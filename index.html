@@ -2901,7 +2901,9 @@ function compressImage(dataURL, maxDim=1000, quality=0.68){
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', quality));
     };
-    img.onerror = ()=> resolve(dataURL);
+    // Échec de décodage (ex: format HEIC non supporté) : on ne renvoie surtout
+    // pas l'image d'origine telle quelle, elle peut peser plusieurs Mo.
+    img.onerror = ()=> resolve(null);
     img.src = dataURL;
   });
 }
@@ -2927,6 +2929,11 @@ function addBookPageRow(){
   row.querySelector('.page-image-input').addEventListener('change', async e=>{
     const file = e.target.files[0];
     if (!file) return;
+    if (/heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)){
+      speak('Ce format de photo (HEIC) n\'est pas pris en charge par les navigateurs. Sur iPhone, allez dans Réglages > Appareil photo > Formats, et choisissez "Le plus compatible", puis reprenez la photo.');
+      e.target.value = '';
+      return;
+    }
     const dataUrl = await readFileAsDataURL(file);
     const thumb = row.querySelector('.page-thumb');
     thumb.src = dataUrl;
@@ -2966,6 +2973,12 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
     const hasImage = !thumb.hidden && thumb.src;
     if (!text && !hasImage) continue;
     const image = hasImage ? await compressImage(thumb.src) : null;
+    if (hasImage && !image){
+      speak('Une des photos n\'a pas pu être traitée (format non pris en charge). Essayez de la remplacer par un JPEG ou un PNG.');
+      btnSave.disabled = false;
+      btnSave.textContent = originalLabel;
+      return;
+    }
     pages.push({ text, image, plain: !image });
   }
 
@@ -2979,8 +2992,9 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
   const coverThumb = pages[0].image ? await compressImage(pages[0].image, 220, 0.6) : null;
   const payload = { title, accent: rand(BOOK_ACCENTS), pages, coverThumb };
 
-  if (JSON.stringify(payload).length > 5.5 * 1024 * 1024){
-    speak('Ce livre a trop de pages ou des photos trop lourdes pour être enregistré en une fois. Essayez de le diviser en deux livres.');
+  const payloadMB = (JSON.stringify(payload).length / (1024*1024)).toFixed(1);
+  if (payloadMB > 5.5){
+    speak(`Ce livre pèse environ ${payloadMB} méga-octets, c'est trop pour être enregistré en une fois. Essayez de le diviser en deux livres, ou retirez une photo.`);
     btnSave.disabled = false;
     btnSave.textContent = originalLabel;
     return;
