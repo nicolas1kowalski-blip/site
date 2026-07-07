@@ -286,7 +286,7 @@
     padding: 0 .08em; border-radius: 10px;
     transition: background .15s, color .15s, opacity .25s;
   }
-  .story-word.gazing{ background: var(--sun); animation: gaze-pulse 1s ease-in-out infinite;}
+  .story-word.gazing, .story-word.word-next{ background: var(--sun); animation: gaze-pulse 1s ease-in-out infinite;}
   .story-word.word-read{ color:#B8BAC9;}
   .scene-custom{ background: linear-gradient(180deg, #FFF8E7 0%, #FDEDC9 100%); display:flex; align-items:center; justify-content:center;}
   .scene-custom .book-icon{ font-size: clamp(80px, 14vw, 160px); animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);}
@@ -1879,6 +1879,7 @@ function renderPage(){
   const storyTextEl = $('#storyText');
   storyTextEl.innerHTML = tokens.map((w,i)=>`<span class="story-word" data-idx="${i}">${escapeHtml(w)}</span>`).join(' ');
   storyTextEl.querySelectorAll('.story-word').forEach((el,i)=> attachWordGaze(el, i, tokens));
+  highlightNextWord(); // met en évidence le premier mot dès l'ouverture de la page
 
   $('#pageIndicator').textContent = `${state.page+1} / ${state.story.pages.length}`;
   $('#btnPrev').disabled = state.page === 0;
@@ -1973,10 +1974,18 @@ function attachGazeSpeak(el){
    page tourne automatiquement la page, comme s'il lisait tout seul.
 ============================================================ */
 let wordAdvanceTimer = null;
+// Met en évidence le prochain mot à lire (celui juste après le dernier confirmé),
+// que l'enfant soit en train de le regarder ou non — sert de repère visuel.
+function highlightNextWord(){
+  document.querySelectorAll('#storyText .story-word').forEach((w,i)=>{
+    w.classList.toggle('word-next', i === state.pageReadIdx + 1);
+  });
+}
 function attachWordGaze(el, idx, tokens){
   let timer = null;
   el.addEventListener('mouseenter', ()=>{
     if (!state.wordGazeEnabled) return;
+    if (idx !== state.pageReadIdx + 1) return; // seul le mot attendu réagit au regard
     el.classList.add('gazing');
     timer = setTimeout(()=> onWordRead(idx, tokens), state.gazeReadTime);
   });
@@ -1986,10 +1995,12 @@ function attachWordGaze(el, idx, tokens){
   });
 }
 function onWordRead(idx, tokens){
-  if (idx > state.pageReadIdx) state.pageReadIdx = idx;
+  state.pageReadIdx = idx;
   document.querySelectorAll('#storyText .story-word').forEach((w,i)=>{
     w.classList.toggle('word-read', i <= state.pageReadIdx);
+    w.classList.remove('gazing');
   });
+  highlightNextWord();
   gazeSound();
   speak(tokens[idx], null, true);
   if (idx === tokens.length - 1){
