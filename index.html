@@ -1298,15 +1298,45 @@ const STORIES = [
 
 /* ============================================================
    LIVRES AJOUTÉS PAR L'UTILISATEUR (photo + texte par page)
-   Stockés dans IndexedDB (les photos scannées sont trop lourdes
-   pour tenir dans localStorage).
+   Stockés côté serveur (Netlify Blobs, via netlify/functions/books.js)
+   pour être accessibles depuis n'importe quel appareil. La bibliothèque
+   ne reçoit que des fiches légères (titre + petite vignette) ; le
+   contenu complet d'un livre (toutes les photos) n'est téléchargé
+   qu'à son ouverture.
 ============================================================ */
 const BOOK_ACCENTS = ['#FFD93C','#FF9FB5','#A8D8A8','#A8E0F0','#D4B5E8','#FFB07A'];
+const BOOKS_API = '/.netlify/functions/books';
+let customBooks = [];
+
+async function apiListBooks(){
+  const res = await fetch(BOOKS_API);
+  if (!res.ok) throw new Error('Échec du chargement des livres');
+  return res.json();
+}
+async function apiGetBook(id){
+  const res = await fetch(BOOKS_API + '?id=' + encodeURIComponent(id));
+  if (!res.ok) throw new Error('Échec du chargement du livre');
+  return res.json();
+}
+async function apiSaveBook(book){
+  const res = await fetch(BOOKS_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(book),
+  });
+  if (!res.ok) throw new Error('Échec de l\'enregistrement du livre');
+  return res.json();
+}
+async function apiDeleteBook(id){
+  const res = await fetch(BOOKS_API + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!res.ok) throw new Error('Échec de la suppression du livre');
+  return res.json();
+}
+
+// ----- Migration ponctuelle des livres créés avant l'existence du serveur -----
 const BOOKS_DB_NAME = 'MesLivresDB';
 const BOOKS_STORE = 'books';
-let customBooks = [];
 let booksDbPromise = null;
-
 function openBooksDB(){
   if (booksDbPromise) return booksDbPromise;
   booksDbPromise = new Promise(resolve=>{
@@ -1327,52 +1357,57 @@ async function dbGetAllBooks(){
     req.onerror = ()=> resolve([]);
   });
 }
-async function dbPutBook(book){
+async function dbClearAllBooks(){
   const db = await openBooksDB();
   if (!db) return;
   return new Promise(resolve=>{
     const tx = db.transaction(BOOKS_STORE, 'readwrite');
-    tx.objectStore(BOOKS_STORE).put(book);
+    tx.objectStore(BOOKS_STORE).clear();
     tx.oncomplete = ()=> resolve();
     tx.onerror = ()=> resolve();
   });
 }
-async function dbDeleteBook(id){
-  const db = await openBooksDB();
-  if (!db) return;
-  return new Promise(resolve=>{
-    const tx = db.transaction(BOOKS_STORE, 'readwrite');
-    tx.objectStore(BOOKS_STORE).delete(id);
-    tx.oncomplete = ()=> resolve();
-    tx.onerror = ()=> resolve();
-  });
-}
-
-// Récupère les livres créés avec l'ancienne version (texte seul, dans localStorage)
-async function migrateLegacyLocalStorageBooks(){
+async function migrateLegacyBooksToServer(){
+  let legacy = [];
+  // Version 1 : livres texte seul stockés dans localStorage
   try{
     const raw = localStorage.getItem('customBooks');
-    if (!raw) return;
-    const legacy = JSON.parse(raw);
-    for (const b of legacy){
-      if (!b.pages) continue;
-      const book = {
-        id: b.id || ('custom-' + Date.now() + '-' + Math.random().toString(36).slice(2)),
-        title: b.title, cover: b.cover || '📗', coverImage: null,
-        accent: b.accent || rand(BOOK_ACCENTS), custom:true,
-        pages: b.pages.map(p=> ({ text: p.text || '', image:null, plain:true })),
-      };
-      await dbPutBook(book);
+    if (raw){
+      legacy = legacy.concat(JSON.parse(raw).map(b=> ({
+        title: b.title, accent: b.accent,
+        pages: (b.pages || []).map(p=> ({ text: p.text || '', image:null, plain:true })),
+      })));
     }
-    localStorage.removeItem('customBooks');
   } catch(e){}
+  // Version 2 : livres photo + texte stockés dans IndexedDB
+  try{
+    const idbBooks = await dbGetAllBooks();
+    legacy = legacy.concat(idbBooks.map(b=> ({
+      title: b.title, accent: b.accent,
+      pages: (b.pages || []).map(p=> ({ text: p.text || '', image: p.image || null, plain: !p.image })),
+      coverThumb: b.coverImage || null,
+    })));
+  } catch(e){}
+
+  if (!legacy.length) return;
+  for (const b of legacy){
+    if (!b.title || !b.pages.length) continue;
+    await apiSaveBook(b); // si ça échoue, on réessaiera au prochain chargement
+  }
+  try{ localStorage.removeItem('customBooks'); } catch(e){}
+  await dbClearAllBooks();
 }
 
 function getAllStories(){ return [...STORIES, ...customBooks]; }
 
 async function loadCustomBooks(){
-  await migrateLegacyLocalStorageBooks();
-  customBooks = await dbGetAllBooks();
+  try{ await migrateLegacyBooksToServer(); } catch(e){ /* pas grave, réessai plus tard */ }
+  try{
+    customBooks = await apiListBooks();
+  } catch(e){
+    customBooks = [];
+    console.warn('Livres du serveur indisponibles :', e);
+  }
   buildLibrary();
 }
 loadCustomBooks();
@@ -1644,15 +1679,34 @@ function buildLibrary(){
   grid.appendChild(addBtn);
 }
 
-function deleteBook(id){
+async function deleteBook(id){
   customBooks = customBooks.filter(b=> b.id !== id);
   buildLibrary();
-  dbDeleteBook(id);
+  try{ await apiDeleteBook(id); } catch(e){ speak('Erreur pendant la suppression du livre'); }
 }
 
-function openStory(id){
+async function openStory(id){
   ensureAudio();
-  state.story = getAllStories().find(s=>s.id===id);
+  let story = getAllStories().find(s=>s.id===id);
+  if (!story) return;
+  if (story.custom && !story.pages){
+    // Livre côté serveur : on ne connaît que la fiche légère, on charge le contenu complet
+    showScreen('screenReader');
+    updateBackButton();
+    $('#scene').className = 'scene scene-custom';
+    $('#scene').innerHTML = '<div class="book-icon">📖</div>';
+    $('#storyText').textContent = 'Chargement du livre...';
+    try{
+      story = await apiGetBook(id);
+    } catch(e){
+      speak('Impossible de charger ce livre, vérifiez la connexion internet');
+      state.inStory = false;
+      showScreen('screenStories');
+      updateBackButton();
+      return;
+    }
+  }
+  state.story = story;
   state.page = 0;
   state.inStory = true;
   showScreen('screenReader');
@@ -2727,7 +2781,7 @@ function readFileAsDataURL(file){
   });
 }
 // Redimensionne/compresse la photo pour ne pas saturer le stockage du navigateur
-function compressImage(dataURL, maxDim=1100, quality=0.72){
+function compressImage(dataURL, maxDim=1000, quality=0.68){
   return new Promise(resolve=>{
     const img = new Image();
     img.onload = ()=>{
@@ -2816,25 +2870,26 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
     return;
   }
 
-  const book = {
-    id: 'custom-' + Date.now(),
-    title,
-    cover: pages[0].image ? null : '📗',
-    coverImage: pages[0].image || null,
-    accent: rand(BOOK_ACCENTS),
-    custom: true,
-    pages,
-  };
-  customBooks.push(book);
-  buildLibrary();
+  const coverThumb = pages[0].image ? await compressImage(pages[0].image, 220, 0.6) : null;
+  const payload = { title, accent: rand(BOOK_ACCENTS), pages, coverThumb };
+
+  if (JSON.stringify(payload).length > 5.5 * 1024 * 1024){
+    speak('Ce livre a trop de pages ou des photos trop lourdes pour être enregistré en une fois. Essayez de le diviser en deux livres.');
+    btnSave.disabled = false;
+    btnSave.textContent = originalLabel;
+    return;
+  }
+
   try{
-    await dbPutBook(book);
+    const meta = await apiSaveBook(payload);
+    customBooks.push(meta);
+    buildLibrary();
+    $('#addBookModal').classList.remove('open');
   } catch(e){
-    speak('Le livre est trop lourd pour être enregistré, essayez avec moins de pages ou des photos plus petites');
+    speak('Impossible d\'enregistrer le livre, vérifiez la connexion internet, ou essayez avec moins de pages');
   }
   btnSave.disabled = false;
   btnSave.textContent = originalLabel;
-  $('#addBookModal').classList.remove('open');
 });
 
 // Cartes du menu musique
