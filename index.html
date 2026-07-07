@@ -78,7 +78,7 @@
   @keyframes pop{ from{ opacity:0; transform: scale(.94);} to{ opacity:1; transform: scale(1);} }
 
   .home-grid{ flex:1; display:grid; grid-template-columns: repeat(4, 1fr); gap: 2vw; align-items:stretch;}
-  .lib-grid{ flex:1; display:grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 1.5vw;}
+  .lib-grid{ flex:1; display:grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 1.5vw;}
   .card{
     border:none; cursor:pointer; background:#fff;
     border-radius: 32px; padding: 2vh 1.5vw; box-shadow: var(--shadow);
@@ -737,7 +737,7 @@
 
   <h3>👁 Commande oculaire</h3>
   <label class="check-row">
-    <input type="checkbox" id="dwellEnabled">
+    <input type="checkbox" id="dwellEnabled" checked>
     <span>Activer le clic au survol</span>
   </label>
   <label>
@@ -772,6 +772,10 @@
   </label>
 
   <div class="info">
+    <strong>👁 Configurer Tobii :</strong><br>
+    1. Dans le logiciel Tobii (Windows Control), activez le module « Contrôle de l'ordinateur » : le regard déplace le curseur de la souris.<br>
+    2. Ici, laissez « Activer le clic au survol » coché : rester quelques secondes sur un bouton suffit à cliquer, aucun geste n'est nécessaire.<br>
+    3. Ajustez la « Durée pour cliquer » selon l'aisance de l'enfant (plus long = moins de clics accidentels).<br><br>
     <strong>💡 Pour GRID 3 :</strong><br>
     Désactivez le clic au survol et laissez GRID 3 gérer la sélection. La fonction "Lire au regard" reste utile avec la souris pour vérifier le bon fonctionnement.
   </div>
@@ -784,7 +788,7 @@
 const state = {
   tab:'stories', inGame:false, inStory:false, musicSub:null,
   game:null, answer:null, story:null, page:0,
-  dwellEnabled:false, dwellTime:1500,
+  dwellEnabled:true, dwellTime:1500,
   gazeReadEnabled:true, gazeReadTime:700,
   soundEnabled:true, speechRate:0.9, autoAdvance:false,
   locked:false,
@@ -1202,12 +1206,32 @@ const STORIES = [
       {scene:'room', character:'🐱🧸', props:['💕','🧺'], text:'Mon doudou ! Il était caché dans le panier !'},
     ]
   },
+  {
+    id:'poussin', title:'Pilou le poussin', cover:'🐥', accent:'#FFE066',
+    pages:[
+      {scene:'morning', character:'🐥', props:['🌅','🥚'], text:'Cui cui ! Pilou sort de son œuf ce matin.'},
+      {scene:'garden', character:'🐥', props:['🐛','🌼'], text:'Miam, un petit ver de terre pour le petit-déjeuner !'},
+      {scene:'garden', character:'🐥🐔', props:['🌸','🦋'], text:'Coucou Maman Poule ! Pilou n\'est plus tout seul.'},
+      {scene:'park', character:'🐥', props:['🛝','☁️'], text:'Pilou essaie de voler... pas encore, mais il court très vite !'},
+      {scene:'evening', character:'🐥🐔', props:['🌅','🏠'], text:'Le soir, Pilou rentre se blottir contre Maman Poule.'},
+    ]
+  },
+  {
+    id:'elephant', title:'Bibi et le grand parapluie', cover:'🐘', accent:'#8ECBE8',
+    pages:[
+      {scene:'room', character:'🐘', props:['☔','☁️'], text:'Il pleut ! Bibi cherche son parapluie.'},
+      {scene:'street', character:'🐘', props:['💧','🏠'], text:'Trouvé ! Un grand parapluie tout rouge.'},
+      {scene:'park', character:'🐘🐰', props:['💧','🌳'], text:'Coucou Lapin, viens vite sous mon parapluie !'},
+      {scene:'park', character:'🐘🐰', props:['🌈','☀️'], text:'La pluie s\'arrête... un arc-en-ciel apparaît !'},
+      {scene:'evening', character:'🐘', props:['🏠','🌅'], text:'Bibi rentre à la maison, tout content de sa journée.'},
+    ]
+  },
 ];
 
 /* ============================================================
    JEUX (données)
 ============================================================ */
-const COUNT_OBJECTS = ['🐶','🐱','🐰','🐻','🦊','🐸','🦋','🐝','🌟','🍎','🍌','🎈'];
+const COUNT_OBJECTS = ['🐶','🐱','🐰','🐻','🦊','🐸','🦋','🐝','🌟','🍎','🍌','🎈','🐷','🐢','🦁'];
 const COLORS = [
   {name:'rouge', value:'#FF4D4D'}, {name:'bleu', value:'#3A86FF'},
   {name:'jaune', value:'#FFD43B'}, {name:'vert', value:'#4CAF50'},
@@ -1506,6 +1530,7 @@ function propLabel(emoji){
     '❓':'un point d\'interrogation', '🧸':'un doudou',
     '🥿':'un chausson', '🍪':'un biscuit', '🌷':'une tulipe',
     '🧺':'un panier',
+    '🥚':'un œuf', '🐛':'un ver de terre', '☔':'un parapluie', '🌈':'un arc-en-ciel',
   };
   return map[emoji] || 'regarde !';
 }
@@ -1515,6 +1540,9 @@ function characterLabel(c){
   if (c.includes('🐱')) return 'Mimi la chatte';
   if (c.includes('🦆')) return 'les petits canards';
   if (c.includes('🐰')) return 'le lapin';
+  if (c.includes('🐥')) return 'Pilou le poussin';
+  if (c.includes('🐔')) return 'Maman Poule';
+  if (c.includes('🐘')) return 'Bibi l\'éléphant';
   return 'le personnage';
 }
 
