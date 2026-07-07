@@ -976,6 +976,12 @@ function tokenizeWords(text){
   });
   return merged;
 }
+// Retire la ponctuation collée à un mot avant de le faire prononcer : certains
+// moteurs de synthèse vocale prononcent mal ou hésitent sur "trou." ou "Chut !".
+function spokenText(word){
+  const cleaned = word.replace(/^[!?.,;:…«»"'“”]+|[!?.,;:…«»"'“”]+$/g, '').trim();
+  return cleaned || word;
+}
 
 /* ============================================================
    ILLUSTRATIONS SVG (style livre pour enfants)
@@ -2087,7 +2093,7 @@ function onWordRead(idx, tokens){
   });
   highlightNextWord();
   gazeSound();
-  speak(tokens[idx], null, true);
+  speak(spokenText(tokens[idx]), null, true);
   if (idx === tokens.length - 1){
     clearTimeout(wordAdvanceTimer);
     // Ne tourne automatiquement la page que s'il y en a une après : sur la
