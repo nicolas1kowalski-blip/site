@@ -142,7 +142,18 @@ exports.handler = async (event) => {
             imageUrl = p.image;
           }
         }
-        pages.push({ text: p.text || '', image: imageUrl, plain: !imageUrl });
+        const zones = Array.isArray(p.zones)
+          ? p.zones
+              .filter((z) => z && typeof z.label === 'string' && z.label.trim())
+              .map((z) => ({
+                left: Number(z.left) || 0,
+                top: Number(z.top) || 0,
+                width: Number(z.width) || 0,
+                height: Number(z.height) || 0,
+                label: String(z.label).trim().slice(0, 60),
+              }))
+          : [];
+        pages.push({ text: p.text || '', image: imageUrl, plain: !imageUrl, zones });
       }
 
       let coverImage = null;

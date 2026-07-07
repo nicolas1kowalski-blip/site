@@ -291,7 +291,10 @@
   .scene-custom{ background: linear-gradient(180deg, #FFF8E7 0%, #FDEDC9 100%); display:flex; align-items:center; justify-content:center;}
   .scene-custom .book-icon{ font-size: clamp(80px, 14vw, 160px); animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);}
   .scene-photo{ background:#20232b; display:flex; align-items:center; justify-content:center;}
-  .scene-photo .page-photo{ max-width:100%; max-height:100%; object-fit:contain; border-radius: 8px;}
+  .photo-zone-wrap{ position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;}
+  .scene-photo .page-photo{ max-width:100%; max-height:100%; object-fit:contain; border-radius: 8px; display:block;}
+  .photo-zone-layer{ position:absolute; pointer-events:none;}
+  .photo-zone{ position:absolute; cursor:help; border-radius:8px; pointer-events:auto;}
   .card .cover-photo{
     width: clamp(70px, 11vw, 130px); height: clamp(70px, 11vw, 130px);
     object-fit:cover; border-radius: 20px;
@@ -548,6 +551,38 @@
     width:100%; padding:12px; margin-bottom:6px;
     border:2px dashed #ccc; background:#fafafa; border-radius:14px;
     font-family:'Baloo 2', sans-serif; font-weight:700; font-size:16px; cursor:pointer;
+  }
+  .btn-zones{
+    width:100%; padding:10px; margin-bottom:8px;
+    border:2px solid var(--sky); background:#EAFBFA; color: var(--ink);
+    border-radius:14px; font-family:'Baloo 2', sans-serif; font-weight:700; font-size:14px; cursor:pointer;
+  }
+  .zone-editor-stage{
+    position:relative; display:flex; justify-content:center; align-items:center;
+    background:#20232b; border-radius:16px; overflow:hidden;
+    -webkit-user-select:none; user-select:none; touch-action:none;
+    min-height: 200px;
+  }
+  #zoneEditorImg{ max-width:100%; max-height:50vh; display:block;}
+  .zone-editor-overlay{ position:absolute; inset:0;}
+  .zone-box{
+    position:absolute; border:3px solid var(--sun); background:rgba(255,201,60,.25);
+    border-radius:6px; box-sizing:border-box;
+  }
+  .zone-box .zone-label{
+    position:absolute; bottom:2px; left:2px; right:24px;
+    color:#2B2D42; font-weight:700; font-size:13px; cursor:pointer;
+    background:rgba(255,255,255,.9); padding:2px 6px; border-radius:6px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .zone-box .zone-delete{
+    position:absolute; top:2px; right:2px; width:20px; height:20px;
+    border-radius:50%; background:var(--coral); color:#fff; border:none;
+    font-size:11px; font-weight:800; cursor:pointer;
+  }
+  .zone-draft{
+    position:absolute; border:3px dashed var(--sun); background:rgba(255,201,60,.15);
+    border-radius:6px; pointer-events:none; box-sizing:border-box;
   }
 
   /* BALLONS */
@@ -813,6 +848,23 @@
     <div class="modal-buttons">
       <button class="btn-cancel" id="btnCancelBook">Annuler</button>
       <button class="btn-save" id="btnSaveBook">Enregistrer le livre</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL Éditeur de zones interactives sur une photo -->
+<div class="modal" id="zoneEditorModal">
+  <div class="modal-content" style="max-width:800px;">
+    <h2>🎯 Zones interactives</h2>
+    <div class="modal-info">
+      💡 Cliquez et glissez sur la photo pour dessiner une zone autour d'un personnage ou d'un objet, puis donnez-lui un nom. En regardant cette zone, l'enfant entendra ce nom prononcé à voix haute. Cliquez sur le nom d'une zone pour le modifier, ou sur le ✕ pour la supprimer.
+    </div>
+    <div class="zone-editor-stage" id="zoneEditorStage">
+      <img id="zoneEditorImg" alt="">
+      <div class="zone-editor-overlay" id="zoneEditorOverlay"></div>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-save" id="btnCloseZoneEditor" style="flex:1;">Terminé</button>
     </div>
   </div>
 </div>
@@ -1848,9 +1900,24 @@ function renderPage(){
     scene.className = 'scene scene-svg';
     scene.innerHTML = `<div class="svg-stage">${p.svg}</div>`;
   } else if (p.image){
-    // Page d'un livre ajouté par l'utilisateur (photo scannée/prise en photo)
+    // Page d'un livre ajouté par l'utilisateur (photo scannée/prise en photo),
+    // avec éventuellement des zones interactives configurées par l'administrateur
     scene.className = 'scene scene-photo';
-    scene.innerHTML = `<img class="page-photo" src="${p.image}" alt="">`;
+    const zones = Array.isArray(p.zones) ? p.zones : [];
+    const zonesHTML = zones.map(z=>
+      `<div class="photo-zone speakable" data-label="${escapeHtml(z.label)}" style="left:${z.left}%; top:${z.top}%; width:${z.width}%; height:${z.height}%;"></div>`
+    ).join('');
+    scene.innerHTML = `
+      <div class="photo-zone-wrap">
+        <img class="page-photo" src="${p.image}" alt="">
+        <div class="photo-zone-layer">${zonesHTML}</div>
+      </div>`;
+    if (zones.length){
+      const imgEl = scene.querySelector('.page-photo');
+      const layerEl = scene.querySelector('.photo-zone-layer');
+      const fit = ()=> fitZoneLayer(imgEl, layerEl);
+      if (imgEl.complete) fit(); else imgEl.addEventListener('load', fit);
+    }
   } else if (p.plain){
     // Page d'un livre ajouté par l'utilisateur, sans photo (texte seul)
     scene.className = 'scene scene-custom';
@@ -1943,6 +2010,24 @@ $('#btnNext').addEventListener('click', nextPage);
 $('#btnPrev').addEventListener('click', prevPage);
 attachDwell($('#btnNext'));
 attachDwell($('#btnPrev'));
+
+// Positionne la couche de zones interactives exactement sur la zone visible
+// de la photo (qui peut être plus petite que son conteneur à cause de
+// object-fit:contain), pour que les pourcentages définis dans l'éditeur de
+// zones correspondent pile à ce que voit l'enfant.
+function fitZoneLayer(imgEl, layerEl){
+  if (!imgEl || !layerEl) return;
+  const wrap = imgEl.parentElement;
+  const wrapRect = wrap.getBoundingClientRect();
+  const imgRect = imgEl.getBoundingClientRect();
+  layerEl.style.left = (imgRect.left - wrapRect.left) + 'px';
+  layerEl.style.top = (imgRect.top - wrapRect.top) + 'px';
+  layerEl.style.width = imgRect.width + 'px';
+  layerEl.style.height = imgRect.height + 'px';
+}
+window.addEventListener('resize', ()=>{
+  fitZoneLayer(document.querySelector('#scene .page-photo'), document.querySelector('#scene .photo-zone-layer'));
+});
 
 /* ============================================================
    NOMINATION AU REGARD (gaze-to-speak)
@@ -2943,12 +3028,13 @@ function compressImage(dataURL, maxDim=1000, quality=0.68){
 }
 
 let bookPageCount = 0;
-// existing = { text, imageUrl } pour pré-remplir une page lors d'une modification
+// existing = { text, imageUrl, zones } pour pré-remplir une page lors d'une modification
 function addBookPageRow(existing){
   bookPageCount++;
   const row = document.createElement('div');
   row.className = 'book-page-row';
   row.dataset.imageMode = 'none';
+  row.zonesData = [];
   row.innerHTML = `
     <div class="book-page-row-header">
       <strong>Page <span class="page-num">${bookPageCount}</span></strong>
@@ -2957,11 +3043,19 @@ function addBookPageRow(existing){
     <input type="file" accept="image/*" capture="environment" class="page-image-input" aria-label="Photo de la page">
     <img class="page-thumb" hidden alt="">
     <button type="button" class="btn-remove-photo" hidden>✕ Retirer la photo</button>
+    <button type="button" class="btn-zones" hidden>🎯 Zones interactives</button>
     <textarea class="page-text-input" placeholder="Texte de cette page..."></textarea>
   `;
   const thumb = row.querySelector('.page-thumb');
   const removePhotoBtn = row.querySelector('.btn-remove-photo');
   const fileInput = row.querySelector('.page-image-input');
+  const zonesBtn = row.querySelector('.btn-zones');
+
+  function updateZonesButtonLabel(){
+    const n = row.zonesData.length;
+    zonesBtn.textContent = n > 0 ? `🎯 Zones interactives (${n})` : '🎯 Zones interactives';
+  }
+  zonesBtn.addEventListener('click', ()=> openZoneEditor(row, updateZonesButtonLabel));
 
   if (existing){
     row.querySelector('.page-text-input').value = existing.text || '';
@@ -2969,7 +3063,10 @@ function addBookPageRow(existing){
       thumb.src = existing.imageUrl;
       thumb.hidden = false;
       removePhotoBtn.hidden = false;
+      zonesBtn.hidden = false;
       row.dataset.imageMode = 'existing';
+      row.zonesData = Array.isArray(existing.zones) ? existing.zones.slice() : [];
+      updateZonesButtonLabel();
     }
   }
 
@@ -2981,8 +3078,10 @@ function addBookPageRow(existing){
     thumb.hidden = true;
     thumb.src = '';
     removePhotoBtn.hidden = true;
+    zonesBtn.hidden = true;
     fileInput.value = '';
     row.dataset.imageMode = 'none';
+    row.zonesData = [];
   });
   fileInput.addEventListener('change', async e=>{
     const file = e.target.files[0];
@@ -2996,7 +3095,10 @@ function addBookPageRow(existing){
     thumb.src = dataUrl;
     thumb.hidden = false;
     removePhotoBtn.hidden = false;
+    zonesBtn.hidden = false;
     row.dataset.imageMode = 'new';
+    row.zonesData = []; // nouvelle photo : les anciennes zones ne correspondent plus
+    updateZonesButtonLabel();
   });
   $('#bookPagesList').appendChild(row);
 }
@@ -3005,6 +3107,129 @@ function renumberBookPages(){
     row.querySelector('.page-num').textContent = i+1;
   });
 }
+
+/* ============================================================
+   ÉDITEUR DE ZONES INTERACTIVES SUR UNE PHOTO
+   Permet à l'administrateur de dessiner, sur la photo d'une page,
+   des rectangles nommés que l'enfant pourra ensuite "découvrir" du
+   regard (même principe que la nomination au regard des histoires
+   intégrées, appliqué à une photo importée).
+============================================================ */
+let zoneEditorRow = null;
+let zoneEditorOnDone = null;
+let zoneEditorZones = [];
+let zoneDraftStart = null;
+
+function openZoneEditor(row, onDone){
+  const thumb = row.querySelector('.page-thumb');
+  if (!thumb || thumb.hidden || !thumb.src){
+    speak('Ajoutez d\'abord une photo à cette page avant de définir des zones');
+    return;
+  }
+  zoneEditorRow = row;
+  zoneEditorOnDone = onDone;
+  zoneEditorZones = (row.zonesData || []).map(z=> ({...z}));
+  $('#zoneEditorImg').src = thumb.src;
+  renderZoneEditorBoxes();
+  $('#zoneEditorModal').classList.add('open');
+}
+
+function renderZoneEditorBoxes(){
+  const overlay = $('#zoneEditorOverlay');
+  overlay.innerHTML = zoneEditorZones.map((z,i)=>`
+    <div class="zone-box" style="left:${z.left}%; top:${z.top}%; width:${z.width}%; height:${z.height}%;">
+      <span class="zone-label" data-idx="${i}">${escapeHtml(z.label)}</span>
+      <button type="button" class="zone-delete" data-idx="${i}" aria-label="Supprimer cette zone">✕</button>
+    </div>
+  `).join('');
+  overlay.querySelectorAll('.zone-delete').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      zoneEditorZones.splice(parseInt(btn.dataset.idx), 1);
+      renderZoneEditorBoxes();
+    });
+  });
+  overlay.querySelectorAll('.zone-label').forEach(el=>{
+    el.addEventListener('mousedown', e=> e.stopPropagation());
+    el.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const i = parseInt(el.dataset.idx);
+      const next = window.prompt('Nom de cette zone (ce que l\'enfant entendra) :', zoneEditorZones[i].label);
+      if (next !== null && next.trim()){
+        zoneEditorZones[i].label = next.trim();
+        renderZoneEditorBoxes();
+      }
+    });
+  });
+}
+
+function zoneStagePercentPos(clientX, clientY){
+  const img = $('#zoneEditorImg');
+  const rect = img.getBoundingClientRect();
+  let x = (clientX - rect.left) / rect.width * 100;
+  let y = (clientY - rect.top) / rect.height * 100;
+  x = Math.max(0, Math.min(100, x));
+  y = Math.max(0, Math.min(100, y));
+  return { x, y };
+}
+function zoneDraftBegin(clientX, clientY, target){
+  if (target.closest('.zone-box')) return;
+  zoneDraftStart = zoneStagePercentPos(clientX, clientY);
+  const draft = document.createElement('div');
+  draft.className = 'zone-draft';
+  draft.id = 'zoneDraft';
+  $('#zoneEditorOverlay').appendChild(draft);
+}
+function zoneDraftUpdate(clientX, clientY){
+  if (!zoneDraftStart) return;
+  const p = zoneStagePercentPos(clientX, clientY);
+  const draft = $('#zoneDraft');
+  if (!draft) return;
+  draft.style.left = Math.min(zoneDraftStart.x, p.x) + '%';
+  draft.style.top = Math.min(zoneDraftStart.y, p.y) + '%';
+  draft.style.width = Math.abs(p.x - zoneDraftStart.x) + '%';
+  draft.style.height = Math.abs(p.y - zoneDraftStart.y) + '%';
+}
+function zoneDraftFinish(clientX, clientY){
+  if (!zoneDraftStart) return;
+  const p = zoneStagePercentPos(clientX, clientY);
+  const left = Math.min(zoneDraftStart.x, p.x);
+  const top = Math.min(zoneDraftStart.y, p.y);
+  const width = Math.abs(p.x - zoneDraftStart.x);
+  const height = Math.abs(p.y - zoneDraftStart.y);
+  zoneDraftStart = null;
+  const draft = $('#zoneDraft');
+  if (draft) draft.remove();
+  if (width < 3 || height < 3) return; // trop petit : probablement un clic accidentel
+  const label = window.prompt('Nom de cette zone (ce que l\'enfant entendra) :', '');
+  if (label && label.trim()){
+    zoneEditorZones.push({ left, top, width, height, label: label.trim() });
+    renderZoneEditorBoxes();
+  }
+}
+const zoneStage = $('#zoneEditorStage');
+zoneStage.addEventListener('mousedown', e=> zoneDraftBegin(e.clientX, e.clientY, e.target));
+window.addEventListener('mousemove', e=> zoneDraftUpdate(e.clientX, e.clientY));
+window.addEventListener('mouseup', e=> zoneDraftFinish(e.clientX, e.clientY));
+zoneStage.addEventListener('touchstart', e=>{
+  const t = e.touches[0];
+  zoneDraftBegin(t.clientX, t.clientY, e.target);
+}, { passive: true });
+zoneStage.addEventListener('touchmove', e=>{
+  const t = e.touches[0];
+  zoneDraftUpdate(t.clientX, t.clientY);
+}, { passive: true });
+zoneStage.addEventListener('touchend', e=>{
+  const t = e.changedTouches[0];
+  zoneDraftFinish(t.clientX, t.clientY);
+});
+$('#btnCloseZoneEditor').addEventListener('click', ()=>{
+  if (zoneEditorRow) zoneEditorRow.zonesData = zoneEditorZones.slice();
+  if (zoneEditorOnDone) zoneEditorOnDone();
+  $('#zoneEditorModal').classList.remove('open');
+  zoneEditorRow = null;
+  zoneEditorOnDone = null;
+});
 let editingBook = null; // {id, accent} du livre en cours de modification, ou null pour un ajout
 
 function resetBookModal(){
@@ -3030,7 +3255,7 @@ async function openEditBook(id){
     $('#btnSaveBook').textContent = 'Enregistrer les modifications';
     $('#bookPagesList').innerHTML = '';
     bookPageCount = 0;
-    (book.pages || []).forEach(p=> addBookPageRow({ text: p.text, imageUrl: p.image }));
+    (book.pages || []).forEach(p=> addBookPageRow({ text: p.text, imageUrl: p.image, zones: p.zones }));
     if (!book.pages || book.pages.length === 0) addBookPageRow();
   } catch(e){
     $('#addBookModal').classList.remove('open');
@@ -3085,7 +3310,7 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
       image = thumb.src; // URL déjà hébergée, pas besoin de la retraiter
     }
     if (pages.length === 0 && mode === 'new') firstPageImageIsNew = true;
-    pages.push({ text, image, plain: !image });
+    pages.push({ text, image, plain: !image, zones: image ? (row.zonesData || []) : [] });
   }
 
   if (!title || pages.length === 0){
