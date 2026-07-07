@@ -286,9 +286,8 @@
     padding: 0 .08em; border-radius: 10px;
     transition: background .15s, color .15s, opacity .25s;
   }
-  .story-word.gazing{ background: var(--bg-2);}
-  .story-word.word-current{ background: var(--sun); animation: gaze-pulse 1s ease-in-out infinite;}
-  .story-word.word-read{ opacity:.4;}
+  .story-word.gazing{ background: var(--sun); animation: gaze-pulse 1s ease-in-out infinite;}
+  .story-word.word-read{ color:#B8BAC9;}
   .scene-custom{ background: linear-gradient(180deg, #FFF8E7 0%, #FDEDC9 100%); display:flex; align-items:center; justify-content:center;}
   .scene-custom .book-icon{ font-size: clamp(80px, 14vw, 160px); animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);}
   .scene-photo{ background:#20232b; display:flex; align-items:center; justify-content:center;}
@@ -1970,8 +1969,7 @@ function attachWordGaze(el, idx, tokens){
 function onWordRead(idx, tokens){
   if (idx > state.pageReadIdx) state.pageReadIdx = idx;
   document.querySelectorAll('#storyText .story-word').forEach((w,i)=>{
-    w.classList.toggle('word-read', i <= state.pageReadIdx && i !== idx);
-    w.classList.toggle('word-current', i === idx);
+    w.classList.toggle('word-read', i <= state.pageReadIdx);
   });
   gazeSound();
   speak(tokens[idx], null, true);
