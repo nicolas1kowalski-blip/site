@@ -291,6 +291,13 @@
   .story-word.word-read{ opacity:.4;}
   .scene-custom{ background: linear-gradient(180deg, #FFF8E7 0%, #FDEDC9 100%); display:flex; align-items:center; justify-content:center;}
   .scene-custom .book-icon{ font-size: clamp(80px, 14vw, 160px); animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);}
+  .scene-photo{ background:#20232b; display:flex; align-items:center; justify-content:center;}
+  .scene-photo .page-photo{ max-width:100%; max-height:100%; object-fit:contain; border-radius: 8px;}
+  .card .cover-photo{
+    width: clamp(70px, 11vw, 130px); height: clamp(70px, 11vw, 130px);
+    object-fit:cover; border-radius: 20px;
+    box-shadow: 0 6px 0 rgba(43,45,66,.15);
+  }
   .story-nav{ display:grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 1.5vw; height: 14vh; height: 14dvh; flex-shrink:0;}
   .story-btn{
     border:none; cursor:pointer; background:#fff;
@@ -504,6 +511,22 @@
   .modal-buttons button:active{ transform: translateY(2px);}
   .btn-cancel{ background:#eee; color: var(--ink);}
   .btn-save{ background: var(--sun); color: var(--ink);}
+  .btn-save[disabled]{ opacity:.5; cursor:default;}
+
+  .book-pages-list{ display:flex; flex-direction:column; gap:14px; max-height:42vh; overflow-y:auto; padding: 4px 2px; margin-bottom: 12px;}
+  .book-page-row{ border:2px solid #eee; border-radius:16px; padding:12px;}
+  .book-page-row-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:700;}
+  .btn-remove-page{
+    background:var(--coral); color:#fff; border:none; border-radius:50%;
+    width:28px; height:28px; font-weight:800; cursor:pointer; flex-shrink:0;
+  }
+  .page-image-input{ width:100%; margin-bottom:8px; font-size:14px;}
+  .page-thumb{ max-width:100%; max-height:160px; border-radius:10px; margin-bottom:8px; display:block;}
+  .btn-add-page{
+    width:100%; padding:12px; margin-bottom:6px;
+    border:2px dashed #ccc; background:#fafafa; border-radius:14px;
+    font-family:'Baloo 2', sans-serif; font-weight:700; font-size:16px; cursor:pointer;
+  }
 
   /* BALLONS */
   .balloon-stage{
@@ -759,20 +782,14 @@
       <span>Titre du livre :</span>
       <input type="text" id="newBookTitle" placeholder="Ex : Le petit chat curieux" maxlength="60">
     </label>
-    <label>
-      <span>Emoji de couverture (optionnel) :</span>
-      <input type="text" id="newBookEmoji" placeholder="📗" maxlength="4">
-    </label>
-    <label>
-      <span>Texte de l'histoire :</span>
-      <textarea id="newBookText" placeholder="Écrivez une phrase par ligne..."></textarea>
-    </label>
     <div class="modal-info">
-      💡 Chaque ligne devient une page. L'enfant pourra suivre les mots du regard, et la page tournera toute seule à la fin de chaque ligne.
+      💡 Ajoutez une page à la fois : une photo (ou un scan) de la page, et son texte en dessous (pour que l'enfant puisse le suivre du regard). Ajoutez autant de pages que le livre en a.
     </div>
+    <div class="book-pages-list" id="bookPagesList"></div>
+    <button type="button" class="btn-add-page" id="btnAddPage">➕ Ajouter une page</button>
     <div class="modal-buttons">
       <button class="btn-cancel" id="btnCancelBook">Annuler</button>
-      <button class="btn-save" id="btnSaveBook">Ajouter</button>
+      <button class="btn-save" id="btnSaveBook">Enregistrer le livre</button>
     </div>
   </div>
 </div>
@@ -1280,20 +1297,84 @@ const STORIES = [
 ];
 
 /* ============================================================
-   LIVRES AJOUTÉS PAR L'UTILISATEUR (texte libre, pages = lignes)
+   LIVRES AJOUTÉS PAR L'UTILISATEUR (photo + texte par page)
+   Stockés dans IndexedDB (les photos scannées sont trop lourdes
+   pour tenir dans localStorage).
 ============================================================ */
 const BOOK_ACCENTS = ['#FFD93C','#FF9FB5','#A8D8A8','#A8E0F0','#D4B5E8','#FFB07A'];
+const BOOKS_DB_NAME = 'MesLivresDB';
+const BOOKS_STORE = 'books';
 let customBooks = [];
-function loadCustomBooks(){
+let booksDbPromise = null;
+
+function openBooksDB(){
+  if (booksDbPromise) return booksDbPromise;
+  booksDbPromise = new Promise(resolve=>{
+    if (!window.indexedDB){ resolve(null); return; }
+    const req = indexedDB.open(BOOKS_DB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(BOOKS_STORE, {keyPath:'id'}); };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> resolve(null);
+  });
+  return booksDbPromise;
+}
+async function dbGetAllBooks(){
+  const db = await openBooksDB();
+  if (!db) return [];
+  return new Promise(resolve=>{
+    const req = db.transaction(BOOKS_STORE, 'readonly').objectStore(BOOKS_STORE).getAll();
+    req.onsuccess = ()=> resolve(req.result || []);
+    req.onerror = ()=> resolve([]);
+  });
+}
+async function dbPutBook(book){
+  const db = await openBooksDB();
+  if (!db) return;
+  return new Promise(resolve=>{
+    const tx = db.transaction(BOOKS_STORE, 'readwrite');
+    tx.objectStore(BOOKS_STORE).put(book);
+    tx.oncomplete = ()=> resolve();
+    tx.onerror = ()=> resolve();
+  });
+}
+async function dbDeleteBook(id){
+  const db = await openBooksDB();
+  if (!db) return;
+  return new Promise(resolve=>{
+    const tx = db.transaction(BOOKS_STORE, 'readwrite');
+    tx.objectStore(BOOKS_STORE).delete(id);
+    tx.oncomplete = ()=> resolve();
+    tx.onerror = ()=> resolve();
+  });
+}
+
+// Récupère les livres créés avec l'ancienne version (texte seul, dans localStorage)
+async function migrateLegacyLocalStorageBooks(){
   try{
     const raw = localStorage.getItem('customBooks');
-    customBooks = raw ? JSON.parse(raw) : [];
-  } catch(e){ customBooks = []; }
+    if (!raw) return;
+    const legacy = JSON.parse(raw);
+    for (const b of legacy){
+      if (!b.pages) continue;
+      const book = {
+        id: b.id || ('custom-' + Date.now() + '-' + Math.random().toString(36).slice(2)),
+        title: b.title, cover: b.cover || '📗', coverImage: null,
+        accent: b.accent || rand(BOOK_ACCENTS), custom:true,
+        pages: b.pages.map(p=> ({ text: p.text || '', image:null, plain:true })),
+      };
+      await dbPutBook(book);
+    }
+    localStorage.removeItem('customBooks');
+  } catch(e){}
 }
-function saveCustomBooks(){
-  try{ localStorage.setItem('customBooks', JSON.stringify(customBooks)); } catch(e){}
-}
+
 function getAllStories(){ return [...STORIES, ...customBooks]; }
+
+async function loadCustomBooks(){
+  await migrateLegacyLocalStorageBooks();
+  customBooks = await dbGetAllBooks();
+  buildLibrary();
+}
 loadCustomBooks();
 
 /* ============================================================
@@ -1536,7 +1617,9 @@ function buildLibrary(){
     const card = document.createElement('button');
     card.className = 'card';
     card.style.setProperty('--card-bg', s.accent);
-    const visual = s.coverSvg ? s.coverSvg : `<div class="emoji">${escapeHtml(s.cover)}</div>`;
+    const visual = s.coverSvg ? s.coverSvg
+      : s.coverImage ? `<img class="cover-photo" src="${s.coverImage}" alt="">`
+      : `<div class="emoji">${escapeHtml(s.cover)}</div>`;
     card.innerHTML = `${visual}<div>${escapeHtml(s.title)}</div>`;
     if (s.custom) card.innerHTML += `<button class="delete-book" data-id="${s.id}" aria-label="Supprimer le livre">✕</button>`;
     card.setAttribute('aria-label', s.title);
@@ -1556,15 +1639,15 @@ function buildLibrary(){
   addBtn.className = 'card add-book-btn';
   addBtn.innerHTML = `<div class="emoji">➕</div><div>Ajouter un livre</div>`;
   addBtn.setAttribute('aria-label', 'Ajouter un livre');
-  addBtn.addEventListener('click', ()=> $('#addBookModal').classList.add('open'));
+  addBtn.addEventListener('click', ()=>{ resetBookModal(); $('#addBookModal').classList.add('open'); });
   attachDwell(addBtn);
   grid.appendChild(addBtn);
 }
 
 function deleteBook(id){
   customBooks = customBooks.filter(b=> b.id !== id);
-  saveCustomBooks();
   buildLibrary();
+  dbDeleteBook(id);
 }
 
 function openStory(id){
@@ -1585,8 +1668,12 @@ function renderPage(){
     // Page SVG (illustration dessinée)
     scene.className = 'scene scene-svg';
     scene.innerHTML = `<div class="svg-stage">${p.svg}</div>`;
+  } else if (p.image){
+    // Page d'un livre ajouté par l'utilisateur (photo scannée/prise en photo)
+    scene.className = 'scene scene-photo';
+    scene.innerHTML = `<img class="page-photo" src="${p.image}" alt="">`;
   } else if (p.plain){
-    // Page d'un livre ajouté par l'utilisateur (texte libre, sans illustration)
+    // Page d'un livre ajouté par l'utilisateur, sans photo (texte seul)
     scene.className = 'scene scene-custom';
     scene.innerHTML = `<div class="book-icon">📖</div>`;
   } else {
@@ -2630,32 +2717,124 @@ $('#btnSaveSong').addEventListener('click', ()=>{
   $('#newSongTitle').value = ''; $('#newSongUrl').value = '';
 });
 
-// Modal "Ajouter un livre"
+// Modal "Ajouter un livre" — une page = une photo (optionnelle) + un texte
+function readFileAsDataURL(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+// Redimensionne/compresse la photo pour ne pas saturer le stockage du navigateur
+function compressImage(dataURL, maxDim=1100, quality=0.72){
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let {width, height} = img;
+      if (width > maxDim || height > maxDim){
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width*scale); height = Math.round(height*scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = ()=> resolve(dataURL);
+    img.src = dataURL;
+  });
+}
+
+let bookPageCount = 0;
+function addBookPageRow(){
+  bookPageCount++;
+  const row = document.createElement('div');
+  row.className = 'book-page-row';
+  row.innerHTML = `
+    <div class="book-page-row-header">
+      <strong>Page <span class="page-num">${bookPageCount}</span></strong>
+      <button type="button" class="btn-remove-page" aria-label="Supprimer cette page">✕</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" class="page-image-input" aria-label="Photo de la page">
+    <img class="page-thumb" hidden alt="">
+    <textarea class="page-text-input" placeholder="Texte de cette page..."></textarea>
+  `;
+  row.querySelector('.btn-remove-page').addEventListener('click', ()=>{
+    row.remove();
+    renumberBookPages();
+  });
+  row.querySelector('.page-image-input').addEventListener('change', async e=>{
+    const file = e.target.files[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    const thumb = row.querySelector('.page-thumb');
+    thumb.src = dataUrl;
+    thumb.hidden = false;
+  });
+  $('#bookPagesList').appendChild(row);
+}
+function renumberBookPages(){
+  $('#bookPagesList').querySelectorAll('.book-page-row').forEach((row, i)=>{
+    row.querySelector('.page-num').textContent = i+1;
+  });
+}
+function resetBookModal(){
+  $('#bookPagesList').innerHTML = '';
+  bookPageCount = 0;
+  $('#newBookTitle').value = '';
+  addBookPageRow();
+}
+$('#btnAddPage').addEventListener('click', addBookPageRow);
+
 $('#btnCancelBook').addEventListener('click', ()=>{
   $('#addBookModal').classList.remove('open');
-  $('#newBookTitle').value = ''; $('#newBookEmoji').value = ''; $('#newBookText').value = '';
 });
-$('#btnSaveBook').addEventListener('click', ()=>{
+$('#btnSaveBook').addEventListener('click', async ()=>{
   const title = $('#newBookTitle').value.trim();
-  const emoji = $('#newBookEmoji').value.trim();
-  const text = $('#newBookText').value.trim();
-  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  if (!title || lines.length === 0){
-    speak('Il manque le titre ou le texte');
+  const btnSave = $('#btnSaveBook');
+  const rows = Array.from($('#bookPagesList').querySelectorAll('.book-page-row'));
+
+  btnSave.disabled = true;
+  const originalLabel = btnSave.textContent;
+  btnSave.textContent = 'Enregistrement...';
+
+  const pages = [];
+  for (const row of rows){
+    const text = row.querySelector('.page-text-input').value.trim();
+    const thumb = row.querySelector('.page-thumb');
+    const hasImage = !thumb.hidden && thumb.src;
+    if (!text && !hasImage) continue;
+    const image = hasImage ? await compressImage(thumb.src) : null;
+    pages.push({ text, image, plain: !image });
+  }
+
+  if (!title || pages.length === 0){
+    speak('Il manque le titre ou au moins une page');
+    btnSave.disabled = false;
+    btnSave.textContent = originalLabel;
     return;
   }
-  customBooks.push({
+
+  const book = {
     id: 'custom-' + Date.now(),
     title,
-    cover: emoji || '📗',
+    cover: pages[0].image ? null : '📗',
+    coverImage: pages[0].image || null,
     accent: rand(BOOK_ACCENTS),
     custom: true,
-    pages: lines.map(line=> ({ text: line, plain: true })),
-  });
-  saveCustomBooks();
+    pages,
+  };
+  customBooks.push(book);
   buildLibrary();
+  try{
+    await dbPutBook(book);
+  } catch(e){
+    speak('Le livre est trop lourd pour être enregistré, essayez avec moins de pages ou des photos plus petites');
+  }
+  btnSave.disabled = false;
+  btnSave.textContent = originalLabel;
   $('#addBookModal').classList.remove('open');
-  $('#newBookTitle').value = ''; $('#newBookEmoji').value = ''; $('#newBookText').value = '';
 });
 
 // Cartes du menu musique
