@@ -126,7 +126,7 @@ exports.handler = async (event) => {
     return json(405, { error: 'Méthode non supportée' });
   } catch (err) {
     const message = String((err && err.message) || err);
-    if (message.includes('MissingBlobsEnvironmentError')) {
+    if (err.name === 'MissingBlobsEnvironmentError' || message.includes('has not been configured to use Netlify Blobs')) {
       return json(500, {
         authorized: false,
         error: 'blobs-not-configured',
