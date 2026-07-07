@@ -134,8 +134,13 @@ exports.handler = async (event) => {
         const p = inputPages[i];
         let imageUrl = null;
         if (p.image) {
-          const ext = /image\/png/i.test(p.image) ? 'png' : 'jpg';
-          imageUrl = await uploadImage(supabase, `${id}/page-${i}.${ext}`, p.image);
+          if (/^data:/.test(p.image)) {
+            const ext = /image\/png/i.test(p.image) ? 'png' : 'jpg';
+            imageUrl = await uploadImage(supabase, `${id}/page-${i}.${ext}`, p.image);
+          } else {
+            // Déjà une URL hébergée (page inchangée lors d'une modification)
+            imageUrl = p.image;
+          }
         }
         pages.push({ text: p.text || '', image: imageUrl, plain: !imageUrl });
       }
@@ -143,6 +148,10 @@ exports.handler = async (event) => {
       let coverImage = null;
       if (body.coverThumb) {
         coverImage = await uploadImage(supabase, `${id}/cover.jpg`, body.coverThumb);
+      } else if (body.id) {
+        // Modification sans nouvelle vignette : on garde l'ancienne couverture
+        const { data: existing } = await supabase.from('books').select('cover_image').eq('id', body.id).maybeSingle();
+        if (existing) coverImage = existing.cover_image;
       }
 
       const row = {

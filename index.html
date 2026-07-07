@@ -474,6 +474,14 @@
     font-size: 16px; font-weight:800; cursor:pointer;
     z-index:2;
   }
+  .card .edit-book{
+    position:absolute; top:10px; right:52px;
+    background:#fff; border: 2px solid #eee;
+    border-radius:50%;
+    width: 34px; height: 34px;
+    font-size: 15px; cursor:pointer;
+    z-index:2; display:flex; align-items:center; justify-content:center;
+  }
 
   /* MODAL */
   .modal{
@@ -531,6 +539,11 @@
   }
   .page-image-input{ width:100%; margin-bottom:8px; font-size:14px;}
   .page-thumb{ max-width:100%; max-height:160px; border-radius:10px; margin-bottom:8px; display:block;}
+  .btn-remove-photo{
+    display:block; margin: -4px 0 8px; padding: 6px 10px;
+    background:#fff; border:2px solid var(--coral); color:var(--coral);
+    border-radius:12px; font-size:13px; font-weight:700; cursor:pointer;
+  }
   .btn-add-page{
     width:100%; padding:12px; margin-bottom:6px;
     border:2px dashed #ccc; background:#fafafa; border-radius:14px;
@@ -786,7 +799,7 @@
 <!-- MODAL Ajouter un livre -->
 <div class="modal" id="addBookModal">
   <div class="modal-content">
-    <h2>📖 Ajouter un livre</h2>
+    <h2 id="addBookModalTitle">📖 Ajouter un livre</h2>
     <label>
       <span>Titre du livre :</span>
       <input type="text" id="newBookTitle" placeholder="Ex : Le petit chat curieux" maxlength="60">
@@ -1760,12 +1773,18 @@ function buildLibrary(){
       : s.coverImage ? `<img class="cover-photo" src="${s.coverImage}" alt="">`
       : `<div class="emoji">${escapeHtml(s.cover)}</div>`;
     card.innerHTML = `${visual}<div>${escapeHtml(s.title)}</div>`;
-    if (s.custom && state.isAdmin) card.innerHTML += `<button class="delete-book" data-id="${s.id}" aria-label="Supprimer le livre">✕</button>`;
+    if (s.custom && state.isAdmin){
+      card.innerHTML += `<button class="delete-book" data-id="${s.id}" aria-label="Supprimer le livre">✕</button>`;
+      card.innerHTML += `<button class="edit-book" data-id="${s.id}" aria-label="Modifier le livre">✏️</button>`;
+    }
     card.setAttribute('aria-label', s.title);
     card.addEventListener('click', (e)=>{
       if (e.target.classList.contains('delete-book')){
         e.stopPropagation();
         deleteBook(e.target.dataset.id);
+      } else if (e.target.classList.contains('edit-book')){
+        e.stopPropagation();
+        openEditBook(e.target.dataset.id);
       } else {
         openStory(s.id);
       }
@@ -1975,7 +1994,12 @@ function onWordRead(idx, tokens){
   speak(tokens[idx], null, true);
   if (idx === tokens.length - 1){
     clearTimeout(wordAdvanceTimer);
-    wordAdvanceTimer = setTimeout(()=>{ if (state.inStory) nextPage(); }, 900);
+    // Ne tourne automatiquement la page que s'il y en a une après : sur la
+    // dernière page, on reste sur l'état "terminé" (tout en gris) au lieu de
+    // relancer l'histoire depuis le début tout seul.
+    if (state.story && state.page < state.story.pages.length - 1){
+      wordAdvanceTimer = setTimeout(()=>{ if (state.inStory) nextPage(); }, 900);
+    }
   }
 }
 
@@ -2908,10 +2932,12 @@ function compressImage(dataURL, maxDim=1000, quality=0.68){
 }
 
 let bookPageCount = 0;
-function addBookPageRow(){
+// existing = { text, imageUrl } pour pré-remplir une page lors d'une modification
+function addBookPageRow(existing){
   bookPageCount++;
   const row = document.createElement('div');
   row.className = 'book-page-row';
+  row.dataset.imageMode = 'none';
   row.innerHTML = `
     <div class="book-page-row-header">
       <strong>Page <span class="page-num">${bookPageCount}</span></strong>
@@ -2919,13 +2945,35 @@ function addBookPageRow(){
     </div>
     <input type="file" accept="image/*" capture="environment" class="page-image-input" aria-label="Photo de la page">
     <img class="page-thumb" hidden alt="">
+    <button type="button" class="btn-remove-photo" hidden>✕ Retirer la photo</button>
     <textarea class="page-text-input" placeholder="Texte de cette page..."></textarea>
   `;
+  const thumb = row.querySelector('.page-thumb');
+  const removePhotoBtn = row.querySelector('.btn-remove-photo');
+  const fileInput = row.querySelector('.page-image-input');
+
+  if (existing){
+    row.querySelector('.page-text-input').value = existing.text || '';
+    if (existing.imageUrl){
+      thumb.src = existing.imageUrl;
+      thumb.hidden = false;
+      removePhotoBtn.hidden = false;
+      row.dataset.imageMode = 'existing';
+    }
+  }
+
   row.querySelector('.btn-remove-page').addEventListener('click', ()=>{
     row.remove();
     renumberBookPages();
   });
-  row.querySelector('.page-image-input').addEventListener('change', async e=>{
+  removePhotoBtn.addEventListener('click', ()=>{
+    thumb.hidden = true;
+    thumb.src = '';
+    removePhotoBtn.hidden = true;
+    fileInput.value = '';
+    row.dataset.imageMode = 'none';
+  });
+  fileInput.addEventListener('change', async e=>{
     const file = e.target.files[0];
     if (!file) return;
     if (/heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)){
@@ -2934,9 +2982,10 @@ function addBookPageRow(){
       return;
     }
     const dataUrl = await readFileAsDataURL(file);
-    const thumb = row.querySelector('.page-thumb');
     thumb.src = dataUrl;
     thumb.hidden = false;
+    removePhotoBtn.hidden = false;
+    row.dataset.imageMode = 'new';
   });
   $('#bookPagesList').appendChild(row);
 }
@@ -2945,14 +2994,40 @@ function renumberBookPages(){
     row.querySelector('.page-num').textContent = i+1;
   });
 }
+let editingBook = null; // {id, accent} du livre en cours de modification, ou null pour un ajout
+
 function resetBookModal(){
   $('#bookPagesList').innerHTML = '';
   bookPageCount = 0;
   $('#newBookTitle').value = '';
   hideBookSaveError();
+  editingBook = null;
+  $('#addBookModalTitle').textContent = '📖 Ajouter un livre';
+  $('#btnSaveBook').textContent = 'Enregistrer le livre';
   addBookPageRow();
 }
-$('#btnAddPage').addEventListener('click', addBookPageRow);
+
+async function openEditBook(id){
+  resetBookModal();
+  $('#addBookModal').classList.add('open');
+  $('#addBookModalTitle').textContent = '📖 Chargement...';
+  try{
+    const book = await apiGetBook(id);
+    editingBook = { id: book.id, accent: book.accent };
+    $('#newBookTitle').value = book.title || '';
+    $('#addBookModalTitle').textContent = '📖 Modifier le livre';
+    $('#btnSaveBook').textContent = 'Enregistrer les modifications';
+    $('#bookPagesList').innerHTML = '';
+    bookPageCount = 0;
+    (book.pages || []).forEach(p=> addBookPageRow({ text: p.text, imageUrl: p.image }));
+    if (!book.pages || book.pages.length === 0) addBookPageRow();
+  } catch(e){
+    $('#addBookModal').classList.remove('open');
+    speak('Impossible de charger ce livre pour le modifier');
+  }
+}
+
+$('#btnAddPage').addEventListener('click', ()=> addBookPageRow());
 
 function showBookSaveError(msg){
   speak(msg);
@@ -2979,18 +3054,26 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
   btnSave.textContent = 'Enregistrement...';
 
   const pages = [];
+  let firstPageImageIsNew = false;
   for (const row of rows){
     const text = row.querySelector('.page-text-input').value.trim();
     const thumb = row.querySelector('.page-thumb');
-    const hasImage = !thumb.hidden && thumb.src;
-    if (!text && !hasImage) continue;
-    const image = hasImage ? await compressImage(thumb.src) : null;
-    if (hasImage && !image){
-      showBookSaveError('Une des photos n\'a pas pu être traitée (format non pris en charge). Essayez de la remplacer par un JPEG ou un PNG.');
-      btnSave.disabled = false;
-      btnSave.textContent = originalLabel;
-      return;
+    const mode = row.dataset.imageMode; // 'new' | 'existing' | 'none'
+    if (!text && mode === 'none') continue;
+
+    let image = null;
+    if (mode === 'new'){
+      image = await compressImage(thumb.src);
+      if (!image){
+        showBookSaveError('Une des photos n\'a pas pu être traitée (format non pris en charge). Essayez de la remplacer par un JPEG ou un PNG.');
+        btnSave.disabled = false;
+        btnSave.textContent = originalLabel;
+        return;
+      }
+    } else if (mode === 'existing'){
+      image = thumb.src; // URL déjà hébergée, pas besoin de la retraiter
     }
+    if (pages.length === 0 && mode === 'new') firstPageImageIsNew = true;
     pages.push({ text, image, plain: !image });
   }
 
@@ -3001,8 +3084,17 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
     return;
   }
 
-  const coverThumb = pages[0].image ? await compressImage(pages[0].image, 220, 0.6) : null;
-  const payload = { title, accent: rand(BOOK_ACCENTS), pages, coverThumb };
+  // On ne renvoie une nouvelle vignette de couverture que si la photo de la
+  // première page vient d'être ajoutée/changée ; sinon le serveur garde
+  // l'ancienne couverture (cas d'une modification sans toucher à cette page).
+  const coverThumb = (firstPageImageIsNew && pages[0].image) ? await compressImage(pages[0].image, 220, 0.6) : null;
+  const payload = {
+    title,
+    accent: (editingBook && editingBook.accent) || rand(BOOK_ACCENTS),
+    pages,
+    coverThumb,
+  };
+  if (editingBook) payload.id = editingBook.id;
 
   const payloadMB = (JSON.stringify(payload).length / (1024*1024)).toFixed(1);
   if (payloadMB > 5.5){
@@ -3014,7 +3106,8 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
 
   try{
     const meta = await apiSaveBook(payload);
-    customBooks.push(meta);
+    const idx = customBooks.findIndex(b=> b.id === meta.id);
+    if (idx >= 0) customBooks[idx] = meta; else customBooks.push(meta);
     buildLibrary();
     $('#addBookModal').classList.remove('open');
   } catch(e){
