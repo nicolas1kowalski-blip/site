@@ -1,0 +1,9 @@
+{
+  "name": "mes-premiers-jeux",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Application d'éveil compatible commande oculaire (Tobii) : histoires, jeux et musique.",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
