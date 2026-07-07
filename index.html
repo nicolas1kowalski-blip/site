@@ -1959,11 +1959,11 @@ function renderPage(){
     btnNext.classList.remove('replay');
   }
   pageSound();
-  speak(p.text, ()=>{
-    if (state.autoAdvance && state.inStory && state.page < state.story.pages.length - 1){
-      setTimeout(()=>{ if (state.inStory) nextPage(); }, 1200);
-    }
-  });
+  // Plus de narration automatique de toute la phrase à l'ouverture de la page :
+  // la lecture se fait mot par mot au regard (voir highlightNextWord/onWordRead).
+  if (state.autoAdvance && state.inStory && state.page < state.story.pages.length - 1){
+    setTimeout(()=>{ if (state.inStory) nextPage(); }, 4000);
+  }
 }
 
 // Tables de noms pour les emojis (pour les anciennes histoires)
