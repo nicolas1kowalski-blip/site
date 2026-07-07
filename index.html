@@ -1348,7 +1348,7 @@ const STORIES = [
 
 /* ============================================================
    LIVRES AJOUTÉS PAR L'UTILISATEUR (photo + texte par page)
-   Stockés côté serveur (Netlify Blobs, via netlify/functions/books.js)
+   Stockés côté serveur (Supabase, via netlify/functions/books.js)
    pour être accessibles depuis n'importe quel appareil. La bibliothèque
    ne reçoit que des fiches légères (titre + petite vignette) ; le
    contenu complet d'un livre (toutes les photos) n'est téléchargé
@@ -1515,9 +1515,6 @@ $('#btnAdminLogin').addEventListener('click', async ()=>{
       } catch(e){}
     } else if (reason === 'not-configured'){
       errEl.textContent = 'Le mot de passe administrateur n\'est pas encore configuré sur le serveur : ajoutez la variable ADMIN_PASSWORD dans Netlify (Site configuration → Environment variables), puis redéployez le site.';
-      errEl.style.display = '';
-    } else if (reason === 'blobs-not-configured'){
-      errEl.textContent = 'Le stockage Netlify Blobs n\'est pas disponible sur ce site : ajoutez les variables BLOBS_SITE_ID et BLOBS_TOKEN dans Netlify, puis redéployez.';
       errEl.style.display = '';
     } else {
       errEl.textContent = 'Mot de passe incorrect.';
