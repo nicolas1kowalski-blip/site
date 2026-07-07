@@ -57,10 +57,9 @@ function checkAuth(event) {
 
 exports.handler = async (event) => {
   try {
-    const store = getBooksStore();
-
     if (event.httpMethod === 'GET') {
       // Vérification silencieuse du mot de passe (utilisée par l'écran de connexion)
+      // — ne touche pas au stockage, doit fonctionner même si Blobs est mal configuré.
       if (event.queryStringParameters && event.queryStringParameters.verify === '1') {
         const auth = checkAuth(event);
         if (auth === 'ok') return json(200, { authorized: true });
@@ -69,6 +68,7 @@ exports.handler = async (event) => {
         }
         return json(401, { authorized: false, error: 'wrong' });
       }
+      const store = getBooksStore();
       const id = event.queryStringParameters && event.queryStringParameters.id;
       if (id) {
         const full = await store.get(FULL_PREFIX + id, { type: 'json' });
@@ -84,6 +84,7 @@ exports.handler = async (event) => {
       const auth = checkAuth(event);
       if (auth === 'not-configured') return json(500, { error: 'ADMIN_PASSWORD non configuré sur le serveur' });
       if (auth !== 'ok') return json(401, { error: 'Mot de passe administrateur requis' });
+      const store = getBooksStore();
 
       const body = JSON.parse(event.body || '{}');
       const title = (body.title || '').trim();
@@ -115,6 +116,7 @@ exports.handler = async (event) => {
       const auth = checkAuth(event);
       if (auth === 'not-configured') return json(500, { error: 'ADMIN_PASSWORD non configuré sur le serveur' });
       if (auth !== 'ok') return json(401, { error: 'Mot de passe administrateur requis' });
+      const store = getBooksStore();
 
       const id = event.queryStringParameters && event.queryStringParameters.id;
       if (!id) return json(400, { error: 'id manquant' });
