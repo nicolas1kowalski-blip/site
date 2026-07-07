@@ -32,12 +32,14 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-function isAuthorized(event) {
+// Retourne 'not-configured' si ADMIN_PASSWORD n'est pas défini côté serveur,
+// 'ok' si le mot de passe envoyé correspond, sinon 'wrong'.
+function checkAuth(event) {
   const configured = process.env.ADMIN_PASSWORD;
-  if (!configured) return false; // pas de mot de passe configuré => on refuse par défaut
+  if (!configured) return 'not-configured';
   const headers = event.headers || {};
   const token = headers['x-admin-token'] || headers['X-Admin-Token'];
-  return safeEqual(token, configured);
+  return safeEqual(token, configured) ? 'ok' : 'wrong';
 }
 
 exports.handler = async (event) => {
@@ -47,7 +49,12 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'GET') {
       // Vérification silencieuse du mot de passe (utilisée par l'écran de connexion)
       if (event.queryStringParameters && event.queryStringParameters.verify === '1') {
-        return isAuthorized(event) ? json(200, { authorized: true }) : json(401, { authorized: false });
+        const auth = checkAuth(event);
+        if (auth === 'ok') return json(200, { authorized: true });
+        if (auth === 'not-configured') {
+          return json(500, { authorized: false, error: 'not-configured' });
+        }
+        return json(401, { authorized: false, error: 'wrong' });
       }
       const id = event.queryStringParameters && event.queryStringParameters.id;
       if (id) {
@@ -61,7 +68,9 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === 'POST') {
-      if (!isAuthorized(event)) return json(401, { error: 'Mot de passe administrateur requis' });
+      const auth = checkAuth(event);
+      if (auth === 'not-configured') return json(500, { error: 'ADMIN_PASSWORD non configuré sur le serveur' });
+      if (auth !== 'ok') return json(401, { error: 'Mot de passe administrateur requis' });
 
       const body = JSON.parse(event.body || '{}');
       const title = (body.title || '').trim();
@@ -90,7 +99,9 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === 'DELETE') {
-      if (!isAuthorized(event)) return json(401, { error: 'Mot de passe administrateur requis' });
+      const auth = checkAuth(event);
+      if (auth === 'not-configured') return json(500, { error: 'ADMIN_PASSWORD non configuré sur le serveur' });
+      if (auth !== 'ok') return json(401, { error: 'Mot de passe administrateur requis' });
 
       const id = event.queryStringParameters && event.queryStringParameters.id;
       if (!id) return json(400, { error: 'id manquant' });
