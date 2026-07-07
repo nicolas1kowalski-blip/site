@@ -16,6 +16,19 @@ const { getStore } = require('@netlify/blobs');
 const META_PREFIX = 'meta:';
 const FULL_PREFIX = 'full:';
 
+// Sur certains sites, Netlify n'injecte pas automatiquement le contexte
+// Netlify Blobs dans les fonctions ("MissingBlobsEnvironmentError"). Dans ce
+// cas, on bascule sur une configuration manuelle avec BLOBS_SITE_ID et
+// BLOBS_TOKEN (variables d'environnement à créer dans Netlify).
+function getBooksStore() {
+  const siteID = process.env.BLOBS_SITE_ID;
+  const token = process.env.BLOBS_TOKEN;
+  if (siteID && token) {
+    return getStore({ name: 'books', siteID, token });
+  }
+  return getStore('books');
+}
+
 function json(statusCode, data) {
   return {
     statusCode,
@@ -43,9 +56,9 @@ function checkAuth(event) {
 }
 
 exports.handler = async (event) => {
-  const store = getStore('books');
-
   try {
+    const store = getBooksStore();
+
     if (event.httpMethod === 'GET') {
       // Vérification silencieuse du mot de passe (utilisée par l'écran de connexion)
       if (event.queryStringParameters && event.queryStringParameters.verify === '1') {
@@ -112,6 +125,14 @@ exports.handler = async (event) => {
 
     return json(405, { error: 'Méthode non supportée' });
   } catch (err) {
-    return json(500, { error: String((err && err.message) || err) });
+    const message = String((err && err.message) || err);
+    if (message.includes('MissingBlobsEnvironmentError')) {
+      return json(500, {
+        authorized: false,
+        error: 'blobs-not-configured',
+        detail: 'Netlify Blobs indisponible : définissez BLOBS_SITE_ID et BLOBS_TOKEN dans les variables d\'environnement.',
+      });
+    }
+    return json(500, { error: message });
   }
 };
