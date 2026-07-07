@@ -5,6 +5,12 @@
 // Ainsi la liste de la bibliothèque reste rapide à charger même avec
 // beaucoup de livres, et les photos pleine résolution ne sont
 // téléchargées qu'à l'ouverture du livre concerné.
+//
+// La lecture (GET) est publique : les enfants doivent pouvoir lire sans
+// se connecter. L'ajout et la suppression (POST/DELETE) exigent le mot
+// de passe administrateur défini dans la variable d'environnement
+// ADMIN_PASSWORD (Netlify → Site settings → Environment variables).
+const crypto = require('crypto');
 const { getStore } = require('@netlify/blobs');
 
 const META_PREFIX = 'meta:';
@@ -18,11 +24,31 @@ function json(statusCode, data) {
   };
 }
 
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function isAuthorized(event) {
+  const configured = process.env.ADMIN_PASSWORD;
+  if (!configured) return false; // pas de mot de passe configuré => on refuse par défaut
+  const headers = event.headers || {};
+  const token = headers['x-admin-token'] || headers['X-Admin-Token'];
+  return safeEqual(token, configured);
+}
+
 exports.handler = async (event) => {
   const store = getStore('books');
 
   try {
     if (event.httpMethod === 'GET') {
+      // Vérification silencieuse du mot de passe (utilisée par l'écran de connexion)
+      if (event.queryStringParameters && event.queryStringParameters.verify === '1') {
+        return isAuthorized(event) ? json(200, { authorized: true }) : json(401, { authorized: false });
+      }
       const id = event.queryStringParameters && event.queryStringParameters.id;
       if (id) {
         const full = await store.get(FULL_PREFIX + id, { type: 'json' });
@@ -35,6 +61,8 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === 'POST') {
+      if (!isAuthorized(event)) return json(401, { error: 'Mot de passe administrateur requis' });
+
       const body = JSON.parse(event.body || '{}');
       const title = (body.title || '').trim();
       const pages = Array.isArray(body.pages) ? body.pages : [];
@@ -62,6 +90,8 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === 'DELETE') {
+      if (!isAuthorized(event)) return json(401, { error: 'Mot de passe administrateur requis' });
+
       const id = event.queryStringParameters && event.queryStringParameters.id;
       if (!id) return json(400, { error: 'id manquant' });
       await store.delete(META_PREFIX + id);
