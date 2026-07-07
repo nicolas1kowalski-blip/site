@@ -1516,6 +1516,9 @@ $('#btnAdminLogin').addEventListener('click', async ()=>{
     } else if (reason === 'not-configured'){
       errEl.textContent = 'Le mot de passe administrateur n\'est pas encore configuré sur le serveur : ajoutez la variable ADMIN_PASSWORD dans Netlify (Site configuration → Environment variables), puis redéployez le site.';
       errEl.style.display = '';
+    } else if (reason === 'blobs-not-configured'){
+      errEl.textContent = 'Le stockage Netlify Blobs n\'est pas disponible sur ce site : ajoutez les variables BLOBS_SITE_ID et BLOBS_TOKEN dans Netlify, puis redéployez.';
+      errEl.style.display = '';
     } else {
       errEl.textContent = 'Mot de passe incorrect.';
       errEl.style.display = '';
