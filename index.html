@@ -797,6 +797,7 @@
     </div>
     <div class="book-pages-list" id="bookPagesList"></div>
     <button type="button" class="btn-add-page" id="btnAddPage">➕ Ajouter une page</button>
+    <div id="bookSaveError" class="modal-info" style="display:none; background:#FFE0E0;"></div>
     <div class="modal-buttons">
       <button class="btn-cancel" id="btnCancelBook">Annuler</button>
       <button class="btn-save" id="btnSaveBook">Enregistrer le livre</button>
@@ -1383,6 +1384,9 @@ async function apiGetBook(id){
   if (!res.ok) throw new Error('Échec du chargement du livre');
   return res.json();
 }
+async function apiErrorDetail(res){
+  try{ return (await res.json()).error || null; } catch(e){ return null; }
+}
 async function apiSaveBook(book){
   const res = await fetch(BOOKS_API, {
     method: 'POST',
@@ -1390,13 +1394,13 @@ async function apiSaveBook(book){
     body: JSON.stringify(book),
   });
   if (res.status === 401) throw new Error('Mot de passe administrateur requis ou expiré');
-  if (!res.ok) throw new Error('Échec de l\'enregistrement du livre');
+  if (!res.ok) throw new Error((await apiErrorDetail(res)) || 'Échec de l\'enregistrement du livre');
   return res.json();
 }
 async function apiDeleteBook(id){
   const res = await fetch(BOOKS_API + '?id=' + encodeURIComponent(id), { method: 'DELETE', headers: adminHeaders() });
   if (res.status === 401) throw new Error('Mot de passe administrateur requis ou expiré');
-  if (!res.ok) throw new Error('Échec de la suppression du livre');
+  if (!res.ok) throw new Error((await apiErrorDetail(res)) || 'Échec de la suppression du livre');
   return res.json();
 }
 
@@ -2947,10 +2951,22 @@ function resetBookModal(){
   $('#bookPagesList').innerHTML = '';
   bookPageCount = 0;
   $('#newBookTitle').value = '';
+  hideBookSaveError();
   addBookPageRow();
 }
 $('#btnAddPage').addEventListener('click', addBookPageRow);
 
+function showBookSaveError(msg){
+  speak(msg);
+  const el = $('#bookSaveError');
+  el.textContent = msg;
+  el.style.display = '';
+}
+function hideBookSaveError(){
+  const el = $('#bookSaveError');
+  el.style.display = 'none';
+  el.textContent = '';
+}
 $('#btnCancelBook').addEventListener('click', ()=>{
   $('#addBookModal').classList.remove('open');
 });
@@ -2959,6 +2975,7 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
   const btnSave = $('#btnSaveBook');
   const rows = Array.from($('#bookPagesList').querySelectorAll('.book-page-row'));
 
+  hideBookSaveError();
   btnSave.disabled = true;
   const originalLabel = btnSave.textContent;
   btnSave.textContent = 'Enregistrement...';
@@ -2971,7 +2988,7 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
     if (!text && !hasImage) continue;
     const image = hasImage ? await compressImage(thumb.src) : null;
     if (hasImage && !image){
-      speak('Une des photos n\'a pas pu être traitée (format non pris en charge). Essayez de la remplacer par un JPEG ou un PNG.');
+      showBookSaveError('Une des photos n\'a pas pu être traitée (format non pris en charge). Essayez de la remplacer par un JPEG ou un PNG.');
       btnSave.disabled = false;
       btnSave.textContent = originalLabel;
       return;
@@ -2980,7 +2997,7 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
   }
 
   if (!title || pages.length === 0){
-    speak('Il manque le titre ou au moins une page');
+    showBookSaveError('Il manque le titre ou au moins une page.');
     btnSave.disabled = false;
     btnSave.textContent = originalLabel;
     return;
@@ -2991,7 +3008,7 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
 
   const payloadMB = (JSON.stringify(payload).length / (1024*1024)).toFixed(1);
   if (payloadMB > 5.5){
-    speak(`Ce livre pèse environ ${payloadMB} méga-octets, c'est trop pour être enregistré en une fois. Essayez de le diviser en deux livres, ou retirez une photo.`);
+    showBookSaveError(`Ce livre pèse environ ${payloadMB} méga-octets, c'est trop pour être enregistré en une fois. Essayez de le diviser en deux livres, ou retirez une photo.`);
     btnSave.disabled = false;
     btnSave.textContent = originalLabel;
     return;
@@ -3003,7 +3020,7 @@ $('#btnSaveBook').addEventListener('click', async ()=>{
     buildLibrary();
     $('#addBookModal').classList.remove('open');
   } catch(e){
-    speak('Impossible d\'enregistrer le livre, vérifiez la connexion internet, ou essayez avec moins de pages');
+    showBookSaveError(e.message || 'Impossible d\'enregistrer le livre, vérifiez la connexion internet.');
   }
   btnSave.disabled = false;
   btnSave.textContent = originalLabel;
