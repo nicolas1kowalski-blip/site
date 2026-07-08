@@ -158,13 +158,48 @@ export const BALLOON_POOL = [
 
 export const BALLOON_COLORS = ['#FF6B6B', '#4ECDC4', '#FFD93C', '#95E06C', '#A06CD5', '#FF9FB5', '#5DADE2', '#FFB347'];
 
-export function svgBalloon(color){
-  return `<svg class="balloon-svg" viewBox="0 0 100 145" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="50" cy="55" rx="42" ry="50" fill="${color}" stroke="#2B2D42" stroke-width="2.5"/>
-    <ellipse cx="38" cy="38" rx="10" ry="16" fill="#fff" opacity="0.4"/>
-    <ellipse cx="42" cy="33" rx="4" ry="7" fill="#fff" opacity="0.7"/>
-    <path d="M44 103 L50 112 L56 103 Z" fill="${color}" stroke="#2B2D42" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M50 112 Q46 122 52 132 Q48 140 50 145" stroke="#2B2D42" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function mixColor(hex, target, amt) {
+  const c = hexToRgb(hex);
+  const t = hexToRgb(target);
+  const r = Math.round(c.r + (t.r - c.r) * amt);
+  const g = Math.round(c.g + (t.g - c.g) * amt);
+  const b = Math.round(c.b + (t.b - c.b) * amt);
+  return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join('');
+}
+
+// uid distingue les dégradés SVG de chaque ballon affiché en même temps :
+// des id identiques entre plusieurs <svg> du DOM casseraient leur rendu.
+export function svgBalloon(color, uid = '0') {
+  const light = mixColor(color, '#ffffff', 0.55);
+  const dark = mixColor(color, '#000000', 0.22);
+  const gradId = `balloonGrad-${uid}`;
+  const shineId = `balloonShine-${uid}`;
+  const delay = (Number(uid) % 6) * 0.35;
+  return `<svg class="balloon-svg" viewBox="0 0 100 150" xmlns="http://www.w3.org/2000/svg" style="animation-delay:${delay}s">
+    <defs>
+      <radialGradient id="${gradId}" cx="35%" cy="26%" r="80%">
+        <stop offset="0%" stop-color="${light}"/>
+        <stop offset="55%" stop-color="${color}"/>
+        <stop offset="100%" stop-color="${dark}"/>
+      </radialGradient>
+      <radialGradient id="${shineId}" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <ellipse cx="50" cy="111" rx="23" ry="4.5" fill="#2B2D42" opacity="0.12"/>
+    <path d="M50 6 C74 6 90 32 90 61 C90 89 72 109 50 109 C28 109 10 89 10 61 C10 32 26 6 50 6 Z"
+          fill="url(#${gradId})" stroke="#2B2D42" stroke-width="2.5" stroke-linejoin="round"/>
+    <ellipse cx="34" cy="36" rx="17" ry="23" fill="url(#${shineId})"/>
+    <ellipse cx="39" cy="27" rx="5" ry="9" fill="#fff" opacity="0.85"/>
+    <path d="M44 107 L50 117 L56 107 Z" fill="${color}" stroke="#2B2D42" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M50 117 Q44 127 52 137 Q46 145 50 150" stroke="#2B2D42" stroke-width="1.8" fill="none" stroke-linecap="round"/>
   </svg>`;
 }
 
