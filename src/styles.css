@@ -583,10 +583,28 @@
   }
 
   /* BALLONS */
+  .stage.balloon-sky{
+    background: linear-gradient(180deg, #BEE7FB 0%, #DFF4FF 45%, #FDFEFF 100%);
+  }
   .balloon-stage{
     position: relative;
     width: 100%; height: 100%;
     overflow: hidden;
+  }
+  .balloon-cloud{
+    position: absolute;
+    left: -15%;
+    font-size: 46px;
+    opacity: .55;
+    pointer-events: none;
+    animation: balloon-cloud-drift linear infinite;
+  }
+  .balloon-cloud:nth-child(1){ top:6%; font-size:40px; animation-duration:22s;}
+  .balloon-cloud:nth-child(2){ top:58%; font-size:30px; animation-duration:30s; animation-delay:-9s;}
+  .balloon-cloud:nth-child(3){ top:32%; font-size:56px; animation-duration:38s; animation-delay:-20s;}
+  @keyframes balloon-cloud-drift{
+    from{ transform: translateX(0);}
+    to{ transform: translateX(115vw);}
   }
   .balloon{
     position: absolute;
@@ -600,16 +618,18 @@
   .balloon-svg{
     width: 100%; height: 100%;
     pointer-events: none;
-    animation: balloon-rotate 4s ease-in-out infinite;
-    filter: drop-shadow(0 4px 0 rgba(0,0,0,0.18));
+    animation: balloon-float 3.6s ease-in-out infinite;
+    filter: drop-shadow(0 6px 4px rgba(43,45,66,0.22));
     transition: filter .15s;
   }
-  @keyframes balloon-rotate{
-    0%, 100%{ transform: rotate(-4deg);}
-    50%{ transform: rotate(4deg);}
+  @keyframes balloon-float{
+    0%, 100%{ transform: translateY(0) rotate(-4deg);}
+    25%{ transform: translateY(-7px) rotate(-1deg);}
+    50%{ transform: translateY(-11px) rotate(4deg);}
+    75%{ transform: translateY(-4px) rotate(1deg);}
   }
   .balloon:hover .balloon-svg, .balloon:focus-visible .balloon-svg{
-    filter: drop-shadow(0 0 14px var(--sun)) drop-shadow(0 4px 0 rgba(0,0,0,0.18));
+    filter: drop-shadow(0 0 14px var(--sun)) drop-shadow(0 6px 4px rgba(43,45,66,0.22));
   }
   .balloon-content{
     position: absolute;
@@ -639,19 +659,32 @@
     from{ transform: scale(0); opacity:0;}
     to{ transform: scale(1); opacity:1;}
   }
+  .pop-ring{
+    position: absolute; pointer-events: none;
+    width: 20px; height: 20px; margin-left: -10px; margin-top: -10px;
+    border: 4px solid; border-radius: 50%;
+    animation: pop-ring-expand .5s ease-out forwards;
+  }
+  @keyframes pop-ring-expand{
+    from{ transform: scale(0.3); opacity: .8;}
+    to{ transform: scale(3.4); opacity: 0;}
+  }
   .pop-particles{
     position: absolute; pointer-events: none;
     width: 0; height: 0;
   }
-  .pop-particles span{
+  .particle-piece{
     position: absolute;
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    animation: particle .6s ease-out forwards;
+    animation: particle .75s cubic-bezier(.25,.7,.4,1) forwards;
   }
+  .particle-piece.circle{ border-radius: 50%;}
+  .particle-piece.diamond{ border-radius: 3px;}
   @keyframes particle{
-    from{ transform: translate(-50%, -50%); opacity: 1;}
-    to{ transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px))); opacity: 0;}
+    from{ transform: translate(-50%, -50%) rotate(0deg); opacity: 1;}
+    to{
+      transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px) + 36px)) rotate(var(--rot, 0deg));
+      opacity: 0;
+    }
   }
   @media (max-height: 700px){
     .balloon{ width: 88px; height: 120px;}

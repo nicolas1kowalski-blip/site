@@ -19,7 +19,7 @@ function Balloon({ balloon, index, appearing, onPop, btnRefCallback }) {
       aria-label={balloon.item.name}
       onClick={() => onPop(index)}
     >
-      <span style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: svgBalloon(balloon.color) }} />
+      <span style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: svgBalloon(balloon.color, index) }} />
       <span className="balloon-content">{balloon.item.emoji}</span>
     </DwellButton>
   );
@@ -132,21 +132,36 @@ export default function BalloonsGame({ active }) {
     const elRect = centerEl.getBoundingClientRect();
     const cx = elRect.left + elRect.width / 2 - stageRect.left;
     const cy = elRect.top + elRect.height / 2 - stageRect.top;
+
+    const ring = document.createElement('div');
+    ring.className = 'pop-ring';
+    ring.style.left = cx + 'px';
+    ring.style.top = cy + 'px';
+    ring.style.borderColor = color;
+    stage.appendChild(ring);
+    setTimeout(() => ring.remove(), 500);
+
     const wrap = document.createElement('div');
     wrap.className = 'pop-particles';
     wrap.style.left = cx + 'px';
     wrap.style.top = cy + 'px';
-    for (let i = 0; i < 10; i++) {
-      const angle = (Math.PI * 2 * i) / 10;
-      const dist = 60 + Math.random() * 40;
+    const count = 14;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+      const dist = 55 + Math.random() * 55;
+      const size = 7 + Math.random() * 9;
       const p = document.createElement('span');
+      p.className = 'particle-piece ' + (Math.random() < 0.35 ? 'diamond' : 'circle');
+      p.style.width = size + 'px';
+      p.style.height = size + 'px';
       p.style.background = color;
       p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
       p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+      p.style.setProperty('--rot', Math.random() * 360 + 'deg');
       wrap.appendChild(p);
     }
     stage.appendChild(wrap);
-    setTimeout(() => wrap.remove(), 700);
+    setTimeout(() => wrap.remove(), 750);
   }
 
   function handlePop(idx) {
@@ -201,8 +216,11 @@ export default function BalloonsGame({ active }) {
   return (
     <>
       <div className="question">{target ? `Trouve ${target.name} !` : ''}</div>
-      <div className="stage" ref={stageRef}>
+      <div className="stage balloon-sky" ref={stageRef}>
         <div className="balloon-stage" ref={arenaRef}>
+          <span className="balloon-cloud" aria-hidden="true">☁️</span>
+          <span className="balloon-cloud" aria-hidden="true">☁️</span>
+          <span className="balloon-cloud" aria-hidden="true">☁️</span>
           {balloonItems.map((b, idx) => (
             <Balloon
               key={idx}
