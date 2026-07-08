@@ -10,11 +10,11 @@ const MotionDwellButton = motion.create(DwellButton);
 export default function MotionCard({ index = 0, children, ...rest }) {
   return (
     <MotionDwellButton
-      initial={{ opacity: 0, scale: 0.5, y: 24 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.5, y: 24, rotate: 0 }}
+      animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 18, delay: Math.min(index, 10) * 0.05 }}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: 1.06, y: -8, rotate: -1.5, transition: { type: 'spring', stiffness: 300, damping: 15 } }}
+      whileTap={{ scale: 0.94, y: -2, rotate: 0, transition: { duration: 0.1 } }}
       {...rest}
     >
       {children}
