@@ -118,7 +118,20 @@ export default function BalloonsGame({ active }) {
           m.y = rect.height - h;
           m.vy = -Math.abs(m.vy);
         }
-        btn.style.transform = `translate(${m.x}px, ${m.y}px)`;
+        // Sélection au regard : le ballon gonfle et tremble de plus en plus.
+        // On compose l'échelle et le tremblement dans le même transform que la
+        // position, sinon le transform inline de la physique les écraserait.
+        const p = parseFloat(btn.style.getPropertyValue('--dwell-pct')) || 0;
+        let sx = 0;
+        let sy = 0;
+        let scale = 1;
+        if (p > 0) {
+          const amp = p * p * 5;
+          sx = (Math.random() - 0.5) * 2 * amp;
+          sy = (Math.random() - 0.5) * 2 * amp;
+          scale = 1 + p * 0.2;
+        }
+        btn.style.transform = `translate(${m.x + sx}px, ${m.y + sy}px) scale(${scale})`;
       });
       animRef.current = requestAnimationFrame(tick);
     };

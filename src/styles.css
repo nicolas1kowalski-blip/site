@@ -205,7 +205,6 @@
     transform: scale(1.1);
     outline: none;
   }
-  .body-part .dwell-ring { border-radius: 50%; }
 
   /* JIGSAW PUZZLE */
   .jigsaw-board{
@@ -345,16 +344,37 @@
     font-size: clamp(24px, 3vw, 38px); color: var(--ink);
   }
 
-  /* DWELL RING (clic au regard) */
-  .dwell-ring{
-    position:absolute; inset:0;
-    border-radius: inherit; pointer-events:none;
-    background: conic-gradient(var(--sun) var(--dwell-deg, 0deg), transparent 0);
-    opacity:0;
-    mask: radial-gradient(circle, transparent 62%, black 64%);
-    -webkit-mask: radial-gradient(circle, transparent 62%, black 64%);
+  /* SÉLECTION AU REGARD (clic au survol) : plus d'anneau ni de carré en
+     overlay. L'objet regardé "prend vie" — il grandit et se met à trembler
+     de plus en plus fort à mesure que la sélection se charge, avec une lueur
+     chaude qui s'intensifie, puis l'action se déclenche. --dwell-pct (0→1) et
+     --dwell-sx/sy (tremblement) sont écrits par useDwell à chaque frame.
+     Cas particuliers plus bas : les cartes (framer-motion pilote le transform
+     du bouton, on anime donc leur icône) et les ballons (transform piloté par
+     la boucle physique, on y compose l'échelle directement). */
+  .dwell-active{
+    transform:
+      translate(var(--dwell-sx, 0px), var(--dwell-sy, 0px))
+      scale(calc(1 + var(--dwell-pct, 0) * 0.14));
+    filter: drop-shadow(0 0 calc(var(--dwell-pct, 0) * 18px) rgba(255,201,60,.7));
+    z-index: 6;
   }
-  .dwell-active .dwell-ring{ opacity:.9;}
+  /* Boutons de réponse : gagne sur le transform de :hover (même spécificité,
+     placé après) pour que ce soit bien l'effet "prend vie" qui s'applique. */
+  .answer.dwell-active{
+    transform:
+      translate(var(--dwell-sx, 0px), var(--dwell-sy, 0px))
+      scale(calc(1 + var(--dwell-pct, 0) * 0.1));
+  }
+  /* Cartes : framer-motion pilote le transform du <button>, donc on fait
+     vivre l'icône à l'intérieur (que framer ne touche pas). */
+  .card.dwell-active .emoji,
+  .card.dwell-active .cover-svg{
+    animation: none;
+    transform:
+      translate(var(--dwell-sx, 0px), var(--dwell-sy, 0px))
+      scale(calc(1 + var(--dwell-pct, 0) * 0.22));
+  }
 
   /* FEEDBACK */
   .feedback{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:50; pointer-events:none;}

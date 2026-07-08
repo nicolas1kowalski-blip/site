@@ -1,8 +1,9 @@
 import React, { forwardRef } from 'react';
 import { useDwell } from '../hooks/useDwell.js';
 
-// Bouton générique compatible clic au survol (commande oculaire). Englobe
-// automatiquement l'anneau de progression (.dwell-ring).
+// Bouton générique compatible clic au survol (commande oculaire). Le retour
+// visuel de sélection (l'objet grandit et tremble) est géré par la classe
+// .dwell-active posée par useDwell — aucun overlay à rendre ici.
 const DwellButton = forwardRef(function DwellButton(
   { onClick, disabled, children, ...rest },
   forwardedRef
@@ -23,7 +24,6 @@ const DwellButton = forwardRef(function DwellButton(
       {...rest}
     >
       {children}
-      <div className="dwell-ring" />
     </button>
   );
 });
