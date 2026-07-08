@@ -93,11 +93,18 @@ export function BooksProvider({ children }) {
   }, []);
 
   const deleteBook = useCallback(async (id) => {
-    setCustomBooks((prev) => prev.filter((b) => b.id !== id));
+    let removed = null;
+    setCustomBooks((prev) => {
+      removed = prev.find((b) => b.id === id) || null;
+      return prev.filter((b) => b.id !== id);
+    });
     try {
       await apiDeleteBook(id);
     } catch (e) {
-      speak('Erreur pendant la suppression du livre');
+      // La suppression a échoué côté serveur : on remet le livre dans la liste
+      // pour ne pas laisser croire qu'il a bien été supprimé.
+      if (removed) setCustomBooks((prev) => (prev.some((b) => b.id === id) ? prev : [...prev, removed]));
+      speak('Erreur pendant la suppression du livre, vérifiez la connexion internet');
     }
   }, []);
 
