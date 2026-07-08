@@ -70,6 +70,38 @@ export default function AddBookModal({ open, editId, onClose }) {
     setPages((prev) => [...prev, emptyPage(++pageIdCounter.current)]);
   }
 
+  async function handleImportJson(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setSaveError('');
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || typeof data.title !== 'string' || !data.title.trim()) {
+        throw new Error('le champ "title" est manquant ou vide');
+      }
+      if (!Array.isArray(data.pages) || data.pages.length === 0) {
+        throw new Error('le champ "pages" doit être une liste non vide');
+      }
+      const importedPages = data.pages.map((p) => {
+        const hasImage = typeof p.image === 'string' && p.image.startsWith('data:image');
+        return {
+          id: ++pageIdCounter.current,
+          text: typeof p.text === 'string' ? p.text : '',
+          imageMode: hasImage ? 'new' : 'none',
+          imageSrc: hasImage ? p.image : null,
+          zones: [],
+        };
+      });
+      editingBookRef.current = null;
+      setTitle(data.title.trim());
+      setPages(importedPages);
+    } catch (err) {
+      setSaveError(`Fichier JSON invalide : ${err.message}. Vérifiez le format attendu.`);
+    }
+  }
+
   async function handleSave() {
     setSaveError('');
     setSaving(true);
@@ -140,6 +172,12 @@ export default function AddBookModal({ open, editId, onClose }) {
       <div className="modal open">
         <div className="modal-content">
           <h2>{editId ? '📖 Modifier le livre' : '📖 Ajouter un livre'}</h2>
+          {!editId && (
+            <label className="btn-import-json">
+              <span>📥 Importer depuis un fichier JSON :</span>
+              <input type="file" accept="application/json,.json" onChange={handleImportJson} />
+            </label>
+          )}
           <label>
             <span>Titre du livre :</span>
             <input
@@ -153,6 +191,16 @@ export default function AddBookModal({ open, editId, onClose }) {
           <div className="modal-info">
             💡 Ajoutez une page à la fois : une photo (ou un scan) de la page, et son texte en dessous (pour que
             l'enfant puisse le suivre du regard). Ajoutez autant de pages que le livre en a.
+            {!editId && (
+              <>
+                <br />
+                <br />
+                📥 <strong>Import JSON :</strong> {'{ "title": "...", "pages": [{ "text": "...", "image":'} <em>
+                  "data:image/jpeg;base64,..." (optionnel)
+                </em>
+                {'} , ...] }'}. Les photos peuvent être ajoutées à la main après import.
+              </>
+            )}
           </div>
           <div className="book-pages-list">
             {pages.map((p, i) => (

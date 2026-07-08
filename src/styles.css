@@ -506,6 +506,11 @@
     padding: 12px 14px; font-size: 14px; line-height: 1.5;
     margin: 14px 0;
   }
+  .btn-import-json{
+    display:block; background: var(--bg-2); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 18px !important;
+  }
+  .btn-import-json input{ width:100%; margin-top:4px; font-size:14px;}
   .modal-buttons{ display:flex; gap: 14px; margin-top: 20px;}
   .modal-buttons button{
     flex:1; padding: 14px 20px;
