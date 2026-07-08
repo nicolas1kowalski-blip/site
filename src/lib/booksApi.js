@@ -1,4 +1,4 @@
-const BOOKS_API = '/.netlify/functions/books';
+const BOOKS_API = '/api/books';
 const ADMIN_TOKEN_KEY = 'adminToken';
 
 export function getAdminToken() {

@@ -6,22 +6,15 @@
 // de passe administrateur défini dans la variable d'environnement
 // ADMIN_PASSWORD.
 //
-// Variables d'environnement requises (Netlify → Environment variables) :
+// Variables d'environnement requises (Vercel → Project → Settings →
+// Environment Variables) :
 //   ADMIN_PASSWORD              mot de passe administrateur
 //   SUPABASE_URL                URL du projet Supabase
 //   SUPABASE_SERVICE_ROLE_KEY   clé "service_role" (jamais exposée au navigateur)
-const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
 const BUCKET = 'book-photos';
-
-function json(statusCode, data) {
-  return {
-    statusCode,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  };
-}
 
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
@@ -33,11 +26,10 @@ function safeEqual(a, b) {
 
 // Retourne 'not-configured' si ADMIN_PASSWORD n'est pas défini côté serveur,
 // 'ok' si le mot de passe envoyé correspond, sinon 'wrong'.
-function checkAuth(event) {
+function checkAuth(req) {
   const configured = process.env.ADMIN_PASSWORD;
   if (!configured) return 'not-configured';
-  const headers = event.headers || {};
-  const token = headers['x-admin-token'] || headers['X-Admin-Token'];
+  const token = req.headers['x-admin-token'];
   return safeEqual(token, configured) ? 'ok' : 'wrong';
 }
 
@@ -79,52 +71,56 @@ function rowToMeta(row) {
   };
 }
 
-exports.handler = async (event) => {
+export default async function handler(req, res) {
   try {
-    if (event.httpMethod === 'GET') {
+    if (req.method === 'GET') {
       // Vérification silencieuse du mot de passe (utilisée par l'écran de connexion)
       // — ne touche pas au stockage, doit fonctionner même si Supabase est mal configuré.
-      if (event.queryStringParameters && event.queryStringParameters.verify === '1') {
-        const auth = checkAuth(event);
-        if (auth === 'ok') return json(200, { authorized: true });
+      if (req.query.verify === '1') {
+        const auth = checkAuth(req);
+        if (auth === 'ok') return res.status(200).json({ authorized: true });
         if (auth === 'not-configured') {
-          return json(500, { authorized: false, error: 'not-configured' });
+          return res.status(500).json({ authorized: false, error: 'not-configured' });
         }
-        return json(401, { authorized: false, error: 'wrong' });
+        return res.status(401).json({ authorized: false, error: 'wrong' });
       }
 
       const supabase = getSupabase();
-      if (!supabase) return json(500, { error: 'Supabase non configuré (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants)' });
+      if (!supabase) {
+        return res.status(500).json({ error: 'Supabase non configuré (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants)' });
+      }
 
-      const id = event.queryStringParameters && event.queryStringParameters.id;
+      const id = req.query.id;
       if (id) {
         const { data, error } = await supabase.from('books').select('*').eq('id', id).maybeSingle();
-        if (error) return json(500, { error: error.message });
-        if (!data) return json(404, { error: 'Livre introuvable' });
-        return json(200, { id: data.id, title: data.title, accent: data.accent, custom: true, pages: data.pages });
+        if (error) return res.status(500).json({ error: error.message });
+        if (!data) return res.status(404).json({ error: 'Livre introuvable' });
+        return res.status(200).json({ id: data.id, title: data.title, accent: data.accent, custom: true, pages: data.pages });
       }
 
       const { data, error } = await supabase
         .from('books')
         .select('id,title,accent,cover,cover_image,page_count,updated_at')
         .order('updated_at', { ascending: false });
-      if (error) return json(500, { error: error.message });
-      return json(200, data.map(rowToMeta));
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json(data.map(rowToMeta));
     }
 
-    if (event.httpMethod === 'POST') {
-      const auth = checkAuth(event);
-      if (auth === 'not-configured') return json(500, { error: 'ADMIN_PASSWORD non configuré sur le serveur' });
-      if (auth !== 'ok') return json(401, { error: 'Mot de passe administrateur requis' });
+    if (req.method === 'POST') {
+      const auth = checkAuth(req);
+      if (auth === 'not-configured') return res.status(500).json({ error: 'ADMIN_PASSWORD non configuré sur le serveur' });
+      if (auth !== 'ok') return res.status(401).json({ error: 'Mot de passe administrateur requis' });
 
       const supabase = getSupabase();
-      if (!supabase) return json(500, { error: 'Supabase non configuré (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants)' });
+      if (!supabase) {
+        return res.status(500).json({ error: 'Supabase non configuré (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants)' });
+      }
 
-      const body = JSON.parse(event.body || '{}');
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
       const title = (body.title || '').trim();
       const inputPages = Array.isArray(body.pages) ? body.pages : [];
       if (!title || inputPages.length === 0) {
-        return json(400, { error: 'Titre ou pages manquants' });
+        return res.status(400).json({ error: 'Titre ou pages manquants' });
       }
       const id = body.id || 'book-' + Date.now() + '-' + Math.random().toString(36).slice(2);
       const accent = body.accent || '#FFD93C';
@@ -177,32 +173,34 @@ exports.handler = async (event) => {
       };
 
       const { error } = await supabase.from('books').upsert(row);
-      if (error) return json(500, { error: error.message });
-      return json(200, rowToMeta(row));
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json(rowToMeta(row));
     }
 
-    if (event.httpMethod === 'DELETE') {
-      const auth = checkAuth(event);
-      if (auth === 'not-configured') return json(500, { error: 'ADMIN_PASSWORD non configuré sur le serveur' });
-      if (auth !== 'ok') return json(401, { error: 'Mot de passe administrateur requis' });
+    if (req.method === 'DELETE') {
+      const auth = checkAuth(req);
+      if (auth === 'not-configured') return res.status(500).json({ error: 'ADMIN_PASSWORD non configuré sur le serveur' });
+      if (auth !== 'ok') return res.status(401).json({ error: 'Mot de passe administrateur requis' });
 
       const supabase = getSupabase();
-      if (!supabase) return json(500, { error: 'Supabase non configuré (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants)' });
+      if (!supabase) {
+        return res.status(500).json({ error: 'Supabase non configuré (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants)' });
+      }
 
-      const id = event.queryStringParameters && event.queryStringParameters.id;
-      if (!id) return json(400, { error: 'id manquant' });
+      const id = req.query.id;
+      if (!id) return res.status(400).json({ error: 'id manquant' });
 
       const { data: files } = await supabase.storage.from(BUCKET).list(id);
       if (files && files.length) {
         await supabase.storage.from(BUCKET).remove(files.map((f) => `${id}/${f.name}`));
       }
       const { error } = await supabase.from('books').delete().eq('id', id);
-      if (error) return json(500, { error: error.message });
-      return json(200, { ok: true });
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ ok: true });
     }
 
-    return json(405, { error: 'Méthode non supportée' });
+    return res.status(405).json({ error: 'Méthode non supportée' });
   } catch (err) {
-    return json(500, { error: String((err && err.message) || err) });
+    return res.status(500).json({ error: String((err && err.message) || err) });
   }
-};
+}
