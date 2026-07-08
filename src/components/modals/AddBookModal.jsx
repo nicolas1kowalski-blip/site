@@ -12,6 +12,28 @@ function emptyPage(id) {
   return { id, text: '', imageMode: 'none', imageSrc: null, zones: [] };
 }
 
+function clampPct(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(100, v));
+}
+
+// Ne garde que les zones exploitables (nom présent, rectangle non vide) :
+// une entrée mal formée dans le JSON ne doit pas faire échouer tout l'import.
+function parseZones(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((z) => z && typeof z.label === 'string' && z.label.trim())
+    .map((z) => ({
+      left: clampPct(z.left),
+      top: clampPct(z.top),
+      width: clampPct(z.width),
+      height: clampPct(z.height),
+      label: z.label.trim(),
+    }))
+    .filter((z) => z.width > 0 && z.height > 0);
+}
+
 export default function AddBookModal({ open, editId, onClose }) {
   const { saveBook } = useBooks();
   const [title, setTitle] = useState('');
@@ -91,7 +113,7 @@ export default function AddBookModal({ open, editId, onClose }) {
           text: typeof p.text === 'string' ? p.text : '',
           imageMode: hasImage ? 'new' : 'none',
           imageSrc: hasImage ? p.image : null,
-          zones: [],
+          zones: hasImage ? parseZones(p.zones) : [],
         };
       });
       editingBookRef.current = null;
@@ -195,10 +217,11 @@ export default function AddBookModal({ open, editId, onClose }) {
               <>
                 <br />
                 <br />
-                📥 <strong>Import JSON :</strong> {'{ "title": "...", "pages": [{ "text": "...", "image":'} <em>
-                  "data:image/jpeg;base64,..." (optionnel)
-                </em>
-                {'} , ...] }'}. Les photos peuvent être ajoutées à la main après import.
+                📥 <strong>Import JSON :</strong> chaque page peut avoir <code>text</code>, <code>image</code> (data
+                URL base64, optionnel) et <code>zones</code> (optionnel, uniquement si une image est fournie) :
+                une liste de <code>{'{ left, top, width, height, label }'}</code>, chaque valeur en % de la largeur
+                / hauteur de l'image (0 à 100) et <code>label</code> le texte prononcé. Les photos et zones peuvent
+                aussi être ajoutées à la main après import.
               </>
             )}
           </div>
