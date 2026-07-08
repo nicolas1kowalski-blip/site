@@ -11,11 +11,11 @@ function randomVel() {
   return v;
 }
 
-function Balloon({ balloon, index, appearing, onPop, btnRefCallback }) {
+function Balloon({ balloon, index, onPop, btnRefCallback }) {
   return (
     <DwellButton
       ref={btnRefCallback}
-      className={`balloon${appearing ? ' appearing' : ''}`}
+      className="balloon appearing"
       aria-label={balloon.item.name}
       onClick={() => onPop(index)}
     >
@@ -28,14 +28,16 @@ function Balloon({ balloon, index, appearing, onPop, btnRefCallback }) {
 export default function BalloonsGame({ active }) {
   const [balloonItems, setBalloonItems] = useState([]);
   const [target, setTarget] = useState(null);
-  const [appearingIdx, setAppearingIdx] = useState(() => new Set());
   const arenaRef = useRef(null);
   const stageRef = useRef(null);
   const btnRefs = useRef([]);
   const moversRef = useRef([]);
   const animRef = useRef(null);
   const roundTimerRef = useRef(null);
+  const keyRef = useRef(0);
   const celebrate = useCelebrate();
+
+  const nextKey = () => ++keyRef.current;
 
   function stopAnim() {
     if (animRef.current) cancelAnimationFrame(animRef.current);
@@ -47,10 +49,9 @@ export default function BalloonsGame({ active }) {
     stopAnim();
     const items = shuffle(BALLOON_POOL).slice(0, 4);
     const colors = shuffle(BALLOON_COLORS).slice(0, 4);
-    const newItems = items.map((item, i) => ({ item, color: colors[i] }));
+    const newItems = items.map((item, i) => ({ item, color: colors[i], key: nextKey() }));
     const newTarget = rand(newItems).item;
     btnRefs.current = [];
-    setAppearingIdx(new Set([0, 1, 2, 3]));
     setBalloonItems(newItems);
     setTarget(newTarget);
     setTimeout(() => speak(`Trouve ${newTarget.name} !`), 350);
@@ -146,6 +147,15 @@ export default function BalloonsGame({ active }) {
     const cx = elRect.left + elRect.width / 2 - stageRect.left;
     const cy = elRect.top + elRect.height / 2 - stageRect.top;
 
+    // Éclair blanc bref au centre de l'explosion
+    const flash = document.createElement('div');
+    flash.className = 'pop-flash';
+    flash.style.left = cx + 'px';
+    flash.style.top = cy + 'px';
+    stage.appendChild(flash);
+    setTimeout(() => flash.remove(), 340);
+
+    // Onde de choc de la couleur du ballon
     const ring = document.createElement('div');
     ring.className = 'pop-ring';
     ring.style.left = cx + 'px';
@@ -154,27 +164,29 @@ export default function BalloonsGame({ active }) {
     stage.appendChild(ring);
     setTimeout(() => ring.remove(), 500);
 
+    // Gerbe d'éclats : plus nombreux et plus dispersés = vraie explosion
     const wrap = document.createElement('div');
     wrap.className = 'pop-particles';
     wrap.style.left = cx + 'px';
     wrap.style.top = cy + 'px';
-    const count = 14;
+    const count = 22;
     for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
-      const dist = 55 + Math.random() * 55;
-      const size = 7 + Math.random() * 9;
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+      const dist = 70 + Math.random() * 80;
+      const size = 8 + Math.random() * 12;
       const p = document.createElement('span');
-      p.className = 'particle-piece ' + (Math.random() < 0.35 ? 'diamond' : 'circle');
+      p.className = 'particle-piece ' + (Math.random() < 0.4 ? 'diamond' : 'circle');
       p.style.width = size + 'px';
       p.style.height = size + 'px';
-      p.style.background = color;
+      // Quelques éclats blancs parmi ceux de la couleur du ballon, pour le côté "éclat"
+      p.style.background = Math.random() < 0.22 ? '#ffffff' : color;
       p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
       p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
-      p.style.setProperty('--rot', Math.random() * 360 + 'deg');
+      p.style.setProperty('--rot', Math.random() * 540 + 'deg');
       wrap.appendChild(p);
     }
     stage.appendChild(wrap);
-    setTimeout(() => wrap.remove(), 750);
+    setTimeout(() => wrap.remove(), 850);
   }
 
   function handlePop(idx) {
@@ -211,8 +223,10 @@ export default function BalloonsGame({ active }) {
       const newItem = rand(available);
       const newColor = rand(BALLOON_COLORS);
       const next = prev.slice();
-      next[idx] = { item: newItem, color: newColor };
-      setAppearingIdx((prevSet) => new Set(prevSet).add(idx));
+      // Nouvelle clé => React recrée un nœud tout neuf pour ce ballon : plus de
+      // classe "popping" résiduelle (qui le figeait et le rendait incliquable)
+      // et l'animation d'apparition se rejoue.
+      next[idx] = { item: newItem, color: newColor, key: nextKey() };
       const mover = moversRef.current[idx];
       if (mover) {
         mover.vx = randomVel();
@@ -236,10 +250,9 @@ export default function BalloonsGame({ active }) {
           <span className="balloon-cloud" aria-hidden="true">☁️</span>
           {balloonItems.map((b, idx) => (
             <Balloon
-              key={idx}
+              key={b.key}
               balloon={b}
               index={idx}
-              appearing={appearingIdx.has(idx)}
               onPop={handlePop}
               btnRefCallback={(node) => {
                 btnRefs.current[idx] = node;
