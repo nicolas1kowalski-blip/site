@@ -206,38 +206,70 @@
     outline: none;
   }
 
-  /* JIGSAW PUZZLE */
+  /* JIGSAW PUZZLE (assemblage d'une image avec de vraies pièces) */
+  .jigsaw-stage{ padding: 1vh; overflow: visible; }
   .jigsaw-board{
-    width:100%; height:100%;
-    display:flex; align-items:center; justify-content:center;
-    padding: 1vh;
+    height: 100%; aspect-ratio: 1 / 1; margin: 0 auto;
+    position: relative;
+    border-radius: 20px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.7), rgba(255,255,255,0)),
+      #fbf4e6;
+    box-shadow: inset 0 0 0 4px rgba(43,45,66,.12), inset 0 6px 24px rgba(43,45,66,.12);
   }
-  .jigsaw-board svg{ width:auto; height:100%; max-width:100%; max-height:100%; display:block;}
-  .slot-overlay{
-    fill:#FDEDC9; stroke:#2B2D42; stroke-width:3;
-    stroke-dasharray:14 10; stroke-linejoin:round;
+  .jigsaw-svg{ width: 100%; height: 100%; display: block; }
+  .jigsaw-ghost{ opacity: .16; }
+  .piece-outline-placed{
+    fill: none; stroke: rgba(43,45,66,.28); stroke-width: 1.5; stroke-linejoin: round;
   }
-  .slot-overlay.active{
-    fill: rgba(255, 201, 60, 0.55);
-    stroke: #F5B400; stroke-width:5;
-    animation: slot-glow 1.2s ease-in-out infinite;
+  .piece-pop{ animation: piece-pop .5s cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes piece-pop{
+    0%{ transform: scale(1.35) rotate(-7deg); opacity: .3; }
+    60%{ opacity: 1; }
+    100%{ transform: scale(1) rotate(0); opacity: 1; }
   }
-  @keyframes slot-glow{
-    0%,100%{ filter: drop-shadow(0 0 4px #FFC93C);}
-    50%{ filter: drop-shadow(0 0 18px #FFC93C);}
+  .jigsaw-board.done{ animation: board-celebrate .7s ease-out; }
+  @keyframes board-celebrate{
+    0%{ transform: scale(1); }
+    35%{ transform: scale(1.06) rotate(1.5deg); }
+    100%{ transform: scale(1) rotate(0); }
   }
-  .answer.jigsaw-piece{ background:#FFF6E2; padding: 4px; overflow: hidden;}
-  .answer.jigsaw-piece svg{ width:100%; height:100%;}
-  .jigsaw-target-arrow{
-    position:absolute;
-    font-size: clamp(40px, 5vw, 70px);
-    animation: bounce-arrow 0.8s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 5;
+
+  .jigsaw-tray{
+    height: 24vh; height: 24dvh; flex-shrink: 0;
+    display: flex; flex-wrap: wrap; align-content: center; justify-content: center;
+    gap: 1vw; padding: 0.5vh 1vw;
   }
-  @keyframes bounce-arrow{
-    0%, 100%{ transform: translateY(0);}
-    50%{ transform: translateY(-12px);}
+  .tray-piece{
+    height: 10.5vh; width: 10.5vh;
+    border: none; background: none; cursor: pointer; padding: 0;
+    position: relative;
+    animation: tray-float 3s ease-in-out infinite;
+    filter: drop-shadow(0 5px 5px rgba(43,45,66,.28));
+  }
+  .tray-piece:nth-child(2n){ animation-delay: -.6s; }
+  .tray-piece:nth-child(3n){ animation-delay: -1.2s; }
+  .tray-piece:nth-child(4n){ animation-delay: -1.8s; }
+  @keyframes tray-float{
+    0%, 100%{ transform: translateY(0) rotate(-2deg); }
+    50%{ transform: translateY(-6px) rotate(2deg); }
+  }
+  .piece-svg{ width: 100%; height: 100%; display: block; overflow: visible; }
+  .piece-outline{ fill: none; stroke: rgba(255,255,255,.9); stroke-width: 2.5; stroke-linejoin: round; }
+
+  .flying-piece{
+    position: fixed; z-index: 60; pointer-events: none;
+    filter: drop-shadow(0 10px 12px rgba(43,45,66,.35));
+  }
+  .jigsaw-snap{
+    position: absolute; z-index: 5; pointer-events: none;
+    width: 30px; height: 30px; margin-left: -15px; margin-top: -15px;
+    border-radius: 50%; border: 5px solid var(--sun);
+    animation: jigsaw-snap .45s ease-out forwards;
+  }
+  @keyframes jigsaw-snap{
+    from{ transform: scale(.3); opacity: .9; }
+    to{ transform: scale(2.6); opacity: 0; }
   }
 
   /* STORY READER */
