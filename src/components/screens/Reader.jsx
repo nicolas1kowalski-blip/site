@@ -14,13 +14,72 @@ const PROP_POSITIONS = [
   { top: '50%', left: '4%' },
 ];
 
-function PhotoZone({ zone }) {
+// Normalise un mot pour comparer nom de zone ↔ mot lu (minuscule, sans accents
+// ni ponctuation).
+const normalizeWord = (s) =>
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+// Indices des zones dont le nom contient le mot lu (mots d'au moins 3 lettres,
+// pour éviter de réagir sur « le », « la », « un »…).
+function matchingZoneIdxs(word, zones) {
+  const w = normalizeWord(word);
+  if (w.length < 3 || !Array.isArray(zones)) return [];
+  const out = [];
+  zones.forEach((z, i) => {
+    const parts = (z.label || '').split(/\s+/).map(normalizeWord);
+    if (parts.some((p) => p.length >= 3 && p === w)) out.push(i);
+  });
+  return out;
+}
+
+function PhotoZone({ zone, pulse }) {
   const ref = useGazeSpeak(zone.label);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (!pulse) return;
+    const el = ref.current;
+    if (!el || !el.animate) return;
+    // Met en évidence le personnage : lueur dorée + petite pulsation.
+    el.animate(
+      [
+        { boxShadow: '0 0 0 0 rgba(255,201,60,0)', background: 'rgba(255,201,60,0)', transform: 'scale(1)' },
+        {
+          offset: 0.18,
+          boxShadow: '0 0 0 5px rgba(255,201,60,.95), 0 0 26px 8px rgba(255,201,60,.75)',
+          background: 'rgba(255,201,60,.22)',
+          transform: 'scale(1.07)',
+        },
+        { offset: 0.5, transform: 'scale(1.02)' },
+        {
+          offset: 0.68,
+          boxShadow: '0 0 0 4px rgba(255,201,60,.85), 0 0 20px 6px rgba(255,201,60,.6)',
+          background: 'rgba(255,201,60,.16)',
+          transform: 'scale(1.05)',
+        },
+        { boxShadow: '0 0 0 0 rgba(255,201,60,0)', background: 'rgba(255,201,60,0)', transform: 'scale(1)' },
+      ],
+      { duration: 1700, easing: 'ease-out' }
+    );
+  }, [pulse]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div
       ref={ref}
       className="photo-zone speakable"
-      style={{ left: zone.left + '%', top: zone.top + '%', width: zone.width + '%', height: zone.height + '%' }}
+      style={{
+        left: zone.left + '%',
+        top: zone.top + '%',
+        width: zone.width + '%',
+        height: zone.height + '%',
+        transformOrigin: 'center',
+      }}
     />
   );
 }
@@ -42,7 +101,7 @@ function CharacterItem({ character }) {
   );
 }
 
-function Scene({ page }) {
+function Scene({ page, zonePulses }) {
   const sceneRef = useRef(null);
   const imgRef = useRef(null);
   const layerRef = useRef(null);
@@ -83,7 +142,7 @@ function Scene({ page }) {
           <img ref={imgRef} className="page-photo" src={page.image} alt="" />
           <div className="photo-zone-layer" ref={layerRef}>
             {zones.map((z, i) => (
-              <PhotoZone key={i} zone={z} />
+              <PhotoZone key={i} zone={z} pulse={zonePulses?.[i] || 0} />
             ))}
           </div>
         </div>
@@ -112,6 +171,7 @@ export default function Reader({ active, story, page, loading, onNext, onPrev })
   const tokens = pageData ? tokenizeWords(pageData.text) : [];
   const [readIdx, setReadIdx] = useState(-1);
   const [gazingIdx, setGazingIdx] = useState(null);
+  const [zonePulses, setZonePulses] = useState([]); // compteur par zone → relance l'animation de mise en évidence
   const gazeTimerRef = useRef(null);
   const wordAdvanceTimerRef = useRef(null);
 
@@ -119,6 +179,7 @@ export default function Reader({ active, story, page, loading, onNext, onPrev })
   useEffect(() => {
     setReadIdx(-1);
     setGazingIdx(null);
+    setZonePulses([]);
     if (gazeTimerRef.current) clearTimeout(gazeTimerRef.current);
     if (wordAdvanceTimerRef.current) clearTimeout(wordAdvanceTimerRef.current);
   }, [story?.id, page]);
@@ -147,6 +208,20 @@ export default function Reader({ active, story, page, loading, onNext, onPrev })
     setGazingIdx(null);
     gazeSound();
     speak(spokenText(tokens[idx]), null, true);
+
+    // Si le mot lu est le nom d'un personnage délimité sur l'image, on met en
+    // évidence ce personnage (petite animation sur le dessin).
+    const matched = matchingZoneIdxs(tokens[idx], pageData?.zones);
+    if (matched.length) {
+      setZonePulses((prev) => {
+        const next = prev.slice();
+        matched.forEach((i) => {
+          next[i] = (next[i] || 0) + 1;
+        });
+        return next;
+      });
+    }
+
     if (idx === tokens.length - 1) {
       clearTimeout(wordAdvanceTimerRef.current);
       // Ne tourne automatiquement la page que s'il y en a une après : sur la
@@ -172,7 +247,7 @@ export default function Reader({ active, story, page, loading, onNext, onPrev })
   return (
     <section className={`screen${active ? ' active' : ''}`}>
       <div className="story-screen">
-        <Scene page={pageData} />
+        <Scene page={pageData} zonePulses={zonePulses} />
         <div className="story-text">
           {loading
             ? 'Chargement du livre...'
