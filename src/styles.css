@@ -218,9 +218,20 @@
     box-shadow: inset 0 0 0 4px rgba(43,45,66,.12), inset 0 6px 24px rgba(43,45,66,.12);
   }
   .jigsaw-svg{ width: 100%; height: 100%; display: block; }
-  .jigsaw-ghost{ opacity: .16; }
+  .jigsaw-ghost{ opacity: .2; }
   .piece-outline-placed{
     fill: none; stroke: rgba(43,45,66,.28); stroke-width: 1.5; stroke-linejoin: round;
+  }
+  /* Emplacement à compléter : contour doré qui pulse pour guider l'enfant. */
+  .slot-target{
+    fill: rgba(255,201,60,.28);
+    stroke: #F5B400; stroke-width: 4; stroke-linejoin: round;
+    stroke-dasharray: 10 8;
+    animation: slot-target 1.3s ease-in-out infinite;
+  }
+  @keyframes slot-target{
+    0%, 100%{ transform: scale(1); filter: drop-shadow(0 0 4px rgba(255,201,60,.7)); }
+    50%{ transform: scale(1.03); filter: drop-shadow(0 0 16px rgba(255,201,60,.95)); }
   }
   .piece-pop{ animation: piece-pop .5s cubic-bezier(.34,1.56,.64,1) both; }
   @keyframes piece-pop{

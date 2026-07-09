@@ -124,6 +124,67 @@ export const JIGSAW_PUZZLES = [
       <circle cx="280" cy="320" r="18" fill="#888" stroke="#2B2D42" stroke-width="2"/>
     `,
   },
+  {
+    id: 'chat', name: 'le chat', size: 400,
+    image: `
+      <rect width="400" height="400" fill="#FFE0B2"/>
+      <circle cx="200" cy="215" r="130" fill="#FFB74D" stroke="#2B2D42" stroke-width="5"/>
+      <polygon points="95,130 90,30 175,95" fill="#FFB74D" stroke="#2B2D42" stroke-width="5" stroke-linejoin="round"/>
+      <polygon points="305,130 310,30 225,95" fill="#FFB74D" stroke="#2B2D42" stroke-width="5" stroke-linejoin="round"/>
+      <polygon points="112,120 110,62 158,100" fill="#FF8A80"/>
+      <polygon points="288,120 290,62 242,100" fill="#FF8A80"/>
+      <circle cx="152" cy="195" r="26" fill="#fff" stroke="#2B2D42" stroke-width="4"/>
+      <circle cx="248" cy="195" r="26" fill="#fff" stroke="#2B2D42" stroke-width="4"/>
+      <circle cx="152" cy="198" r="12" fill="#2B2D42"/>
+      <circle cx="248" cy="198" r="12" fill="#2B2D42"/>
+      <polygon points="200,235 184,222 216,222" fill="#FF6B95" stroke="#2B2D42" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M200 248 Q180 268 158 252" stroke="#2B2D42" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M200 248 Q220 268 242 252" stroke="#2B2D42" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <g stroke="#2B2D42" stroke-width="3" stroke-linecap="round">
+        <line x1="60" y1="230" x2="120" y2="225"/><line x1="60" y1="255" x2="120" y2="248"/>
+        <line x1="340" y1="230" x2="280" y2="225"/><line x1="340" y1="255" x2="280" y2="248"/>
+      </g>
+      <circle cx="118" cy="240" r="16" fill="#FF8A80" opacity="0.6"/>
+      <circle cx="282" cy="240" r="16" fill="#FF8A80" opacity="0.6"/>
+    `,
+  },
+  {
+    id: 'poisson', name: 'le poisson', size: 400,
+    image: `
+      <rect width="400" height="400" fill="#8ED6E8"/>
+      <circle cx="70" cy="90" r="10" fill="#fff" opacity="0.7"/>
+      <circle cx="110" cy="60" r="6" fill="#fff" opacity="0.7"/>
+      <circle cx="330" cy="320" r="9" fill="#fff" opacity="0.6"/>
+      <polygon points="300,200 380,140 380,260" fill="#FF7043" stroke="#2B2D42" stroke-width="5" stroke-linejoin="round"/>
+      <ellipse cx="180" cy="200" rx="150" ry="105" fill="#FF9800" stroke="#2B2D42" stroke-width="5"/>
+      <polygon points="150,95 200,150 130,160" fill="#FF7043" stroke="#2B2D42" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M120 200 q40 -30 90 0" fill="none" stroke="#E65100" stroke-width="5" stroke-linecap="round"/>
+      <path d="M120 230 q40 -30 90 0" fill="none" stroke="#E65100" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="95" cy="180" r="30" fill="#fff" stroke="#2B2D42" stroke-width="4"/>
+      <circle cx="90" cy="182" r="14" fill="#2B2D42"/>
+      <circle cx="85" cy="177" r="5" fill="#fff"/>
+      <path d="M70 235 q20 20 45 8" stroke="#2B2D42" stroke-width="4" fill="none" stroke-linecap="round"/>
+    `,
+  },
+  {
+    id: 'fusee', name: 'la fusée', size: 400,
+    image: `
+      <rect width="400" height="400" fill="#1A237E"/>
+      <g fill="#FFF59D">
+        <circle cx="60" cy="70" r="4"/><circle cx="120" cy="120" r="3"/><circle cx="330" cy="60" r="5"/>
+        <circle cx="300" cy="150" r="3"/><circle cx="70" cy="300" r="4"/><circle cx="350" cy="300" r="3"/>
+        <polygon points="150,55 156,73 175,73 160,84 166,102 150,90 134,102 140,84 125,73 144,73"/>
+      </g>
+      <ellipse cx="200" cy="150" rx="70" ry="120" fill="#ECEFF1" stroke="#2B2D42" stroke-width="5"/>
+      <path d="M200 35 q-70 40 -70 115 h140 q0 -75 -70 -115z" fill="#EF5350" stroke="#2B2D42" stroke-width="5"/>
+      <circle cx="200" cy="150" r="34" fill="#4FC3F7" stroke="#2B2D42" stroke-width="5"/>
+      <circle cx="188" cy="140" r="10" fill="#fff" opacity="0.7"/>
+      <polygon points="130,230 90,300 130,275" fill="#EF5350" stroke="#2B2D42" stroke-width="5" stroke-linejoin="round"/>
+      <polygon points="270,230 310,300 270,275" fill="#EF5350" stroke="#2B2D42" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M170 268 q30 90 60 0 q-30 40 -60 0z" fill="#FFB300"/>
+      <path d="M182 275 q18 60 36 0 q-18 26 -36 0z" fill="#FF7043"/>
+    `,
+  },
 ];
 
 export const BALLOON_POOL = [

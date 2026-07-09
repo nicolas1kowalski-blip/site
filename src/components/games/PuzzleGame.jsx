@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import DwellButton from '../DwellButton.jsx';
 import { appState } from '../../lib/appState.js';
-import { JIGSAW_PUZZLES } from '../../data/games.js';
+import { JIGSAW_PUZZLES, PRAISES, ENCOURAGE } from '../../data/games.js';
 import { generateJigsaw } from '../../lib/jigsaw.js';
-import { rand, shuffle, speak, popSound, successSound, pageSound } from '../../lib/audio.js';
+import { rand, shuffle, speak, popSound, successSound, wrongSound, pageSound } from '../../lib/audio.js';
 import { useCelebrate } from '../../context/FeedbackContext.jsx';
 
-const COLS = 3;
-const ROWS = 3;
+// Puzzle simple pour les tout-petits : 2x2 = 4 grosses pièces.
+const COLS = 2;
+const ROWS = 2;
 
 function PieceSvg({ piece, image, className }) {
   const { bbox } = piece;
@@ -29,40 +30,65 @@ export default function PuzzleGame({ active }) {
   const [pieces, setPieces] = useState([]);
   const [placed, setPlaced] = useState(() => new Set());
   const [tray, setTray] = useState([]); // ids restants (mélangés)
-  const [flying, setFlying] = useState(null); // { piece, from, to }
+  const [target, setTarget] = useState(null); // id de la pièce dont l'emplacement brille
+  const [flying, setFlying] = useState(null);
+  const [shakeId, setShakeId] = useState(null);
   const [done, setDone] = useState(false);
 
   const stageRef = useRef(null);
   const boardRef = useRef(null);
   const trayRefs = useRef({});
   const roundTimerRef = useRef(null);
+  const shakeTimerRef = useRef(null);
   const pkeyRef = useRef(0);
+  const lastPuzzleIdRef = useRef(null);
   const celebrate = useCelebrate();
 
   const newPuzzle = useCallback(() => {
     clearTimeout(roundTimerRef.current);
     appState.locked = false;
-    const p = rand(JIGSAW_PUZZLES);
+    // Jamais deux fois le même puzzle de suite.
+    const pool = JIGSAW_PUZZLES.filter((p) => p.id !== lastPuzzleIdRef.current);
+    const p = rand(pool.length ? pool : JIGSAW_PUZZLES);
+    lastPuzzleIdRef.current = p.id;
+
     const key = ++pkeyRef.current;
     const gen = generateJigsaw(COLS, ROWS, p.size).map((pc) => ({ ...pc, clipId: `${key}-${pc.id}` }));
+    const trayIds = shuffle(gen.map((pc) => pc.id));
     setPuzzle({ ...p, key });
     setPieces(gen);
     setPlaced(new Set());
-    setTray(shuffle(gen.map((pc) => pc.id)));
+    setTray(trayIds);
+    setTarget(rand(trayIds));
     setFlying(null);
+    setShakeId(null);
     setDone(false);
     setTimeout(() => speak(`Fais le puzzle : ${p.name}`), 350);
   }, []);
 
   useEffect(() => {
     newPuzzle();
-    return () => clearTimeout(roundTimerRef.current);
+    return () => {
+      clearTimeout(roundTimerRef.current);
+      clearTimeout(shakeTimerRef.current);
+    };
   }, [newPuzzle]);
 
   const pieceById = useCallback((id) => pieces.find((p) => p.id === id), [pieces]);
 
   function selectPiece(id) {
     if (appState.locked || flying || done) return;
+
+    if (id !== target) {
+      // Mauvaise pièce : petit tremblement, on encourage, on réessaie.
+      wrongSound();
+      speak(rand(ENCOURAGE));
+      setShakeId(id);
+      clearTimeout(shakeTimerRef.current);
+      shakeTimerRef.current = setTimeout(() => setShakeId(null), 550);
+      return;
+    }
+
     const piece = pieceById(id);
     const trayEl = trayRefs.current[id];
     const board = boardRef.current;
@@ -92,14 +118,18 @@ export default function PuzzleGame({ active }) {
     setPlaced((prev) => {
       const next = new Set(prev);
       next.add(piece.id);
-      if (next.size === pieces.length) {
+      const remaining = pieces.map((p) => p.id).filter((x) => !next.has(x));
+      if (remaining.length === 0) {
         setDone(true);
+        setTarget(null);
         setTimeout(() => {
           celebrate();
           speak(`Bravo ! Tu as fait ${puzzle.name} !`);
         }, 250);
         roundTimerRef.current = setTimeout(newPuzzle, 4000);
       } else {
+        speak(rand(PRAISES));
+        setTarget(rand(remaining));
         appState.locked = false;
       }
       return next;
@@ -126,12 +156,12 @@ export default function PuzzleGame({ active }) {
   if (!puzzle) return null;
 
   const placedPieces = pieces.filter((p) => placed.has(p.id));
+  const targetPiece = target ? pieceById(target) : null;
 
   return (
     <>
       <div className="question">Fais le puzzle : {puzzle.name}</div>
 
-      {/* Chemins de découpe (partagés par le plateau, la réserve et la pièce en vol). */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <defs>
           {pieces.map((p) => (
@@ -146,6 +176,9 @@ export default function PuzzleGame({ active }) {
         <div className={`jigsaw-board${done ? ' done' : ''}`} ref={boardRef}>
           <svg className="jigsaw-svg" viewBox={`0 0 ${puzzle.size} ${puzzle.size}`} xmlns="http://www.w3.org/2000/svg">
             <g className="jigsaw-ghost" dangerouslySetInnerHTML={{ __html: puzzle.image }} />
+            {targetPiece && (
+              <path d={targetPiece.d} className="slot-target" style={{ transformBox: 'fill-box', transformOrigin: 'center' }} />
+            )}
             {placedPieces.map((p) => (
               <g className="piece-pop" key={p.id} style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
                 <g clipPath={`url(#clip-${p.clipId})`} dangerouslySetInnerHTML={{ __html: puzzle.image }} />
@@ -166,7 +199,7 @@ export default function PuzzleGame({ active }) {
               ref={(node) => {
                 if (node) trayRefs.current[id] = node;
               }}
-              className="tray-piece"
+              className={`tray-piece${shakeId === id ? ' shake' : ''}`}
               aria-label="pièce de puzzle"
               onClick={() => selectPiece(id)}
             >
