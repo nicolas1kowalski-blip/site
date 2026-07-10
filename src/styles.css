@@ -189,8 +189,8 @@
     position: relative; 
     height: 100%; 
     /* L'aspect-ratio garantit que les zones tactiles/oculaires ne se décalent JAMAIS de l'image */
-    aspect-ratio: 2 / 3; 
-    max-height: 55vh; 
+    aspect-ratio: 2 / 3;
+    max-height: 74vh;
     margin: 0 auto;
     animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);
   }
