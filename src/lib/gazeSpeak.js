@@ -26,12 +26,16 @@ export function attachGazeSpeakNative(el) {
     if (timer) clearTimeout(timer);
     el.classList.remove('gazing');
   };
-  el.addEventListener('mouseenter', onEnter);
-  el.addEventListener('mouseleave', onLeave);
+  // Pointer Events : compatible souris, tactile, stylet et pointeurs des
+  // commandes oculaires (voir useDwell pour le détail).
+  el.addEventListener('pointerenter', onEnter);
+  el.addEventListener('pointerleave', onLeave);
+  el.addEventListener('pointercancel', onLeave);
   return () => {
     if (timer) clearTimeout(timer);
-    el.removeEventListener('mouseenter', onEnter);
-    el.removeEventListener('mouseleave', onLeave);
+    el.removeEventListener('pointerenter', onEnter);
+    el.removeEventListener('pointerleave', onLeave);
+    el.removeEventListener('pointercancel', onLeave);
   };
 }
 

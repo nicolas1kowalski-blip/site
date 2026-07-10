@@ -17,9 +17,10 @@ const DwellButton = forwardRef(function DwellButton(
         else if (forwardedRef) forwardedRef.current = node;
       }}
       onClick={onClick}
-      onMouseEnter={dwell.onMouseEnter}
-      onMouseLeave={dwell.onMouseLeave}
+      onPointerEnter={dwell.onPointerEnter}
+      onPointerLeave={dwell.onPointerLeave}
       onPointerDown={dwell.onPointerDown}
+      onPointerCancel={dwell.onPointerCancel}
       disabled={disabled}
       {...rest}
     >

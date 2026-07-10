@@ -56,5 +56,16 @@ export function useDwell(onActivate, disabled = false) {
 
   useEffect(() => () => end(), [end]);
 
-  return { ref: elRef, onMouseEnter: begin, onMouseLeave: end, onPointerDown: end };
+  // On utilise les Pointer Events (et non les événements souris) pour être
+  // compatible avec TOUS les systèmes : souris, tactile, stylet, et pointeurs
+  // injectés par les commandes oculaires (Tobii, GazePoint, pointeur GRID 3…).
+  // onPointerDown/Cancel annulent le dwell : un vrai clic/appui passe alors par
+  // onClick, et le survol prolongé (regard) déclenche l'activation.
+  return {
+    ref: elRef,
+    onPointerEnter: begin,
+    onPointerLeave: end,
+    onPointerDown: end,
+    onPointerCancel: end,
+  };
 }
