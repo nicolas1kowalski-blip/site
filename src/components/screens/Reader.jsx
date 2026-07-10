@@ -260,8 +260,9 @@ export default function Reader({ active, story, page, loading, onNext, onPrev })
                     (i === readIdx + 1 ? ' word-next' : '') +
                     (gazingIdx === i ? ' gazing' : '')
                   }
-                  onMouseEnter={() => handleWordEnter(i)}
-                  onMouseLeave={handleWordLeave}
+                  onPointerEnter={() => handleWordEnter(i)}
+                  onPointerLeave={handleWordLeave}
+                  onPointerCancel={handleWordLeave}
                 >
                   {w}
                 </span>
