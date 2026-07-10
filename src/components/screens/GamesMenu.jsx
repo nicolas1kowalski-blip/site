@@ -9,6 +9,8 @@ const GAMES = [
   { id: 'puzzle', emoji: '🧩', label: 'Puzzle' },
   { id: 'balloons', emoji: '🎈', label: 'Ballons' },
   { id: 'body', emoji: '🧍', label: 'Le Corps' },
+  { id: 'shadow', emoji: '🫥', label: 'Les Ombres' },
+  { id: 'complete', emoji: '🖼️', label: "Complète l'image" },
 ];
 
 export default function GamesMenu({ active, onStartGame }) {

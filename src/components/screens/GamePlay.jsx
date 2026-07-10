@@ -4,6 +4,8 @@ import ColorsGame from '../games/ColorsGame.jsx';
 import ShapesGame from '../games/ShapesGame.jsx';
 import PuzzleGame from '../games/PuzzleGame.jsx';
 import BodyGame from '../games/BodyGame.jsx';
+import ShadowGame from '../games/ShadowGame.jsx';
+import CompleteGame from '../games/CompleteGame.jsx';
 
 // Le jeu des ballons embarque three.js (rendu 3D) : on le charge à la demande
 // pour ne pas alourdir le démarrage des autres écrans.
@@ -16,6 +18,8 @@ const GAME_COMPONENTS = {
   puzzle: PuzzleGame,
   balloons: BalloonsGame,
   body: BodyGame,
+  shadow: ShadowGame,
+  complete: CompleteGame,
 };
 
 export default function GamePlay({ active, game }) {
