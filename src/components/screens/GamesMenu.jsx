@@ -1,5 +1,5 @@
 import React from 'react';
-import DwellButton from '../DwellButton.jsx';
+import MotionCard from '../MotionCard.jsx';
 import { ensureAudio } from '../../lib/audio.js';
 
 const GAMES = [
@@ -9,15 +9,20 @@ const GAMES = [
   { id: 'puzzle', emoji: '🧩', label: 'Puzzle' },
   { id: 'balloons', emoji: '🎈', label: 'Ballons' },
   { id: 'body', emoji: '🧍', label: 'Le Corps' },
+  { id: 'shadow', emoji: '🫥', label: 'Les Ombres' },
+  { id: 'complete', emoji: '🖼️', label: "Complète l'image" },
+  { id: 'memory', emoji: '🃏', label: 'Les Paires' },
+  { id: 'families', emoji: '🍎', label: 'Les Familles' },
 ];
 
 export default function GamesMenu({ active, onStartGame }) {
   return (
     <section id="screenGames" className={`screen${active ? ' active' : ''}`}>
       <div className="home-grid">
-        {GAMES.map((g) => (
-          <DwellButton
+        {GAMES.map((g, i) => (
+          <MotionCard
             key={g.id}
+            index={i}
             className="card"
             aria-label={`Jeu ${g.label.toLowerCase()}`}
             onClick={() => {
@@ -27,7 +32,7 @@ export default function GamesMenu({ active, onStartGame }) {
           >
             <div className="emoji">{g.emoji}</div>
             <div>{g.label}</div>
-          </DwellButton>
+          </MotionCard>
         ))}
       </div>
     </section>

@@ -65,9 +65,12 @@
   .tab.active{ background: var(--sun); transform: translateY(2px);}
   .tab:active{ transform: translateY(4px); box-shadow: var(--shadow-press);}
 
-  .screen{ flex:1; display:none; flex-direction:column; animation: pop .4s cubic-bezier(.34,1.56,.64,1);}
+  .screen{ flex:1; display:none; flex-direction:column; animation: pop .5s cubic-bezier(.34,1.56,.64,1);}
   .screen.active{ display:flex;}
-  @keyframes pop{ from{ opacity:0; transform: scale(.94);} to{ opacity:1; transform: scale(1);} }
+  @keyframes pop{
+    from{ opacity:0; transform: scale(.92) translateY(14px);}
+    to{ opacity:1; transform: scale(1) translateY(0);}
+  }
 
   .home-grid{ flex:1; display:grid; grid-template-columns: repeat(4, 1fr); gap: 2vw; align-items:stretch;}
   .lib-grid{ flex:1; display:grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 1.5vw;}
@@ -78,28 +81,58 @@
     gap: 1vh;
     font-family:'Fredoka', sans-serif; font-weight:600;
     font-size: clamp(18px, 2vw, 28px); color: var(--ink);
-    transition: transform .2s cubic-bezier(.34,1.56,.64,1);
     position:relative; overflow:hidden; text-align:center;
   }
-  .card::before{ content:''; position:absolute; inset:0; background: var(--card-bg); opacity:.22; z-index:0;}
+  .card::before{
+    content:''; position:absolute; inset:0; z-index:0;
+    background:
+      radial-gradient(120% 100% at 28% 14%, rgba(255,255,255,.65) 0%, rgba(255,255,255,0) 42%),
+      color-mix(in srgb, var(--card-bg) 34%, white);
+  }
+  .card::after{
+    content:''; position:absolute; left:0; right:0; bottom:0; height:38%; z-index:0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, color-mix(in srgb, var(--card-bg) 22%, transparent) 100%);
+  }
   .card > *{ position:relative; z-index:1;}
-  .card .emoji{ font-size: clamp(50px, 8vw, 110px); line-height:1; filter: drop-shadow(0 6px 0 rgba(43,45,66,.15));}
-  .card .cover-svg{ width: clamp(70px, 11vw, 130px); height: clamp(70px, 11vw, 130px);}
-  .card:hover, .card:focus-visible{ transform: translateY(-6px) rotate(-1deg); outline: none;}
+  .card .emoji{
+    font-size: clamp(50px, 8vw, 110px); line-height:1;
+    filter: drop-shadow(0 6px 0 rgba(43,45,66,.15));
+    animation: card-icon-float 3.4s ease-in-out infinite;
+  }
+  .card .cover-svg{
+    width: clamp(70px, 11vw, 130px); height: clamp(70px, 11vw, 130px);
+    animation: card-icon-float 3.4s ease-in-out infinite;
+  }
+  @keyframes card-icon-float{
+    0%, 100%{ transform: translateY(0) rotate(0deg);}
+    50%{ transform: translateY(-7px) rotate(2deg);}
+  }
+  .card:nth-child(2) .emoji, .card:nth-child(2) .cover-svg{ animation-delay: .25s;}
+  .card:nth-child(3) .emoji, .card:nth-child(3) .cover-svg{ animation-delay: .5s;}
+  .card:nth-child(4) .emoji, .card:nth-child(4) .cover-svg{ animation-delay: .75s;}
+  .card:nth-child(5) .emoji, .card:nth-child(5) .cover-svg{ animation-delay: .15s;}
+  .card:nth-child(6) .emoji, .card:nth-child(6) .cover-svg{ animation-delay: .4s;}
+  .card:nth-child(7) .emoji, .card:nth-child(7) .cover-svg{ animation-delay: .65s;}
+  .card:focus-visible{ outline: 3px solid var(--ink); outline-offset: 3px;}
 
-  #screenGames .home-grid{ grid-template-columns: repeat(5, 1fr);}
+  #screenGames .home-grid{ grid-template-columns: repeat(4, 1fr);}
   #screenGames .card:nth-child(1){ --card-bg: var(--sun);}
   #screenGames .card:nth-child(2){ --card-bg: var(--coral);}
   #screenGames .card:nth-child(3){ --card-bg: var(--sky);}
   #screenGames .card:nth-child(4){ --card-bg: var(--grass);}
   #screenGames .card:nth-child(5){ --card-bg: var(--plum);}
   #screenGames .card:nth-child(6){ --card-bg: var(--rose);}
+  #screenGames .card:nth-child(7){ --card-bg: var(--sky);}
+  #screenGames .card:nth-child(8){ --card-bg: var(--sun);}
+  #screenGames .card:nth-child(9){ --card-bg: var(--coral);}
+  #screenGames .card:nth-child(10){ --card-bg: var(--grass);}
 
   /* GAME SCREEN */
   .question{ text-align:center; font-family:'Baloo 2', sans-serif; font-weight:700; font-size: clamp(22px, 3vw, 38px); margin: 0 0 0.8vh; flex-shrink:0;}
   .stage{
     flex:1 1 0; min-height: 0;
-    background:#fff; border-radius: 28px; box-shadow: var(--shadow);
+    background: linear-gradient(160deg, #FFFFFF 0%, #FBF7FF 55%, #F2FBFF 100%);
+    border-radius: 28px; box-shadow: var(--shadow);
     display:flex; align-items:center; justify-content:center;
     padding: 1vh 1.5vw; margin-bottom: 1vh;
     position:relative; overflow:hidden;
@@ -135,16 +168,19 @@
     flex-shrink: 0;
   }
   .answer{
-    border:none; cursor:pointer; background:#fff;
+    border:none; cursor:pointer;
+    background:
+      radial-gradient(120% 100% at 28% 14%, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 45%),
+      linear-gradient(165deg, #ffffff 0%, #F5F8FF 100%);
     border-radius: 24px; box-shadow: var(--shadow);
     font-family:'Baloo 2', sans-serif; font-weight:800;
     font-size: clamp(45px, 6vw, 90px); color:var(--ink);
     display:flex; align-items:center; justify-content:center;
-    transition: transform .15s ease, box-shadow .15s ease;
+    transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .15s ease;
     position:relative; overflow:hidden; padding: 0.8vh;
   }
-  .answer:hover, .answer:focus-visible{ transform: translateY(-4px); outline:none;}
-  .answer:active{ transform: translateY(3px); box-shadow: var(--shadow-press);}
+  .answer:hover, .answer:focus-visible{ transform: translateY(-6px) scale(1.03); outline:none;}
+  .answer:active{ transform: translateY(3px) scale(0.98); box-shadow: var(--shadow-press);}
   .answer svg{ width: 70%; height:70%;}
   .answer .swatch{ width: 80%; height: 80%; border-radius: 50%; box-shadow: inset 0 -10px 25px rgba(0,0,0,.15);}
 
@@ -153,8 +189,8 @@
     position: relative; 
     height: 100%; 
     /* L'aspect-ratio garantit que les zones tactiles/oculaires ne se décalent JAMAIS de l'image */
-    aspect-ratio: 2 / 3; 
-    max-height: 55vh; 
+    aspect-ratio: 2 / 3;
+    max-height: 74vh;
     margin: 0 auto;
     animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);
   }
@@ -173,40 +209,173 @@
     transform: scale(1.1);
     outline: none;
   }
-  .body-part .dwell-ring { border-radius: 50%; }
 
-  /* JIGSAW PUZZLE */
+  /* JIGSAW PUZZLE (assemblage d'une image avec de vraies pièces) */
+  .jigsaw-stage{ padding: 1vh; overflow: visible; }
   .jigsaw-board{
-    width:100%; height:100%;
-    display:flex; align-items:center; justify-content:center;
-    padding: 1vh;
+    height: 100%; aspect-ratio: 1 / 1; margin: 0 auto;
+    position: relative;
+    border-radius: 20px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.7), rgba(255,255,255,0)),
+      #fbf4e6;
+    box-shadow: inset 0 0 0 4px rgba(43,45,66,.12), inset 0 6px 24px rgba(43,45,66,.12);
   }
-  .jigsaw-board svg{ width:auto; height:100%; max-width:100%; max-height:100%; display:block;}
-  .slot-overlay{
-    fill:#FDEDC9; stroke:#2B2D42; stroke-width:3;
-    stroke-dasharray:14 10; stroke-linejoin:round;
+  .jigsaw-svg{ width: 100%; height: 100%; display: block; }
+  .jigsaw-ghost{ opacity: .2; }
+  .piece-outline-placed{
+    fill: none; stroke: rgba(43,45,66,.28); stroke-width: 1.5; stroke-linejoin: round;
   }
-  .slot-overlay.active{
-    fill: rgba(255, 201, 60, 0.55);
-    stroke: #F5B400; stroke-width:5;
-    animation: slot-glow 1.2s ease-in-out infinite;
+  /* Emplacement à compléter : contour doré qui pulse pour guider l'enfant. */
+  .slot-target{
+    fill: rgba(255,201,60,.28);
+    stroke: #F5B400; stroke-width: 4; stroke-linejoin: round;
+    stroke-dasharray: 10 8;
+    animation: slot-target 1.3s ease-in-out infinite;
   }
-  @keyframes slot-glow{
-    0%,100%{ filter: drop-shadow(0 0 4px #FFC93C);}
-    50%{ filter: drop-shadow(0 0 18px #FFC93C);}
+  @keyframes slot-target{
+    0%, 100%{ transform: scale(1); filter: drop-shadow(0 0 4px rgba(255,201,60,.7)); }
+    50%{ transform: scale(1.03); filter: drop-shadow(0 0 16px rgba(255,201,60,.95)); }
   }
-  .answer.jigsaw-piece{ background:#FFF6E2; padding: 4px; overflow: hidden;}
-  .answer.jigsaw-piece svg{ width:100%; height:100%;}
-  .jigsaw-target-arrow{
-    position:absolute;
-    font-size: clamp(40px, 5vw, 70px);
-    animation: bounce-arrow 0.8s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 5;
+  .piece-pop{ animation: piece-pop .5s cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes piece-pop{
+    0%{ transform: scale(1.35) rotate(-7deg); opacity: .3; }
+    60%{ opacity: 1; }
+    100%{ transform: scale(1) rotate(0); opacity: 1; }
   }
-  @keyframes bounce-arrow{
-    0%, 100%{ transform: translateY(0);}
-    50%{ transform: translateY(-12px);}
+  .jigsaw-board.done{ animation: board-celebrate .7s ease-out; }
+  @keyframes board-celebrate{
+    0%{ transform: scale(1); }
+    35%{ transform: scale(1.06) rotate(1.5deg); }
+    100%{ transform: scale(1) rotate(0); }
+  }
+
+  .jigsaw-tray{
+    height: 24vh; height: 24dvh; flex-shrink: 0;
+    display: flex; flex-wrap: wrap; align-content: center; justify-content: center;
+    gap: 1vw; padding: 0.5vh 1vw;
+  }
+  .tray-piece{
+    height: 10.5vh; width: 10.5vh;
+    border: none; background: none; cursor: pointer; padding: 0;
+    position: relative;
+    animation: tray-float 3s ease-in-out infinite;
+    filter: drop-shadow(0 5px 5px rgba(43,45,66,.28));
+  }
+  .tray-piece:nth-child(2n){ animation-delay: -.6s; }
+  .tray-piece:nth-child(3n){ animation-delay: -1.2s; }
+  .tray-piece:nth-child(4n){ animation-delay: -1.8s; }
+  @keyframes tray-float{
+    0%, 100%{ transform: translateY(0) rotate(-2deg); }
+    50%{ transform: translateY(-6px) rotate(2deg); }
+  }
+  .piece-svg{ width: 100%; height: 100%; display: block; overflow: visible; }
+  .piece-outline{ fill: none; stroke: rgba(255,255,255,.9); stroke-width: 2.5; stroke-linejoin: round; }
+
+  .flying-piece{
+    position: fixed; z-index: 60; pointer-events: none;
+    filter: drop-shadow(0 10px 12px rgba(43,45,66,.35));
+  }
+  .jigsaw-snap{
+    position: absolute; z-index: 5; pointer-events: none;
+    width: 30px; height: 30px; margin-left: -15px; margin-top: -15px;
+    border-radius: 50%; border: 5px solid var(--sun);
+    animation: jigsaw-snap .45s ease-out forwards;
+  }
+  @keyframes jigsaw-snap{
+    from{ transform: scale(.3); opacity: .9; }
+    to{ transform: scale(2.6); opacity: 0; }
+  }
+  /* Trou "pièce manquante" du jeu Complète l'image */
+  .jigsaw-hole{
+    fill: #efe6d2;
+    stroke: #F5B400; stroke-width: 4; stroke-dasharray: 10 8; stroke-linejoin: round;
+    animation: slot-target 1.3s ease-in-out infinite;
+    transform-box: fill-box; transform-origin: center;
+  }
+
+  /* JEU DES OMBRES */
+  .shadow-target{
+    font-size: clamp(120px, 20vw, 240px); line-height: 1;
+    filter: brightness(0) drop-shadow(0 12px 10px rgba(43,45,66,.25));
+    animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);
+    transition: filter .3s ease;
+  }
+  /* Quand l'ombre est trouvée, l'objet apparaît en couleur pour féliciter. */
+  .shadow-target.revealed{
+    filter: brightness(1) drop-shadow(0 12px 10px rgba(43,45,66,.25));
+    animation: shadow-reveal .6s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes shadow-reveal{
+    0%{ transform: scale(.8) rotate(-8deg); }
+    55%{ transform: scale(1.18) rotate(4deg); }
+    100%{ transform: scale(1) rotate(0); }
+  }
+  .shadow-choice{ font-size: clamp(50px, 8vw, 96px); line-height: 1; }
+
+  /* JEU DE MÉMOIRE (paires) */
+  .memory-grid{
+    flex: 1 1 0; min-height: 0;
+    display: grid; gap: 1.5vw; padding: 0.5vh 0;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .memory-grid.cols-4{ grid-template-columns: repeat(4, 1fr); }
+  .memory-card{
+    border: none; background: none; cursor: pointer; padding: 0;
+    position: relative; perspective: 700px;
+  }
+  .memory-inner{
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transition: transform .45s cubic-bezier(.34,1.56,.64,1);
+  }
+  .memory-card.up .memory-inner{ transform: rotateY(180deg); }
+  .memory-face{
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 22px; box-shadow: var(--shadow);
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    overflow: hidden;
+  }
+  .memory-back{
+    background:
+      radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.5), rgba(255,255,255,0) 45%),
+      linear-gradient(150deg, var(--sky), var(--plum));
+    color: #fff; font-size: clamp(34px, 5vw, 64px);
+  }
+  .memory-front{
+    background: linear-gradient(150deg, #fff, #FFF6E2);
+    transform: rotateY(180deg);
+    font-size: clamp(46px, 8vw, 96px);
+  }
+  .memory-card.matched .memory-front{ animation: matched-pulse .5s ease-out; box-shadow: 0 0 0 4px var(--grass), var(--shadow); }
+  @keyframes matched-pulse{ 0%{ transform: rotateY(180deg) scale(1);} 50%{ transform: rotateY(180deg) scale(1.12);} 100%{ transform: rotateY(180deg) scale(1);} }
+
+  /* JEU RANGE PAR FAMILLE */
+  .sort-grid{
+    flex: 1 1 0; min-height: 0;
+    display: grid; gap: 1.5vw; padding: 0.5vh 0;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .sort-item{
+    border: none; cursor: pointer; position: relative;
+    background:
+      radial-gradient(120% 100% at 28% 16%, rgba(255,255,255,.9), rgba(255,255,255,0) 45%),
+      linear-gradient(160deg, #ffffff, #F3F7FF);
+    border-radius: 24px; box-shadow: var(--shadow);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .2s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+  }
+  .sort-emoji{ font-size: clamp(48px, 8vw, 96px); line-height: 1; }
+  .sort-item.found{ opacity: .5; box-shadow: 0 0 0 4px var(--grass), var(--shadow); }
+  .sort-check{
+    position: absolute; top: 8%; right: 10%;
+    width: clamp(28px, 4vw, 46px); height: clamp(28px, 4vw, 46px);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--grass); color: #fff; border-radius: 50%;
+    font-size: clamp(18px, 2.5vw, 30px); font-weight: 900;
+    box-shadow: 0 3px 8px rgba(43,45,66,.3);
+    animation: bounce-in .4s cubic-bezier(.34,1.56,.64,1);
   }
 
   /* STORY READER */
@@ -313,29 +482,45 @@
     font-size: clamp(24px, 3vw, 38px); color: var(--ink);
   }
 
-  /* DWELL RING (clic au regard) */
-  .dwell-ring{
-    position:absolute; inset:0;
-    border-radius: inherit; pointer-events:none;
-    background: conic-gradient(var(--sun) var(--dwell-deg, 0deg), transparent 0);
-    opacity:0;
-    mask: radial-gradient(circle, transparent 62%, black 64%);
-    -webkit-mask: radial-gradient(circle, transparent 62%, black 64%);
+  /* SÉLECTION AU REGARD (clic au survol) : plus d'anneau ni de carré en
+     overlay. L'objet regardé "prend vie" — il grandit et se met à trembler
+     de plus en plus fort à mesure que la sélection se charge, avec une lueur
+     chaude qui s'intensifie, puis l'action se déclenche. --dwell-pct (0→1) et
+     --dwell-sx/sy (tremblement) sont écrits par useDwell à chaque frame.
+     Cas particuliers plus bas : les cartes (framer-motion pilote le transform
+     du bouton, on anime donc leur icône) et les ballons (transform piloté par
+     la boucle physique, on y compose l'échelle directement). */
+  .dwell-active{
+    transform:
+      translate(var(--dwell-sx, 0px), var(--dwell-sy, 0px))
+      scale(calc(1 + var(--dwell-pct, 0) * 0.14));
+    filter: drop-shadow(0 0 calc(var(--dwell-pct, 0) * 18px) rgba(255,201,60,.7));
+    z-index: 6;
   }
-  .dwell-active .dwell-ring{ opacity:.9;}
+  /* Boutons de réponse : gagne sur le transform de :hover (même spécificité,
+     placé après) pour que ce soit bien l'effet "prend vie" qui s'applique. */
+  .answer.dwell-active{
+    transform:
+      translate(var(--dwell-sx, 0px), var(--dwell-sy, 0px))
+      scale(calc(1 + var(--dwell-pct, 0) * 0.1));
+  }
+  /* Cartes : framer-motion pilote le transform du <button>, donc on fait
+     vivre l'icône à l'intérieur (que framer ne touche pas). */
+  .card.dwell-active .emoji,
+  .card.dwell-active .cover-svg{
+    animation: none;
+    transform:
+      translate(var(--dwell-sx, 0px), var(--dwell-sy, 0px))
+      scale(calc(1 + var(--dwell-pct, 0) * 0.22));
+  }
 
   /* FEEDBACK */
-  .feedback{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:50; pointer-events:none;}
-  .feedback.show{ display:flex; animation: feedback-pop .6s ease-out;}
-  @keyframes feedback-pop{
-    0%{ transform: scale(.5); opacity:0;}
-    50%{ transform: scale(1.15);}
-    100%{ transform: scale(1); opacity:1;}
-  }
+  .feedback{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:50; pointer-events:none;}
   .feedback-emoji{ font-size: clamp(160px, 25vw, 280px); filter: drop-shadow(0 10px 0 rgba(43,45,66,.2));}
   .confetti{position:fixed; pointer-events:none; z-index:49; inset:0; overflow:hidden;}
-  .confetti span{ position:absolute; top:-20px; width: 18px; height: 18px; animation: fall 2.2s linear forwards;}
-  @keyframes fall{ to{ transform: translateY(110vh) rotate(720deg); opacity: .8;} }
+  .confetti-piece{ position:absolute; top:-20px;}
+  .confetti-piece.confetti-circle{ border-radius:50%;}
+  .confetti-piece.confetti-diamond{ border-radius:3px;}
   .shake{ animation: shake .5s;}
   @keyframes shake{
     0%, 100%{ transform: translateX(0);}
@@ -591,12 +776,29 @@
     width: 100%; height: 100%;
     overflow: hidden;
   }
+  /* Rendu 3D (three.js) : le canvas occupe toute l'arène ; par-dessus, des
+     zones de clic DOM transparentes alignées sur chaque ballon assurent la
+     compatibilité commande oculaire (clic au survol / simulateur de souris). */
+  .balloon-canvas{
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; z-index: 1;
+  }
+  .balloon-hit{
+    position: absolute; left: 0; top: 0;
+    background: transparent; border: none; padding: 0; margin: 0;
+    cursor: pointer; z-index: 2;
+  }
+  /* La zone de clic est repositionnée à chaque frame via un transform inline :
+     on neutralise donc le transform/filtre générique de .dwell-active ici, car
+     c'est le ballon 3D en dessous qui grossit et tremble, pas la zone. */
+  .balloon-hit.dwell-active{ filter: none; }
   .balloon-cloud{
     position: absolute;
     left: -15%;
     font-size: 46px;
     opacity: .55;
-    pointer-events: none;
+    pointer-events: none; z-index: 0;
     animation: balloon-cloud-drift linear infinite;
   }
   .balloon-cloud:nth-child(1){ top:6%; font-size:40px; animation-duration:22s;}
@@ -641,12 +843,26 @@
     filter: drop-shadow(0 3px 0 rgba(0,0,0,0.2));
   }
   .balloon.popping{ pointer-events: none;}
-  .balloon.popping .balloon-svg{ animation: balloon-pop .55s ease-out forwards;}
+  .balloon.popping .balloon-svg{ animation: balloon-pop .4s ease-out forwards;}
   .balloon.popping .balloon-content{ animation: content-fly .8s ease-out forwards;}
+  /* Vrai éclatement : le ballon se gonfle brusquement puis DISPARAÎT à pleine
+     taille (au lieu de rétrécir), pendant que les éclats jaillissent. */
   @keyframes balloon-pop{
-    0%{ transform: scale(1) rotate(0deg);}
-    25%{ transform: scale(1.3) rotate(5deg);}
-    100%{ transform: scale(0) rotate(0deg); opacity: 0;}
+    0%{ transform: scale(1) rotate(0deg); opacity:1;}
+    35%{ transform: scale(1.4) rotate(4deg); opacity:1;}
+    55%{ transform: scale(1.75) rotate(-3deg); opacity:0;}
+    100%{ transform: scale(1.75); opacity:0;}
+  }
+  .pop-flash{
+    position:absolute; pointer-events:none;
+    width: 40px; height: 40px; margin-left:-20px; margin-top:-20px;
+    border-radius:50%;
+    background: radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 70%);
+    animation: pop-flash .32s ease-out forwards;
+  }
+  @keyframes pop-flash{
+    0%{ transform: scale(.4); opacity:1;}
+    100%{ transform: scale(3.2); opacity:0;}
   }
   @keyframes content-fly{
     0%{ transform: translate(-50%, -50%) scale(1); opacity: 1;}
@@ -675,14 +891,16 @@
   }
   .particle-piece{
     position: absolute;
-    animation: particle .75s cubic-bezier(.25,.7,.4,1) forwards;
+    animation: particle .85s cubic-bezier(.15,.75,.35,1) forwards;
+    box-shadow: 0 0 4px rgba(0,0,0,.12);
   }
   .particle-piece.circle{ border-radius: 50%;}
   .particle-piece.diamond{ border-radius: 3px;}
   @keyframes particle{
-    from{ transform: translate(-50%, -50%) rotate(0deg); opacity: 1;}
-    to{
-      transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px) + 36px)) rotate(var(--rot, 0deg));
+    0%{ transform: translate(-50%, -50%) rotate(0deg) scale(1.15); opacity: 1;}
+    70%{ opacity: 1;}
+    100%{
+      transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px) + 44px)) rotate(var(--rot, 0deg)) scale(.6);
       opacity: 0;
     }
   }
@@ -697,7 +915,7 @@
 
   @media (max-width: 800px), (orientation: portrait){
     .home-grid{ grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;}
-    #screenGames .home-grid{ grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);}
+    #screenGames .home-grid{ grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr;}
     .lib-grid{ grid-template-columns: 1fr 1fr; grid-template-rows: auto;}
     .card .emoji{ font-size: 60px;}
   }

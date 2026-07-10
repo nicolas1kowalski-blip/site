@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef } from 'react';
 import { appState } from '../lib/appState.js';
 
 // Reproduit le "clic au survol" (commande oculaire) : rester un certain temps
-// sur un élément déclenche automatiquement son activation, avec un anneau de
-// progression visuel (voir .dwell-ring dans le CSS). Usage :
-//   const dwell = useDwell(handleClick);
-//   <button ref={dwell.ref} onMouseEnter={dwell.onMouseEnter} onMouseLeave={dwell.onMouseLeave}
-//           onPointerDown={dwell.onPointerDown} onClick={handleClick}><div className="dwell-ring"/></button>
+// sur un élément déclenche automatiquement son activation. Le retour visuel se
+// fait par l'objet lui-même qui grandit et tremble de plus en plus (voir la
+// règle .dwell-active dans le CSS), plutôt que par un anneau/carré en overlay.
+// Pendant le survol, on écrit trois variables CSS sur l'élément :
+//   --dwell-pct   progression 0 → 1 (pilote l'agrandissement + la lueur)
+//   --dwell-sx    décalage de tremblement horizontal (px), amplitude ∝ pct
+//   --dwell-sy    décalage de tremblement vertical (px)
 export function useDwell(onActivate, disabled = false) {
   const elRef = useRef(null);
   const timerRef = useRef(null);
@@ -22,7 +24,9 @@ export function useDwell(onActivate, disabled = false) {
     const el = elRef.current;
     if (el) {
       el.classList.remove('dwell-active');
-      el.style.setProperty('--dwell-deg', '0deg');
+      el.style.setProperty('--dwell-pct', 0);
+      el.style.setProperty('--dwell-sx', '0px');
+      el.style.setProperty('--dwell-sy', '0px');
     }
   }, []);
 
@@ -35,7 +39,12 @@ export function useDwell(onActivate, disabled = false) {
     const tick = () => {
       const elapsed = performance.now() - startT;
       const pct = Math.min(elapsed / appState.dwellTime, 1);
-      el.style.setProperty('--dwell-deg', pct * 360 + 'deg');
+      // Le tremblement s'intensifie de façon quadratique : imperceptible au
+      // début, bien visible juste avant l'activation ("ça va éclater").
+      const amp = pct * pct * 4;
+      el.style.setProperty('--dwell-pct', pct);
+      el.style.setProperty('--dwell-sx', (Math.random() - 0.5) * 2 * amp + 'px');
+      el.style.setProperty('--dwell-sy', (Math.random() - 0.5) * 2 * amp + 'px');
       if (pct < 1) rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
