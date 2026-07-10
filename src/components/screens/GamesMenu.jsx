@@ -11,6 +11,8 @@ const GAMES = [
   { id: 'body', emoji: '🧍', label: 'Le Corps' },
   { id: 'shadow', emoji: '🫥', label: 'Les Ombres' },
   { id: 'complete', emoji: '🖼️', label: "Complète l'image" },
+  { id: 'memory', emoji: '🃏', label: 'Les Paires' },
+  { id: 'families', emoji: '🍎', label: 'Les Familles' },
 ];
 
 export default function GamesMenu({ active, onStartGame }) {

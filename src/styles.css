@@ -124,6 +124,8 @@
   #screenGames .card:nth-child(6){ --card-bg: var(--rose);}
   #screenGames .card:nth-child(7){ --card-bg: var(--sky);}
   #screenGames .card:nth-child(8){ --card-bg: var(--sun);}
+  #screenGames .card:nth-child(9){ --card-bg: var(--coral);}
+  #screenGames .card:nth-child(10){ --card-bg: var(--grass);}
 
   /* GAME SCREEN */
   .question{ text-align:center; font-family:'Baloo 2', sans-serif; font-weight:700; font-size: clamp(22px, 3vw, 38px); margin: 0 0 0.8vh; flex-shrink:0;}
@@ -299,6 +301,71 @@
     animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);
   }
   .shadow-choice{ font-size: clamp(50px, 8vw, 96px); line-height: 1; }
+
+  /* JEU DE MÉMOIRE (paires) */
+  .memory-grid{
+    flex: 1 1 0; min-height: 0;
+    display: grid; gap: 1.5vw; padding: 0.5vh 0;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .memory-grid.cols-4{ grid-template-columns: repeat(4, 1fr); }
+  .memory-card{
+    border: none; background: none; cursor: pointer; padding: 0;
+    position: relative; perspective: 700px;
+  }
+  .memory-inner{
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transition: transform .45s cubic-bezier(.34,1.56,.64,1);
+  }
+  .memory-card.up .memory-inner{ transform: rotateY(180deg); }
+  .memory-face{
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 22px; box-shadow: var(--shadow);
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    overflow: hidden;
+  }
+  .memory-back{
+    background:
+      radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.5), rgba(255,255,255,0) 45%),
+      linear-gradient(150deg, var(--sky), var(--plum));
+    color: #fff; font-size: clamp(34px, 5vw, 64px);
+  }
+  .memory-front{
+    background: linear-gradient(150deg, #fff, #FFF6E2);
+    transform: rotateY(180deg);
+    font-size: clamp(46px, 8vw, 96px);
+  }
+  .memory-card.matched .memory-front{ animation: matched-pulse .5s ease-out; box-shadow: 0 0 0 4px var(--grass), var(--shadow); }
+  @keyframes matched-pulse{ 0%{ transform: rotateY(180deg) scale(1);} 50%{ transform: rotateY(180deg) scale(1.12);} 100%{ transform: rotateY(180deg) scale(1);} }
+
+  /* JEU RANGE PAR FAMILLE */
+  .sort-grid{
+    flex: 1 1 0; min-height: 0;
+    display: grid; gap: 1.5vw; padding: 0.5vh 0;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .sort-item{
+    border: none; cursor: pointer; position: relative;
+    background:
+      radial-gradient(120% 100% at 28% 16%, rgba(255,255,255,.9), rgba(255,255,255,0) 45%),
+      linear-gradient(160deg, #ffffff, #F3F7FF);
+    border-radius: 24px; box-shadow: var(--shadow);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .2s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+  }
+  .sort-emoji{ font-size: clamp(48px, 8vw, 96px); line-height: 1; }
+  .sort-item.found{ opacity: .5; box-shadow: 0 0 0 4px var(--grass), var(--shadow); }
+  .sort-check{
+    position: absolute; top: 8%; right: 10%;
+    width: clamp(28px, 4vw, 46px); height: clamp(28px, 4vw, 46px);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--grass); color: #fff; border-radius: 50%;
+    font-size: clamp(18px, 2.5vw, 30px); font-weight: 900;
+    box-shadow: 0 3px 8px rgba(43,45,66,.3);
+    animation: bounce-in .4s cubic-bezier(.34,1.56,.64,1);
+  }
 
   /* STORY READER */
   .story-screen{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; gap: 1vh;}
