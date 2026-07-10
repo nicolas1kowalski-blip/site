@@ -299,6 +299,17 @@
     font-size: clamp(120px, 20vw, 240px); line-height: 1;
     filter: brightness(0) drop-shadow(0 12px 10px rgba(43,45,66,.25));
     animation: bounce-in .5s cubic-bezier(.34,1.56,.64,1);
+    transition: filter .3s ease;
+  }
+  /* Quand l'ombre est trouvée, l'objet apparaît en couleur pour féliciter. */
+  .shadow-target.revealed{
+    filter: brightness(1) drop-shadow(0 12px 10px rgba(43,45,66,.25));
+    animation: shadow-reveal .6s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes shadow-reveal{
+    0%{ transform: scale(.8) rotate(-8deg); }
+    55%{ transform: scale(1.18) rotate(4deg); }
+    100%{ transform: scale(1) rotate(0); }
   }
   .shadow-choice{ font-size: clamp(50px, 8vw, 96px); line-height: 1; }
 

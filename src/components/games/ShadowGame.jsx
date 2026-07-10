@@ -10,12 +10,14 @@ import { useCelebrate } from '../../context/FeedbackContext.jsx';
 export default function ShadowGame({ active }) {
   const [round, setRound] = useState(null);
   const [shakeEmoji, setShakeEmoji] = useState(null);
+  const [revealed, setRevealed] = useState(false);
   const timerRef = useRef(null);
   const celebrate = useCelebrate();
 
   const newRound = useCallback(() => {
     appState.locked = false;
     setShakeEmoji(null);
+    setRevealed(false);
     const target = rand(COUNT_OBJECTS);
     const options = pickN(COUNT_OBJECTS, 3, target);
     setRound({ target, options });
@@ -33,6 +35,7 @@ export default function ShadowGame({ active }) {
     if (appState.locked) return;
     if (emoji === round.target) {
       appState.locked = true;
+      setRevealed(true); // l'ombre laisse place à l'objet en couleur
       successSound();
       celebrate();
       speak(rand(PRAISES));
@@ -49,7 +52,7 @@ export default function ShadowGame({ active }) {
     <>
       <div className="question">Quel objet fait cette ombre ?</div>
       <div className="stage">
-        <div className="shadow-target">{round.target}</div>
+        <div className={`shadow-target${revealed ? ' revealed' : ''}`}>{round.target}</div>
       </div>
       <div className="answers">
         {round.options.map((emo, i) => (

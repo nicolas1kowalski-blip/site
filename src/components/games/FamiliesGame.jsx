@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DwellButton from '../DwellButton.jsx';
 import { appState } from '../../lib/appState.js';
 import { PRAISES, ENCOURAGE } from '../../data/games.js';
-import { shuffle, pickN, rand, speak, successSound, wrongSound } from '../../lib/audio.js';
+import { shuffle, rand, speak, successSound, wrongSound } from '../../lib/audio.js';
 import { useCelebrate } from '../../context/FeedbackContext.jsx';
 
 const FAMILIES = [
@@ -27,8 +27,8 @@ export default function FamiliesGame({ active }) {
     setShakeIdx(null);
     const target = rand(FAMILIES);
     const others = FAMILIES.filter((f) => f !== target).flatMap((f) => f.items);
-    const targetItems = pickN(target.items, 3);
-    const distractors = pickN(others, 3);
+    const targetItems = shuffle(target.items).slice(0, 3);
+    const distractors = shuffle(others).slice(0, 3);
     const items = shuffle([
       ...targetItems.map((emoji) => ({ emoji, isTarget: true })),
       ...distractors.map((emoji) => ({ emoji, isTarget: false })),
