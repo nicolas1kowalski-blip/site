@@ -4,6 +4,7 @@ import DwellButton from './DwellButton.jsx';
 const TABS = [
   { id: 'stories', icon: '📖', label: 'Histoires' },
   { id: 'games', icon: '🎮', label: 'Jeux' },
+  { id: 'coloring', icon: '🎨', label: 'Coloriage' },
   { id: 'music', icon: '🎵', label: 'Musique' },
 ];
 

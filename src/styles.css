@@ -378,6 +378,54 @@
     animation: bounce-in .4s cubic-bezier(.34,1.56,.64,1);
   }
 
+  /* COLORIAGE */
+  .coloring-top{ flex:1 1 0; min-height:0; display:flex; gap:1.5vw; align-items:stretch; }
+  .coloring-stage{
+    flex:1 1 0; min-height:0; position:relative;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .coloring-canvas{
+    max-width:100%; max-height:100%;
+    background:#fff; border-radius:22px; box-shadow: var(--shadow);
+    cursor:pointer; touch-action:none; display:block;
+  }
+  .color-ring{
+    position:absolute; display:none; z-index:5; pointer-events:none;
+    width:64px; height:64px; border-radius:50%;
+    border:5px solid var(--sun); background: rgba(255,201,60,.18);
+    box-shadow: 0 0 14px rgba(255,201,60,.6);
+  }
+  .coloring-tools{
+    width: clamp(74px, 9vw, 128px); flex-shrink:0;
+    display:flex; flex-direction:column; gap:1vh; align-items:center; justify-content:center;
+  }
+  .coloring-page-btn{
+    width:100%; aspect-ratio:1/1; padding:5px;
+    border:3px solid transparent; border-radius:16px;
+    background:#fff; box-shadow: var(--shadow); cursor:pointer;
+  }
+  .coloring-page-btn.sel{ border-color: var(--sun); }
+  .coloring-page-btn img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .coloring-reset{
+    width:100%; aspect-ratio:1/1; border:none; border-radius:16px;
+    background:#fff; box-shadow: var(--shadow); cursor:pointer;
+    font-size: clamp(24px, 3.2vw, 44px); display:flex; align-items:center; justify-content:center;
+  }
+
+  .palette{
+    flex-shrink:0; margin-top: 0.8vh;
+    display:flex; flex-wrap:wrap; gap: 0.7vw; justify-content:center; align-content:flex-start;
+    max-height: 24vh; overflow-y:auto; padding: 2px;
+  }
+  .swatch{
+    width: clamp(46px, 5.4vw, 74px); aspect-ratio:1/1; padding:0;
+    border:4px solid #fff; border-radius:50%; box-shadow: var(--shadow);
+    background:#fff; cursor:pointer; overflow:hidden;
+  }
+  .swatch img{ width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+  .swatch.sel{ border-color: var(--ink); }
+  .swatch-solid.swatch[aria-label="blanc"]{ border-color:#ddd; }
+
   /* STORY READER */
   .story-screen{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; gap: 1vh;}
   .scene{
