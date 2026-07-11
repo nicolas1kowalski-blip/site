@@ -58,7 +58,7 @@ namespace MesPremiersJeux
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            _dwell = new DwellController(RootGrid, GazeLayer, GazeRing);
+            _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress);
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Start();
             GazeStatus.Text = _gaze.IsAvailable ? "👁  Regard actif" : "🖱  Souris (aucun Tobii détecté)";

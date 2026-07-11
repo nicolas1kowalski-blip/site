@@ -74,14 +74,16 @@
             </Border>
         </Popup>
 
-        <!-- Anneau de dwell (au-dessus de tout, non cliquable) -->
+        <!-- Cercle de progression du dwell (au-dessus de tout, non cliquable) -->
         <Canvas x:Name="GazeLayer" IsHitTestVisible="False">
-            <Ellipse x:Name="GazeRing" Width="84" Height="84" Visibility="Collapsed"
-                     StrokeThickness="6" Fill="#22FFFFFF">
-                <Ellipse.Stroke>
-                    <SolidColorBrush Color="#FF7E3FF2" />
-                </Ellipse.Stroke>
-            </Ellipse>
+            <Grid x:Name="GazeIndicator" Width="90" Height="90" Visibility="Collapsed">
+                <Ellipse Width="74" Height="74" Stroke="#33512DA8" StrokeThickness="9"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Path x:Name="GazeProgress" Stroke="#FF7E3FF2" StrokeThickness="9"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                <Ellipse Width="56" Height="56" Fill="#33FFFFFF"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
         </Canvas>
     </Grid>
 </Window>

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,36 +13,43 @@ namespace MesPremiersJeux.Gaze
 {
     /// <summary>
     /// Transforme le flux de regard en « dwell-click » : quand le regard reste
-    /// posé sur une cible (bouton ou surface) pendant <see cref="DwellTime"/>,
-    /// l'action est déclenchée. Un anneau de progression suit le regard et la
-    /// cible « prend vie » (elle grossit et frémit), comme dans la version web.
+    /// posé sur une cible pendant <see cref="DwellTime"/>, l'action se déclenche.
+    /// Le point de regard est lissé (filtre 1 €) pour absorber le tremblement des
+    /// eye-trackers, la sélection tolère les petits écarts et les brèves pertes,
+    /// et un cercle de progression se remplit pendant la fixation.
     /// </summary>
     public sealed class DwellController
     {
         private readonly FrameworkElement _root;
-        private readonly Canvas _overlay;
-        private readonly Ellipse _ring;
+        private readonly FrameworkElement _indicator; // cercle de progression (conteneur)
+        private readonly Path _progress;              // arc qui se remplit
         private readonly DispatcherTimer _tick;
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
 
-        // Dernier point de regard reçu (écrit depuis le thread Tobii).
+        private readonly OneEuroFilter _fx = new OneEuroFilter();
+        private readonly OneEuroFilter _fy = new OneEuroFilter();
+
+        // Dernier point de regard SDK reçu (écrit depuis le thread Tobii).
         private volatile bool _hasGaze;
         private double _gx, _gy;
 
         // État du dwell courant.
         private object _target;
         private FrameworkElement _aliveElement;
-        private Point _dwellScreen;
-        private Point _lastScreen;
+        private Point _dwellScreen;   // point (lissé) au démarrage du dwell
+        private Point _lastScreen;    // dernier point lissé
         private DateTime _dwellStart;
+        private int _missTicks;       // images consécutives sans cible
+
+        // Tolérances.
+        private const int GraceTicks = 5;         // ~165 ms de perte tolérée
+        private const double IndicatorR = 37;     // rayon de l'arc de progression
 
         public bool Enabled { get; set; } = true;
         public bool Locked { get; set; } = false;
         public int DwellTime { get; set; } = 900; // ms
 
-        /// <summary>
-        /// Si vrai, on suit la position du curseur (déplacé au regard par la I-13
-        /// en mode « Contrôle de l'ordinateur ») au lieu du flux SDK Tobii.
-        /// </summary>
+        /// <summary>Suivre le curseur (déplacé au regard par la I-13) au lieu du SDK.</summary>
         public bool UseCursor { get; set; } = false;
 
         [DllImport("user32.dll")]
@@ -50,22 +58,22 @@ namespace MesPremiersJeux.Gaze
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT { public int X; public int Y; }
 
-        public DwellController(FrameworkElement root, Canvas overlay, Ellipse ring)
+        public DwellController(FrameworkElement root, FrameworkElement indicator, Path progress)
         {
             _root = root;
-            _overlay = overlay;
-            _ring = ring;
-            _ring.Visibility = Visibility.Collapsed;
+            _indicator = indicator;
+            _progress = progress;
+            _indicator.Visibility = Visibility.Collapsed;
 
             _tick = new DispatcherTimer(DispatcherPriority.Input)
             {
-                Interval = TimeSpan.FromMilliseconds(33), // ~30 img/s
+                Interval = TimeSpan.FromMilliseconds(30),
             };
             _tick.Tick += OnTick;
             _tick.Start();
         }
 
-        /// <summary>Reçoit un point de regard (thread quelconque).</summary>
+        /// <summary>Reçoit un point de regard SDK (thread quelconque).</summary>
         public void PushGaze(GazePoint p)
         {
             _gx = p.X;
@@ -81,40 +89,53 @@ namespace MesPremiersJeux.Gaze
                 return;
             }
 
-            Point screen;
+            // 1) Source du point brut.
+            Point raw;
             if (UseCursor)
             {
                 if (!GetCursorPos(out var cp)) { Cancel(); return; }
-                screen = new Point(cp.X, cp.Y);
+                raw = new Point(cp.X, cp.Y);
             }
             else
             {
                 if (!_hasGaze) { Cancel(); return; }
-                screen = new Point(_gx, _gy);
+                raw = new Point(_gx, _gy);
             }
+
+            // 2) Lissage anti-bruit (filtre 1 €).
+            double t = _clock.Elapsed.TotalSeconds;
+            var screen = new Point(_fx.Filter(raw.X, t), _fy.Filter(raw.Y, t));
             _lastScreen = screen;
+
             Point local;
             try { local = _root.PointFromScreen(screen); }
             catch { Cancel(); return; }
 
+            // 3) Cible sous le regard, avec tolérance aux brèves pertes.
             var target = FindTarget(local);
-            if (target == null) { Cancel(); return; }
+            if (target == null)
+            {
+                if (_target != null && _missTicks++ < GraceTicks) return; // on maintient
+                Cancel();
+                return;
+            }
+            _missTicks = 0;
 
             bool moved = Distance(screen, _dwellScreen) > MoveThreshold(target);
             bool changed = !ReferenceEquals(target, _target);
-
             if (changed || (target is IGazeSurface && moved))
                 StartDwell(target, screen);
 
-            // Anneau qui suit le regard.
-            PlaceRing(local);
+            // 4) Indicateur + progression.
+            PlaceIndicator(local);
+            double frac = Math.Min(1.0, (DateTime.UtcNow - _dwellStart).TotalMilliseconds / DwellTime);
+            UpdateProgress(frac);
 
-            var elapsed = (DateTime.UtcNow - _dwellStart).TotalMilliseconds;
-            if (elapsed >= DwellTime)
-                Commit();
+            if (frac >= 1.0) Commit();
         }
 
-        private double MoveThreshold(object target) => target is IGazeSurface ? ((IGazeSurface)target).ReArmDistance : 40.0;
+        private double MoveThreshold(object target)
+            => target is IGazeSurface s ? s.ReArmDistance : 60.0;
 
         private void StartDwell(object target, Point screen)
         {
@@ -122,10 +143,8 @@ namespace MesPremiersJeux.Gaze
             _target = target;
             _dwellScreen = screen;
             _dwellStart = DateTime.UtcNow;
-
-            _ring.Visibility = Visibility.Visible;
-            BeginRingGrow();
-
+            _indicator.Visibility = Visibility.Visible;
+            UpdateProgress(0);
             if (target is FrameworkElement fe && !(target is IGazeSurface))
                 BeginAlive(fe);
         }
@@ -134,18 +153,17 @@ namespace MesPremiersJeux.Gaze
         {
             var target = _target;
             var screen = _lastScreen;
-            // On réinitialise avant l'action pour éviter un double déclenchement.
-            _dwellStart = DateTime.UtcNow;
+            _dwellStart = DateTime.UtcNow; // ré-armement immédiat
 
             if (target is IGazeSurface surf)
             {
                 if (surf.HitTestGaze(screen)) surf.CommitGaze(screen);
-                // La surface se ré-armera au prochain déplacement.
+                UpdateProgress(0);
             }
             else
             {
                 StopAlive();
-                _ring.Visibility = Visibility.Collapsed;
+                _indicator.Visibility = Visibility.Collapsed;
                 _target = null;
                 if (target is ButtonBase btn) InvokeButton(btn);
             }
@@ -154,12 +172,13 @@ namespace MesPremiersJeux.Gaze
         private void Cancel()
         {
             _target = null;
+            _missTicks = 0;
             StopAlive();
-            if (_ring.Visibility != Visibility.Collapsed)
-                _ring.Visibility = Visibility.Collapsed;
+            if (_indicator.Visibility != Visibility.Collapsed)
+                _indicator.Visibility = Visibility.Collapsed;
         }
 
-        // --- Recherche de la cible sous le regard ---
+        // --- Cible sous le regard ---
         private object FindTarget(Point local)
         {
             DependencyObject hit = null;
@@ -183,22 +202,35 @@ namespace MesPremiersJeux.Gaze
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
-        // --- Anneau de progression ---
-        private void PlaceRing(Point local)
+        // --- Cercle de progression (arc qui se remplit) ---
+        private void PlaceIndicator(Point local)
         {
-            const double size = 84;
-            Canvas.SetLeft(_ring, local.X - size / 2);
-            Canvas.SetTop(_ring, local.Y - size / 2);
+            Canvas.SetLeft(_indicator, local.X - _indicator.Width / 2);
+            Canvas.SetTop(_indicator, local.Y - _indicator.Height / 2);
         }
 
-        private void BeginRingGrow()
+        private void UpdateProgress(double frac)
         {
-            var grow = new DoubleAnimation(0.25, 1.0, TimeSpan.FromMilliseconds(DwellTime));
-            var st = EnsureScale(_ring);
-            st.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-            st.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
-            _ring.BeginAnimation(UIElement.OpacityProperty,
-                new DoubleAnimation(0.5, 0.9, TimeSpan.FromMilliseconds(DwellTime)));
+            frac = Math.Max(0, Math.Min(1, frac));
+            double cx = _indicator.Width / 2, cy = _indicator.Height / 2, r = IndicatorR;
+            if (frac <= 0.001)
+            {
+                _progress.Data = Geometry.Empty;
+                return;
+            }
+            if (frac >= 0.999)
+            {
+                _progress.Data = new EllipseGeometry(new Point(cx, cy), r, r);
+                return;
+            }
+            double ang = frac * 2 * Math.PI;
+            var start = new Point(cx, cy - r);
+            var end = new Point(cx + r * Math.Sin(ang), cy - r * Math.Cos(ang));
+            var fig = new PathFigure { StartPoint = start, IsClosed = false };
+            fig.Segments.Add(new ArcSegment(end, new Size(r, r), 0, frac > 0.5, SweepDirection.Clockwise, true));
+            var geo = new PathGeometry();
+            geo.Figures.Add(fig);
+            _progress.Data = geo;
         }
 
         // --- « Prend vie » : la cible grossit et frémit ---
@@ -233,19 +265,10 @@ namespace MesPremiersJeux.Gaze
             }
         }
 
-        private static ScaleTransform EnsureScale(UIElement el)
-        {
-            if (el.RenderTransform is ScaleTransform s) return s;
-            var st = new ScaleTransform(1, 1);
-            el.RenderTransformOrigin = new Point(0.5, 0.5);
-            el.RenderTransform = st;
-            return st;
-        }
-
         private static void InvokeButton(ButtonBase btn)
         {
-            // Nos boutons réagissent tous à l'événement routé Click ; le lever
-            // suffit à déclencher leurs gestionnaires (pas de dépendance UIAutomation).
+            // Nos boutons réagissent à l'événement routé Click ; le lever suffit
+            // (pas de dépendance UIAutomation).
             btn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, btn));
             if (btn.Command != null && btn.Command.CanExecute(btn.CommandParameter))
                 btn.Command.Execute(btn.CommandParameter);

@@ -143,7 +143,7 @@ namespace MesPremiersJeux.Views
         }
 
         // --- IGazeSurface (dwell) ---
-        public double ReArmDistance => 18.0;
+        public double ReArmDistance => 30.0;
 
         private bool TryMap(Point screenPoint, out Point imgPoint)
         {
