@@ -53,10 +53,14 @@ msbuild MesPremiersJeux.sln /p:Platform=x64 /p:Configuration=Release
 
 ## Réglages du dwell (au regard)
 
-Un bouton **⚙** en haut à droite ouvre un panneau :
+Un bouton **⚙** en haut à droite ouvre un panneau, **réglable en direct** et
+**mémorisé** d'une session à l'autre (fichier `%AppData%\MesPremiersJeux\settings.ini`) :
 
 - **Piloter au regard (dwell)** — active/désactive le déclenchement par fixation.
 - **Durée de fixation** — de 0,4 s à 2,5 s.
+- **Lissage (stabilité du regard)** — de « réactif » à « très stable ». Augmente-le
+  si le point tremble trop ; diminue-le si le cercle traîne derrière le regard.
+- **Taille du cercle** — diamètre du cercle de progression.
 
 Deux sources de regard sont gérées automatiquement :
 

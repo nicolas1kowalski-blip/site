@@ -66,6 +66,17 @@
                     <Slider x:Name="DwellSlider" Minimum="400" Maximum="2500" TickFrequency="100"
                             IsSnapToTickEnabled="True" ValueChanged="DwellSlider_Changed" />
                     <TextBlock x:Name="DwellValue" FontSize="13" Foreground="#FF6B5B8A" HorizontalAlignment="Right" />
+
+                    <TextBlock Text="Lissage (stabilité du regard)" FontSize="14" Foreground="#FF6B5B8A" Margin="0,14,0,2" />
+                    <Slider x:Name="SmoothSlider" Minimum="0" Maximum="100" ValueChanged="SmoothSlider_Changed" />
+                    <DockPanel LastChildFill="False">
+                        <TextBlock Text="réactif" DockPanel.Dock="Left" FontSize="12" Foreground="#FF9A8AB8" />
+                        <TextBlock Text="très stable" DockPanel.Dock="Right" FontSize="12" Foreground="#FF9A8AB8" />
+                    </DockPanel>
+
+                    <TextBlock Text="Taille du cercle" FontSize="14" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
+                    <Slider x:Name="CircleSlider" Minimum="60" Maximum="170" ValueChanged="CircleSlider_Changed" />
+
                     <Border Background="#FFF3E9FF" CornerRadius="10" Padding="10" Margin="0,14,0,0">
                         <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="#FF5A4A7A"
                                    Text="Calibrage : sur la TD I-13, il se fait dans les réglages d'eye-tracking de l'appareil (Tobii Dynavox → Calibrer). Active le mode « Contrôle de l'ordinateur » pour que le regard déplace le curseur, puis coche « Piloter au regard » ci-dessus." />

@@ -24,17 +24,21 @@ namespace MesPremiersJeux.Gaze
             public void Reset() => Initialized = false;
         }
 
-        private readonly double _minCutoff;
-        private readonly double _beta;
         private readonly double _dCutoff;
         private readonly LowPass _x = new LowPass();
         private readonly LowPass _dx = new LowPass();
         private double _lastTime = -1;
 
+        /// <summary>Fréquence de coupure au repos : plus bas = plus lissé/stable.</summary>
+        public double MinCutoff { get; set; }
+
+        /// <summary>Réactivité à la vitesse : plus haut = suit mieux les mouvements rapides.</summary>
+        public double Beta { get; set; }
+
         public OneEuroFilter(double minCutoff = 0.7, double beta = 0.018, double dCutoff = 1.0)
         {
-            _minCutoff = minCutoff;
-            _beta = beta;
+            MinCutoff = minCutoff;
+            Beta = beta;
             _dCutoff = dCutoff;
         }
 

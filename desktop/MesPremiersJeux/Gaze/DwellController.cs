@@ -73,6 +73,24 @@ namespace MesPremiersJeux.Gaze
             _tick.Start();
         }
 
+        /// <summary>Règle le lissage anti-bruit (mêmes paramètres sur X et Y).</summary>
+        public void SetSmoothing(double minCutoff, double beta)
+        {
+            _fx.MinCutoff = minCutoff; _fx.Beta = beta;
+            _fy.MinCutoff = minCutoff; _fy.Beta = beta;
+        }
+
+        /// <summary>Règle le diamètre (px) du cercle de progression.</summary>
+        public void SetIndicatorSize(double diameter)
+        {
+            double k = diameter / _indicator.Width; // conteneur de base = 90 px
+            _indicator.RenderTransform = new ScaleTransform(k, k)
+            {
+                CenterX = _indicator.Width / 2,
+                CenterY = _indicator.Height / 2,
+            };
+        }
+
         /// <summary>Reçoit un point de regard SDK (thread quelconque).</summary>
         public void PushGaze(GazePoint p)
         {

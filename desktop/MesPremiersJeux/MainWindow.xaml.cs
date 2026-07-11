@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using MesPremiersJeux.Gaze;
+using MesPremiersJeux.Lib;
 using MesPremiersJeux.Views;
 
 namespace MesPremiersJeux
@@ -12,6 +13,7 @@ namespace MesPremiersJeux
     {
         private readonly GazeService _gaze = new GazeService();
         private DwellController _dwell;
+        private Settings _settings;
 
         private readonly Dictionary<string, FrameworkElement> _views = new Dictionary<string, FrameworkElement>();
 
@@ -58,17 +60,35 @@ namespace MesPremiersJeux
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
+            _settings = Settings.Load();
+
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress);
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Start();
             GazeStatus.Text = _gaze.IsAvailable ? "👁  Regard actif" : "🖱  Souris (aucun Tobii détecté)";
 
-            // Valeurs par défaut des réglages (après création du dwell).
-            DwellSlider.Value = _dwell.DwellTime;
+            // Applique les réglages sauvegardés au contrôleur.
+            _dwell.DwellTime = _settings.DwellTime;
+            ApplySmoothing(_settings.Smoothing);
+            _dwell.SetIndicatorSize(_settings.CircleSize);
+
+            // Reporte ces réglages dans les curseurs du panneau ⚙.
+            DwellSlider.Value = _settings.DwellTime;
+            SmoothSlider.Value = _settings.Smoothing * 100;
+            CircleSlider.Value = _settings.CircleSize;
+
             // Si un tracker SDK est présent, le regard pilote d'emblée ; sinon on
             // laisse le parent l'activer (mode curseur pour la TD I-13).
             GazeModeCheck.IsChecked = _gaze.IsAvailable;
             ApplyGazeMode();
+        }
+
+        private void ApplySmoothing(double s)
+        {
+            // s ∈ [0,1] : 0 = réactif (peu de lissage), 1 = très stable (fort lissage).
+            double minCutoff = 3.0 - s * 2.75; // 3.0 → 0.25
+            double beta = 0.05 - s * 0.042;    // 0.05 → 0.008
+            _dwell.SetSmoothing(minCutoff, beta);
         }
 
         private void Settings_Click(object sender, RoutedEventArgs e)
@@ -92,6 +112,22 @@ namespace MesPremiersJeux
             if (_dwell == null) return;
             _dwell.DwellTime = (int)e.NewValue;
             if (DwellValue != null) DwellValue.Text = $"{e.NewValue / 1000.0:0.0} s";
+            if (_settings != null) { _settings.DwellTime = (int)e.NewValue; _settings.Save(); }
+        }
+
+        private void SmoothSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_dwell == null) return;
+            double s = e.NewValue / 100.0;
+            ApplySmoothing(s);
+            if (_settings != null) { _settings.Smoothing = s; _settings.Save(); }
+        }
+
+        private void CircleSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_dwell == null) return;
+            _dwell.SetIndicatorSize(e.NewValue);
+            if (_settings != null) { _settings.CircleSize = e.NewValue; _settings.Save(); }
         }
 
         private void Tab_Click(object sender, RoutedEventArgs e)
