@@ -19,15 +19,15 @@ namespace MesPremiersJeux.Games
             var options = GameKit.PickN(GameData.Shapes, 3, target);
             Question.Text = "Quel objet fait cette ombre ?";
 
-            var silhouette = Shape3D.View(Shape3D.ShapeMesh(target.Name), Color.FromRgb(0x22, 0x22, 0x2A), 240);
-            var colored = Shape3D.View(Shape3D.ShapeMesh(target.Name), target.Color, 240);
+            var silhouette = Shape3D.View(Shape3D.ShapeMesh(target.Name), Color.FromRgb(0x22, 0x22, 0x2A), 330);
+            var colored = Shape3D.View(Shape3D.ShapeMesh(target.Name), target.Color, 330);
             colored.Visibility = Visibility.Collapsed;
             var stage = new Grid { Children = { silhouette, colored } };
 
             var row = Row();
             foreach (var s in options)
             {
-                var btn = AnswerButton(Shape3D.View(Shape3D.ShapeMesh(s.Name), s.Color, 115));
+                var btn = AnswerButton(Shape3D.View(Shape3D.ShapeMesh(s.Name), s.Color, 175));
                 var chosen = s;
                 btn.Click += (ev, e) => Answer(chosen, target, btn, silhouette, colored);
                 row.Children.Add(btn);

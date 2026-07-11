@@ -91,15 +91,21 @@ namespace MesPremiersJeux.Games
             Body.Children.Add(dp);
         }
 
-        /// <summary>Remplit le corps avec un contenu unique (grilles, etc.).</summary>
+        /// <summary>Remplit le corps avec un contenu unique (grilles, etc.), mis à
+        /// l'échelle vers le bas si besoin pour tenir sans défilement ni rognage.</summary>
         protected void SetBody(UIElement content)
         {
             Body.Children.Clear();
-            Body.Children.Add(content);
+            Body.Children.Add(new Viewbox
+            {
+                Child = content,
+                Stretch = Stretch.Uniform,
+                StretchDirection = StretchDirection.DownOnly,
+            });
         }
 
         // --- Fabrique de boutons-réponses (gaze-cliquables : ce sont des Button) ---
-        protected Button AnswerButton(UIElement content, double size = 160)
+        protected Button AnswerButton(UIElement content, double size = 210)
         {
             return new Button
             {

@@ -22,12 +22,12 @@ namespace MesPremiersJeux.Games
             var options = GameKit.PickN(GameData.Shapes, 3, target);
             Question.Text = $"Trouve : {target.Name}";
 
-            var stage = ShapeVisual(target, target.Color, 200);
+            var stage = ShapeVisual(target, target.Color, 320);
 
             var row = Row();
             foreach (var s in options)
             {
-                var btn = AnswerButton(ShapeVisual(s, GameData.ShapeNeutral, 110));
+                var btn = AnswerButton(ShapeVisual(s, GameData.ShapeNeutral, 175));
                 var chosen = s;
                 btn.Click += (ev, e) => Answer(chosen, target, btn);
                 row.Children.Add(btn);

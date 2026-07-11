@@ -32,8 +32,8 @@ namespace MesPremiersJeux.Games
             var visuals = Row();
             for (int i = 0; i < n; i++)
             {
-                var vp = Shape3D.View(sphere, col, 120);
-                vp.Margin = new Thickness(10, 0, 10, 0);
+                var vp = Shape3D.View(sphere, col, 175);
+                vp.Margin = new Thickness(12, 0, 12, 0);
                 visuals.Children.Add(vp);
             }
 
@@ -43,11 +43,11 @@ namespace MesPremiersJeux.Games
                 var label = new TextBlock
                 {
                     Text = num.ToString(),
-                    FontSize = 56,
+                    FontSize = 88,
                     FontWeight = FontWeights.Bold,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                 };
-                var btn = AnswerButton(label, 120);
+                var btn = AnswerButton(label, 180);
                 btn.Background = new SolidColorBrush(Bg[num]);
                 int chosen = num;
                 btn.Click += (s, e) => Answer(chosen, n, btn);

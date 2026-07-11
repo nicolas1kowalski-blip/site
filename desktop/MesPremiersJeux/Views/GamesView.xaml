@@ -2,17 +2,19 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="#FFF3E9FF">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
 
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="12,14">
-            <StackPanel x:Name="Picker" />
-        </ScrollViewer>
+        <!-- Menu plein écran (aucun défilement : un Viewbox met tout à l'échelle) -->
+        <Viewbox x:Name="MenuRoot" Margin="28" Stretch="Uniform">
+            <UniformGrid x:Name="Menu" Columns="4" />
+        </Viewbox>
 
-        <Grid Grid.Column="1" x:Name="GameHost" />
+        <!-- Jeu en cours : plein écran + bouton retour -->
+        <Grid x:Name="PlayRoot" Visibility="Collapsed">
+            <Grid x:Name="GameHost" />
+            <Button x:Name="BackBtn" Style="{StaticResource BackButton}" Click="Back_Click"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16" Content="⬅  Menu" />
+        </Grid>
 
-        <Canvas Grid.ColumnSpan="2" x:Name="Confetti" IsHitTestVisible="False" ClipToBounds="True" />
+        <Canvas x:Name="Confetti" IsHitTestVisible="False" ClipToBounds="True" />
     </Grid>
 </UserControl>

@@ -25,8 +25,10 @@ le regard dans une cellule web.
   qui montent, éclatés au regard), **Couleurs** (sphères 3D), **Formes** (solides :
   sphère, cube, prismes triangle/étoile/cœur), **Compter** (sphères 3D), **Les
   ombres** (forme 3D sombre qui tourne, révélée en couleur), **Les familles** et
-  **Les paires** (cartes 3D qui se retournent). Sélecteur de jeu à gauche,
-  félicitations en confettis, voix française. Au regard (dwell) ou à la souris.
+  **Les paires** (cartes 3D qui se retournent). **Menu plein écran sans
+  défilement** (grandes tuiles) : on choisit un jeu, il occupe toute la page, et
+  un bouton **« ⬅ Menu »** ramène au choix. Cibles agrandies pour le pilotage au
+  regard. Félicitations en confettis, voix française. Au regard (dwell) ou à la souris.
 
 Les onglets Histoires / Musique — et les jeux restants (corps, puzzles) — sont à
 venir : on les ajoute un par un (le coloriage et ces jeux servent de patron).

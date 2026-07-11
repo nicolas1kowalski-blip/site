@@ -9,8 +9,9 @@ using MesPremiersJeux.Games;
 namespace MesPremiersJeux.Views
 {
     /// <summary>
-    /// Onglet Jeux : un sélecteur de jeu à gauche, le jeu actif au centre, et une
-    /// pluie de confettis pour féliciter.
+    /// Onglet Jeux : un menu plein écran de grandes tuiles (sans défilement, tout
+    /// mis à l'échelle par un Viewbox). On choisit un jeu, il occupe toute la page,
+    /// et un bouton « Menu » ramène au choix. Confettis pour féliciter.
     /// </summary>
     public partial class GamesView : UserControl
     {
@@ -25,39 +26,46 @@ namespace MesPremiersJeux.Views
             ("🃏", "Les paires",   c => new MemoryGame(c)),
         };
 
-        private readonly Button[] _pickButtons;
         private readonly Random _rng = new Random();
 
         public GamesView()
         {
             InitializeComponent();
-            _pickButtons = new Button[_games.Length];
 
-            for (int i = 0; i < _games.Length; i++)
+            foreach (var g in _games)
             {
-                var g = _games[i];
                 var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                content.Children.Add(new TextBlock { Text = g.Icon, FontSize = 30, HorizontalAlignment = HorizontalAlignment.Center });
-                content.Children.Add(new TextBlock { Text = g.Label, FontSize = 14, FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) });
+                content.Children.Add(new TextBlock { Text = g.Icon, FontSize = 82, HorizontalAlignment = HorizontalAlignment.Center });
+                content.Children.Add(new TextBlock
+                {
+                    Text = g.Label,
+                    FontSize = 27,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
 
-                var btn = new Button { Style = (Style)Application.Current.Resources["GamePick"], Content = content };
-                int idx = i;
-                btn.Click += (s, e) => Select(idx);
-                _pickButtons[i] = btn;
-                Picker.Children.Add(btn);
+                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
+                var make = g.Make;
+                tile.Click += (s, e) => Play(make);
+                Menu.Children.Add(tile);
             }
-
-            Loaded += (s, e) => { if (GameHost.Children.Count == 0) Select(0); };
         }
 
-        private void Select(int i)
+        private void Play(Func<Action, UserControl> make)
         {
-            for (int k = 0; k < _pickButtons.Length; k++)
-                _pickButtons[k].BorderThickness = new Thickness(k == i ? 3 : 0);
-
             GameHost.Children.Clear();
-            GameHost.Children.Add(_games[i].Make(ShowConfetti));
+            GameHost.Children.Add(make(ShowConfetti));
+            MenuRoot.Visibility = Visibility.Collapsed;
+            PlayRoot.Visibility = Visibility.Visible;
+        }
+
+        private void Back_Click(object sender, RoutedEventArgs e)
+        {
+            GameHost.Children.Clear(); // arrête le jeu (Unloaded)
+            PlayRoot.Visibility = Visibility.Collapsed;
+            MenuRoot.Visibility = Visibility.Visible;
         }
 
         // --- Confettis de félicitation ---
@@ -71,12 +79,12 @@ namespace MesPremiersJeux.Views
                 Color.FromRgb(0x95, 0xE0, 0x6C), Color.FromRgb(0xA0, 0x6C, 0xD5), Color.FromRgb(0x5D, 0xAD, 0xE2),
             };
 
-            for (int i = 0; i < 32; i++)
+            for (int i = 0; i < 36; i++)
             {
                 var piece = new Rectangle
                 {
-                    Width = 10 + _rng.Next(8),
-                    Height = 14 + _rng.Next(10),
+                    Width = 12 + _rng.Next(9),
+                    Height = 16 + _rng.Next(11),
                     Fill = new SolidColorBrush(colors[_rng.Next(colors.Length)]),
                     RadiusX = 2,
                     RadiusY = 2,

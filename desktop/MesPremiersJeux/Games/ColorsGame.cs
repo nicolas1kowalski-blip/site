@@ -20,12 +20,12 @@ namespace MesPremiersJeux.Games
             Question.Text = $"Trouve la couleur : {target.Name}";
 
             var sphere = Shape3D.Sphere(18, 26, 1.05);
-            var stage = Shape3D.View(sphere, target.Value, 230);
+            var stage = Shape3D.View(sphere, target.Value, 320);
 
             var row = Row();
             foreach (var c in options)
             {
-                var btn = AnswerButton(Shape3D.View(sphere, c.Value, 115));
+                var btn = AnswerButton(Shape3D.View(sphere, c.Value, 175));
                 var chosen = c;
                 btn.Click += (s, e) => Answer(chosen, target, btn);
                 row.Children.Add(btn);

@@ -61,9 +61,9 @@ namespace MesPremiersJeux.Games
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["BalloonButton"],
-                    Width = 130,
-                    Height = 168,
-                    Margin = new Thickness(6),
+                    Width = 205,
+                    Height = 265,
+                    Margin = new Thickness(12),
                     Content = new Grid { Children = { card.Viewport, overlay, check } },
                 };
                 bool isTarget = it.isTarget;
