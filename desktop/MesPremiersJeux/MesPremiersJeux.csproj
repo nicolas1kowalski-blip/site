@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Application de bureau native (WPF) « Mes Premiers Jeux ».
+    Cible .NET Framework 4.7.2 car le SDK grand public Tobii (Tobii.Interaction,
+    a.k.a. Tobii Core / EyeX) est distribué pour .NET Framework et embarque des
+    DLL natives. À compiler en x64 (voir README) pour que ces DLL se chargent.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>MesPremiersJeux</RootNamespace>
+    <AssemblyName>MesPremiersJeux</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Platforms>x64;x86</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tobii.Interaction" Version="0.7.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Synthèse vocale française (System.Speech.Synthesis). -->
+    <Reference Include="System.Speech" />
+  </ItemGroup>
+
+</Project>
