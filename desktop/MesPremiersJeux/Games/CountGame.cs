@@ -24,13 +24,18 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             int n = 1 + new Random().Next(3);
-            var obj = GameKit.Rand(GameData.CountObjects);
             var options = GameKit.Shuffle(new[] { 1, 2, 3 });
             Question.Text = "Combien ?";
 
+            var sphere = Shape3D.Sphere(16, 22, 1.0);
+            var col = GameData.BalloonColors[new Random().Next(GameData.BalloonColors.Length)];
             var visuals = Row();
             for (int i = 0; i < n; i++)
-                visuals.Children.Add(new TextBlock { Text = obj, FontSize = 96, Margin = new Thickness(8, 0, 8, 0) });
+            {
+                var vp = Shape3D.View(sphere, col, 120);
+                vp.Margin = new Thickness(10, 0, 10, 0);
+                visuals.Children.Add(vp);
+            }
 
             var row = Row();
             foreach (var num in options)

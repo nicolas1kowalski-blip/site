@@ -19,33 +19,19 @@ namespace MesPremiersJeux.Games
             var options = GameKit.PickN(GameData.Colors, 3, target);
             Question.Text = $"Trouve la couleur : {target.Name}";
 
-            var blob = new Border
-            {
-                Width = 190,
-                Height = 190,
-                CornerRadius = new CornerRadius(95),
-                Background = new SolidColorBrush(target.Value),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42)),
-                BorderThickness = new Thickness(4),
-            };
+            var sphere = Shape3D.Sphere(18, 26, 1.05);
+            var stage = Shape3D.View(sphere, target.Value, 230);
 
             var row = Row();
             foreach (var c in options)
             {
-                var swatch = new Border
-                {
-                    Width = 110,
-                    Height = 110,
-                    CornerRadius = new CornerRadius(18),
-                    Background = new SolidColorBrush(c.Value),
-                };
-                var btn = AnswerButton(swatch);
+                var btn = AnswerButton(Shape3D.View(sphere, c.Value, 115));
                 var chosen = c;
                 btn.Click += (s, e) => Answer(chosen, target, btn);
                 row.Children.Add(btn);
             }
 
-            SetBody(blob, row);
+            SetBody(stage, row);
             Schedule(350, () => Speak($"Trouve la couleur {target.Name}"));
         }
 

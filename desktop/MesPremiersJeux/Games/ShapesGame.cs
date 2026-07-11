@@ -2,7 +2,6 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using MesPremiersJeux.Data;
 using MesPremiersJeux.Lib;
 
@@ -11,22 +10,10 @@ namespace MesPremiersJeux.Games
     /// <summary>Trouve la forme nommée parmi trois (les choix sont en une couleur neutre).</summary>
     public sealed class ShapesGame : GameControl
     {
-        private static readonly Color Dark = Color.FromRgb(0x2B, 0x2D, 0x42);
-
         public ShapesGame(Action celebrate) : base(celebrate) { }
 
         private static UIElement ShapeVisual(GameShape s, Color fill, double size)
-        {
-            var path = new Path
-            {
-                Data = s.Geo,
-                Fill = new SolidColorBrush(fill),
-                Stroke = new SolidColorBrush(Dark),
-                StrokeThickness = 4,
-                StrokeLineJoin = PenLineJoin.Round,
-            };
-            return new Viewbox { Width = size, Height = size, Child = path };
-        }
+            => Shape3D.View(Shape3D.ShapeMesh(s.Name), fill, size);
 
         protected override void NewRound()
         {
