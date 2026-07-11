@@ -133,11 +133,11 @@ namespace MesPremiersJeux.Games
         {
             switch (name)
             {
-                case "rond": return Sphere(18, 26, 1.05);
+                case "rond": return Sphere(20, 28, 1.05);
                 case "carré": return Box(1.7, 1.7, 1.7);
-                case "triangle": return ExtrudedPolygon(TrianglePoints(), 0.6);
-                case "étoile": return ExtrudedPolygon(StarPoints(), 0.5);
-                case "cœur": return ExtrudedPolygon(HeartPoints(), 0.6);
+                case "triangle": return ExtrudedPolygon(TrianglePoints(), 0.95);
+                case "étoile": return ExtrudedPolygon(StarPoints(), 0.8);
+                case "cœur": return ExtrudedPolygon(HeartPoints(), 0.95);
                 default: return Sphere();
             }
         }
@@ -151,16 +151,20 @@ namespace MesPremiersJeux.Games
             mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)), 30));
             var model = new GeometryModel3D(mesh, mat) { BackMaterial = new DiffuseMaterial(diffuse) };
 
-            var spinR = new AxisAngleRotation3D(new Vector3D(0, 1, 0), 0);
-            var tilt = new AxisAngleRotation3D(new Vector3D(1, 0, 0), 18);
+            // On fait tourner autour d'un axe légèrement incliné : les faces et
+            // l'épaisseur défilent, ce qui donne bien le volume.
+            var spinR = new AxisAngleRotation3D(new Vector3D(0.25, 1, 0), 0);
+            var tilt = new AxisAngleRotation3D(new Vector3D(1, 0, 0), 24);
             var tg = new Transform3DGroup();
             tg.Children.Add(new RotateTransform3D(spinR));
             tg.Children.Add(new RotateTransform3D(tilt));
             model.Transform = tg;
 
             var group = new Model3DGroup();
-            group.Children.Add(new AmbientLight(Color.FromRgb(0x74, 0x74, 0x74)));
+            // Ambiant plus faible + deux directionnelles : plus de contraste = plus de relief.
+            group.Children.Add(new AmbientLight(Color.FromRgb(0x4C, 0x4C, 0x4C)));
             group.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-0.4, -0.7, -1)));
+            group.Children.Add(new DirectionalLight(Color.FromRgb(0x66, 0x66, 0x66), new Vector3D(0.6, 0.4, 0.3)));
             group.Children.Add(model);
 
             var vp = new Viewport3D

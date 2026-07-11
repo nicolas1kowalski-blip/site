@@ -7,63 +7,81 @@ using System.Windows.Media.Media3D;
 
 namespace MesPremiersJeux.Games
 {
-    /// <summary>Fabrique un ballon 3D (WPF Viewport3D) : sphère éclairée, brillante,
-    /// en rotation douce. Le pinceau diffus est renvoyé pour pouvoir recolorer.</summary>
+    /// <summary>Fabrique un ballon 3D en forme de goutte (corps renflé + col + nœud),
+    /// obtenu par révolution d'un profil. Le pinceau diffus est renvoyé pour recolorer.</summary>
     public static class Balloon3D
     {
-        private static MeshGeometry3D Sphere(int stacks, int slices, double rx, double ry, double rz)
+        // Profil du ballon (rayon, hauteur), du nœud (bas) vers le sommet.
+        private static readonly Point[] Profile =
+        {
+            new Point(0.00, -1.35), // pointe du nœud
+            new Point(0.10, -1.18), // renflement du nœud
+            new Point(0.05, -1.02), // col pincé
+            new Point(0.32, -0.82),
+            new Point(0.63, -0.52),
+            new Point(0.86, -0.14),
+            new Point(0.95,  0.26),
+            new Point(0.85,  0.63),
+            new Point(0.60,  0.95),
+            new Point(0.31,  1.16),
+            new Point(0.00,  1.30), // sommet
+        };
+
+        private static MeshGeometry3D Lathe(Point[] profile, int slices)
         {
             var m = new MeshGeometry3D();
-            for (int i = 0; i <= stacks; i++)
+            for (int i = 0; i < profile.Length; i++)
             {
-                double v = Math.PI * i / stacks;
-                double y = Math.Cos(v), r = Math.Sin(v);
+                double r = profile[i].X, y = profile[i].Y;
                 for (int j = 0; j <= slices; j++)
                 {
                     double u = 2 * Math.PI * j / slices;
-                    double x = r * Math.Cos(u), z = r * Math.Sin(u);
-                    m.Positions.Add(new Point3D(x * rx, y * ry, z * rz));
-                    m.Normals.Add(new Vector3D(x, y, z));
+                    m.Positions.Add(new Point3D(r * Math.Cos(u), y, r * Math.Sin(u)));
                 }
             }
-            for (int i = 0; i < stacks; i++)
+            int ring = slices + 1;
+            for (int i = 0; i < profile.Length - 1; i++)
                 for (int j = 0; j < slices; j++)
                 {
-                    int a = i * (slices + 1) + j, b = a + slices + 1;
-                    m.TriangleIndices.Add(a); m.TriangleIndices.Add(b); m.TriangleIndices.Add(a + 1);
-                    m.TriangleIndices.Add(b); m.TriangleIndices.Add(b + 1); m.TriangleIndices.Add(a + 1);
+                    int a = i * ring + j, b = a + 1, c = a + ring, d = c + 1;
+                    m.TriangleIndices.Add(a); m.TriangleIndices.Add(c); m.TriangleIndices.Add(b);
+                    m.TriangleIndices.Add(b); m.TriangleIndices.Add(c); m.TriangleIndices.Add(d);
                 }
             m.Freeze();
             return m;
         }
 
-        private static readonly MeshGeometry3D BalloonMesh = Sphere(18, 26, 0.92, 1.16, 0.92);
+        private static readonly MeshGeometry3D BalloonMesh = Lathe(Profile, 30);
 
         public static Viewport3D MakeBalloon(out SolidColorBrush diffuse)
         {
             diffuse = new SolidColorBrush(Colors.Red);
             var mat = new MaterialGroup();
             mat.Children.Add(new DiffuseMaterial(diffuse));
-            mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), 40));
+            mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)), 50));
 
-            var model = new GeometryModel3D(BalloonMesh, mat);
+            var model = new GeometryModel3D(BalloonMesh, mat) { BackMaterial = new DiffuseMaterial(diffuse) };
             var rot = new AxisAngleRotation3D(new Vector3D(0, 1, 0), 0);
             model.Transform = new RotateTransform3D(rot);
 
             var group = new Model3DGroup();
-            group.Children.Add(new AmbientLight(Color.FromRgb(0x6E, 0x6E, 0x6E)));
-            group.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-0.4, -0.7, -1)));
+            group.Children.Add(new AmbientLight(Color.FromRgb(0x5A, 0x5A, 0x5A)));
+            group.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-0.4, -0.6, -1)));
             group.Children.Add(model);
 
             var vp = new Viewport3D
             {
                 IsHitTestVisible = false, // le bouton parent capte le regard
-                Camera = new PerspectiveCamera(new Point3D(0, 0, 4.3), new Vector3D(0, 0, -1), new Vector3D(0, 1, 0), 45),
+                Camera = new PerspectiveCamera(new Point3D(0, 0, 4.6), new Vector3D(0, 0, -1), new Vector3D(0, 1, 0), 45),
             };
             vp.Children.Add(new ModelVisual3D { Content = group });
 
-            var spin = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(6)) { RepeatBehavior = RepeatBehavior.Forever };
-            rot.BeginAnimation(AxisAngleRotation3D.AngleProperty, spin);
+            // Léger balancement (plutôt qu'une rotation complète : plus « ballon »).
+            var sway = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever, Duration = TimeSpan.FromSeconds(4) };
+            sway.KeyFrames.Add(new LinearDoubleKeyFrame(-14, KeyTime.FromPercent(0)));
+            sway.KeyFrames.Add(new LinearDoubleKeyFrame(14, KeyTime.FromPercent(0.5)));
+            sway.KeyFrames.Add(new LinearDoubleKeyFrame(-14, KeyTime.FromPercent(1)));
+            rot.BeginAnimation(AxisAngleRotation3D.AngleProperty, sway);
             return vp;
         }
     }
