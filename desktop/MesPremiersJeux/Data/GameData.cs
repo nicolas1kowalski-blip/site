@@ -51,6 +51,30 @@ namespace MesPremiersJeux.Data
         };
         public static readonly Color ShapeNeutral = C("#FFB347");
 
+        public sealed class BalloonInfo { public string Name; public string Sound; }
+
+        public static readonly List<BalloonInfo> Balloons = new List<BalloonInfo>
+        {
+            new BalloonInfo { Name = "le chien",       Sound = "wouf wouf" },
+            new BalloonInfo { Name = "le chat",        Sound = "miaou miaou" },
+            new BalloonInfo { Name = "la vache",       Sound = "meuh meuh" },
+            new BalloonInfo { Name = "le canard",      Sound = "coin coin" },
+            new BalloonInfo { Name = "le cochon",      Sound = "groin groin" },
+            new BalloonInfo { Name = "la grenouille",  Sound = "coâ coâ" },
+            new BalloonInfo { Name = "l'abeille",      Sound = "bzzz bzzz" },
+            new BalloonInfo { Name = "le lion",        Sound = "rooaar" },
+            new BalloonInfo { Name = "le cheval",      Sound = "hi hi hi" },
+            new BalloonInfo { Name = "l'étoile" },
+            new BalloonInfo { Name = "le cœur" },
+            new BalloonInfo { Name = "la pomme" },
+        };
+
+        public static readonly Color[] BalloonColors =
+        {
+            C("#FF6B6B"), C("#4ECDC4"), C("#FFD93C"), C("#95E06C"),
+            C("#A06CD5"), C("#FF9FB5"), C("#5DADE2"), C("#FFB347"),
+        };
+
         public static readonly List<Family> Families = new List<Family>
         {
             new Family { Name = "les animaux",   Items = new[] { "🐶", "🐱", "🐰", "🐻", "🦊", "🐸", "🐷", "🦁", "🐴", "🐔", "🐢" } },

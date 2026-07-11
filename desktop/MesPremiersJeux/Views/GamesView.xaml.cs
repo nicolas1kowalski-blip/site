@@ -14,8 +14,9 @@ namespace MesPremiersJeux.Views
     /// </summary>
     public partial class GamesView : UserControl
     {
-        private readonly (string Icon, string Label, Func<Action, GameControl> Make)[] _games =
+        private readonly (string Icon, string Label, Func<Action, UserControl> Make)[] _games =
         {
+            ("🎈", "Ballons 3D",   c => new BalloonsGame(c)),
             ("🌈", "Couleurs",     c => new ColorsGame(c)),
             ("🔺", "Formes",       c => new ShapesGame(c)),
             ("🔢", "Compter",      c => new CountGame(c)),
