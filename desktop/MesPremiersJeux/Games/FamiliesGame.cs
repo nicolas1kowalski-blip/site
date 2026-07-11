@@ -10,7 +10,7 @@ using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
 {
-    /// <summary>Range par famille : sélectionne tous les objets de la bonne catégorie.</summary>
+    /// <summary>Range par famille : sélectionne tous les objets (cartes 3D) de la bonne catégorie.</summary>
     public sealed class FamiliesGame : GameControl
     {
         private int _need;
@@ -38,9 +38,36 @@ namespace MesPremiersJeux.Games
             var grid = new UniformGrid { Columns = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             foreach (var it in items)
             {
-                var btn = AnswerButton(new TextBlock { Text = it.emoji, FontSize = 66 }, 130);
+                var card = new Card3D(it.emoji);
+                card.ShowFront();
+
+                var check = new TextBlock
+                {
+                    Text = "✓",
+                    FontSize = 46,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Visibility = Visibility.Collapsed,
+                };
+                var overlay = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(0x66, 0x8A, 0xE6, 0x8A)),
+                    CornerRadius = new CornerRadius(16),
+                    Visibility = Visibility.Collapsed,
+                };
+
+                var btn = new Button
+                {
+                    Style = (Style)Application.Current.Resources["BalloonButton"],
+                    Width = 130,
+                    Height = 168,
+                    Margin = new Thickness(6),
+                    Content = new Grid { Children = { card.Viewport, overlay, check } },
+                };
                 bool isTarget = it.isTarget;
-                btn.Click += (s, e) => Pick(btn, isTarget, target.Name);
+                btn.Click += (s, e) => Pick(btn, isTarget, target.Name, overlay, check);
                 grid.Children.Add(btn);
             }
 
@@ -48,26 +75,15 @@ namespace MesPremiersJeux.Games
             Schedule(350, () => Speak($"Regarde tous {target.Name} !"));
         }
 
-        private void Pick(Button btn, bool isTarget, string familyName)
+        private void Pick(Button btn, bool isTarget, string familyName, UIElement overlay, UIElement check)
         {
             if (Locked || _found.Contains(btn)) return;
             if (isTarget)
             {
                 GameKit.Success();
                 _found.Add(btn);
-                btn.Background = new SolidColorBrush(Color.FromRgb(0xB6, 0xEF, 0xB6));
-                var emoji = btn.Content as UIElement;
-                btn.Content = null; // détache l'emoji avant de le re-parenter
-                var check = new TextBlock
-                {
-                    Text = "✓",
-                    FontSize = 30,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Top,
-                    Margin = new Thickness(0, 4, 6, 0),
-                };
-                btn.Content = new Grid { Children = { emoji, check } };
+                overlay.Visibility = Visibility.Visible;
+                check.Visibility = Visibility.Visible;
                 if (_found.Count >= _need)
                 {
                     Locked = true;

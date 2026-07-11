@@ -21,11 +21,12 @@ le regard dans une cellule web.
   souris (remplissage « pot de peinture »), 4 dessins intégrés, bouton *Recommencer*
   et bouton *Plein écran*. Voix française qui nomme la couleur choisie.
 
-- **Jeux** (7 pour l'instant) : **Ballons 3D** (vraie 3D WPF `Viewport3D` :
-  ballons volumétriques éclairés qui montent, éclatés au regard), **Couleurs**,
-  **Formes**, **Compter**, **Les ombres**, **Les familles**, **Les paires**
-  (mémoire). Sélecteur de jeu à gauche, félicitations en confettis, voix française.
-  Tout se joue au regard (dwell) ou à la souris.
+- **Jeux (tous en 3D WPF `Viewport3D`)** : **Ballons 3D** (ballons volumétriques
+  qui montent, éclatés au regard), **Couleurs** (sphères 3D), **Formes** (solides :
+  sphère, cube, prismes triangle/étoile/cœur), **Compter** (sphères 3D), **Les
+  ombres** (forme 3D sombre qui tourne, révélée en couleur), **Les familles** et
+  **Les paires** (cartes 3D qui se retournent). Sélecteur de jeu à gauche,
+  félicitations en confettis, voix française. Au regard (dwell) ou à la souris.
 
 Les onglets Histoires / Musique — et les jeux restants (corps, puzzles) — sont à
 venir : on les ajoute un par un (le coloriage et ces jeux servent de patron).
