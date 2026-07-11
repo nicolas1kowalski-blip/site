@@ -51,12 +51,43 @@ msbuild MesPremiersJeux.sln /p:Platform=x64 /p:Configuration=Release
 > `dotnet build` peut suffire, mais `Tobii.Interaction` cible .NET Framework :
 > si `dotnet` pose souci, privilégier **MSBuild via Visual Studio**.
 
-## Réglages du dwell
+## Réglages du dwell (au regard)
 
-Dans `Gaze/DwellController.cs` :
+Un bouton **⚙** en haut à droite ouvre un panneau :
 
-- `DwellTime` (ms) — durée de fixation avant déclenchement (900 ms par défaut).
-- L'anneau et l'animation « prend vie » se calent automatiquement sur cette durée.
+- **Piloter au regard (dwell)** — active/désactive le déclenchement par fixation.
+- **Durée de fixation** — de 0,4 s à 2,5 s.
+
+Deux sources de regard sont gérées automatiquement :
+
+- **SDK Tobii présent** (tracker grand public) → le regard pilote directement,
+  case « Piloter au regard » cochée par défaut.
+- **Pas de SDK** (ex. **Tobii Dynavox TD I-13**) → l'appli suit la **position du
+  curseur** déplacé au regard. Il suffit d'activer le mode *« Contrôle de
+  l'ordinateur / Windows Control »* de la I-13, puis de cocher « Piloter au
+  regard » dans le panneau ⚙.
+
+## Calibrage
+
+Le calibrage se fait **au niveau de l'appareil / du runtime**, pas dans l'appli :
+
+- **TD I-13 (Tobii Dynavox)** : réglages d'eye-tracking de l'appareil →
+  **Calibrer** (interface Tobii Dynavox).
+- **Tracker grand public** : via **Tobii Experience** (l'appli Tobii de Windows).
+
+## Version autonome (sans Visual Studio) — pour la TD I-13
+
+1. Dans Visual Studio, choisir **Release** + **x64**, puis menu **Générer →
+   Générer la solution** (Ctrl+Maj+B).
+2. Le résultat se trouve dans :
+   `desktop/MesPremiersJeux/bin/x64/Release/net472/`
+3. Ce dossier est **autonome** : il contient `MesPremiersJeux.exe` **et** les DLL
+   Tobii. **Copie le dossier entier** sur la TD I-13 (clé USB, OneDrive…).
+4. Sur la I-13, double-clique **`MesPremiersJeux.exe`**. Aucune installation
+   requise : .NET Framework 4.8 est déjà présent sur Windows 10/11.
+
+> Astuce : pour un lancement facile par l'enfant, crée un **raccourci** de
+> `MesPremiersJeux.exe` sur le Bureau, et utilise le bouton **⛶ Plein écran**.
 
 ## Prochaines étapes prévues
 

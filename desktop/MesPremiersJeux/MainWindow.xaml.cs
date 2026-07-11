@@ -62,6 +62,36 @@ namespace MesPremiersJeux
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Start();
             GazeStatus.Text = _gaze.IsAvailable ? "👁  Regard actif" : "🖱  Souris (aucun Tobii détecté)";
+
+            // Valeurs par défaut des réglages (après création du dwell).
+            DwellSlider.Value = _dwell.DwellTime;
+            // Si un tracker SDK est présent, le regard pilote d'emblée ; sinon on
+            // laisse le parent l'activer (mode curseur pour la TD I-13).
+            GazeModeCheck.IsChecked = _gaze.IsAvailable;
+            ApplyGazeMode();
+        }
+
+        private void Settings_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = !SettingsPopup.IsOpen;
+        }
+
+        private void GazeMode_Changed(object sender, RoutedEventArgs e) => ApplyGazeMode();
+
+        private void ApplyGazeMode()
+        {
+            if (_dwell == null) return;
+            bool on = GazeModeCheck.IsChecked == true;
+            _dwell.Enabled = on;
+            // Sans SDK Tobii, on suit le curseur (déplacé au regard par la I-13).
+            _dwell.UseCursor = on && !_gaze.IsAvailable;
+        }
+
+        private void DwellSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_dwell == null) return;
+            _dwell.DwellTime = (int)e.NewValue;
+            if (DwellValue != null) DwellValue.Text = $"{e.NewValue / 1000.0:0.0} s";
         }
 
         private void Tab_Click(object sender, RoutedEventArgs e)

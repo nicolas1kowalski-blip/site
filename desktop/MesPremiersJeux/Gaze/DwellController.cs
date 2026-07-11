@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -30,11 +31,24 @@ namespace MesPremiersJeux.Gaze
         private object _target;
         private FrameworkElement _aliveElement;
         private Point _dwellScreen;
+        private Point _lastScreen;
         private DateTime _dwellStart;
 
         public bool Enabled { get; set; } = true;
         public bool Locked { get; set; } = false;
         public int DwellTime { get; set; } = 900; // ms
+
+        /// <summary>
+        /// Si vrai, on suit la position du curseur (déplacé au regard par la I-13
+        /// en mode « Contrôle de l'ordinateur ») au lieu du flux SDK Tobii.
+        /// </summary>
+        public bool UseCursor { get; set; } = false;
+
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT p);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int X; public int Y; }
 
         public DwellController(FrameworkElement root, Canvas overlay, Ellipse ring)
         {
@@ -61,13 +75,24 @@ namespace MesPremiersJeux.Gaze
 
         private void OnTick(object sender, EventArgs e)
         {
-            if (!Enabled || Locked || !_hasGaze || _root.ActualWidth <= 0)
+            if (!Enabled || Locked || _root.ActualWidth <= 0)
             {
                 Cancel();
                 return;
             }
 
-            var screen = new Point(_gx, _gy);
+            Point screen;
+            if (UseCursor)
+            {
+                if (!GetCursorPos(out var cp)) { Cancel(); return; }
+                screen = new Point(cp.X, cp.Y);
+            }
+            else
+            {
+                if (!_hasGaze) { Cancel(); return; }
+                screen = new Point(_gx, _gy);
+            }
+            _lastScreen = screen;
             Point local;
             try { local = _root.PointFromScreen(screen); }
             catch { Cancel(); return; }
@@ -108,7 +133,7 @@ namespace MesPremiersJeux.Gaze
         private void Commit()
         {
             var target = _target;
-            var screen = new Point(_gx, _gy);
+            var screen = _lastScreen;
             // On réinitialise avant l'action pour éviter un double déclenchement.
             _dwellStart = DateTime.UtcNow;
 
