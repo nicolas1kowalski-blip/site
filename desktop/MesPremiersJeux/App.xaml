@@ -66,6 +66,51 @@
             </Setter>
         </Style>
 
+        <!-- Bouton-réponse d'un jeu (grande carte blanche) -->
+        <Style x:Key="AnswerButton" TargetType="Button">
+            <Setter Property="Margin" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#FF7E3FF2" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="22" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" Padding="8">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.18" />
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Bouton du sélecteur de jeu -->
+        <Style x:Key="GamePick" TargetType="Button">
+            <Setter Property="Width" Value="122" />
+            <Setter Property="Height" Value="96" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="#88FFFFFF" />
+            <Setter Property="BorderBrush" Value="#FF7E3FF2" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="18" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Onglet de navigation -->
         <Style x:Key="TabButton" TargetType="Button">
             <Setter Property="Height" Value="76" />

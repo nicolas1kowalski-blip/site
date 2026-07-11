@@ -21,8 +21,12 @@ le regard dans une cellule web.
   souris (remplissage « pot de peinture »), 4 dessins intégrés, bouton *Recommencer*
   et bouton *Plein écran*. Voix française qui nomme la couleur choisie.
 
-Les onglets Histoires / Jeux / Musique sont pour l'instant des écrans « bientôt » :
-on les remplira activité par activité (le portage du coloriage sert de patron).
+- **Jeux** (6 pour l'instant) : **Couleurs**, **Formes**, **Compter**, **Les ombres**,
+  **Les familles**, **Les paires** (mémoire). Sélecteur de jeu à gauche, félicitations
+  en confettis, voix française. Tout se joue au regard (dwell) ou à la souris.
+
+Les onglets Histoires / Musique — et les jeux plus lourds (ballons 3D, corps, puzzles) —
+sont à venir : on les ajoute un par un (le coloriage et ces jeux servent de patron).
 
 ## Prérequis
 
