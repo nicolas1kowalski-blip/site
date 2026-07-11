@@ -32,6 +32,10 @@ namespace MesPremiersJeux.Games
             return e;
         }
 
+        // Formate un tracé en culture invariante (point décimal), sinon en français
+        // « 52,5 » casse l'analyse (la virgule sépare déjà les coordonnées).
+        private static string Inv(FormattableString s) => FormattableString.Invariant(s);
+
         private static Path Pa(string d, Brush fill, Brush stroke = null, double sw = 3)
             => new Path
             {
@@ -50,7 +54,7 @@ namespace MesPremiersJeux.Games
             c.Children.Add(Circle(cx + dx, cy, eyeR, Ink));
             c.Children.Add(Circle(cx - dx - eyeR * 0.6, cy + eyeR * 1.7, eyeR * 0.9, B("#FF9FB5")));
             c.Children.Add(Circle(cx + dx + eyeR * 0.6, cy + eyeR * 1.7, eyeR * 0.9, B("#FF9FB5")));
-            c.Children.Add(Pa($"M{cx - smileW},{cy + smileW * 0.7} Q{cx},{cy + smileW * 1.9} {cx + smileW},{cy + smileW * 0.7}", null, Ink, 2.4));
+            c.Children.Add(Pa(Inv($"M{cx - smileW},{cy + smileW * 0.7} Q{cx},{cy + smileW * 1.9} {cx + smileW},{cy + smileW * 0.7}"), null, Ink, 2.4));
         }
 
         private static UIElement Wrap(Canvas c) => new Viewbox { Child = c, Stretch = Stretch.Uniform };
@@ -101,8 +105,8 @@ namespace MesPremiersJeux.Games
             c.Children.Add(Pa("M50,66 Q58,73 66,68", null, Ink, 2));
             foreach (var y in new[] { 60.0, 66.0 })
             {
-                c.Children.Add(Pa($"M30,{y} L14,{y - 3}", null, Ink, 2));
-                c.Children.Add(Pa($"M70,{y} L86,{y - 3}", null, Ink, 2));
+                c.Children.Add(Pa(Inv($"M30,{y} L14,{y - 3}"), null, Ink, 2));
+                c.Children.Add(Pa(Inv($"M70,{y} L86,{y - 3}"), null, Ink, 2));
             }
             c.Children.Add(Circle(30, 64, 5, B("#FF9FB5")));
             c.Children.Add(Circle(70, 64, 5, B("#FF9FB5")));
@@ -129,7 +133,7 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < cols.Length; i++)
             {
                 double r = 40 - i * 6;
-                c.Children.Add(Pa($"M{50 - r},72 A{r},{r} 0 0 1 {50 + r},72", null, B(cols[i]), 6));
+                c.Children.Add(Pa(Inv($"M{50 - r},72 A{r},{r} 0 0 1 {50 + r},72"), null, B(cols[i]), 6));
             }
             c.Children.Add(Circle(18, 74, 9, Brushes.White, Ink, 2.5));
             c.Children.Add(Circle(82, 74, 9, Brushes.White, Ink, 2.5));
@@ -167,7 +171,7 @@ namespace MesPremiersJeux.Games
                 double a = Math.PI * 2 * i / 12;
                 double x1 = 50 + Math.Cos(a) * 34, y1 = 50 + Math.Sin(a) * 34;
                 double x2 = 50 + Math.Cos(a) * 46, y2 = 50 + Math.Sin(a) * 46;
-                c.Children.Add(Pa($"M{x1},{y1} L{x2},{y2}", null, B("#FFC107"), 4));
+                c.Children.Add(Pa(Inv($"M{x1},{y1} L{x2},{y2}"), null, B("#FFC107"), 4));
             }
             c.Children.Add(Circle(50, 50, 30, B("#FFD93C"), Ink, 3));
             Face(c, 50, 48, 9, 3.2, 8);
