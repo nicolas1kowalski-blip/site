@@ -11,6 +11,7 @@ namespace MesPremiersJeux.Games
     /// <summary>
     /// Carte 3D : un quad texturé (jolie carte pastel décorée au recto, carte
     /// « magique » au verso) qui pivote autour de l'axe vertical pour se retourner.
+    /// Le recto peut être un emoji ou un dessin cartoon vectoriel.
     /// </summary>
     public sealed class Card3D
     {
@@ -20,19 +21,20 @@ namespace MesPremiersJeux.Games
 
         private static readonly Color[] Pastels =
         {
-            Color.FromRgb(0xFF, 0xC9, 0xE0), // rose
-            Color.FromRgb(0xC9, 0xE7, 0xFF), // bleu ciel
-            Color.FromRgb(0xFF, 0xE6, 0xB3), // jaune doux
-            Color.FromRgb(0xD8, 0xC9, 0xFF), // lavande
-            Color.FromRgb(0xC9, 0xF5, 0xD8), // menthe
-            Color.FromRgb(0xFF, 0xD3, 0xC2), // pêche
+            Color.FromRgb(0xFF, 0xC9, 0xE0), Color.FromRgb(0xC9, 0xE7, 0xFF), Color.FromRgb(0xFF, 0xE6, 0xB3),
+            Color.FromRgb(0xD8, 0xC9, 0xFF), Color.FromRgb(0xC9, 0xF5, 0xD8), Color.FromRgb(0xFF, 0xD3, 0xC2),
         };
 
         public Card3D(string glyph, Color? frontBg = null)
+            : this(GlyphElement(glyph), frontBg ?? PastelFor(glyph)) { }
+
+        public Card3D(UIElement art, string key, Color? frontBg = null)
+            : this(art, frontBg ?? PastelFor(key)) { }
+
+        private Card3D(UIElement frontArt, Color bg)
         {
-            var bg = frontBg ?? PastelFor(glyph);
-            var front = Face(glyph, bg, false);
-            var back = Face("⭐", Color.FromRgb(0x9A, 0x6C, 0xE0), true);
+            var front = Face(frontArt, bg);
+            var back = Face(GlyphElement("⭐"), Color.FromRgb(0x9A, 0x6C, 0xE0));
 
             var model = new GeometryModel3D(Quad(), new DiffuseMaterial(new ImageBrush(front)))
             {
@@ -42,7 +44,7 @@ namespace MesPremiersJeux.Games
             model.Transform = new RotateTransform3D(_rot);
 
             var group = new Model3DGroup();
-            group.Children.Add(new AmbientLight(Colors.White)); // carte « à plat », non ombrée
+            group.Children.Add(new AmbientLight(Colors.White));
             group.Children.Add(model);
 
             Viewport = new Viewport3D
@@ -66,6 +68,14 @@ namespace MesPremiersJeux.Games
             _up = true;
             _rot.Angle = 0;
         }
+
+        private static UIElement GlyphElement(string glyph) => new TextBlock
+        {
+            Text = glyph,
+            FontSize = 100,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
         private static Color PastelFor(string glyph)
         {
@@ -97,10 +107,9 @@ namespace MesPremiersJeux.Games
         private static Color Mix(Color c, Color t, double a) => Color.FromRgb(
             (byte)(c.R + (t.R - c.R) * a), (byte)(c.G + (t.G - c.G) * a), (byte)(c.B + (t.B - c.B) * a));
 
-        // Jolie face de carte : fond pastel dégradé, cadre coloré, panneau doux,
-        // quelques paillettes, et l'emoji bien grand. Rendu via des éléments WPF
-        // (le TextBlock affiche correctement les emojis en couleur).
-        private static BitmapSource Face(string glyph, Color bg, bool magic)
+        // Jolie face de carte (fond pastel dégradé, cadre, panneau doux, paillettes)
+        // avec le dessin mis à l'échelle pour occuper une grande part de la carte.
+        private static BitmapSource Face(UIElement content, Color bg)
         {
             const int w = 384, h = 536;
             var root = new Grid { Width = w, Height = h };
@@ -114,12 +123,11 @@ namespace MesPremiersJeux.Games
             });
             root.Children.Add(new Border
             {
-                Margin = new Thickness(30),
+                Margin = new Thickness(26),
                 Background = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
                 CornerRadius = new CornerRadius(34),
             });
 
-            // Paillettes décoratives.
             void Sparkle(double x, double y, double r, byte a)
             {
                 var e = new System.Windows.Shapes.Ellipse
@@ -133,15 +141,14 @@ namespace MesPremiersJeux.Games
                 };
                 root.Children.Add(e);
             }
-            Sparkle(52, 60, 12, 0xCC); Sparkle(300, 90, 8, 0xB0);
-            Sparkle(70, 430, 9, 0xB0); Sparkle(312, 452, 13, 0xCC);
+            Sparkle(46, 54, 12, 0xCC); Sparkle(312, 84, 8, 0xB0);
+            Sparkle(60, 452, 9, 0xB0); Sparkle(322, 470, 13, 0xCC);
 
-            root.Children.Add(new TextBlock
+            root.Children.Add(new Viewbox
             {
-                Text = magic ? "✨" + glyph : glyph,
-                FontSize = magic ? 210 : 300,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                Child = content,
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(48, 60, 48, 60),
             });
 
             root.Measure(new Size(w, h));

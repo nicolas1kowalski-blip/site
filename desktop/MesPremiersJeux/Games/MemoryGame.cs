@@ -14,7 +14,7 @@ namespace MesPremiersJeux.Games
     {
         private const int Pairs = 3;
 
-        private string[] _deck;
+        private CartoonItem[] _deck;
         private bool[] _up;
         private bool[] _matched;
         private Card3D[] _cards;
@@ -29,7 +29,7 @@ namespace MesPremiersJeux.Games
             _busy = false;
             _sel.Clear();
 
-            var chosen = GameKit.Shuffle(GameData.FunPool).Take(Pairs).ToList();
+            var chosen = GameKit.Shuffle(CartoonArt.Items).Take(Pairs).ToList();
             _deck = GameKit.Shuffle(chosen.Concat(chosen)).ToArray();
             _up = new bool[_deck.Length];
             _matched = new bool[_deck.Length];
@@ -40,7 +40,7 @@ namespace MesPremiersJeux.Games
             var grid = new UniformGrid { Columns = 3 };
             for (int i = 0; i < _deck.Length; i++)
             {
-                var card = new Card3D(_deck[i]);
+                var card = new Card3D(_deck[i].Build(), _deck[i].Name);
                 _cards[i] = card;
                 var btn = new Button
                 {
