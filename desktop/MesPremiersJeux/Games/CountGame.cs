@@ -27,14 +27,17 @@ namespace MesPremiersJeux.Games
             var options = GameKit.Shuffle(new[] { 1, 2, 3 });
             Question.Text = "Combien ?";
 
-            var sphere = Shape3D.Sphere(16, 22, 1.0);
-            var col = GameData.BalloonColors[new Random().Next(GameData.BalloonColors.Length)];
+            var item = GameKit.Rand(CartoonArt.Items);
             var visuals = Row();
             for (int i = 0; i < n; i++)
             {
-                var vp = Shape3D.View(sphere, col, 175);
-                vp.Margin = new Thickness(12, 0, 12, 0);
-                visuals.Children.Add(vp);
+                visuals.Children.Add(new Viewbox
+                {
+                    Child = item.Build(),
+                    Width = 200,
+                    Height = 200,
+                    Margin = new Thickness(12, 0, 12, 0),
+                });
             }
 
             var row = Row();

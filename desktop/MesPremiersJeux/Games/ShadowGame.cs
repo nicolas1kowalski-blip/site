@@ -2,32 +2,55 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using MesPremiersJeux.Data;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
 {
-    /// <summary>Une forme sombre (ombre 3D) tourne : retrouver la forme correspondante.</summary>
+    /// <summary>Une ombre (silhouette noire d'un dessin cartoon) : retrouver le bon dessin.</summary>
     public sealed class ShadowGame : GameControl
     {
         public ShadowGame(Action celebrate) : base(celebrate) { }
 
+        private static UIElement Draw(CartoonItem item, double size)
+            => new Viewbox { Child = item.Build(), Width = size, Height = size };
+
+        // Silhouette : on rend le dessin dans un bitmap, puis on s'en sert comme
+        // masque d'opacité sur un rectangle noir.
+        private static UIElement Silhouette(CartoonItem item, double size)
+        {
+            var host = new Viewbox { Child = item.Build(), Width = size, Height = size };
+            host.Measure(new Size(size, size));
+            host.Arrange(new Rect(0, 0, size, size));
+            int px = Math.Max(1, (int)size);
+            var rtb = new RenderTargetBitmap(px, px, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(host);
+            return new Rectangle
+            {
+                Width = size,
+                Height = size,
+                Fill = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x2A)),
+                OpacityMask = new ImageBrush(rtb) { Stretch = Stretch.Uniform },
+            };
+        }
+
         protected override void NewRound()
         {
             Locked = false;
-            var target = GameKit.Rand(GameData.Shapes);
-            var options = GameKit.PickN(GameData.Shapes, 3, target);
+            var target = GameKit.Rand(CartoonArt.Items);
+            var options = GameKit.PickN(CartoonArt.Items, 3, target);
             Question.Text = "Quel objet fait cette ombre ?";
 
-            var silhouette = Shape3D.View(Shape3D.ShapeMesh(target.Name), Color.FromRgb(0x22, 0x22, 0x2A), 330);
-            var colored = Shape3D.View(Shape3D.ShapeMesh(target.Name), target.Color, 330);
+            var silhouette = Silhouette(target, 320);
+            var colored = Draw(target, 320);
             colored.Visibility = Visibility.Collapsed;
             var stage = new Grid { Children = { silhouette, colored } };
 
             var row = Row();
             foreach (var s in options)
             {
-                var btn = AnswerButton(Shape3D.View(Shape3D.ShapeMesh(s.Name), s.Color, 175));
+                var btn = AnswerButton(Draw(s, 175));
                 var chosen = s;
                 btn.Click += (ev, e) => Answer(chosen, target, btn, silhouette, colored);
                 row.Children.Add(btn);
@@ -37,17 +60,17 @@ namespace MesPremiersJeux.Games
             Schedule(350, () => Speak("Quel objet fait cette ombre ?"));
         }
 
-        private void Answer(GameShape s, GameShape target, Button btn, UIElement silhouette, UIElement colored)
+        private void Answer(CartoonItem s, CartoonItem target, Button btn, UIElement silhouette, UIElement colored)
         {
             if (Locked) return;
             if (s.Name == target.Name)
             {
                 Locked = true;
-                silhouette.Visibility = Visibility.Collapsed; // l'ombre laisse place à l'objet coloré
+                silhouette.Visibility = Visibility.Collapsed;
                 colored.Visibility = Visibility.Visible;
                 GameKit.Success();
                 Celebrate();
-                Speak($"{GameKit.Praise()} C'est {target.Name} !");
+                Speak(GameKit.Praise());
                 ScheduleNext(2400);
             }
             else

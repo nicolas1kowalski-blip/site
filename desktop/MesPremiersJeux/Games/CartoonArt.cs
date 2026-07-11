@@ -7,7 +7,7 @@ using System.Windows.Shapes;
 
 namespace MesPremiersJeux.Games
 {
-    public sealed class CartoonItem { public string Name; public Func<UIElement> Build; }
+    public sealed class CartoonItem { public string Name; public string Cat; public Func<UIElement> Build; }
 
     /// <summary>
     /// Petits personnages « cartoon » dessinés en vectoriel (formes + visages
@@ -189,18 +189,64 @@ namespace MesPremiersJeux.Games
             return Wrap(c);
         }
 
+        private static UIElement Dog()
+        {
+            var c = New();
+            c.Children.Add(Pa("M22,40 Q8,44 12,68 Q22,74 32,60 Z", B("#A97442"), Ink, 2.5));
+            c.Children.Add(Pa("M78,40 Q92,44 88,68 Q78,74 68,60 Z", B("#A97442"), Ink, 2.5));
+            c.Children.Add(Circle(50, 54, 32, B("#C8895A"), Ink, 3));
+            c.Children.Add(Circle(50, 66, 16, B("#EAD1B8"), Ink, 2));
+            c.Children.Add(Circle(38, 50, 4, Ink));
+            c.Children.Add(Circle(62, 50, 4, Ink));
+            c.Children.Add(Circle(50, 60, 5, Ink));
+            c.Children.Add(Pa("M50,65 Q44,71 38,67", null, Ink, 2));
+            c.Children.Add(Pa("M50,65 Q56,71 62,67", null, Ink, 2));
+            return Wrap(c);
+        }
+
+        private static UIElement Rabbit()
+        {
+            var c = New();
+            c.Children.Add(Pa("M40,46 Q34,10 44,8 Q50,26 48,46 Z", B("#F0F0F5"), Ink, 2.5));
+            c.Children.Add(Pa("M60,46 Q66,10 56,8 Q50,26 52,46 Z", B("#F0F0F5"), Ink, 2.5));
+            c.Children.Add(Pa("M42,44 Q39,20 44,16 Q47,30 46,44 Z", B("#FFC2D6")));
+            c.Children.Add(Pa("M58,44 Q61,20 56,16 Q53,30 54,44 Z", B("#FFC2D6")));
+            c.Children.Add(Circle(50, 60, 30, B("#F5F5FA"), Ink, 3));
+            c.Children.Add(Circle(40, 56, 4, Ink));
+            c.Children.Add(Circle(60, 56, 4, Ink));
+            c.Children.Add(Circle(50, 64, 4, B("#FF9FB5"), Ink, 1.5));
+            c.Children.Add(Circle(37, 66, 5, B("#FFC2D6")));
+            c.Children.Add(Circle(63, 66, 5, B("#FFC2D6")));
+            return Wrap(c);
+        }
+
+        private static UIElement Bird()
+        {
+            var c = New();
+            c.Children.Add(Circle(50, 55, 30, B("#5DADE2"), Ink, 3));
+            c.Children.Add(Pa("M50,50 Q30,54 34,72 Q46,68 54,58 Z", B("#3E90C8"), Ink, 2));
+            c.Children.Add(Pa("M76,54 L92,51 L78,62 Z", B("#FFB300"), Ink, 2));
+            c.Children.Add(Circle(64, 47, 5, Brushes.White, Ink, 2));
+            c.Children.Add(Circle(65, 48, 2.4, Ink));
+            c.Children.Add(Pa("M50,26 L45,15 M50,26 L55,15", null, Ink, 2));
+            return Wrap(c);
+        }
+
         public static readonly List<CartoonItem> Items = new List<CartoonItem>
         {
-            new CartoonItem { Name = "etoile",    Build = Star },
-            new CartoonItem { Name = "coeur",     Build = Heart },
-            new CartoonItem { Name = "fleur",     Build = Flower },
-            new CartoonItem { Name = "chat",      Build = Cat },
-            new CartoonItem { Name = "couronne",  Build = Crown },
-            new CartoonItem { Name = "arcenciel", Build = Rainbow },
-            new CartoonItem { Name = "papillon",  Build = Butterfly },
-            new CartoonItem { Name = "nuage",     Build = Cloud },
-            new CartoonItem { Name = "soleil",    Build = Sun },
-            new CartoonItem { Name = "poisson",   Build = Fish },
+            new CartoonItem { Name = "chat",      Cat = "les animaux", Build = Cat },
+            new CartoonItem { Name = "chien",     Cat = "les animaux", Build = Dog },
+            new CartoonItem { Name = "lapin",     Cat = "les animaux", Build = Rabbit },
+            new CartoonItem { Name = "oiseau",    Cat = "les animaux", Build = Bird },
+            new CartoonItem { Name = "poisson",   Cat = "les animaux", Build = Fish },
+            new CartoonItem { Name = "papillon",  Cat = "les animaux", Build = Butterfly },
+            new CartoonItem { Name = "etoile",    Cat = "la magie",    Build = Star },
+            new CartoonItem { Name = "coeur",     Cat = "la magie",    Build = Heart },
+            new CartoonItem { Name = "fleur",     Cat = "la magie",    Build = Flower },
+            new CartoonItem { Name = "couronne",  Cat = "la magie",    Build = Crown },
+            new CartoonItem { Name = "arcenciel", Cat = "la magie",    Build = Rainbow },
+            new CartoonItem { Name = "soleil",    Cat = "la magie",    Build = Sun },
+            new CartoonItem { Name = "nuage",     Cat = "la magie",    Build = Cloud },
         };
     }
 }

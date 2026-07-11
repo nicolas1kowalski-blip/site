@@ -45,16 +45,17 @@ namespace MesPremiersJeux.Games
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["BalloonButton"],
-                    Width = 200,
-                    Height = 260,
+                    Width = 360,
+                    Height = 470,
+                    Margin = new Thickness(6),
                     Content = card.Viewport,
                 };
                 int idx = i;
                 btn.Click += (s, e) => Flip(idx);
-                grid.Children.Add(Cell(btn));
+                grid.Children.Add(btn);
             }
 
-            SetBodyFill(grid);
+            SetBody(grid);
             Schedule(350, () => Speak("Trouve les paires !"));
         }
 

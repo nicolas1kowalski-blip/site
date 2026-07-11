@@ -5,12 +5,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using MesPremiersJeux.Data;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
 {
-    /// <summary>Range par famille : sélectionne tous les objets (cartes 3D) de la bonne catégorie.</summary>
+    /// <summary>Range par famille : sélectionne toutes les cartes cartoon de la bonne catégorie.</summary>
     public sealed class FamiliesGame : GameControl
     {
         private int _need;
@@ -23,28 +22,31 @@ namespace MesPremiersJeux.Games
             Locked = false;
             _found.Clear();
 
-            var target = GameKit.Rand(GameData.Families);
-            var others = GameData.Families.Where(f => f != target).SelectMany(f => f.Items).ToList();
-            var targetItems = GameKit.Shuffle(target.Items).Take(3).ToList();
+            var cats = CartoonArt.Items.Select(i => i.Cat).Distinct().ToList();
+            var targetCat = GameKit.Rand(cats);
+            var targetPool = CartoonArt.Items.Where(i => i.Cat == targetCat).ToList();
+            var others = CartoonArt.Items.Where(i => i.Cat != targetCat).ToList();
+
+            var targetItems = GameKit.Shuffle(targetPool).Take(3).ToList();
             var distractors = GameKit.Shuffle(others).Take(3).ToList();
             _need = targetItems.Count;
 
             var items = GameKit.Shuffle(
-                targetItems.Select(e => (emoji: e, isTarget: true))
-                    .Concat(distractors.Select(e => (emoji: e, isTarget: false))));
+                targetItems.Select(it => (item: it, isTarget: true))
+                    .Concat(distractors.Select(it => (item: it, isTarget: false))));
 
-            Question.Text = $"Regarde tous {target.Name} !";
+            Question.Text = $"Regarde tous {targetCat} !";
 
             var grid = new UniformGrid { Columns = 3 };
-            foreach (var it in items)
+            foreach (var entry in items)
             {
-                var card = new Card3D(it.emoji);
+                var card = new Card3D(entry.item.Build(), entry.item.Name);
                 card.ShowFront();
 
                 var check = new TextBlock
                 {
                     Text = "✓",
-                    FontSize = 46,
+                    FontSize = 70,
                     FontWeight = FontWeights.Bold,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)),
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -54,24 +56,25 @@ namespace MesPremiersJeux.Games
                 var overlay = new Border
                 {
                     Background = new SolidColorBrush(Color.FromArgb(0x66, 0x8A, 0xE6, 0x8A)),
-                    CornerRadius = new CornerRadius(16),
+                    CornerRadius = new CornerRadius(20),
                     Visibility = Visibility.Collapsed,
                 };
 
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["BalloonButton"],
-                    Width = 205,
-                    Height = 265,
+                    Width = 360,
+                    Height = 470,
+                    Margin = new Thickness(6),
                     Content = new Grid { Children = { card.Viewport, overlay, check } },
                 };
-                bool isTarget = it.isTarget;
-                btn.Click += (s, e) => Pick(btn, isTarget, target.Name, overlay, check);
-                grid.Children.Add(Cell(btn));
+                bool isTarget = entry.isTarget;
+                btn.Click += (s, e) => Pick(btn, isTarget, targetCat, overlay, check);
+                grid.Children.Add(btn);
             }
 
-            SetBodyFill(grid);
-            Schedule(350, () => Speak($"Regarde tous {target.Name} !"));
+            SetBody(grid);
+            Schedule(350, () => Speak($"Regarde tous {targetCat} !"));
         }
 
         private void Pick(Button btn, bool isTarget, string familyName, UIElement overlay, UIElement check)
