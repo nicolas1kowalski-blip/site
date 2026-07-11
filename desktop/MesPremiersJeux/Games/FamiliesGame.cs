@@ -35,7 +35,7 @@ namespace MesPremiersJeux.Games
 
             Question.Text = $"Regarde tous {target.Name} !";
 
-            var grid = new UniformGrid { Columns = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var grid = new UniformGrid { Columns = 3 };
             foreach (var it in items)
             {
                 var card = new Card3D(it.emoji);
@@ -63,15 +63,14 @@ namespace MesPremiersJeux.Games
                     Style = (Style)Application.Current.Resources["BalloonButton"],
                     Width = 205,
                     Height = 265,
-                    Margin = new Thickness(12),
                     Content = new Grid { Children = { card.Viewport, overlay, check } },
                 };
                 bool isTarget = it.isTarget;
                 btn.Click += (s, e) => Pick(btn, isTarget, target.Name, overlay, check);
-                grid.Children.Add(btn);
+                grid.Children.Add(Cell(btn));
             }
 
-            SetBody(grid);
+            SetBodyFill(grid);
             Schedule(350, () => Speak($"Regarde tous {target.Name} !"));
         }
 

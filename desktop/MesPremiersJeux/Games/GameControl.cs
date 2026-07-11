@@ -108,6 +108,28 @@ namespace MesPremiersJeux.Games
             Margin = new Thickness(8),
         };
 
+        /// <summary>Remplit toute la page avec un contenu étiré (ex. grille de cartes
+        /// dont chaque carte occupe sa cellule au maximum).</summary>
+        protected void SetBodyFill(UIElement content)
+        {
+            Body.Children.Clear();
+            if (content is FrameworkElement fe)
+            {
+                fe.HorizontalAlignment = HorizontalAlignment.Stretch;
+                fe.VerticalAlignment = VerticalAlignment.Stretch;
+            }
+            Body.Children.Add(content);
+        }
+
+        /// <summary>Cellule : agrandit l'élément (sans le déformer) pour remplir sa case.</summary>
+        protected static UIElement Cell(UIElement child) => new Viewbox
+        {
+            Child = child,
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.Both,
+            Margin = new Thickness(10),
+        };
+
         // --- Fabrique de boutons-réponses (gaze-cliquables : ce sont des Button) ---
         protected Button AnswerButton(UIElement content, double size = 210)
         {

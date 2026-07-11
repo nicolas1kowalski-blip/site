@@ -17,8 +17,10 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="GazeStatus" VerticalAlignment="Center"
                                    Foreground="White" FontSize="14" Margin="12,0" />
+                        <Button x:Name="FullscreenBtn" Style="{StaticResource TabButton}"
+                                Content="⛶" FontSize="26" MinWidth="60" Margin="6,0" Click="Fullscreen_Click" />
                         <Button x:Name="SettingsBtn" Style="{StaticResource TabButton}"
-                                Content="⚙" FontSize="26" MinWidth="64" Margin="6,0" Click="Settings_Click" />
+                                Content="⚙" FontSize="26" MinWidth="60" Margin="6,0" Click="Settings_Click" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                         <Button x:Name="TabStories" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="stories">
@@ -81,6 +83,14 @@
                         <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="#FF5A4A7A"
                                    Text="Calibrage : sur la TD I-13, il se fait dans les réglages d'eye-tracking de l'appareil (Tobii Dynavox → Calibrer). Active le mode « Contrôle de l'ordinateur » pour que le regard déplace le curseur, puis coche « Piloter au regard » ci-dessus." />
                     </Border>
+
+                    <Separator Margin="0,14,0,10" />
+                    <TextBlock Text="Fenêtre" FontSize="14" Foreground="#FF6B5B8A" Margin="0,0,0,6" />
+                    <UniformGrid Columns="3">
+                        <Button Content="⛶ Plein écran" Padding="6,10" Margin="0,0,6,0" FontSize="14" Click="Fullscreen_Click" />
+                        <Button Content="🗕 Réduire" Padding="6,10" Margin="0,0,6,0" FontSize="14" Click="Minimize_Click" />
+                        <Button Content="✕ Fermer" Padding="6,10" FontSize="14" Foreground="#FFB00020" Click="Close_Click" />
+                    </UniformGrid>
                 </StackPanel>
             </Border>
         </Popup>

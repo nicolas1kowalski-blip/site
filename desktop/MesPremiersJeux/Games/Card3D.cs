@@ -139,7 +139,7 @@ namespace MesPremiersJeux.Games
             root.Children.Add(new TextBlock
             {
                 Text = magic ? "✨" + glyph : glyph,
-                FontSize = magic ? 150 : 210,
+                FontSize = magic ? 210 : 300,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             });

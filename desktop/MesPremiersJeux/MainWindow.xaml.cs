@@ -21,6 +21,8 @@ namespace MesPremiersJeux
         private WindowStyle _prevStyle;
         private ResizeMode _prevResize;
         private WindowState _prevState;
+        private bool _prevTopmost;
+        private Rect _prevRect;
         private bool _isFullscreen;
 
         public MainWindow()
@@ -140,6 +142,23 @@ namespace MesPremiersJeux
             foreach (var kv in _views) kv.Value.Visibility = kv.Key == id ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        private void Fullscreen_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            ToggleFullscreen();
+        }
+
+        private void Minimize_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            WindowState = WindowState.Minimized;
+        }
+
+        private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+        // Plein écran « kiosque » : on dimensionne la fenêtre à l'écran entier et on
+        // la met au premier plan (Topmost) pour passer PAR-DESSUS la barre des tâches
+        // Windows, ce qu'un simple « Maximisé » ne fait pas toujours (surtout I-13).
         private void ToggleFullscreen()
         {
             if (!_isFullscreen)
@@ -147,16 +166,31 @@ namespace MesPremiersJeux
                 _prevStyle = WindowStyle;
                 _prevResize = ResizeMode;
                 _prevState = WindowState;
+                _prevTopmost = Topmost;
+                _prevRect = new Rect(Left, Top, ActualWidth, ActualHeight);
+
                 WindowStyle = WindowStyle.None;
                 ResizeMode = ResizeMode.NoResize;
-                WindowState = WindowState.Normal; // force re-maximize pour couvrir la barre des tâches
-                WindowState = WindowState.Maximized;
+                WindowState = WindowState.Normal; // repart de Normal pour poser nos dimensions
+                Topmost = true;
+                Left = 0;
+                Top = 0;
+                Width = SystemParameters.PrimaryScreenWidth;
+                Height = SystemParameters.PrimaryScreenHeight;
                 _isFullscreen = true;
             }
             else
             {
                 WindowStyle = _prevStyle;
                 ResizeMode = _prevResize;
+                Topmost = _prevTopmost;
+                if (_prevState == WindowState.Normal)
+                {
+                    Left = _prevRect.Left;
+                    Top = _prevRect.Top;
+                    Width = _prevRect.Width;
+                    Height = _prevRect.Height;
+                }
                 WindowState = _prevState;
                 _isFullscreen = false;
             }

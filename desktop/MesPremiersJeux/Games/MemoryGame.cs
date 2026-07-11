@@ -37,7 +37,7 @@ namespace MesPremiersJeux.Games
 
             Question.Text = "Trouve les paires !";
 
-            var grid = new UniformGrid { Columns = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var grid = new UniformGrid { Columns = 3 };
             for (int i = 0; i < _deck.Length; i++)
             {
                 var card = new Card3D(_deck[i]);
@@ -46,16 +46,15 @@ namespace MesPremiersJeux.Games
                 {
                     Style = (Style)Application.Current.Resources["BalloonButton"],
                     Width = 200,
-                    Height = 258,
-                    Margin = new Thickness(12),
+                    Height = 260,
                     Content = card.Viewport,
                 };
                 int idx = i;
                 btn.Click += (s, e) => Flip(idx);
-                grid.Children.Add(btn);
+                grid.Children.Add(Cell(btn));
             }
 
-            SetBody(grid);
+            SetBodyFill(grid);
             Schedule(350, () => Speak("Trouve les paires !"));
         }
 
