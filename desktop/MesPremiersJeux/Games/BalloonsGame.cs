@@ -16,7 +16,7 @@ namespace MesPremiersJeux.Games
     /// survient à chaque niveau franchi, pas à chaque ballon.</summary>
     public sealed class BalloonsGame : UserControl
     {
-        private const double BW = 130, BH = 210; // taille de référence (ballon + ficelle)
+        private const double BW = 180, BH = 300; // taille de référence (ballon + ficelle)
 
         private sealed class Balloon
         {
@@ -74,16 +74,16 @@ namespace MesPremiersJeux.Games
         private void AddBalloon(int stagger)
         {
             var vp = Balloon3D.MakeBalloon(out var brush);
-            vp.Width = BW; vp.Height = 150;
+            vp.Width = BW; vp.Height = 210;
 
             var ficelle = new Path
             {
                 Stroke = new SolidColorBrush(Color.FromRgb(0x6B, 0x6B, 0x6B)),
-                StrokeThickness = 2,
-                Data = Geometry.Parse("M65,146 q8,16 -3,28 q-8,12 4,30"),
+                StrokeThickness = 2.5,
+                Data = Geometry.Parse("M90,205 q11,22 -4,38 q-11,17 5,42"),
             };
             // Ficelle qui se balance (pivot au niveau du nœud).
-            var swingPivot = new RotateTransform(0, 65, 146);
+            var swingPivot = new RotateTransform(0, 90, 205);
             ficelle.RenderTransform = swingPivot;
             var swing = new DoubleAnimation(-9, 9, TimeSpan.FromMilliseconds(1500 + _rng.Next(1300)))
             {
@@ -155,7 +155,7 @@ namespace MesPremiersJeux.Games
             Speak(b.Info);
 
             double cx = Canvas.GetLeft(b.Btn) + BW * b.Scale / 2;
-            double cy = Canvas.GetTop(b.Btn) + 70 * b.Scale;
+            double cy = Canvas.GetTop(b.Btn) + 95 * b.Scale;
             Burst(cx, cy, b.Diffuse.Color, b.Scale);
 
             b.Btn.RenderTransformOrigin = new Point(0.5, 0.4);

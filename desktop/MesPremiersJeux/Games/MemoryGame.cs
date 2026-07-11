@@ -29,7 +29,7 @@ namespace MesPremiersJeux.Games
             _busy = false;
             _sel.Clear();
 
-            var chosen = GameKit.Shuffle(GameData.CountObjects).Take(Pairs).ToList();
+            var chosen = GameKit.Shuffle(GameData.FunPool).Take(Pairs).ToList();
             _deck = GameKit.Shuffle(chosen.Concat(chosen)).ToArray();
             _up = new bool[_deck.Length];
             _matched = new bool[_deck.Length];

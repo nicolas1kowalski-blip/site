@@ -88,21 +88,25 @@ namespace MesPremiersJeux.Games
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             });
-            Body.Children.Add(dp);
+            Body.Children.Add(FitBox(dp));
         }
 
-        /// <summary>Remplit le corps avec un contenu unique (grilles, etc.), mis à
-        /// l'échelle vers le bas si besoin pour tenir sans défilement ni rognage.</summary>
+        /// <summary>Remplit le corps avec un contenu unique (grilles, etc.).</summary>
         protected void SetBody(UIElement content)
         {
             Body.Children.Clear();
-            Body.Children.Add(new Viewbox
-            {
-                Child = content,
-                Stretch = Stretch.Uniform,
-                StretchDirection = StretchDirection.DownOnly,
-            });
+            Body.Children.Add(FitBox(content));
         }
+
+        // Met le contenu à l'échelle pour occuper toute la page (cibles maximales),
+        // sans défilement ni rognage.
+        private static Viewbox FitBox(UIElement child) => new Viewbox
+        {
+            Child = child,
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.Both,
+            Margin = new Thickness(8),
+        };
 
         // --- Fabrique de boutons-réponses (gaze-cliquables : ce sont des Button) ---
         protected Button AnswerButton(UIElement content, double size = 210)

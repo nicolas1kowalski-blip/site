@@ -75,11 +75,15 @@ namespace MesPremiersJeux.Data
             C("#A06CD5"), C("#FF9FB5"), C("#5DADE2"), C("#FFB347"),
         };
 
+        // Set « fun » pour les cartes (mémoire) : princesses, magie, mignon.
+        public static readonly string[] FunPool =
+            { "👸", "🦄", "🧚", "👑", "🌈", "⭐", "❤️", "🌸", "🦋", "🎀", "🏰", "🍰", "🍦", "🐱", "🌷", "🧜‍♀️" };
+
         public static readonly List<Family> Families = new List<Family>
         {
-            new Family { Name = "les animaux",   Items = new[] { "🐶", "🐱", "🐰", "🐻", "🦊", "🐸", "🐷", "🦁", "🐴", "🐔", "🐢" } },
-            new Family { Name = "les fruits",    Items = new[] { "🍎", "🍌", "🍓", "🍇", "🍐", "🍊", "🍒", "🍉", "🍑" } },
-            new Family { Name = "les véhicules", Items = new[] { "🚗", "🚌", "🚂", "✈️", "🚀", "🚲", "⛵", "🚁" } },
+            new Family { Name = "les animaux mignons", Items = new[] { "🐱", "🐰", "🐶", "🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐸" } },
+            new Family { Name = "les fruits",          Items = new[] { "🍎", "🍓", "🍒", "🍑", "🍊", "🍇", "🍉", "🍌", "🍐" } },
+            new Family { Name = "la magie",            Items = new[] { "👸", "🦄", "🧚", "👑", "🌈", "⭐", "🎀", "🏰", "🌸" } },
         };
     }
 }
