@@ -21,9 +21,24 @@ export default function ColoringScreen({ active }) {
   const specRef = useRef(spec);
   specRef.current = spec;
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const pages = BUILTIN_COLORINGS;
   const swatchUrls = useMemo(() => PALETTE.map((s) => paletteSwatchCanvas(s)), []);
   const pageThumbs = useMemo(() => pages.map((p) => svgDataUrl(p.svg)), [pages]);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }
 
   const drawPage = useCallback(() => {
     const canvas = canvasRef.current;
@@ -118,7 +133,25 @@ export default function ColoringScreen({ active }) {
 
   return (
     <section className={`screen coloring${active ? ' active' : ''}`}>
-      <div className="coloring-top">
+      {/* Palette à gauche */}
+      <div className="palette-col">
+        {PALETTE.map((s, i) => (
+          <DwellButton
+            key={s.id}
+            className={`swatch swatch-${s.type || 'solid'}${spec.id === s.id ? ' sel' : ''}`}
+            aria-label={s.name}
+            onClick={() => {
+              setSpec(s);
+              speak(s.name);
+            }}
+          >
+            <img src={swatchUrls[i]} alt="" />
+          </DwellButton>
+        ))}
+      </div>
+
+      {/* Grand dessin au centre */}
+      <div className="coloring-center">
         <div className="coloring-stage" ref={stageRef}>
           <canvas
             ref={canvasRef}
@@ -133,37 +166,30 @@ export default function ColoringScreen({ active }) {
           />
           <div className="color-ring" ref={ringRef} />
         </div>
-        <div className="coloring-tools">
-          {pages.map((p, i) => (
-            <DwellButton
-              key={p.id}
-              className={`coloring-page-btn${i === pageIdx ? ' sel' : ''}`}
-              aria-label={`Colorier ${p.name}`}
-              onClick={() => setPageIdx(i)}
-            >
-              <img src={pageThumbs[i]} alt="" />
-            </DwellButton>
-          ))}
-          <DwellButton className="coloring-reset" aria-label="Recommencer le coloriage" onClick={drawPage}>
-            🔄
-          </DwellButton>
-        </div>
       </div>
 
-      <div className="palette">
-        {PALETTE.map((s, i) => (
+      {/* Outils à droite : dessins, recommencer, plein écran */}
+      <div className="coloring-tools">
+        {pages.map((p, i) => (
           <DwellButton
-            key={s.id}
-            className={`swatch swatch-${s.type || 'solid'}${spec.id === s.id ? ' sel' : ''}`}
-            aria-label={s.name}
-            onClick={() => {
-              setSpec(s);
-              speak(s.name);
-            }}
+            key={p.id}
+            className={`coloring-page-btn${i === pageIdx ? ' sel' : ''}`}
+            aria-label={`Colorier ${p.name}`}
+            onClick={() => setPageIdx(i)}
           >
-            <img src={swatchUrls[i]} alt="" />
+            <img src={pageThumbs[i]} alt="" />
           </DwellButton>
         ))}
+        <DwellButton className="coloring-reset" aria-label="Recommencer le coloriage" onClick={drawPage}>
+          🔄
+        </DwellButton>
+        <DwellButton
+          className="coloring-reset"
+          aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+          onClick={toggleFullscreen}
+        >
+          {isFullscreen ? '🗗' : '⛶'}
+        </DwellButton>
       </div>
     </section>
   );
