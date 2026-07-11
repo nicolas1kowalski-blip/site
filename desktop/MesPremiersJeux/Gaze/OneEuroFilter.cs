@@ -55,7 +55,7 @@ namespace MesPremiersJeux.Gaze
             _lastTime = t;
             double dValue = _x.Initialized ? (value - _x.Last) / dt : 0;
             double edValue = _dx.Filter(dValue, Alpha(_dCutoff, dt));
-            double cutoff = _minCutoff + _beta * Math.Abs(edValue);
+            double cutoff = MinCutoff + Beta * Math.Abs(edValue);
             return _x.Filter(value, Alpha(cutoff, dt));
         }
 
