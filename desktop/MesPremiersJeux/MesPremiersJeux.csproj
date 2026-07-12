@@ -25,6 +25,8 @@
   <ItemGroup>
     <!-- Synthèse vocale française (System.Speech.Synthesis). -->
     <Reference Include="System.Speech" />
+    <!-- Lecture/écriture du format JSON des livres (DataContractJsonSerializer). -->
+    <Reference Include="System.Runtime.Serialization" />
   </ItemGroup>
 
 </Project>

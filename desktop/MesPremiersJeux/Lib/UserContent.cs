@@ -2,38 +2,80 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+using System.Text;
 using System.Windows.Media.Imaging;
 
 namespace MesPremiersJeux.Lib
 {
-    /// <summary>Une page d'histoire personnalisée : texte + image éventuelle.</summary>
+    /// <summary>Zone interactive sur la photo d'une page (pourcentages, comme sur le web).</summary>
+    public sealed class UserZone
+    {
+        public double Left, Top, Width, Height; // en % de l'image
+        public string Label;
+    }
+
+    /// <summary>Une page d'histoire : texte + image éventuelle + zones interactives.</summary>
     public sealed class UserStoryPage
     {
         public string Text;
         public string ImagePath; // peut être null
+        public List<UserZone> Zones = new List<UserZone>();
     }
 
-    /// <summary>Une histoire personnalisée chargée depuis Documents\MesPremiersJeux\Histoires.</summary>
+    /// <summary>Une histoire chargée depuis Documents\MesPremiersJeux\Histoires.</summary>
     public sealed class UserStory
     {
         public string Title;
         public List<UserStoryPage> Pages = new List<UserStoryPage>();
     }
 
-    /// <summary>Un coloriage personnalisé (dessin au trait) chargé depuis Documents\MesPremiersJeux\Coloriages.</summary>
+    /// <summary>Page en cours d'édition (éditeur de livre).</summary>
+    public sealed class PageDraft
+    {
+        public string Text = "";
+        public string ImagePath;
+        public List<UserZone> Zones = new List<UserZone>();
+    }
+
+    /// <summary>Un coloriage personnalisé (dessin au trait).</summary>
     public sealed class UserColoring
     {
         public string Name;
         public string Path;
     }
 
+    // --- Schéma JSON des livres (identique à l'application web) ---
+    [DataContract]
+    internal sealed class BookJson
+    {
+        [DataMember(Name = "title")] public string Title;
+        [DataMember(Name = "pages")] public List<BookPageJson> Pages;
+    }
+
+    [DataContract]
+    internal sealed class BookPageJson
+    {
+        [DataMember(Name = "text", EmitDefaultValue = false)] public string Text;
+        [DataMember(Name = "image", EmitDefaultValue = false)] public string Image; // data URL ou nom de fichier
+        [DataMember(Name = "zones", EmitDefaultValue = false)] public List<BookZoneJson> Zones;
+    }
+
+    [DataContract]
+    internal sealed class BookZoneJson
+    {
+        [DataMember(Name = "left")] public double Left;
+        [DataMember(Name = "top")] public double Top;
+        [DataMember(Name = "width")] public double Width;
+        [DataMember(Name = "height")] public double Height;
+        [DataMember(Name = "label")] public string Label;
+    }
+
     /// <summary>
-    /// Contenu ajouté par le parent, via de simples dossiers dans
-    /// Documents\MesPremiersJeux :
-    ///
-    ///   Coloriages\  → des images au trait (PNG/JPG, traits noirs sur fond clair).
-    ///   Histoires\MonHistoire\ → « histoire.txt » (une ligne = une page)
-    ///                            + images « 1.png », « 2.png », … (page 1, 2, …).
+    /// Contenu ajouté par le parent (Documents\MesPremiersJeux) :
+    ///   Coloriages\ → images au trait ;
+    ///   Histoires\MonLivre\ → livre.json (+ images), ou histoire.txt + 1.png…
     /// </summary>
     public static class UserContent
     {
@@ -44,7 +86,6 @@ namespace MesPremiersJeux.Lib
         public static string ColoringsDir => Path.Combine(RootDir, "Coloriages");
         public static string StoriesDir => Path.Combine(RootDir, "Histoires");
 
-        /// <summary>Crée les dossiers (avec un mode d'emploi) s'ils n'existent pas.</summary>
         public static void EnsureFolders()
         {
             try
@@ -58,22 +99,20 @@ namespace MesPremiersJeux.Lib
                     File.WriteAllText(readme,
                         "MES PREMIERS JEUX — Ajouter du contenu\r\n" +
                         "=======================================\r\n\r\n" +
-                        "COLORIAGES\r\n" +
-                        "  Déposez des images au trait (PNG ou JPG, contours noirs sur fond\r\n" +
-                        "  blanc) dans le dossier « Coloriages ». Elles apparaissent dans\r\n" +
-                        "  l'onglet Coloriage au prochain lancement.\r\n\r\n" +
-                        "HISTOIRES\r\n" +
-                        "  Créez un dossier par histoire dans « Histoires », par exemple :\r\n" +
-                        "    Histoires\\La petite sirène\\\r\n" +
-                        "  Dedans :\r\n" +
-                        "    - histoire.txt : une ligne de texte par page ;\r\n" +
-                        "    - 1.png, 2.png, 3.png… : l'image de la page 1, 2, 3…\r\n" +
-                        "  Le nom du dossier devient le titre du livre.\r\n");
+                        "Le plus simple : utilisez les boutons ➕ dans l'application\r\n" +
+                        "(onglet Coloriage, et « Nouveau livre » dans Histoires).\r\n\r\n" +
+                        "COLORIAGES : déposez des images au trait (PNG/JPG) dans « Coloriages ».\r\n\r\n" +
+                        "HISTOIRES : un dossier par livre dans « Histoires », contenant soit\r\n" +
+                        "  - livre.json (même format que l'application web) + les images ;\r\n" +
+                        "  - soit histoire.txt (une ligne = une page) + 1.png, 2.png…\r\n");
                 }
             }
-            catch { /* pas bloquant */ }
+            catch { }
         }
 
+        // ------------------------------------------------------------------
+        // Coloriages
+        // ------------------------------------------------------------------
         public static List<UserColoring> LoadColorings()
         {
             var list = new List<UserColoring>();
@@ -90,6 +129,27 @@ namespace MesPremiersJeux.Lib
             return list;
         }
 
+        public static List<string> AddColorings(IEnumerable<string> files)
+        {
+            EnsureFolders();
+            var added = new List<string>();
+            foreach (var f in files)
+            {
+                try
+                {
+                    if (!ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant())) continue;
+                    var dest = UniquePath(ColoringsDir, Path.GetFileName(f));
+                    File.Copy(f, dest);
+                    added.Add(dest);
+                }
+                catch { }
+            }
+            return added;
+        }
+
+        // ------------------------------------------------------------------
+        // Histoires
+        // ------------------------------------------------------------------
         public static List<UserStory> LoadStories()
         {
             var stories = new List<UserStory>();
@@ -110,12 +170,12 @@ namespace MesPremiersJeux.Lib
         {
             try
             {
+                var json = Path.Combine(dir, "livre.json");
+                if (File.Exists(json)) return LoadJsonStory(dir, json);
+
                 var txt = Directory.GetFiles(dir, "*.txt").OrderBy(f => f).FirstOrDefault();
                 if (txt == null) return null;
-                var lines = File.ReadAllLines(txt)
-                    .Select(l => l.Trim())
-                    .Where(l => l.Length > 0)
-                    .ToList();
+                var lines = File.ReadAllLines(txt).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
                 if (lines.Count == 0) return null;
 
                 var story = new UserStory { Title = Path.GetFileName(dir) };
@@ -132,37 +192,44 @@ namespace MesPremiersJeux.Lib
             catch { return null; }
         }
 
-        private static string FindPageImage(string dir, int page)
+        private static UserStory LoadJsonStory(string dir, string jsonPath)
         {
-            foreach (var ext in ImageExts)
-            {
-                var p = Path.Combine(dir, page + ext);
-                if (File.Exists(p)) return p;
-            }
-            return null;
-        }
+            var data = ParseJson(File.ReadAllText(jsonPath));
+            if (data?.Pages == null || data.Pages.Count == 0) return null;
 
-        /// <summary>Copie des images dans le dossier Coloriages ; renvoie les chemins ajoutés.</summary>
-        public static List<string> AddColorings(IEnumerable<string> files)
-        {
-            EnsureFolders();
-            var added = new List<string>();
-            foreach (var f in files)
+            var story = new UserStory
             {
-                try
+                Title = string.IsNullOrWhiteSpace(data.Title) ? Path.GetFileName(dir) : data.Title.Trim(),
+            };
+            foreach (var p in data.Pages)
+            {
+                var page = new UserStoryPage { Text = (p.Text ?? "").Trim() };
+                if (!string.IsNullOrEmpty(p.Image))
                 {
-                    if (!ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant())) continue;
-                    var dest = UniquePath(ColoringsDir, Path.GetFileName(f));
-                    File.Copy(f, dest);
-                    added.Add(dest);
+                    var img = Path.Combine(dir, p.Image);
+                    if (File.Exists(img)) page.ImagePath = img;
                 }
-                catch { }
+                if (p.Zones != null)
+                {
+                    foreach (var z in p.Zones)
+                    {
+                        if (string.IsNullOrWhiteSpace(z.Label)) continue;
+                        var zone = new UserZone
+                        {
+                            Left = Clamp(z.Left), Top = Clamp(z.Top),
+                            Width = Clamp(z.Width), Height = Clamp(z.Height),
+                            Label = z.Label.Trim(),
+                        };
+                        if (zone.Width > 0 && zone.Height > 0) page.Zones.Add(zone);
+                    }
+                }
+                story.Pages.Add(page);
             }
-            return added;
+            return story;
         }
 
-        /// <summary>Enregistre un livre (titre + pages texte/image) ; renvoie null si échec.</summary>
-        public static string SaveStory(string title, IList<(string Text, string ImagePath)> pages)
+        /// <summary>Enregistre un livre (format livre.json + images) ; renvoie null si échec.</summary>
+        public static string SaveStory(string title, IList<PageDraft> pages)
         {
             try
             {
@@ -174,20 +241,118 @@ namespace MesPremiersJeux.Lib
                 for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(StoriesDir, safe + " " + i);
                 Directory.CreateDirectory(dir);
 
-                File.WriteAllLines(Path.Combine(dir, "histoire.txt"),
-                    pages.Select(p => p.Text.Trim().Replace("\r", " ").Replace("\n", " ")));
-
+                var data = new BookJson { Title = title.Trim(), Pages = new List<BookPageJson>() };
                 for (int i = 0; i < pages.Count; i++)
                 {
-                    var img = pages[i].ImagePath;
-                    if (string.IsNullOrEmpty(img) || !File.Exists(img)) continue;
-                    var ext = Path.GetExtension(img).ToLowerInvariant();
-                    if (!ImageExts.Contains(ext)) continue;
-                    File.Copy(img, Path.Combine(dir, (i + 1) + ext), true);
+                    var p = pages[i];
+                    var pj = new BookPageJson { Text = p.Text ?? "" };
+                    if (!string.IsNullOrEmpty(p.ImagePath) && File.Exists(p.ImagePath))
+                    {
+                        var ext = Path.GetExtension(p.ImagePath).ToLowerInvariant();
+                        if (ImageExts.Contains(ext))
+                        {
+                            var name = (i + 1) + ext;
+                            File.Copy(p.ImagePath, Path.Combine(dir, name), true);
+                            pj.Image = name;
+                            if (p.Zones != null && p.Zones.Count > 0)
+                                pj.Zones = p.Zones.Select(z => new BookZoneJson
+                                {
+                                    Left = z.Left, Top = z.Top, Width = z.Width, Height = z.Height, Label = z.Label,
+                                }).ToList();
+                        }
+                    }
+                    data.Pages.Add(pj);
+                }
+
+                using (var fs = File.Create(Path.Combine(dir, "livre.json")))
+                {
+                    var ser = new DataContractJsonSerializer(typeof(BookJson));
+                    ser.WriteObject(fs, data);
                 }
                 return dir;
             }
             catch { return null; }
+        }
+
+        /// <summary>
+        /// Importe un JSON au format web (title/pages/text/image dataURL/zones) :
+        /// les images en data: sont décodées vers des fichiers temporaires.
+        /// Renvoie null (avec message) si le JSON est invalide.
+        /// </summary>
+        public static (string Title, List<PageDraft> Pages)? ImportJson(string jsonText, out string error)
+        {
+            error = null;
+            BookJson data;
+            try { data = ParseJson(jsonText); }
+            catch { error = "Ce fichier n'est pas un JSON valide."; return null; }
+
+            if (data == null || string.IsNullOrWhiteSpace(data.Title))
+            { error = "Le champ « title » est manquant ou vide."; return null; }
+            if (data.Pages == null || data.Pages.Count == 0)
+            { error = "Le champ « pages » doit être une liste non vide."; return null; }
+
+            var pages = new List<PageDraft>();
+            foreach (var p in data.Pages)
+            {
+                var draft = new PageDraft { Text = (p.Text ?? "").Trim() };
+                if (!string.IsNullOrEmpty(p.Image) && p.Image.StartsWith("data:image"))
+                {
+                    draft.ImagePath = DecodeDataUrl(p.Image);
+                    if (draft.ImagePath != null && p.Zones != null)
+                    {
+                        foreach (var z in p.Zones)
+                        {
+                            if (string.IsNullOrWhiteSpace(z.Label)) continue;
+                            var zone = new UserZone
+                            {
+                                Left = Clamp(z.Left), Top = Clamp(z.Top),
+                                Width = Clamp(z.Width), Height = Clamp(z.Height),
+                                Label = z.Label.Trim(),
+                            };
+                            if (zone.Width > 0 && zone.Height > 0) draft.Zones.Add(zone);
+                        }
+                    }
+                }
+                pages.Add(draft);
+            }
+            return (data.Title.Trim(), pages);
+        }
+
+        private static BookJson ParseJson(string jsonText)
+        {
+            using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(jsonText)))
+            {
+                var ser = new DataContractJsonSerializer(typeof(BookJson));
+                return (BookJson)ser.ReadObject(ms);
+            }
+        }
+
+        private static string DecodeDataUrl(string dataUrl)
+        {
+            try
+            {
+                int comma = dataUrl.IndexOf(',');
+                if (comma < 0) return null;
+                var header = dataUrl.Substring(0, comma);
+                var ext = header.Contains("image/png") ? ".png" : header.Contains("image/gif") ? ".gif" : ".jpg";
+                var bytes = Convert.FromBase64String(dataUrl.Substring(comma + 1));
+                var path = Path.Combine(Path.GetTempPath(), "mpj-" + Guid.NewGuid().ToString("N") + ext);
+                File.WriteAllBytes(path, bytes);
+                return path;
+            }
+            catch { return null; }
+        }
+
+        private static double Clamp(double v) => double.IsNaN(v) ? 0 : Math.Max(0, Math.Min(100, v));
+
+        private static string FindPageImage(string dir, int page)
+        {
+            foreach (var ext in ImageExts)
+            {
+                var p = Path.Combine(dir, page + ext);
+                if (File.Exists(p)) return p;
+            }
+            return null;
         }
 
         private static string UniquePath(string dir, string fileName)

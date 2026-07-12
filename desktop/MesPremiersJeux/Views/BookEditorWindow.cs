@@ -11,10 +11,10 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Views
 {
     /// <summary>
-    /// Éditeur de livre (pour le parent, à la souris) : un titre + des pages
-    /// (texte de la page et image facultative). À l'enregistrement, le livre est
-    /// écrit dans Documents\MesPremiersJeux\Histoires et apparaît aussitôt dans
-    /// la bibliothèque.
+    /// Éditeur de livre (pour le parent) : titre + pages (texte, photo, zones
+    /// interactives), et import d'un fichier JSON au même format que
+    /// l'application web. À l'enregistrement, le livre est écrit dans
+    /// Documents\MesPremiersJeux\Histoires et apparaît aussitôt.
     /// </summary>
     public sealed class BookEditorWindow : Window
     {
@@ -24,7 +24,8 @@ namespace MesPremiersJeux.Views
             public TextBlock Header;
             public TextBox Text;
             public Button ImgBtn;
-            public string ImagePath;
+            public Button ZonesBtn;
+            public PageDraft Draft = new PageDraft();
         }
 
         private readonly TextBox _title;
@@ -34,14 +35,14 @@ namespace MesPremiersJeux.Views
         public BookEditorWindow()
         {
             Title = "Nouveau livre";
-            Width = 780;
-            Height = 680;
+            Width = 820;
+            Height = 700;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(0xFB, 0xF3, 0xFF));
 
             var dock = new DockPanel { Margin = new Thickness(18) };
 
-            // Titre du livre.
+            // Titre + import JSON.
             var titleRow = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
             titleRow.Children.Add(new TextBlock
             {
@@ -50,7 +51,10 @@ namespace MesPremiersJeux.Views
                 FontWeight = FontWeights.Bold,
                 VerticalAlignment = VerticalAlignment.Center,
             });
-            _title = new TextBox { FontSize = 20, Padding = new Thickness(8, 6, 8, 6) };
+            var import = MakeButton("📥 Importer un JSON", ImportJson);
+            DockPanel.SetDock(import, Dock.Right);
+            titleRow.Children.Add(import);
+            _title = new TextBox { FontSize = 20, Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 8, 0) };
             titleRow.Children.Add(_title);
             DockPanel.SetDock(titleRow, Dock.Top);
             dock.Children.Add(titleRow);
@@ -93,7 +97,7 @@ namespace MesPremiersJeux.Views
             return b;
         }
 
-        private void AddRow()
+        private Row AddRow()
         {
             var row = new Row();
 
@@ -128,9 +132,19 @@ namespace MesPremiersJeux.Views
             grid.Children.Add(row.Text);
 
             var side = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
-            row.ImgBtn = new Button { Content = "🖼 Image…", FontSize = 15, Padding = new Thickness(10, 8, 10, 8) };
+            row.ImgBtn = new Button { Content = "🖼 Photo…", FontSize = 15, Padding = new Thickness(10, 8, 10, 8) };
             row.ImgBtn.Click += (s, e) => PickImage(row);
             side.Children.Add(row.ImgBtn);
+            row.ZonesBtn = new Button
+            {
+                Content = "🎯 Zones",
+                FontSize = 15,
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(6, 0, 0, 0),
+                IsEnabled = false,
+            };
+            row.ZonesBtn.Click += (s, e) => EditZones(row);
+            side.Children.Add(row.ZonesBtn);
             var del = new Button { Content = "🗑", FontSize = 15, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(6, 0, 0, 0) };
             del.Click += (s, e) => RemoveRow(row);
             side.Children.Add(del);
@@ -150,6 +164,7 @@ namespace MesPremiersJeux.Views
             _rows.Add(row);
             _pagesHost.Children.Add(row.Ui);
             RenumberRows();
+            return row;
         }
 
         private void RemoveRow(Row row)
@@ -170,13 +185,58 @@ namespace MesPremiersJeux.Views
         {
             var dlg = new OpenFileDialog
             {
-                Title = "Image de la page",
+                Title = "Photo de la page",
                 Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif",
             };
             if (dlg.ShowDialog(this) == true)
             {
-                row.ImagePath = dlg.FileName;
-                row.ImgBtn.Content = "🖼 " + Path.GetFileName(dlg.FileName);
+                row.Draft.ImagePath = dlg.FileName;
+                row.Draft.Zones.Clear(); // nouvelles zones pour la nouvelle photo
+                RefreshRowButtons(row);
+            }
+        }
+
+        private void EditZones(Row row)
+        {
+            if (string.IsNullOrEmpty(row.Draft.ImagePath)) return;
+            var editor = new ZoneEditorWindow(row.Draft.ImagePath, row.Draft.Zones) { Owner = this };
+            if (editor.ShowDialog() == true)
+            {
+                row.Draft.Zones = editor.Zones;
+                RefreshRowButtons(row);
+            }
+        }
+
+        private void RefreshRowButtons(Row row)
+        {
+            bool hasImg = !string.IsNullOrEmpty(row.Draft.ImagePath);
+            row.ImgBtn.Content = hasImg ? "🖼 " + Path.GetFileName(row.Draft.ImagePath) : "🖼 Photo…";
+            row.ZonesBtn.IsEnabled = hasImg;
+            row.ZonesBtn.Content = row.Draft.Zones.Count > 0 ? $"🎯 Zones ({row.Draft.Zones.Count})" : "🎯 Zones";
+        }
+
+        // Import d'un JSON au format de l'application web.
+        private void ImportJson(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog { Title = "Importer un livre (JSON)", Filter = "JSON|*.json" };
+            if (dlg.ShowDialog(this) != true) return;
+
+            var result = UserContent.ImportJson(File.ReadAllText(dlg.FileName), out var error);
+            if (result == null)
+            {
+                MessageBox.Show(this, "Import impossible : " + error, "Importer un JSON");
+                return;
+            }
+
+            _title.Text = result.Value.Title;
+            _rows.Clear();
+            _pagesHost.Children.Clear();
+            foreach (var draft in result.Value.Pages)
+            {
+                var row = AddRow();
+                row.Draft = draft;
+                row.Text.Text = draft.Text;
+                RefreshRowButtons(row);
             }
         }
 
@@ -188,10 +248,13 @@ namespace MesPremiersJeux.Views
                 MessageBox.Show(this, "Donne un titre au livre 🙂", "Nouveau livre");
                 return;
             }
-            var pages = _rows
-                .Where(r => r.Text.Text.Trim().Length > 0)
-                .Select(r => (r.Text.Text.Trim(), r.ImagePath))
-                .ToList();
+            var pages = new List<PageDraft>();
+            foreach (var r in _rows)
+            {
+                r.Draft.Text = r.Text.Text.Trim();
+                if (r.Draft.Text.Length > 0 || !string.IsNullOrEmpty(r.Draft.ImagePath))
+                    pages.Add(r.Draft);
+            }
             if (pages.Count == 0)
             {
                 MessageBox.Show(this, "Écris au moins une page 🙂", "Nouveau livre");

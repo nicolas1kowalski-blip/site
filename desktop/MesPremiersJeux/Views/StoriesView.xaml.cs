@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Text;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -35,11 +36,22 @@ namespace MesPremiersJeux.Views
         };
 
         // --- Modèle de livre (intégré ou personnalisé) ---
+        private sealed class BookPage
+        {
+            public string Text;
+            public Func<UIElement> Cartoon;   // dessin intégré
+            public string ImagePath;          // photo personnalisée
+            public List<UserZone> Zones = new List<UserZone>();
+        }
+
         private sealed class Book
         {
             public string Title;
-            public List<(string Text, Func<UIElement> Illus)> Pages = new List<(string, Func<UIElement>)>();
+            public List<BookPage> Pages = new List<BookPage>();
         }
+
+        // Zones affichées sur la page courante (pour les faire réagir à la lecture).
+        private readonly List<(UserZone Zone, Border Ui)> _zoneUis = new List<(UserZone, Border)>();
 
         private readonly List<Book> _books = new List<Book>();
 
@@ -169,7 +181,7 @@ namespace MesPremiersJeux.Views
             })
             {
                 var a = art;
-                builtIn.Pages.Add((text, () => CartoonArt.Draw(a)));
+                builtIn.Pages.Add(new BookPage { Text = text, Cartoon = () => CartoonArt.Draw(a) });
             }
             _books.Add(builtIn);
 
@@ -178,25 +190,87 @@ namespace MesPremiersJeux.Views
             {
                 var book = new Book { Title = s.Title };
                 foreach (var p in s.Pages)
-                {
-                    var path = p.ImagePath;
-                    book.Pages.Add((p.Text, () => MakeUserIllustration(path)));
-                }
+                    book.Pages.Add(new BookPage { Text = p.Text, ImagePath = p.ImagePath, Zones = p.Zones });
                 _books.Add(book);
             }
         }
 
-        private static UIElement MakeUserIllustration(string path)
+        // Construit l'illustration d'une page : dessin intégré, ou photo avec ses
+        // zones interactives (fixer une zone la nomme ; lire son mot l'illumine).
+        private UIElement MakeIllustration(BookPage page)
         {
-            if (path == null)
+            _zoneUis.Clear();
+            if (page.Cartoon != null) return page.Cartoon();
+            if (page.ImagePath == null)
                 return new TextBlock { Text = "📖", FontSize = 160, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+
             try
             {
-                return new Image { Source = UserContent.LoadBitmap(path), Stretch = Stretch.Uniform };
+                var bmp = UserContent.LoadBitmap(page.ImagePath);
+                double w = bmp.PixelWidth, h = bmp.PixelHeight;
+                var host = new Grid { Width = w, Height = h };
+                host.Children.Add(new Image { Source = bmp, Stretch = Stretch.Fill, Width = w, Height = h });
+
+                var layer = new Canvas { Width = w, Height = h, Background = Brushes.Transparent };
+                foreach (var z in page.Zones ?? new List<UserZone>())
+                {
+                    var ui = new Border
+                    {
+                        Width = z.Width / 100 * w,
+                        Height = z.Height / 100 * h,
+                        CornerRadius = new CornerRadius(10),
+                        Background = Brushes.Transparent,
+                        BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0x7E, 0x3F, 0xF2)),
+                        BorderThickness = new Thickness(3),
+                    };
+                    Canvas.SetLeft(ui, z.Left / 100 * w);
+                    Canvas.SetTop(ui, z.Top / 100 * h);
+                    var zone = z;
+                    ui.MouseLeftButtonDown += (s, e) => Speech.Say(zone.Label); // fixer la zone la nomme
+                    layer.Children.Add(ui);
+                    _zoneUis.Add((zone, ui));
+                }
+                host.Children.Add(layer);
+                return host;
             }
             catch
             {
                 return new TextBlock { Text = "🖼️", FontSize = 160 };
+            }
+        }
+
+        // --- Mise en évidence d'une zone quand son mot est lu (comme sur le web) ---
+        private static string NormalizeWord(string s)
+        {
+            var d = s.ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+            foreach (var c in d)
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark
+                    && char.IsLetterOrDigit(c))
+                    sb.Append(c);
+            return sb.ToString();
+        }
+
+        private void PulseMatchingZones(string groupText)
+        {
+            if (_zoneUis.Count == 0) return;
+            var words = groupText.Split(' ').Select(NormalizeWord).Where(x => x.Length >= 3).ToList();
+            if (words.Count == 0) return;
+
+            foreach (var (zone, ui) in _zoneUis)
+            {
+                var labelParts = zone.Label.Split(' ').Select(NormalizeWord);
+                if (!labelParts.Any(lp => words.Contains(lp))) continue;
+
+                // Petit flash : fond jaune + bord épais qui s'estompent.
+                var flash = new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xE0, 0x5C));
+                ui.Background = flash;
+                ui.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
+                flash.BeginAnimation(SolidColorBrush.ColorProperty,
+                    new System.Windows.Media.Animation.ColorAnimation(
+                        Color.FromArgb(0x88, 0xFF, 0xE0, 0x5C),
+                        Color.FromArgb(0x00, 0xFF, 0xE0, 0x5C),
+                        TimeSpan.FromMilliseconds(1600)));
             }
         }
 
@@ -208,7 +282,7 @@ namespace MesPremiersJeux.Views
                 var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
                 var preview = new ContentControl
                 {
-                    Content = b.Pages.Count > 0 ? b.Pages[0].Illus() : null,
+                    Content = b.Pages.Count > 0 ? PreviewOf(b.Pages[0]) : null,
                     Width = 150,
                     Height = 130,
                 };
@@ -259,6 +333,18 @@ namespace MesPremiersJeux.Views
                 BuildMenu();
                 Speech.Say("Le livre est ajouté !");
             }
+        }
+
+        // Aperçu léger d'une page pour la tuile de la bibliothèque.
+        private static UIElement PreviewOf(BookPage page)
+        {
+            if (page.Cartoon != null) return page.Cartoon();
+            if (page.ImagePath != null)
+            {
+                try { return new Image { Source = UserContent.LoadBitmap(page.ImagePath, 400), Stretch = Stretch.Uniform }; }
+                catch { }
+            }
+            return new TextBlock { Text = "📖", FontSize = 90, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         }
 
         private void ShowMenu()
@@ -322,7 +408,7 @@ namespace MesPremiersJeux.Views
             int n = _book.Pages.Count;
             _index = ((i % n) + n) % n;
             var page = _book.Pages[_index];
-            _illus.Content = new Viewbox { Child = page.Illus(), Stretch = Stretch.Uniform };
+            _illus.Content = new Viewbox { Child = MakeIllustration(page), Stretch = Stretch.Uniform };
             _pageInfo.Text = $"{_index + 1} / {n}";
 
             _wordHost.Children.Clear();
@@ -357,6 +443,7 @@ namespace MesPremiersJeux.Views
         {
             if (idx != _readIndex || _readIndex >= _groups.Count) return;
             Speech.Say(_groups[idx].Text);
+            PulseMatchingZones(_groups[idx].Text); // la zone correspondante s'illumine
             _readIndex++;
             Refresh();
             if (_readIndex >= _groups.Count)
