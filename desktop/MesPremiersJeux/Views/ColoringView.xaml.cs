@@ -36,12 +36,18 @@ namespace MesPremiersJeux.Views
             Loaded += (s, e) => DrawPage();
         }
 
+        // Palette réduite : moins de couleurs mais grandes = plus simple à viser au regard.
+        private static readonly string[] SimpleIds =
+            { "rouge", "orange", "jaune", "vert", "bleu", "violet", "rose", "noir", "g-arc", "m-etoiles" };
+
         // --- Construction de l'interface ---
         private void BuildPalette()
         {
-            for (int i = 0; i < Palette.All.Count; i++)
+            bool first = true;
+            foreach (var id in SimpleIds)
             {
-                var swatch = Palette.All[i];
+                var swatch = Palette.All.Find(s => s.Id == id);
+                if (swatch == null) continue;
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["SwatchButton"],
@@ -51,7 +57,7 @@ namespace MesPremiersJeux.Views
                 };
                 btn.Click += (s, e) => SelectSwatch(swatch, btn);
                 PaletteHost.Children.Add(btn);
-                if (i == 0) btn.BorderThickness = new Thickness(4);
+                if (first) { btn.BorderThickness = new Thickness(4); _spec = swatch; first = false; }
             }
         }
 

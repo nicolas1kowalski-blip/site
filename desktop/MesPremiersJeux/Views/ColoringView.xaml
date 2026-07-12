@@ -10,7 +10,7 @@
 
         <!-- Palette (gauche) -->
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="12">
-            <UniformGrid x:Name="PaletteHost" Columns="3" Width="216" />
+            <UniformGrid x:Name="PaletteHost" Columns="2" Width="242" />
         </ScrollViewer>
 
         <!-- Grand dessin (centre) -->
