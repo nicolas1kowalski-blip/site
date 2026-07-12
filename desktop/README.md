@@ -30,8 +30,10 @@ le regard dans une cellule web.
   un bouton **« ⬅ Menu »** ramène au choix. Cibles agrandies pour le pilotage au
   regard. Félicitations en confettis, voix française. Au regard (dwell) ou à la souris.
 
-Les onglets Histoires / Musique — et les jeux restants (corps, puzzles) — sont à
-venir : on les ajoute un par un (le coloriage et ces jeux servent de patron).
+- **Puzzle** : une image cartoon avec un morceau manquant ; choisir la bonne pièce.
+
+Les onglets Histoires / Musique — et le jeu du corps — sont à venir : on les
+ajoute un par un (le coloriage et ces jeux servent de patron).
 
 ## Prérequis
 
