@@ -111,6 +111,12 @@ namespace MesPremiersJeux.Gaze
 
         private void OnTick(object sender, EventArgs e)
         {
+            // Ne jamais laisser une exception tuer la boucle de regard.
+            try { OnTickCore(); } catch { }
+        }
+
+        private void OnTickCore()
+        {
             if (!Enabled || _root.ActualWidth <= 0)
             {
                 HideDot();
