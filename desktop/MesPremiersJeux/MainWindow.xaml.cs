@@ -67,7 +67,9 @@ namespace MesPremiersJeux
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Start();
-            GazeStatus.Text = _gaze.IsAvailable ? "👁  Regard actif" : "🖱  Souris (aucun Tobii détecté)";
+            GazeStatus.Text = "👁  Regard actif";
+            int clicks = 0;
+            _dwell.Clicked += p => Dispatcher.Invoke(() => GazeStatus.Text = $"👁  Clics : {++clicks}");
 
             // Applique les réglages sauvegardés au contrôleur.
             _dwell.DwellTime = _settings.DwellTime;
