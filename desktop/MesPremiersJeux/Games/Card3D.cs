@@ -87,10 +87,10 @@ namespace MesPremiersJeux.Games
         private static MeshGeometry3D Quad()
         {
             var m = new MeshGeometry3D();
-            m.Positions.Add(new Point3D(-1, -1.4, 0));
-            m.Positions.Add(new Point3D(1, -1.4, 0));
-            m.Positions.Add(new Point3D(1, 1.4, 0));
-            m.Positions.Add(new Point3D(-1, 1.4, 0));
+            m.Positions.Add(new Point3D(-1.2, -1.2, 0));
+            m.Positions.Add(new Point3D(1.2, -1.2, 0));
+            m.Positions.Add(new Point3D(1.2, 1.2, 0));
+            m.Positions.Add(new Point3D(-1.2, 1.2, 0));
             m.TextureCoordinates.Add(new Point(0, 1));
             m.TextureCoordinates.Add(new Point(1, 1));
             m.TextureCoordinates.Add(new Point(1, 0));
@@ -111,21 +111,21 @@ namespace MesPremiersJeux.Games
         // avec le dessin mis à l'échelle pour occuper une grande part de la carte.
         private static BitmapSource Face(UIElement content, Color bg)
         {
-            const int w = 384, h = 536;
+            const int w = 460, h = 460;
             var root = new Grid { Width = w, Height = h };
 
             root.Children.Add(new Border
             {
                 Background = new LinearGradientBrush(Lighten(bg, 0.55), bg, 90),
-                CornerRadius = new CornerRadius(46),
+                CornerRadius = new CornerRadius(44),
                 BorderBrush = new SolidColorBrush(Darken(bg, 0.28)),
-                BorderThickness = new Thickness(12),
+                BorderThickness = new Thickness(10),
             });
             root.Children.Add(new Border
             {
-                Margin = new Thickness(26),
-                Background = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
-                CornerRadius = new CornerRadius(34),
+                Margin = new Thickness(20),
+                Background = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
+                CornerRadius = new CornerRadius(32),
             });
 
             void Sparkle(double x, double y, double r, byte a)

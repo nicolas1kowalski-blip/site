@@ -64,7 +64,7 @@ namespace MesPremiersJeux
         {
             _settings = Settings.Load();
 
-            _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress);
+            _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Start();
             GazeStatus.Text = _gaze.IsAvailable ? "👁  Regard actif" : "🖱  Souris (aucun Tobii détecté)";
@@ -79,9 +79,10 @@ namespace MesPremiersJeux
             SmoothSlider.Value = _settings.Smoothing * 100;
             CircleSlider.Value = _settings.CircleSize;
 
-            // Si un tracker SDK est présent, le regard pilote d'emblée ; sinon on
-            // laisse le parent l'activer (mode curseur pour la TD I-13).
-            GazeModeCheck.IsChecked = _gaze.IsAvailable;
+            // Le pilotage au regard est actif par défaut. Sans SDK (TD I-13), on
+            // suit le curseur déplacé par le regard, ce qui rend l'appli utilisable
+            // d'emblée sans devoir ouvrir les réglages.
+            GazeModeCheck.IsChecked = true;
             ApplyGazeMode();
         }
 

@@ -58,12 +58,16 @@ namespace MesPremiersJeux.Gaze
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT { public int X; public int Y; }
 
-        public DwellController(FrameworkElement root, FrameworkElement indicator, Path progress)
+        private readonly FrameworkElement _dot; // point de regard toujours visible
+
+        public DwellController(FrameworkElement root, FrameworkElement indicator, Path progress, FrameworkElement dot)
         {
             _root = root;
             _indicator = indicator;
             _progress = progress;
+            _dot = dot;
             _indicator.Visibility = Visibility.Collapsed;
+            if (_dot != null) _dot.Visibility = Visibility.Collapsed;
 
             _tick = new DispatcherTimer(DispatcherPriority.Input)
             {
@@ -101,8 +105,9 @@ namespace MesPremiersJeux.Gaze
 
         private void OnTick(object sender, EventArgs e)
         {
-            if (!Enabled || Locked || _root.ActualWidth <= 0)
+            if (!Enabled || _root.ActualWidth <= 0)
             {
+                HideDot();
                 Cancel();
                 return;
             }
@@ -111,12 +116,12 @@ namespace MesPremiersJeux.Gaze
             Point raw;
             if (UseCursor)
             {
-                if (!GetCursorPos(out var cp)) { Cancel(); return; }
+                if (!GetCursorPos(out var cp)) { HideDot(); Cancel(); return; }
                 raw = new Point(cp.X, cp.Y);
             }
             else
             {
-                if (!_hasGaze) { Cancel(); return; }
+                if (!_hasGaze) { HideDot(); Cancel(); return; }
                 raw = new Point(_gx, _gy);
             }
 
@@ -127,7 +132,12 @@ namespace MesPremiersJeux.Gaze
 
             Point local;
             try { local = _root.PointFromScreen(screen); }
-            catch { Cancel(); return; }
+            catch { HideDot(); Cancel(); return; }
+
+            // Point de regard toujours visible (l'enfant voit où il regarde).
+            PlaceDot(local);
+
+            if (Locked) { Cancel(); return; }
 
             // 3) Cible sous le regard, avec tolérance aux brèves pertes.
             var target = FindTarget(local);
@@ -150,6 +160,19 @@ namespace MesPremiersJeux.Gaze
             UpdateProgress(frac);
 
             if (frac >= 1.0) Commit();
+        }
+
+        private void PlaceDot(Point local)
+        {
+            if (_dot == null) return;
+            Canvas.SetLeft(_dot, local.X - _dot.Width / 2);
+            Canvas.SetTop(_dot, local.Y - _dot.Height / 2);
+            if (_dot.Visibility != Visibility.Visible) _dot.Visibility = Visibility.Visible;
+        }
+
+        private void HideDot()
+        {
+            if (_dot != null && _dot.Visibility != Visibility.Collapsed) _dot.Visibility = Visibility.Collapsed;
         }
 
         private double MoveThreshold(object target)

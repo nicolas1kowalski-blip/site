@@ -45,8 +45,8 @@ namespace MesPremiersJeux.Games
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["BalloonButton"],
-                    Width = 360,
-                    Height = 470,
+                    Width = 440,
+                    Height = 440,
                     Margin = new Thickness(6),
                     Content = card.Viewport,
                 };
