@@ -31,6 +31,11 @@ le regard dans une cellule web.
   regard. Félicitations en confettis, voix française. Au regard (dwell) ou à la souris.
 
 - **Puzzle** : une image cartoon avec un morceau manquant ; choisir la bonne pièce.
+- **Onglet 🎓 Éducatif (maternelle PS/MS)** : **Les lettres** (reconnaître la
+  lettre nommée, « A comme avion ! »), **Les nombres** (dénombrer 1 à 5 et
+  choisir le chiffre), **Grand ou petit** (contraires), **Les suites**
+  (algorithmes A-B-A-B, MS) et **L'imagier** (vocabulaire : « Trouve le
+  chat ! »). Tout au regard, avec voix et confettis.
 
 Les onglets Histoires / Musique — et le jeu du corps — sont à venir : on les
 ajoute un par un (le coloriage et ces jeux servent de patron).

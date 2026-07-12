@@ -8,7 +8,13 @@ using System.Windows.Shapes;
 
 namespace MesPremiersJeux.Games
 {
-    public sealed class CartoonItem { public string Name; public string Cat; public Func<UIElement> Build; }
+    public sealed class CartoonItem
+    {
+        public string Name;             // identifiant (sans accents)
+        public string Fr;               // nom français parlé (« le chat »)
+        public string Cat;              // catégorie (familles)
+        public Func<UIElement> Build;   // fabrique le dessin
+    }
 
     /// <summary>
     /// Petits personnages « cartoon » dessinés en vectoriel (formes + visages
@@ -286,22 +292,22 @@ namespace MesPremiersJeux.Games
 
         public static readonly List<CartoonItem> Items = new List<CartoonItem>
         {
-            new CartoonItem { Name = "chat",      Cat = "les animaux", Build = Cat },
-            new CartoonItem { Name = "cochon",    Cat = "les animaux", Build = Pig },
-            new CartoonItem { Name = "chien",     Cat = "les animaux", Build = Dog },
-            new CartoonItem { Name = "lapin",     Cat = "les animaux", Build = Rabbit },
-            new CartoonItem { Name = "oiseau",    Cat = "les animaux", Build = Bird },
-            new CartoonItem { Name = "poisson",   Cat = "les animaux", Build = Fish },
-            new CartoonItem { Name = "papillon",  Cat = "les animaux", Build = Butterfly },
-            new CartoonItem { Name = "licorne",   Cat = "la magie",    Build = Unicorn },
-            new CartoonItem { Name = "princesse", Cat = "la magie",    Build = Princess },
-            new CartoonItem { Name = "etoile",    Cat = "la magie",    Build = Star },
-            new CartoonItem { Name = "coeur",     Cat = "la magie",    Build = Heart },
-            new CartoonItem { Name = "fleur",     Cat = "la magie",    Build = Flower },
-            new CartoonItem { Name = "couronne",  Cat = "la magie",    Build = Crown },
-            new CartoonItem { Name = "arcenciel", Cat = "la magie",    Build = Rainbow },
-            new CartoonItem { Name = "soleil",    Cat = "la magie",    Build = Sun },
-            new CartoonItem { Name = "nuage",     Cat = "la magie",    Build = Cloud },
+            new CartoonItem { Name = "chat",      Fr = "le chat",        Cat = "les animaux", Build = Cat },
+            new CartoonItem { Name = "cochon",    Fr = "le cochon",      Cat = "les animaux", Build = Pig },
+            new CartoonItem { Name = "chien",     Fr = "le chien",       Cat = "les animaux", Build = Dog },
+            new CartoonItem { Name = "lapin",     Fr = "le lapin",       Cat = "les animaux", Build = Rabbit },
+            new CartoonItem { Name = "oiseau",    Fr = "l'oiseau",       Cat = "les animaux", Build = Bird },
+            new CartoonItem { Name = "poisson",   Fr = "le poisson",     Cat = "les animaux", Build = Fish },
+            new CartoonItem { Name = "papillon",  Fr = "le papillon",    Cat = "les animaux", Build = Butterfly },
+            new CartoonItem { Name = "licorne",   Fr = "la licorne",     Cat = "la magie",    Build = Unicorn },
+            new CartoonItem { Name = "princesse", Fr = "la princesse",   Cat = "la magie",    Build = Princess },
+            new CartoonItem { Name = "etoile",    Fr = "l'étoile",       Cat = "la magie",    Build = Star },
+            new CartoonItem { Name = "coeur",     Fr = "le cœur",        Cat = "la magie",    Build = Heart },
+            new CartoonItem { Name = "fleur",     Fr = "la fleur",       Cat = "la magie",    Build = Flower },
+            new CartoonItem { Name = "couronne",  Fr = "la couronne",    Cat = "la magie",    Build = Crown },
+            new CartoonItem { Name = "arcenciel", Fr = "l'arc-en-ciel",  Cat = "la magie",    Build = Rainbow },
+            new CartoonItem { Name = "soleil",    Fr = "le soleil",      Cat = "la magie",    Build = Sun },
+            new CartoonItem { Name = "nuage",     Fr = "le nuage",       Cat = "la magie",    Build = Cloud },
         };
     }
 }

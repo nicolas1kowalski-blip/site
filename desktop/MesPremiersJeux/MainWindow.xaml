@@ -33,6 +33,11 @@
                                 <TextBlock Text="🎮  " FontSize="24" /><TextBlock Text="Jeux" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
+                        <Button x:Name="TabEdu" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="edu">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🎓  " FontSize="24" /><TextBlock Text="Éducatif" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="TabColoring" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="coloring">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="🎨  " FontSize="24" /><TextBlock Text="Coloriage" VerticalAlignment="Center" />

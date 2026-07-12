@@ -40,6 +40,7 @@ namespace MesPremiersJeux
 
             _views["stories"] = new StoriesView();
             _views["games"] = new GamesView();
+            _views["edu"] = new EducationView();
             _views["coloring"] = coloring;
             _views["music"] = Placeholder("🎵", "Musique", "Bientôt : les comptines.");
 
