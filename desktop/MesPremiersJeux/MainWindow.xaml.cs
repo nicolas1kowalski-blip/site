@@ -89,8 +89,9 @@ namespace MesPremiersJeux
         private void ApplySmoothing(double s)
         {
             // s ∈ [0,1] : 0 = réactif (peu de lissage), 1 = très stable (fort lissage).
-            double minCutoff = 3.0 - s * 2.75; // 3.0 → 0.25
-            double beta = 0.05 - s * 0.042;    // 0.05 → 0.008
+            // Plage plus réactive qu'avant pour éviter que le point « traîne ».
+            double minCutoff = 4.5 - s * 3.5; // 4.5 (réactif) → 1.0 (lissé)
+            double beta = 0.02 + (1 - s) * 0.05;
             _dwell.SetSmoothing(minCutoff, beta);
         }
 

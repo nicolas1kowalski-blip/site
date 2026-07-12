@@ -43,7 +43,7 @@ namespace MesPremiersJeux.Gaze
         private int _missTicks;       // images consécutives sans cible
 
         // Tolérances.
-        private const int GraceTicks = 5;         // ~165 ms de perte tolérée
+        private const int GraceTicks = 12;        // ~360 ms de perte tolérée (plus indulgent)
         private const double IndicatorR = 37;     // rayon de l'arc de progression
 
         public bool Enabled { get; set; } = true;
@@ -318,27 +318,19 @@ namespace MesPremiersJeux.Gaze
             _progress.Data = geo;
         }
 
-        // --- « Prend vie » : la cible grossit et frémit ---
+        // --- « Prend vie » : la cible grossit doucement ---
+        // (Pas de rotation/frémissement : cela déplacerait la cible sous le regard
+        //  et pourrait ré-initialiser le dwell. On garde un simple agrandissement.)
         private void BeginAlive(FrameworkElement fe)
         {
             _aliveElement = fe;
             fe.RenderTransformOrigin = new Point(0.5, 0.5);
             var scale = new ScaleTransform(1, 1);
-            var rot = new RotateTransform(0);
-            fe.RenderTransform = new TransformGroup { Children = { scale, rot } };
+            fe.RenderTransform = scale;
 
-            var dur = TimeSpan.FromMilliseconds(DwellTime);
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, 1.14, dur));
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, 1.14, dur));
-
-            var wobble = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
-            wobble.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-            wobble.KeyFrames.Add(new LinearDoubleKeyFrame(-3.5, KeyTime.FromPercent(0.25)));
-            wobble.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0.5)));
-            wobble.KeyFrames.Add(new LinearDoubleKeyFrame(3.5, KeyTime.FromPercent(0.75)));
-            wobble.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-            wobble.Duration = TimeSpan.FromMilliseconds(260);
-            rot.BeginAnimation(RotateTransform.AngleProperty, wobble);
+            var dur = TimeSpan.FromMilliseconds(Math.Min(DwellTime, 500));
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, 1.1, dur));
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, 1.1, dur));
         }
 
         private void StopAlive()
