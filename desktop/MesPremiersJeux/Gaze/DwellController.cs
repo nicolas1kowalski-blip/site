@@ -45,8 +45,8 @@ namespace MesPremiersJeux.Gaze
         private bool _needRearm;          // après un clic, il faut sortir de la zone avant de recliquer
         private Point _rearmPoint;
 
-        // Tolérances.
-        private const double HoldRadius = 80;     // px : tant qu'on reste dans ce rayon, le dwell continue
+        // Tolérances (généreuses : enfants en situation de handicap).
+        private const double HoldRadius = 160;    // px : tant qu'on reste dans ce rayon, le dwell continue
         private const double IndicatorR = 37;     // rayon de l'arc de progression
 
         public bool Enabled { get; set; } = true;
@@ -254,13 +254,16 @@ namespace MesPremiersJeux.Gaze
         private static readonly Point[] SnapOffsets = BuildSnap();
         private static Point[] BuildSnap()
         {
-            var arr = new Point[24];
+            // Anneaux croissants (12 directions) : le premier bouton trouvé est le
+            // plus proche. Rayon large pour combler les espaces entre cibles.
+            var radii = new[] { 40.0, 75.0, 110.0, 150.0 };
+            var arr = new Point[radii.Length * 12];
             int i = 0;
-            foreach (var r in new[] { 30.0, 55.0, 80.0 })
-                for (int a = 0; a < 8; a++)
+            for (int ri = 0; ri < radii.Length; ri++)
+                for (int a = 0; a < 12; a++)
                 {
-                    double ang = Math.PI * 2 * a / 8 + (r > 40 ? Math.PI / 8 : 0);
-                    arr[i++] = new Point(Math.Cos(ang) * r, Math.Sin(ang) * r);
+                    double ang = Math.PI * 2 * a / 12 + (ri % 2 == 1 ? Math.PI / 12 : 0);
+                    arr[i++] = new Point(Math.Cos(ang) * radii[ri], Math.Sin(ang) * radii[ri]);
                 }
             return arr;
         }
