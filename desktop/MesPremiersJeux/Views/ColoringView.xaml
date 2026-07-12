@@ -24,6 +24,8 @@
         </Viewbox>
 
         <!-- Outils (droite) -->
-        <StackPanel Grid.Column="2" x:Name="ToolsHost" Width="132" Margin="8,12" />
+        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="ToolsHost" Width="132" Margin="8,12" />
+        </ScrollViewer>
     </Grid>
 </UserControl>

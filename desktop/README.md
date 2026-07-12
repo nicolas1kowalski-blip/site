@@ -35,6 +35,21 @@ le regard dans une cellule web.
 Les onglets Histoires / Musique — et le jeu du corps — sont à venir : on les
 ajoute un par un (le coloriage et ces jeux servent de patron).
 
+## Ajouter ses propres livres et coloriages
+
+Au premier lancement, l'application crée le dossier
+**`Documents\MesPremiersJeux`** (avec un fichier `LISEZ-MOI.txt`) :
+
+- **`Coloriages\`** — déposez-y des **images au trait** (PNG/JPG, contours noirs
+  sur fond blanc). Elles apparaissent dans l'onglet Coloriage au prochain
+  lancement. N'importe quel coloriage à imprimer trouvé sur internet convient.
+- **`Histoires\`** — créez **un dossier par livre** (son nom = le titre) :
+  - `histoire.txt` : **une ligne de texte par page** ;
+  - `1.png`, `2.png`, `3.png`… : l'image de la page 1, 2, 3…
+
+L'onglet Histoires devient une **bibliothèque** : l'histoire intégrée + vos
+livres, lus **au regard** (groupe de mots surligné → fixé → lu → suivant).
+
 ## Prérequis
 
 - **Windows 10/11**

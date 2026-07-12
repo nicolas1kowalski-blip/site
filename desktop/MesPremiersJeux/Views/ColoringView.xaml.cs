@@ -19,6 +19,16 @@ namespace MesPremiersJeux.Views
     {
         private const int Size = 800;
 
+        // Une page à colorier : dessin intégré OU image au trait ajoutée par le parent.
+        private sealed class PageEntry
+        {
+            public string Name;
+            public Coloring BuiltIn;   // dessin vectoriel intégré
+            public string ImagePath;   // image personnalisée (Documents\MesPremiersJeux\Coloriages)
+        }
+
+        private readonly List<PageEntry> _pages = new List<PageEntry>();
+
         private WriteableBitmap _bmp;
         private byte[] _pixels;
         private Swatch _spec = Palette.All[0];
@@ -31,6 +41,13 @@ namespace MesPremiersJeux.Views
         public ColoringView()
         {
             InitializeComponent();
+            UserContent.EnsureFolders();
+
+            foreach (var c in Colorings.All)
+                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
+            foreach (var u in UserContent.LoadColorings())
+                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
+
             BuildPalette();
             BuildTools();
             Loaded += (s, e) => DrawPage();
@@ -63,10 +80,10 @@ namespace MesPremiersJeux.Views
 
         private void BuildTools()
         {
-            for (int i = 0; i < Colorings.All.Count; i++)
+            for (int i = 0; i < _pages.Count; i++)
             {
                 int idx = i;
-                var page = Colorings.All[i];
+                var page = _pages[i];
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["PageButton"],
@@ -101,17 +118,34 @@ namespace MesPremiersJeux.Views
                 if (child is Button b && b.Content is Image) b.BorderThickness = new Thickness(ReferenceEquals(b, btn) ? 4 : 0);
         }
 
-        // --- Rendu du dessin ---
-        private static RenderTargetBitmap RenderDrawing(Coloring page, int size)
+        // --- Rendu du dessin (intégré ou image personnalisée) ---
+        private static RenderTargetBitmap RenderDrawing(PageEntry page, int size)
         {
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
             {
                 dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, size, size));
-                double scale = size / 100.0;
-                dc.PushTransform(new ScaleTransform(scale, scale));
-                page.Draw(dc);
-                dc.Pop();
+                if (page.BuiltIn != null)
+                {
+                    double scale = size / 100.0;
+                    dc.PushTransform(new ScaleTransform(scale, scale));
+                    page.BuiltIn.Draw(dc);
+                    dc.Pop();
+                }
+                else if (page.ImagePath != null)
+                {
+                    try
+                    {
+                        var img = UserContent.LoadBitmap(page.ImagePath);
+                        // Ajustement uniforme, centré, avec une petite marge blanche.
+                        double m = size * 0.03;
+                        double avail = size - 2 * m;
+                        double k = Math.Min(avail / img.PixelWidth, avail / img.PixelHeight);
+                        double w = img.PixelWidth * k, h = img.PixelHeight * k;
+                        dc.DrawImage(img, new Rect((size - w) / 2, (size - h) / 2, w, h));
+                    }
+                    catch { /* image illisible : page blanche */ }
+                }
             }
             var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             rtb.Render(dv);
@@ -120,7 +154,7 @@ namespace MesPremiersJeux.Views
 
         private void DrawPage()
         {
-            var rtb = RenderDrawing(Colorings.All[_pageIdx], Size);
+            var rtb = RenderDrawing(_pages[_pageIdx], Size);
             _pixels = new byte[Size * Size * 4];
             rtb.CopyPixels(_pixels, Size * 4, 0);
             _bmp = new WriteableBitmap(Size, Size, 96, 96, PixelFormats.Pbgra32, null);

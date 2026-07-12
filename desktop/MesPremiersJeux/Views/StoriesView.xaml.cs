@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using MesPremiersJeux.Games;
@@ -11,12 +11,10 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Views
 {
     /// <summary>
-    /// Onglet Histoires : l'enfant lit l'histoire AU REGARD, groupe de mots par
-    /// groupe de mots. Le groupe courant est mis en évidence ; quand l'enfant le
-    /// fixe (le dwell clique dessus), il est lu à voix haute et passe en gris,
-    /// puis le groupe suivant s'allume. Les petits mots (articles, pronoms…) et
-    /// la ponctuation sont regroupés avec le mot voisin pour ne pas hacher la
-    /// lecture.
+    /// Onglet Histoires : bibliothèque de livres (histoire intégrée + livres
+    /// ajoutés par le parent dans Documents\MesPremiersJeux\Histoires), puis
+    /// lecture AU REGARD groupe de mots par groupe de mots : le groupe courant est
+    /// surligné ; le fixer le lit à voix haute, le grise et allume le suivant.
     /// </summary>
     public sealed class StoriesView : UserControl
     {
@@ -35,35 +33,56 @@ namespace MesPremiersJeux.Views
             "tout", "toute", "tous", "très",
         };
 
-        private readonly (string Text, string Art)[] _pages =
+        // --- Modèle de livre (intégré ou personnalisé) ---
+        private sealed class Book
         {
-            ("Voici Étincelle, une petite licorne toute rose.", "licorne"),
-            ("Un matin, elle saute par-dessus un grand arc-en-ciel !", "arcenciel"),
-            ("Elle rencontre Minou, un chat très rigolo.", "chat"),
-            ("Ensemble, ils cueillent de jolies fleurs.", "fleur"),
-            ("Un papillon vient danser avec eux.", "papillon"),
-            ("Le soir, ils font un vœu sur une étoile. Bonne nuit !", "etoile"),
-        };
+            public string Title;
+            public List<(string Text, Func<UIElement> Illus)> Pages = new List<(string, Func<UIElement>)>();
+        }
 
+        private readonly List<Book> _books = new List<Book>();
+
+        // --- Interface ---
+        private readonly Grid _menuRoot;
+        private readonly UniformGrid _menu;
+        private readonly Grid _readerRoot;
+        private readonly TextBlock _title;
         private readonly ContentControl _illus;
         private readonly WrapPanel _wordHost;
         private readonly TextBlock _pageInfo;
         private readonly List<TextBlock> _groups = new List<TextBlock>();
+        private Book _book;
         private int _index;
         private int _readIndex;
 
         public StoriesView()
         {
+            UserContent.EnsureFolders();
+            BuildBooks();
+
             var root = new Grid();
             root.Background = new LinearGradientBrush(
                 Color.FromRgb(0xFF, 0xF3, 0xFB), Color.FromRgb(0xE9, 0xF2, 0xFF), 90);
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var title = new TextBlock
+            // --- Bibliothèque (choix du livre) ---
+            _menuRoot = new Grid();
+            _menu = new UniformGrid
             {
-                Text = "✨ Étincelle la licorne ✨",
+                Columns = 3,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            _menuRoot.Children.Add(_menu);
+            root.Children.Add(_menuRoot);
+
+            // --- Lecteur ---
+            _readerRoot = new Grid { Visibility = Visibility.Collapsed };
+            _readerRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            _readerRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _readerRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            _title = new TextBlock
+            {
                 FontSize = 30,
                 FontWeight = FontWeights.Bold,
                 Foreground = Violet,
@@ -82,9 +101,22 @@ namespace MesPremiersJeux.Views
             card.Child = _illus;
             var illusHost = new Grid();
             illusHost.Children.Add(card);
-            illusHost.Children.Add(title);
+            illusHost.Children.Add(_title);
+
+            // Bouton retour bibliothèque.
+            var backBtn = new Button
+            {
+                Style = (Style)Application.Current.Resources["BackButton"],
+                Content = "📚  Livres",
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(16),
+            };
+            backBtn.Click += (s, e) => ShowMenu();
+            illusHost.Children.Add(backBtn);
+
             Grid.SetRow(illusHost, 0);
-            root.Children.Add(illusHost);
+            _readerRoot.Children.Add(illusHost);
 
             _wordHost = new WrapPanel
             {
@@ -93,7 +125,7 @@ namespace MesPremiersJeux.Views
                 Margin = new Thickness(24, 8, 24, 8),
             };
             Grid.SetRow(_wordHost, 1);
-            root.Children.Add(_wordHost);
+            _readerRoot.Children.Add(_wordHost);
 
             var nav = new StackPanel
             {
@@ -101,8 +133,8 @@ namespace MesPremiersJeux.Views
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 4, 0, 18),
             };
-            nav.Children.Add(NavButton("⬅", () => Show(_index - 1)));
-            nav.Children.Add(NavButton("🔁", () => Show(_index)));
+            nav.Children.Add(NavButton("⬅", () => ShowPage(_index - 1)));
+            nav.Children.Add(NavButton("🔁", () => ShowPage(_index)));
             _pageInfo = new TextBlock
             {
                 FontSize = 24,
@@ -111,12 +143,108 @@ namespace MesPremiersJeux.Views
                 Margin = new Thickness(24, 0, 24, 0),
             };
             nav.Children.Add(_pageInfo);
-            nav.Children.Add(NavButton("➡", () => Show(_index + 1)));
+            nav.Children.Add(NavButton("➡", () => ShowPage(_index + 1)));
             Grid.SetRow(nav, 2);
-            root.Children.Add(nav);
+            _readerRoot.Children.Add(nav);
 
+            root.Children.Add(_readerRoot);
             Content = root;
-            Loaded += (s, e) => { if (_groups.Count == 0) Show(0); };
+
+            BuildMenu();
+        }
+
+        // --- Bibliothèque ---
+        private void BuildBooks()
+        {
+            var builtIn = new Book { Title = "Étincelle la licorne" };
+            foreach (var (text, art) in new[]
+            {
+                ("Voici Étincelle, une petite licorne toute rose.", "licorne"),
+                ("Un matin, elle saute par-dessus un grand arc-en-ciel !", "arcenciel"),
+                ("Elle rencontre Minou, un chat très rigolo.", "chat"),
+                ("Ensemble, ils cueillent de jolies fleurs.", "fleur"),
+                ("Un papillon vient danser avec eux.", "papillon"),
+                ("Le soir, ils font un vœu sur une étoile. Bonne nuit !", "etoile"),
+            })
+            {
+                var a = art;
+                builtIn.Pages.Add((text, () => CartoonArt.Draw(a)));
+            }
+            _books.Add(builtIn);
+
+            // Livres du parent (Documents\MesPremiersJeux\Histoires).
+            foreach (var s in UserContent.LoadStories())
+            {
+                var book = new Book { Title = s.Title };
+                foreach (var p in s.Pages)
+                {
+                    var path = p.ImagePath;
+                    book.Pages.Add((p.Text, () => MakeUserIllustration(path)));
+                }
+                _books.Add(book);
+            }
+        }
+
+        private static UIElement MakeUserIllustration(string path)
+        {
+            if (path == null)
+                return new TextBlock { Text = "📖", FontSize = 160, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            try
+            {
+                return new Image { Source = UserContent.LoadBitmap(path), Stretch = Stretch.Uniform };
+            }
+            catch
+            {
+                return new TextBlock { Text = "🖼️", FontSize = 160 };
+            }
+        }
+
+        private void BuildMenu()
+        {
+            _menu.Children.Clear();
+            foreach (var b in _books)
+            {
+                var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                var preview = new ContentControl
+                {
+                    Content = b.Pages.Count > 0 ? b.Pages[0].Illus() : null,
+                    Width = 150,
+                    Height = 130,
+                };
+                content.Children.Add(preview);
+                content.Children.Add(new TextBlock
+                {
+                    Text = b.Title,
+                    FontSize = 24,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Dark,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    MaxWidth = 220,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
+
+                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
+                var book = b;
+                tile.Click += (s, e) => OpenBook(book);
+                _menu.Children.Add(tile);
+            }
+        }
+
+        private void ShowMenu()
+        {
+            _readerRoot.Visibility = Visibility.Collapsed;
+            _menuRoot.Visibility = Visibility.Visible;
+        }
+
+        private void OpenBook(Book book)
+        {
+            _book = book;
+            _title.Text = "✨ " + book.Title + " ✨";
+            _menuRoot.Visibility = Visibility.Collapsed;
+            _readerRoot.Visibility = Visibility.Visible;
+            ShowPage(0);
         }
 
         private Button NavButton(string glyph, Action onClick)
@@ -134,8 +262,7 @@ namespace MesPremiersJeux.Views
             return btn;
         }
 
-        // Découpe une phrase en groupes de lecture : les petits mots et la
-        // ponctuation sont rattachés au mot voisin.
+        // --- Lecture au regard ---
         private static List<string> SplitGroups(string text)
         {
             var groups = new List<string>();
@@ -160,12 +287,13 @@ namespace MesPremiersJeux.Views
             return groups;
         }
 
-        private void Show(int i)
+        private void ShowPage(int i)
         {
-            int n = _pages.Length;
+            if (_book == null || _book.Pages.Count == 0) return;
+            int n = _book.Pages.Count;
             _index = ((i % n) + n) % n;
-            var page = _pages[_index];
-            _illus.Content = new Viewbox { Child = CartoonArt.Draw(page.Art), Stretch = Stretch.Uniform };
+            var page = _book.Pages[_index];
+            _illus.Content = new Viewbox { Child = page.Illus(), Stretch = Stretch.Uniform };
             _pageInfo.Text = $"{_index + 1} / {n}";
 
             _wordHost.Children.Clear();
