@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -245,18 +246,39 @@ namespace MesPremiersJeux.Gaze
         private object FindTarget(Point local)
         {
             DependencyObject hit = null;
-            VisualTreeHelper.HitTest(
-                _root, null,
-                r => { hit = r.VisualHit; return HitTestResultBehavior.Stop; },
-                new PointHitTestParameters(local));
+            try
+            {
+                VisualTreeHelper.HitTest(
+                    _root, null,
+                    r => { hit = r.VisualHit; return HitTestResultBehavior.Stop; },
+                    new PointHitTestParameters(local));
+            }
+            catch { return null; }
 
             var d = hit;
-            while (d != null)
+            int guard = 0;
+            while (d != null && guard++ < 300)
             {
                 if (d is IGazeSurface || d is ButtonBase) return d;
-                d = VisualTreeHelper.GetParent(d) ?? (d as FrameworkElement)?.Parent;
+                d = SafeParent(d);
             }
             return null;
+        }
+
+        // Remonte l'arbre sans jamais lever d'exception (VisualTreeHelper.GetParent
+        // lève pour un ContentElement ; on gère alors le parent logique).
+        private static DependencyObject SafeParent(DependencyObject d)
+        {
+            if (d is Visual || d is Visual3D)
+            {
+                try
+                {
+                    var p = VisualTreeHelper.GetParent(d);
+                    if (p != null) return p;
+                }
+                catch { }
+            }
+            return (d as FrameworkElement)?.Parent ?? (d as FrameworkContentElement)?.Parent;
         }
 
         private static double Distance(Point a, Point b)
