@@ -377,8 +377,21 @@ namespace MesPremiersJeux.Gaze
 
         private static void InvokeButton(ButtonBase btn)
         {
-            // Nos boutons réagissent à l'événement routé Click ; le lever suffit
-            // (pas de dépendance UIAutomation).
+            // Clic canonique via UI Automation (même mécanisme que les outils
+            // d'accessibilité) ; repli sur l'événement routé Click.
+            try
+            {
+                var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(btn)
+                           ?? System.Windows.Automation.Peers.UIElementAutomationPeer.FromElement(btn);
+                if (peer?.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)
+                        is System.Windows.Automation.Provider.IInvokeProvider invoke)
+                {
+                    invoke.Invoke();
+                    return;
+                }
+            }
+            catch { /* repli ci-dessous */ }
+
             btn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, btn));
             if (btn.Command != null && btn.Command.CanExecute(btn.CommandParameter))
                 btn.Command.Execute(btn.CommandParameter);

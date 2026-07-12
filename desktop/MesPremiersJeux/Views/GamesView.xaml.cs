@@ -65,7 +65,7 @@ namespace MesPremiersJeux.Views
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Play error: " + ex);
+                MessageBox.Show("Impossible d'ouvrir ce jeu :\n" + ex.Message, "Mes Premiers Jeux");
             }
         }
 
