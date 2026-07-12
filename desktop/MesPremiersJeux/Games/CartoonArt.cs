@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -58,6 +59,9 @@ namespace MesPremiersJeux.Games
         }
 
         private static UIElement Wrap(Canvas c) => new Viewbox { Child = c, Stretch = Stretch.Uniform };
+
+        /// <summary>Construit un dessin par son nom (pour les histoires).</summary>
+        public static UIElement Draw(string name) => Items.First(i => i.Name == name).Build();
         private static Canvas New() => new Canvas { Width = 100, Height = 100 };
 
         // --- Personnages ---

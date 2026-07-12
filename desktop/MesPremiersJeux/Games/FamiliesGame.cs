@@ -37,7 +37,7 @@ namespace MesPremiersJeux.Games
 
             Question.Text = $"Regarde tous {targetCat} !";
 
-            var grid = new UniformGrid { Rows = 1 }; // une seule rangée = cartes maximales
+            var grid = new UniformGrid { Columns = 3 }; // 2 lignes de 3, grandes cartes
             foreach (var entry in items)
             {
                 var card = new Card3D(entry.item.Build(), entry.item.Name);

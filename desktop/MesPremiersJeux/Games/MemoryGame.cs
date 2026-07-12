@@ -37,7 +37,7 @@ namespace MesPremiersJeux.Games
 
             Question.Text = "Trouve les paires !";
 
-            var grid = new UniformGrid { Rows = 1 }; // une seule rangée = cartes maximales
+            var grid = new UniformGrid { Columns = 3 }; // 2 lignes de 3, grandes cartes
             for (int i = 0; i < _deck.Length; i++)
             {
                 var card = new Card3D(_deck[i].Build(), _deck[i].Name);

@@ -38,7 +38,7 @@ namespace MesPremiersJeux
             var coloring = new ColoringView();
             coloring.ToggleFullscreenRequested += (s, e) => ToggleFullscreen();
 
-            _views["stories"] = Placeholder("📖", "Histoires", "Bientôt : les livres et le lecteur au regard.");
+            _views["stories"] = new StoriesView();
             _views["games"] = new GamesView();
             _views["coloring"] = coloring;
             _views["music"] = Placeholder("🎵", "Musique", "Bientôt : les comptines.");

@@ -27,7 +27,7 @@ namespace MesPremiersJeux.Games
             var row = Row();
             foreach (var s in options)
             {
-                var btn = AnswerButton(ShapeVisual(s, GameData.ShapeNeutral, 175));
+                var btn = AnswerButton(ShapeVisual(s, s.Color, 175));
                 var chosen = s;
                 btn.Click += (ev, e) => Answer(chosen, target, btn);
                 row.Children.Add(btn);

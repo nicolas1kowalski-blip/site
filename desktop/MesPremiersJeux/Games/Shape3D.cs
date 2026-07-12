@@ -148,9 +148,10 @@ namespace MesPremiersJeux.Games
             diffuse = new SolidColorBrush(color);
             var mat = new MaterialGroup();
             mat.Children.Add(new DiffuseMaterial(diffuse));
-            // Émissif = la couleur reste vive même dans l'ombre (rendu joyeux).
-            mat.Children.Add(new EmissiveMaterial(new SolidColorBrush(Dim(color, 0.28))));
-            mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)), 32));
+            // Fort émissif = couleur pleine et éclatante partout (look « bonbon »).
+            mat.Children.Add(new EmissiveMaterial(new SolidColorBrush(Dim(color, 0.55))));
+            // Reflet blanc marqué pour un rendu brillant et joyeux.
+            mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(235, 255, 255, 255)), 22));
             var model = new GeometryModel3D(mesh, mat) { BackMaterial = new DiffuseMaterial(diffuse) };
 
             // On fait tourner autour d'un axe légèrement incliné : les faces et
@@ -163,10 +164,10 @@ namespace MesPremiersJeux.Games
             model.Transform = tg;
 
             var group = new Model3DGroup();
-            // Ambiant plus faible + deux directionnelles : plus de contraste = plus de relief.
-            group.Children.Add(new AmbientLight(Color.FromRgb(0x4C, 0x4C, 0x4C)));
-            group.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-0.4, -0.7, -1)));
-            group.Children.Add(new DirectionalLight(Color.FromRgb(0x66, 0x66, 0x66), new Vector3D(0.6, 0.4, 0.3)));
+            // Ambiant clair : la couleur reste lumineuse ; une directionnelle donne
+            // le reflet et un peu de relief.
+            group.Children.Add(new AmbientLight(Color.FromRgb(0xB4, 0xB4, 0xB4)));
+            group.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-0.4, -0.6, -1)));
             group.Children.Add(model);
 
             var vp = new Viewport3D
