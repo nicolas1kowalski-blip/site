@@ -42,8 +42,7 @@ namespace MesPremiersJeux.Gaze
         private Point _dwellLocal;        // idem, en coordonnées fenêtre
         private Point _lastScreen;        // dernier point lissé
         private DateTime _dwellStart;
-        private bool _needRearm;          // après un clic, il faut sortir de la zone avant de recliquer
-        private Point _rearmPoint;
+        private double _cooldownUntil = -1; // courte pause (temps) après un clic, pas de blocage spatial
 
         // Tolérances (généreuses : enfants en situation de handicap).
         private const double HoldRadius = 160;    // px : tant qu'on reste dans ce rayon, le dwell continue
@@ -177,14 +176,11 @@ namespace MesPremiersJeux.Gaze
                 return;
             }
 
-            // Après un clic : attendre que le regard sorte de la zone avant de recliquer.
-            if (_needRearm)
-            {
-                if (Distance(screen, _rearmPoint) <= HoldRadius) { SetDotActive(false); return; }
-                _needRearm = false;
-            }
+            // Courte pause après un clic (évite les clics en rafale), sans bloquer
+            // spatialement les cibles voisines.
+            if (t < _cooldownUntil) { SetDotActive(false); return; }
 
-            // Sinon on (re)cherche une cible sous le point courant.
+            // On (re)cherche une cible sous le point courant.
             var target = FindTarget(local);
             SetDotActive(target != null);
             if (target == null) { Cancel(); return; }
@@ -233,8 +229,7 @@ namespace MesPremiersJeux.Gaze
             else
             {
                 Cancel();
-                _needRearm = true;      // éviter les clics en rafale tant qu'on fixe le même bouton
-                _rearmPoint = screen;
+                _cooldownUntil = _clock.Elapsed.TotalSeconds + 0.45; // petite pause avant le prochain clic
                 if (target is ButtonBase btn) InvokeButton(btn);
             }
         }

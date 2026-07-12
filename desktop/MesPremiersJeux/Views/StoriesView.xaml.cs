@@ -2,18 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using MesPremiersJeux.Games;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Views
 {
     /// <summary>
-    /// Onglet Histoires : une histoire illustrée. Le texte se lit MOT À MOT au
-    /// regard : le mot regardé est mis en surbrillance et lu à voix haute, et les
-    /// mots déjà lus passent en gris.
+    /// Onglet Histoires : une histoire illustrée. Le texte se lit MOT À MOT :
+    /// chaque mot est surligné et lu à voix haute, puis on avance automatiquement
+    /// au suivant ; les mots déjà lus passent en gris.
     /// </summary>
     public sealed class StoriesView : UserControl
     {
@@ -36,10 +36,15 @@ namespace MesPremiersJeux.Views
         private readonly WrapPanel _wordHost;
         private readonly TextBlock _pageInfo;
         private readonly List<TextBlock> _words = new List<TextBlock>();
+        private readonly DispatcherTimer _readTimer;
         private int _index;
+        private int _readIndex;
 
         public StoriesView()
         {
+            _readTimer = new DispatcherTimer();
+            _readTimer.Tick += (s, e) => ReadNext();
+
             var root = new Grid();
             root.Background = new LinearGradientBrush(
                 Color.FromRgb(0xFF, 0xF3, 0xFB), Color.FromRgb(0xE9, 0xF2, 0xFF), 90);
@@ -72,7 +77,6 @@ namespace MesPremiersJeux.Views
             Grid.SetRow(illusHost, 0);
             root.Children.Add(illusHost);
 
-            // Texte lu mot à mot.
             _wordHost = new WrapPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -89,6 +93,7 @@ namespace MesPremiersJeux.Views
                 Margin = new Thickness(0, 4, 0, 18),
             };
             nav.Children.Add(NavButton("⬅", () => Show(_index - 1)));
+            nav.Children.Add(NavButton("▶ Lire", StartReading));
             _pageInfo = new TextBlock
             {
                 FontSize = 24,
@@ -103,6 +108,7 @@ namespace MesPremiersJeux.Views
 
             Content = root;
             Loaded += (s, e) => Show(0);
+            Unloaded += (s, e) => _readTimer.Stop();
         }
 
         private Button NavButton(string glyph, Action onClick)
@@ -111,9 +117,9 @@ namespace MesPremiersJeux.Views
             {
                 Style = (Style)Application.Current.Resources["BackButton"],
                 Content = glyph,
-                FontSize = 46,
+                FontSize = 40,
                 Height = 100,
-                MinWidth = 140,
+                MinWidth = 150,
                 Margin = new Thickness(10, 0, 10, 0),
             };
             btn.Click += (s, e) => onClick();
@@ -130,51 +136,54 @@ namespace MesPremiersJeux.Views
 
             _wordHost.Children.Clear();
             _words.Clear();
-            var parts = page.Text.Split(' ');
-            for (int k = 0; k < parts.Length; k++)
+            foreach (var w in page.Text.Split(' '))
             {
-                var word = new TextBlock
+                _words.Add(new TextBlock
                 {
-                    Text = parts[k],
-                    FontSize = 50,
+                    Text = w,
+                    FontSize = 52,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = Dark,
-                    Background = Brushes.Transparent, // toute la zone est « regardable »
                     Padding = new Thickness(10, 4, 10, 4),
                     Margin = new Thickness(4, 6, 4, 6),
-                };
-                int idx = k;
-                word.MouseEnter += (s, e) => ReadWord(idx);
-                _words.Add(word);
-                _wordHost.Children.Add(word);
+                });
             }
+            foreach (var t in _words) _wordHost.Children.Add(t);
+
+            StartReading();
         }
 
-        // Le mot regardé est surligné et lu ; les mots précédents passent en gris.
-        private void ReadWord(int idx)
+        // Lance (ou relance) la lecture mot à mot depuis le début.
+        private void StartReading()
         {
+            _readTimer.Stop();
+            _readIndex = -1;
+            ReadNext();
+        }
+
+        private void ReadNext()
+        {
+            _readTimer.Stop();
+            _readIndex++;
+            if (_readIndex >= _words.Count)
+            {
+                // Fin : tous les mots en gris (lus).
+                foreach (var w in _words) { w.Foreground = Read; w.Background = null; w.FontWeight = FontWeights.SemiBold; }
+                return;
+            }
+
             for (int k = 0; k < _words.Count; k++)
             {
-                if (k < idx)
-                {
-                    _words[k].Foreground = Read;
-                    _words[k].Background = Brushes.Transparent;
-                    _words[k].FontWeight = FontWeights.SemiBold;
-                }
-                else if (k == idx)
-                {
-                    _words[k].Foreground = Current;
-                    _words[k].Background = Highlight;
-                    _words[k].FontWeight = FontWeights.Bold;
-                }
-                else
-                {
-                    _words[k].Foreground = Dark;
-                    _words[k].Background = Brushes.Transparent;
-                    _words[k].FontWeight = FontWeights.SemiBold;
-                }
+                if (k < _readIndex) { _words[k].Foreground = Read; _words[k].Background = null; _words[k].FontWeight = FontWeights.SemiBold; }
+                else if (k == _readIndex) { _words[k].Foreground = Current; _words[k].Background = Highlight; _words[k].FontWeight = FontWeights.Bold; }
+                else { _words[k].Foreground = Dark; _words[k].Background = null; _words[k].FontWeight = FontWeights.SemiBold; }
             }
-            Speech.Say(_words[idx].Text);
+
+            var word = _words[_readIndex].Text;
+            Speech.Say(word);
+            // Durée avant le mot suivant (proportionnelle à la longueur du mot).
+            _readTimer.Interval = TimeSpan.FromMilliseconds(650 + 75 * word.Length);
+            _readTimer.Start();
         }
     }
 }
