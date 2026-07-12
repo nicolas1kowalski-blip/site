@@ -35,7 +35,9 @@ namespace MesPremiersJeux.Games
                 grid.Children.Add(btn);
             }
 
-            SetBody(grid);
+            // Remplissage direct de la page : les panneaux s'étirent dans leurs
+            // cellules (dans un Viewbox ils mesureraient 0 et seraient invisibles).
+            SetBodyFill(grid);
             Schedule(350, () => Speak($"Trouve la couleur {target.Name}"));
         }
 
