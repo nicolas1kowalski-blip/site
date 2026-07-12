@@ -148,7 +148,9 @@ namespace MesPremiersJeux.Games
             diffuse = new SolidColorBrush(color);
             var mat = new MaterialGroup();
             mat.Children.Add(new DiffuseMaterial(diffuse));
-            mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)), 30));
+            // Émissif = la couleur reste vive même dans l'ombre (rendu joyeux).
+            mat.Children.Add(new EmissiveMaterial(new SolidColorBrush(Dim(color, 0.28))));
+            mat.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)), 32));
             var model = new GeometryModel3D(mesh, mat) { BackMaterial = new DiffuseMaterial(diffuse) };
 
             // On fait tourner autour d'un axe légèrement incliné : les faces et
@@ -186,5 +188,8 @@ namespace MesPremiersJeux.Games
 
         public static Viewport3D View(MeshGeometry3D mesh, Color color, double size, bool spin = true)
             => View(mesh, color, size, out _, spin);
+
+        private static Color Dim(Color c, double f)
+            => Color.FromRgb((byte)(c.R * f), (byte)(c.G * f), (byte)(c.B * f));
     }
 }

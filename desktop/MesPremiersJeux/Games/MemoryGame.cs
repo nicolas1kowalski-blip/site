@@ -12,7 +12,7 @@ namespace MesPremiersJeux.Games
     /// <summary>Jeu de mémoire avec des cartes 3D qui se retournent (3 paires).</summary>
     public sealed class MemoryGame : GameControl
     {
-        private const int Pairs = 2; // 2 paires = 4 grandes cartes
+        private const int Pairs = 3; // 3 paires = 6 grandes cartes (une rangée)
 
         private CartoonItem[] _deck;
         private bool[] _up;

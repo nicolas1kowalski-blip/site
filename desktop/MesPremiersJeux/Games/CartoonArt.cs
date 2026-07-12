@@ -232,14 +232,65 @@ namespace MesPremiersJeux.Games
             return Wrap(c);
         }
 
+        private static UIElement Unicorn()
+        {
+            var c = New();
+            c.Children.Add(Pa("M34,34 L30,18 L44,30 Z", B("#FDFDFF"), Ink, 2));
+            c.Children.Add(Pa("M62,58 Q86,40 80,66 Q96,60 84,82 Q94,86 78,92", null, B("#FF6BB0"), 7));
+            c.Children.Add(Pa("M66,54 Q88,52 82,74", null, B("#8AD6FF"), 6));
+            c.Children.Add(Circle(50, 58, 29, B("#FDFDFF"), Ink, 3));
+            c.Children.Add(Pa("M44,32 L50,6 L56,32 Z", B("#FFD54A"), Ink, 2));
+            c.Children.Add(Circle(43, 56, 4, Ink));
+            c.Children.Add(Pa("M42,68 Q50,74 60,68", null, Ink, 2));
+            c.Children.Add(Circle(60, 66, 2, Ink));
+            c.Children.Add(Circle(37, 63, 5, B("#FFC2D6")));
+            return Wrap(c);
+        }
+
+        private static UIElement Princess()
+        {
+            var c = New();
+            c.Children.Add(Pa("M24,52 Q20,86 36,90 L64,90 Q80,86 76,52 Q80,30 50,26 Q20,30 24,52 Z", B("#8B5A2B"), Ink, 2.5));
+            c.Children.Add(Circle(50, 56, 24, B("#FFE0BD"), Ink, 2.5));
+            c.Children.Add(Pa("M32,34 L34,20 L42,30 L50,16 L58,30 L66,20 L68,34 Z", B("#FFD54A"), Ink, 2));
+            c.Children.Add(Circle(50, 22, 2.5, B("#FF6BB0"), Ink, 1));
+            c.Children.Add(Circle(42, 56, 3.5, Ink));
+            c.Children.Add(Circle(58, 56, 3.5, Ink));
+            c.Children.Add(Pa("M42,66 Q50,72 58,66", null, Ink, 2));
+            c.Children.Add(Circle(37, 62, 4, B("#FF9FB5")));
+            c.Children.Add(Circle(63, 62, 4, B("#FF9FB5")));
+            return Wrap(c);
+        }
+
+        private static UIElement Pig()
+        {
+            var c = New();
+            c.Children.Add(Pa("M30,38 L24,22 L44,32 Z", B("#FF9EC4"), Ink, 2));
+            c.Children.Add(Pa("M70,38 L76,22 L56,32 Z", B("#FF9EC4"), Ink, 2));
+            c.Children.Add(Circle(50, 56, 30, B("#FFB3D1"), Ink, 3));
+            var snout = new Ellipse { Width = 40, Height = 28, Fill = B("#FF9EC4"), Stroke = Ink, StrokeThickness = 2 };
+            Canvas.SetLeft(snout, 30); Canvas.SetTop(snout, 52);
+            c.Children.Add(snout);
+            c.Children.Add(Circle(44, 66, 3, Ink));
+            c.Children.Add(Circle(56, 66, 3, Ink));
+            c.Children.Add(Circle(40, 48, 4, Ink));
+            c.Children.Add(Circle(60, 48, 4, Ink));
+            c.Children.Add(Circle(31, 58, 5, B("#FF7FB0")));
+            c.Children.Add(Circle(69, 58, 5, B("#FF7FB0")));
+            return Wrap(c);
+        }
+
         public static readonly List<CartoonItem> Items = new List<CartoonItem>
         {
             new CartoonItem { Name = "chat",      Cat = "les animaux", Build = Cat },
+            new CartoonItem { Name = "cochon",    Cat = "les animaux", Build = Pig },
             new CartoonItem { Name = "chien",     Cat = "les animaux", Build = Dog },
             new CartoonItem { Name = "lapin",     Cat = "les animaux", Build = Rabbit },
             new CartoonItem { Name = "oiseau",    Cat = "les animaux", Build = Bird },
             new CartoonItem { Name = "poisson",   Cat = "les animaux", Build = Fish },
             new CartoonItem { Name = "papillon",  Cat = "les animaux", Build = Butterfly },
+            new CartoonItem { Name = "licorne",   Cat = "la magie",    Build = Unicorn },
+            new CartoonItem { Name = "princesse", Cat = "la magie",    Build = Princess },
             new CartoonItem { Name = "etoile",    Cat = "la magie",    Build = Star },
             new CartoonItem { Name = "coeur",     Cat = "la magie",    Build = Heart },
             new CartoonItem { Name = "fleur",     Cat = "la magie",    Build = Flower },

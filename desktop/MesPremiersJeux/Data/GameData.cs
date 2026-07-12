@@ -28,28 +28,30 @@ namespace MesPremiersJeux.Data
             return Color.FromRgb(r, g, b);
         }
 
+        // Couleurs vives et joyeuses (moins ternes, pour une enfant).
         public static readonly List<GameColor> Colors = new List<GameColor>
         {
-            new GameColor { Name = "rouge",  Value = C("#FF4D4D") },
-            new GameColor { Name = "bleu",   Value = C("#3A86FF") },
-            new GameColor { Name = "jaune",  Value = C("#FFD43B") },
-            new GameColor { Name = "vert",   Value = C("#4CAF50") },
-            new GameColor { Name = "rose",   Value = C("#FF8FAB") },
-            new GameColor { Name = "violet", Value = C("#9D4EDD") },
-            new GameColor { Name = "orange", Value = C("#FF8C42") },
+            new GameColor { Name = "rouge",      Value = C("#FF4D6D") },
+            new GameColor { Name = "orange",     Value = C("#FF8C1A") },
+            new GameColor { Name = "jaune",      Value = C("#FFD500") },
+            new GameColor { Name = "vert",       Value = C("#2FD86B") },
+            new GameColor { Name = "turquoise",  Value = C("#1FD5C4") },
+            new GameColor { Name = "bleu",       Value = C("#3B9BFF") },
+            new GameColor { Name = "rose",       Value = C("#FF5FA2") },
+            new GameColor { Name = "violet",     Value = C("#B15CFF") },
         };
 
         private static Geometry P(string data) { var g = Geometry.Parse(data); g.Freeze(); return g; }
 
         public static readonly List<GameShape> Shapes = new List<GameShape>
         {
-            new GameShape { Name = "rond",     Color = C("#FF6B6B"), Geo = P("M50,8 A42,42 0 1 0 50,92 A42,42 0 1 0 50,8 Z") },
-            new GameShape { Name = "carré",    Color = C("#4ECDC4"), Geo = P("M16,10 H84 A6,6 0 0 1 90,16 V84 A6,6 0 0 1 84,90 H16 A6,6 0 0 1 10,84 V16 A6,6 0 0 1 16,10 Z") },
-            new GameShape { Name = "triangle", Color = C("#FFD43B"), Geo = P("M50,10 L92,85 L8,85 Z") },
-            new GameShape { Name = "étoile",   Color = C("#FF8FAB"), Geo = P("M50,8 L61,38 L92,38 L67,57 L77,88 L50,70 L23,88 L33,57 L8,38 L39,38 Z") },
+            new GameShape { Name = "rond",     Color = C("#FF4D6D"), Geo = P("M50,8 A42,42 0 1 0 50,92 A42,42 0 1 0 50,8 Z") },
+            new GameShape { Name = "carré",    Color = C("#1FD5C4"), Geo = P("M16,10 H84 A6,6 0 0 1 90,16 V84 A6,6 0 0 1 84,90 H16 A6,6 0 0 1 10,84 V16 A6,6 0 0 1 16,10 Z") },
+            new GameShape { Name = "triangle", Color = C("#FFC400"), Geo = P("M50,10 L92,85 L8,85 Z") },
+            new GameShape { Name = "étoile",   Color = C("#FFD500"), Geo = P("M50,8 L61,38 L92,38 L67,57 L77,88 L50,70 L23,88 L33,57 L8,38 L39,38 Z") },
             new GameShape { Name = "cœur",     Color = C("#FF4D8D"), Geo = P("M50,85 C20,65 5,45 20,25 C32,12 45,22 50,32 C55,22 68,12 80,25 C95,45 80,65 50,85 Z") },
         };
-        public static readonly Color ShapeNeutral = C("#FFB347");
+        public static readonly Color ShapeNeutral = C("#FF9F45");
 
         public sealed class BalloonInfo { public string Name; public string Sound; }
 
