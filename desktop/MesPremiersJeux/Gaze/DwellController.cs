@@ -34,16 +34,19 @@ namespace MesPremiersJeux.Gaze
         private volatile bool _hasGaze;
         private double _gx, _gy;
 
-        // État du dwell courant.
-        private object _target;
+        // État du dwell courant (dwell « par zone de stabilité »).
+        private bool _active;             // un dwell est en cours
+        private object _startTarget;      // cible verrouillée au démarrage du dwell
         private FrameworkElement _aliveElement;
-        private Point _dwellScreen;   // point (lissé) au démarrage du dwell
-        private Point _lastScreen;    // dernier point lissé
+        private Point _dwellScreen;       // point (lissé) au démarrage du dwell
+        private Point _dwellLocal;        // idem, en coordonnées fenêtre
+        private Point _lastScreen;        // dernier point lissé
         private DateTime _dwellStart;
-        private int _missTicks;       // images consécutives sans cible
+        private bool _needRearm;          // après un clic, il faut sortir de la zone avant de recliquer
+        private Point _rearmPoint;
 
         // Tolérances.
-        private const int GraceTicks = 12;        // ~360 ms de perte tolérée (plus indulgent)
+        private const double HoldRadius = 80;     // px : tant qu'on reste dans ce rayon, le dwell continue
         private const double IndicatorR = 37;     // rayon de l'arc de progression
 
         public bool Enabled { get; set; } = true;
@@ -161,28 +164,46 @@ namespace MesPremiersJeux.Gaze
 
             if (Locked) { Cancel(); return; }
 
-            // 3) Cible sous le regard, avec tolérance aux brèves pertes.
-            var target = FindTarget(local);
-            if (_dotShape != null) _dotShape.Fill = target != null ? DotActive : DotIdle; // diagnostic : vert = cible
-            if (target == null)
+            // 3) Dwell « par zone de stabilité » : une fois la cible verrouillée,
+            //    tant que le regard reste dans un petit rayon, le compte à rebours
+            //    continue jusqu'au bout (même si la détection clignote une image).
+            if (_active && Distance(screen, _dwellScreen) <= HoldRadius)
             {
-                if (_target != null && _missTicks++ < GraceTicks) return; // on maintient
-                Cancel();
+                SetDotActive(true);
+                PlaceIndicator(_dwellLocal);
+                double frac = Math.Min(1.0, (DateTime.UtcNow - _dwellStart).TotalMilliseconds / DwellTime);
+                UpdateProgress(frac);
+                if (frac >= 1.0) Commit();
                 return;
             }
-            _missTicks = 0;
 
-            bool moved = Distance(screen, _dwellScreen) > MoveThreshold(target);
-            bool changed = !ReferenceEquals(target, _target);
-            if (changed || (target is IGazeSurface && moved))
-                StartDwell(target, screen);
+            // Après un clic : attendre que le regard sorte de la zone avant de recliquer.
+            if (_needRearm)
+            {
+                if (Distance(screen, _rearmPoint) <= HoldRadius) { SetDotActive(false); return; }
+                _needRearm = false;
+            }
 
-            // 4) Indicateur + progression.
+            // Sinon on (re)cherche une cible sous le point courant.
+            var target = FindTarget(local);
+            SetDotActive(target != null);
+            if (target == null) { Cancel(); return; }
+
+            // Démarrage d'un nouveau dwell, verrouillé sur cette cible et ce point.
+            _active = true;
+            _startTarget = target;
+            _dwellScreen = screen;
+            _dwellLocal = local;
+            _dwellStart = DateTime.UtcNow;
+            _indicator.Visibility = Visibility.Visible;
             PlaceIndicator(local);
-            double frac = Math.Min(1.0, (DateTime.UtcNow - _dwellStart).TotalMilliseconds / DwellTime);
-            UpdateProgress(frac);
+            UpdateProgress(0);
+            if (target is FrameworkElement fe && !(target is IGazeSurface)) BeginAlive(fe);
+        }
 
-            if (frac >= 1.0) Commit();
+        private void SetDotActive(bool active)
+        {
+            if (_dotShape != null) _dotShape.Fill = active ? DotActive : DotIdle;
         }
 
         private void PlaceDot(Point local)
@@ -198,46 +219,32 @@ namespace MesPremiersJeux.Gaze
             if (_dot != null && _dot.Visibility != Visibility.Collapsed) _dot.Visibility = Visibility.Collapsed;
         }
 
-        private double MoveThreshold(object target)
-            => target is IGazeSurface s ? s.ReArmDistance : 60.0;
-
-        private void StartDwell(object target, Point screen)
-        {
-            StopAlive();
-            _target = target;
-            _dwellScreen = screen;
-            _dwellStart = DateTime.UtcNow;
-            _indicator.Visibility = Visibility.Visible;
-            UpdateProgress(0);
-            if (target is FrameworkElement fe && !(target is IGazeSurface))
-                BeginAlive(fe);
-        }
-
         private void Commit()
         {
-            var target = _target;
+            var target = _startTarget;
             var screen = _lastScreen;
-            _dwellStart = DateTime.UtcNow; // ré-armement immédiat
 
             if (target is IGazeSurface surf)
             {
                 if (surf.HitTestGaze(screen)) surf.CommitGaze(screen);
-                UpdateProgress(0);
+                // On désarme : il faudra bouger le regard pour colorier une nouvelle zone.
+                Cancel();
             }
             else
             {
-                StopAlive();
-                _indicator.Visibility = Visibility.Collapsed;
-                _target = null;
+                Cancel();
+                _needRearm = true;      // éviter les clics en rafale tant qu'on fixe le même bouton
+                _rearmPoint = screen;
                 if (target is ButtonBase btn) InvokeButton(btn);
             }
         }
 
         private void Cancel()
         {
-            _target = null;
-            _missTicks = 0;
+            _active = false;
+            _startTarget = null;
             StopAlive();
+            UpdateProgress(0);
             if (_indicator.Visibility != Visibility.Collapsed)
                 _indicator.Visibility = Visibility.Collapsed;
         }
