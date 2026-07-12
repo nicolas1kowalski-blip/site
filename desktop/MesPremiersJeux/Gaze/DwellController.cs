@@ -59,6 +59,11 @@ namespace MesPremiersJeux.Gaze
         private struct POINT { public int X; public int Y; }
 
         private readonly FrameworkElement _dot; // point de regard toujours visible
+        private readonly Shape _dotShape;
+        private static readonly Brush DotIdle = Freeze(new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0x3D, 0x7F)));   // rose : rien sous le regard
+        private static readonly Brush DotActive = Freeze(new SolidColorBrush(Color.FromArgb(0x99, 0x35, 0xC7, 0x66))); // vert : cible détectée
+
+        private static Brush Freeze(Brush b) { b.Freeze(); return b; }
 
         public DwellController(FrameworkElement root, FrameworkElement indicator, Path progress, FrameworkElement dot)
         {
@@ -66,6 +71,7 @@ namespace MesPremiersJeux.Gaze
             _indicator = indicator;
             _progress = progress;
             _dot = dot;
+            _dotShape = dot as Shape;
             _indicator.Visibility = Visibility.Collapsed;
             if (_dot != null) _dot.Visibility = Visibility.Collapsed;
 
@@ -141,6 +147,7 @@ namespace MesPremiersJeux.Gaze
 
             // 3) Cible sous le regard, avec tolérance aux brèves pertes.
             var target = FindTarget(local);
+            if (_dotShape != null) _dotShape.Fill = target != null ? DotActive : DotIdle; // diagnostic : vert = cible
             if (target == null)
             {
                 if (_target != null && _missTicks++ < GraceTicks) return; // on maintient

@@ -98,8 +98,8 @@
         <!-- Cercle de progression du dwell (au-dessus de tout, non cliquable) -->
         <Canvas x:Name="GazeLayer" IsHitTestVisible="False">
             <!-- Point de regard toujours visible : l'enfant voit où il regarde. -->
-            <Ellipse x:Name="GazeDot" Width="30" Height="30" Visibility="Collapsed"
-                     Fill="#66FF3D7F" Stroke="White" StrokeThickness="3" />
+            <Ellipse x:Name="GazeDot" Width="38" Height="38" Visibility="Collapsed"
+                     Fill="#88FF3D7F" Stroke="White" StrokeThickness="3" />
             <Grid x:Name="GazeIndicator" Width="90" Height="90" Visibility="Collapsed">
                 <Ellipse Width="74" Height="74" Stroke="#33512DA8" StrokeThickness="9"
                          HorizontalAlignment="Center" VerticalAlignment="Center" />
