@@ -81,6 +81,8 @@ namespace MesPremiersJeux.Views
 
         private void BuildTools()
         {
+            ToolsHost.Children.Clear();
+
             for (int i = 0; i < _pages.Count; i++)
             {
                 int idx = i;
@@ -93,8 +95,12 @@ namespace MesPremiersJeux.Views
                 };
                 btn.Click += (s, e) => { _pageIdx = idx; DrawPage(); HighlightPage(btn); };
                 ToolsHost.Children.Add(btn);
-                if (i == 0) btn.BorderThickness = new Thickness(4);
+                if (i == _pageIdx) btn.BorderThickness = new Thickness(4);
             }
+
+            var add = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "➕", ToolTip = "Ajouter des coloriages" };
+            add.Click += (s, e) => AddColorings();
+            ToolsHost.Children.Add(add);
 
             var reset = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "🔄", ToolTip = "Recommencer" };
             reset.Click += (s, e) => DrawPage();
@@ -103,6 +109,33 @@ namespace MesPremiersJeux.Views
             var full = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "⛶", ToolTip = "Plein écran" };
             full.Click += (s, e) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
             ToolsHost.Children.Add(full);
+        }
+
+        // Choisir des images au trait (PNG/JPG) : elles sont copiées dans
+        // Documents\MesPremiersJeux\Coloriages et apparaissent immédiatement.
+        private void AddColorings()
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Ajouter des coloriages (dessins au trait)",
+                Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif",
+                Multiselect = true,
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+
+            var added = UserContent.AddColorings(dlg.FileNames);
+            if (added.Count == 0) return;
+
+            _pages.Clear();
+            foreach (var c in Colorings.All)
+                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
+            foreach (var u in UserContent.LoadColorings())
+                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
+
+            _pageIdx = _pages.Count - 1; // ouvre le dernier ajouté
+            BuildTools();
+            DrawPage();
+            Speech.Say("Le coloriage est ajouté !");
         }
 
         private void SelectSwatch(Swatch s, Button btn)

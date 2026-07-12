@@ -142,6 +142,63 @@ namespace MesPremiersJeux.Lib
             return null;
         }
 
+        /// <summary>Copie des images dans le dossier Coloriages ; renvoie les chemins ajoutés.</summary>
+        public static List<string> AddColorings(IEnumerable<string> files)
+        {
+            EnsureFolders();
+            var added = new List<string>();
+            foreach (var f in files)
+            {
+                try
+                {
+                    if (!ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant())) continue;
+                    var dest = UniquePath(ColoringsDir, Path.GetFileName(f));
+                    File.Copy(f, dest);
+                    added.Add(dest);
+                }
+                catch { }
+            }
+            return added;
+        }
+
+        /// <summary>Enregistre un livre (titre + pages texte/image) ; renvoie null si échec.</summary>
+        public static string SaveStory(string title, IList<(string Text, string ImagePath)> pages)
+        {
+            try
+            {
+                EnsureFolders();
+                var safe = new string(title.Trim()
+                    .Where(c => Array.IndexOf(Path.GetInvalidFileNameChars(), c) < 0).ToArray());
+                if (safe.Length == 0) safe = "Mon histoire";
+                var dir = Path.Combine(StoriesDir, safe);
+                for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(StoriesDir, safe + " " + i);
+                Directory.CreateDirectory(dir);
+
+                File.WriteAllLines(Path.Combine(dir, "histoire.txt"),
+                    pages.Select(p => p.Text.Trim().Replace("\r", " ").Replace("\n", " ")));
+
+                for (int i = 0; i < pages.Count; i++)
+                {
+                    var img = pages[i].ImagePath;
+                    if (string.IsNullOrEmpty(img) || !File.Exists(img)) continue;
+                    var ext = Path.GetExtension(img).ToLowerInvariant();
+                    if (!ImageExts.Contains(ext)) continue;
+                    File.Copy(img, Path.Combine(dir, (i + 1) + ext), true);
+                }
+                return dir;
+            }
+            catch { return null; }
+        }
+
+        private static string UniquePath(string dir, string fileName)
+        {
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            var p = Path.Combine(dir, fileName);
+            for (int i = 2; File.Exists(p); i++) p = Path.Combine(dir, name + " " + i + ext);
+            return p;
+        }
+
         /// <summary>Charge une image depuis le disque (sans verrouiller le fichier).</summary>
         public static BitmapImage LoadBitmap(string path, int maxSize = 1600)
         {

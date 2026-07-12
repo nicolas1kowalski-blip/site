@@ -231,6 +231,34 @@ namespace MesPremiersJeux.Views
                 tile.Click += (s, e) => OpenBook(book);
                 _menu.Children.Add(tile);
             }
+
+            // Tuile « nouveau livre » (pour le parent).
+            var addContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            addContent.Children.Add(new TextBlock { Text = "➕", FontSize = 74, HorizontalAlignment = HorizontalAlignment.Center });
+            addContent.Children.Add(new TextBlock
+            {
+                Text = "Nouveau livre",
+                FontSize = 22,
+                FontWeight = FontWeights.Bold,
+                Foreground = Dark,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 8, 0, 0),
+            });
+            var addTile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = addContent };
+            addTile.Click += (s, e) => AddBook();
+            _menu.Children.Add(addTile);
+        }
+
+        private void AddBook()
+        {
+            var editor = new BookEditorWindow { Owner = Window.GetWindow(this) };
+            if (editor.ShowDialog() == true)
+            {
+                _books.Clear();
+                BuildBooks();
+                BuildMenu();
+                Speech.Say("Le livre est ajouté !");
+            }
         }
 
         private void ShowMenu()
