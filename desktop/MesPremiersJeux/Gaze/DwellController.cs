@@ -101,12 +101,15 @@ namespace MesPremiersJeux.Gaze
             };
         }
 
+        private double _lastGazeTime = -10; // dernier instant (s) où une donnée SDK est arrivée
+
         /// <summary>Reçoit un point de regard SDK (thread quelconque).</summary>
         public void PushGaze(GazePoint p)
         {
             _gx = p.X;
             _gy = p.Y;
             _hasGaze = true;
+            _lastGazeTime = _clock.Elapsed.TotalSeconds;
         }
 
         private void OnTick(object sender, EventArgs e)
@@ -124,21 +127,27 @@ namespace MesPremiersJeux.Gaze
                 return;
             }
 
-            // 1) Source du point brut.
+            // 1) Source du point brut : on suit le curseur, sauf si des données SDK
+            //    Tobii affluent réellement (sinon on ne verrait jamais le point).
+            double t = _clock.Elapsed.TotalSeconds;
+            bool sdkFresh = _hasGaze && (t - _lastGazeTime) < 0.4;
             Point raw;
-            if (UseCursor)
+            if (sdkFresh)
             {
-                if (!GetCursorPos(out var cp)) { HideDot(); Cancel(); return; }
+                raw = new Point(_gx, _gy);
+            }
+            else if (GetCursorPos(out var cp))
+            {
                 raw = new Point(cp.X, cp.Y);
             }
             else
             {
-                if (!_hasGaze) { HideDot(); Cancel(); return; }
-                raw = new Point(_gx, _gy);
+                HideDot();
+                Cancel();
+                return;
             }
 
             // 2) Lissage anti-bruit (filtre 1 €).
-            double t = _clock.Elapsed.TotalSeconds;
             var screen = new Point(_fx.Filter(raw.X, t), _fy.Filter(raw.Y, t));
             _lastScreen = screen;
 

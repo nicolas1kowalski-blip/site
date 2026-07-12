@@ -104,10 +104,9 @@ namespace MesPremiersJeux
         private void ApplyGazeMode()
         {
             if (_dwell == null) return;
-            bool on = GazeModeCheck.IsChecked == true;
-            _dwell.Enabled = on;
-            // Sans SDK Tobii, on suit le curseur (déplacé au regard par la I-13).
-            _dwell.UseCursor = on && !_gaze.IsAvailable;
+            // La source (curseur ou SDK) est choisie automatiquement par le
+            // contrôleur ; ici on active/désactive simplement le pilotage au regard.
+            _dwell.Enabled = GazeModeCheck.IsChecked == true;
         }
 
         private void DwellSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
