@@ -58,6 +58,15 @@ namespace MesPremiersJeux.Gaze
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out POINT p);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetCursorPos(int x, int y);
+
+        [DllImport("user32.dll")]
+        private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+
+        private const uint MOUSEEVENTF_LEFTDOWN = 0x02;
+        private const uint MOUSEEVENTF_LEFTUP = 0x04;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT { public int X; public int Y; }
 
@@ -230,7 +239,31 @@ namespace MesPremiersJeux.Gaze
             {
                 Cancel();
                 _cooldownUntil = _clock.Elapsed.TotalSeconds + 0.45; // petite pause avant le prochain clic
-                if (target is ButtonBase btn) InvokeButton(btn);
+                if (target is ButtonBase btn) ClickButton(btn, screen);
+            }
+        }
+
+        // Clique la cible avec un VRAI clic souris Windows (SendInput/mouse_event),
+        // injecté au centre du bouton : le système le traite comme un clic physique.
+        // C'est la méthode des logiciels de commande oculaire (GRID, Snap).
+        private static void ClickButton(ButtonBase btn, Point fallbackScreen)
+        {
+            Point p = fallbackScreen;
+            try
+            {
+                p = btn.PointToScreen(new Point(btn.ActualWidth / 2, btn.ActualHeight / 2));
+            }
+            catch { /* on cliquera au point de regard */ }
+
+            try
+            {
+                SetCursorPos((int)Math.Round(p.X), (int)Math.Round(p.Y));
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            }
+            catch
+            {
+                InvokeButton(btn); // repli : clic programmatique
             }
         }
 
