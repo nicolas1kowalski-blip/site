@@ -249,8 +249,36 @@ namespace MesPremiersJeux.Gaze
                 _indicator.Visibility = Visibility.Collapsed;
         }
 
-        // --- Cible sous le regard ---
+        // Décalages d'« aimantation » : si le point n'est pas pile sur une cible,
+        // on regarde tout autour (2 anneaux) pour attraper le bouton le plus proche.
+        private static readonly Point[] SnapOffsets = BuildSnap();
+        private static Point[] BuildSnap()
+        {
+            var arr = new Point[24];
+            int i = 0;
+            foreach (var r in new[] { 30.0, 55.0, 80.0 })
+                for (int a = 0; a < 8; a++)
+                {
+                    double ang = Math.PI * 2 * a / 8 + (r > 40 ? Math.PI / 8 : 0);
+                    arr[i++] = new Point(Math.Cos(ang) * r, Math.Sin(ang) * r);
+                }
+            return arr;
+        }
+
+        // --- Cible sous le regard (avec aimantation vers la plus proche) ---
         private object FindTarget(Point local)
+        {
+            var t = HitAt(local);
+            if (t != null) return t;
+            foreach (var o in SnapOffsets)
+            {
+                t = HitAt(new Point(local.X + o.X, local.Y + o.Y));
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        private object HitAt(Point local)
         {
             DependencyObject hit = null;
             try

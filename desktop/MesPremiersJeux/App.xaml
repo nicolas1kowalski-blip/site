@@ -68,7 +68,7 @@
 
         <!-- Bouton-réponse d'un jeu (grande carte blanche) -->
         <Style x:Key="AnswerButton" TargetType="Button">
-            <Setter Property="Margin" Value="12" />
+            <Setter Property="Margin" Value="5" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="White" />
             <Setter Property="BorderBrush" Value="#FF7E3FF2" />
@@ -108,7 +108,7 @@
         <Style x:Key="MenuTile" TargetType="Button">
             <Setter Property="Width" Value="250" />
             <Setter Property="Height" Value="220" />
-            <Setter Property="Margin" Value="14" />
+            <Setter Property="Margin" Value="8" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="White" />
             <Setter Property="BorderBrush" Value="#FF7E3FF2" />
