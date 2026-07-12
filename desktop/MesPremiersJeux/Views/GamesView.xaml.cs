@@ -56,10 +56,17 @@ namespace MesPremiersJeux.Views
 
         private void Play(Func<Action, UserControl> make)
         {
-            GameHost.Children.Clear();
-            GameHost.Children.Add(make(ShowConfetti));
-            MenuRoot.Visibility = Visibility.Collapsed;
-            PlayRoot.Visibility = Visibility.Visible;
+            try
+            {
+                GameHost.Children.Clear();
+                GameHost.Children.Add(make(ShowConfetti));
+                MenuRoot.Visibility = Visibility.Collapsed;
+                PlayRoot.Visibility = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Play error: " + ex);
+            }
         }
 
         private void Back_Click(object sender, RoutedEventArgs e)

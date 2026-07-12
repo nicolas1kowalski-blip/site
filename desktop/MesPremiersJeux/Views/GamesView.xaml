@@ -3,10 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="#FFF3E9FF">
 
-        <!-- Menu plein écran (aucun défilement : un Viewbox met tout à l'échelle) -->
-        <Viewbox x:Name="MenuRoot" Margin="28" Stretch="Uniform">
-            <UniformGrid x:Name="Menu" Columns="4" />
-        </Viewbox>
+        <!-- Menu plein écran : grandes tuiles centrées (sans Viewbox, pour un
+             ciblage au regard direct et fiable). -->
+        <Grid x:Name="MenuRoot">
+            <UniformGrid x:Name="Menu" Columns="4"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Grid>
 
         <!-- Jeu en cours : plein écran + bouton retour -->
         <Grid x:Name="PlayRoot" Visibility="Collapsed">

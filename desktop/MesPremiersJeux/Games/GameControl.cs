@@ -46,7 +46,17 @@ namespace MesPremiersJeux.Games
             root.Children.Add(Body);
 
             Content = root;
-            Loaded += (s, e) => { if (_started == false) { _started = true; NewRound(); } };
+            Loaded += (s, e) =>
+            {
+                if (_started) return;
+                _started = true;
+                try { NewRound(); }
+                catch (Exception ex)
+                {
+                    Question.Text = "Oups, ce jeu a un souci.";
+                    System.Diagnostics.Debug.WriteLine("NewRound error: " + ex);
+                }
+            };
         }
 
         private bool _started;
