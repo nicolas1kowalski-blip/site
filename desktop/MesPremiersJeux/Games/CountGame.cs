@@ -18,12 +18,16 @@ namespace MesPremiersJeux.Games
             { 3, Color.FromRgb(0xFF, 0xD3, 0xDC) },
         };
 
+        private int _lastN;
+
         public CountGame(Action celebrate) : base(celebrate) { }
 
         protected override void NewRound()
         {
             Locked = false;
-            int n = 1 + new Random().Next(3);
+            int n;
+            do { n = 1 + GameKit.RandInt(3); } while (n == _lastN); // évite de répéter le même chiffre
+            _lastN = n;
             var options = GameKit.Shuffle(new[] { 1, 2, 3 });
             Question.Text = "Combien ?";
 

@@ -12,7 +12,7 @@ namespace MesPremiersJeux.Games
     /// <summary>Jeu de mémoire avec des cartes 3D qui se retournent (3 paires).</summary>
     public sealed class MemoryGame : GameControl
     {
-        private const int Pairs = 3;
+        private const int Pairs = 2; // 2 paires = 4 grandes cartes
 
         private CartoonItem[] _deck;
         private bool[] _up;
@@ -37,7 +37,7 @@ namespace MesPremiersJeux.Games
 
             Question.Text = "Trouve les paires !";
 
-            var grid = new UniformGrid { Columns = 3 };
+            var grid = new UniformGrid { Rows = 1 }; // une seule rangée = cartes maximales
             for (int i = 0; i < _deck.Length; i++)
             {
                 var card = new Card3D(_deck[i].Build(), _deck[i].Name);

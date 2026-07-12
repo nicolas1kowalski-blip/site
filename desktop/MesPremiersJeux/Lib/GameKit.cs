@@ -12,6 +12,9 @@ namespace MesPremiersJeux.Lib
 
         public static T Rand<T>(IList<T> list) => list[Rng.Next(list.Count)];
 
+        /// <summary>Entier dans [0, maxExclusive) via le générateur partagé.</summary>
+        public static int RandInt(int maxExclusive) => Rng.Next(maxExclusive);
+
         public static List<T> Shuffle<T>(IEnumerable<T> src)
         {
             var list = src.ToList();

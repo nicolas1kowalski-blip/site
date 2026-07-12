@@ -27,8 +27,8 @@ namespace MesPremiersJeux.Games
             var targetPool = CartoonArt.Items.Where(i => i.Cat == targetCat).ToList();
             var others = CartoonArt.Items.Where(i => i.Cat != targetCat).ToList();
 
-            var targetItems = GameKit.Shuffle(targetPool).Take(3).ToList();
-            var distractors = GameKit.Shuffle(others).Take(3).ToList();
+            var targetItems = GameKit.Shuffle(targetPool).Take(2).ToList();
+            var distractors = GameKit.Shuffle(others).Take(2).ToList();
             _need = targetItems.Count;
 
             var items = GameKit.Shuffle(
@@ -37,7 +37,7 @@ namespace MesPremiersJeux.Games
 
             Question.Text = $"Regarde tous {targetCat} !";
 
-            var grid = new UniformGrid { Columns = 3 };
+            var grid = new UniformGrid { Rows = 1 }; // une seule rangée = cartes maximales
             foreach (var entry in items)
             {
                 var card = new Card3D(entry.item.Build(), entry.item.Name);
