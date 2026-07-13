@@ -6,15 +6,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
+using MesPremiersJeux.Games;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Views
 {
     /// <summary>
     /// Éditeur de livre (pour le parent) : titre + pages (texte, photo, zones
-    /// interactives), et import d'un fichier JSON au même format que
-    /// l'application web. À l'enregistrement, le livre est écrit dans
-    /// Documents\MesPremiersJeux\Histoires et apparaît aussitôt.
+    /// interactives) + un quiz de fin (questions Vrai/Faux ou choix d'image),
+    /// et import d'un fichier JSON au même format que l'application web. À
+    /// l'enregistrement, le livre est écrit dans le dossier Contenu\Histoires.
     /// </summary>
     public sealed class BookEditorWindow : Window
     {
@@ -29,13 +30,38 @@ namespace MesPremiersJeux.Views
             public PageDraft Draft = new PageDraft();
         }
 
+        // Une question dans l'éditeur.
+        private sealed class QRow
+        {
+            public Border Ui;
+            public TextBlock Header;
+            public TextBox Text;
+            public ComboBox Type;
+            public StackPanel VfPanel;
+            public RadioButton VfTrue;
+            public StackPanel ImgPanel;
+            public StackPanel ChoicesHost;
+            public readonly List<QChoice> Choices = new List<QChoice>();
+            public readonly string Group = Guid.NewGuid().ToString("N"); // radios « bonne réponse »
+        }
+
+        private sealed class QChoice
+        {
+            public Border Ui;
+            public ContentControl Preview;
+            public RadioButton Correct;
+            public QuizChoice Data = new QuizChoice();
+        }
+
         private readonly TextBox _title;
         private readonly StackPanel _pagesHost;
+        private readonly StackPanel _questionsHost;
         private readonly List<Row> _rows = new List<Row>();
+        private readonly List<QRow> _qRows = new List<QRow>();
         private readonly string _existingDir; // non nul = modification d'un livre
 
         /// <summary>Ouvre l'éditeur pré-rempli pour modifier un livre existant.</summary>
-        public BookEditorWindow(string title, List<PageDraft> pages, string existingDir) : this()
+        public BookEditorWindow(string title, List<PageDraft> pages, List<UserQuestion> questions, string existingDir) : this()
         {
             _existingDir = existingDir;
             Title = "Modifier le livre";
@@ -50,6 +76,9 @@ namespace MesPremiersJeux.Views
                 row.Text.Text = draft.Text;
                 RefreshRowButtons(row);
             }
+
+            if (questions != null)
+                foreach (var q in questions) AddQuestion(q);
         }
 
         public BookEditorWindow()
@@ -59,8 +88,8 @@ namespace MesPremiersJeux.Views
             Closed += (s, e) => Gaze.GazeGate.Pop();
 
             Title = "Nouveau livre";
-            Width = 820;
-            Height = 700;
+            Width = 860;
+            Height = 720;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = new SolidColorBrush(Color.FromRgb(0xFB, 0xF3, 0xFF));
 
@@ -96,17 +125,45 @@ namespace MesPremiersJeux.Views
             DockPanel.SetDock(buttons, Dock.Bottom);
             dock.Children.Add(buttons);
 
-            // Pages.
+            // Contenu défilant : pages, puis section « Questions ».
             _pagesHost = new StackPanel();
+            _questionsHost = new StackPanel();
+
+            var scrollHost = new StackPanel();
+            scrollHost.Children.Add(SectionTitle("📖 Pages"));
+            scrollHost.Children.Add(_pagesHost);
+
+            scrollHost.Children.Add(SectionTitle("🎯 Questions de fin (quiz)"));
+            scrollHost.Children.Add(new TextBlock
+            {
+                Text = "Facultatif : à la fin de l'histoire, l'enfant répond à ces questions " +
+                       "(Vrai / Faux, ou en choisissant la bonne image).",
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5B, 0x8A)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(2, 0, 2, 8),
+            });
+            scrollHost.Children.Add(_questionsHost);
+            scrollHost.Children.Add(MakeButton("➕ Ajouter une question", (s, e) => AddQuestion(null)));
+
             dock.Children.Add(new ScrollViewer
             {
-                Content = _pagesHost,
+                Content = scrollHost,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             });
 
             Content = dock;
             AddRow();
         }
+
+        private static TextBlock SectionTitle(string text) => new TextBlock
+        {
+            Text = text,
+            FontSize = 19,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)),
+            Margin = new Thickness(0, 10, 0, 8),
+        };
 
         private static Button MakeButton(string label, RoutedEventHandler onClick)
         {
@@ -121,6 +178,7 @@ namespace MesPremiersJeux.Views
             return b;
         }
 
+        // ------------------------------------------------------------------ pages
         private Row AddRow()
         {
             var row = new Row();
@@ -156,7 +214,6 @@ namespace MesPremiersJeux.Views
             grid.Children.Add(row.Text);
 
             var side = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
-            // Prévisualisation de la photo choisie.
             row.Preview = new Image
             {
                 Width = 120,
@@ -263,7 +320,234 @@ namespace MesPremiersJeux.Views
             }
         }
 
-        // Import d'un JSON au format de l'application web.
+        // ------------------------------------------------------------------ questions
+        private void AddQuestion(UserQuestion data)
+        {
+            var q = new QRow();
+
+            var panel = new StackPanel();
+
+            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+            q.Header = new TextBlock
+            {
+                FontSize = 16,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            head.Children.Add(q.Header);
+            var delQ = new Button { Content = "🗑", FontSize = 15, Padding = new Thickness(10, 5, 10, 5), HorizontalAlignment = HorizontalAlignment.Right };
+            delQ.Click += (s, e) => RemoveQuestion(q);
+            DockPanel.SetDock(delQ, Dock.Right);
+            head.Children.Add(delQ);
+            panel.Children.Add(head);
+
+            q.Text = new TextBox
+            {
+                FontSize = 18,
+                Padding = new Thickness(8, 6, 8, 6),
+                TextWrapping = TextWrapping.Wrap,
+                MinHeight = 40,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            panel.Children.Add(q.Text);
+
+            var typeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            typeRow.Children.Add(new TextBlock { Text = "Type : ", FontSize = 15, VerticalAlignment = VerticalAlignment.Center });
+            q.Type = new ComboBox { FontSize = 15, Width = 160 };
+            q.Type.Items.Add("Vrai / Faux");
+            q.Type.Items.Add("Images");
+            q.Type.SelectedIndex = 0;
+            q.Type.SelectionChanged += (s, e) => UpdateQuestionType(q);
+            typeRow.Children.Add(q.Type);
+            panel.Children.Add(typeRow);
+
+            // Vrai / Faux.
+            q.VfPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            q.VfTrue = new RadioButton { Content = "Vrai", FontSize = 16, GroupName = "vf" + q.Group, IsChecked = true, Margin = new Thickness(0, 0, 20, 0) };
+            var vfFalse = new RadioButton { Content = "Faux", FontSize = 16, GroupName = "vf" + q.Group };
+            q.VfPanel.Children.Add(new TextBlock { Text = "Bonne réponse : ", FontSize = 15, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            q.VfPanel.Children.Add(q.VfTrue);
+            q.VfPanel.Children.Add(vfFalse);
+            panel.Children.Add(q.VfPanel);
+
+            // Images.
+            q.ImgPanel = new StackPanel { Visibility = Visibility.Collapsed };
+            q.ImgPanel.Children.Add(new TextBlock
+            {
+                Text = "Ajoute 2 à 4 images et coche la bonne réponse :",
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5B, 0x8A)),
+                Margin = new Thickness(0, 0, 0, 6),
+            });
+            q.ChoicesHost = new StackPanel();
+            q.ImgPanel.Children.Add(q.ChoicesHost);
+            q.ImgPanel.Children.Add(MakeButton("➕ Image réponse", (s, e) => AddChoice(q, null)));
+            panel.Children.Add(q.ImgPanel);
+
+            q.Ui = new Border
+            {
+                Background = Brushes.White,
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 10),
+                Child = panel,
+            };
+
+            _qRows.Add(q);
+            _questionsHost.Children.Add(q.Ui);
+            RenumberQuestions();
+
+            // Pré-remplissage (édition / import).
+            if (data != null)
+            {
+                q.Text.Text = data.Text;
+                if (data.Kind == QuizKind.Image)
+                {
+                    q.Type.SelectedIndex = 1;
+                    foreach (var c in data.Choices) AddChoice(q, c);
+                }
+                else
+                {
+                    q.Type.SelectedIndex = 0;
+                    q.VfTrue.IsChecked = data.Answer;
+                    ((RadioButton)q.VfPanel.Children[q.VfPanel.Children.Count - 1]).IsChecked = !data.Answer;
+                }
+                UpdateQuestionType(q);
+            }
+        }
+
+        private void UpdateQuestionType(QRow q)
+        {
+            bool image = q.Type.SelectedIndex == 1;
+            q.VfPanel.Visibility = image ? Visibility.Collapsed : Visibility.Visible;
+            q.ImgPanel.Visibility = image ? Visibility.Visible : Visibility.Collapsed;
+            if (image && q.Choices.Count == 0)
+            {
+                AddChoice(q, null);
+                AddChoice(q, null);
+            }
+        }
+
+        private void RemoveQuestion(QRow q)
+        {
+            _qRows.Remove(q);
+            _questionsHost.Children.Remove(q.Ui);
+            RenumberQuestions();
+        }
+
+        private void RenumberQuestions()
+        {
+            for (int i = 0; i < _qRows.Count; i++)
+                _qRows[i].Header.Text = "Question " + (i + 1);
+        }
+
+        private void AddChoice(QRow q, QuizChoice data)
+        {
+            if (q.Choices.Count >= 4) return;
+            var choice = new QChoice { Data = data ?? new QuizChoice() };
+
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            choice.Preview = new ContentControl { Width = 64, Height = 48, Margin = new Thickness(0, 0, 8, 0) };
+            line.Children.Add(choice.Preview);
+
+            var pick = new Button { Content = "🖼 Image…", FontSize = 14, Padding = new Thickness(10, 6, 10, 6) };
+            pick.Click += (s, e) => PickChoiceImage(choice);
+            line.Children.Add(pick);
+
+            choice.Correct = new RadioButton
+            {
+                Content = "Bonne réponse",
+                FontSize = 15,
+                GroupName = "ok" + q.Group,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0),
+                IsChecked = choice.Data.Correct || q.Choices.Count == 0, // la 1re est cochée par défaut
+            };
+            line.Children.Add(choice.Correct);
+
+            var del = new Button { Content = "🗑", FontSize = 14, Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(12, 0, 0, 0) };
+            del.Click += (s, e) => { q.Choices.Remove(choice); q.ChoicesHost.Children.Remove(choice.Ui); };
+            line.Children.Add(del);
+
+            choice.Ui = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0xF6, 0xF1, 0xFF)),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8),
+                Margin = new Thickness(0, 0, 0, 6),
+                Child = line,
+            };
+            q.Choices.Add(choice);
+            q.ChoicesHost.Children.Add(choice.Ui);
+            RefreshChoicePreview(choice);
+        }
+
+        private void PickChoiceImage(QChoice choice)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "Image de la réponse",
+                Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif",
+            };
+            if (dlg.ShowDialog(this) == true)
+            {
+                choice.Data.ImagePath = dlg.FileName;
+                choice.Data.Draw = null;
+                RefreshChoicePreview(choice);
+            }
+        }
+
+        private static void RefreshChoicePreview(QChoice choice)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(choice.Data.Draw))
+                {
+                    choice.Preview.Content = new Viewbox { Child = CartoonArt.Draw(choice.Data.Draw), Stretch = Stretch.Uniform };
+                    return;
+                }
+                if (!string.IsNullOrEmpty(choice.Data.ImagePath) && File.Exists(choice.Data.ImagePath))
+                {
+                    choice.Preview.Content = new Image { Source = UserContent.LoadBitmap(choice.Data.ImagePath, 200), Stretch = Stretch.Uniform };
+                    return;
+                }
+            }
+            catch { }
+            choice.Preview.Content = new TextBlock { Text = "🖼", FontSize = 30, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        }
+
+        private List<UserQuestion> CollectQuestions()
+        {
+            var list = new List<UserQuestion>();
+            foreach (var q in _qRows)
+            {
+                var text = q.Text.Text.Trim();
+                if (text.Length == 0) continue;
+
+                var uq = new UserQuestion { Text = text };
+                if (q.Type.SelectedIndex == 1)
+                {
+                    uq.Kind = QuizKind.Image;
+                    foreach (var c in q.Choices)
+                    {
+                        c.Data.Correct = c.Correct.IsChecked == true;
+                        if (!string.IsNullOrEmpty(c.Data.ImagePath) || !string.IsNullOrEmpty(c.Data.Draw))
+                            uq.Choices.Add(c.Data);
+                    }
+                    if (uq.Choices.Count < 2 || !uq.Choices.Any(c => c.Correct)) continue; // question incomplète : ignorée
+                }
+                else
+                {
+                    uq.Kind = QuizKind.TrueFalse;
+                    uq.Answer = q.VfTrue.IsChecked == true;
+                }
+                list.Add(uq);
+            }
+            return list;
+        }
+
+        // ------------------------------------------------------------------ import / enregistrement
         private void ImportJson(object sender, RoutedEventArgs e)
         {
             var dlg = new OpenFileDialog { Title = "Importer un livre (JSON)", Filter = "JSON|*.json" };
@@ -276,16 +560,20 @@ namespace MesPremiersJeux.Views
                 return;
             }
 
-            _title.Text = result.Value.Title;
+            _title.Text = result.Title;
             _rows.Clear();
             _pagesHost.Children.Clear();
-            foreach (var draft in result.Value.Pages)
+            foreach (var draft in result.Pages)
             {
                 var row = AddRow();
                 row.Draft = draft;
                 row.Text.Text = draft.Text;
                 RefreshRowButtons(row);
             }
+
+            _qRows.Clear();
+            _questionsHost.Children.Clear();
+            foreach (var q in result.Questions) AddQuestion(q);
         }
 
         private void Save(object sender, RoutedEventArgs e)
@@ -309,9 +597,11 @@ namespace MesPremiersJeux.Views
                 return;
             }
 
+            var questions = CollectQuestions();
+
             var saved = _existingDir != null
-                ? UserContent.UpdateStory(_existingDir, title, pages)
-                : UserContent.SaveStory(title, pages);
+                ? UserContent.UpdateStory(_existingDir, title, pages, questions)
+                : UserContent.SaveStory(title, pages, questions);
             if (saved == null)
             {
                 MessageBox.Show(this, "Impossible d'enregistrer le livre.", "Nouveau livre");

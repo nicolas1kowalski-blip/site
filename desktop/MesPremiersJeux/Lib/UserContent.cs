@@ -31,6 +31,27 @@ namespace MesPremiersJeux.Lib
         public string Title;
         public string Dir; // dossier du livre (pour modifier / supprimer)
         public List<UserStoryPage> Pages = new List<UserStoryPage>();
+        public List<UserQuestion> Questions = new List<UserQuestion>(); // quiz de fin
+    }
+
+    /// <summary>Type de question du quiz de fin d'histoire.</summary>
+    public enum QuizKind { TrueFalse, Image }
+
+    /// <summary>Une réponse-image du quiz (photo, ou dessin intégré via « draw »).</summary>
+    public sealed class QuizChoice
+    {
+        public string ImagePath;  // fichier image (peut être null)
+        public string Draw;       // nom d'un dessin intégré : chat, licorne… (peut être null)
+        public bool Correct;      // vraie réponse ?
+    }
+
+    /// <summary>Une question posée à la fin de l'histoire : Vrai/Faux ou choix d'image.</summary>
+    public sealed class UserQuestion
+    {
+        public string Text = "";
+        public QuizKind Kind = QuizKind.TrueFalse;
+        public bool Answer;                                        // pour Vrai/Faux
+        public List<QuizChoice> Choices = new List<QuizChoice>();  // pour Image
     }
 
     /// <summary>Page en cours d'édition (éditeur de livre).</summary>
@@ -54,6 +75,24 @@ namespace MesPremiersJeux.Lib
     {
         [DataMember(Name = "title")] public string Title;
         [DataMember(Name = "pages")] public List<BookPageJson> Pages;
+        [DataMember(Name = "questions", EmitDefaultValue = false)] public List<BookQuestionJson> Questions;
+    }
+
+    [DataContract]
+    internal sealed class BookQuestionJson
+    {
+        [DataMember(Name = "text")] public string Text;
+        [DataMember(Name = "type", EmitDefaultValue = false)] public string Type;        // "vraifaux" | "image"
+        [DataMember(Name = "answer", EmitDefaultValue = false)] public bool Answer;      // pour vraifaux
+        [DataMember(Name = "choices", EmitDefaultValue = false)] public List<BookChoiceJson> Choices;
+    }
+
+    [DataContract]
+    internal sealed class BookChoiceJson
+    {
+        [DataMember(Name = "image", EmitDefaultValue = false)] public string Image;      // fichier ou data URL
+        [DataMember(Name = "draw", EmitDefaultValue = false)] public string Draw;        // dessin intégré
+        [DataMember(Name = "correct", EmitDefaultValue = false)] public bool Correct;
     }
 
     [DataContract]
@@ -214,7 +253,16 @@ namespace MesPremiersJeux.Lib
                         "  l'imagier de l'onglet Éducatif (« Trouve papa ! »).\r\n\r\n" +
                         "HISTOIRES : un dossier par livre dans « Histoires », contenant soit\r\n" +
                         "  - livre.json (même format que l'application web) + les images ;\r\n" +
-                        "  - soit histoire.txt (une ligne = une page) + 1.png, 2.png…\r\n");
+                        "  - soit histoire.txt (une ligne = une page) + 1.png, 2.png…\r\n\r\n" +
+                        "QUIZ DE FIN (facultatif) : dans livre.json, ajoutez un tableau\r\n" +
+                        "  \"questions\" après \"pages\". Deux types :\r\n" +
+                        "  - Vrai/Faux : {\"text\":\"La licorne est rose ?\",\"type\":\"vraifaux\",\"answer\":true}\r\n" +
+                        "  - Images    : {\"text\":\"Montre le chat !\",\"type\":\"image\",\"choices\":[\r\n" +
+                        "                  {\"draw\":\"chat\",\"correct\":true},{\"draw\":\"poisson\"}]}\r\n" +
+                        "  « draw » = dessin intégré (chat, chien, licorne, princesse, fleur,\r\n" +
+                        "  poisson, papillon, arcenciel, etoile, coeur, soleil, nuage, cochon,\r\n" +
+                        "  lapin, oiseau, couronne, chateau). Ou « image »:\"photo.png\" (fichier\r\n" +
+                        "  dans le dossier du livre). Le plus simple : le bouton « Nouveau livre ».\r\n");
                 }
             }
             catch { }
@@ -406,11 +454,61 @@ namespace MesPremiersJeux.Lib
                 }
                 story.Pages.Add(page);
             }
+
+            // Quiz de fin (images résolues dans le dossier du livre).
+            if (data.Questions != null)
+            {
+                foreach (var q in data.Questions)
+                {
+                    var uq = ParseQuestion(q, img =>
+                    {
+                        var path = Path.Combine(dir, img);
+                        return File.Exists(path) ? path : null;
+                    });
+                    if (uq != null) story.Questions.Add(uq);
+                }
+            }
             return story;
         }
 
+        // Construit une UserQuestion à partir du JSON. « resolveImage » convertit le
+        // champ image (nom de fichier local, ou data URL) en chemin de fichier.
+        private static UserQuestion ParseQuestion(BookQuestionJson q, Func<string, string> resolveImage)
+        {
+            if (q == null || string.IsNullOrWhiteSpace(q.Text)) return null;
+            var uq = new UserQuestion { Text = q.Text.Trim() };
+
+            bool isImage = string.Equals(q.Type, "image", StringComparison.OrdinalIgnoreCase)
+                           || (q.Choices != null && q.Choices.Count > 0);
+            if (isImage)
+            {
+                uq.Kind = QuizKind.Image;
+                if (q.Choices != null)
+                {
+                    foreach (var c in q.Choices)
+                    {
+                        var choice = new QuizChoice
+                        {
+                            Correct = c.Correct,
+                            Draw = string.IsNullOrWhiteSpace(c.Draw) ? null : c.Draw.Trim(),
+                        };
+                        if (!string.IsNullOrEmpty(c.Image))
+                            choice.ImagePath = c.Image.StartsWith("data:image") ? DecodeDataUrl(c.Image) : resolveImage(c.Image);
+                        if (choice.ImagePath != null || choice.Draw != null) uq.Choices.Add(choice);
+                    }
+                }
+                if (uq.Choices.Count < 2 || !uq.Choices.Any(c => c.Correct)) return null;
+            }
+            else
+            {
+                uq.Kind = QuizKind.TrueFalse;
+                uq.Answer = q.Answer;
+            }
+            return uq;
+        }
+
         /// <summary>Enregistre un livre (format livre.json + images) ; renvoie null si échec.</summary>
-        public static string SaveStory(string title, IList<PageDraft> pages)
+        public static string SaveStory(string title, IList<PageDraft> pages, IList<UserQuestion> questions = null)
         {
             try
             {
@@ -421,17 +519,17 @@ namespace MesPremiersJeux.Lib
                 var dir = Path.Combine(StoriesDir, safe);
                 for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(StoriesDir, safe + " " + i);
                 Directory.CreateDirectory(dir);
-                return WriteStory(dir, title, pages);
+                return WriteStory(dir, title, pages, questions);
             }
             catch { return null; }
         }
 
         /// <summary>Met à jour un livre existant (dans son dossier) ; renvoie null si échec.</summary>
-        public static string UpdateStory(string dir, string title, IList<PageDraft> pages)
+        public static string UpdateStory(string dir, string title, IList<PageDraft> pages, IList<UserQuestion> questions = null)
         {
             try
             {
-                if (!Directory.Exists(dir)) return SaveStory(title, pages);
+                if (!Directory.Exists(dir)) return SaveStory(title, pages, questions);
 
                 // Sécurise les images référencées DANS le dossier : copie temporaire
                 // avant de nettoyer, pour pouvoir réécrire proprement 1.png, 2.png…
@@ -443,9 +541,19 @@ namespace MesPremiersJeux.Lib
                     File.Copy(p.ImagePath, tmp, true);
                     p.ImagePath = tmp;
                 }
+                // Idem pour les images-réponses du quiz.
+                if (questions != null)
+                    foreach (var c in questions.SelectMany(q => q.Choices))
+                    {
+                        if (string.IsNullOrEmpty(c.ImagePath) || !File.Exists(c.ImagePath)) continue;
+                        if (!c.ImagePath.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) continue;
+                        var tmp = Path.Combine(Path.GetTempPath(), "mpj-" + Guid.NewGuid().ToString("N") + Path.GetExtension(c.ImagePath));
+                        File.Copy(c.ImagePath, tmp, true);
+                        c.ImagePath = tmp;
+                    }
 
                 foreach (var f in Directory.GetFiles(dir)) File.Delete(f);
-                return WriteStory(dir, title, pages);
+                return WriteStory(dir, title, pages, questions);
             }
             catch { return null; }
         }
@@ -465,7 +573,7 @@ namespace MesPremiersJeux.Lib
             return false;
         }
 
-        private static string WriteStory(string dir, string title, IList<PageDraft> pages)
+        private static string WriteStory(string dir, string title, IList<PageDraft> pages, IList<UserQuestion> questions = null)
         {
             try
             {
@@ -492,6 +600,51 @@ namespace MesPremiersJeux.Lib
                     data.Pages.Add(pj);
                 }
 
+                // Quiz de fin : images-réponses copiées en q1_1.png, q1_2.png…
+                if (questions != null)
+                {
+                    var qList = new List<BookQuestionJson>();
+                    for (int i = 0; i < questions.Count; i++)
+                    {
+                        var q = questions[i];
+                        if (string.IsNullOrWhiteSpace(q.Text)) continue;
+                        var qj = new BookQuestionJson { Text = q.Text.Trim() };
+                        if (q.Kind == QuizKind.Image)
+                        {
+                            qj.Type = "image";
+                            qj.Choices = new List<BookChoiceJson>();
+                            int ci = 0;
+                            foreach (var c in q.Choices)
+                            {
+                                ci++;
+                                var cj = new BookChoiceJson { Correct = c.Correct };
+                                if (!string.IsNullOrWhiteSpace(c.Draw))
+                                {
+                                    cj.Draw = c.Draw.Trim();
+                                }
+                                else if (!string.IsNullOrEmpty(c.ImagePath) && File.Exists(c.ImagePath))
+                                {
+                                    var ext = Path.GetExtension(c.ImagePath).ToLowerInvariant();
+                                    if (!ImageExts.Contains(ext)) continue;
+                                    var name = "q" + (i + 1) + "_" + ci + ext;
+                                    File.Copy(c.ImagePath, Path.Combine(dir, name), true);
+                                    cj.Image = name;
+                                }
+                                else continue;
+                                qj.Choices.Add(cj);
+                            }
+                            if (qj.Choices.Count >= 2 && qj.Choices.Any(x => x.Correct)) qList.Add(qj);
+                        }
+                        else
+                        {
+                            qj.Type = "vraifaux";
+                            qj.Answer = q.Answer;
+                            qList.Add(qj);
+                        }
+                    }
+                    if (qList.Count > 0) data.Questions = qList;
+                }
+
                 using (var fs = File.Create(Path.Combine(dir, "livre.json")))
                 {
                     var ser = new DataContractJsonSerializer(typeof(BookJson));
@@ -502,12 +655,20 @@ namespace MesPremiersJeux.Lib
             catch { return null; }
         }
 
+        /// <summary>Livre importé depuis un JSON (pour pré-remplir l'éditeur).</summary>
+        public sealed class ImportedBook
+        {
+            public string Title;
+            public List<PageDraft> Pages = new List<PageDraft>();
+            public List<UserQuestion> Questions = new List<UserQuestion>();
+        }
+
         /// <summary>
-        /// Importe un JSON au format web (title/pages/text/image dataURL/zones) :
-        /// les images en data: sont décodées vers des fichiers temporaires.
-        /// Renvoie null (avec message) si le JSON est invalide.
+        /// Importe un JSON au format web (title/pages/text/image dataURL/zones) plus
+        /// le quiz de fin (questions) : les images en data: sont décodées vers des
+        /// fichiers temporaires. Renvoie null (avec message) si le JSON est invalide.
         /// </summary>
-        public static (string Title, List<PageDraft> Pages)? ImportJson(string jsonText, out string error)
+        public static ImportedBook ImportJson(string jsonText, out string error)
         {
             error = null;
             BookJson data;
@@ -519,7 +680,7 @@ namespace MesPremiersJeux.Lib
             if (data.Pages == null || data.Pages.Count == 0)
             { error = "Le champ « pages » doit être une liste non vide."; return null; }
 
-            var pages = new List<PageDraft>();
+            var book = new ImportedBook { Title = data.Title.Trim() };
             foreach (var p in data.Pages)
             {
                 var draft = new PageDraft { Text = (p.Text ?? "").Trim() };
@@ -541,9 +702,20 @@ namespace MesPremiersJeux.Lib
                         }
                     }
                 }
-                pages.Add(draft);
+                book.Pages.Add(draft);
             }
-            return (data.Title.Trim(), pages);
+
+            // Quiz : images en data URL décodées ; noms de fichiers ignorés (l'import
+            // JSON n'embarque pas de fichiers séparés).
+            if (data.Questions != null)
+            {
+                foreach (var q in data.Questions)
+                {
+                    var uq = ParseQuestion(q, _ => null);
+                    if (uq != null) book.Questions.Add(uq);
+                }
+            }
+            return book;
         }
 
         private static BookJson ParseJson(string jsonText)

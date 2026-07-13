@@ -6,7 +6,9 @@ using System.Windows.Controls;
 using System.Text;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using MesPremiersJeux.Games;
 using MesPremiersJeux.Gaze;
 using MesPremiersJeux.Lib;
@@ -50,6 +52,7 @@ namespace MesPremiersJeux.Views
             public string Title;
             public string Dir; // dossier du livre personnalisé (null = livre intégré)
             public List<BookPage> Pages = new List<BookPage>();
+            public List<UserQuestion> Questions = new List<UserQuestion>(); // quiz de fin
         }
 
         // Zones affichées sur la page courante (pour les faire réagir à la lecture).
@@ -69,6 +72,15 @@ namespace MesPremiersJeux.Views
         private Book _book;
         private int _index;
         private int _readIndex;
+
+        // --- Quiz de fin d'histoire ---
+        private Grid _quizRoot;
+        private TextBlock _quizInfo;
+        private TextBlock _quizPrompt;
+        private WrapPanel _quizAnswers;
+        private Button _quizBtn;
+        private int _quizIndex;
+        private bool _quizLocked;
 
         // Histoire racontée : texte de la page et correspondance mot → groupe.
         private string _pageText = "";
@@ -155,6 +167,9 @@ namespace MesPremiersJeux.Views
             nav.Children.Add(NavButton("⬅", () => ShowPage(_index - 1)));
             nav.Children.Add(NavButton("🔁", () => ShowPage(_index)));
             nav.Children.Add(NavButton("🔊", ListenPage));
+            _quizBtn = NavButton("🎯", StartQuiz);
+            _quizBtn.Visibility = Visibility.Collapsed; // seulement si le livre a des questions
+            nav.Children.Add(_quizBtn);
             _pageInfo = new TextBlock
             {
                 FontSize = 24,
@@ -168,6 +183,10 @@ namespace MesPremiersJeux.Views
             _readerRoot.Children.Add(nav);
 
             root.Children.Add(_readerRoot);
+
+            // --- Quiz de fin (par-dessus, masqué au départ) ---
+            root.Children.Add(BuildQuizRoot());
+
             Content = root;
 
             BuildMenu();
@@ -194,16 +213,35 @@ namespace MesPremiersJeux.Views
                 var a = art;
                 builtIn.Pages.Add(new BookPage { Text = text, Cartoon = () => CartoonArt.Draw(a) });
             }
+            // Petit quiz de fin (démontre les deux types de questions).
+            builtIn.Questions.Add(new UserQuestion
+            {
+                Text = "Étincelle est une licorne ?",
+                Kind = QuizKind.TrueFalse,
+                Answer = true,
+            });
+            builtIn.Questions.Add(Pick("Montre le chat !", "chat", "poisson", "fleur"));
+            builtIn.Questions.Add(Pick("Où est l'arc-en-ciel ?", "arcenciel", "etoile", "papillon"));
             _books.Add(builtIn);
 
             // Livres du parent (Documents\MesPremiersJeux\Histoires).
             foreach (var s in UserContent.LoadStories())
             {
-                var book = new Book { Title = s.Title, Dir = s.Dir };
+                var book = new Book { Title = s.Title, Dir = s.Dir, Questions = s.Questions };
                 foreach (var p in s.Pages)
                     book.Pages.Add(new BookPage { Text = p.Text, ImagePath = p.ImagePath, Zones = p.Zones });
                 _books.Add(book);
             }
+        }
+
+        // Question « choisis la bonne image » à partir de dessins intégrés
+        // (le 1er est la bonne réponse).
+        private static UserQuestion Pick(string text, string correct, params string[] others)
+        {
+            var q = new UserQuestion { Text = text, Kind = QuizKind.Image };
+            q.Choices.Add(new QuizChoice { Draw = correct, Correct = true });
+            foreach (var o in others) q.Choices.Add(new QuizChoice { Draw = o });
+            return q;
         }
 
         // Construit l'illustration d'une page : dessin intégré, ou photo avec ses
@@ -376,7 +414,19 @@ namespace MesPremiersJeux.Views
                 }).ToList() ?? new List<UserZone>(),
             }).ToList();
 
-            var editor = new BookEditorWindow(book.Title, drafts, book.Dir) { Owner = Window.GetWindow(this) };
+            // Copie des questions (pour ne pas modifier le modèle chargé).
+            var qDrafts = book.Questions.Select(q => new UserQuestion
+            {
+                Text = q.Text,
+                Kind = q.Kind,
+                Answer = q.Answer,
+                Choices = q.Choices.Select(c => new QuizChoice
+                {
+                    ImagePath = c.ImagePath, Draw = c.Draw, Correct = c.Correct,
+                }).ToList(),
+            }).ToList();
+
+            var editor = new BookEditorWindow(book.Title, drafts, qDrafts, book.Dir) { Owner = Window.GetWindow(this) };
             if (editor.ShowDialog() == true)
             {
                 ReloadBooks();
@@ -429,6 +479,7 @@ namespace MesPremiersJeux.Views
         {
             _book = book;
             _title.Text = "✨ " + book.Title + " ✨";
+            _quizBtn.Visibility = book.Questions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             _menuRoot.Visibility = Visibility.Collapsed;
             _readerRoot.Visibility = Visibility.Visible;
             ShowPage(0);
@@ -554,7 +605,19 @@ namespace MesPremiersJeux.Views
             _readIndex++;
             Refresh();
             if (_readIndex >= _groups.Count)
+            {
                 Speech.Say("Bravo !");
+                // Fin de la dernière page + quiz disponible : on enchaîne en douceur.
+                if (_book != null && _index == _book.Pages.Count - 1 && _book.Questions.Count > 0)
+                    Delay(1400, StartQuiz);
+            }
+        }
+
+        private void Delay(int ms, Action action)
+        {
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+            t.Tick += (s, e) => { t.Stop(); action(); };
+            t.Start();
         }
 
         // Met à jour les couleurs : lus = gris, courant = surligné, à venir = foncé.
@@ -581,6 +644,228 @@ namespace MesPremiersJeux.Views
                     _groups[k].FontWeight = FontWeights.SemiBold;
                 }
             }
+        }
+
+        // ------------------------------------------------------------------
+        // Quiz de fin d'histoire (Vrai/Faux ou choix d'image, joué au regard)
+        // ------------------------------------------------------------------
+        private static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0x7B, 0xC9, 0x6F));
+        private static readonly Brush Red = new SolidColorBrush(Color.FromRgb(0xF2, 0x6D, 0x6D));
+
+        private UIElement BuildQuizRoot()
+        {
+            _quizRoot = new Grid { Visibility = Visibility.Collapsed };
+            _quizRoot.Background = new LinearGradientBrush(
+                Color.FromRgb(0xFF, 0xF8, 0xE6), Color.FromRgb(0xE9, 0xF7, 0xFF), 90);
+            _quizRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _quizRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _quizRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            _quizInfo = new TextBlock
+            {
+                FontSize = 24,
+                FontWeight = FontWeights.Bold,
+                Foreground = Violet,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 20, 0, 0),
+            };
+            Grid.SetRow(_quizInfo, 0);
+            _quizRoot.Children.Add(_quizInfo);
+
+            _quizPrompt = new TextBlock
+            {
+                FontSize = 46,
+                FontWeight = FontWeights.Bold,
+                Foreground = Dark,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                MaxWidth = 1200,
+                Margin = new Thickness(24, 12, 24, 8),
+            };
+            Grid.SetRow(_quizPrompt, 1);
+            _quizRoot.Children.Add(_quizPrompt);
+
+            _quizAnswers = new WrapPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetRow(_quizAnswers, 2);
+            _quizRoot.Children.Add(_quizAnswers);
+
+            var back = new Button
+            {
+                Style = (Style)Application.Current.Resources["BackButton"],
+                Content = "📚  Livres",
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(16),
+            };
+            back.Click += (s, e) => { _quizRoot.Visibility = Visibility.Collapsed; ShowMenu(); };
+            _quizRoot.Children.Add(back);
+            return _quizRoot;
+        }
+
+        private void StartQuiz()
+        {
+            if (_book == null || _book.Questions.Count == 0) return;
+            _quizIndex = 0;
+            _menuRoot.Visibility = Visibility.Collapsed;
+            _readerRoot.Visibility = Visibility.Collapsed;
+            _quizRoot.Visibility = Visibility.Visible;
+            ShowQuestion();
+        }
+
+        private void ShowQuestion()
+        {
+            if (_book == null || _quizIndex >= _book.Questions.Count) { FinishQuiz(); return; }
+            var q = _book.Questions[_quizIndex];
+            _quizLocked = false;
+            _quizInfo.Text = $"Question {_quizIndex + 1} / {_book.Questions.Count}";
+            _quizPrompt.Text = q.Text;
+            _quizAnswers.Children.Clear();
+            Speech.Say(q.Text);
+
+            if (q.Kind == QuizKind.TrueFalse)
+            {
+                _quizAnswers.Children.Add(VfCard("✅", "Vrai", Green, q.Answer == true));
+                _quizAnswers.Children.Add(VfCard("❌", "Faux", Red, q.Answer == false));
+            }
+            else
+            {
+                foreach (var c in q.Choices)
+                {
+                    var choice = c;
+                    var card = QuizCard(new Viewbox { Child = ChoiceVisual(choice), Stretch = Stretch.Uniform }, Brushes.White);
+                    card.Click += (s, e) => AnswerQuestion(choice.Correct, card);
+                    _quizAnswers.Children.Add(card);
+                }
+            }
+        }
+
+        private Button VfCard(string glyph, string label, Brush bg, bool correct)
+        {
+            var inner = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            inner.Children.Add(new TextBlock { Text = glyph, FontSize = 84, HorizontalAlignment = HorizontalAlignment.Center });
+            inner.Children.Add(new TextBlock { Text = label, FontSize = 32, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center });
+            var card = QuizCard(inner, bg);
+            card.Click += (s, e) => AnswerQuestion(correct, card);
+            return card;
+        }
+
+        private void AnswerQuestion(bool correct, FrameworkElement card)
+        {
+            if (_quizLocked) return;
+            if (correct)
+            {
+                _quizLocked = true;
+                RewardStore.Add();               // une étoile ⭐
+                Speech.Say("Bravo !");
+                PopEl(card);
+                _quizIndex++;
+                Delay(1500, ShowQuestion);
+            }
+            else
+            {
+                ShakeEl(card);
+                Speech.Say("Essaie encore !");
+            }
+        }
+
+        private void FinishQuiz()
+        {
+            _quizLocked = true;
+            _quizInfo.Text = "";
+            _quizPrompt.Text = "🌟 Bravo, tu as tout trouvé ! 🌟";
+            _quizAnswers.Children.Clear();
+            Speech.Say("Bravo ! Tu as tout trouvé !");
+
+            var again = QuizCard(BigGlyph("🔁", "Encore"), Brushes.White);
+            again.Click += (s, e) => StartQuiz();
+            var lib = QuizCard(BigGlyph("📚", "Livres"), Brushes.White);
+            lib.Click += (s, e) => { _quizRoot.Visibility = Visibility.Collapsed; ShowMenu(); };
+            _quizAnswers.Children.Add(again);
+            _quizAnswers.Children.Add(lib);
+        }
+
+        private static UIElement BigGlyph(string glyph, string label)
+        {
+            var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            sp.Children.Add(new TextBlock { Text = glyph, FontSize = 76, HorizontalAlignment = HorizontalAlignment.Center });
+            sp.Children.Add(new TextBlock { Text = label, FontSize = 26, FontWeight = FontWeights.Bold, Foreground = Dark, HorizontalAlignment = HorizontalAlignment.Center });
+            return sp;
+        }
+
+        private static UIElement ChoiceVisual(QuizChoice c)
+        {
+            if (!string.IsNullOrEmpty(c.Draw))
+            {
+                try { return CartoonArt.Draw(c.Draw); } catch { }
+            }
+            if (!string.IsNullOrEmpty(c.ImagePath))
+            {
+                try { return new Image { Source = UserContent.LoadBitmap(c.ImagePath, 500), Stretch = Stretch.Uniform }; }
+                catch { }
+            }
+            return new TextBlock { Text = "🖼", FontSize = 90, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        }
+
+        // Carte-réponse (grande cible cliquable au regard), apparence entièrement
+        // maîtrisée pour ne pas dépendre d'un style de bouton particulier.
+        private static Button QuizCard(UIElement inner, Brush bg)
+        {
+            var card = new Border
+            {
+                Background = bg,
+                CornerRadius = new CornerRadius(24),
+                Padding = new Thickness(12),
+                Child = inner,
+                Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 3, Opacity = 0.2 },
+            };
+            return new Button
+            {
+                Template = CardTemplate(),
+                Content = card,
+                Background = Brushes.Transparent,
+                Width = 230,
+                Height = 230,
+                Margin = new Thickness(18),
+            };
+        }
+
+        private static ControlTemplate CardTemplate()
+        {
+            var tpl = new ControlTemplate(typeof(Button));
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Stretch);
+            border.AppendChild(cp);
+            tpl.VisualTree = border;
+            return tpl;
+        }
+
+        private static void PopEl(FrameworkElement el)
+        {
+            el.RenderTransformOrigin = new Point(0.5, 0.5);
+            var st = new ScaleTransform(1, 1);
+            el.RenderTransform = st;
+            var a = new DoubleAnimation(1, 1.16, TimeSpan.FromMilliseconds(190)) { AutoReverse = true };
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, a);
+            st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+        }
+
+        private static void ShakeEl(FrameworkElement el)
+        {
+            el.RenderTransformOrigin = new Point(0.5, 0.5);
+            var tt = new TranslateTransform();
+            el.RenderTransform = tt;
+            var a = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(450) };
+            foreach (var (p, v) in new[] { (0.0, 0.0), (0.2, -10.0), (0.4, 9.0), (0.6, -7.0), (0.8, 5.0), (1.0, 0.0) })
+                a.KeyFrames.Add(new LinearDoubleKeyFrame(v, KeyTime.FromPercent(p)));
+            tt.BeginAnimation(TranslateTransform.XProperty, a);
         }
     }
 }
