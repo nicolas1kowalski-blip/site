@@ -11,46 +11,19 @@ using System.Windows.Shapes;
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// « Le corps » — un enfant dessiné en vectoriel mais volumétrique (dégradés
-    /// de peau, ombres douces, yeux réalistes avec iris et reflets, cheveux en
-    /// mèches, mains avec doigts…), dont on apprend les parties du corps au regard.
-    /// Le jeu demande « Montre le nez ! », illumine la partie et lance les confettis
-    /// quand c'est juste, et fait doucement trembler l'enfant sinon (on réessaie).
+    /// « Le corps » — un enfant dessiné au trait, façon « livre de coloriage »
+    /// (contours noirs nets, intérieur blanc, sans aucune étiquette), dont on
+    /// apprend les parties du corps au regard. Le jeu demande « Montre le nez ! »,
+    /// illumine la bonne partie et lance les confettis, et fait doucement trembler
+    /// l'enfant sinon (on réessaie, sans pénalité).
     /// </summary>
     public sealed class BodyGame : GameControl
     {
         private const double W = 200, H = 320;
+        private const double LW = 3.2;   // épaisseur du trait
 
-        // ---- Palette / brosses partagées (réutilisables sur plusieurs formes) ----
-        private static readonly Brush Ink = Col("#3A2E4A");
-
-        // Peau : dégradé radial pour le visage (lumière en haut à gauche), dégradé
-        // linéaire pour les membres (effet cylindrique).
-        private static readonly Brush SkinFace = Rad(0.38, 0.30, 0.50, 0.48, 0.72, 0.78,
-            (0.0, "#FCE4CB"), (0.55, "#F2C29B"), (1.0, "#DDA379"));
-        private static readonly Brush SkinLimb = Lin(0, 0, 1, 0,
-            (0.0, "#FBDCC1"), (0.45, "#F0BE94"), (1.0, "#D69C71"));
-        private static readonly Brush SkinLn = Col("#C68C61");
-        private static readonly Brush SkinShade = Col("#3AC08A63"); // ombre translucide
-
-        private static readonly Brush HairBrush = Lin(0.2, 0, 0.8, 1,
-            (0.0, "#8A5A30"), (0.5, "#6E4522"), (1.0, "#4E3016"));
-        private static readonly Brush HairHi = Col("#B98A55");
-
-        private static readonly Brush Dress = Lin(0.3, 0, 0.6, 1,
-            (0.0, "#FF9DB2"), (0.5, "#FF6E8C"), (1.0, "#E7527A"));
-        private static readonly Brush DressLn = Col("#C7476B");
-        private static readonly Brush Fold = Col("#33962E52");
-
-        private static readonly Brush IrisBrush = Rad(0.5, 0.4, 0.5, 0.5, 0.5, 0.5,
-            (0.0, "#8A5E36"), (0.55, "#6B4522"), (1.0, "#3A2210"));
-        private static readonly Brush EyeWhite = Lin(0, 0, 0, 1,
-            (0.0, "#E9E1D6"), (0.3, "#F7F2EB"), (1.0, "#FBF8F3"));
-        private static readonly Brush LipTop = Col("#D25574");
-        private static readonly Brush LipBottom = Lin(0, 0, 0, 1,
-            (0.0, "#F06A88"), (1.0, "#D9506F"));
-        private static readonly Brush Cheek = RadA(0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-            (0.0, "#78FF8FB0"), (1.0, "#00FF8FB0"));
+        private static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A));
+        private static readonly Brush White = Brushes.White;
 
         private readonly Random _rng = new Random();
         private readonly List<(Rect r, string id)> _zones = new List<(Rect, string)>();
@@ -132,22 +105,22 @@ namespace MesPremiersJeux.Games
             _figure = BuildFigure();
 
             _overlay = new Canvas { Width = W, Height = H, Background = Brushes.Transparent };
-            AddZone(48, 8, 104, 46, "tete");        // dessous : un détail du visage l'emporte
-            AddZone(44, 6, 112, 38, "cheveux");
-            AddZone(58, 54, 84, 26, "yeux");
-            AddZone(84, 78, 32, 18, "nez");
-            AddZone(74, 96, 52, 22, "bouche");
-            AddZone(38, 58, 22, 28, "oreilles");    // gauche
-            AddZone(140, 58, 22, 28, "oreilles");   // droite
-            AddZone(70, 150, 60, 62, "ventre");
-            AddZone(26, 150, 30, 80, "bras");        // gauche
-            AddZone(144, 150, 30, 80, "bras");       // droit
-            AddZone(12, 224, 38, 40, "mains");       // gauche
-            AddZone(150, 224, 38, 40, "mains");      // droite
-            AddZone(70, 224, 28, 74, "jambes");      // gauche
-            AddZone(102, 224, 28, 74, "jambes");     // droite
-            AddZone(62, 298, 40, 22, "pieds");       // gauche
-            AddZone(98, 298, 40, 22, "pieds");       // droit
+            AddZone(58, 20, 84, 38, "tete");        // dessous : un détail du visage l'emporte
+            AddZone(56, 18, 88, 30, "cheveux");
+            AddZone(66, 56, 68, 22, "yeux");
+            AddZone(88, 64, 24, 18, "nez");
+            AddZone(80, 82, 40, 22, "bouche");
+            AddZone(46, 58, 22, 28, "oreilles");    // gauche
+            AddZone(132, 58, 22, 28, "oreilles");   // droite
+            AddZone(72, 135, 56, 68, "ventre");
+            AddZone(28, 140, 34, 68, "bras");        // gauche
+            AddZone(138, 140, 34, 68, "bras");       // droit
+            AddZone(16, 200, 40, 46, "mains");       // gauche
+            AddZone(144, 200, 40, 46, "mains");      // droite
+            AddZone(70, 214, 28, 78, "jambes");      // gauche
+            AddZone(102, 214, 28, 78, "jambes");     // droite
+            AddZone(60, 298, 44, 22, "pieds");       // gauche
+            AddZone(96, 298, 44, 22, "pieds");       // droit
 
             var grid = new Grid { Width = W, Height = H };
             grid.Children.Add(_figure);
@@ -189,9 +162,9 @@ namespace MesPremiersJeux.Games
             double d = Math.Max(z.Width, z.Height) * 1.8 + 14;
 
             var brush = new RadialGradientBrush();
-            brush.GradientStops.Add(new GradientStop(Color.FromArgb(220, 0xFF, 0xF3, 0x7A), 0.0));
-            brush.GradientStops.Add(new GradientStop(Color.FromArgb(150, 0xFF, 0xD9, 0x3C), 0.55));
-            brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0xD9, 0x3C), 1.0));
+            brush.GradientStops.Add(new GradientStop(Color.FromArgb(210, 0xFF, 0xE7, 0x5C), 0.0));
+            brush.GradientStops.Add(new GradientStop(Color.FromArgb(140, 0xFF, 0xD1, 0x3C), 0.55));
+            brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0xD1, 0x3C), 1.0));
 
             _halo = new Ellipse { Width = d, Height = d, Fill = brush, IsHitTestVisible = false };
             Canvas.SetLeft(_halo, cx - d / 2);
@@ -214,183 +187,112 @@ namespace MesPremiersJeux.Games
             if (_halo != null) { _overlay.Children.Remove(_halo); _halo = null; }
         }
 
-        // ------------------------------------------------------------------ dessin
+        // ------------------------------------------------------------------ dessin (trait « coloriage »)
         private static FrameworkElement BuildFigure()
         {
             var c = new Canvas { Width = W, Height = H };
 
-            // 1) Chevelure arrière (mèches qui tombent derrière les épaules).
-            c.Children.Add(Pa("M50,74 Q38,18 100,12 Q162,18 150,74 " +
-                              "Q160,120 146,170 Q136,182 126,172 Q132,120 124,86 " +
-                              "L76,86 Q68,120 74,172 Q64,182 54,170 Q40,120 50,74 Z", HairBrush, Ink, 2));
+            // Bras (derrière le torse), mains ouvertes vers le bas.
+            c.Children.Add(Pa(Capsule(72, 134, 40, 212, 26), White, Ink, LW));
+            c.Children.Add(Pa(Capsule(128, 134, 160, 212, 26), White, Ink, LW));
 
-            // 2) Jambes (derrière la robe), avec genou clair.
-            c.Children.Add(Limb(87, 226, 85, 302, 26));
-            c.Children.Add(Limb(113, 226, 115, 302, 26));
-            c.Children.Add(Oval(85, 262, 12, 14, Highlight(), null, 0));
-            c.Children.Add(Oval(115, 262, 12, 14, Highlight(), null, 0));
+            // Jambes (derrière le short).
+            c.Children.Add(Pa(Capsule(86, 210, 84, 300, 32), White, Ink, LW));
+            c.Children.Add(Pa(Capsule(114, 210, 116, 300, 32), White, Ink, LW));
 
-            // 3) Pieds nus (talon + orteils).
-            Foot(c, 82, 306);
-            Foot(c, 118, 306);
+            // Pieds nus (contour + orteils).
+            Foot(c, 84, 302);
+            Foot(c, 116, 302);
 
-            // 4) Bras (derrière la robe).
-            c.Children.Add(Limb(62, 154, 30, 236, 22));
-            c.Children.Add(Limb(138, 154, 170, 236, 22));
+            // Torse (buste nu : le ventre se montre facilement).
+            c.Children.Add(Pa("M72,130 C60,152 66,198 76,210 Q100,220 124,210 " +
+                              "C134,198 140,152 128,130 Q100,120 72,130 Z", White, Ink, LW));
+            // Short.
+            c.Children.Add(Pa("M74,200 Q100,210 126,200 L130,240 L104,246 L100,232 L96,246 L70,240 Z", White, Ink, LW));
+            // Nombril.
+            c.Children.Add(Pa("M98,178 Q100,182 102,178", null, Ink, 2));
 
-            // 5) Mains avec doigts.
-            Hand(c, 29, 240, -1);
-            Hand(c, 171, 240, +1);
+            // Mains ouvertes (doigts écartés).
+            Hand(c, 40, 214, -1);
+            Hand(c, 160, 214, +1);
 
-            // 6) Robe (corps), évasée, avec plis et col.
-            c.Children.Add(Pa("M62,150 Q100,140 138,150 L158,224 Q100,240 42,224 Z", Dress, DressLn, 2.5));
-            c.Children.Add(Pa("M84,158 Q80,196 74,222", null, Fold, 3));
-            c.Children.Add(Pa("M116,158 Q120,196 126,222", null, Fold, 3));
-            c.Children.Add(Pa("M100,150 L100,232", null, Fold, 2));
-            // Manches courtes.
-            c.Children.Add(Pa("M64,150 Q50,156 52,176 Q66,176 74,160 Z", Dress, DressLn, 2));
-            c.Children.Add(Pa("M136,150 Q150,156 148,176 Q134,176 126,160 Z", Dress, DressLn, 2));
-            // Encolure.
-            c.Children.Add(Pa("M84,148 Q100,158 116,148", null, DressLn, 2.5));
+            // Cou (derrière la tête).
+            c.Children.Add(Pa("M88,116 L88,130 Q100,136 112,130 L112,116 Z", White, Ink, LW));
 
-            // 7) Cou + ombre sous le menton.
-            var neck = new Rectangle { Width = 26, Height = 34, RadiusX = 10, RadiusY = 10, Fill = SkinLimb, Stroke = SkinLn, StrokeThickness = 1.5 };
-            Canvas.SetLeft(neck, 87); Canvas.SetTop(neck, 108);
-            c.Children.Add(neck);
-            c.Children.Add(Pa("M74,116 Q100,132 126,116 Q100,126 74,116 Z", SkinShade, null, 0));
+            // Oreilles (avant la tête, la tête recouvre l'attache).
+            c.Children.Add(Oval(56, 70, 8, 11, White, Ink, LW));
+            c.Children.Add(Oval(144, 70, 8, 11, White, Ink, LW));
+            c.Children.Add(Pa("M56,64 Q60,70 56,76", null, Ink, 2));
+            c.Children.Add(Pa("M144,64 Q140,70 144,76", null, Ink, 2));
 
-            // 8) Oreilles.
-            Ear(c, 50, 72);
-            Ear(c, 150, 72);
+            // Tête.
+            c.Children.Add(Oval(100, 66, 42, 46, White, Ink, LW));
 
-            // 9) Tête (grand ovale, dégradé volumétrique).
-            c.Children.Add(Oval(100, 64, 50, 56, SkinFace, SkinLn, 2));
-            // Ombres douces des tempes/mâchoire.
-            c.Children.Add(Pa("M52,60 Q46,92 74,112 Q58,88 60,60 Z", SkinShade, null, 0));
-            c.Children.Add(Pa("M148,60 Q154,92 126,112 Q142,88 140,60 Z", SkinShade, null, 0));
+            // Cheveux courts en épis.
+            c.Children.Add(Pa("M60,66 C54,38 68,24 84,24 C90,14 110,14 116,26 C134,24 146,40 140,66 " +
+                              "C132,52 126,56 120,46 C116,58 106,54 104,44 C100,56 92,56 88,46 " +
+                              "C84,58 74,56 72,50 C68,62 62,56 60,66 Z", White, Ink, LW));
 
-            // 10) Frange + mèches devant, encadrant le visage.
-            c.Children.Add(Pa("M50,66 Q44,20 100,14 Q156,20 150,66 " +
-                              "Q150,44 128,40 Q116,30 100,32 Q84,30 72,40 Q50,44 50,66 Z", HairBrush, Ink, 2));
-            c.Children.Add(Pa("M100,14 Q70,18 60,54 Q66,34 84,30 Q92,20 100,20 Z", HairHi, null, 0));
-            c.Children.Add(Pa("M64,42 Q58,58 62,80 Q66,56 74,46 Z", HairBrush, Ink, 1.5)); // mèche gauche
-            c.Children.Add(Pa("M136,42 Q142,58 138,80 Q134,56 126,46 Z", HairBrush, Ink, 1.5)); // mèche droite
+            // Sourcils.
+            c.Children.Add(Pa("M74,54 Q84,49 94,54", null, Ink, 2.6));
+            c.Children.Add(Pa("M106,54 Q116,49 126,54", null, Ink, 2.6));
 
-            // 11) Sourcils.
-            c.Children.Add(Pa("M62,52 Q78,44 94,51 Q78,48 62,52 Z", HairBrush, null, 0));
-            c.Children.Add(Pa("M106,51 Q122,44 138,52 Q122,48 106,51 Z", HairBrush, null, 0));
+            // Yeux (pleins) + petit reflet.
+            c.Children.Add(Oval(84, 64, 6.5, 8, Ink));
+            c.Children.Add(Oval(116, 64, 6.5, 8, Ink));
+            c.Children.Add(Circle(81.6, 61, 2.2, White));
+            c.Children.Add(Circle(113.6, 61, 2.2, White));
 
-            // 12) Yeux réalistes (blanc, iris, pupille, reflet, paupière, cils).
-            Eye(c, 78, 68, -1);
-            Eye(c, 122, 68, +1);
+            // Nez.
+            c.Children.Add(Pa("M99,68 C104,73 104,79 98,79", null, Ink, 2.4));
 
-            // 13) Nez (ombre latérale, narines, petit reflet).
-            c.Children.Add(Pa("M100,62 Q94,80 99,88 Q104,86 105,80 Q104,72 100,62 Z", SkinShade, null, 0));
-            c.Children.Add(Oval(95, 87, 2.2, 1.6, Ink, null, 0));
-            c.Children.Add(Oval(105, 87, 2.2, 1.6, Ink, null, 0));
-            c.Children.Add(Oval(101, 82, 2.4, 3, Highlight(), null, 0));
-
-            // 14) Lèvres.
-            c.Children.Add(Pa("M80,100 Q90,95 100,99 Q110,95 120,100 Q110,105 100,103 Q90,105 80,100 Z", LipTop, Col("#B0405E"), 1));
-            c.Children.Add(Pa("M82,101 Q100,116 118,101 Q100,108 82,101 Z", LipBottom, Col("#C7506C"), 1));
-            c.Children.Add(Pa("M92,106 Q100,110 108,106", null, Col("#66FFB8C8"), 2)); // brillance
-
-            // 15) Joues rosées.
-            c.Children.Add(Oval(70, 86, 13, 10, Cheek, null, 0));
-            c.Children.Add(Oval(130, 86, 13, 10, Cheek, null, 0));
+            // Bouche (sourire ouvert).
+            c.Children.Add(Pa("M84,86 Q100,93 116,86 Q109,103 100,103 Q91,103 84,86 Z", White, Ink, LW));
 
             return new Viewbox { Child = c, Stretch = Stretch.Uniform, IsHitTestVisible = false };
         }
 
-        // ---- Sous-ensembles réutilisables ----
-        private static void Eye(Canvas c, double cx, double cy, int dir)
-        {
-            // Blanc de l'œil (amande).
-            c.Children.Add(Pa(Inv($"M{cx - 14},{cy} Q{cx},{cy - 11} {cx + 14},{cy} Q{cx},{cy + 9} {cx - 14},{cy} Z"),
-                EyeWhite, Col("#8C6B57"), 1.2));
-            // Iris + pupille + reflet.
-            c.Children.Add(Circle(cx, cy, 7.5, IrisBrush, Col("#3A2210"), 0.8));
-            c.Children.Add(Circle(cx, cy, 3.4, Ink));
-            c.Children.Add(Circle(cx - 2.4, cy - 2.6, 1.7, Brushes.White));
-            c.Children.Add(Circle(cx + 2, cy + 2, 0.9, Col("#66FFFFFF")));
-            // Paupière supérieure (trait + ombre) et quelques cils.
-            c.Children.Add(Pa(Inv($"M{cx - 14},{cy} Q{cx},{cy - 11.5} {cx + 14},{cy}"), null, Col("#5A4636"), 2));
-            c.Children.Add(Pa(Inv($"M{cx + dir * 13},{cy - 1} l{dir * 4},{-3}"), null, Col("#5A4636"), 1.6));
-            c.Children.Add(Pa(Inv($"M{cx + dir * 10},{cy - 4} l{dir * 3},{-3}"), null, Col("#5A4636"), 1.4));
-            // Pli sous l'œil.
-            c.Children.Add(Pa(Inv($"M{cx - 10},{cy + 6} Q{cx},{cy + 9} {cx + 10},{cy + 6}"), null, Col("#40C08A63"), 1.4));
-        }
-
-        private static void Ear(Canvas c, double cx, double cy)
-        {
-            c.Children.Add(Oval(cx, cy, 10, 15, SkinFace, SkinLn, 1.5));
-            c.Children.Add(Pa(Inv($"M{cx},{cy - 8} Q{cx + 5},{cy} {cx},{cy + 7} Q{cx - 3},{cy} {cx},{cy - 8} Z"),
-                Col("#33C08A63"), null, 0));
-        }
-
         private static void Hand(Canvas c, double cx, double cy, int dir)
         {
-            // Doigts (derrière la paume).
+            // Doigts écartés (pointant vers le bas).
             for (int i = 0; i < 4; i++)
             {
-                double fx = cx - 8 + i * 5.3;
-                var f = new Rectangle { Width = 4.6, Height = 15, RadiusX = 2.3, RadiusY = 2.3, Fill = SkinLimb, Stroke = SkinLn, StrokeThickness = 0.8 };
-                Canvas.SetLeft(f, fx - 2.3); Canvas.SetTop(f, cy + 4);
-                c.Children.Add(f);
+                double sx = cx - 8 + i * 5.5, sy = cy + 6;
+                double ex = cx - 13 + i * 8.5, ey = cy + 24;
+                c.Children.Add(Pa(Capsule(sx, sy, ex, ey, 6), White, Ink, 2.4));
             }
             // Pouce.
-            var th = new Rectangle { Width = 5.2, Height = 11, RadiusX = 2.6, RadiusY = 2.6, Fill = SkinLimb, Stroke = SkinLn, StrokeThickness = 0.8 };
-            th.RenderTransformOrigin = new Point(0.5, 0.5);
-            th.RenderTransform = new RotateTransform(dir * 55);
-            Canvas.SetLeft(th, cx + dir * 10 - 2.6); Canvas.SetTop(th, cy - 2);
-            c.Children.Add(th);
-            // Paume.
-            c.Children.Add(Oval(cx, cy, 12, 12, SkinLimb, SkinLn, 1.4));
+            c.Children.Add(Pa(Capsule(cx + dir * 6, cy + 2, cx + dir * 15, cy + 14, 6.5), White, Ink, 2.4));
+            // Paume (par-dessus l'attache des doigts).
+            c.Children.Add(Oval(cx, cy, 13, 12, White, Ink, LW));
         }
 
         private static void Foot(Canvas c, double cx, double cy)
         {
-            c.Children.Add(Oval(cx, cy, 15, 9, SkinLimb, SkinLn, 1.5));
+            c.Children.Add(Oval(cx, cy, 16, 10, White, Ink, LW));
             for (int i = 0; i < 5; i++)
-                c.Children.Add(Oval(cx - 10 + i * 5, cy + 7, 2.6, 2.2, SkinLimb, SkinLn, 0.7));
+                c.Children.Add(Oval(cx - 11 + i * 5.5, cy + 8, 3, 2.6, White, Ink, 2));
         }
 
         // ------------------------------------------------------------------ fabriques
         private static string Inv(FormattableString s) => FormattableString.Invariant(s);
 
-        private static Brush Highlight() => Col("#4CFFFFFF");
-
-        // Col → brosse pleine (utilisée partout comme Fill/Stroke) ; C → couleur brute
-        // (pour les arrêts de dégradé).
-        private static SolidColorBrush Col(string hex) => new SolidColorBrush(C(hex));
-
-        private static Color C(string hex)
+        // Contour d'une « gélule » (membre/doigt) entre deux points, bouts arrondis.
+        private static string Capsule(double x1, double y1, double x2, double y2, double w)
         {
-            var h = hex.Replace("#", "");
-            if (h.Length == 8)
-                return Color.FromArgb(
-                    Convert.ToByte(h.Substring(0, 2), 16), Convert.ToByte(h.Substring(2, 2), 16),
-                    Convert.ToByte(h.Substring(4, 2), 16), Convert.ToByte(h.Substring(6, 2), 16));
-            return Color.FromRgb(
-                Convert.ToByte(h.Substring(0, 2), 16), Convert.ToByte(h.Substring(2, 2), 16), Convert.ToByte(h.Substring(4, 2), 16));
+            double dx = x2 - x1, dy = y2 - y1, len = Math.Sqrt(dx * dx + dy * dy);
+            if (len < 0.001) len = 0.001;
+            double ux = dx / len, uy = dy / len;   // direction
+            double px = -uy, py = ux;              // perpendiculaire
+            double h = w / 2;
+            double ax = x1 + px * h, ay = y1 + py * h;
+            double bx = x2 + px * h, by = y2 + py * h;
+            double cx = x2 - px * h, cy = y2 - py * h;
+            double dxp = x1 - px * h, dyp = y1 - py * h;
+            double teX = x2 + ux * h, teY = y2 + uy * h;   // pointe côté fin
+            double tsX = x1 - ux * h, tsY = y1 - uy * h;   // pointe côté départ
+            return Inv($"M{ax},{ay} L{bx},{by} Q{teX},{teY} {cx},{cy} L{dxp},{dyp} Q{tsX},{tsY} {ax},{ay} Z");
         }
-
-        private static LinearGradientBrush Lin(double x1, double y1, double x2, double y2, params (double o, string hex)[] s)
-        {
-            var b = new LinearGradientBrush { StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2) };
-            foreach (var (o, hex) in s) b.GradientStops.Add(new GradientStop(C(hex), o));
-            return b;
-        }
-
-        private static RadialGradientBrush Rad(double ox, double oy, double cx, double cy, double rx, double ry, params (double o, string hex)[] s)
-        {
-            var b = new RadialGradientBrush { GradientOrigin = new Point(ox, oy), Center = new Point(cx, cy), RadiusX = rx, RadiusY = ry };
-            foreach (var (o, hex) in s) b.GradientStops.Add(new GradientStop(C(hex), o));
-            return b;
-        }
-
-        private static RadialGradientBrush RadA(double ox, double oy, double cx, double cy, double rx, double ry, params (double o, string hex)[] s)
-            => Rad(ox, oy, cx, cy, rx, ry, s);
 
         private static Ellipse Circle(double cx, double cy, double r, Brush fill, Brush stroke = null, double sw = 3)
             => Oval(cx, cy, r, r, fill, stroke, sw);
@@ -401,16 +303,6 @@ namespace MesPremiersJeux.Games
             Canvas.SetLeft(e, cx - rx); Canvas.SetTop(e, cy - ry);
             return e;
         }
-
-        private static Path Limb(double x1, double y1, double x2, double y2, double th)
-            => new Path
-            {
-                Data = Geometry.Parse(Inv($"M{x1},{y1} L{x2},{y2}")),
-                Stroke = SkinLimb,
-                StrokeThickness = th,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-            };
 
         private static Path Pa(string d, Brush fill, Brush stroke = null, double sw = 3)
             => new Path
