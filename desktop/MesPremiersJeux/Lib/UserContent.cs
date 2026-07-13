@@ -28,6 +28,7 @@ namespace MesPremiersJeux.Lib
     public sealed class UserStory
     {
         public string Title;
+        public string Dir; // dossier du livre (pour modifier / supprimer)
         public List<UserStoryPage> Pages = new List<UserStoryPage>();
     }
 
@@ -159,7 +160,11 @@ namespace MesPremiersJeux.Lib
                 foreach (var dir in Directory.GetDirectories(StoriesDir).OrderBy(d => d))
                 {
                     var story = LoadStory(dir);
-                    if (story != null && story.Pages.Count > 0) stories.Add(story);
+                    if (story != null && story.Pages.Count > 0)
+                    {
+                        story.Dir = dir;
+                        stories.Add(story);
+                    }
                 }
             }
             catch { }
@@ -240,7 +245,54 @@ namespace MesPremiersJeux.Lib
                 var dir = Path.Combine(StoriesDir, safe);
                 for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(StoriesDir, safe + " " + i);
                 Directory.CreateDirectory(dir);
+                return WriteStory(dir, title, pages);
+            }
+            catch { return null; }
+        }
 
+        /// <summary>Met à jour un livre existant (dans son dossier) ; renvoie null si échec.</summary>
+        public static string UpdateStory(string dir, string title, IList<PageDraft> pages)
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) return SaveStory(title, pages);
+
+                // Sécurise les images référencées DANS le dossier : copie temporaire
+                // avant de nettoyer, pour pouvoir réécrire proprement 1.png, 2.png…
+                foreach (var p in pages)
+                {
+                    if (string.IsNullOrEmpty(p.ImagePath) || !File.Exists(p.ImagePath)) continue;
+                    if (!p.ImagePath.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) continue;
+                    var tmp = Path.Combine(Path.GetTempPath(), "mpj-" + Guid.NewGuid().ToString("N") + Path.GetExtension(p.ImagePath));
+                    File.Copy(p.ImagePath, tmp, true);
+                    p.ImagePath = tmp;
+                }
+
+                foreach (var f in Directory.GetFiles(dir)) File.Delete(f);
+                return WriteStory(dir, title, pages);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Supprime définitivement un livre.</summary>
+        public static bool DeleteStory(string dir)
+        {
+            try
+            {
+                if (Directory.Exists(dir) && dir.StartsWith(StoriesDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    Directory.Delete(dir, true);
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static string WriteStory(string dir, string title, IList<PageDraft> pages)
+        {
+            try
+            {
                 var data = new BookJson { Title = title.Trim(), Pages = new List<BookPageJson>() };
                 for (int i = 0; i < pages.Count; i++)
                 {

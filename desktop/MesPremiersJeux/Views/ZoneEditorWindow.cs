@@ -34,6 +34,9 @@ namespace MesPremiersJeux.Views
                 Left = z.Left, Top = z.Top, Width = z.Width, Height = z.Height, Label = z.Label,
             }).ToList() ?? new List<UserZone>();
 
+            Gaze.GazeGate.Push();
+            Closed += (s, e) => Gaze.GazeGate.Pop();
+
             Title = "Zones interactives";
             Width = 1060;
             Height = 720;

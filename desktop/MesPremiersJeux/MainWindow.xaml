@@ -69,6 +69,9 @@
                                Foreground="#FF3B2A5A" Margin="0,0,0,12" />
                     <CheckBox x:Name="GazeModeCheck" Content="Piloter au regard (dwell)"
                               FontSize="15" Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
+                    <CheckBox x:Name="AdminCheck" Content="🔧 Mode administration (regard en pause)"
+                              FontSize="15" Margin="0,8,0,0"
+                              Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
                     <TextBlock Text="Durée de fixation" FontSize="14" Foreground="#FF6B5B8A" Margin="0,14,0,2" />
                     <Slider x:Name="DwellSlider" Minimum="400" Maximum="2500" TickFrequency="100"
                             IsSnapToTickEnabled="True" ValueChanged="DwellSlider_Changed" />

@@ -25,15 +25,39 @@ namespace MesPremiersJeux.Views
             public TextBox Text;
             public Button ImgBtn;
             public Button ZonesBtn;
+            public Image Preview;
             public PageDraft Draft = new PageDraft();
         }
 
         private readonly TextBox _title;
         private readonly StackPanel _pagesHost;
         private readonly List<Row> _rows = new List<Row>();
+        private readonly string _existingDir; // non nul = modification d'un livre
+
+        /// <summary>Ouvre l'éditeur pré-rempli pour modifier un livre existant.</summary>
+        public BookEditorWindow(string title, List<PageDraft> pages, string existingDir) : this()
+        {
+            _existingDir = existingDir;
+            Title = "Modifier le livre";
+            _title.Text = title;
+
+            _rows.Clear();
+            _pagesHost.Children.Clear();
+            foreach (var draft in pages)
+            {
+                var row = AddRow();
+                row.Draft = draft;
+                row.Text.Text = draft.Text;
+                RefreshRowButtons(row);
+            }
+        }
 
         public BookEditorWindow()
         {
+            // Pause du regard tant que l'éditeur est ouvert (usage parent, souris).
+            Gaze.GazeGate.Push();
+            Closed += (s, e) => Gaze.GazeGate.Pop();
+
             Title = "Nouveau livre";
             Width = 820;
             Height = 700;
@@ -132,6 +156,16 @@ namespace MesPremiersJeux.Views
             grid.Children.Add(row.Text);
 
             var side = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0) };
+            // Prévisualisation de la photo choisie.
+            row.Preview = new Image
+            {
+                Width = 120,
+                Height = 84,
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(0, 0, 8, 0),
+                Visibility = Visibility.Collapsed,
+            };
+            side.Children.Add(row.Preview);
             row.ImgBtn = new Button { Content = "🖼 Photo…", FontSize = 15, Padding = new Thickness(10, 8, 10, 8) };
             row.ImgBtn.Click += (s, e) => PickImage(row);
             side.Children.Add(row.ImgBtn);
@@ -209,10 +243,24 @@ namespace MesPremiersJeux.Views
 
         private void RefreshRowButtons(Row row)
         {
-            bool hasImg = !string.IsNullOrEmpty(row.Draft.ImagePath);
-            row.ImgBtn.Content = hasImg ? "🖼 " + Path.GetFileName(row.Draft.ImagePath) : "🖼 Photo…";
+            bool hasImg = !string.IsNullOrEmpty(row.Draft.ImagePath) && File.Exists(row.Draft.ImagePath);
+            row.ImgBtn.Content = hasImg ? "🖼 Changer" : "🖼 Photo…";
             row.ZonesBtn.IsEnabled = hasImg;
             row.ZonesBtn.Content = row.Draft.Zones.Count > 0 ? $"🎯 Zones ({row.Draft.Zones.Count})" : "🎯 Zones";
+
+            if (hasImg)
+            {
+                try
+                {
+                    row.Preview.Source = UserContent.LoadBitmap(row.Draft.ImagePath, 300);
+                    row.Preview.Visibility = Visibility.Visible;
+                }
+                catch { row.Preview.Visibility = Visibility.Collapsed; }
+            }
+            else
+            {
+                row.Preview.Visibility = Visibility.Collapsed;
+            }
         }
 
         // Import d'un JSON au format de l'application web.
@@ -261,7 +309,10 @@ namespace MesPremiersJeux.Views
                 return;
             }
 
-            if (UserContent.SaveStory(title, pages) == null)
+            var saved = _existingDir != null
+                ? UserContent.UpdateStory(_existingDir, title, pages)
+                : UserContent.SaveStory(title, pages);
+            if (saved == null)
             {
                 MessageBox.Show(this, "Impossible d'enregistrer le livre.", "Nouveau livre");
                 return;

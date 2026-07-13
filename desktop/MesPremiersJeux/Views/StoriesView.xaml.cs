@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using MesPremiersJeux.Games;
+using MesPremiersJeux.Gaze;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Views
@@ -47,6 +48,7 @@ namespace MesPremiersJeux.Views
         private sealed class Book
         {
             public string Title;
+            public string Dir; // dossier du livre personnalisé (null = livre intégré)
             public List<BookPage> Pages = new List<BookPage>();
         }
 
@@ -188,7 +190,7 @@ namespace MesPremiersJeux.Views
             // Livres du parent (Documents\MesPremiersJeux\Histoires).
             foreach (var s in UserContent.LoadStories())
             {
-                var book = new Book { Title = s.Title };
+                var book = new Book { Title = s.Title, Dir = s.Dir };
                 foreach (var p in s.Pages)
                     book.Pages.Add(new BookPage { Text = p.Text, ImagePath = p.ImagePath, Zones = p.Zones });
                 _books.Add(book);
@@ -300,6 +302,25 @@ namespace MesPremiersJeux.Views
                     Margin = new Thickness(0, 8, 0, 0),
                 });
 
+                // Livres personnalisés : boutons Modifier / Supprimer (pour le parent).
+                if (b.Dir != null)
+                {
+                    var admin = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 8, 0, 0),
+                    };
+                    var bookRef = b;
+                    var edit = new Button { Content = "✏️", FontSize = 18, Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(4, 0, 4, 0) };
+                    edit.Click += (s, e) => { e.Handled = true; EditBook(bookRef); };
+                    var del = new Button { Content = "🗑", FontSize = 18, Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(4, 0, 4, 0) };
+                    del.Click += (s, e) => { e.Handled = true; DeleteBook(bookRef); };
+                    admin.Children.Add(edit);
+                    admin.Children.Add(del);
+                    content.Children.Add(admin);
+                }
+
                 var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
                 var book = b;
                 tile.Click += (s, e) => OpenBook(book);
@@ -328,11 +349,52 @@ namespace MesPremiersJeux.Views
             var editor = new BookEditorWindow { Owner = Window.GetWindow(this) };
             if (editor.ShowDialog() == true)
             {
-                _books.Clear();
-                BuildBooks();
-                BuildMenu();
+                ReloadBooks();
                 Speech.Say("Le livre est ajouté !");
             }
+        }
+
+        private void EditBook(Book book)
+        {
+            var drafts = book.Pages.Select(p => new PageDraft
+            {
+                Text = p.Text ?? "",
+                ImagePath = p.ImagePath,
+                Zones = p.Zones?.Select(z => new UserZone
+                {
+                    Left = z.Left, Top = z.Top, Width = z.Width, Height = z.Height, Label = z.Label,
+                }).ToList() ?? new List<UserZone>(),
+            }).ToList();
+
+            var editor = new BookEditorWindow(book.Title, drafts, book.Dir) { Owner = Window.GetWindow(this) };
+            if (editor.ShowDialog() == true)
+            {
+                ReloadBooks();
+                Speech.Say("Le livre est modifié !");
+            }
+        }
+
+        private void DeleteBook(Book book)
+        {
+            // Pause du regard pendant la confirmation (action parent, souris).
+            GazeGate.Push();
+            var res = MessageBox.Show(
+                Window.GetWindow(this),
+                $"Supprimer définitivement « {book.Title} » ?",
+                "Supprimer le livre",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            GazeGate.Pop();
+
+            if (res == MessageBoxResult.Yes && UserContent.DeleteStory(book.Dir))
+                ReloadBooks();
+        }
+
+        private void ReloadBooks()
+        {
+            _books.Clear();
+            BuildBooks();
+            BuildMenu();
         }
 
         // Aperçu léger d'une page pour la tuile de la bibliothèque.

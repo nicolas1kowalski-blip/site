@@ -72,6 +72,9 @@ namespace MesPremiersJeux
             int clicks = 0;
             _dwell.Clicked += p => Dispatcher.Invoke(() => GazeStatus.Text = $"👁  Clics : {++clicks}");
 
+            // Pause automatique du regard quand une fenêtre d'édition est ouverte.
+            GazeGate.PauseChanged = paused => Dispatcher.Invoke(ApplyGazeMode);
+
             // Applique les réglages sauvegardés au contrôleur.
             _dwell.DwellTime = _settings.DwellTime;
             ApplySmoothing(_settings.Smoothing);
@@ -108,9 +111,12 @@ namespace MesPremiersJeux
         private void ApplyGazeMode()
         {
             if (_dwell == null) return;
-            // La source (curseur ou SDK) est choisie automatiquement par le
-            // contrôleur ; ici on active/désactive simplement le pilotage au regard.
-            _dwell.Enabled = GazeModeCheck.IsChecked == true;
+            // Le regard est actif si : la case est cochée, le mode admin est
+            // désactivé, et aucune fenêtre d'édition (parent) n'est ouverte.
+            bool admin = AdminCheck != null && AdminCheck.IsChecked == true;
+            _dwell.Enabled = GazeModeCheck.IsChecked == true && !admin && !GazeGate.IsPaused;
+            if (admin || GazeGate.IsPaused)
+                GazeStatus.Text = "⏸  Regard en pause";
         }
 
         private void DwellSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
