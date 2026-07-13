@@ -22,6 +22,7 @@ namespace MesPremiersJeux.Views
             ("📏", "Grand ou petit", "PS",      c => new SizeGame(c)),
             ("🟡", "Les suites",     "MS",      c => new PatternGame(c)),
             ("🖼️", "L'imagier",      "PS · MS", c => new VocabGame(c)),
+            ("🧒", "Le corps",       "PS · MS", c => new BodyGame(c)),
         };
 
         private readonly Random _rng = new Random();
