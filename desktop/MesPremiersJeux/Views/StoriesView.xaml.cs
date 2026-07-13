@@ -173,6 +173,8 @@ namespace MesPremiersJeux.Views
             BuildMenu();
             // Les outils parent apparaissent/disparaissent avec le mode admin.
             AdminMode.Changed += () => Dispatcher.Invoke(BuildMenu);
+            // Après un import de contenu, la bibliothèque se recharge.
+            UserContent.ContentChanged += () => Dispatcher.Invoke(ReloadBooks);
         }
 
         // --- Bibliothèque ---

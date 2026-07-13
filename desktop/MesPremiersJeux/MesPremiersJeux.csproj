@@ -29,6 +29,9 @@
     <Reference Include="System.Runtime.Serialization" />
     <!-- Voix naturelles Azure (requêtes HTTPS). -->
     <Reference Include="System.Net.Http" />
+    <!-- Export/Import du contenu en .zip. -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
 </Project>

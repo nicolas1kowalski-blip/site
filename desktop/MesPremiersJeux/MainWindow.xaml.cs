@@ -150,6 +150,53 @@ namespace MesPremiersJeux
             new FamilyManagerWindow { Owner = this }.ShowDialog();
         }
 
+        private void OpenContent_Click(object sender, RoutedEventArgs e)
+        {
+            UserContent.EnsureFolders();
+            try { System.Diagnostics.Process.Start("explorer.exe", UserContent.RootDir); } catch { }
+        }
+
+        private void ExportContent_Click(object sender, RoutedEventArgs e)
+        {
+            GazeGate.Push();
+            try
+            {
+                var dlg = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Exporter le contenu",
+                    Filter = "Archive|*.zip",
+                    FileName = "MesPremiersJeux-contenu-" + DateTime.Now.ToString("yyyy-MM-dd") + ".zip",
+                };
+                if (dlg.ShowDialog(this) != true) return;
+                MessageBox.Show(this,
+                    UserContent.ExportZip(dlg.FileName)
+                        ? "Contenu exporté ! Copie ce fichier sur l'autre PC puis « Importer »."
+                        : "Impossible d'exporter le contenu.",
+                    "Exporter");
+            }
+            finally { GazeGate.Pop(); }
+        }
+
+        private void ImportContent_Click(object sender, RoutedEventArgs e)
+        {
+            GazeGate.Push();
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Importer du contenu",
+                    Filter = "Archive|*.zip",
+                };
+                if (dlg.ShowDialog(this) != true) return;
+                MessageBox.Show(this,
+                    UserContent.ImportZip(dlg.FileName)
+                        ? "Contenu importé ! Livres, coloriages et photos sont à jour."
+                        : "Impossible d'importer ce fichier.",
+                    "Importer");
+            }
+            finally { GazeGate.Pop(); }
+        }
+
         private void DwellSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (_dwell == null) return;

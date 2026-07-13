@@ -40,10 +40,19 @@ le regard dans une cellule web.
 Les onglets Histoires / Musique — et le jeu du corps — sont à venir : on les
 ajoute un par un (le coloriage et ces jeux servent de patron).
 
+## Où vit le contenu ? (portable)
+
+Le contenu (livres, coloriages, photos de famille) vit dans le dossier
+**`Contenu` à côté de l'application** : **copier le dossier de l'appli =
+tout emporter** (même contenu sur n'importe quel PC / la TD I-13). Le panneau
+⚙ offre aussi **📂 Ouvrir le dossier**, **📦 Exporter** (un .zip) et
+**📥 Importer** (recharge à chaud). L'ancien contenu de
+`Documents\MesPremiersJeux` est migré automatiquement au premier lancement ;
+si le dossier programme n'est pas inscriptible, Documents reste utilisé.
+
 ## Ajouter ses propres livres et coloriages
 
-Au premier lancement, l'application crée le dossier
-**`Documents\MesPremiersJeux`** (avec un fichier `LISEZ-MOI.txt`) :
+Dans le dossier de contenu (`Contenu`, avec un fichier `LISEZ-MOI.txt`) :
 
 - **`Coloriages\`** — déposez-y des **images au trait** (PNG/JPG, contours noirs
   sur fond blanc). Elles apparaissent dans l'onglet Coloriage au prochain

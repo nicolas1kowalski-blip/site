@@ -79,6 +79,14 @@
                                FontSize="12" Foreground="#FF9A8AB8" TextWrapping="Wrap" Margin="24,2,0,0" />
                     <Button Content="👨‍👩‍👧 Gérer les photos de famille…" FontSize="14" Padding="8,8"
                             Margin="0,10,0,0" Click="FamilyManager_Click" />
+                    <TextBlock Text="Contenu (livres, coloriages, photos)" FontSize="14" Foreground="#FF6B5B8A" Margin="0,12,0,4" />
+                    <Button Content="📂 Ouvrir le dossier du contenu" FontSize="14" Padding="8,8" Click="OpenContent_Click" />
+                    <UniformGrid Columns="2" Margin="0,6,0,0">
+                        <Button Content="📦 Exporter…" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="ExportContent_Click" />
+                        <Button Content="📥 Importer…" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="ImportContent_Click" />
+                    </UniformGrid>
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
+                               Text="Le contenu vit dans le dossier « Contenu » à côté de l'application : copier le dossier de l'appli transporte tout sur un autre PC." />
                     <TextBlock Text="Durée de fixation" FontSize="14" Foreground="#FF6B5B8A" Margin="0,14,0,2" />
                     <Slider x:Name="DwellSlider" Minimum="400" Maximum="2500" TickFrequency="100"
                             IsSnapToTickEnabled="True" ValueChanged="DwellSlider_Changed" />

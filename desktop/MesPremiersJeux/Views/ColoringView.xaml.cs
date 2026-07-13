@@ -54,6 +54,8 @@ namespace MesPremiersJeux.Views
             Loaded += (s, e) => DrawPage();
             // Les outils parent (➕ / 🗑) suivent le mode admin.
             AdminMode.Changed += () => Dispatcher.Invoke(BuildTools);
+            // Après un import de contenu, les coloriages se rechargent.
+            UserContent.ContentChanged += () => Dispatcher.Invoke(ReloadPages);
         }
 
         // Palette réduite : moins de couleurs mais grandes = plus simple à viser au regard.

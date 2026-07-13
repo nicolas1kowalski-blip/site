@@ -82,8 +82,111 @@ namespace MesPremiersJeux.Lib
     {
         private static readonly string[] ImageExts = { ".png", ".jpg", ".jpeg", ".bmp", ".gif" };
 
-        public static string RootDir =>
+        /// <summary>Levé quand le contenu change en dehors des écrans (ex. import).</summary>
+        public static event Action ContentChanged;
+
+        private static string _root;
+
+        /// <summary>
+        /// Dossier du contenu. PORTABLE : « Contenu » à côté de l'application →
+        /// copier le dossier de l'appli transporte tout (livres, coloriages,
+        /// photos) sur n'importe quel PC. Repli sur Documents si non inscriptible.
+        /// Le contenu existant de Documents est migré automatiquement (une fois).
+        /// </summary>
+        public static string RootDir
+        {
+            get
+            {
+                if (_root == null) _root = ResolveRoot();
+                return _root;
+            }
+        }
+
+        private static string DocsRoot =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MesPremiersJeux");
+
+        private static string ResolveRoot()
+        {
+            try
+            {
+                var portable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Contenu");
+                Directory.CreateDirectory(portable);
+                var probe = Path.Combine(portable, ".test-ecriture");
+                File.WriteAllText(probe, "ok");
+                File.Delete(probe);
+
+                // Migration unique de l'ancien emplacement (Documents).
+                var marker = Path.Combine(portable, ".migration-faite");
+                if (!File.Exists(marker) && Directory.Exists(DocsRoot))
+                {
+                    CopyDirectory(DocsRoot, portable);
+                    File.WriteAllText(marker, DateTime.Now.ToString("s"));
+                }
+                return portable;
+            }
+            catch
+            {
+                // Dossier programme non inscriptible (ex. Program Files).
+                return DocsRoot;
+            }
+        }
+
+        private static void CopyDirectory(string from, string to)
+        {
+            Directory.CreateDirectory(to);
+            foreach (var f in Directory.GetFiles(from))
+            {
+                try
+                {
+                    var dest = Path.Combine(to, Path.GetFileName(f));
+                    if (!File.Exists(dest)) File.Copy(f, dest);
+                }
+                catch { }
+            }
+            foreach (var d in Directory.GetDirectories(from))
+                CopyDirectory(d, Path.Combine(to, Path.GetFileName(d)));
+        }
+
+        // ------------------------------------------------------------------
+        // Export / import de tout le contenu (un seul fichier .zip)
+        // ------------------------------------------------------------------
+        public static bool ExportZip(string zipPath)
+        {
+            try
+            {
+                EnsureFolders();
+                if (File.Exists(zipPath)) File.Delete(zipPath);
+                System.IO.Compression.ZipFile.CreateFromDirectory(RootDir, zipPath);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        public static bool ImportZip(string zipPath)
+        {
+            try
+            {
+                EnsureFolders();
+                using (var zip = System.IO.Compression.ZipFile.OpenRead(zipPath))
+                {
+                    foreach (var entry in zip.Entries)
+                    {
+                        if (entry.FullName.Contains("..")) continue; // sécurité
+                        var dest = Path.Combine(RootDir, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+                        if (string.IsNullOrEmpty(entry.Name)) // dossier
+                        {
+                            Directory.CreateDirectory(dest);
+                            continue;
+                        }
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                        entry.ExtractToFile(dest, true);
+                    }
+                }
+                ContentChanged?.Invoke();
+                return true;
+            }
+            catch { return false; }
+        }
         public static string ColoringsDir => Path.Combine(RootDir, "Coloriages");
         public static string StoriesDir => Path.Combine(RootDir, "Histoires");
         public static string FamilyDir => Path.Combine(RootDir, "Famille");
