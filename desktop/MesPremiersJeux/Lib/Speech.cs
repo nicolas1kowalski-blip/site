@@ -95,8 +95,16 @@ namespace MesPremiersJeux.Lib
                 _pageMode = false;
                 _tts.SpeakAsyncCancelAll();
                 ApplyVoice();
-                if (Math.Abs(Pitch) < 1) _tts.SpeakAsync(text);
-                else _tts.SpeakSsmlAsync(Ssml(text));
+                if (Math.Abs(Pitch) < 1)
+                {
+                    _tts.SpeakAsync(text);
+                }
+                else
+                {
+                    // Certaines voix n'acceptent pas la prosodie : on parle quand même.
+                    try { _tts.SpeakSsmlAsync(Ssml(text)); }
+                    catch { _tts.SpeakAsync(text); }
+                }
             }
             catch { }
         }

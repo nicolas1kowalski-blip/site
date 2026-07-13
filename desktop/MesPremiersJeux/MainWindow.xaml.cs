@@ -127,9 +127,16 @@ namespace MesPremiersJeux
             // Le regard est actif si : la case est cochée, le mode admin est
             // désactivé, et aucune fenêtre d'édition (parent) n'est ouverte.
             bool admin = AdminCheck != null && AdminCheck.IsChecked == true;
+            AdminMode.Set(admin); // affiche/masque les outils parent partout
             _dwell.Enabled = GazeModeCheck.IsChecked == true && !admin && !GazeGate.IsPaused;
             if (admin || GazeGate.IsPaused)
                 GazeStatus.Text = "⏸  Regard en pause";
+        }
+
+        private void FamilyManager_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            new FamilyManagerWindow { Owner = this }.ShowDialog();
         }
 
         private void DwellSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)

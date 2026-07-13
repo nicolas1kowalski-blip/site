@@ -52,6 +52,8 @@ namespace MesPremiersJeux.Views
             BuildPalette();
             BuildTools();
             Loaded += (s, e) => DrawPage();
+            // Les outils parent (➕ / 🗑) suivent le mode admin.
+            AdminMode.Changed += () => Dispatcher.Invoke(BuildTools);
         }
 
         // Palette réduite : moins de couleurs mais grandes = plus simple à viser au regard.
@@ -98,9 +100,20 @@ namespace MesPremiersJeux.Views
                 if (i == _pageIdx) btn.BorderThickness = new Thickness(4);
             }
 
-            var add = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "➕", ToolTip = "Ajouter des coloriages" };
-            add.Click += (s, e) => AddColorings();
-            ToolsHost.Children.Add(add);
+            // Outils parent (mode admin) : ajouter des coloriages, supprimer celui affiché.
+            if (AdminMode.IsActive)
+            {
+                var add = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "➕", ToolTip = "Ajouter des coloriages" };
+                add.Click += (s, e) => AddColorings();
+                ToolsHost.Children.Add(add);
+
+                if (_pages[_pageIdx].ImagePath != null)
+                {
+                    var del = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "🗑", ToolTip = "Supprimer ce coloriage" };
+                    del.Click += (s, e) => DeleteCurrentColoring();
+                    ToolsHost.Children.Add(del);
+                }
+            }
 
             var reset = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "🔄", ToolTip = "Recommencer" };
             reset.Click += (s, e) => DrawPage();
@@ -136,6 +149,35 @@ namespace MesPremiersJeux.Views
             BuildTools();
             DrawPage();
             Speech.Say("Le coloriage est ajouté !");
+        }
+
+        // Supprime le coloriage personnalisé affiché (mode admin).
+        private void DeleteCurrentColoring()
+        {
+            var page = _pages[_pageIdx];
+            if (page.ImagePath == null) return;
+
+            GazeGate.Push();
+            var res = MessageBox.Show(Window.GetWindow(this),
+                $"Supprimer le coloriage « {page.Name} » ?", "Coloriage",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            GazeGate.Pop();
+            if (res != MessageBoxResult.Yes) return;
+
+            UserContent.DeleteColoring(page.ImagePath);
+            ReloadPages();
+        }
+
+        private void ReloadPages()
+        {
+            _pages.Clear();
+            foreach (var c in Colorings.All)
+                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
+            foreach (var u in UserContent.LoadColorings())
+                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
+            if (_pageIdx >= _pages.Count) _pageIdx = 0;
+            BuildTools();
+            DrawPage();
         }
 
         private void SelectSwatch(Swatch s, Button btn)

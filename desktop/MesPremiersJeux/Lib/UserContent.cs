@@ -173,6 +173,53 @@ namespace MesPremiersJeux.Lib
             return list;
         }
 
+        /// <summary>Copie une photo dans le dossier Famille sous le nom donné.</summary>
+        public static bool AddFamilyPhoto(string sourcePath, string personName)
+        {
+            try
+            {
+                EnsureFolders();
+                var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+                if (!ImageExts.Contains(ext)) return false;
+                var safe = new string(personName.Trim()
+                    .Where(c => Array.IndexOf(Path.GetInvalidFileNameChars(), c) < 0).ToArray());
+                if (safe.Length == 0) return false;
+                File.Copy(sourcePath, UniquePath(FamilyDir, safe + ext));
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Supprime une photo du dossier Famille.</summary>
+        public static bool DeleteFamilyPhoto(string path)
+        {
+            try
+            {
+                if (File.Exists(path) && path.StartsWith(FamilyDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(path);
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        /// <summary>Supprime un coloriage personnalisé.</summary>
+        public static bool DeleteColoring(string path)
+        {
+            try
+            {
+                if (File.Exists(path) && path.StartsWith(ColoringsDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(path);
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         // ------------------------------------------------------------------
         // Histoires
         // ------------------------------------------------------------------

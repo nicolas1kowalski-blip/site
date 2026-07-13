@@ -171,6 +171,8 @@ namespace MesPremiersJeux.Views
             Content = root;
 
             BuildMenu();
+            // Les outils parent apparaissent/disparaissent avec le mode admin.
+            AdminMode.Changed += () => Dispatcher.Invoke(BuildMenu);
         }
 
         // --- Bibliothèque ---
@@ -307,8 +309,8 @@ namespace MesPremiersJeux.Views
                     Margin = new Thickness(0, 8, 0, 0),
                 });
 
-                // Livres personnalisés : boutons Modifier / Supprimer (pour le parent).
-                if (b.Dir != null)
+                // Livres personnalisés : boutons Modifier / Supprimer (mode admin).
+                if (b.Dir != null && AdminMode.IsActive)
                 {
                     var admin = new StackPanel
                     {
@@ -332,7 +334,8 @@ namespace MesPremiersJeux.Views
                 _menu.Children.Add(tile);
             }
 
-            // Tuile « nouveau livre » (pour le parent).
+            // Tuile « nouveau livre » (mode admin uniquement).
+            if (!AdminMode.IsActive) return;
             var addContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
             addContent.Children.Add(new TextBlock { Text = "➕", FontSize = 74, HorizontalAlignment = HorizontalAlignment.Center });
             addContent.Children.Add(new TextBlock

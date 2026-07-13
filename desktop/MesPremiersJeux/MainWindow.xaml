@@ -74,6 +74,10 @@
                     <CheckBox x:Name="AdminCheck" Content="🔧 Mode administration (regard en pause)"
                               FontSize="15" Margin="0,8,0,0"
                               Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
+                    <TextBlock Text="En mode admin : ajouter / modifier / supprimer les livres, les coloriages et les photos."
+                               FontSize="12" Foreground="#FF9A8AB8" TextWrapping="Wrap" Margin="24,2,0,0" />
+                    <Button Content="👨‍👩‍👧 Gérer les photos de famille…" FontSize="14" Padding="8,8"
+                            Margin="0,10,0,0" Click="FamilyManager_Click" />
                     <TextBlock Text="Durée de fixation" FontSize="14" Foreground="#FF6B5B8A" Margin="0,14,0,2" />
                     <Slider x:Name="DwellSlider" Minimum="400" Maximum="2500" TickFrequency="100"
                             IsSnapToTickEnabled="True" ValueChanged="DwellSlider_Changed" />
