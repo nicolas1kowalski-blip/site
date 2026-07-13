@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
@@ -156,7 +157,7 @@ namespace MesPremiersJeux.Lib
             {
                 EnsureFolders();
                 if (File.Exists(zipPath)) File.Delete(zipPath);
-                System.IO.Compression.ZipFile.CreateFromDirectory(RootDir, zipPath);
+                ZipFile.CreateFromDirectory(RootDir, zipPath);
                 return true;
             }
             catch { return false; }
@@ -167,7 +168,7 @@ namespace MesPremiersJeux.Lib
             try
             {
                 EnsureFolders();
-                using (var zip = System.IO.Compression.ZipFile.OpenRead(zipPath))
+                using (var zip = ZipFile.OpenRead(zipPath))
                 {
                     foreach (var entry in zip.Entries)
                     {
