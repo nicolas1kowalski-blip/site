@@ -290,8 +290,27 @@ namespace MesPremiersJeux.Games
             return Wrap(c);
         }
 
+        private static UIElement Castle()
+        {
+            var c = New();
+            // Tours et corps du château.
+            c.Children.Add(Pa("M14,38 L14,92 L34,92 L34,38 Z", B("#D8C9FF"), Ink, 2.5));
+            c.Children.Add(Pa("M66,38 L66,92 L86,92 L86,38 Z", B("#D8C9FF"), Ink, 2.5));
+            c.Children.Add(Pa("M30,52 L30,92 L70,92 L70,52 Z", B("#EDE4FF"), Ink, 2.5));
+            // Créneaux.
+            c.Children.Add(Pa("M14,38 L14,30 L20,30 L20,38 M24,38 L24,30 L30,30 L30,38 M28,38 L34,38", B("#D8C9FF"), Ink, 2));
+            c.Children.Add(Pa("M66,38 L66,30 L72,30 L72,38 M76,38 L76,30 L82,30 L82,38 M80,38 L86,38", B("#D8C9FF"), Ink, 2));
+            // Porte + fenêtres + drapeau.
+            c.Children.Add(Pa("M42,92 L42,72 Q50,62 58,72 L58,92 Z", B("#B57EDC"), Ink, 2.5));
+            c.Children.Add(Circle(24, 50, 4, B("#FFF3B0"), Ink, 1.5));
+            c.Children.Add(Circle(76, 50, 4, B("#FFF3B0"), Ink, 1.5));
+            c.Children.Add(Pa("M50,52 L50,20 L64,25 L50,30", B("#FF6BB0"), Ink, 2));
+            return Wrap(c);
+        }
+
         public static readonly List<CartoonItem> Items = new List<CartoonItem>
         {
+            new CartoonItem { Name = "chateau",   Fr = "le château",     Cat = "la magie",    Build = Castle },
             new CartoonItem { Name = "chat",      Fr = "le chat",        Cat = "les animaux", Build = Cat },
             new CartoonItem { Name = "cochon",    Fr = "le cochon",      Cat = "les animaux", Build = Pig },
             new CartoonItem { Name = "chien",     Fr = "le chien",       Cat = "les animaux", Build = Dog },

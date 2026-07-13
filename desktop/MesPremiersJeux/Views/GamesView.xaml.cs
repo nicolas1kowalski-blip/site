@@ -23,6 +23,8 @@ namespace MesPremiersJeux.Views
             ("🔢", "Compter",      c => new CountGame(c)),
             ("🌑", "Les ombres",   c => new ShadowGame(c)),
             ("🔍", "Cherche et trouve", c => new SeekFindGame(c)),
+            ("🧶", "Les ficelles", c => new StringsGame(c)),
+            ("🥤", "Les gobelets", c => new CupsGame(c)),
             ("🧩", "Puzzle",       c => new PuzzleGame(c)),
             ("🗂️", "Les familles", c => new FamiliesGame(c)),
             ("🃏", "Les paires",   c => new MemoryGame(c)),
