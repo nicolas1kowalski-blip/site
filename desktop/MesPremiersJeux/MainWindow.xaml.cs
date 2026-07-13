@@ -75,6 +75,19 @@ namespace MesPremiersJeux
             // Pause automatique du regard quand une fenêtre d'édition est ouverte.
             GazeGate.PauseChanged = paused => Dispatcher.Invoke(ApplyGazeMode);
 
+            // Étoiles de récompense.
+            RewardStore.Load();
+            StarsText.Text = $"⭐ {RewardStore.Today}";
+            RewardStore.Changed += () => Dispatcher.Invoke(() => StarsText.Text = $"⭐ {RewardStore.Today}");
+
+            // Voix : liste des voix installées + réglages sauvegardés.
+            Speech.VoiceName = _settings.VoiceName;
+            Speech.Pitch = _settings.VoicePitch;
+            foreach (var v in Speech.Voices()) VoiceCombo.Items.Add(v);
+            if (!string.IsNullOrEmpty(_settings.VoiceName) && VoiceCombo.Items.Contains(_settings.VoiceName))
+                VoiceCombo.SelectedItem = _settings.VoiceName;
+            PitchSlider.Value = _settings.VoicePitch;
+
             // Applique les réglages sauvegardés au contrôleur.
             _dwell.DwellTime = _settings.DwellTime;
             ApplySmoothing(_settings.Smoothing);
@@ -140,6 +153,27 @@ namespace MesPremiersJeux
             if (_dwell == null) return;
             _dwell.SetIndicatorSize(e.NewValue);
             if (_settings != null) { _settings.CircleSize = e.NewValue; _settings.Save(); }
+        }
+
+        private void Voice_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (_settings == null || VoiceCombo.SelectedItem == null) return;
+            Speech.VoiceName = VoiceCombo.SelectedItem.ToString();
+            _settings.VoiceName = Speech.VoiceName;
+            _settings.Save();
+        }
+
+        private void Pitch_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_settings == null) return;
+            Speech.Pitch = e.NewValue;
+            _settings.VoicePitch = e.NewValue;
+            _settings.Save();
+        }
+
+        private void VoiceTest_Click(object sender, RoutedEventArgs e)
+        {
+            Speech.Say("Bonjour ! On joue ensemble ?");
         }
 
         private void Tab_Click(object sender, RoutedEventArgs e)

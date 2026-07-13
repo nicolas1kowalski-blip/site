@@ -184,6 +184,7 @@ namespace MesPremiersJeux.Games
             _popped = 0;
             _target += 2;
             UpdateLevelUi();
+            RewardStore.Add(); // une étoile par niveau ⭐
             Speech.Say($"Bravo ! Niveau {_level} !");
             CelebrateLevel();
 

@@ -70,6 +70,10 @@ namespace MesPremiersJeux.Views
         private int _index;
         private int _readIndex;
 
+        // Histoire racontée : texte de la page et correspondance mot → groupe.
+        private string _pageText = "";
+        private readonly List<int> _wordToGroup = new List<int>();
+
         public StoriesView()
         {
             UserContent.EnsureFolders();
@@ -150,6 +154,7 @@ namespace MesPremiersJeux.Views
             };
             nav.Children.Add(NavButton("⬅", () => ShowPage(_index - 1)));
             nav.Children.Add(NavButton("🔁", () => ShowPage(_index)));
+            nav.Children.Add(NavButton("🔊", ListenPage));
             _pageInfo = new TextBlock
             {
                 FontSize = 24,
@@ -476,10 +481,16 @@ namespace MesPremiersJeux.Views
             _wordHost.Children.Clear();
             _groups.Clear();
             _readIndex = 0;
+            _pageText = page.Text;
+            _wordToGroup.Clear();
 
             int gi = 0;
             foreach (var g in SplitGroups(page.Text))
             {
+                // Nombre de mots réellement prononcés dans ce groupe (pour la
+                // synchronisation de l'histoire racontée).
+                foreach (var tok in g.Split(' '))
+                    if (tok.Any(char.IsLetterOrDigit)) _wordToGroup.Add(gi);
                 var tb = new TextBlock
                 {
                     Text = g,
@@ -499,6 +510,35 @@ namespace MesPremiersJeux.Views
 
             Refresh();
             Speech.Say("À toi de lire !");
+        }
+
+        // Histoire racontée : la voix lit toute la page ; les groupes se
+        // surlignent au fil des mots, et les zones s'illuminent.
+        private void ListenPage()
+        {
+            if (_groups.Count == 0) return;
+            _readIndex = 0;
+            Refresh();
+            PulseMatchingZones(_groups[0].Text);
+
+            Speech.SayPage(
+                _pageText,
+                wordIdx => Dispatcher.Invoke(() =>
+                {
+                    if (_wordToGroup.Count == 0) return;
+                    int g = _wordToGroup[Math.Min(wordIdx, _wordToGroup.Count - 1)];
+                    if (g != _readIndex && g < _groups.Count)
+                    {
+                        _readIndex = g;
+                        Refresh();
+                        PulseMatchingZones(_groups[g].Text);
+                    }
+                }),
+                () => Dispatcher.Invoke(() =>
+                {
+                    _readIndex = 0; // la page se remet au début pour la lecture au regard
+                    Refresh();
+                }));
         }
 
         private void OnGroupClicked(int idx)

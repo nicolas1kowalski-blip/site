@@ -86,6 +86,7 @@ namespace MesPremiersJeux.Lib
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MesPremiersJeux");
         public static string ColoringsDir => Path.Combine(RootDir, "Coloriages");
         public static string StoriesDir => Path.Combine(RootDir, "Histoires");
+        public static string FamilyDir => Path.Combine(RootDir, "Famille");
 
         public static void EnsureFolders()
         {
@@ -93,6 +94,7 @@ namespace MesPremiersJeux.Lib
             {
                 Directory.CreateDirectory(ColoringsDir);
                 Directory.CreateDirectory(StoriesDir);
+                Directory.CreateDirectory(FamilyDir);
 
                 var readme = Path.Combine(RootDir, "LISEZ-MOI.txt");
                 if (!File.Exists(readme))
@@ -103,6 +105,9 @@ namespace MesPremiersJeux.Lib
                         "Le plus simple : utilisez les boutons ➕ dans l'application\r\n" +
                         "(onglet Coloriage, et « Nouveau livre » dans Histoires).\r\n\r\n" +
                         "COLORIAGES : déposez des images au trait (PNG/JPG) dans « Coloriages ».\r\n\r\n" +
+                        "FAMILLE : déposez des photos nommées par la personne (papa.jpg,\r\n" +
+                        "  maman.png, mamie.jpg…) dans « Famille » : elles apparaissent dans\r\n" +
+                        "  l'imagier de l'onglet Éducatif (« Trouve papa ! »).\r\n\r\n" +
                         "HISTOIRES : un dossier par livre dans « Histoires », contenant soit\r\n" +
                         "  - livre.json (même format que l'application web) + les images ;\r\n" +
                         "  - soit histoire.txt (une ligne = une page) + 1.png, 2.png…\r\n");
@@ -146,6 +151,26 @@ namespace MesPremiersJeux.Lib
                 catch { }
             }
             return added;
+        }
+
+        // ------------------------------------------------------------------
+        // Famille (photos nommées : papa.jpg, maman.png, mamie.jpg…)
+        // ------------------------------------------------------------------
+        public static List<(string Name, string Path)> LoadFamily()
+        {
+            var list = new List<(string, string)>();
+            try
+            {
+                if (!Directory.Exists(FamilyDir)) return list;
+                foreach (var f in Directory.GetFiles(FamilyDir).OrderBy(f => f))
+                {
+                    if (!ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant())) continue;
+                    var name = Path.GetFileNameWithoutExtension(f).Trim();
+                    if (name.Length > 0) list.Add((name, f));
+                }
+            }
+            catch { }
+            return list;
         }
 
         // ------------------------------------------------------------------

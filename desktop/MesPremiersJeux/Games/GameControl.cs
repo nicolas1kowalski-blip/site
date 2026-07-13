@@ -65,7 +65,12 @@ namespace MesPremiersJeux.Games
         protected abstract void NewRound();
 
         protected void Speak(string text) => Speech.Say(text);
-        protected void Celebrate() => _celebrate?.Invoke();
+
+        protected void Celebrate()
+        {
+            RewardStore.Add(); // chaque réussite gagne une étoile ⭐
+            _celebrate?.Invoke();
+        }
 
         protected void ScheduleNext(int ms) => Schedule(ms, NewRound);
 

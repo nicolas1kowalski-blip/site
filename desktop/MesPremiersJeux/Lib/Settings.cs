@@ -15,6 +15,8 @@ namespace MesPremiersJeux.Lib
         public int DwellTime = 900;      // ms
         public double Smoothing = 0.8;   // 0 = réactif … 1 = très lissé/stable
         public double CircleSize = 90;   // diamètre du cercle de progression (px)
+        public string VoiceName = "";    // voix choisie (vide = par défaut)
+        public double VoicePitch = 25;   // hauteur (%) : +25 ≈ voix enfantine
 
         private static string Dir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux");
@@ -37,6 +39,8 @@ namespace MesPremiersJeux.Lib
                         case "DwellTime": if (int.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d)) s.DwellTime = d; break;
                         case "Smoothing": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var sm)) s.Smoothing = sm; break;
                         case "CircleSize": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var c)) s.CircleSize = c; break;
+                        case "VoiceName": s.VoiceName = val; break;
+                        case "VoicePitch": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var vp)) s.VoicePitch = vp; break;
                     }
                 }
             }
@@ -54,6 +58,8 @@ namespace MesPremiersJeux.Lib
                     "DwellTime=" + DwellTime.ToString(CultureInfo.InvariantCulture),
                     "Smoothing=" + Smoothing.ToString(CultureInfo.InvariantCulture),
                     "CircleSize=" + CircleSize.ToString(CultureInfo.InvariantCulture),
+                    "VoiceName=" + (VoiceName ?? ""),
+                    "VoicePitch=" + VoicePitch.ToString(CultureInfo.InvariantCulture),
                 };
                 File.WriteAllLines(FilePath, lines);
             }
