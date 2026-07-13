@@ -360,7 +360,11 @@ namespace MesPremiersJeux.Games
 
         private static Brush Highlight() => Col("#4CFFFFFF");
 
-        private static Color Col(string hex)
+        // Col → brosse pleine (utilisée partout comme Fill/Stroke) ; C → couleur brute
+        // (pour les arrêts de dégradé).
+        private static SolidColorBrush Col(string hex) => new SolidColorBrush(C(hex));
+
+        private static Color C(string hex)
         {
             var h = hex.Replace("#", "");
             if (h.Length == 8)
@@ -374,14 +378,14 @@ namespace MesPremiersJeux.Games
         private static LinearGradientBrush Lin(double x1, double y1, double x2, double y2, params (double o, string hex)[] s)
         {
             var b = new LinearGradientBrush { StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2) };
-            foreach (var (o, hex) in s) b.GradientStops.Add(new GradientStop(Col(hex), o));
+            foreach (var (o, hex) in s) b.GradientStops.Add(new GradientStop(C(hex), o));
             return b;
         }
 
         private static RadialGradientBrush Rad(double ox, double oy, double cx, double cy, double rx, double ry, params (double o, string hex)[] s)
         {
             var b = new RadialGradientBrush { GradientOrigin = new Point(ox, oy), Center = new Point(cx, cy), RadiusX = rx, RadiusY = ry };
-            foreach (var (o, hex) in s) b.GradientStops.Add(new GradientStop(Col(hex), o));
+            foreach (var (o, hex) in s) b.GradientStops.Add(new GradientStop(C(hex), o));
             return b;
         }
 
