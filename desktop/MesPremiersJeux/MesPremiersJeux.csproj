@@ -27,6 +27,8 @@
     <Reference Include="System.Speech" />
     <!-- Lecture/écriture du format JSON des livres (DataContractJsonSerializer). -->
     <Reference Include="System.Runtime.Serialization" />
+    <!-- Voix naturelles Azure (requêtes HTTPS). -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
 </Project>

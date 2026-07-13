@@ -88,6 +88,17 @@ namespace MesPremiersJeux
                 VoiceCombo.SelectedItem = _settings.VoiceName;
             PitchSlider.Value = _settings.VoicePitch;
 
+            // Voix naturelle Azure.
+            AzureTts.Key = _settings.AzureKey;
+            AzureTts.Region = _settings.AzureRegion;
+            AzureTts.Voice = _settings.AzureVoice;
+            AzureKeyBox.Text = _settings.AzureKey;
+            AzureRegionBox.Text = _settings.AzureRegion;
+            foreach (var (label, name) in AzureTts.Voices)
+                AzureVoiceCombo.Items.Add(new ComboBoxItem { Content = label, Tag = name });
+            foreach (ComboBoxItem it in AzureVoiceCombo.Items)
+                if ((string)it.Tag == _settings.AzureVoice) { AzureVoiceCombo.SelectedItem = it; break; }
+
             // Applique les réglages sauvegardés au contrôleur.
             _dwell.DwellTime = _settings.DwellTime;
             ApplySmoothing(_settings.Smoothing);
@@ -181,6 +192,20 @@ namespace MesPremiersJeux
         private void VoiceTest_Click(object sender, RoutedEventArgs e)
         {
             Speech.Say("Bonjour ! On joue ensemble ?");
+        }
+
+        private void Azure_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null || AzureKeyBox == null) return;
+            _settings.AzureKey = AzureKeyBox.Text.Trim();
+            _settings.AzureRegion = AzureRegionBox.Text.Trim();
+            if (AzureVoiceCombo.SelectedItem is ComboBoxItem it)
+                _settings.AzureVoice = (string)it.Tag;
+            _settings.Save();
+
+            AzureTts.Key = _settings.AzureKey;
+            AzureTts.Region = _settings.AzureRegion;
+            AzureTts.Voice = _settings.AzureVoice;
         }
 
         private void Tab_Click(object sender, RoutedEventArgs e)

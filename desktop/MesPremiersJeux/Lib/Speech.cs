@@ -88,8 +88,27 @@ namespace MesPremiersJeux.Lib
 
         public static void Say(string text)
         {
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            // Voix naturelle Azure si configurée, sinon voix Windows locale.
+            if (AzureTts.Enabled)
+            {
+                LocalStop();
+                AzureTts.Speak(text, Pitch, () => LocalSay(text));
+                return;
+            }
+            LocalSay(text);
+        }
+
+        private static void LocalStop()
+        {
+            try { _pageMode = false; _tts?.SpeakAsyncCancelAll(); } catch { }
+        }
+
+        private static void LocalSay(string text)
+        {
             Ensure();
-            if (_tts == null || string.IsNullOrWhiteSpace(text)) return;
+            if (_tts == null) return;
             try
             {
                 _pageMode = false;
@@ -115,8 +134,22 @@ namespace MesPremiersJeux.Lib
         /// </summary>
         public static void SayPage(string text, Action<int> onWord, Action onDone)
         {
+            if (string.IsNullOrWhiteSpace(text)) { onDone?.Invoke(); return; }
+
+            if (AzureTts.Enabled)
+            {
+                LocalStop();
+                AzureTts.SpeakPage(text, Pitch, onWord, onDone,
+                    () => LocalSayPage(text, onWord, onDone));
+                return;
+            }
+            LocalSayPage(text, onWord, onDone);
+        }
+
+        private static void LocalSayPage(string text, Action<int> onWord, Action onDone)
+        {
             Ensure();
-            if (_tts == null || string.IsNullOrWhiteSpace(text)) { onDone?.Invoke(); return; }
+            if (_tts == null) { onDone?.Invoke(); return; }
             try
             {
                 _tts.SpeakAsyncCancelAll();
@@ -133,7 +166,8 @@ namespace MesPremiersJeux.Lib
 
         public static void Stop()
         {
-            try { _pageMode = false; _tts?.SpeakAsyncCancelAll(); } catch { }
+            AzureTts.StopPlayback();
+            LocalStop();
         }
 
         public static void Pop()

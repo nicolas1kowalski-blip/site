@@ -66,6 +66,7 @@
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.25" />
                 </Border.Effect>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="620">
                 <StackPanel Width="320">
                     <TextBlock Text="Réglages" FontSize="20" FontWeight="Bold"
                                Foreground="#FF3B2A5A" Margin="0,0,0,12" />
@@ -94,11 +95,23 @@
                     <Slider x:Name="CircleSlider" Minimum="60" Maximum="170" ValueChanged="CircleSlider_Changed" />
 
                     <Separator Margin="0,14,0,10" />
-                    <TextBlock Text="Voix" FontSize="14" Foreground="#FF6B5B8A" Margin="0,0,0,2" />
+                    <TextBlock Text="Voix Windows (hors ligne)" FontSize="14" Foreground="#FF6B5B8A" Margin="0,0,0,2" />
                     <ComboBox x:Name="VoiceCombo" FontSize="14" SelectionChanged="Voice_Changed" />
                     <TextBlock Text="Hauteur de la voix (aiguë = plus enfantine)" FontSize="14" Foreground="#FF6B5B8A" Margin="0,10,0,2" />
                     <Slider x:Name="PitchSlider" Minimum="-20" Maximum="60" ValueChanged="Pitch_Changed" />
-                    <Button Content="🔈 Écouter un exemple" FontSize="14" Padding="8,6" Margin="0,8,0,0" Click="VoiceTest_Click" />
+
+                    <Separator Margin="0,14,0,10" />
+                    <TextBlock Text="🌟 Voix naturelle (Azure, en ligne)" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,0,0,2" />
+                    <TextBlock Text="Clé Azure Speech :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,4,0,2" />
+                    <TextBox x:Name="AzureKeyBox" FontSize="13" Padding="6,4" LostFocus="Azure_Changed" />
+                    <TextBlock Text="Région :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,6,0,2" />
+                    <TextBox x:Name="AzureRegionBox" FontSize="13" Padding="6,4" LostFocus="Azure_Changed" />
+                    <TextBlock Text="Voix :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,6,0,2" />
+                    <ComboBox x:Name="AzureVoiceCombo" FontSize="13" SelectionChanged="Azure_Changed" />
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,6,0,0"
+                               Text="Sans clé : voix Windows. Avec clé : voix naturelle (Eloise = voix d'enfant). Repli automatique hors ligne." />
+
+                    <Button Content="🔈 Écouter un exemple" FontSize="14" Padding="8,6" Margin="0,10,0,0" Click="VoiceTest_Click" />
 
                     <Border Background="#FFF3E9FF" CornerRadius="10" Padding="10" Margin="0,14,0,0">
                         <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="#FF5A4A7A"
@@ -113,6 +126,7 @@
                         <Button Content="✕ Fermer" Padding="6,10" FontSize="14" Foreground="#FFB00020" Click="Close_Click" />
                     </UniformGrid>
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Popup>
 

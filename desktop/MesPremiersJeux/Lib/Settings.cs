@@ -15,8 +15,11 @@ namespace MesPremiersJeux.Lib
         public int DwellTime = 900;      // ms
         public double Smoothing = 0.8;   // 0 = réactif … 1 = très lissé/stable
         public double CircleSize = 90;   // diamètre du cercle de progression (px)
-        public string VoiceName = "";    // voix choisie (vide = par défaut)
+        public string VoiceName = "";    // voix Windows choisie (vide = par défaut)
         public double VoicePitch = 25;   // hauteur (%) : +25 ≈ voix enfantine
+        public string AzureKey = "";     // clé Azure Speech (vide = voix Windows)
+        public string AzureRegion = "francecentral";
+        public string AzureVoice = "fr-FR-EloiseNeural";
 
         private static string Dir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux");
@@ -41,6 +44,9 @@ namespace MesPremiersJeux.Lib
                         case "CircleSize": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var c)) s.CircleSize = c; break;
                         case "VoiceName": s.VoiceName = val; break;
                         case "VoicePitch": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var vp)) s.VoicePitch = vp; break;
+                        case "AzureKey": s.AzureKey = val; break;
+                        case "AzureRegion": if (val.Length > 0) s.AzureRegion = val; break;
+                        case "AzureVoice": if (val.Length > 0) s.AzureVoice = val; break;
                     }
                 }
             }
@@ -60,6 +66,9 @@ namespace MesPremiersJeux.Lib
                     "CircleSize=" + CircleSize.ToString(CultureInfo.InvariantCulture),
                     "VoiceName=" + (VoiceName ?? ""),
                     "VoicePitch=" + VoicePitch.ToString(CultureInfo.InvariantCulture),
+                    "AzureKey=" + (AzureKey ?? ""),
+                    "AzureRegion=" + (AzureRegion ?? ""),
+                    "AzureVoice=" + (AzureVoice ?? ""),
                 };
                 File.WriteAllLines(FilePath, lines);
             }
