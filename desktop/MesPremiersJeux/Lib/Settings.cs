@@ -20,6 +20,8 @@ namespace MesPremiersJeux.Lib
         public string AzureKey = "";     // clé Azure Speech (vide = voix Windows)
         public string AzureRegion = "francecentral";
         public string AzureVoice = "fr-FR-EloiseNeural";
+        public string SupabaseUrl = "";  // sauvegarde en ligne du contenu
+        public string SupabaseKey = "";
 
         private static string Dir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux");
@@ -47,6 +49,8 @@ namespace MesPremiersJeux.Lib
                         case "AzureKey": s.AzureKey = val; break;
                         case "AzureRegion": if (val.Length > 0) s.AzureRegion = val; break;
                         case "AzureVoice": if (val.Length > 0) s.AzureVoice = val; break;
+                        case "SupabaseUrl": s.SupabaseUrl = val; break;
+                        case "SupabaseKey": s.SupabaseKey = val; break;
                     }
                 }
             }
@@ -69,6 +73,8 @@ namespace MesPremiersJeux.Lib
                     "AzureKey=" + (AzureKey ?? ""),
                     "AzureRegion=" + (AzureRegion ?? ""),
                     "AzureVoice=" + (AzureVoice ?? ""),
+                    "SupabaseUrl=" + (SupabaseUrl ?? ""),
+                    "SupabaseKey=" + (SupabaseKey ?? ""),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

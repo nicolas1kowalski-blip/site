@@ -87,6 +87,18 @@
                     </UniformGrid>
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
                                Text="Le contenu vit dans le dossier « Contenu » à côté de l'application : copier le dossier de l'appli transporte tout sur un autre PC." />
+
+                    <TextBlock Text="☁️ Sauvegarde en ligne (Supabase)" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
+                    <TextBlock Text="URL du projet :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,4,0,2" />
+                    <TextBox x:Name="SupabaseUrlBox" FontSize="13" Padding="6,4" LostFocus="Supabase_Changed" />
+                    <TextBlock Text="Clé :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,6,0,2" />
+                    <TextBox x:Name="SupabaseKeyBox" FontSize="13" Padding="6,4" LostFocus="Supabase_Changed" />
+                    <UniformGrid Columns="2" Margin="0,8,0,0">
+                        <Button x:Name="CloudUpBtn" Content="☁️⬆ Sauvegarder" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="CloudUp_Click" />
+                        <Button x:Name="CloudDownBtn" Content="☁️⬇ Récupérer" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="CloudDown_Click" />
+                    </UniformGrid>
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
+                               Text="Même contenu sur tous les PC : « Sauvegarder » envoie tout dans le nuage, « Récupérer » le charge sur l'autre appareil." />
                     <TextBlock Text="Durée de fixation" FontSize="14" Foreground="#FF6B5B8A" Margin="0,14,0,2" />
                     <Slider x:Name="DwellSlider" Minimum="400" Maximum="2500" TickFrequency="100"
                             IsSnapToTickEnabled="True" ValueChanged="DwellSlider_Changed" />

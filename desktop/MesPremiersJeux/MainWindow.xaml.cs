@@ -99,6 +99,12 @@ namespace MesPremiersJeux
             foreach (ComboBoxItem it in AzureVoiceCombo.Items)
                 if ((string)it.Tag == _settings.AzureVoice) { AzureVoiceCombo.SelectedItem = it; break; }
 
+            // Sauvegarde en ligne (Supabase).
+            CloudSync.Url = _settings.SupabaseUrl;
+            CloudSync.Key = _settings.SupabaseKey;
+            SupabaseUrlBox.Text = _settings.SupabaseUrl;
+            SupabaseKeyBox.Text = _settings.SupabaseKey;
+
             // Applique les réglages sauvegardés au contrôleur.
             _dwell.DwellTime = _settings.DwellTime;
             ApplySmoothing(_settings.Smoothing);
@@ -239,6 +245,50 @@ namespace MesPremiersJeux
         private void VoiceTest_Click(object sender, RoutedEventArgs e)
         {
             Speech.Say("Bonjour ! On joue ensemble ?");
+        }
+
+        private void Supabase_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null || SupabaseUrlBox == null) return;
+            _settings.SupabaseUrl = SupabaseUrlBox.Text.Trim();
+            _settings.SupabaseKey = SupabaseKeyBox.Text.Trim();
+            _settings.Save();
+            CloudSync.Url = _settings.SupabaseUrl;
+            CloudSync.Key = _settings.SupabaseKey;
+        }
+
+        private async void CloudUp_Click(object sender, RoutedEventArgs e)
+        {
+            if (!CloudSync.Enabled)
+            {
+                MessageBox.Show(this, "Renseigne d'abord l'URL et la clé Supabase.", "Sauvegarde en ligne");
+                return;
+            }
+            CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = false;
+            CloudUpBtn.Content = "⏳ Envoi…";
+            var err = await CloudSync.UploadAsync();
+            CloudUpBtn.Content = "☁️⬆ Sauvegarder";
+            CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = true;
+            MessageBox.Show(this, err == null
+                ? "Contenu sauvegardé dans le nuage ! Sur l'autre PC : « Récupérer »."
+                : "Échec de la sauvegarde : " + err, "Sauvegarde en ligne");
+        }
+
+        private async void CloudDown_Click(object sender, RoutedEventArgs e)
+        {
+            if (!CloudSync.Enabled)
+            {
+                MessageBox.Show(this, "Renseigne d'abord l'URL et la clé Supabase.", "Sauvegarde en ligne");
+                return;
+            }
+            CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = false;
+            CloudDownBtn.Content = "⏳ Réception…";
+            var err = await CloudSync.DownloadAsync();
+            CloudDownBtn.Content = "☁️⬇ Récupérer";
+            CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = true;
+            MessageBox.Show(this, err == null
+                ? "Contenu récupéré ! Livres, coloriages et photos sont à jour."
+                : "Échec de la récupération : " + err, "Sauvegarde en ligne");
         }
 
         private void Azure_Changed(object sender, RoutedEventArgs e)
