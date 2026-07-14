@@ -40,9 +40,13 @@
                 </Border>
             </Viewbox>
 
-            <!-- Droite : outils (recommencer, plein écran, supprimer) -->
+            <!-- Droite (haut) : réglages de la couleur -->
             <StackPanel x:Name="TopTools" Grid.Column="2" Orientation="Vertical"
                         VerticalAlignment="Top" Margin="6,8,10,8" />
+
+            <!-- Droite (bas) : recommencer / plein écran / supprimer -->
+            <StackPanel x:Name="BottomTools" Grid.Column="2" Orientation="Vertical"
+                        VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="6,8,10,10" />
         </Grid>
     </Grid>
 </UserControl>

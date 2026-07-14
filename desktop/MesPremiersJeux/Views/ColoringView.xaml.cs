@@ -159,23 +159,24 @@ namespace MesPremiersJeux.Views
             TopTools.Children.Add(ModButton("🌙", "Plus foncé", () => Shade(false)));
             TopTools.Children.Add(ModButton("✨", "Paillettes", ToggleGlitter));
 
-            TopTools.Children.Add(new Border { Height = 2, Background = new SolidColorBrush(Color.FromRgb(0xE4, 0xCC, 0xF2)), Margin = new Thickness(6, 4, 6, 12) });
-
-            var reset = ToolButton("🔄", "Recommencer");
-            reset.Click += (s, e) => DrawPage();
-            TopTools.Children.Add(reset);
-
-            var full = ToolButton("⛶", "Plein écran");
-            full.Click += (s, e) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
-            TopTools.Children.Add(full);
+            // En bas à droite : recommencer / plein écran / supprimer.
+            BottomTools.Children.Clear();
 
             // Supprimer ce coloriage (personnalisé, mode admin).
             if (AdminMode.IsActive && _pageIdx >= 0 && _pages[_pageIdx].ImagePath != null)
             {
                 var del = ToolButton("🗑", "Supprimer ce coloriage");
                 del.Click += (s, e) => DeleteCurrentColoring();
-                TopTools.Children.Add(del);
+                BottomTools.Children.Add(del);
             }
+
+            var reset = ToolButton("🔄", "Recommencer");
+            reset.Click += (s, e) => DrawPage();
+            BottomTools.Children.Add(reset);
+
+            var full = ToolButton("⛶", "Plein écran");
+            full.Click += (s, e) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
+            BottomTools.Children.Add(full);
         }
 
         private static Button ToolButton(string glyph, string tip) => new Button
