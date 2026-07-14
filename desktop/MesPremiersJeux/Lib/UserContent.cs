@@ -741,10 +741,11 @@ namespace MesPremiersJeux.Lib
             foreach (var p in data.Pages)
             {
                 var draft = new PageDraft { Text = (p.Text ?? "").Trim() };
-                // Image : seules les data URL sont embarquées dans le JSON ; un nom
-                // de fichier (ex. « page_001.png ») sera ajouté par le parent ensuite.
-                if (!string.IsNullOrEmpty(p.Image) && p.Image.StartsWith("data:image"))
-                    draft.ImagePath = DecodeDataUrl(p.Image);
+                // Image : chemin absolu (C:\…\page.png), URL http(s), file:// ou
+                // data URL. Un simple nom de fichier ne peut pas être retrouvé à
+                // l'import (aucun dossier de référence) → sera ajouté par le parent.
+                if (!string.IsNullOrEmpty(p.Image))
+                    draft.ImagePath = ResolveImageRef(null, p.Image);
                 // Zones : conservées même sans image, pour ne pas perdre le travail
                 // (elles seront réutilisées quand une photo sera ajoutée à la page).
                 if (p.Zones != null)
