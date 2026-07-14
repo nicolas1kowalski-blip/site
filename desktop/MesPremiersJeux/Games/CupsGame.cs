@@ -121,13 +121,14 @@ namespace MesPremiersJeux.Games
             SetBody(_canvas);
             Schedule(350, () => Speak("Regarde bien où est la balle !"));
 
-            // 1) On laisse regarder, 2) les gobelets descendent, 3) mélange.
+            // 1) On laisse regarder, 2) les gobelets descendent EN RECOUVRANT la
+            // balle (elle disparaît progressivement, cachée par le gobelet), 3) mélange.
             Schedule(2600, () =>
             {
                 foreach (var c in _cups) AnimateTop(c, DownY);
-                _ball.Visibility = Visibility.Hidden;
                 Schedule(800, () =>
                 {
+                    _ball.Visibility = Visibility.Hidden; // désormais totalement recouverte
                     _phase = Phase.Shuffle;
                     Question.Text = "Les gobelets se mélangent…";
                     _swapsLeft = 5;
