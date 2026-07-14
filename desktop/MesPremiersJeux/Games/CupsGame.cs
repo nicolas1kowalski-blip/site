@@ -96,7 +96,9 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(_ball, BallY);
             _canvas.Children.Add(_ball);
 
-            // Les trois gobelets, levés au départ (la balle est visible).
+            // Les trois gobelets, TOUS IDENTIQUES (même couleur) : impossible de
+            // suivre la couleur, il faut suivre le mouvement. Levés au départ.
+            var cupColor = CupColors[GameKit.RandInt(CupColors.Length)];
             _cups = new Button[3];
             _cupSlot = new int[3];
             for (int i = 0; i < 3; i++)
@@ -107,7 +109,7 @@ namespace MesPremiersJeux.Games
                     Style = (Style)Application.Current.Resources["BalloonButton"],
                     Width = CupW,
                     Height = CupH,
-                    Content = CupVisual(CupColors[i]),
+                    Content = CupVisual(cupColor),
                 };
                 int cup = i;
                 btn.Click += (s, e) => Guess(cup);
