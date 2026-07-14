@@ -28,6 +28,9 @@ namespace MesPremiersJeux
         public MainWindow()
         {
             InitializeComponent();
+            // Mode immersif : masque/affiche la barre du haut pendant une activité.
+            Chrome.Changed += () => Dispatcher.Invoke(() =>
+                TopBar.Visibility = Chrome.Immersive ? Visibility.Collapsed : Visibility.Visible);
             BuildViews();
             Loaded += OnLoaded;
             Closed += (s, e) => _gaze.Dispose();
@@ -312,6 +315,7 @@ namespace MesPremiersJeux
 
         private void Select(string id)
         {
+            Chrome.Immersive = false; // changer d'onglet réaffiche toujours la barre
             foreach (var kv in _views) kv.Value.Visibility = kv.Key == id ? Visibility.Visible : Visibility.Collapsed;
         }
 

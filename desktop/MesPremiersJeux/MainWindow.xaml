@@ -5,8 +5,8 @@
         WindowStartupLocation="CenterScreen" Background="#FFF3E9FF">
     <Grid x:Name="RootGrid">
         <DockPanel>
-            <!-- Barre d'onglets -->
-            <Border DockPanel.Dock="Top" Padding="14,12">
+            <!-- Barre d'onglets (masquée pendant une activité pour gagner de la place) -->
+            <Border x:Name="TopBar" DockPanel.Dock="Top" Padding="14,12">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                         <GradientStop Color="#FFB388FF" Offset="0" />

@@ -473,6 +473,7 @@ namespace MesPremiersJeux.Views
         {
             _readerRoot.Visibility = Visibility.Collapsed;
             _menuRoot.Visibility = Visibility.Visible;
+            Chrome.Immersive = false;
         }
 
         private void OpenBook(Book book)
@@ -482,6 +483,7 @@ namespace MesPremiersJeux.Views
             _quizBtn.Visibility = book.Questions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             _menuRoot.Visibility = Visibility.Collapsed;
             _readerRoot.Visibility = Visibility.Visible;
+            Chrome.Immersive = true; // plein écran pour lire
             ShowPage(0);
         }
 

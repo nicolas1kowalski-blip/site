@@ -68,6 +68,7 @@ namespace MesPremiersJeux.Views
                 GameHost.Children.Add(make(ShowConfetti));
                 MenuRoot.Visibility = Visibility.Collapsed;
                 PlayRoot.Visibility = Visibility.Visible;
+                MesPremiersJeux.Lib.Chrome.Immersive = true; // plein écran pour l'activité
             }
             catch (Exception ex)
             {
@@ -80,6 +81,7 @@ namespace MesPremiersJeux.Views
             GameHost.Children.Clear();
             PlayRoot.Visibility = Visibility.Collapsed;
             MenuRoot.Visibility = Visibility.Visible;
+            MesPremiersJeux.Lib.Chrome.Immersive = false;
         }
 
         // --- Confettis (fontaine douce, comme dans les jeux) ---

@@ -121,6 +121,7 @@ namespace MesPremiersJeux.Views
             BuildColorTools();
             MenuRoot.Visibility = Visibility.Collapsed;
             ColorRoot.Visibility = Visibility.Visible;
+            Chrome.Immersive = true; // plein écran pour colorier
         }
 
         private void Back_Click(object sender, RoutedEventArgs e)
@@ -128,6 +129,7 @@ namespace MesPremiersJeux.Views
             _pageIdx = -1;
             ColorRoot.Visibility = Visibility.Collapsed;
             MenuRoot.Visibility = Visibility.Visible;
+            Chrome.Immersive = false;
             BuildGallery();
         }
 
@@ -264,9 +266,8 @@ namespace MesPremiersJeux.Views
                     try
                     {
                         var img = UserContent.LoadBitmap(page.ImagePath);
-                        double m = size * 0.03;
-                        double avail = size - 2 * m;
-                        double k = Math.Min(avail / img.PixelWidth, avail / img.PixelHeight);
+                        // Le dessin occupe toute la surface (pas de marge blanche inutile).
+                        double k = Math.Min((double)size / img.PixelWidth, (double)size / img.PixelHeight);
                         double w = img.PixelWidth * k, h = img.PixelHeight * k;
                         dc.DrawImage(img, new Rect((size - w) / 2, (size - h) / 2, w, h));
                     }

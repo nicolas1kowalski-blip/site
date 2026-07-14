@@ -35,10 +35,10 @@
                     <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
                 </ScrollViewer>
 
-                <!-- Grand dessin -->
-                <Viewbox Grid.Column="1" Margin="8,0,16,16" Stretch="Uniform">
-                    <Border x:Name="StageBorder" Background="White" CornerRadius="18"
-                            BorderBrush="#FFE4CCF2" BorderThickness="3">
+                <!-- Grand dessin (occupe tout l'espace disponible) -->
+                <Viewbox Grid.Column="1" Margin="4,0,6,6" Stretch="Uniform">
+                    <Border x:Name="StageBorder" Background="White" CornerRadius="14"
+                            BorderBrush="#FFE4CCF2" BorderThickness="2">
                         <Image x:Name="Img" Width="800" Height="800" Stretch="Fill"
                                SnapsToDevicePixels="True"
                                MouseLeftButtonDown="Img_MouseLeftButtonDown" />

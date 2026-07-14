@@ -65,6 +65,7 @@ namespace MesPremiersJeux.Views
                 GameHost.Children.Add(make(ShowConfetti));
                 MenuRoot.Visibility = Visibility.Collapsed;
                 PlayRoot.Visibility = Visibility.Visible;
+                MesPremiersJeux.Lib.Chrome.Immersive = true; // plein écran pour jouer
             }
             catch (Exception ex)
             {
@@ -77,6 +78,7 @@ namespace MesPremiersJeux.Views
             GameHost.Children.Clear(); // arrête le jeu (Unloaded)
             PlayRoot.Visibility = Visibility.Collapsed;
             MenuRoot.Visibility = Visibility.Visible;
+            MesPremiersJeux.Lib.Chrome.Immersive = false;
         }
 
         private static readonly Color[] ConfettiColors =
