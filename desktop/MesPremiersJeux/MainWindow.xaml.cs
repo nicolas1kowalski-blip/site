@@ -41,6 +41,7 @@ namespace MesPremiersJeux
             var coloring = new ColoringView();
             coloring.ToggleFullscreenRequested += (s, e) => ToggleFullscreen();
 
+            _views["express"] = new ExpressView();
             _views["stories"] = new StoriesView();
             _views["games"] = new GamesView();
             _views["edu"] = new EducationView();

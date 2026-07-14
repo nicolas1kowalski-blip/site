@@ -25,6 +25,11 @@
                                 Content="⚙" FontSize="26" MinWidth="60" Margin="6,0" Click="Settings_Click" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Button x:Name="TabExpress" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="express">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💬  " FontSize="24" /><TextBlock Text="Je m'exprime" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="TabStories" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="stories">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="📖  " FontSize="24" /><TextBlock Text="Histoires" VerticalAlignment="Center" />
