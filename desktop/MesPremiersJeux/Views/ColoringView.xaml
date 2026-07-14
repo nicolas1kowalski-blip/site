@@ -2,30 +2,49 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="#FFFBF3FF">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
 
-        <!-- Palette (gauche) -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="12">
-            <UniformGrid x:Name="PaletteHost" Columns="2" Width="242" />
-        </ScrollViewer>
+        <!-- Galerie de dessins (comme la bibliothèque de livres) -->
+        <Grid x:Name="MenuRoot">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <WrapPanel x:Name="Gallery" HorizontalAlignment="Center" Margin="20" />
+            </ScrollViewer>
+        </Grid>
 
-        <!-- Grand dessin (centre) -->
-        <Viewbox Grid.Column="1" Margin="16" Stretch="Uniform">
-            <Border x:Name="StageBorder" Background="White" CornerRadius="18"
-                    BorderBrush="#FFE4CCF2" BorderThickness="3">
-                <Image x:Name="Img" Width="800" Height="800" Stretch="Fill"
-                       SnapsToDevicePixels="True"
-                       MouseLeftButtonDown="Img_MouseLeftButtonDown" />
-            </Border>
-        </Viewbox>
+        <!-- Écran de coloriage (palette à gauche + dessin en grand) -->
+        <Grid x:Name="ColorRoot" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-        <!-- Outils (droite) -->
-        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="ToolsHost" Width="132" Margin="8,12" />
-        </ScrollViewer>
+            <!-- Barre du haut : retour + outils -->
+            <DockPanel Grid.Row="0" Margin="16,12,16,4">
+                <Button x:Name="BackBtn" Style="{StaticResource BackButton}" Content="🎨  Dessins"
+                        HorizontalAlignment="Left" Click="Back_Click" />
+                <StackPanel x:Name="TopTools" Orientation="Horizontal" HorizontalAlignment="Right" />
+            </DockPanel>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Palette complète (gauche) -->
+                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="12,4">
+                    <UniformGrid x:Name="PaletteHost" Columns="2" Width="242" />
+                </ScrollViewer>
+
+                <!-- Grand dessin -->
+                <Viewbox Grid.Column="1" Margin="8,0,16,16" Stretch="Uniform">
+                    <Border x:Name="StageBorder" Background="White" CornerRadius="18"
+                            BorderBrush="#FFE4CCF2" BorderThickness="3">
+                        <Image x:Name="Img" Width="800" Height="800" Stretch="Fill"
+                               SnapsToDevicePixels="True"
+                               MouseLeftButtonDown="Img_MouseLeftButtonDown" />
+                    </Border>
+                </Viewbox>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

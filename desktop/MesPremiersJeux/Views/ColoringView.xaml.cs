@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MesPremiersJeux.Data;
@@ -12,20 +11,22 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Views
 {
     /// <summary>
-    /// Activité « coloriage » : palette variée (couleurs simples, à paillettes,
-    /// à motifs), grand dessin au centre rempli au regard (dwell) ou à la souris.
-    /// Portage de src/components/screens/ColoringScreen.jsx.
+    /// Activité « coloriage » façon bibliothèque : une galerie de dessins (comme les
+    /// livres) ; on en choisit un, il s'ouvre en grand avec une palette complète en
+    /// bas. Remplissage au regard (dwell → vrai clic) ou à la souris.
     /// </summary>
     public partial class ColoringView : UserControl, IGazeSurface
     {
         private const int Size = 800;
+
+        private static readonly Brush Dark = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A));
 
         // Une page à colorier : dessin intégré OU image au trait ajoutée par le parent.
         private sealed class PageEntry
         {
             public string Name;
             public Coloring BuiltIn;   // dessin vectoriel intégré
-            public string ImagePath;   // image personnalisée (Documents\MesPremiersJeux\Coloriages)
+            public string ImagePath;   // image personnalisée (Contenu\Coloriages)
         }
 
         private readonly List<PageEntry> _pages = new List<PageEntry>();
@@ -33,7 +34,7 @@ namespace MesPremiersJeux.Views
         private WriteableBitmap _bmp;
         private byte[] _pixels;
         private Swatch _spec = Palette.All[0];
-        private int _pageIdx = 0;
+        private int _pageIdx = -1;   // -1 = galerie (aucun dessin ouvert)
         private double _lastFillX = -999, _lastFillY = -999;
 
         /// <summary>Demande de bascule plein écran, gérée par la fenêtre principale.</summary>
@@ -44,90 +45,160 @@ namespace MesPremiersJeux.Views
             InitializeComponent();
             UserContent.EnsureFolders();
 
-            foreach (var c in Colorings.All)
-                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
-            foreach (var u in UserContent.LoadColorings())
-                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
-
+            LoadPages();
             BuildPalette();
-            BuildTools();
-            Loaded += (s, e) => DrawPage();
+            BuildGallery();
+
             // Les outils parent (➕ / 🗑) suivent le mode admin.
-            AdminMode.Changed += () => Dispatcher.Invoke(BuildTools);
+            AdminMode.Changed += () => Dispatcher.Invoke(() => { BuildGallery(); if (_pageIdx >= 0) BuildColorTools(); });
             // Après un import de contenu, les coloriages se rechargent.
             UserContent.ContentChanged += () => Dispatcher.Invoke(ReloadPages);
         }
 
-        // Palette réduite : moins de couleurs mais grandes = plus simple à viser au regard.
-        private static readonly string[] SimpleIds =
-            { "rouge", "orange", "jaune", "vert", "bleu", "violet", "rose", "noir", "g-arc", "m-etoiles" };
+        private void LoadPages()
+        {
+            _pages.Clear();
+            foreach (var c in Colorings.All)
+                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
+            foreach (var u in UserContent.LoadColorings())
+                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
+        }
 
-        // --- Construction de l'interface ---
+        // ------------------------------------------------------------------ galerie
+        private void BuildGallery()
+        {
+            Gallery.Children.Clear();
+            for (int i = 0; i < _pages.Count; i++)
+            {
+                int idx = i;
+                var page = _pages[i];
+
+                var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                content.Children.Add(new Image { Source = RenderDrawing(page, 300), Width = 150, Height = 150 });
+                content.Children.Add(new TextBlock
+                {
+                    Text = page.Name,
+                    FontSize = 22,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Dark,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    MaxWidth = 220,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
+
+                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
+                tile.Click += (s, e) => OpenColoring(idx);
+                Gallery.Children.Add(tile);
+            }
+
+            // Tuile « ajouter des dessins » (mode admin uniquement).
+            if (AdminMode.IsActive)
+            {
+                var add = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                add.Children.Add(new TextBlock { Text = "➕", FontSize = 74, HorizontalAlignment = HorizontalAlignment.Center });
+                add.Children.Add(new TextBlock
+                {
+                    Text = "Ajouter des dessins",
+                    FontSize = 20,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Dark,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
+                var addTile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = add };
+                addTile.Click += (s, e) => AddColorings();
+                Gallery.Children.Add(addTile);
+            }
+        }
+
+        private void OpenColoring(int idx)
+        {
+            if (idx < 0 || idx >= _pages.Count) return;
+            _pageIdx = idx;
+            DrawPage();
+            BuildColorTools();
+            MenuRoot.Visibility = Visibility.Collapsed;
+            ColorRoot.Visibility = Visibility.Visible;
+        }
+
+        private void Back_Click(object sender, RoutedEventArgs e)
+        {
+            _pageIdx = -1;
+            ColorRoot.Visibility = Visibility.Collapsed;
+            MenuRoot.Visibility = Visibility.Visible;
+            BuildGallery();
+        }
+
+        // ------------------------------------------------------------------ outils (écran de coloriage)
+        private void BuildColorTools()
+        {
+            TopTools.Children.Clear();
+
+            var reset = ToolButton("🔄", "Recommencer");
+            reset.Click += (s, e) => DrawPage();
+            TopTools.Children.Add(reset);
+
+            var full = ToolButton("⛶", "Plein écran");
+            full.Click += (s, e) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
+            TopTools.Children.Add(full);
+
+            // Supprimer ce coloriage (personnalisé, mode admin).
+            if (AdminMode.IsActive && _pageIdx >= 0 && _pages[_pageIdx].ImagePath != null)
+            {
+                var del = ToolButton("🗑", "Supprimer ce coloriage");
+                del.Click += (s, e) => DeleteCurrentColoring();
+                TopTools.Children.Add(del);
+            }
+        }
+
+        private static Button ToolButton(string glyph, string tip) => new Button
+        {
+            Style = (Style)Application.Current.Resources["BackButton"],
+            Content = glyph,
+            FontSize = 30,
+            MinWidth = 90,
+            Margin = new Thickness(10, 0, 0, 0),
+            ToolTip = tip,
+        };
+
+        // ------------------------------------------------------------------ palette (complète)
         private void BuildPalette()
         {
             bool first = true;
-            foreach (var id in SimpleIds)
+            foreach (var swatch in Palette.All)
             {
-                var swatch = Palette.All.Find(s => s.Id == id);
-                if (swatch == null) continue;
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["SwatchButton"],
                     Background = ColoringEngine.PreviewBrush(swatch),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0xB8, 0xB0, 0xC8)),
+                    BorderThickness = new Thickness(1.5),
                     Tag = swatch,
                     ToolTip = swatch.Name,
                 };
                 btn.Click += (s, e) => SelectSwatch(swatch, btn);
                 PaletteHost.Children.Add(btn);
-                if (first) { btn.BorderThickness = new Thickness(4); _spec = swatch; first = false; }
+                if (first) { btn.BorderBrush = Dark; btn.BorderThickness = new Thickness(4); _spec = swatch; first = false; }
             }
         }
 
-        private void BuildTools()
+        private void SelectSwatch(Swatch s, Button btn)
         {
-            ToolsHost.Children.Clear();
-
-            for (int i = 0; i < _pages.Count; i++)
-            {
-                int idx = i;
-                var page = _pages[i];
-                var btn = new Button
+            _spec = s;
+            var idle = new SolidColorBrush(Color.FromRgb(0xB8, 0xB0, 0xC8));
+            foreach (var child in PaletteHost.Children)
+                if (child is Button b)
                 {
-                    Style = (Style)Application.Current.Resources["PageButton"],
-                    Content = new Image { Source = RenderDrawing(page, 108), Width = 108, Height = 108 },
-                    ToolTip = "Colorier " + page.Name,
-                };
-                btn.Click += (s, e) => { _pageIdx = idx; DrawPage(); HighlightPage(btn); };
-                ToolsHost.Children.Add(btn);
-                if (i == _pageIdx) btn.BorderThickness = new Thickness(4);
-            }
-
-            // Outils parent (mode admin) : ajouter des coloriages, supprimer celui affiché.
-            if (AdminMode.IsActive)
-            {
-                var add = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "➕", ToolTip = "Ajouter des coloriages" };
-                add.Click += (s, e) => AddColorings();
-                ToolsHost.Children.Add(add);
-
-                if (_pages[_pageIdx].ImagePath != null)
-                {
-                    var del = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "🗑", ToolTip = "Supprimer ce coloriage" };
-                    del.Click += (s, e) => DeleteCurrentColoring();
-                    ToolsHost.Children.Add(del);
+                    bool sel = ReferenceEquals(b, btn);
+                    b.BorderBrush = sel ? Dark : idle;
+                    b.BorderThickness = new Thickness(sel ? 4 : 1.5);
                 }
-            }
-
-            var reset = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "🔄", ToolTip = "Recommencer" };
-            reset.Click += (s, e) => DrawPage();
-            ToolsHost.Children.Add(reset);
-
-            var full = new Button { Style = (Style)Application.Current.Resources["ToolButton"], Content = "⛶", ToolTip = "Plein écran" };
-            full.Click += (s, e) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
-            ToolsHost.Children.Add(full);
+            Speech.Say(s.Name);
         }
 
-        // Choisir des images au trait (PNG/JPG) : elles sont copiées dans
-        // Documents\MesPremiersJeux\Coloriages et apparaissent immédiatement.
+        // ------------------------------------------------------------------ ajout / suppression (parent)
         private void AddColorings()
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
@@ -141,21 +212,14 @@ namespace MesPremiersJeux.Views
             var added = UserContent.AddColorings(dlg.FileNames);
             if (added.Count == 0) return;
 
-            _pages.Clear();
-            foreach (var c in Colorings.All)
-                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
-            foreach (var u in UserContent.LoadColorings())
-                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
-
-            _pageIdx = _pages.Count - 1; // ouvre le dernier ajouté
-            BuildTools();
-            DrawPage();
+            LoadPages();
+            BuildGallery();
             Speech.Say("Le coloriage est ajouté !");
         }
 
-        // Supprime le coloriage personnalisé affiché (mode admin).
         private void DeleteCurrentColoring()
         {
+            if (_pageIdx < 0) return;
             var page = _pages[_pageIdx];
             if (page.ImagePath == null) return;
 
@@ -167,36 +231,19 @@ namespace MesPremiersJeux.Views
             if (res != MessageBoxResult.Yes) return;
 
             UserContent.DeleteColoring(page.ImagePath);
-            ReloadPages();
+            LoadPages();
+            Back_Click(this, null); // retour à la galerie
         }
 
         private void ReloadPages()
         {
-            _pages.Clear();
-            foreach (var c in Colorings.All)
-                _pages.Add(new PageEntry { Name = c.Name, BuiltIn = c });
-            foreach (var u in UserContent.LoadColorings())
-                _pages.Add(new PageEntry { Name = u.Name, ImagePath = u.Path });
-            if (_pageIdx >= _pages.Count) _pageIdx = 0;
-            BuildTools();
-            DrawPage();
+            LoadPages();
+            if (_pageIdx >= _pages.Count) { Back_Click(this, null); return; }
+            BuildGallery();
+            if (_pageIdx >= 0) { DrawPage(); BuildColorTools(); }
         }
 
-        private void SelectSwatch(Swatch s, Button btn)
-        {
-            _spec = s;
-            foreach (var child in PaletteHost.Children)
-                if (child is Button b) b.BorderThickness = new Thickness(ReferenceEquals(b, btn) ? 4 : 0);
-            Speech.Say(s.Name);
-        }
-
-        private void HighlightPage(Button btn)
-        {
-            foreach (var child in ToolsHost.Children)
-                if (child is Button b && b.Content is Image) b.BorderThickness = new Thickness(ReferenceEquals(b, btn) ? 4 : 0);
-        }
-
-        // --- Rendu du dessin (intégré ou image personnalisée) ---
+        // ------------------------------------------------------------------ rendu / remplissage
         private static RenderTargetBitmap RenderDrawing(PageEntry page, int size)
         {
             var dv = new DrawingVisual();
@@ -215,7 +262,6 @@ namespace MesPremiersJeux.Views
                     try
                     {
                         var img = UserContent.LoadBitmap(page.ImagePath);
-                        // Ajustement uniforme, centré, avec une petite marge blanche.
                         double m = size * 0.03;
                         double avail = size - 2 * m;
                         double k = Math.Min(avail / img.PixelWidth, avail / img.PixelHeight);
@@ -232,6 +278,7 @@ namespace MesPremiersJeux.Views
 
         private void DrawPage()
         {
+            if (_pageIdx < 0 || _pageIdx >= _pages.Count) return;
             var rtb = RenderDrawing(_pages[_pageIdx], Size);
             _pixels = new byte[Size * Size * 4];
             rtb.CopyPixels(_pixels, Size * 4, 0);
@@ -241,7 +288,6 @@ namespace MesPremiersJeux.Views
             _lastFillX = _lastFillY = -999;
         }
 
-        // --- Remplissage ---
         private void FillAtImagePoint(Point p)
         {
             if (_pixels == null) return;
@@ -260,7 +306,7 @@ namespace MesPremiersJeux.Views
             FillAtImagePoint(e.GetPosition(Img));
         }
 
-        // --- IGazeSurface (dwell) ---
+        // ------------------------------------------------------------------ IGazeSurface (dwell)
         public double ReArmDistance => 30.0;
 
         private bool TryMap(Point screenPoint, out Point imgPoint)
@@ -277,7 +323,6 @@ namespace MesPremiersJeux.Views
         public void CommitGaze(Point screenPoint)
         {
             if (!TryMap(screenPoint, out var p)) return;
-            // Évite de re-remplir exactement au même endroit d'un dwell à l'autre.
             if (Math.Abs(p.X - _lastFillX) < 4 && Math.Abs(p.Y - _lastFillY) < 4) return;
             _lastFillX = p.X; _lastFillY = p.Y;
             FillAtImagePoint(p);
