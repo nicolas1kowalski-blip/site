@@ -248,7 +248,45 @@ namespace MesPremiersJeux.Views
         }
 
         // ------------------------------------------------------------------ rendu / remplissage
+        // Rend le dessin en le RECADRANT sur son contenu (le tracé), pour qu'il
+        // remplisse le carré sans marge blanche autour. On rend d'abord en double
+        // résolution, on cherche la boîte englobante des pixels non blancs, puis on
+        // la ré-étale pour occuper toute la surface.
         private static RenderTargetBitmap RenderDrawing(PageEntry page, int size)
+        {
+            int hi = size * 2;
+            var raw = RenderRaw(page, hi);
+            var rect = ContentBounds(raw, hi);
+
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, size, size));
+                if (rect.Width > 1 && rect.Height > 1)
+                {
+                    double pad = size * 0.015;
+                    double avail = size - 2 * pad;
+                    double k = Math.Min(avail / rect.Width, avail / rect.Height);
+                    double w = rect.Width * k, h = rect.Height * k;
+                    double ox = (size - w) / 2 - rect.X * k;
+                    double oy = (size - h) / 2 - rect.Y * k;
+                    dc.PushTransform(new TranslateTransform(ox, oy));
+                    dc.PushTransform(new ScaleTransform(k, k));
+                    dc.DrawImage(raw, new Rect(0, 0, hi, hi));
+                    dc.Pop(); dc.Pop();
+                }
+                else
+                {
+                    dc.DrawImage(raw, new Rect(0, 0, size, size)); // dessin vide : tel quel
+                }
+            }
+            var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(dv);
+            return rtb;
+        }
+
+        // Rendu « brut » du dessin (fond blanc + tracé / image), sans recadrage.
+        private static RenderTargetBitmap RenderRaw(PageEntry page, int size)
         {
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
@@ -266,7 +304,6 @@ namespace MesPremiersJeux.Views
                     try
                     {
                         var img = UserContent.LoadBitmap(page.ImagePath);
-                        // Le dessin occupe toute la surface (pas de marge blanche inutile).
                         double k = Math.Min((double)size / img.PixelWidth, (double)size / img.PixelHeight);
                         double w = img.PixelWidth * k, h = img.PixelHeight * k;
                         dc.DrawImage(img, new Rect((size - w) / 2, (size - h) / 2, w, h));
@@ -277,6 +314,30 @@ namespace MesPremiersJeux.Views
             var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             rtb.Render(dv);
             return rtb;
+        }
+
+        // Boîte englobante des pixels « non blancs » (le tracé du dessin).
+        private static Rect ContentBounds(RenderTargetBitmap bmp, int size)
+        {
+            var px = new byte[size * size * 4];
+            bmp.CopyPixels(px, size * 4, 0);
+            int minX = size, minY = size, maxX = -1, maxY = -1;
+            for (int y = 0; y < size; y++)
+            {
+                int row = y * size * 4;
+                for (int x = 0; x < size; x++)
+                {
+                    int i = row + x * 4;                 // Pbgra32 : B, G, R, A
+                    bool bg = px[i + 3] < 8 || (px[i] > 244 && px[i + 1] > 244 && px[i + 2] > 244);
+                    if (bg) continue;
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+            if (maxX < 0) return Rect.Empty;
+            return new Rect(minX, minY, maxX - minX + 1, maxY - minY + 1);
         }
 
         private void DrawPage()
