@@ -37,6 +37,9 @@ namespace MesPremiersJeux.Views
         private int _pageIdx = -1;   // -1 = galerie (aucun dessin ouvert)
         private double _lastFillX = -999, _lastFillY = -999;
 
+        private Border _current;     // aperçu de la couleur active (à droite)
+        private int _seq;            // identifiants uniques des couleurs dérivées
+
         /// <summary>Demande de bascule plein écran, gérée par la fenêtre principale.</summary>
         public event EventHandler ToggleFullscreenRequested;
 
@@ -138,6 +141,26 @@ namespace MesPremiersJeux.Views
         {
             TopTools.Children.Clear();
 
+            // Aperçu de la couleur active (reflète les réglages ci-dessous).
+            _current = new Border
+            {
+                Width = 96,
+                Height = 56,
+                CornerRadius = new CornerRadius(12),
+                Background = ColoringEngine.PreviewBrush(_spec),
+                BorderBrush = Dark,
+                BorderThickness = new Thickness(2),
+                Margin = new Thickness(0, 0, 0, 10),
+            };
+            TopTools.Children.Add(_current);
+
+            // Réglages de la couleur choisie.
+            TopTools.Children.Add(ModButton("🔆", "Plus clair", () => Shade(true)));
+            TopTools.Children.Add(ModButton("🌙", "Plus foncé", () => Shade(false)));
+            TopTools.Children.Add(ModButton("✨", "Paillettes", ToggleGlitter));
+
+            TopTools.Children.Add(new Border { Height = 2, Background = new SolidColorBrush(Color.FromRgb(0xE4, 0xCC, 0xF2)), Margin = new Thickness(6, 4, 6, 12) });
+
             var reset = ToolButton("🔄", "Recommencer");
             reset.Click += (s, e) => DrawPage();
             TopTools.Children.Add(reset);
@@ -164,6 +187,72 @@ namespace MesPremiersJeux.Views
             Margin = new Thickness(0, 0, 0, 10),
             ToolTip = tip,
         };
+
+        private static Button ModButton(string glyph, string tip, Action onClick)
+        {
+            var b = ToolButton(glyph, tip);
+            b.Click += (s, e) => onClick();
+            return b;
+        }
+
+        // ------------------------------------------------------------------ réglage de la couleur
+        // Éclaircit (vers le blanc) ou fonce (vers le noir) la couleur active.
+        private void Shade(bool lighter)
+        {
+            var b = BaseRgb(_spec);
+            var adj = lighter ? Blend(b, 255, 255, 255, 0.20) : Blend(b, 0, 0, 0, 0.22);
+            _spec = _spec.Kind == SwatchKind.Glitter ? MakeGlitter(adj) : MakeSolid(adj);
+            AfterSpecChanged(lighter ? "plus clair" : "plus foncé");
+        }
+
+        // Ajoute / retire les paillettes sur la couleur active.
+        private void ToggleGlitter()
+        {
+            var b = BaseRgb(_spec);
+            bool on = _spec.Kind != SwatchKind.Glitter;
+            _spec = on ? MakeGlitter(b) : MakeSolid(b);
+            AfterSpecChanged(on ? "des paillettes" : "sans paillettes");
+        }
+
+        private void AfterSpecChanged(string say)
+        {
+            // La couleur n'est plus une pastille de la palette : on enlève la sélection.
+            var idle = new SolidColorBrush(Color.FromRgb(0xB8, 0xB0, 0xC8));
+            foreach (var child in PaletteHost.Children)
+                if (child is Button b) { b.BorderBrush = idle; b.BorderThickness = new Thickness(1.5); }
+            if (_current != null) _current.Background = ColoringEngine.PreviewBrush(_spec);
+            Speech.Say(say);
+        }
+
+        private Swatch MakeSolid(ColoringEngine.Rgb c) => new Swatch
+        {
+            Id = "custom" + _seq++, Kind = SwatchKind.Solid, Name = "ma couleur", Color = Hex(c),
+        };
+
+        private Swatch MakeGlitter(ColoringEngine.Rgb c) => new Swatch
+        {
+            Id = "custom" + _seq++, Kind = SwatchKind.Glitter, Name = "paillettes",
+            Base = Hex(c), Spark = Hex(Blend(c, 255, 255, 255, 0.6)),
+        };
+
+        private static ColoringEngine.Rgb BaseRgb(Swatch s)
+        {
+            switch (s.Kind)
+            {
+                case SwatchKind.Glitter: return ColoringEngine.HexToRgb(s.Base);
+                case SwatchKind.Pattern: return ColoringEngine.HexToRgb(s.Fg);
+                case SwatchKind.Rainbow: return new ColoringEngine.Rgb(0xB0, 0xB0, 0xB0);
+                default: return ColoringEngine.HexToRgb(s.Color);
+            }
+        }
+
+        private static ColoringEngine.Rgb Blend(ColoringEngine.Rgb c, int tr, int tg, int tb, double t)
+            => new ColoringEngine.Rgb(
+                (byte)Math.Round(c.R + (tr - c.R) * t),
+                (byte)Math.Round(c.G + (tg - c.G) * t),
+                (byte)Math.Round(c.B + (tb - c.B) * t));
+
+        private static string Hex(ColoringEngine.Rgb c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
         // ------------------------------------------------------------------ palette (complète)
         private void BuildPalette()
@@ -199,6 +288,7 @@ namespace MesPremiersJeux.Views
                     b.BorderBrush = sel ? Dark : idle;
                     b.BorderThickness = new Thickness(sel ? 4 : 1.5);
                 }
+            if (_current != null) _current.Background = ColoringEngine.PreviewBrush(_spec);
             Speech.Say(s.Name);
         }
 
