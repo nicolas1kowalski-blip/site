@@ -77,7 +77,9 @@ namespace MesPremiersJeux.Lib
     internal sealed class BookJson
     {
         [DataMember(Name = "title")] public string Title;
+#pragma warning disable CS0649 // assigné par le désérialiseur JSON (jamais dans le code)
         [DataMember(Name = "metadata", EmitDefaultValue = false)] public BookMetaJson Metadata; // certains fichiers mettent le titre ici
+#pragma warning restore CS0649
         [DataMember(Name = "pages")] public List<BookPageJson> Pages;
         [DataMember(Name = "questions", EmitDefaultValue = false)] public List<BookQuestionJson> Questions;
     }

@@ -137,7 +137,7 @@ namespace MesPremiersJeux.Views
                 var crop = new CroppedBitmap(_bmp, new Int32Rect(x, y, w, h));
                 var enc = new PngBitmapEncoder();
                 enc.Frames.Add(BitmapFrame.Create(crop));
-                var path = Path.Combine(Path.GetTempPath(), "mpj-crop-" + Guid.NewGuid().ToString("N") + ".png");
+                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mpj-crop-" + Guid.NewGuid().ToString("N") + ".png");
                 using (var fs = File.Create(path)) enc.Save(fs);
 
                 ResultPath = path;
