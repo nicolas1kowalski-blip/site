@@ -10,35 +10,39 @@
             </ScrollViewer>
         </Grid>
 
-        <!-- Écran de coloriage (palette à gauche + dessin en grand) -->
+        <!-- Écran de coloriage : palette + retour (gauche), dessin en grand (centre),
+             outils (droite). Les deux bandes latérales servent aux commandes, le
+             dessin occupe toute la hauteur au milieu. -->
         <Grid x:Name="ColorRoot" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Palette complète (gauche) -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10,8">
-                <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
-            </ScrollViewer>
+            <!-- Gauche : bouton retour (en haut) puis la palette -->
+            <DockPanel Grid.Column="0" Margin="10,8">
+                <Button x:Name="BackBtn" DockPanel.Dock="Top" Style="{StaticResource BackButton}"
+                        Content="🎨  Dessins" HorizontalAlignment="Left" Margin="0,0,0,10"
+                        Click="Back_Click" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
+                </ScrollViewer>
+            </DockPanel>
 
-            <!-- Zone de dessin : le dessin occupe toute la hauteur, les boutons
-                 retour / outils flottent par-dessus les coins. -->
-            <Grid Grid.Column="1" Margin="2,6,8,8">
-                <Viewbox Stretch="Uniform">
-                    <Border x:Name="StageBorder" Background="White" CornerRadius="12"
-                            BorderBrush="#FFE4CCF2" BorderThickness="2">
-                        <Image x:Name="Img" Width="800" Height="800" Stretch="Fill"
-                               SnapsToDevicePixels="True"
-                               MouseLeftButtonDown="Img_MouseLeftButtonDown" />
-                    </Border>
-                </Viewbox>
+            <!-- Centre : le dessin (plein hauteur) -->
+            <Viewbox Grid.Column="1" Margin="2" Stretch="Uniform">
+                <Border x:Name="StageBorder" Background="White" CornerRadius="12"
+                        BorderBrush="#FFE4CCF2" BorderThickness="2">
+                    <Image x:Name="Img" Width="800" Height="800" Stretch="Fill"
+                           SnapsToDevicePixels="True"
+                           MouseLeftButtonDown="Img_MouseLeftButtonDown" />
+                </Border>
+            </Viewbox>
 
-                <Button x:Name="BackBtn" Style="{StaticResource BackButton}" Content="🎨  Dessins"
-                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6" Click="Back_Click" />
-                <StackPanel x:Name="TopTools" Orientation="Horizontal"
-                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" />
-            </Grid>
+            <!-- Droite : outils (recommencer, plein écran, supprimer) -->
+            <StackPanel x:Name="TopTools" Grid.Column="2" Orientation="Vertical"
+                        VerticalAlignment="Top" Margin="6,8,10,8" />
         </Grid>
     </Grid>
 </UserControl>

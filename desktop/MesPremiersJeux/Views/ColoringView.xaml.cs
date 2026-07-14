@@ -160,8 +160,8 @@ namespace MesPremiersJeux.Views
             Style = (Style)Application.Current.Resources["BackButton"],
             Content = glyph,
             FontSize = 30,
-            MinWidth = 90,
-            Margin = new Thickness(10, 0, 0, 0),
+            MinWidth = 96,
+            Margin = new Thickness(0, 0, 0, 10),
             ToolTip = tip,
         };
 
