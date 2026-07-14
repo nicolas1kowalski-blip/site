@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace MesPremiersJeux.Lib
@@ -92,6 +95,12 @@ namespace MesPremiersJeux.Lib
         [DataMember(Name = "type", EmitDefaultValue = false)] public string Type;        // "vraifaux" | "image"
         [DataMember(Name = "answer", EmitDefaultValue = false)] public bool Answer;      // pour vraifaux
         [DataMember(Name = "choices", EmitDefaultValue = false)] public List<BookChoiceJson> Choices;
+
+        // Alias du format « ocular » (import).
+        [DataMember(Name = "question_text", EmitDefaultValue = false)] public string QuestionText;
+        [DataMember(Name = "question_type", EmitDefaultValue = false)] public string QuestionType;
+        [DataMember(Name = "correct_answer", EmitDefaultValue = false)] public object CorrectAnswer; // bool ou texte
+        [DataMember(Name = "options", EmitDefaultValue = false)] public List<BookOptionJson> Options; // choix_multiple (texte)
     }
 
     [DataContract]
@@ -100,6 +109,17 @@ namespace MesPremiersJeux.Lib
         [DataMember(Name = "image", EmitDefaultValue = false)] public string Image;      // fichier ou data URL
         [DataMember(Name = "draw", EmitDefaultValue = false)] public string Draw;        // dessin intégré
         [DataMember(Name = "correct", EmitDefaultValue = false)] public bool Correct;
+
+        // Alias « ocular » : réponse = une zone de la page.
+        [DataMember(Name = "zone_ref", EmitDefaultValue = false)] public string ZoneRef;
+        [DataMember(Name = "is_correct", EmitDefaultValue = false)] public bool IsCorrect;
+    }
+
+    [DataContract]
+    internal sealed class BookOptionJson
+    {
+        [DataMember(Name = "label", EmitDefaultValue = false)] public string Label;
+        [DataMember(Name = "is_correct", EmitDefaultValue = false)] public bool IsCorrect;
     }
 
     [DataContract]
@@ -108,6 +128,7 @@ namespace MesPremiersJeux.Lib
         [DataMember(Name = "text", EmitDefaultValue = false)] public string Text;
         [DataMember(Name = "image", EmitDefaultValue = false)] public string Image; // data URL ou nom de fichier
         [DataMember(Name = "zones", EmitDefaultValue = false)] public List<BookZoneJson> Zones;
+        [DataMember(Name = "page_id", EmitDefaultValue = false)] public string PageId; // « ocular »
     }
 
     [DataContract]
@@ -118,6 +139,7 @@ namespace MesPremiersJeux.Lib
         [DataMember(Name = "width")] public double Width;
         [DataMember(Name = "height")] public double Height;
         [DataMember(Name = "label")] public string Label;
+        [DataMember(Name = "zone_id", EmitDefaultValue = false)] public string ZoneId; // « ocular »
     }
 
     /// <summary>
@@ -472,47 +494,161 @@ namespace MesPremiersJeux.Lib
             {
                 foreach (var q in data.Questions)
                 {
-                    var uq = ParseQuestion(q, dir);
+                    var uq = ParseQuestion(q, dir, data);
                     if (uq != null) story.Questions.Add(uq);
                 }
             }
             return story;
         }
 
-        // Construit une UserQuestion à partir du JSON. « dir » = dossier du livre
-        // (peut être null lors d'un import sans fichiers).
-        private static UserQuestion ParseQuestion(BookQuestionJson q, string dir)
+        // Construit une UserQuestion à partir du JSON, en acceptant le format de
+        // l'app (text/type/answer/choices image|draw) ET le format « ocular »
+        // (question_text/question_type/correct_answer, choices par zone, options
+        // texte). « book » sert à retrouver l'image d'une zone à découper.
+        private static UserQuestion ParseQuestion(BookQuestionJson q, string dir, BookJson book)
         {
-            if (q == null || string.IsNullOrWhiteSpace(q.Text)) return null;
-            var uq = new UserQuestion { Text = q.Text.Trim() };
+            if (q == null) return null;
+            var text = FirstText(q.Text, q.QuestionText);
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            var uq = new UserQuestion { Text = text.Trim() };
 
-            bool isImage = string.Equals(q.Type, "image", StringComparison.OrdinalIgnoreCase)
-                           || (q.Choices != null && q.Choices.Count > 0);
-            if (isImage)
-            {
-                uq.Kind = QuizKind.Image;
-                if (q.Choices != null)
-                {
-                    foreach (var c in q.Choices)
-                    {
-                        var choice = new QuizChoice
-                        {
-                            Correct = c.Correct,
-                            Draw = string.IsNullOrWhiteSpace(c.Draw) ? null : c.Draw.Trim(),
-                        };
-                        if (!string.IsNullOrEmpty(c.Image))
-                            choice.ImagePath = ResolveImageRef(dir, c.Image);
-                        if (choice.ImagePath != null || choice.Draw != null) uq.Choices.Add(choice);
-                    }
-                }
-                if (uq.Choices.Count < 2 || !uq.Choices.Any(c => c.Correct)) return null;
-            }
-            else
+            var type = (q.Type ?? q.QuestionType ?? "").Trim().ToLowerInvariant();
+            bool imageChoices = q.Choices != null && q.Choices.Any(c => !string.IsNullOrEmpty(c.Image) || !string.IsNullOrEmpty(c.Draw));
+            bool zoneChoices = q.Choices != null && q.Choices.Any(c => !string.IsNullOrEmpty(c.ZoneRef));
+            bool textOptions = q.Options != null && q.Options.Count >= 2;
+
+            if (!imageChoices && !zoneChoices && !textOptions &&
+                (type == "vraifaux" || type == "truefalse" || type == "vrai_faux" || type == ""))
             {
                 uq.Kind = QuizKind.TrueFalse;
-                uq.Answer = q.Answer;
+                uq.Answer = AsBool(q.Answer, q.CorrectAnswer);
+                return uq;
             }
+
+            uq.Kind = QuizKind.Image;
+            if (imageChoices)
+            {
+                foreach (var c in q.Choices)
+                {
+                    var choice = new QuizChoice
+                    {
+                        Correct = c.Correct || c.IsCorrect,
+                        Draw = string.IsNullOrWhiteSpace(c.Draw) ? null : c.Draw.Trim(),
+                    };
+                    if (!string.IsNullOrEmpty(c.Image)) choice.ImagePath = ResolveImageRef(dir, c.Image);
+                    if (choice.ImagePath != null || choice.Draw != null) uq.Choices.Add(choice);
+                }
+            }
+            else if (zoneChoices)
+            {
+                // Chaque réponse est une zone de la page : on découpe l'image.
+                foreach (var c in q.Choices)
+                {
+                    var img = CropZoneToTemp(book, dir, c.ZoneRef);
+                    if (img != null) uq.Choices.Add(new QuizChoice { ImagePath = img, Correct = c.IsCorrect || c.Correct });
+                }
+            }
+            else if (textOptions)
+            {
+                // Choix multiple textuel : chaque option devient une pastille de texte.
+                foreach (var o in q.Options)
+                {
+                    if (string.IsNullOrWhiteSpace(o.Label)) continue;
+                    var img = RenderTextTileToTemp(o.Label.Trim());
+                    if (img != null) uq.Choices.Add(new QuizChoice { ImagePath = img, Correct = o.IsCorrect });
+                }
+            }
+
+            if (uq.Choices.Count < 2 || !uq.Choices.Any(c => c.Correct)) return null;
             return uq;
+        }
+
+        private static string FirstText(string a, string b)
+            => !string.IsNullOrWhiteSpace(a) ? a : (!string.IsNullOrWhiteSpace(b) ? b : null);
+
+        // Lit un booléen depuis « answer » (app) ou « correct_answer » (ocular, qui
+        // peut être true/false, ou du texte « vrai »/« oui »…).
+        private static bool AsBool(bool appAnswer, object ocular)
+        {
+            if (ocular is bool b) return b;
+            if (ocular is string s)
+            {
+                s = s.Trim().ToLowerInvariant();
+                return s == "true" || s == "vrai" || s == "oui" || s == "1";
+            }
+            if (ocular is decimal d) return d != 0;
+            if (ocular is double dd) return dd != 0;
+            return appAnswer;
+        }
+
+        // Découpe la zone d'une page (référencée par zone_id) en une petite image.
+        private static string CropZoneToTemp(BookJson book, string dir, string zoneRef)
+        {
+            try
+            {
+                if (book?.Pages == null || string.IsNullOrEmpty(zoneRef)) return null;
+                foreach (var p in book.Pages)
+                {
+                    var z = p.Zones?.FirstOrDefault(zz => string.Equals(zz.ZoneId, zoneRef, StringComparison.OrdinalIgnoreCase));
+                    if (z == null) continue;
+
+                    var imgRef = ResolveImageRef(dir, p.Image);
+                    if (imgRef == null) return null;
+                    var bmp = LoadBitmap(imgRef, 2000);
+                    int W = bmp.PixelWidth, H = bmp.PixelHeight;
+                    int x = (int)(Clamp(z.Left) / 100.0 * W);
+                    int y = (int)(Clamp(z.Top) / 100.0 * H);
+                    int w = (int)(Clamp(z.Width) / 100.0 * W);
+                    int h = (int)(Clamp(z.Height) / 100.0 * H);
+                    x = Math.Max(0, Math.Min(x, W - 1));
+                    y = Math.Max(0, Math.Min(y, H - 1));
+                    w = Math.Max(1, Math.Min(w, W - x));
+                    h = Math.Max(1, Math.Min(h, H - y));
+                    return SavePngTemp(new CroppedBitmap(bmp, new Int32Rect(x, y, w, h)));
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        // Fabrique une pastille-image affichant un texte (pour les choix multiples).
+        private static string RenderTextTileToTemp(string label)
+        {
+            try
+            {
+                const int W = 460, H = 320;
+                var dv = new DrawingVisual();
+                using (var dc = dv.RenderOpen())
+                {
+                    dc.DrawRoundedRectangle(Brushes.White,
+                        new Pen(new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)), 5),
+                        new Rect(0, 0, W, H), 28, 28);
+#pragma warning disable CS0618
+                    var ft = new FormattedText(label, CultureInfo.GetCultureInfo("fr-FR"),
+                        FlowDirection.LeftToRight, new Typeface("Segoe UI"), 46,
+                        new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42)))
+                    {
+                        MaxTextWidth = W - 60,
+                        MaxTextHeight = H - 40,
+                        TextAlignment = TextAlignment.Center,
+                    };
+#pragma warning restore CS0618
+                    dc.DrawText(ft, new Point(30, Math.Max(20, (H - ft.Height) / 2)));
+                }
+                var rtb = new RenderTargetBitmap(W, H, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(dv);
+                return SavePngTemp(rtb);
+            }
+            catch { return null; }
+        }
+
+        private static string SavePngTemp(BitmapSource src)
+        {
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(src));
+            var path = Path.Combine(Path.GetTempPath(), "mpj-" + Guid.NewGuid().ToString("N") + ".png");
+            using (var fs = File.Create(path)) enc.Save(fs);
+            return path;
         }
 
         /// <summary>Vrai si la référence est une URL http(s) ou une data URL (à stocker telle quelle).</summary>
@@ -528,30 +664,47 @@ namespace MesPremiersJeux.Lib
 
         /// <summary>
         /// Résout une référence d'image écrite dans le JSON en un chemin/URL
-        /// exploitable, ou null. Accepte : data URL (décodée vers un fichier
-        /// temporaire), URL http(s), file:///, chemin absolu, ou nom de fichier
-        /// relatif au dossier du livre.
+        /// exploitable, ou null. Tolérant à plusieurs formats : data URL, URL
+        /// http(s), file:// (2 ou 3 barres), chemin absolu Windows (barres « \ » ou
+        /// « / », guillemets, %20…), ou nom de fichier relatif au dossier du livre.
         /// </summary>
         public static string ResolveImageRef(string dir, string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return null;
-            value = value.Trim();
+            value = value.Trim().Trim('"', '\'');   // enlève d'éventuels guillemets
+
             if (value.StartsWith("data:image", StringComparison.OrdinalIgnoreCase)) return DecodeDataUrl(value);
             if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                 value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return value;
-            if (value.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+
+            // URI de fichier (file:///C:/… ou file://C:\…).
+            if (value.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
             {
-                try { var p = new Uri(value).LocalPath; return File.Exists(p) ? p : null; }
-                catch { return null; }
+                try { var lp = new Uri(value).LocalPath; if (File.Exists(lp)) return lp; }
+                catch { }
             }
-            try { if (Path.IsPathRooted(value) && File.Exists(value)) return value; }
-            catch { }
-            if (dir != null)
+
+            // Essaie plusieurs variantes du chemin (barres inversées/normales, %20).
+            foreach (var cand in PathVariants(value))
             {
-                var p = Path.Combine(dir, value);
-                if (File.Exists(p)) return p;
+                try { if (Path.IsPathRooted(cand) && File.Exists(cand)) return cand; }
+                catch { }
+                if (dir != null)
+                {
+                    try { var p = Path.Combine(dir, cand); if (File.Exists(p)) return p; }
+                    catch { }
+                }
             }
             return null;
+        }
+
+        private static IEnumerable<string> PathVariants(string value)
+        {
+            var seen = new HashSet<string>();
+            string Decoded() { try { return Uri.UnescapeDataString(value); } catch { return value; } }
+            foreach (var v in new[] { value, Decoded() })
+                foreach (var w in new[] { v, v.Replace('/', '\\'), v.Replace('\\', '/') })
+                    if (w.Length > 0 && seen.Add(w)) yield return w;
         }
 
         /// <summary>Enregistre un livre (format livre.json + images) ; renvoie null si échec.</summary>
@@ -771,7 +924,7 @@ namespace MesPremiersJeux.Lib
             {
                 foreach (var q in data.Questions)
                 {
-                    var uq = ParseQuestion(q, null);
+                    var uq = ParseQuestion(q, null, data);
                     if (uq != null) book.Questions.Add(uq);
                 }
             }
