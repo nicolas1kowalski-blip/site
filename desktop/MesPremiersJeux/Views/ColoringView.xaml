@@ -31,8 +31,8 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Palette complète (gauche) -->
-                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="12,4">
-                    <UniformGrid x:Name="PaletteHost" Columns="2" Width="242" />
+                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10,4">
+                    <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
                 </ScrollViewer>
 
                 <!-- Grand dessin -->

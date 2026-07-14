@@ -172,6 +172,8 @@ namespace MesPremiersJeux.Views
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["SwatchButton"],
+                    Width = 120,
+                    Height = 120,
                     Background = ColoringEngine.PreviewBrush(swatch),
                     BorderBrush = new SolidColorBrush(Color.FromRgb(0xB8, 0xB0, 0xC8)),
                     BorderThickness = new Thickness(1.5),
