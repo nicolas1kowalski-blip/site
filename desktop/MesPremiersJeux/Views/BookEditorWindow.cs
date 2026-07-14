@@ -236,7 +236,14 @@ namespace MesPremiersJeux.Views
             };
             row.ZonesBtn.Click += (s, e) => EditZones(row);
             side.Children.Add(row.ZonesBtn);
-            var del = new Button { Content = "🗑", FontSize = 15, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(6, 0, 0, 0) };
+            // Réordonner la page (utile si l'import n'est pas dans l'ordre).
+            var up = new Button { Content = "⬆", FontSize = 15, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(12, 0, 0, 0), ToolTip = "Monter la page" };
+            up.Click += (s, e) => MoveRow(row, -1);
+            side.Children.Add(up);
+            var down = new Button { Content = "⬇", FontSize = 15, Padding = new Thickness(6, 8, 6, 8), Margin = new Thickness(6, 0, 0, 0), ToolTip = "Descendre la page" };
+            down.Click += (s, e) => MoveRow(row, +1);
+            side.Children.Add(down);
+            var del = new Button { Content = "🗑", FontSize = 15, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(12, 0, 0, 0) };
             del.Click += (s, e) => RemoveRow(row);
             side.Children.Add(del);
             Grid.SetRow(side, 1);
@@ -263,6 +270,19 @@ namespace MesPremiersJeux.Views
             if (_rows.Count <= 1) return; // toujours au moins une page
             _rows.Remove(row);
             _pagesHost.Children.Remove(row.Ui);
+            RenumberRows();
+        }
+
+        // Déplace une page vers le haut (-1) ou le bas (+1) dans la liste et à l'écran.
+        private void MoveRow(Row row, int delta)
+        {
+            int i = _rows.IndexOf(row);
+            int j = i + delta;
+            if (i < 0 || j < 0 || j >= _rows.Count) return;
+            _rows.RemoveAt(i);
+            _rows.Insert(j, row);
+            _pagesHost.Children.RemoveAt(i);
+            _pagesHost.Children.Insert(j, row.Ui);
             RenumberRows();
         }
 
