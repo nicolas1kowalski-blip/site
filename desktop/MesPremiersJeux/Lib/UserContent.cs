@@ -762,7 +762,7 @@ namespace MesPremiersJeux.Lib
             {
                 foreach (var q in data.Questions)
                 {
-                    var uq = ParseQuestion(q, _ => null);
+                    var uq = ParseQuestion(q, null);
                     if (uq != null) book.Questions.Add(uq);
                 }
             }
