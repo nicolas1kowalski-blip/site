@@ -300,7 +300,7 @@ namespace MesPremiersJeux.Views
 
         private void RefreshRowButtons(Row row)
         {
-            bool hasImg = !string.IsNullOrEmpty(row.Draft.ImagePath) && File.Exists(row.Draft.ImagePath);
+            bool hasImg = UserContent.IsImageRef(row.Draft.ImagePath);
             row.ImgBtn.Content = hasImg ? "🖼 Changer" : "🖼 Photo…";
             row.ZonesBtn.IsEnabled = hasImg;
             row.ZonesBtn.Content = row.Draft.Zones.Count > 0 ? $"🎯 Zones ({row.Draft.Zones.Count})" : "🎯 Zones";
@@ -507,7 +507,7 @@ namespace MesPremiersJeux.Views
                     choice.Preview.Content = new Viewbox { Child = CartoonArt.Draw(choice.Data.Draw), Stretch = Stretch.Uniform };
                     return;
                 }
-                if (!string.IsNullOrEmpty(choice.Data.ImagePath) && File.Exists(choice.Data.ImagePath))
+                if (UserContent.IsImageRef(choice.Data.ImagePath))
                 {
                     choice.Preview.Content = new Image { Source = UserContent.LoadBitmap(choice.Data.ImagePath, 200), Stretch = Stretch.Uniform };
                     return;

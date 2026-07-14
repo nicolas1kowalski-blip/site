@@ -254,6 +254,13 @@ namespace MesPremiersJeux.Lib
                         "HISTOIRES : un dossier par livre dans « Histoires », contenant soit\r\n" +
                         "  - livre.json (même format que l'application web) + les images ;\r\n" +
                         "  - soit histoire.txt (une ligne = une page) + 1.png, 2.png…\r\n\r\n" +
+                        "IMAGE (champ \"image\") : peut être\r\n" +
+                        "  - un nom de fichier posé dans le dossier du livre : \"1.png\" ;\r\n" +
+                        "  - un chemin complet : \"C:\\\\Users\\\\Moi\\\\Images\\\\photo.png\" ;\r\n" +
+                        "  - une adresse Internet : \"https://exemple.com/photo.png\" ;\r\n" +
+                        "  - une image encodée (data URL) : \"data:image/png;base64,....\".\r\n" +
+                        "  Astuce : les fichiers et data URL sont copiés dans le livre (contenu\r\n" +
+                        "  portable) ; une adresse http reste un lien (nécessite Internet).\r\n\r\n" +
                         "QUIZ DE FIN (facultatif) : dans livre.json, ajoutez un tableau\r\n" +
                         "  \"questions\" après \"pages\". Deux types :\r\n" +
                         "  - Vrai/Faux : {\"text\":\"La licorne est rose ?\",\"type\":\"vraifaux\",\"answer\":true}\r\n" +
@@ -435,8 +442,8 @@ namespace MesPremiersJeux.Lib
                 var page = new UserStoryPage { Text = (p.Text ?? "").Trim() };
                 if (!string.IsNullOrEmpty(p.Image))
                 {
-                    var img = Path.Combine(dir, p.Image);
-                    if (File.Exists(img)) page.ImagePath = img;
+                    var img = ResolveImageRef(dir, p.Image);
+                    if (img != null) page.ImagePath = img;
                 }
                 if (p.Zones != null)
                 {
@@ -455,25 +462,22 @@ namespace MesPremiersJeux.Lib
                 story.Pages.Add(page);
             }
 
-            // Quiz de fin (images résolues dans le dossier du livre).
+            // Quiz de fin (images résolues comme les pages : fichier du dossier,
+            // chemin absolu, URL ou data URL).
             if (data.Questions != null)
             {
                 foreach (var q in data.Questions)
                 {
-                    var uq = ParseQuestion(q, img =>
-                    {
-                        var path = Path.Combine(dir, img);
-                        return File.Exists(path) ? path : null;
-                    });
+                    var uq = ParseQuestion(q, dir);
                     if (uq != null) story.Questions.Add(uq);
                 }
             }
             return story;
         }
 
-        // Construit une UserQuestion à partir du JSON. « resolveImage » convertit le
-        // champ image (nom de fichier local, ou data URL) en chemin de fichier.
-        private static UserQuestion ParseQuestion(BookQuestionJson q, Func<string, string> resolveImage)
+        // Construit une UserQuestion à partir du JSON. « dir » = dossier du livre
+        // (peut être null lors d'un import sans fichiers).
+        private static UserQuestion ParseQuestion(BookQuestionJson q, string dir)
         {
             if (q == null || string.IsNullOrWhiteSpace(q.Text)) return null;
             var uq = new UserQuestion { Text = q.Text.Trim() };
@@ -493,7 +497,7 @@ namespace MesPremiersJeux.Lib
                             Draw = string.IsNullOrWhiteSpace(c.Draw) ? null : c.Draw.Trim(),
                         };
                         if (!string.IsNullOrEmpty(c.Image))
-                            choice.ImagePath = c.Image.StartsWith("data:image") ? DecodeDataUrl(c.Image) : resolveImage(c.Image);
+                            choice.ImagePath = ResolveImageRef(dir, c.Image);
                         if (choice.ImagePath != null || choice.Draw != null) uq.Choices.Add(choice);
                     }
                 }
@@ -505,6 +509,45 @@ namespace MesPremiersJeux.Lib
                 uq.Answer = q.Answer;
             }
             return uq;
+        }
+
+        /// <summary>Vrai si la référence est une URL http(s) ou une data URL (à stocker telle quelle).</summary>
+        public static bool IsRemoteOrData(string s) =>
+            !string.IsNullOrEmpty(s) &&
+            (s.StartsWith("data:image", StringComparison.OrdinalIgnoreCase) ||
+             s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             s.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>Vrai si la référence est affichable (fichier existant, URL ou data URL).</summary>
+        public static bool IsImageRef(string s) =>
+            IsRemoteOrData(s) || (!string.IsNullOrEmpty(s) && File.Exists(s));
+
+        /// <summary>
+        /// Résout une référence d'image écrite dans le JSON en un chemin/URL
+        /// exploitable, ou null. Accepte : data URL (décodée vers un fichier
+        /// temporaire), URL http(s), file:///, chemin absolu, ou nom de fichier
+        /// relatif au dossier du livre.
+        /// </summary>
+        public static string ResolveImageRef(string dir, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            value = value.Trim();
+            if (value.StartsWith("data:image", StringComparison.OrdinalIgnoreCase)) return DecodeDataUrl(value);
+            if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return value;
+            if (value.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+            {
+                try { var p = new Uri(value).LocalPath; return File.Exists(p) ? p : null; }
+                catch { return null; }
+            }
+            try { if (Path.IsPathRooted(value) && File.Exists(value)) return value; }
+            catch { }
+            if (dir != null)
+            {
+                var p = Path.Combine(dir, value);
+                if (File.Exists(p)) return p;
+            }
+            return null;
         }
 
         /// <summary>Enregistre un livre (format livre.json + images) ; renvoie null si échec.</summary>
@@ -582,21 +625,12 @@ namespace MesPremiersJeux.Lib
                 {
                     var p = pages[i];
                     var pj = new BookPageJson { Text = p.Text ?? "" };
-                    if (!string.IsNullOrEmpty(p.ImagePath) && File.Exists(p.ImagePath))
-                    {
-                        var ext = Path.GetExtension(p.ImagePath).ToLowerInvariant();
-                        if (ImageExts.Contains(ext))
+                    pj.Image = StoreImage(dir, (i + 1).ToString(), p.ImagePath);
+                    if (pj.Image != null && p.Zones != null && p.Zones.Count > 0)
+                        pj.Zones = p.Zones.Select(z => new BookZoneJson
                         {
-                            var name = (i + 1) + ext;
-                            File.Copy(p.ImagePath, Path.Combine(dir, name), true);
-                            pj.Image = name;
-                            if (p.Zones != null && p.Zones.Count > 0)
-                                pj.Zones = p.Zones.Select(z => new BookZoneJson
-                                {
-                                    Left = z.Left, Top = z.Top, Width = z.Width, Height = z.Height, Label = z.Label,
-                                }).ToList();
-                        }
-                    }
+                            Left = z.Left, Top = z.Top, Width = z.Width, Height = z.Height, Label = z.Label,
+                        }).ToList();
                     data.Pages.Add(pj);
                 }
 
@@ -622,15 +656,11 @@ namespace MesPremiersJeux.Lib
                                 {
                                     cj.Draw = c.Draw.Trim();
                                 }
-                                else if (!string.IsNullOrEmpty(c.ImagePath) && File.Exists(c.ImagePath))
+                                else
                                 {
-                                    var ext = Path.GetExtension(c.ImagePath).ToLowerInvariant();
-                                    if (!ImageExts.Contains(ext)) continue;
-                                    var name = "q" + (i + 1) + "_" + ci + ext;
-                                    File.Copy(c.ImagePath, Path.Combine(dir, name), true);
-                                    cj.Image = name;
+                                    cj.Image = StoreImage(dir, "q" + (i + 1) + "_" + ci, c.ImagePath);
+                                    if (cj.Image == null) continue;
                                 }
-                                else continue;
                                 qj.Choices.Add(cj);
                             }
                             if (qj.Choices.Count >= 2 && qj.Choices.Any(x => x.Correct)) qList.Add(qj);
@@ -653,6 +683,27 @@ namespace MesPremiersJeux.Lib
                 return dir;
             }
             catch { return null; }
+        }
+
+        // Décide comment stocker une image dans le livre : un fichier local est
+        // copié dans le dossier (nom « baseName.ext » → contenu portable) ; une URL
+        // http(s) est conservée telle quelle (lien). Renvoie la valeur du champ
+        // « image » du JSON, ou null si rien d'exploitable.
+        private static string StoreImage(string dir, string baseName, string src)
+        {
+            if (string.IsNullOrEmpty(src)) return null;
+            if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                src.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return src; // lien conservé tel quel
+            if (File.Exists(src))
+            {
+                var ext = Path.GetExtension(src).ToLowerInvariant();
+                if (!ImageExts.Contains(ext)) return null;
+                var name = baseName + ext;
+                File.Copy(src, Path.Combine(dir, name), true);
+                return name;
+            }
+            return null;
         }
 
         /// <summary>Livre importé depuis un JSON (pour pré-remplir l'éditeur).</summary>
