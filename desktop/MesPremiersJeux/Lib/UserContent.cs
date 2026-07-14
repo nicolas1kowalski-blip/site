@@ -74,8 +74,15 @@ namespace MesPremiersJeux.Lib
     internal sealed class BookJson
     {
         [DataMember(Name = "title")] public string Title;
+        [DataMember(Name = "metadata", EmitDefaultValue = false)] public BookMetaJson Metadata; // certains fichiers mettent le titre ici
         [DataMember(Name = "pages")] public List<BookPageJson> Pages;
         [DataMember(Name = "questions", EmitDefaultValue = false)] public List<BookQuestionJson> Questions;
+    }
+
+    [DataContract]
+    internal sealed class BookMetaJson
+    {
+        [DataMember(Name = "title", EmitDefaultValue = false)] public string Title;
     }
 
     [DataContract]
@@ -433,10 +440,7 @@ namespace MesPremiersJeux.Lib
             var data = ParseJson(File.ReadAllText(jsonPath));
             if (data?.Pages == null || data.Pages.Count == 0) return null;
 
-            var story = new UserStory
-            {
-                Title = string.IsNullOrWhiteSpace(data.Title) ? Path.GetFileName(dir) : data.Title.Trim(),
-            };
+            var story = new UserStory { Title = BookTitle(data, Path.GetFileName(dir)) };
             foreach (var p in data.Pages)
             {
                 var page = new UserStoryPage { Text = (p.Text ?? "").Trim() };
@@ -726,31 +730,35 @@ namespace MesPremiersJeux.Lib
             try { data = ParseJson(jsonText); }
             catch { error = "Ce fichier n'est pas un JSON valide."; return null; }
 
-            if (data == null || string.IsNullOrWhiteSpace(data.Title))
-            { error = "Le champ « title » est manquant ou vide."; return null; }
+            if (data == null)
+            { error = "Ce fichier n'est pas un JSON valide."; return null; }
             if (data.Pages == null || data.Pages.Count == 0)
             { error = "Le champ « pages » doit être une liste non vide."; return null; }
 
-            var book = new ImportedBook { Title = data.Title.Trim() };
+            // Le titre n'est PAS bloquant : on le prend où qu'il soit (racine ou
+            // metadata), sinon on laisse vide (le parent le complétera dans l'éditeur).
+            var book = new ImportedBook { Title = BookTitle(data, "") };
             foreach (var p in data.Pages)
             {
                 var draft = new PageDraft { Text = (p.Text ?? "").Trim() };
+                // Image : seules les data URL sont embarquées dans le JSON ; un nom
+                // de fichier (ex. « page_001.png ») sera ajouté par le parent ensuite.
                 if (!string.IsNullOrEmpty(p.Image) && p.Image.StartsWith("data:image"))
-                {
                     draft.ImagePath = DecodeDataUrl(p.Image);
-                    if (draft.ImagePath != null && p.Zones != null)
+                // Zones : conservées même sans image, pour ne pas perdre le travail
+                // (elles seront réutilisées quand une photo sera ajoutée à la page).
+                if (p.Zones != null)
+                {
+                    foreach (var z in p.Zones)
                     {
-                        foreach (var z in p.Zones)
+                        if (string.IsNullOrWhiteSpace(z.Label)) continue;
+                        var zone = new UserZone
                         {
-                            if (string.IsNullOrWhiteSpace(z.Label)) continue;
-                            var zone = new UserZone
-                            {
-                                Left = Clamp(z.Left), Top = Clamp(z.Top),
-                                Width = Clamp(z.Width), Height = Clamp(z.Height),
-                                Label = z.Label.Trim(),
-                            };
-                            if (zone.Width > 0 && zone.Height > 0) draft.Zones.Add(zone);
-                        }
+                            Left = Clamp(z.Left), Top = Clamp(z.Top),
+                            Width = Clamp(z.Width), Height = Clamp(z.Height),
+                            Label = z.Label.Trim(),
+                        };
+                        if (zone.Width > 0 && zone.Height > 0) draft.Zones.Add(zone);
                     }
                 }
                 book.Pages.Add(draft);
@@ -767,6 +775,15 @@ namespace MesPremiersJeux.Lib
                 }
             }
             return book;
+        }
+
+        // Titre du livre : racine « title », sinon « metadata.title », sinon repli.
+        private static string BookTitle(BookJson data, string fallback)
+        {
+            if (data == null) return fallback;
+            if (!string.IsNullOrWhiteSpace(data.Title)) return data.Title.Trim();
+            if (!string.IsNullOrWhiteSpace(data.Metadata?.Title)) return data.Metadata.Title.Trim();
+            return fallback;
         }
 
         private static BookJson ParseJson(string jsonText)
