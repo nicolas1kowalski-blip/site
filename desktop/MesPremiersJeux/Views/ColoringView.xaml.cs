@@ -158,6 +158,8 @@ namespace MesPremiersJeux.Views
             TopTools.Children.Add(ModButton("🔆", "Plus clair", () => Shade(true)));
             TopTools.Children.Add(ModButton("🌙", "Plus foncé", () => Shade(false)));
             TopTools.Children.Add(ModButton("✨", "Paillettes", ToggleGlitter));
+            TopTools.Children.Add(ModButton("🐾", "Poils", () => ApplyTexture("fur")));
+            TopTools.Children.Add(ModButton("🐟", "Écailles", () => ApplyTexture("scales")));
 
             // En bas à droite : recommencer / plein écran / supprimer.
             BottomTools.Children.Clear();
@@ -215,6 +217,21 @@ namespace MesPremiersJeux.Views
             AfterSpecChanged(on ? "des paillettes" : "sans paillettes");
         }
 
+        // Applique (ou retire) une texture — « fur » (poils) ou « scales » (écailles).
+        private void ApplyTexture(string pattern)
+        {
+            var b = BaseRgb(_spec);
+            bool already = _spec.Kind == SwatchKind.Pattern && _spec.Pattern == pattern;
+            _spec = already ? MakeSolid(b) : MakeTexture(b, pattern);
+            AfterSpecChanged(already ? "sans texture" : (pattern == "fur" ? "des poils" : "des écailles"));
+        }
+
+        private Swatch MakeTexture(ColoringEngine.Rgb c, string pattern) => new Swatch
+        {
+            Id = "custom" + _seq++, Kind = SwatchKind.Pattern, Name = pattern == "fur" ? "poils" : "écailles",
+            Pattern = pattern, Bg = Hex(c), Fg = Hex(Blend(c, 0, 0, 0, 0.38)),
+        };
+
         private void AfterSpecChanged(string say)
         {
             // La couleur n'est plus une pastille de la palette : on enlève la sélection.
@@ -241,7 +258,7 @@ namespace MesPremiersJeux.Views
             switch (s.Kind)
             {
                 case SwatchKind.Glitter: return ColoringEngine.HexToRgb(s.Base);
-                case SwatchKind.Pattern: return ColoringEngine.HexToRgb(s.Fg);
+                case SwatchKind.Pattern: return ColoringEngine.HexToRgb(s.Bg);
                 case SwatchKind.Rainbow: return new ColoringEngine.Rgb(0xB0, 0xB0, 0xB0);
                 default: return ColoringEngine.HexToRgb(s.Color);
             }

@@ -182,7 +182,59 @@ namespace MesPremiersJeux.Lib
                     dc.DrawGeometry(fg, null, Heart(13, 15, 9));
                     dc.DrawGeometry(fg, null, Heart(37, 39, 9));
                     break;
+                case "fur":
+                    DrawFur(dc, s, size);
+                    break;
+                case "scales":
+                    DrawScales(dc, s, size);
+                    break;
             }
+        }
+
+        // Poils : petits traits fins et serrés, dans un ton plus foncé de la couleur.
+        private static void DrawFur(DrawingContext dc, Swatch s, int size)
+        {
+            var fg = Parse(s.Fg);
+            long seed = s.Id.Length * 911 + 7;
+            double Rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / (double)0x7fffffff; }
+            for (int i = 0; i < 150; i++)
+            {
+                double x = Rnd() * size, y = Rnd() * size;
+                double len = 5 + Rnd() * 6;
+                double ang = Math.PI / 2 + (Rnd() - 0.5) * 0.7; // vers le bas, légèrement incliné
+                var p2 = new Point(x + Math.Cos(ang) * len, y + Math.Sin(ang) * len);
+                byte a = (byte)((0.35 + Rnd() * 0.5) * 255);
+                var pen = new Pen(new SolidColorBrush(Color.FromArgb(a, fg.R, fg.G, fg.B)), 1.1)
+                { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                dc.DrawLine(pen, new Point(x, y), p2);
+            }
+        }
+
+        // Écailles : rangées d'arcs qui se chevauchent, façon poisson/dragon.
+        private static void DrawScales(DrawingContext dc, Swatch s, int size)
+        {
+            var pen = new Pen(new SolidColorBrush(Parse(s.Fg)), 1.8)
+            { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            const double w = 16, rowH = 9;
+            for (int row = 0; row * rowH < size + rowH; row++)
+            {
+                double y = row * rowH;
+                double off = (row % 2 == 0) ? 0 : w / 2;
+                for (double x = -w + off; x < size + w; x += w)
+                    dc.DrawGeometry(null, pen, Scallop(x, y, w, rowH + 3));
+            }
+        }
+
+        private static Geometry Scallop(double x, double y, double w, double h)
+        {
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                c.BeginFigure(new Point(x, y), false, false);
+                c.ArcTo(new Point(x + w, y), new Size(w / 2, h), 0, false, SweepDirection.Clockwise, true, false);
+            }
+            g.Freeze();
+            return g;
         }
 
         private static Geometry Star(double cx, double cy, double r)
