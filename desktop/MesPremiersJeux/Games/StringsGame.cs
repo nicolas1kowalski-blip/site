@@ -10,120 +10,125 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// Les ficelles : trois personnages, trois ficelles emmêlées, trois objets.
-    /// « Aide la princesse à retrouver son château ! » — l'enfant suit la ficelle
-    /// du héros et choisit l'objet au bout.
+    /// Les ficelles : UN personnage à gauche tient une ficelle emmêlée parmi
+    /// d'autres, toutes de la MÊME couleur (on ne peut pas tricher par la couleur,
+    /// il faut la suivre du regard). À droite, trois arrivées A, B et C. « Où arrive
+    /// la ficelle ? » — l'enfant suit le fil et choisit A, B ou C.
     /// </summary>
     public sealed class StringsGame : GameControl
     {
-        private sealed class Pair
-        {
-            public string Hero, Target, Phrase; // « son château », « sa fleur »…
-        }
+        private static readonly string[] Heroes =
+            { "princesse", "licorne", "chat", "oiseau", "lapin", "chien", "cochon" };
 
-        private static readonly Pair[] Pairs =
+        private static readonly Color[] Palette =
         {
-            new Pair { Hero = "princesse", Target = "chateau",   Phrase = "son château" },
-            new Pair { Hero = "licorne",   Target = "arcenciel", Phrase = "son arc-en-ciel" },
-            new Pair { Hero = "chat",      Target = "poisson",   Phrase = "son poisson" },
-            new Pair { Hero = "oiseau",    Target = "nuage",     Phrase = "son nuage" },
-            new Pair { Hero = "lapin",     Target = "fleur",     Phrase = "sa fleur" },
+            Color.FromRgb(0xFF, 0x6B, 0xB0), Color.FromRgb(0x5D, 0xAD, 0xE2),
+            Color.FromRgb(0x7E, 0x3F, 0xF2), Color.FromRgb(0x2E, 0xA0, 0x43),
+            Color.FromRgb(0xFF, 0x8F, 0x1F),
         };
 
-        private static readonly Color[] StringColors =
-        {
-            Color.FromRgb(0xFF, 0x6B, 0xB0), Color.FromRgb(0x5D, 0xAD, 0xE2), Color.FromRgb(0xFF, 0xC1, 0x07),
-        };
+        private static readonly string[] Letters = { "A", "B", "C" };
 
-        private const double W = 1340, H = 640;
-        private static readonly double[] LaneY = { 40, 240, 440 }; // haut des cases
+        private const double W = 1340, H = 620;
+        private static readonly double[] LaneY = { 30, 230, 430 }; // haut des cases
+        private const double CardMid = 82;                          // centre vertical d'une case
 
         public StringsGame(Action celebrate) : base(celebrate) { }
 
         protected override void NewRound()
         {
             Locked = false;
-            var chosen = GameKit.Shuffle(Pairs).Take(3).ToList();
-            var hero = chosen[0];
-            Question.Text = $"Aide {CartoonArt.Items.First(i => i.Name == hero.Hero).Fr} à retrouver {hero.Phrase} !";
+
+            var heroName = Heroes[GameKit.RandInt(Heroes.Length)];
+            var heroFr = CartoonArt.Items.First(i => i.Name == heroName).Fr;
+            var color = Palette[GameKit.RandInt(Palette.Length)];
+
+            int charLane = GameKit.RandInt(3);
+
+            // Permutation gauche→droite (on évite le « tout droit » pour que ça s'emmêle).
+            var perm = GameKit.Shuffle(new List<int> { 0, 1, 2 });
+            if (perm[0] == 0 && perm[1] == 1 && perm[2] == 2) perm = new List<int> { 1, 2, 0 };
+            int correct = perm[charLane]; // case d'arrivée de la ficelle du héros
+
+            Question.Text = $"Où arrive la ficelle de {heroFr} ? A, B ou C ?";
 
             var canvas = new Canvas { Width = W, Height = H };
+            var brush = new SolidColorBrush(color);
 
-            // Position des héros (gauche, dans l'ordre mélangé) et des objets
-            // (droite, permutation aléatoire des cibles).
-            var leftOrder = GameKit.Shuffle(chosen);
-            var rightOrder = GameKit.Shuffle(chosen);
-
-            // Ficelles d'abord (sous les personnages/objets).
-            for (int li = 0; li < 3; li++)
+            // Ficelles (toutes de la même couleur), emmêlées.
+            for (int i = 0; i < 3; i++)
             {
-                var p = leftOrder[li];
-                int ri = rightOrder.IndexOf(p);
-                double y1 = LaneY[li] + 80;
-                double y2 = LaneY[ri] + 80;
-
-                // Points de contrôle croisés pour emmêler les ficelles.
-                double c1y = LaneY[(li + 1) % 3] + 80 + GameKit.RandInt(60) - 30;
-                double c2y = LaneY[(li + 2) % 3] + 80 + GameKit.RandInt(60) - 30;
-
-                var path = new Path
+                double y1 = LaneY[i] + CardMid, y2 = LaneY[perm[i]] + CardMid;
+                double c1y = LaneY[(i + 1) % 3] + CardMid + GameKit.RandInt(70) - 35;
+                double c2y = LaneY[(perm[i] + 2) % 3] + CardMid + GameKit.RandInt(70) - 35;
+                canvas.Children.Add(new Path
                 {
-                    Stroke = new SolidColorBrush(StringColors[li]),
-                    StrokeThickness = 9,
+                    Stroke = brush,
+                    StrokeThickness = 10,
                     StrokeStartLineCap = PenLineCap.Round,
                     StrokeEndLineCap = PenLineCap.Round,
                     Data = Geometry.Parse(FormattableString.Invariant(
-                        $"M 210,{y1} C 560,{c1y} 800,{c2y} 1130,{y2}")),
-                    Opacity = 0.9,
-                };
-                canvas.Children.Add(path);
+                        $"M 205,{y1} C 560,{c1y} 800,{c2y} 1120,{y2}")),
+                });
             }
 
-            // Personnages à gauche (le héros est entouré d'un halo doré).
-            for (int li = 0; li < 3; li++)
+            // Nœuds de départ (petits ronds de couleur) sur les lignes sans personnage.
+            for (int i = 0; i < 3; i++)
             {
-                var p = leftOrder[li];
-                var item = CartoonArt.Items.First(i => i.Name == p.Hero);
-                var host = new Border
-                {
-                    Width = 170,
-                    Height = 160,
-                    CornerRadius = new CornerRadius(20),
-                    Background = new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)),
-                    BorderBrush = p == hero ? new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)) : Brushes.Transparent,
-                    BorderThickness = new Thickness(p == hero ? 6 : 0),
-                    Child = new Viewbox { Child = item.Build(), Margin = new Thickness(14) },
-                };
-                Canvas.SetLeft(host, 30);
-                Canvas.SetTop(host, LaneY[li]);
-                canvas.Children.Add(host);
+                if (i == charLane) continue;
+                var knot = new Ellipse { Width = 26, Height = 26, Fill = brush, Stroke = Brushes.White, StrokeThickness = 3 };
+                Canvas.SetLeft(knot, 205 - 13);
+                Canvas.SetTop(knot, LaneY[i] + CardMid - 13);
+                canvas.Children.Add(knot);
             }
 
-            // Objets à droite : les boutons-réponses.
-            for (int ri = 0; ri < 3; ri++)
+            // Personnage (un seul), à gauche de sa ficelle.
+            var heroBox = new Border
             {
-                var p = rightOrder[ri];
-                var item = CartoonArt.Items.First(i => i.Name == p.Target);
+                Width = 180,
+                Height = 164,
+                CornerRadius = new CornerRadius(22),
+                Background = new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)),
+                BorderThickness = new Thickness(6),
+                Child = new Viewbox { Child = CartoonArt.Items.First(i => i.Name == heroName).Build(), Margin = new Thickness(14) },
+            };
+            Canvas.SetLeft(heroBox, 20);
+            Canvas.SetTop(heroBox, LaneY[charLane]);
+            canvas.Children.Add(heroBox);
+
+            // Arrivées A / B / C (les réponses).
+            for (int j = 0; j < 3; j++)
+            {
+                int lane = j;
+                var letter = Letters[lane];
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["AnswerButton"],
-                    Width = 180,
-                    Height = 165,
-                    Content = new Viewbox { Child = item.Build(), Margin = new Thickness(10) },
+                    Width = 175,
+                    Height = 164,
+                    Content = new TextBlock
+                    {
+                        Text = letter,
+                        FontSize = 96,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
                 };
-                bool ok = p == hero;
-                var targetItem = item;
-                btn.Click += (s, e) => Answer(ok, hero, targetItem.Fr, btn);
-                Canvas.SetLeft(btn, 1130);
-                Canvas.SetTop(btn, LaneY[ri]);
+                bool ok = lane == correct;
+                btn.Click += (s, e) => Answer(ok, heroFr, letter, btn);
+                Canvas.SetLeft(btn, 1120);
+                Canvas.SetTop(btn, LaneY[lane]);
                 canvas.Children.Add(btn);
             }
 
             SetBody(canvas);
-            Schedule(350, () => Speak(Question.Text + " Suis la ficelle !"));
+            Schedule(350, () => Speak($"Suis la ficelle de {heroFr}. Où arrive-t-elle ? A, B ou C ?"));
         }
 
-        private void Answer(bool ok, Pair hero, string chosenFr, Button btn)
+        private void Answer(bool ok, string heroFr, string letter, Button btn)
         {
             if (Locked) return;
             if (ok)
@@ -131,15 +136,14 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 GameKit.Success();
                 Celebrate();
-                var heroFr = CartoonArt.Items.First(i => i.Name == hero.Hero).Fr;
-                Speak($"Bravo ! {heroFr} a retrouvé {hero.Phrase} !");
-                ScheduleNext(2800);
+                Speak($"Bravo ! La ficelle de {heroFr} arrive à {letter} !");
+                ScheduleNext(2600);
             }
             else
             {
                 GameKit.Wrong();
                 Shake(btn);
-                Speak($"Non, ça c'est {chosenFr}. Suis bien la ficelle !");
+                Speak($"Non, ce n'est pas {letter}. Suis bien la ficelle !");
             }
         }
     }
