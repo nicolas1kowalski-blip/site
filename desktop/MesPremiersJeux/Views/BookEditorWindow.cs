@@ -25,6 +25,7 @@ namespace MesPremiersJeux.Views
             public TextBlock Header;
             public TextBox Text;
             public Button ImgBtn;
+            public Button CropBtn;
             public Button ZonesBtn;
             public Image Preview;
             public PageDraft Draft = new PageDraft();
@@ -226,6 +227,16 @@ namespace MesPremiersJeux.Views
             row.ImgBtn = new Button { Content = "🖼 Photo…", FontSize = 15, Padding = new Thickness(10, 8, 10, 8) };
             row.ImgBtn.Click += (s, e) => PickImage(row);
             side.Children.Add(row.ImgBtn);
+            row.CropBtn = new Button
+            {
+                Content = "✂ Rogner",
+                FontSize = 15,
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(6, 0, 0, 0),
+                IsEnabled = false,
+            };
+            row.CropBtn.Click += (s, e) => CropImage(row);
+            side.Children.Add(row.CropBtn);
             row.ZonesBtn = new Button
             {
                 Content = "🎯 Zones",
@@ -307,6 +318,18 @@ namespace MesPremiersJeux.Views
             }
         }
 
+        private void CropImage(Row row)
+        {
+            if (!UserContent.IsImageRef(row.Draft.ImagePath)) return;
+            var win = new ImageCropWindow(row.Draft.ImagePath) { Owner = this };
+            if (win.ShowDialog() == true && win.ResultPath != null)
+            {
+                row.Draft.ImagePath = win.ResultPath;
+                row.Draft.Zones.Clear(); // la géométrie a changé : les zones sont réinitialisées
+                RefreshRowButtons(row);
+            }
+        }
+
         private void EditZones(Row row)
         {
             if (string.IsNullOrEmpty(row.Draft.ImagePath)) return;
@@ -322,6 +345,7 @@ namespace MesPremiersJeux.Views
         {
             bool hasImg = UserContent.IsImageRef(row.Draft.ImagePath);
             row.ImgBtn.Content = hasImg ? "🖼 Changer" : "🖼 Photo…";
+            row.CropBtn.IsEnabled = hasImg;
             row.ZonesBtn.IsEnabled = hasImg;
             row.ZonesBtn.Content = row.Draft.Zones.Count > 0 ? $"🎯 Zones ({row.Draft.Zones.Count})" : "🎯 Zones";
 

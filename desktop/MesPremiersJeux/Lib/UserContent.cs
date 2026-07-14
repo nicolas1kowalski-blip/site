@@ -642,6 +642,27 @@ namespace MesPremiersJeux.Lib
             catch { return null; }
         }
 
+        // Copie immédiatement une image locale importée dans un fichier temporaire
+        // (de notre côté), pour ne plus dépendre du fichier d'origine. Les URL et
+        // data URL sont laissées telles quelles (l'URL reste un lien).
+        private static string StageImport(string resolved)
+        {
+            if (string.IsNullOrEmpty(resolved) || IsRemoteOrData(resolved)) return resolved;
+            try
+            {
+                if (File.Exists(resolved))
+                {
+                    var ext = Path.GetExtension(resolved);
+                    if (!ImageExts.Contains(ext.ToLowerInvariant())) ext = ".png";
+                    var tmp = Path.Combine(Path.GetTempPath(), "mpj-import-" + Guid.NewGuid().ToString("N") + ext);
+                    File.Copy(resolved, tmp, true);
+                    return tmp;
+                }
+            }
+            catch { }
+            return resolved;
+        }
+
         private static string SavePngTemp(BitmapSource src)
         {
             var enc = new PngBitmapEncoder();
@@ -897,8 +918,10 @@ namespace MesPremiersJeux.Lib
                 // Image : chemin absolu (C:\…\page.png), URL http(s), file:// ou
                 // data URL. Un simple nom de fichier ne peut pas être retrouvé à
                 // l'import (aucun dossier de référence) → sera ajouté par le parent.
+                // On copie tout de suite une image locale de notre côté (fichier
+                // temporaire) pour ne pas dépendre de la source d'origine.
                 if (!string.IsNullOrEmpty(p.Image))
-                    draft.ImagePath = ResolveImageRef(null, p.Image);
+                    draft.ImagePath = StageImport(ResolveImageRef(null, p.Image));
                 // Zones : conservées même sans image, pour ne pas perdre le travail
                 // (elles seront réutilisées quand une photo sera ajoutée à la page).
                 if (p.Zones != null)
