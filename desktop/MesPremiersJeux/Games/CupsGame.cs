@@ -19,7 +19,7 @@ namespace MesPremiersJeux.Games
         private static readonly double[] SlotX = { 110, 530, 950 }; // gauche des gobelets
         private const double CupW = 240, CupH = 260;
         private const double UpY = 40, DownY = 170;                 // gobelet levé / posé
-        private const double BallY = 380;
+        private const double BallY = 300;
 
         private static readonly Color[] CupColors =
         {
@@ -38,29 +38,42 @@ namespace MesPremiersJeux.Games
 
         public CupsGame(Action celebrate) : base(celebrate) { }
 
+        // Gobelet RETOURNÉ (ouverture vers le bas) qui recouvre la balle : étroit
+        // en haut, large en bas, avec un rebord d'ouverture en bas.
         private static UIElement CupVisual(Color c)
         {
             var g = new Grid { Width = CupW, Height = CupH };
-            var body = new Path
+            var ink = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42));
+
+            // Corps.
+            g.Children.Add(new Path
             {
                 Fill = new LinearGradientBrush(Lighten(c), c, 90),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42)),
+                Stroke = ink,
                 StrokeThickness = 5,
                 StrokeLineJoin = PenLineJoin.Round,
-                Data = Geometry.Parse("M 30,10 L 210,10 L 185,250 L 55,250 Z"),
-            };
-            g.Children.Add(body);
-            // Bandes décoratives.
+                Data = Geometry.Parse("M 58,12 L 182,12 L 220,244 L 20,244 Z"),
+            });
+            // Bande décorative (près du haut).
             g.Children.Add(new Path
             {
                 Fill = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
-                Data = Geometry.Parse("M 34,40 L 206,40 L 201,85 L 39,85 Z"),
+                Data = Geometry.Parse("M 62,44 L 178,44 L 184,82 L 56,82 Z"),
             });
+            // Dessus arrondi (fond fermé du gobelet).
+            g.Children.Add(Ell(120, 12, 62, 12, new SolidColorBrush(Lighten(c)), ink, 4));
+            // Ouverture en bas (rebord qui recouvre la balle).
+            g.Children.Add(Ell(120, 244, 102, 22, new SolidColorBrush(Darken(c)), ink, 5));
             return g;
         }
 
+        private static Path Ell(double cx, double cy, double rx, double ry, Brush fill, Brush stroke, double sw)
+            => new Path { Fill = fill, Stroke = stroke, StrokeThickness = sw, Data = new EllipseGeometry(new Point(cx, cy), rx, ry) };
+
         private static Color Lighten(Color c) => Color.FromRgb(
             (byte)(c.R + (255 - c.R) * 0.45), (byte)(c.G + (255 - c.G) * 0.45), (byte)(c.B + (255 - c.B) * 0.45));
+
+        private static Color Darken(Color c) => Color.FromRgb((byte)(c.R * 0.68), (byte)(c.G * 0.68), (byte)(c.B * 0.68));
 
         protected override void NewRound()
         {
