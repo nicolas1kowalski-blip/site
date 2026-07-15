@@ -18,6 +18,9 @@ namespace MesPremiersJeux.Gaze
         private IEyeTracker _tracker;
         private bool _disposed;
         private volatile bool _guideSeen; // le flux « guide de positionnement » émet
+        private long _events;             // échantillons de regard reçus
+        private long _valid;              // échantillons avec un point de regard valide
+        private DateTime _lastGuideValid = DateTime.MinValue; // yeux vus par le guide
 
         /// <summary>Vrai si un tracker a été trouvé et que le flux est actif.</summary>
         public bool IsAvailable { get; private set; }
@@ -41,6 +44,9 @@ namespace MesPremiersJeux.Gaze
 
         /// <summary>Levé une fois quand un tracker est trouvé (thread de recherche).</summary>
         public event Action<string> Connected;
+
+        /// <summary>Diagnostic : « points valides / échantillons reçus ».</summary>
+        public string Stats => _valid + "/" + _events;
 
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int index);
@@ -86,6 +92,7 @@ namespace MesPremiersJeux.Gaze
         {
             try
             {
+                _events++;
                 bool lv = e.LeftEye.GazePoint.Validity == Validity.Valid;
                 bool rv = e.RightEye.GazePoint.Validity == Validity.Valid;
 
@@ -98,15 +105,19 @@ namespace MesPremiersJeux.Gaze
                 { nx += e.RightEye.GazePoint.PositionOnDisplayArea.X; ny += e.RightEye.GazePoint.PositionOnDisplayArea.Y; n++; }
                 if (n > 0)
                 {
+                    _valid++;
                     double w = GetSystemMetrics(0), h = GetSystemMetrics(1); // écran principal (px)
                     Gaze?.Invoke(new GazePoint(nx / n * w, ny / n * h));
                 }
 
                 // Présence du regard, à plein débit : yeux vus si un point de
-                // regard OU une origine d'œil est valide dans cet échantillon.
+                // regard OU une origine d'œil est valide dans cet échantillon, OU si
+                // le flux « guide » a vu les yeux très récemment (certains trackers
+                // ne renseignent pas les validités du flux de regard).
                 bool lo = e.LeftEye.GazeOrigin.Validity == Validity.Valid;
                 bool ro = e.RightEye.GazeOrigin.Validity == Validity.Valid;
-                Presence?.Invoke(lv || rv || lo || ro);
+                bool guideFresh = (DateTime.UtcNow - _lastGuideValid).TotalSeconds < 1.0;
+                Presence?.Invoke(lv || rv || lo || ro || guideFresh);
 
                 // Position des yeux via GazeOrigin — seulement si le flux « guide »
                 // n'émet pas (sinon c'est lui qui fait foi).
@@ -137,6 +148,7 @@ namespace MesPremiersJeux.Gaze
                 var rp = e.RightEye.UserPosition;
                 bool lv = e.LeftEye.Validity == Validity.Valid && Ok(lp.X, lp.Y);
                 bool rv = e.RightEye.Validity == Validity.Valid && Ok(rp.X, rp.Y);
+                if (lv || rv) _lastGuideValid = DateTime.UtcNow;
                 Eyes?.Invoke(new EyeSample
                 {
                     HasLeft = lv,

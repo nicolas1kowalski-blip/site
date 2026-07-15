@@ -14,6 +14,7 @@ namespace MesPremiersJeux
         private readonly GazeService _gaze = new GazeService();
         private readonly ProGazeSource _pro = new ProGazeSource();
         private string _srcName = "Regard";
+        private int _clicks;
         private DwellController _dwell;
         private Settings _settings;
 
@@ -93,8 +94,20 @@ namespace MesPremiersJeux
             _gaze.Eyes += s => _dwell.PushEye(s.AnyValid); // sait quand le regard est perdu
             _gaze.Start();
             GazeStatus.Text = "👁  Regard actif";
-            int clicks = 0;
-            _dwell.Clicked += p => Dispatcher.Invoke(() => GazeStatus.Text = $"👁  {_srcName} · Clics : {++clicks}");
+            _dwell.Clicked += p => Dispatcher.Invoke(() => _clicks++);
+
+            // Diagnostic en direct : source active + « points valides/reçus » du
+            // flux direct + compteur de clics. Rafraîchi toutes les 700 ms.
+            var statusTimer = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(700) };
+            statusTimer.Tick += (s2, e2) =>
+            {
+                if (AdminCheck?.IsChecked == true || GazeGate.IsPaused) return; // texte « pause » prioritaire
+                GazeStatus.Text = _pro.IsAvailable
+                    ? $"👁  {_srcName} · {_pro.Stats} · Clics : {_clicks}"
+                    : $"👁  {_srcName} · Clics : {_clicks}";
+            };
+            statusTimer.Start();
 
             // Pause automatique du regard quand une fenêtre d'édition est ouverte.
             GazeGate.PauseChanged = paused => Dispatcher.Invoke(ApplyGazeMode);
