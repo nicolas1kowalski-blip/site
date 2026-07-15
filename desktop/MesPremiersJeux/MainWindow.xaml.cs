@@ -73,29 +73,27 @@ namespace MesPremiersJeux
 
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
 
-            // Source DIRECTE (Tobii Pro SDK) : prioritaire si un tracker est visible.
+            // Source DIRECTE (Tobii Pro SDK) : on lui donne le tracker POUR LUI SEUL
+            // d'abord. Les deux moteurs (Pro et grand public) se disputent le même
+            // flux de regard de l'appareil : si le SDK grand public s'abonne en même
+            // temps, le flux de regard du Pro SDK reste muet (abonnement accepté mais
+            // aucun échantillon). On démarre donc le Pro seul, et on ne réveille le
+            // SDK grand public QUE s'il n'a pas fourni de regard direct (repli).
             _pro.Gaze += p => _dwell.PushGaze(p);
-            // Présence : via le flux de regard s'il émet (plein débit), ET via le
-            // flux « guide » (position des yeux) — sur la I-13 le flux de regard
-            // est verrouillé par licence, seul le guide fournit la présence.
             _pro.Presence += v => _dwell.PushEye(v);
             _pro.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); };
             _pro.Connected += name => Dispatcher.Invoke(() =>
             {
                 _srcName = "Tobii";
                 GazeStatus.Text = $"👁  Tobii : {name}";
-                // IMPORTANT (journal du 15/07) : on GARDE le SDK grand public — c'est
-                // LUI qui fournit le point de regard sur la I-13 ; le Pro SDK sert à
-                // la présence et à la position des yeux (son flux de regard est
-                // verrouillé par licence sur cet appareil).
-                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name} — SDK grand public conservé (source du regard)");
+                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name} — on attend son flux de regard avant tout repli");
             });
             _pro.Start();
 
-            // Source SDK grand public (Tobii Experience), puis repli curseur.
+            // Repli SDK grand public : préparé mais PAS démarré tout de suite.
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); }; // présence + tête
-            _gaze.Start();
+            StartConsumerFallbackWatch();
             GazeStatus.Text = "👁  Regard actif";
             _dwell.Clicked += p => Dispatcher.Invoke(() => _clicks++);
 
@@ -169,6 +167,43 @@ namespace MesPremiersJeux
             // d'emblée sans devoir ouvrir les réglages.
             GazeModeCheck.IsChecked = true;
             ApplyGazeMode();
+        }
+
+        /// <summary>
+        /// On laisse au Pro SDK sa chance d'ouvrir SEUL le flux de regard direct :
+        /// tant qu'il produit des échantillons valides, on ne démarre PAS le SDK
+        /// grand public (les deux se disputeraient le flux de regard de l'appareil).
+        /// Si au bout de ~6 s le Pro n'a toujours rien donné, on réveille le SDK
+        /// grand public en repli (comportement historique de la I-13).
+        /// </summary>
+        private void StartConsumerFallbackWatch()
+        {
+            bool started = false;
+            var t0 = DateTime.UtcNow;
+            var w = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(600) };
+            w.Tick += (s, e) =>
+            {
+                if (started) { w.Stop(); return; }
+
+                // Le Pro SDK délivre un vrai regard direct : parfait, on reste dessus
+                // et on ne démarre jamais le concurrent grand public.
+                if (_pro.HasGaze)
+                {
+                    started = true; w.Stop();
+                    Lib.Log.Write("app", $"Regard direct du Pro SDK confirmé ({_pro.Stats}) — SDK grand public NON démarré (pas de concurrence)");
+                    return;
+                }
+
+                // Fenêtre d'attente écoulée sans regard Pro : on passe au repli.
+                if ((DateTime.UtcNow - t0).TotalSeconds >= 6.0)
+                {
+                    started = true; w.Stop();
+                    Lib.Log.Write("app", $"Pas de regard direct du Pro SDK après 6 s ({_pro.Stats}) — démarrage du SDK grand public (repli)");
+                    _gaze.Start();
+                }
+            };
+            w.Start();
         }
 
         private void ApplySmoothing(double s)
