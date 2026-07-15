@@ -82,13 +82,13 @@ namespace MesPremiersJeux
             _pro.Eyes += s => _dwell.PushEye(s.AnyValid);
             _pro.Connected += name => Dispatcher.Invoke(() =>
             {
-                _srcName = "Tobii direct";
-                GazeStatus.Text = $"👁  Tobii direct : {name}";
-                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name} — arrêt du SDK grand public");
-                // Une seule source de vérité : on coupe l'ancien SDK pour éviter
-                // deux flux superposés (le suivi du curseur est ignoré de toute
-                // façon tant que le flux direct est frais).
-                try { _gaze.Dispose(); } catch { }
+                _srcName = "Tobii";
+                GazeStatus.Text = $"👁  Tobii : {name}";
+                // IMPORTANT (journal du 15/07) : on GARDE le SDK grand public — c'est
+                // LUI qui fournit le point de regard sur la I-13 ; le Pro SDK sert à
+                // la présence et à la position des yeux (son flux de regard est
+                // verrouillé par licence sur cet appareil).
+                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name} — SDK grand public conservé (source du regard)");
             });
             _pro.Start();
 
@@ -106,12 +106,9 @@ namespace MesPremiersJeux
             statusTimer.Tick += (s2, e2) =>
             {
                 if (AdminCheck?.IsChecked == true || GazeGate.IsPaused) return; // texte « pause » prioritaire
-                string src = !_pro.IsAvailable ? _srcName
-                    : _pro.HasGaze ? "Tobii direct"
-                    : "curseur + yeux Tobii"; // regard verrouillé : pointage TD Control, présence Tobii
-                GazeStatus.Text = _pro.IsAvailable
-                    ? $"👁  {src} · {_pro.Stats} · Clics : {_clicks}"
-                    : $"👁  {src} · Clics : {_clicks}";
+                // La vérité vient du moteur : quelle source pilote le point, là,
+                // maintenant (« Regard direct » via SDK, ou « Curseur »).
+                GazeStatus.Text = $"👁  {_dwell.ActiveSource} · Clics : {_clicks}";
             };
             statusTimer.Start();
 

@@ -65,13 +65,17 @@ namespace MesPremiersJeux.Gaze
         private const double RearmDistance = 95;    // px : il FAUT s'éloigner pour re-sélectionner
         private const double CooldownSeconds = 0.5;
         private const double MoveEps = 6;           // px : en deçà, on considère le point immobile
-        private const double GazeLostSeconds = 0.35; // yeux invalides plus longtemps = regard perdu
+        private const double GazeLostSeconds = 0.60; // yeux invalides plus longtemps = regard perdu
+                                                     // (0,6 s : un clignement ne coupe pas le point)
         private const double FrozenSeconds = 2.2;   // point figé plus longtemps = pas d'action
         private const double IndicatorR = 37;       // rayon de l'arc de progression
 
         public bool Enabled { get; set; } = true;
         public bool Locked { get; set; } = false;
         public int DwellTime { get; set; } = 900; // ms
+
+        /// <summary>Source réellement utilisée au dernier instant (« Regard direct » / « Curseur »).</summary>
+        public string ActiveSource { get; private set; } = "…";
 
         /// <summary>Levé à chaque clic injecté (diagnostic / retour visuel).</summary>
         public event Action<Point> Clicked;
@@ -209,6 +213,7 @@ namespace MesPremiersJeux.Gaze
             // 1) Source du point : curseur (déplacé au regard sur la I-13, souris
             //    sur PC), sauf si des données SDK Tobii affluent réellement.
             bool sdkFresh = _hasGaze && (t - _lastGazeTime) < 0.4;
+            ActiveSource = sdkFresh ? "Regard direct" : "Curseur";
             Point raw;
             if (sdkFresh) raw = new Point(_gx, _gy);
             else if (GetCursorPos(out var cp)) raw = new Point(cp.X, cp.Y);
