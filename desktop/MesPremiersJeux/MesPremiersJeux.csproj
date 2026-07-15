@@ -23,7 +23,7 @@
     <!-- Tobii Pro SDK : accès direct au tracker (regard brut + position des yeux),
          sans passer par le curseur. Gratuit ; ne se connecte qu'aux trackers
          visibles par le Pro SDK — sinon la source reste inactive (aucun impact). -->
-    <PackageReference Include="Tobii.Research.x64" Version="1.*" />
+    <PackageReference Include="Tobii.Research.x64" Version="1.11.1.1349" />
     <!-- Lecteur Spotify intégré (onglet Musique) : héberge le Web Playback SDK.
          Nécessite le « WebView2 Runtime » installé sur le poste (présent par
          défaut sur Windows 10/11 récents). Toute version 1.0.* convient. -->
