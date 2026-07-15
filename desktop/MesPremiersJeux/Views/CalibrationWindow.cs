@@ -23,10 +23,14 @@ namespace MesPremiersJeux.Views
         /// <summary>Correction mesurée : points d'ancrage (0..1) + décalages (px).</summary>
         public List<(Point Anchor, Vector Offset)> Result { get; } = new List<(Point, Vector)>();
 
+        // 9 points (3×3) : correction fine sur tout l'écran, décisive quand deux
+        // cibles sont côte à côte.
         private static readonly Point[] Anchors =
         {
-            new Point(0.50, 0.50), new Point(0.15, 0.18), new Point(0.85, 0.18),
-            new Point(0.15, 0.82), new Point(0.85, 0.82),
+            new Point(0.50, 0.50),
+            new Point(0.15, 0.18), new Point(0.50, 0.18), new Point(0.85, 0.18),
+            new Point(0.15, 0.50), new Point(0.85, 0.50),
+            new Point(0.15, 0.82), new Point(0.50, 0.82), new Point(0.85, 0.82),
         };
 
         private readonly Canvas _canvas;
@@ -171,7 +175,7 @@ namespace MesPremiersJeux.Views
         private void Finish()
         {
             _timer.Stop();
-            if (Result.Count >= 3)
+            if (Result.Count >= 5)
             {
                 Speech.Say("Bravo ! C'est réglé !");
                 DialogResult = true;

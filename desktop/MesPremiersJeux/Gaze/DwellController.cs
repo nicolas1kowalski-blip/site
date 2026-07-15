@@ -95,9 +95,21 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Vrai : pointer avec le curseur TD Control même si le regard direct émet.</summary>
         public bool PreferCursor { get; set; }
 
-        // --- Correction de précision (« étoile ») : décalages mesurés en 5 points,
+        // --- Correction de précision (« étoile ») : décalages mesurés en 9 points,
         // interpolés sur tout l'écran et appliqués au point brut. ---
         private (Point Anchor, Vector Offset)[] _bias;
+
+        // --- Micro-correction continue (dérive apprise) : à chaque sélection, on
+        // note de quel côté le regard « atterrit » par rapport au centre visé, et
+        // on compense doucement. Corrige le « c'est toujours le voisin du même
+        // côté qui gagne ». ---
+        private Vector _drift;
+        private const double DriftAlpha = 0.06; // apprentissage doux
+        private const double DriftMax = 50;     // px : compensation plafonnée
+
+        // Hystérésis entre cibles voisines : il faut être NETTEMENT plus près du
+        // centre de la voisine pour changer de cible.
+        private const double StickyMargin = 30;
 
         public bool Enabled { get; set; } = true;
         public bool Locked { get; set; } = false;
@@ -210,6 +222,7 @@ namespace MesPremiersJeux.Gaze
         public void SetBias(IList<(Point Anchor, Vector Offset)> points)
         {
             _bias = points != null && points.Count > 0 ? points.ToArray() : null;
+            _drift = new Vector(0, 0); // la dérive apprise repart de zéro
             Lib.Log.Write("dwell", _bias == null
                 ? "Correction de précision effacée"
                 : "Correction de précision appliquée (" + _bias.Length + " points)");
@@ -246,6 +259,9 @@ namespace MesPremiersJeux.Gaze
 
         private Point ApplyBias(Point raw)
         {
+            // Dérive apprise (toujours appliquée, même sans étoile).
+            raw = new Point(raw.X + _drift.X, raw.Y + _drift.Y);
+
             var b = _bias;
             if (b == null) return raw;
             double w = GetSystemMetrics(0), h = GetSystemMetrics(1);
@@ -255,7 +271,7 @@ namespace MesPremiersJeux.Gaze
             foreach (var p in b)
             {
                 double dx = nx - p.Anchor.X, dy = ny - p.Anchor.Y;
-                double wi = 1.0 / (dx * dx + dy * dy + 0.01); // 0.01 : évite l'explosion au point exact
+                double wi = 1.0 / (dx * dx + dy * dy + 0.004); // correction locale (9 points)
                 sw += wi; ox += p.Offset.X * wi; oy += p.Offset.Y * wi;
             }
             return new Point(raw.X + ox / sw, raw.Y + oy / sw);
@@ -336,7 +352,7 @@ namespace MesPremiersJeux.Gaze
             {
                 _lastHeartbeat = t;
                 Lib.Log.Write("dwell", FormattableString.Invariant(
-                    $"hb src={(sdkFresh ? "REGARD-DIRECT" : "CURSEUR")} pos=({raw.X:0};{raw.Y:0}) actif={Enabled} yeuxVus={_eyeSeen} âgeValide={(t - _lastEyeValidTime):0.00}s rythme={_eyeIntervalEma * 1000:0}ms fixation={_holdActive} verrou={Locked}"));
+                    $"hb src={(sdkFresh ? "REGARD-DIRECT" : "CURSEUR")} pos=({raw.X:0};{raw.Y:0}) actif={Enabled} yeuxVus={_eyeSeen} âgeValide={(t - _lastEyeValidTime):0.00}s rythme={_eyeIntervalEma * 1000:0}ms fixation={_holdActive} verrou={Locked} dérive=({_drift.X:0};{_drift.Y:0})"));
             }
 
             // 2) Médiane courte (rejette les à-coups de tête) puis filtre 1 €.
@@ -403,6 +419,24 @@ namespace MesPremiersJeux.Gaze
             }
 
             var tgt = FindTarget(screen);
+
+            // Hystérésis entre voisins : quand une cible est déjà engagée, la
+            // voisine ne la « vole » que si le regard est clairement DANS la
+            // voisine ET nettement plus près de son centre. Sinon, à la frontière,
+            // le bruit ferait toujours gagner le voisin du même côté.
+            if (tgt != null && _curTargetEl != null && !ReferenceEquals(tgt.Element, _curTargetEl))
+            {
+                var cur = _targets.FirstOrDefault(x => ReferenceEquals(x.Element, _curTargetEl));
+                if (cur != null && RectDistance(cur.ScreenRect, screen) <= SnapRadius)
+                {
+                    bool insideNew = tgt.ScreenRect.Contains(screen);
+                    double dNew = Distance(screen, RectCenter(tgt.ScreenRect));
+                    double dCur = Distance(screen, RectCenter(cur.ScreenRect));
+                    if (!insideNew || dNew > dCur - StickyMargin)
+                        tgt = cur; // on reste sur la cible engagée
+                }
+            }
+
             if (tgt != null)
             {
                 if (!ReferenceEquals(tgt.Element, _curTargetEl))
@@ -418,8 +452,18 @@ namespace MesPremiersJeux.Gaze
                 ShowTargetVisuals();
                 if (_progressSec * 1000.0 >= DwellTime)
                 {
-                    var c = new Point(_curTargetRect.X + _curTargetRect.Width / 2,
-                                      _curTargetRect.Y + _curTargetRect.Height / 2);
+                    var c = RectCenter(_curTargetRect);
+
+                    // Micro-correction continue : le regard atterrit toujours un
+                    // peu à côté du centre visé ? On apprend ce décalage (doucement,
+                    // plafonné) et on le compense en permanence.
+                    var err = c - screen;
+                    if (err.Length < 120)
+                    {
+                        _drift = _drift * (1 - DriftAlpha) + err * DriftAlpha;
+                        if (_drift.Length > DriftMax) _drift = _drift / _drift.Length * DriftMax;
+                    }
+
                     Click(c, t); // clic au CENTRE de la cible : précision maximale
                 }
                 return;
@@ -461,6 +505,15 @@ namespace MesPremiersJeux.Gaze
             double frac = Math.Min(1.0, _progressSec * 1000.0 / DwellTime);
             UpdateProgress(frac);
             if (frac >= 1.0) Click(screen, t);
+        }
+
+        private static Point RectCenter(Rect r) => new Point(r.X + r.Width / 2, r.Y + r.Height / 2);
+
+        private static double RectDistance(Rect r, Point p)
+        {
+            double dx = Math.Max(Math.Max(r.Left - p.X, 0), p.X - r.Right);
+            double dy = Math.Max(Math.Max(r.Top - p.Y, 0), p.Y - r.Bottom);
+            return Math.Sqrt(dx * dx + dy * dy);
         }
 
         // --- Aimant : trouve la cible sous le point, sinon la plus proche (rayon). ---
