@@ -17,6 +17,7 @@ namespace MesPremiersJeux.Gaze
     {
         private IEyeTracker _tracker;
         private bool _disposed;
+        private volatile bool _guideSeen; // le flux « guide de positionnement » émet
 
         /// <summary>Vrai si un tracker a été trouvé et que le flux est actif.</summary>
         public bool IsAvailable { get; private set; }
@@ -60,6 +61,9 @@ namespace MesPremiersJeux.Gaze
                     : _tracker.DeviceName;
 
                 _tracker.GazeDataReceived += OnGazeData;
+                // Flux dédié au POSITIONNEMENT (fenêtre « Position des yeux ») :
+                // plus fiable que GazeOrigin sur certains trackers.
+                try { _tracker.UserPositionGuideReceived += OnGuide; } catch { }
                 IsAvailable = true;
                 Connected?.Invoke(DeviceName);
             }
@@ -90,16 +94,41 @@ namespace MesPremiersJeux.Gaze
                     Gaze?.Invoke(new GazePoint(nx / n * w, ny / n * h));
                 }
 
-                // Position des yeux dans la boîte de suivi (pour le positionnement
-                // de la tablette et la détection « regard perdu »).
-                bool lo = e.LeftEye.GazeOrigin.Validity == Validity.Valid;
-                bool ro = e.RightEye.GazeOrigin.Validity == Validity.Valid;
-                var lp = e.LeftEye.GazeOrigin.PositionInTrackBoxCoordinates;
-                var rp = e.RightEye.GazeOrigin.PositionInTrackBoxCoordinates;
+                // Position des yeux via GazeOrigin — seulement si le flux « guide »
+                // n'émet pas (sinon c'est lui qui fait foi).
+                if (!_guideSeen)
+                {
+                    bool lo = e.LeftEye.GazeOrigin.Validity == Validity.Valid;
+                    bool ro = e.RightEye.GazeOrigin.Validity == Validity.Valid;
+                    var lp = e.LeftEye.GazeOrigin.PositionInTrackBoxCoordinates;
+                    var rp = e.RightEye.GazeOrigin.PositionInTrackBoxCoordinates;
+                    Eyes?.Invoke(new EyeSample
+                    {
+                        HasLeft = lo && Ok(lp.X, lp.Y),
+                        HasRight = ro && Ok(rp.X, rp.Y),
+                        LX = lp.X, LY = lp.Y, LZ = lp.Z,
+                        RX = rp.X, RY = rp.Y, RZ = rp.Z,
+                    });
+                }
+            }
+            catch { }
+        }
+
+        // Guide de positionnement : position normalisée de chaque œil (0..1),
+        // pensé par Tobii précisément pour les écrans « placez-vous bien ».
+        private void OnGuide(object sender, UserPositionGuideEventArgs e)
+        {
+            try
+            {
+                _guideSeen = true;
+                var lp = e.LeftEye.UserPosition;
+                var rp = e.RightEye.UserPosition;
+                bool lv = e.LeftEye.Validity == Validity.Valid && Ok(lp.X, lp.Y);
+                bool rv = e.RightEye.Validity == Validity.Valid && Ok(rp.X, rp.Y);
                 Eyes?.Invoke(new EyeSample
                 {
-                    HasLeft = lo && Ok(lp.X, lp.Y),
-                    HasRight = ro && Ok(rp.X, rp.Y),
+                    HasLeft = lv,
+                    HasRight = rv,
                     LX = lp.X, LY = lp.Y, LZ = lp.Z,
                     RX = rp.X, RY = rp.Y, RZ = rp.Z,
                 });
@@ -114,7 +143,11 @@ namespace MesPremiersJeux.Gaze
             _disposed = true;
             try
             {
-                if (_tracker != null) _tracker.GazeDataReceived -= OnGazeData;
+                if (_tracker != null)
+                {
+                    _tracker.GazeDataReceived -= OnGazeData;
+                    try { _tracker.UserPositionGuideReceived -= OnGuide; } catch { }
+                }
                 EyeTrackingOperations.Terminate();
             }
             catch { }

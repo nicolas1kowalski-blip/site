@@ -43,7 +43,7 @@ namespace MesPremiersJeux.Views
             var root = new Grid();
             root.Children.Add(new TextBlock
             {
-                Text = "Place-toi bien en face de la tablette.\nLes deux points doivent être au CENTRE et VERTS.",
+                Text = "Place-toi bien en face de la tablette.\nLes deux points doivent être au CENTRE et VERTS.\n(La sélection au regard est en pause pendant ce réglage.)",
                 Foreground = Brushes.White,
                 FontSize = 18,
                 TextAlignment = TextAlignment.Center,
@@ -121,6 +121,16 @@ namespace MesPremiersJeux.Views
             if (!_gaze.IsAvailable)
             {
                 _status.Text = "Eye tracker non détecté sur cet appareil.";
+                _left.Visibility = _right.Visibility = _depthMark.Visibility = Visibility.Hidden;
+                return;
+            }
+
+            // Aucune mesure reçue du capteur (flux muet) : différent de « yeux non
+            // vus » — utile pour diagnostiquer.
+            if (_lastEye == DateTime.MinValue || (DateTime.Now - _lastEye).TotalMilliseconds > 1500)
+            {
+                _status.Text = "⏳ En attente des données du capteur…";
+                _status.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0xD6, 0xFF));
                 _left.Visibility = _right.Visibility = _depthMark.Visibility = Visibility.Hidden;
                 return;
             }
