@@ -30,7 +30,7 @@ namespace MesPremiersJeux.Gaze
     /// expose un flux de points de regard. Si aucun eye-tracker n'est présent,
     /// le service reste inactif : l'application fonctionne alors à la souris.
     /// </summary>
-    public sealed class GazeService : IDisposable
+    public sealed class GazeService : IEyeStream, IDisposable
     {
         private Host _host;
         private object _stream;    // conserve une référence pour éviter le ramasse-miettes

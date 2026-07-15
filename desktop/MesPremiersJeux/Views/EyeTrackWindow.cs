@@ -15,7 +15,7 @@ namespace MesPremiersJeux.Views
     /// </summary>
     public sealed class EyeTrackWindow : Window
     {
-        private readonly GazeService _gaze;
+        private readonly IEyeStream _gaze;
         private readonly Canvas _box;
         private readonly Ellipse _left, _right;
         private readonly Rectangle _depthMark;
@@ -28,7 +28,7 @@ namespace MesPremiersJeux.Views
         private EyeSample _latest;
         private DateTime _lastEye = DateTime.MinValue;
 
-        public EyeTrackWindow(GazeService gaze)
+        public EyeTrackWindow(IEyeStream gaze)
         {
             _gaze = gaze;
             Gaze.GazeGate.Push();

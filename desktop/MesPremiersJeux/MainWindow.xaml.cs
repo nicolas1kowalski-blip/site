@@ -12,6 +12,8 @@ namespace MesPremiersJeux
     public partial class MainWindow : Window
     {
         private readonly GazeService _gaze = new GazeService();
+        private readonly ProGazeSource _pro = new ProGazeSource();
+        private string _srcName = "Regard";
         private DwellController _dwell;
         private Settings _settings;
 
@@ -33,7 +35,7 @@ namespace MesPremiersJeux
                 TopBar.Visibility = Chrome.Immersive ? Visibility.Collapsed : Visibility.Visible);
             BuildViews();
             Loaded += OnLoaded;
-            Closed += (s, e) => _gaze.Dispose();
+            Closed += (s, e) => { _gaze.Dispose(); _pro.Dispose(); };
         }
 
         private void BuildViews()
@@ -69,12 +71,24 @@ namespace MesPremiersJeux
             _settings = Settings.Load();
 
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
+
+            // Source DIRECTE (Tobii Pro SDK) : prioritaire si un tracker est visible.
+            _pro.Gaze += p => _dwell.PushGaze(p);
+            _pro.Eyes += s => _dwell.PushEye(s.AnyValid);
+            _pro.Connected += name => Dispatcher.Invoke(() =>
+            {
+                _srcName = "Tobii direct";
+                GazeStatus.Text = $"👁  Tobii direct : {name}";
+            });
+            _pro.Start();
+
+            // Source SDK grand public (Tobii Experience), puis repli curseur.
             _gaze.Gaze += p => _dwell.PushGaze(p);
             _gaze.Eyes += s => _dwell.PushEye(s.AnyValid); // sait quand le regard est perdu
             _gaze.Start();
             GazeStatus.Text = "👁  Regard actif";
             int clicks = 0;
-            _dwell.Clicked += p => Dispatcher.Invoke(() => GazeStatus.Text = $"👁  Clics : {++clicks}");
+            _dwell.Clicked += p => Dispatcher.Invoke(() => GazeStatus.Text = $"👁  {_srcName} · Clics : {++clicks}");
 
             // Pause automatique du regard quand une fenêtre d'édition est ouverte.
             GazeGate.PauseChanged = paused => Dispatcher.Invoke(ApplyGazeMode);
@@ -144,7 +158,8 @@ namespace MesPremiersJeux
         private void EyeTrack_Click(object sender, RoutedEventArgs e)
         {
             SettingsPopup.IsOpen = false;
-            new EyeTrackWindow(_gaze) { Owner = this }.ShowDialog();
+            // La fenêtre des yeux utilise la meilleure source disponible.
+            new EyeTrackWindow(_pro.IsAvailable ? (IEyeStream)_pro : _gaze) { Owner = this }.ShowDialog();
         }
 
         private void GazeMode_Changed(object sender, RoutedEventArgs e) => ApplyGazeMode();
