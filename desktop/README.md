@@ -37,8 +37,50 @@ le regard dans une cellule web.
   (algorithmes A-B-A-B, MS) et **L'imagier** (vocabulaire : « Trouve le
   chat ! »). Tout au regard, avec voix et confettis.
 
-Les onglets Histoires / Musique — et le jeu du corps — sont à venir : on les
-ajoute un par un (le coloriage et ces jeux servent de patron).
+- **Onglet 🎵 Musique (Spotify)** : des tuiles « mes musiques » (chansons ou
+  playlists) que l'enfant lance au regard, avec de gros boutons ⏮ ⏯ ⏭. La lecture
+  des morceaux **complets** se fait *dans l'application* grâce au **Spotify Web
+  Playback SDK** (compte **Premium** requis). Voir la section **Musique / Spotify**
+  plus bas pour la configuration.
+
+L'onglet Histoires — et le jeu du corps — sont à venir : on les ajoute un par un
+(le coloriage et ces jeux servent de patron).
+
+## Musique / Spotify (Option B : lecteur intégré)
+
+La lecture in-app s'appuie sur le **WebView2** (composant Edge) qui héberge le
+Spotify Web Playback SDK. Il faut donc :
+
+1. **WebView2 Runtime** installé sur le poste (déjà présent sur Windows 10/11 à
+   jour ; sinon, « Microsoft Edge WebView2 Runtime », gratuit). Le paquet NuGet
+   `Microsoft.Web.WebView2` est restauré automatiquement à la compilation.
+2. Un **compte Spotify Premium** (obligatoire pour lire des morceaux complets via
+   le SDK).
+3. Une **app développeur Spotify** gratuite (une fois) :
+   - Aller sur <https://developer.spotify.com/dashboard>, se connecter, cliquer
+     **Create app**.
+   - Nom/description au choix. Dans **Redirect URIs**, ajouter **exactement** :
+     `http://127.0.0.1:8888/callback`
+   - Dans **APIs used**, cocher **Web Playback SDK** (et Web API).
+   - Enregistrer, puis copier le **Client ID**.
+
+### Côté application (une fois)
+
+1. Ouvrir ⚙ et activer le **mode admin** (le panneau parent apparaît dans l'onglet
+   Musique).
+2. Coller le **Client ID** dans le champ prévu.
+3. Cliquer **Connecter Spotify** : le navigateur s'ouvre, se connecter et accepter.
+   La page affiche « Spotify connecté », on revient à l'app.
+4. Coller un **lien Spotify** (chanson, album ou playlist) et cliquer **Ajouter** :
+   la pochette et le titre sont récupérés automatiquement. Répéter pour chaque
+   musique.
+5. **Décocher le mode admin** : l'enfant ne voit plus que ses grandes tuiles et
+   peut lancer/mettre en pause au regard.
+
+Le Client ID et le jeton de reconnexion sont conservés dans
+`%AppData%\MesPremiersJeux\settings.ini` ; la liste des musiques dans
+`%AppData%\MesPremiersJeux\musique.tsv`. Aucun mot de passe Spotify n'est stocké
+(connexion OAuth « PKCE », sans secret).
 
 ## Où vit le contenu ? (portable)
 

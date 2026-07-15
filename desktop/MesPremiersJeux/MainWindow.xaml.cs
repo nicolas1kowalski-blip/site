@@ -45,7 +45,7 @@ namespace MesPremiersJeux
             _views["games"] = new GamesView();
             _views["edu"] = new EducationView();
             _views["coloring"] = coloring;
-            _views["music"] = Placeholder("🎵", "Musique", "Bientôt : les comptines.");
+            _views["music"] = new MusicView();
 
             foreach (var v in _views.Values)
             {

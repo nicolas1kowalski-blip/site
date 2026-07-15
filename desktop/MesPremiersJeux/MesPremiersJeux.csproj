@@ -20,6 +20,10 @@
 
   <ItemGroup>
     <PackageReference Include="Tobii.Interaction" Version="0.7.3" />
+    <!-- Lecteur Spotify intégré (onglet Musique) : héberge le Web Playback SDK.
+         Nécessite le « WebView2 Runtime » installé sur le poste (présent par
+         défaut sur Windows 10/11 récents). Toute version 1.0.* convient. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2210.55" />
   </ItemGroup>
 
   <ItemGroup>

@@ -22,6 +22,8 @@ namespace MesPremiersJeux.Lib
         public string AzureVoice = "fr-FR-EloiseNeural";
         public string SupabaseUrl = "";  // sauvegarde en ligne du contenu
         public string SupabaseKey = "";
+        public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
+        public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
 
         private static string Dir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux");
@@ -51,6 +53,8 @@ namespace MesPremiersJeux.Lib
                         case "AzureVoice": if (val.Length > 0) s.AzureVoice = val; break;
                         case "SupabaseUrl": s.SupabaseUrl = val; break;
                         case "SupabaseKey": s.SupabaseKey = val; break;
+                        case "SpotifyClientId": s.SpotifyClientId = val; break;
+                        case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
                     }
                 }
             }
@@ -75,6 +79,8 @@ namespace MesPremiersJeux.Lib
                     "AzureVoice=" + (AzureVoice ?? ""),
                     "SupabaseUrl=" + (SupabaseUrl ?? ""),
                     "SupabaseKey=" + (SupabaseKey ?? ""),
+                    "SpotifyClientId=" + (SpotifyClientId ?? ""),
+                    "SpotifyRefreshToken=" + (SpotifyRefreshToken ?? ""),
                 };
                 File.WriteAllLines(FilePath, lines);
             }
