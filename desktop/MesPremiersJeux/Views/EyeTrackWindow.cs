@@ -28,7 +28,7 @@ namespace MesPremiersJeux.Views
         private EyeSample _latest;
         private DateTime _lastEye = DateTime.MinValue;
 
-        public EyeTrackWindow(IEyeStream gaze)
+        public EyeTrackWindow(IEyeStream gaze, string diagnostic = null)
         {
             _gaze = gaze;
             Gaze.GazeGate.Push();
@@ -97,6 +97,23 @@ namespace MesPremiersJeux.Views
             var close = new Button { Content = "Fermer", FontSize = 16, Padding = new Thickness(22, 10, 22, 10), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 18) };
             close.Click += (s, e) => Close();
             root.Children.Add(close);
+
+            // Fiche technique du tracker (diagnostic) : petit texte en bas.
+            if (!string.IsNullOrEmpty(diagnostic))
+            {
+                Height = 640;
+                root.Children.Add(new TextBlock
+                {
+                    Text = diagnostic,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x8A, 0xC8)),
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(16, 0, 16, 62),
+                });
+            }
 
             Content = root;
 

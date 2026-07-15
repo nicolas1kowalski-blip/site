@@ -182,8 +182,12 @@ namespace MesPremiersJeux
         private void EyeTrack_Click(object sender, RoutedEventArgs e)
         {
             SettingsPopup.IsOpen = false;
-            // La fenêtre des yeux utilise la meilleure source disponible.
-            new EyeTrackWindow(_pro.IsAvailable ? (IEyeStream)_pro : _gaze) { Owner = this }.ShowDialog();
+            // La fenêtre des yeux utilise la meilleure source disponible, et affiche
+            // la fiche technique du tracker (diagnostic licence/capacités).
+            new EyeTrackWindow(
+                _pro.IsAvailable ? (IEyeStream)_pro : _gaze,
+                _pro.IsAvailable ? _pro.Diagnostic + "\nFlux de regard : " + _pro.Stats : null)
+            { Owner = this }.ShowDialog();
         }
 
         private void GazeMode_Changed(object sender, RoutedEventArgs e) => ApplyGazeMode();

@@ -51,6 +51,14 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Vrai si le flux de regard direct émet des points valides.</summary>
         public bool HasGaze => _valid > 0;
 
+        /// <summary>
+        /// Fiche technique du tracker vue par le Pro SDK : modèle, série, firmware,
+        /// CAPACITÉS (dont « HasGazeData » : le flux de regard est-il autorisé ?)
+        /// et fréquence. Les erreurs du SDK y sont recopiées telles quelles —
+        /// c'est notre vérité terrain pour diagnostiquer les verrous de licence.
+        /// </summary>
+        public string Diagnostic { get; private set; } = "";
+
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int index);
 
@@ -76,6 +84,17 @@ namespace MesPremiersJeux.Gaze
                 DeviceName = string.IsNullOrWhiteSpace(_tracker.DeviceName)
                     ? _tracker.Model.ToString()
                     : _tracker.DeviceName;
+
+                // Fiche technique complète (capacités, fréquence) : chaque erreur du
+                // SDK est capturée en clair pour comprendre ce que l'appareil autorise.
+                var sb = new System.Text.StringBuilder();
+                try { sb.Append(_tracker.Model).Append(" · s/n ").Append(_tracker.SerialNumber); } catch { }
+                try { sb.Append(" · fw ").Append(_tracker.FirmwareVersion); } catch { }
+                try { sb.Append("\nCapacités : ").Append(_tracker.DeviceCapabilities.ToString()); }
+                catch (Exception ex) { sb.Append("\nCapacités : ERREUR ").Append(ex.Message); }
+                try { sb.Append("\nFréquence : ").Append(_tracker.GetGazeOutputFrequency()).Append(" Hz"); }
+                catch (Exception ex) { sb.Append("\nFréquence : ERREUR ").Append(ex.Message); }
+                Diagnostic = sb.ToString();
 
                 _tracker.GazeDataReceived += OnGazeData;
                 // Flux dédié au POSITIONNEMENT (fenêtre « Position des yeux ») :
