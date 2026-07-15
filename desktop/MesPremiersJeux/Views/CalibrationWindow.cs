@@ -139,6 +139,24 @@ namespace MesPremiersJeux.Views
             ContentRendered += (s, e) =>
             {
                 if (_step >= 0) return;
+
+                // Sans REGARD DIRECT, l'étoile mesurerait le curseur (souvent figé)
+                // et produirait une correction absurde : on refuse proprement.
+                var src = DwellController.Instance?.ActiveSource ?? "";
+                if (src != "Regard direct")
+                {
+                    Log.Write("etoile", "Refusé : pas de regard direct (source = " + src + ")");
+                    Speech.Say("Le regard direct n'est pas disponible sur cet appareil.");
+                    MessageBox.Show(this,
+                        "L'étoile a besoin du REGARD DIRECT du capteur, qui n'est pas actif ici\n" +
+                        "(le pointage passe par le curseur TD Control).\n\n" +
+                        "Sur cet appareil, la précision se règle dans la calibration de TD Control.\n" +
+                        "Voir aussi le journal : il indique pourquoi le regard direct est indisponible.",
+                        "Suis l'étoile");
+                    DialogResult = false;
+                    return;
+                }
+
                 Log.Write("etoile", FormattableString.Invariant(
                     $"Démarrage : fenêtre {ActualWidth:0}x{ActualHeight:0}"));
                 NextStep();

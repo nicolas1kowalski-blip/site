@@ -82,6 +82,17 @@ namespace MesPremiersJeux.Gaze
             {
                 // Pas de Tobii Experience installé / pas de tracker : mode souris.
                 Lib.Log.Write("sdk", "SDK grand public indisponible : " + ex.Message);
+                try
+                {
+                    // Diagnostic : la DLL native est-elle bien à côté de l'exe ?
+                    // Présente + « module introuvable » = il manque le runtime
+                    // Visual C++ (vc_redist x64) sur ce PC. Absente = copie incomplète.
+                    var p = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tobii.EyeX.Client.dll");
+                    Lib.Log.Write("sdk", System.IO.File.Exists(p)
+                        ? "Tobii.EyeX.Client.dll : PRÉSENTE à côté de l'exe → il manque probablement le runtime Visual C++ x64 (vc_redist.x64.exe)"
+                        : "Tobii.EyeX.Client.dll : ABSENTE à côté de l'exe → copie du dossier incomplète");
+                }
+                catch { }
                 IsAvailable = false;
             }
         }
