@@ -39,8 +39,8 @@ namespace MesPremiersJeux.Games
 
         private const double W = 1340, H = 760, PlayH = 600;
         private const double CardW = 168, CardH = 128;
-        private const double PrincessX = 20, PrincessW = 150;
-        private const double DepX = 210;       // départ des ficelles (et pastille-lettre)
+        private const double PrincessX = 20, PrincessW = 170, PrincessH = 180;
+        private const double DepX = 230;       // départ des ficelles (et pastille-lettre)
         private const double EndX = 1115;      // arrivée des ficelles (bord des pictos)
         private const double RightX = 1120;    // bord gauche des pictos de droite
 
@@ -73,11 +73,12 @@ namespace MesPremiersJeux.Games
 
             var canvas = new Canvas { Width = W, Height = H };
 
-            // La princesse, à gauche : elle tient toutes les ficelles.
+            // La princesse : un simple picto à GAUCHE, devant les ficelles (elle ne
+            // les tient pas). Carte de taille normale, centrée verticalement.
             var princess = new Border
             {
                 Width = PrincessW,
-                Height = PlayH - 40,
+                Height = PrincessH,
                 CornerRadius = new CornerRadius(22),
                 Background = new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)),
                 BorderBrush = new SolidColorBrush(Gold),
@@ -85,7 +86,7 @@ namespace MesPremiersJeux.Games
                 Child = new Viewbox { Child = CartoonArt.Draw("princesse"), Margin = new Thickness(12) },
             };
             Canvas.SetLeft(princess, PrincessX);
-            Canvas.SetTop(princess, 20);
+            Canvas.SetTop(princess, PlayH / 2 - PrincessH / 2);
             canvas.Children.Add(princess);
 
             // Ficelles (toutes de la même couleur), départs séparés à gauche, arrivées
