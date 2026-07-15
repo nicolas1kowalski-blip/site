@@ -79,6 +79,10 @@ namespace MesPremiersJeux
             {
                 _srcName = "Tobii direct";
                 GazeStatus.Text = $"👁  Tobii direct : {name}";
+                // Une seule source de vérité : on coupe l'ancien SDK pour éviter
+                // deux flux superposés (le suivi du curseur est ignoré de toute
+                // façon tant que le flux direct est frais).
+                try { _gaze.Dispose(); } catch { }
             });
             _pro.Start();
 
