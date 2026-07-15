@@ -13,11 +13,13 @@ namespace MesPremiersJeux.Games
 {
     /// <summary>
     /// Les ficelles : la princesse est À GAUCHE, sur sa ligne ; à droite, plusieurs
-    /// images dont SON château. Depuis la princesse part une ficelle emmêlée (parmi
-    /// d'autres, toutes de la même couleur) qui traverse l'écran à l'HORIZONTALE :
-    /// l'enfant SUIT la ficelle de la princesse jusqu'à son château, puis le choisit.
-    /// Les ficelles sont bien séparées, une par ligne — aucune ne « part d'un carré »
-    /// commun. Quand c'est juste, la ficelle de la princesse ET le château s'illuminent.
+    /// images dont SON château, chacune repérée par une lettre (A, B, C, D). Depuis
+    /// la princesse part une ficelle emmêlée (parmi d'autres, toutes de la même
+    /// couleur) qui traverse l'écran à l'HORIZONTALE : l'enfant SUIT la ficelle de la
+    /// princesse jusqu'à l'image où elle arrive, puis appuie sur la lettre
+    /// correspondante dans la barre A/B/C/D du bas. Les ficelles sont bien séparées,
+    /// une par ligne — aucune ne « part d'un carré » commun. Quand c'est juste, la
+    /// ficelle de la princesse ET son château s'illuminent.
     /// « Aide la princesse à retrouver son château ! »
     /// </summary>
     public sealed class StringsGame : GameControl
@@ -33,13 +35,16 @@ namespace MesPremiersJeux.Games
             Color.FromRgb(0xFF, 0x8F, 0x1F),
         };
 
+        private static readonly string[] Letters = { "A", "B", "C", "D" };
         private static readonly Color Gold = Color.FromRgb(0xFF, 0xC1, 0x07);
 
-        private const double W = 1340, H = 640, CardW = 172, CardH = 150;
+        private const double W = 1340, H = 760, PlayH = 600;
+        private const double CardW = 168, CardH = 128;
         private const double LeftX = 20, RightX = 1130, StartX = 200, EndX = 1120;
 
         private Path _princessString;
-        private Button _chateauBtn;
+        private Border _chateauCard;
+        private int _correct;
 
         public StringsGame(Action celebrate) : base(celebrate) { }
 
@@ -47,12 +52,13 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
 
-            int n = 3 + GameKit.RandInt(2);            // 3 ou 4 lignes
+            int n = 3 + GameKit.RandInt(2);            // 3 ou 4 lignes (A/B/C ou A/B/C/D)
             var color = new SolidColorBrush(Palette[GameKit.RandInt(Palette.Length)]);
 
             int princessLane = GameKit.RandInt(n);
             var perm = RandomPermutation(n);
-            int chateauRight = perm[princessLane];     // là où arrive la ficelle de la princesse
+            int chateauRight = perm[princessLane];     // ligne d'arrivée de la ficelle de la princesse
+            _correct = chateauRight;                   // la lettre à désigner
 
             // Images de droite : le château à sa place, des leurres ailleurs.
             var pool = GameKit.Shuffle(Distractors.ToList());
@@ -61,7 +67,7 @@ namespace MesPremiersJeux.Games
             for (int j = 0; j < n; j++)
                 rightNames[j] = j == chateauRight ? "chateau" : pool[di++];
 
-            Question.Text = "Aide la princesse à retrouver son château ! Suis sa ficelle.";
+            Question.Text = "Suis la ficelle de la princesse jusqu'à son château, puis choisis A, B, C ou D !";
 
             var canvas = new Canvas { Width = W, Height = H };
 
@@ -105,39 +111,70 @@ namespace MesPremiersJeux.Games
                 Background = new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)),
                 BorderBrush = new SolidColorBrush(Gold),
                 BorderThickness = new Thickness(6),
-                Child = new Viewbox { Child = CartoonArt.Draw("princesse"), Margin = new Thickness(12) },
+                Child = new Viewbox { Child = CartoonArt.Draw("princesse"), Margin = new Thickness(10) },
             };
             Canvas.SetLeft(princess, LeftX);
             Canvas.SetTop(princess, CenterY(princessLane, n) - CardH / 2);
             canvas.Children.Add(princess);
 
-            // Images de droite (les réponses).
-            _chateauBtn = null;
+            // Images d'arrivée à droite, chacune repérée par sa lettre (A, B, C, D).
+            _chateauCard = null;
             for (int j = 0; j < n; j++)
             {
-                var name = rightNames[j];
-                var item = CartoonArt.Items.First(it => it.Name == name);
+                var item = CartoonArt.Items.First(it => it.Name == rightNames[j]);
+                var card = new Border
+                {
+                    Width = CardW,
+                    Height = CardH,
+                    CornerRadius = new CornerRadius(18),
+                    Background = new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)),
+                    Child = new Viewbox { Child = item.Build(), Margin = new Thickness(8) },
+                };
+                Canvas.SetLeft(card, RightX);
+                Canvas.SetTop(card, CenterY(j, n) - CardH / 2);
+                canvas.Children.Add(card);
+                if (j == chateauRight) _chateauCard = card;
+
+                // Pastille-lettre en haut à gauche de l'image.
+                var tag = new Grid { Width = 46, Height = 46 };
+                tag.Children.Add(new Ellipse { Fill = new SolidColorBrush(color.Color), Stroke = Brushes.White, StrokeThickness = 3 });
+                tag.Children.Add(new TextBlock { Text = Letters[j], FontSize = 26, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+                Canvas.SetLeft(tag, RightX - 10);
+                Canvas.SetTop(tag, CenterY(j, n) - CardH / 2 - 10);
+                canvas.Children.Add(tag);
+            }
+
+            // Barre de réponses A / B / C / D en bas.
+            double bw = 150, gap = 20, total = n * bw + (n - 1) * gap, bx0 = (W - total) / 2;
+            for (int k = 0; k < n; k++)
+            {
+                int idx = k;
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["AnswerButton"],
-                    Width = CardW,
-                    Height = CardH,
-                    Content = new Viewbox { Child = item.Build(), Margin = new Thickness(8) },
+                    Width = bw,
+                    Height = 118,
+                    Content = new TextBlock
+                    {
+                        Text = Letters[k],
+                        FontSize = 68,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
                 };
-                bool ok = j == chateauRight;
-                if (ok) _chateauBtn = btn;
-                var fr = item.Fr;
-                btn.Click += (s, e) => Answer(ok, fr, btn);
-                Canvas.SetLeft(btn, RightX);
-                Canvas.SetTop(btn, CenterY(j, n) - CardH / 2);
+                btn.Click += (s, e) => Answer(idx, btn);
+                Canvas.SetLeft(btn, bx0 + k * (bw + gap));
+                Canvas.SetTop(btn, H - 130);
                 canvas.Children.Add(btn);
             }
 
             SetBody(canvas);
-            Schedule(350, () => Speak("Aide la princesse ! Suis sa ficelle pour retrouver son château."));
+            Schedule(350, () => Speak("Aide la princesse ! Suis sa ficelle, puis choisis A, B, C ou D."));
         }
 
-        private static double CenterY(int lane, int n) => (lane + 0.5) * H / n;
+        private static double CenterY(int lane, int n) => (lane + 0.5) * PlayH / n;
 
         private static List<int> RandomPermutation(int n)
         {
@@ -149,27 +186,27 @@ namespace MesPremiersJeux.Games
             return p;
         }
 
-        private void Answer(bool ok, string chosenFr, Button btn)
+        private void Answer(int idx, Button btn)
         {
             if (Locked) return;
-            if (ok)
+            if (idx == _correct)
             {
                 Locked = true;
-                Illuminate(_princessString, _chateauBtn);
+                Illuminate(_princessString, _chateauCard);
                 GameKit.Success();
                 Celebrate();
-                Speak("Bravo ! La princesse a retrouvé son château !");
+                Speak($"Bravo ! La ficelle {Letters[_correct]} mène la princesse à son château !");
                 ScheduleNext(3000);
             }
             else
             {
                 GameKit.Wrong();
                 Shake(btn);
-                Speak($"Non, ça c'est {chosenFr}. Suis bien la ficelle de la princesse !");
+                Speak("Non, suis bien la ficelle de la princesse !");
             }
         }
 
-        private static void Illuminate(Path str, Button chateau)
+        private static void Illuminate(Path str, Border chateau)
         {
             var glow = new SolidColorBrush(Gold);
             if (str != null)
@@ -183,6 +220,8 @@ namespace MesPremiersJeux.Games
 
             if (chateau != null)
             {
+                chateau.BorderBrush = glow;
+                chateau.BorderThickness = new Thickness(8);
                 chateau.Effect = new DropShadowEffect { Color = Gold, BlurRadius = 34, ShadowDepth = 0, Opacity = 1 };
                 chateau.RenderTransformOrigin = new Point(0.5, 0.5);
                 var st = new ScaleTransform(1, 1);
