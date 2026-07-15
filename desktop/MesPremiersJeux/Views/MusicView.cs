@@ -39,6 +39,10 @@ namespace MesPremiersJeux.Views
         };
         private bool _webReady;
         private string _deviceId;
+        // Une musique est « active » dès qu'on en lance une (en lecture OU en pause).
+        // Tant qu'elle est active, cliquer une autre tuile ne change RIEN : il faut
+        // d'abord ⏹ Stop. Pause/reprise (⏯) restent possibles pendant ce temps.
+        private bool _active;
 
         private readonly List<Favorite> _favs;
 
@@ -115,14 +119,15 @@ namespace MesPremiersJeux.Views
             Grid.SetRow(_nowPlaying, 2);
             root.Children.Add(_nowPlaying);
 
-            // --- Barre de transport ⏮ ⏯ ⏭ ---
+            // --- Barre de transport ⏮ ⏯ ⏹ ⏭ ---
             var transport = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 18) };
-            transport.Children.Add(TransportButton("⏮", () => RunJs("window.__prev()")));
+            transport.Children.Add(TransportButton("⏮", Prev));
             _toggleGlyph = new TextBlock { Text = "⏯", FontSize = 60, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var toggleBtn = new Button { Style = Res("AnswerButton"), Width = 150, Height = 120, Content = _toggleGlyph, Margin = new Thickness(16, 0, 16, 0) };
-            toggleBtn.Click += (s, e) => RunJs("window.__toggle()");
+            toggleBtn.Click += (s, e) => Toggle();
             transport.Children.Add(toggleBtn);
-            transport.Children.Add(TransportButton("⏭", () => RunJs("window.__next()")));
+            transport.Children.Add(TransportButton("⏹", Stop));
+            transport.Children.Add(TransportButton("⏭", Next));
             Grid.SetRow(transport, 3);
             root.Children.Add(transport);
 
@@ -300,19 +305,50 @@ namespace MesPremiersJeux.Views
 
         private async System.Threading.Tasks.Task Play(Favorite fav)
         {
-            _nowPlaying.Text = "🎵 " + fav.Title;
+            // Une musique est déjà en cours (ou en pause) : on ne change pas de
+            // morceau sur un simple clic. Il faut d'abord appuyer sur ⏹ Stop.
+            if (_active)
+            {
+                _nowPlaying.Text = "⏹ Appuie sur Stop pour changer de musique.";
+                Speech.Say("Appuie sur stop pour changer de musique.");
+                return;
+            }
+
             if (!_webReady)
             {
                 _nowPlaying.Text = "⏳ Le lecteur se prépare… réessaie dans un instant.";
                 return;
             }
+
+            _nowPlaying.Text = "🎵 " + fav.Title;
             var err = await Spotify.PlayAsync(_deviceId, fav.Uri);
             if (err != null)
             {
                 _nowPlaying.Text = "⚠ " + err;
                 Speech.Say(err);
+                return;
             }
+            _active = true;
         }
+
+        // ⏯ : met en pause / reprend la musique en cours (sans la changer).
+        private void Toggle()
+        {
+            if (!_active) return;
+            RunJs("window.__toggle()");
+        }
+
+        // ⏹ : arrête la musique et déverrouille les tuiles pour en rechoisir une.
+        private void Stop()
+        {
+            RunJs("window.__stop()");
+            _active = false;
+            _nowPlaying.Text = "";
+            _toggleGlyph.Text = "⏯";
+        }
+
+        private void Prev() { if (_active) RunJs("window.__prev()"); }
+        private void Next() { if (_active) RunJs("window.__next()"); }
 
         // ------------------------------------------------------------------
         //  WebView2 : hôte du Spotify Web Playback SDK
@@ -412,6 +448,7 @@ namespace MesPremiersJeux.Views
   window.__toggle = function(){ if (player) player.togglePlay(); };
   window.__next   = function(){ if (player) player.nextTrack(); };
   window.__prev   = function(){ if (player) player.previousTrack(); };
+  window.__stop   = function(){ if (player) player.pause(); };
   window.onSpotifyWebPlaybackSDKReady = function(){
     player = new Spotify.Player({
       name: 'Mes Premiers Jeux',
