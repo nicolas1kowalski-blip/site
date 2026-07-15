@@ -48,6 +48,9 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Diagnostic : « points valides / échantillons reçus ».</summary>
         public string Stats => _valid + "/" + _events;
 
+        /// <summary>Vrai si le flux de regard direct émet des points valides.</summary>
+        public bool HasGaze => _valid > 0;
+
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int index);
 

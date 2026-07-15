@@ -75,9 +75,11 @@ namespace MesPremiersJeux
 
             // Source DIRECTE (Tobii Pro SDK) : prioritaire si un tracker est visible.
             _pro.Gaze += p => _dwell.PushGaze(p);
-            // Présence à plein débit (le flux « Eyes » peut être lent : il sert au
-            // positionnement, pas à la détection de perte du regard).
+            // Présence : via le flux de regard s'il émet (plein débit), ET via le
+            // flux « guide » (position des yeux) — sur la I-13 le flux de regard
+            // est verrouillé par licence, seul le guide fournit la présence.
             _pro.Presence += v => _dwell.PushEye(v);
+            _pro.Eyes += s => _dwell.PushEye(s.AnyValid);
             _pro.Connected += name => Dispatcher.Invoke(() =>
             {
                 _srcName = "Tobii direct";
@@ -103,9 +105,12 @@ namespace MesPremiersJeux
             statusTimer.Tick += (s2, e2) =>
             {
                 if (AdminCheck?.IsChecked == true || GazeGate.IsPaused) return; // texte « pause » prioritaire
+                string src = !_pro.IsAvailable ? _srcName
+                    : _pro.HasGaze ? "Tobii direct"
+                    : "curseur + yeux Tobii"; // regard verrouillé : pointage TD Control, présence Tobii
                 GazeStatus.Text = _pro.IsAvailable
-                    ? $"👁  {_srcName} · {_pro.Stats} · Clics : {_clicks}"
-                    : $"👁  {_srcName} · Clics : {_clicks}";
+                    ? $"👁  {src} · {_pro.Stats} · Clics : {_clicks}"
+                    : $"👁  {src} · Clics : {_clicks}";
             };
             statusTimer.Start();
 

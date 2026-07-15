@@ -120,11 +120,24 @@ namespace MesPremiersJeux.Gaze
             _deadZone = Math.Max(0, deadZone);
         }
 
+        // Rythme réel des mesures de présence (certaines sources émettent à 60 Hz,
+        // d'autres — le « guide » Tobii — à quelques Hz seulement) : le seuil de
+        // « regard perdu » s'adapte à ce rythme.
+        private double _eyeIntervalEma = 0.05;
+        private double _lastEyeAnyTime = -10;
+
         /// <summary>Reçoit la validité des yeux (thread SDK) pour détecter la perte du regard.</summary>
         public void PushEye(bool anyValid)
         {
+            double t = _clock.Elapsed.TotalSeconds;
+            if (_lastEyeAnyTime > 0)
+            {
+                double dt = Math.Min(1.0, t - _lastEyeAnyTime);
+                _eyeIntervalEma = 0.7 * _eyeIntervalEma + 0.3 * dt;
+            }
+            _lastEyeAnyTime = t;
             _eyeSeen = true;
-            if (anyValid) _lastEyeValidTime = _clock.Elapsed.TotalSeconds;
+            if (anyValid) _lastEyeValidTime = t;
         }
 
         /// <summary>Règle le diamètre (px) du cercle de progression.</summary>
@@ -164,8 +177,12 @@ namespace MesPremiersJeux.Gaze
             double t = _clock.Elapsed.TotalSeconds;
 
             // 0) Regard perdu (yeux invalides) : le curseur disparaît et rien n'est
-            //    sélectionné tant que les yeux ne sont pas revenus.
-            if (_eyeSeen && (t - _lastEyeValidTime) > GazeLostSeconds)
+            //    sélectionné tant que les yeux ne sont pas revenus. Le seuil s'adapte
+            //    au rythme de la source de présence (guide Tobii = quelques Hz).
+            if (_eyeSeen && (t - _lastEyeAnyTime) > 10)
+                _eyeSeen = false; // source de présence morte : on n'aveugle pas l'appli
+            double lostAfter = Math.Max(GazeLostSeconds, _eyeIntervalEma * 4 + 0.15);
+            if (_eyeSeen && (t - _lastEyeValidTime) > lostAfter)
             {
                 HideAll();
                 _hasDisplay = false;
