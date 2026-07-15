@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -37,7 +40,6 @@ namespace MesPremiersJeux.Gaze
         private bool _holdActive;
         private Point _holdScreen;   // point (écran) où la stabilité a commencé
         private Point _holdLocal;    // idem, en coordonnées fenêtre
-        private double _holdStart;   // en secondes (horloge interne)
 
         // Après un clic : petite pause + éviter de re-cliquer au même endroit.
         private double _cooldownUntil = -1;
@@ -70,6 +72,33 @@ namespace MesPremiersJeux.Gaze
         private const double FrozenSeconds = 2.2;   // point figé plus longtemps = pas d'action
         private const double IndicatorR = 37;       // rayon de l'arc de progression
 
+        // --- Aimant à cibles + fixation « intelligente » ---
+        private const double SnapRadius = 80;        // px : le regard proche d'un bouton est attiré dessus
+        private const double GraceSeconds = 0.35;    // un écart bref ne remet PAS la progression à zéro
+        private const double SaccadePxPerSec = 1100; // au-delà = mouvement brusque : progression en pause
+
+        private List<GazeTargets.Target> _targets = new List<GazeTargets.Target>();
+        private double _lastTargetScan = -10;
+        private FrameworkElement _curTargetEl;   // cible en cours de fixation
+        private Rect _curTargetRect;
+        private double _progressSec;             // fixation accumulée (s)
+        private double _lastTickTime = -1;
+        private double _outSince = -1;           // sortie momentanée (grâce)
+        private Point _prevScreen;
+        private bool _hasPrevScreen;
+        private readonly Border _highlight;      // halo posé sur la cible visée
+        private readonly Canvas _layer;          // calque des indicateurs
+
+        /// <summary>Vrai : le dwell ne se déclenche que sur des cibles (jeux d'exploration).</summary>
+        public bool TargetsOnly { get; set; }
+
+        /// <summary>Vrai : pointer avec le curseur TD Control même si le regard direct émet.</summary>
+        public bool PreferCursor { get; set; }
+
+        // --- Correction de précision (« étoile ») : décalages mesurés en 5 points,
+        // interpolés sur tout l'écran et appliqués au point brut. ---
+        private (Point Anchor, Vector Offset)[] _bias;
+
         public bool Enabled { get; set; } = true;
         public bool Locked { get; set; } = false;
         public int DwellTime { get; set; } = 900; // ms
@@ -89,6 +118,9 @@ namespace MesPremiersJeux.Gaze
         [DllImport("user32.dll")]
         private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
 
+        [DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int index);
+
         private const uint MOUSEEVENTF_LEFTDOWN = 0x02;
         private const uint MOUSEEVENTF_LEFTUP = 0x04;
 
@@ -103,6 +135,19 @@ namespace MesPremiersJeux.Gaze
             _dot = dot;
             _indicator.Visibility = Visibility.Collapsed;
             if (_dot != null) _dot.Visibility = Visibility.Collapsed;
+
+            // Halo doré posé sur la cible visée (sous le cercle de progression).
+            _layer = indicator.Parent as Canvas;
+            _highlight = new Border
+            {
+                CornerRadius = new CornerRadius(18),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)),
+                BorderThickness = new Thickness(5),
+                Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xC1, 0x07)),
+                Visibility = Visibility.Collapsed,
+                IsHitTestVisible = false,
+            };
+            _layer?.Children.Insert(0, _highlight);
 
             _tick = new DispatcherTimer(DispatcherPriority.Input)
             {
@@ -157,6 +202,65 @@ namespace MesPremiersJeux.Gaze
             };
         }
 
+        // ------------------------------------------------------------------
+        // Correction de précision (« suis l'étoile ») : offsets mesurés en
+        // quelques points d'ancrage (coordonnées normalisées 0..1), interpolés
+        // par pondération inverse à la distance, appliqués au point brut.
+        // ------------------------------------------------------------------
+        public void SetBias(IList<(Point Anchor, Vector Offset)> points)
+        {
+            _bias = points != null && points.Count > 0 ? points.ToArray() : null;
+            Lib.Log.Write("dwell", _bias == null
+                ? "Correction de précision effacée"
+                : "Correction de précision appliquée (" + _bias.Length + " points)");
+        }
+
+        public void SetBiasFromString(string s)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(s)) { _bias = null; return; }
+                var list = new List<(Point, Vector)>();
+                foreach (var part in s.Split(';'))
+                {
+                    var v = part.Split(',');
+                    if (v.Length != 4) continue;
+                    list.Add((new Point(
+                            double.Parse(v[0], CultureInfo.InvariantCulture),
+                            double.Parse(v[1], CultureInfo.InvariantCulture)),
+                        new Vector(
+                            double.Parse(v[2], CultureInfo.InvariantCulture),
+                            double.Parse(v[3], CultureInfo.InvariantCulture))));
+                }
+                SetBias(list);
+            }
+            catch { _bias = null; }
+        }
+
+        public static string BiasToString(IList<(Point Anchor, Vector Offset)> points)
+        {
+            if (points == null || points.Count == 0) return "";
+            return string.Join(";", points.Select(p => string.Format(CultureInfo.InvariantCulture,
+                "{0:0.####},{1:0.####},{2:0.#},{3:0.#}", p.Anchor.X, p.Anchor.Y, p.Offset.X, p.Offset.Y)));
+        }
+
+        private Point ApplyBias(Point raw)
+        {
+            var b = _bias;
+            if (b == null) return raw;
+            double w = GetSystemMetrics(0), h = GetSystemMetrics(1);
+            if (w <= 0 || h <= 0) return raw;
+            double nx = raw.X / w, ny = raw.Y / h;
+            double sw = 0, ox = 0, oy = 0;
+            foreach (var p in b)
+            {
+                double dx = nx - p.Anchor.X, dy = ny - p.Anchor.Y;
+                double wi = 1.0 / (dx * dx + dy * dy + 0.01); // 0.01 : évite l'explosion au point exact
+                sw += wi; ox += p.Offset.X * wi; oy += p.Offset.Y * wi;
+            }
+            return new Point(raw.X + ox / sw, raw.Y + oy / sw);
+        }
+
         /// <summary>Reçoit un point de regard SDK (thread quelconque).</summary>
         public void PushGaze(GazePoint p)
         {
@@ -174,13 +278,15 @@ namespace MesPremiersJeux.Gaze
 
         private void OnTickCore()
         {
-            if (!Enabled || _root.ActualWidth <= 0)
+            if (_root.ActualWidth <= 0)
             {
                 HideAll();
                 return;
             }
 
             double t = _clock.Elapsed.TotalSeconds;
+            double dt = _lastTickTime < 0 ? 0.03 : Math.Min(0.1, t - _lastTickTime);
+            _lastTickTime = t;
 
             // 0) Regard perdu (yeux invalides) : le curseur disparaît et rien n'est
             //    sélectionné tant que les yeux ne sont pas revenus. Le seuil s'adapte
@@ -202,6 +308,7 @@ namespace MesPremiersJeux.Gaze
                 HideAll();
                 _hasDisplay = false;
                 _mCount = 0; // repart proprement quand le regard revient
+                GazeFeed.Push(_display, false); // les jeux savent que le regard est parti
                 return;
             }
             if (_lostLogged)
@@ -210,14 +317,19 @@ namespace MesPremiersJeux.Gaze
                 Lib.Log.Write("dwell", "Regard retrouvé");
             }
 
-            // 1) Source du point : curseur (déplacé au regard sur la I-13, souris
-            //    sur PC), sauf si des données SDK Tobii affluent réellement.
-            bool sdkFresh = _hasGaze && (t - _lastGazeTime) < 0.4;
+            // 1) Source du point : le regard direct (SDK) s'il émet — sauf si le
+            //    parent a choisi le curseur TD Control — sinon le curseur.
+            bool sdkFresh = !PreferCursor && _hasGaze && (t - _lastGazeTime) < 0.4;
             ActiveSource = sdkFresh ? "Regard direct" : "Curseur";
             Point raw;
             if (sdkFresh) raw = new Point(_gx, _gy);
             else if (GetCursorPos(out var cp)) raw = new Point(cp.X, cp.Y);
             else { HideAll(); return; }
+
+            // Flux partagé (étoile de précision : point brut AVANT correction).
+            GazeFeed.PushRaw(raw);
+            // Correction de précision mesurée avec l'étoile.
+            raw = ApplyBias(raw);
 
             // Battement de cœur toutes les 2 s : l'état complet du moteur.
             if (t - _lastHeartbeat > 2)
@@ -244,6 +356,20 @@ namespace MesPremiersJeux.Gaze
             }
             var screen = _display;
 
+            // Vitesse du point affiché : un mouvement brusque (saccade, à-coup de
+            // tête) met la progression en PAUSE au lieu de la remettre à zéro.
+            double speed = 0;
+            if (_hasPrevScreen && dt > 0) speed = Distance(screen, _prevScreen) / dt;
+            _prevScreen = screen; _hasPrevScreen = true;
+            bool saccade = speed > SaccadePxPerSec;
+
+            // Flux partagé : point affiché (jeux « cause à effet », bilan…).
+            GazeFeed.Push(screen, true);
+
+            // Regard en pause (fenêtre parent, case décochée…) : le flux continue
+            // mais ni point, ni sélection.
+            if (!Enabled) { HideAll(); return; }
+
             Point local;
             try { local = _root.PointFromScreen(screen); }
             catch { HideAll(); return; }
@@ -268,24 +394,147 @@ namespace MesPremiersJeux.Gaze
             }
             _hasLastClick = false; // on s'est éloigné : ré-armé
 
-            // 7) Fenêtre de stabilité : si le point sort du rayon, on repart d'ici.
-            if (!_holdActive || Distance(screen, _holdScreen) > HoldRadius)
+            // 7) AIMANT À CIBLES : les boutons visibles sont recensés, et le regard
+            //    posé sur (ou près d') une cible remplit le cercle SUR la cible.
+            if (t - _lastTargetScan > 0.4)
             {
-                _holdActive = true;
-                _holdScreen = screen;
-                _holdLocal = local;
-                _holdStart = t;
-                _indicator.Visibility = Visibility.Visible;
-                PlaceIndicator(local);
-                UpdateProgress(0);
+                _lastTargetScan = t;
+                try { _targets = GazeTargets.Collect(_root); } catch { _targets = new List<GazeTargets.Target>(); }
+            }
+
+            var tgt = FindTarget(screen);
+            if (tgt != null)
+            {
+                if (!ReferenceEquals(tgt.Element, _curTargetEl))
+                {
+                    // Nouvelle cible : la progression repart (et le dwell libre s'arrête).
+                    _curTargetEl = tgt.Element;
+                    _progressSec = 0;
+                    _holdActive = false;
+                }
+                _curTargetRect = tgt.ScreenRect;
+                _outSince = -1;
+                if (!saccade) _progressSec += dt;
+                ShowTargetVisuals();
+                if (_progressSec * 1000.0 >= DwellTime)
+                {
+                    var c = new Point(_curTargetRect.X + _curTargetRect.Width / 2,
+                                      _curTargetRect.Y + _curTargetRect.Height / 2);
+                    Click(c, t); // clic au CENTRE de la cible : précision maximale
+                }
                 return;
             }
 
-            // 8) Stable : le cercle se remplit, puis on clique POUR DE VRAI.
+            // Le regard vient de quitter une cible : GRÂCE avant d'abandonner
+            // (un tremblement ne remet pas la progression à zéro).
+            if (_curTargetEl != null)
+            {
+                if (_outSince < 0) _outSince = t;
+                if (t - _outSince < GraceSeconds) { ShowTargetVisuals(); return; }
+                ClearTarget();
+            }
+
+            // Jeux d'exploration : pas de sélection en dehors des cibles.
+            if (TargetsOnly) { ResetHold(); return; }
+
+            // 8) DWELL LIBRE (coloriage, zones sans cible…) : fenêtre de stabilité
+            //    avec accumulation + grâce, comme pour les cibles.
+            if (!_holdActive)
+            {
+                StartFreeHold(screen, local, t);
+                return;
+            }
+            if (Distance(screen, _holdScreen) > HoldRadius)
+            {
+                if (_outSince < 0) _outSince = t;
+                if (t - _outSince >= GraceSeconds) { StartFreeHold(screen, local, t); return; }
+                // en grâce : on n'accumule pas, mais on ne repart pas de zéro
+            }
+            else
+            {
+                _outSince = -1;
+                if (!saccade) _progressSec += dt;
+            }
+
             PlaceIndicator(_holdLocal);
-            double frac = Math.Min(1.0, (t - _holdStart) * 1000.0 / DwellTime);
+            if (_indicator.Visibility != Visibility.Visible) _indicator.Visibility = Visibility.Visible;
+            double frac = Math.Min(1.0, _progressSec * 1000.0 / DwellTime);
             UpdateProgress(frac);
             if (frac >= 1.0) Click(screen, t);
+        }
+
+        // --- Aimant : trouve la cible sous le point, sinon la plus proche (rayon). ---
+        private GazeTargets.Target FindTarget(Point screen)
+        {
+            GazeTargets.Target inside = null;
+            double insideArea = double.MaxValue;
+            GazeTargets.Target near = null;
+            double nearDist = SnapRadius;
+
+            foreach (var tg in _targets)
+            {
+                var r = tg.ScreenRect;
+                if (r.Contains(screen))
+                {
+                    double area = r.Width * r.Height;
+                    if (area < insideArea) { inside = tg; insideArea = area; } // la plus petite gagne
+                }
+                else if (inside == null)
+                {
+                    double dx = Math.Max(Math.Max(r.Left - screen.X, 0), screen.X - r.Right);
+                    double dy = Math.Max(Math.Max(r.Top - screen.Y, 0), screen.Y - r.Bottom);
+                    double d = Math.Sqrt(dx * dx + dy * dy);
+                    if (d < nearDist) { near = tg; nearDist = d; }
+                }
+            }
+            return inside ?? near;
+        }
+
+        // Halo sur la cible + cercle de progression au centre de la cible.
+        private void ShowTargetVisuals()
+        {
+            Point tl, br;
+            try
+            {
+                tl = _root.PointFromScreen(_curTargetRect.TopLeft);
+                br = _root.PointFromScreen(_curTargetRect.BottomRight);
+            }
+            catch { return; }
+
+            if (_highlight != null)
+            {
+                _highlight.Width = Math.Max(0, br.X - tl.X) + 12;
+                _highlight.Height = Math.Max(0, br.Y - tl.Y) + 12;
+                Canvas.SetLeft(_highlight, tl.X - 6);
+                Canvas.SetTop(_highlight, tl.Y - 6);
+                if (_highlight.Visibility != Visibility.Visible) _highlight.Visibility = Visibility.Visible;
+            }
+
+            var center = new Point((tl.X + br.X) / 2, (tl.Y + br.Y) / 2);
+            PlaceIndicator(center);
+            if (_indicator.Visibility != Visibility.Visible) _indicator.Visibility = Visibility.Visible;
+            UpdateProgress(Math.Min(1.0, _progressSec * 1000.0 / DwellTime));
+        }
+
+        private void ClearTarget()
+        {
+            _curTargetEl = null;
+            _progressSec = 0;
+            _outSince = -1;
+            if (_highlight != null && _highlight.Visibility != Visibility.Collapsed)
+                _highlight.Visibility = Visibility.Collapsed;
+        }
+
+        private void StartFreeHold(Point screen, Point local, double t)
+        {
+            _holdActive = true;
+            _holdScreen = screen;
+            _holdLocal = local;
+            _progressSec = 0;
+            _outSince = -1;
+            _indicator.Visibility = Visibility.Visible;
+            PlaceIndicator(local);
+            UpdateProgress(0);
         }
 
         // Médiane des derniers points (rejette un pic isolé dû à un mouvement brusque).
@@ -330,6 +579,7 @@ namespace MesPremiersJeux.Gaze
         private void ResetHold()
         {
             _holdActive = false;
+            ClearTarget();
             UpdateProgress(0);
             if (_indicator.Visibility != Visibility.Collapsed)
                 _indicator.Visibility = Visibility.Collapsed;

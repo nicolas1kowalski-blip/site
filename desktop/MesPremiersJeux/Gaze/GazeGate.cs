@@ -26,5 +26,25 @@ namespace MesPremiersJeux.Gaze
         {
             if (_count > 0 && --_count == 0) PauseChanged?.Invoke(false);
         }
+
+        // --- Mode « cibles seulement » ---
+        // Utilisé par les jeux « cause à effet » : le regard reste actif (le flux
+        // continue) mais le dwell ne se déclenche QUE sur les boutons (ex. retour),
+        // jamais en zone libre — l'enfant explore sans cliquer partout.
+        private static int _targetsOnly;
+
+        public static bool IsTargetsOnly => _targetsOnly > 0;
+
+        public static void PushTargetsOnly()
+        {
+            _targetsOnly++;
+            PauseChanged?.Invoke(IsPaused);
+        }
+
+        public static void PopTargetsOnly()
+        {
+            if (_targetsOnly > 0) _targetsOnly--;
+            PauseChanged?.Invoke(IsPaused);
+        }
     }
 }

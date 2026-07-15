@@ -17,6 +17,7 @@ namespace MesPremiersJeux.Views
     {
         private readonly (string Icon, string Label, Func<Action, UserControl> Make)[] _games =
         {
+            ("✨", "Bulles magiques", c => new MagicGame(c)),
             ("🎈", "Ballons 3D",   c => new BalloonsGame(c)),
             ("🌈", "Couleurs",     c => new ColorsGame(c)),
             ("🔺", "Formes",       c => new ShapesGame(c)),

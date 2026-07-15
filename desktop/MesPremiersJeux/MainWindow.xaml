@@ -72,8 +72,21 @@
                                Foreground="#FF3B2A5A" Margin="0,0,0,12" />
                     <CheckBox x:Name="GazeModeCheck" Content="Piloter au regard (dwell)"
                               FontSize="15" Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
+                    <CheckBox x:Name="PreferCursorCheck" Content="🖱 Pointer via le curseur TD Control"
+                              FontSize="14" Margin="0,8,0,0"
+                              Checked="PreferCursor_Changed" Unchecked="PreferCursor_Changed" />
+                    <TextBlock Text="Coché : le point suit le curseur de l'appareil (calibration TD). Décoché : regard direct du capteur + correction « étoile »."
+                               FontSize="12" Foreground="#FF9A8AB8" TextWrapping="Wrap" Margin="24,2,0,0" />
                     <Button Content="👁 Vérifier la position des yeux" FontSize="14" Padding="8,8"
                             Margin="0,8,0,0" Click="EyeTrack_Click" />
+                    <UniformGrid Columns="2" Margin="0,6,0,0">
+                        <Button Content="🎯 Régler la précision (étoile)…" FontSize="14" Padding="8,8"
+                                Margin="0,0,4,0" Click="Calibrate_Click" />
+                        <Button Content="↺ Annuler la correction" FontSize="14" Padding="8,8"
+                                Margin="4,0,0,0" Click="ClearBias_Click" />
+                    </UniformGrid>
+                    <Button Content="📊 Bilan de la session…" FontSize="14" Padding="8,8"
+                            Margin="0,6,0,0" Click="Session_Click" />
                     <Button Content="🧾 Ouvrir le journal (diagnostic)" FontSize="14" Padding="8,8"
                             Margin="0,6,0,0" Click="OpenLog_Click" />
                     <CheckBox x:Name="AdminCheck" Content="🔧 Mode administration (regard en pause)"

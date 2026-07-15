@@ -22,6 +22,8 @@ namespace MesPremiersJeux.Lib
         public string AzureVoice = "fr-FR-EloiseNeural";
         public string SupabaseUrl = "";  // sauvegarde en ligne du contenu
         public string SupabaseKey = "";
+        public string BiasMap = "";      // correction de précision (« étoile »)
+        public bool PreferCursor;        // pointer via le curseur TD Control
         public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
         public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
 
@@ -53,6 +55,8 @@ namespace MesPremiersJeux.Lib
                         case "AzureVoice": if (val.Length > 0) s.AzureVoice = val; break;
                         case "SupabaseUrl": s.SupabaseUrl = val; break;
                         case "SupabaseKey": s.SupabaseKey = val; break;
+                        case "BiasMap": s.BiasMap = val; break;
+                        case "PreferCursor": s.PreferCursor = val == "1" || val.ToLowerInvariant() == "true"; break;
                         case "SpotifyClientId": s.SpotifyClientId = val; break;
                         case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
                     }
@@ -81,6 +85,8 @@ namespace MesPremiersJeux.Lib
                     "SupabaseKey=" + (SupabaseKey ?? ""),
                     "SpotifyClientId=" + (SpotifyClientId ?? ""),
                     "SpotifyRefreshToken=" + (SpotifyRefreshToken ?? ""),
+                    "BiasMap=" + (BiasMap ?? ""),
+                    "PreferCursor=" + (PreferCursor ? "1" : "0"),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

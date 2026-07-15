@@ -276,6 +276,7 @@ namespace MesPremiersJeux.Views
                     Canvas.SetTop(ui, z.Top / 100 * h);
                     var zone = z;
                     ui.MouseLeftButtonDown += (s, e) => Speech.Say(zone.Label); // fixer la zone la nomme
+                    GazeTargets.SetIsTarget(ui, true); // aimant du regard sur la zone
                     layer.Children.Add(ui);
                     _zoneUis.Add((zone, ui));
                 }
@@ -562,6 +563,7 @@ namespace MesPremiersJeux.Views
                 int idx = gi++;
                 // Le dwell injecte un vrai clic : on lit le groupe si c'est le courant.
                 tb.MouseLeftButtonDown += (s, e) => OnGroupClicked(idx);
+                GazeTargets.SetIsTarget(tb, true); // aimant du regard sur chaque groupe de mots
                 _groups.Add(tb);
                 _wordHost.Children.Add(tb);
             }

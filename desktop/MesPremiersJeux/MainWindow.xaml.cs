@@ -149,6 +149,13 @@ namespace MesPremiersJeux
             _dwell.DwellTime = _settings.DwellTime;
             ApplySmoothing(_settings.Smoothing);
             _dwell.SetIndicatorSize(_settings.CircleSize);
+            _dwell.SetBiasFromString(_settings.BiasMap);   // correction « étoile »
+            _dwell.PreferCursor = _settings.PreferCursor;
+            PreferCursorCheck.IsChecked = _settings.PreferCursor;
+
+            // Bilan de session (carte de chaleur + compteurs).
+            SessionLog.Init();
+            _dwell.Clicked += p => SessionLog.Clicks++;
 
             // Reporte ces réglages dans les curseurs du panneau ⚙.
             DwellSlider.Value = _settings.DwellTime;
@@ -184,6 +191,42 @@ namespace MesPremiersJeux
             Lib.Log.Open();
         }
 
+        // « Suis l'étoile » : mesure le décalage du regard et applique la correction.
+        private void Calibrate_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            var win = new CalibrationWindow { Owner = this };
+            if (win.ShowDialog() == true && win.Result.Count > 0)
+            {
+                _dwell.SetBias(win.Result);
+                _settings.BiasMap = DwellController.BiasToString(win.Result);
+                _settings.Save();
+            }
+        }
+
+        private void ClearBias_Click(object sender, RoutedEventArgs e)
+        {
+            _dwell.SetBias(null);
+            _settings.BiasMap = "";
+            _settings.Save();
+            Speech.Say("Correction annulée.");
+        }
+
+        private void Session_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            new SessionWindow { Owner = this }.ShowDialog();
+        }
+
+        private void PreferCursor_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_dwell == null || _settings == null) return;
+            _dwell.PreferCursor = PreferCursorCheck.IsChecked == true;
+            _settings.PreferCursor = _dwell.PreferCursor;
+            _settings.Save();
+            Lib.Log.Write("app", "Pointage via curseur : " + _dwell.PreferCursor);
+        }
+
         private void EyeTrack_Click(object sender, RoutedEventArgs e)
         {
             SettingsPopup.IsOpen = false;
@@ -208,6 +251,7 @@ namespace MesPremiersJeux
             if (_dwell.Enabled != enabled)
                 Lib.Log.Write("app", $"Pilotage au regard : {(enabled ? "ACTIF" : "en pause")} (case={GazeModeCheck.IsChecked == true}, admin={admin}, fenêtreParent={GazeGate.IsPaused})");
             _dwell.Enabled = enabled;
+            _dwell.TargetsOnly = GazeGate.IsTargetsOnly; // jeux d'exploration
             if (admin || GazeGate.IsPaused)
                 GazeStatus.Text = "⏸  Regard en pause";
         }
