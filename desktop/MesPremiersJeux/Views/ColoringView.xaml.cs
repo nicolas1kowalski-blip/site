@@ -463,6 +463,9 @@ namespace MesPremiersJeux.Views
         private void FillAtImagePoint(Point p)
         {
             if (_pixels == null) return;
+            // Précision regard : si le point tombe près d'un trait (frontière entre
+            // deux zones), on le repousse vers le CŒUR de la zone visée.
+            p = NudgeAwayFromLines(p);
             int px = (int)Math.Round(p.X);
             int py = (int)Math.Round(p.Y);
             int n = ColoringEngine.FloodFill(_pixels, Size, Size, px, py, ColoringEngine.MakeFiller(_spec));
@@ -471,6 +474,35 @@ namespace MesPremiersJeux.Views
                 _bmp.WritePixels(new Int32Rect(0, 0, Size, Size), _pixels, Size * 4, 0);
                 Speech.Pop();
             }
+        }
+
+        // Répulsion des traits : examine les pixels sombres autour du point et
+        // pousse le point de remplissage à l'opposé (max ~14 px). Un regard qui
+        // atterrit à cheval sur un contour colorie ainsi la zone visée, pas le
+        // trait ni la zone voisine effleurée.
+        private Point NudgeAwayFromLines(Point p)
+        {
+            const int R = 18;
+            int px = (int)Math.Round(p.X), py = (int)Math.Round(p.Y);
+            double vx = 0, vy = 0;
+            for (int dy = -R; dy <= R; dy += 3)
+                for (int dx = -R; dx <= R; dx += 3)
+                {
+                    int x = px + dx, y = py + dy;
+                    if (x < 0 || y < 0 || x >= Size || y >= Size) continue;
+                    int i = (y * Size + x) * 4;
+                    double lum = 0.299 * _pixels[i + 2] + 0.587 * _pixels[i + 1] + 0.114 * _pixels[i];
+                    if (lum >= 95) continue; // pas un trait
+                    double d2 = dx * dx + dy * dy;
+                    if (d2 < 1) d2 = 1;
+                    vx -= dx / d2; vy -= dy / d2;
+                }
+            double len = Math.Sqrt(vx * vx + vy * vy);
+            if (len < 0.02) return p; // aucun trait proche : point inchangé
+            double push = Math.Min(14, 6 + len * 8);
+            return new Point(
+                Math.Max(0, Math.Min(Size - 1, px + vx / len * push)),
+                Math.Max(0, Math.Min(Size - 1, py + vy / len * push)));
         }
 
         private void Img_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)

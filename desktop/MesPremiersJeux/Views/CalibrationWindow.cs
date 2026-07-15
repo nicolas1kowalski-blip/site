@@ -43,6 +43,8 @@ namespace MesPremiersJeux.Views
         private bool _collecting;
         private double _sumX, _sumY;
         private int _samples;
+        private readonly TextBlock _eyeState;  // « yeux vus / non vus » en direct
+        private bool _eyesValid;
 
         public CalibrationWindow()
         {
@@ -107,17 +109,50 @@ namespace MesPremiersJeux.Views
             pulse.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
             _canvas.Children.Add(_star);
 
+            // Indicateur en direct : la caméra voit-elle les yeux, là, maintenant ?
+            _eyeState = new TextBlock
+            {
+                FontSize = 20,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 22),
+                Text = "…",
+                Foreground = Brushes.White,
+            };
+            root.Children.Add(_eyeState);
+
             Content = root;
 
             GazeFeed.Raw += OnRaw;
+            GazeFeed.Sample += OnSample;
+            Closed += (s, e) => GazeFeed.Sample -= OnSample;
             _timer.Tick += (s, e) => Tick();
-            Loaded += (s, e) => { NextStep(); _timer.Start(); Speech.Say("Suis l'étoile avec tes yeux !"); };
+            // ContentRendered : la fenêtre est réellement affichée et mesurée
+            // (à Loaded, les dimensions peuvent encore être à zéro).
+            ContentRendered += (s, e) =>
+            {
+                if (_step >= 0) return;
+                Log.Write("etoile", FormattableString.Invariant(
+                    $"Démarrage : fenêtre {ActualWidth:0}x{ActualHeight:0}"));
+                NextStep();
+                _timer.Start();
+                Speech.Say("Suis l'étoile avec tes yeux !");
+            };
         }
 
         private void OnRaw(Point p)
         {
             if (!_collecting) return;
             _sumX += p.X; _sumY += p.Y; _samples++;
+        }
+
+        private void OnSample(Point p, bool valid)
+        {
+            _eyesValid = valid;
+            _eyeState.Text = valid ? "👁 Yeux vus" : "👀 Yeux non détectés — place-toi bien en face";
+            _eyeState.Foreground = new SolidColorBrush(valid
+                ? Color.FromRgb(0x7B, 0xE0, 0x6C) : Color.FromRgb(0xFF, 0xC1, 0x07));
         }
 
         private void NextStep()
@@ -139,17 +174,20 @@ namespace MesPremiersJeux.Views
             if (_step < 0 || _step >= Anchors.Length) return;
             double elapsed = (DateTime.Now - _phaseStart).TotalMilliseconds;
 
-            // 0,9 s pour amener le regard, puis 1,0 s de mesure.
+            // 0,9 s pour amener le regard (le chrono ne démarre pas tant que les
+            // yeux ne sont pas vus), puis mesure jusqu'à avoir assez d'échantillons
+            // (3,5 s maximum).
             if (!_collecting && elapsed > 900)
             {
+                if (!_eyesValid) { _phaseStart = DateTime.Now.AddMilliseconds(-600); return; }
                 _collecting = true;
                 _sumX = _sumY = 0;
                 _samples = 0;
             }
-            else if (_collecting && elapsed > 1900)
+            else if (_collecting && ((_samples >= 15 && elapsed > 1700) || elapsed > 3500))
             {
                 _collecting = false;
-                if (_samples >= 8)
+                if (_samples >= 5)
                 {
                     // Centre réel de l'étoile en pixels écran.
                     Point starScreen;
@@ -157,8 +195,8 @@ namespace MesPremiersJeux.Views
                     catch { starScreen = new Point(0, 0); }
                     var mean = new Point(_sumX / _samples, _sumY / _samples);
                     var offset = starScreen - mean;
-                    // Un décalage aberrant (> 500 px) = mesure ratée : ignorée.
-                    if (offset.Length < 500)
+                    // Un décalage aberrant (> 600 px) = mesure ratée : ignorée.
+                    if (offset.Length < 600)
                     {
                         Result.Add((Anchors[_step], offset));
                         Log.Write("etoile", FormattableString.Invariant(
@@ -175,7 +213,8 @@ namespace MesPremiersJeux.Views
         private void Finish()
         {
             _timer.Stop();
-            if (Result.Count >= 5)
+            Log.Write("etoile", $"Terminé : {Result.Count} points valides sur {Anchors.Length}");
+            if (Result.Count >= 4)
             {
                 Speech.Say("Bravo ! C'est réglé !");
                 DialogResult = true;
