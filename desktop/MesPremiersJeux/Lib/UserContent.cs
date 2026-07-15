@@ -73,13 +73,14 @@ namespace MesPremiersJeux.Lib
     }
 
     // --- Schéma JSON des livres (identique à l'application web) ---
+    // Les champs de ces classes sont assignés par le désérialiseur JSON, jamais
+    // dans le code : l'avertissement « jamais assigné » (CS0649) est donc muet ici.
+#pragma warning disable CS0649
     [DataContract]
     internal sealed class BookJson
     {
         [DataMember(Name = "title")] public string Title;
-#pragma warning disable CS0649 // assigné par le désérialiseur JSON (jamais dans le code)
         [DataMember(Name = "metadata", EmitDefaultValue = false)] public BookMetaJson Metadata; // certains fichiers mettent le titre ici
-#pragma warning restore CS0649
         [DataMember(Name = "pages")] public List<BookPageJson> Pages;
         [DataMember(Name = "questions", EmitDefaultValue = false)] public List<BookQuestionJson> Questions;
     }
@@ -143,6 +144,7 @@ namespace MesPremiersJeux.Lib
         [DataMember(Name = "label")] public string Label;
         [DataMember(Name = "zone_id", EmitDefaultValue = false)] public string ZoneId; // « ocular »
     }
+#pragma warning restore CS0649
 
     /// <summary>
     /// Contenu ajouté par le parent (Documents\MesPremiersJeux) :

@@ -219,9 +219,7 @@ namespace MesPremiersJeux.Gaze
             {
                 _lastHeartbeat = t;
                 Lib.Log.Write("dwell", FormattableString.Invariant(
-                    $"hb src={(sdkFresh ? "REGARD-DIRECT" : "CURSEUR")} pos=({raw.X:0};{raw.Y:0}) actif={Enabled} " +
-                    $"yeuxVus={_eyeSeen} âgeValide={(t - _lastEyeValidTime):0.00}s rythme={_eyeIntervalEma * 1000:0}ms " +
-                    $"fixation={_holdActive} verrou={Locked}"));
+                    $"hb src={(sdkFresh ? "REGARD-DIRECT" : "CURSEUR")} pos=({raw.X:0};{raw.Y:0}) actif={Enabled} yeuxVus={_eyeSeen} âgeValide={(t - _lastEyeValidTime):0.00}s rythme={_eyeIntervalEma * 1000:0}ms fixation={_holdActive} verrou={Locked}"));
             }
 
             // 2) Médiane courte (rejette les à-coups de tête) puis filtre 1 €.

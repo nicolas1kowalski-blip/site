@@ -160,9 +160,7 @@ namespace MesPremiersJeux.Gaze
                 // régulier (pour voir vivre le flux sans noyer le fichier).
                 if (_events == 1)
                     Lib.Log.Write("pro", FormattableString.Invariant(
-                        $"1er échantillon de REGARD : L={e.LeftEye.GazePoint.Validity} ({e.LeftEye.GazePoint.PositionOnDisplayArea.X:0.###};{e.LeftEye.GazePoint.PositionOnDisplayArea.Y:0.###}) " +
-                        $"R={e.RightEye.GazePoint.Validity} ({e.RightEye.GazePoint.PositionOnDisplayArea.X:0.###};{e.RightEye.GazePoint.PositionOnDisplayArea.Y:0.###}) " +
-                        $"originL={e.LeftEye.GazeOrigin.Validity} originR={e.RightEye.GazeOrigin.Validity}"));
+                        $"1er échantillon de REGARD : L={e.LeftEye.GazePoint.Validity} ({e.LeftEye.GazePoint.PositionOnDisplayArea.X:0.###};{e.LeftEye.GazePoint.PositionOnDisplayArea.Y:0.###}) R={e.RightEye.GazePoint.Validity} ({e.RightEye.GazePoint.PositionOnDisplayArea.X:0.###};{e.RightEye.GazePoint.PositionOnDisplayArea.Y:0.###}) originL={e.LeftEye.GazeOrigin.Validity} originR={e.RightEye.GazeOrigin.Validity}"));
                 else if (_events % 500 == 0)
                     Lib.Log.Write("pro", $"Flux de regard : {_events} reçus, {_valid} valides");
 
@@ -223,8 +221,7 @@ namespace MesPremiersJeux.Gaze
                 _guideEvents++;
                 if (_guideEvents == 1)
                     Lib.Log.Write("pro", FormattableString.Invariant(
-                        $"1er échantillon GUIDE : L={e.LeftEye.Validity} ({e.LeftEye.UserPosition.X:0.###};{e.LeftEye.UserPosition.Y:0.###};{e.LeftEye.UserPosition.Z:0.###}) " +
-                        $"R={e.RightEye.Validity}"));
+                        $"1er échantillon GUIDE : L={e.LeftEye.Validity} ({e.LeftEye.UserPosition.X:0.###};{e.LeftEye.UserPosition.Y:0.###};{e.LeftEye.UserPosition.Z:0.###}) R={e.RightEye.Validity}"));
                 else if (_guideEvents % 300 == 0)
                     Lib.Log.Write("pro", $"Flux guide : {_guideEvents} reçus");
                 var lp = e.LeftEye.UserPosition;
