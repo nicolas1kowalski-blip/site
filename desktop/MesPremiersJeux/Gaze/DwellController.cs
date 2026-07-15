@@ -107,6 +107,56 @@ namespace MesPremiersJeux.Gaze
         private const double DriftAlpha = 0.06; // apprentissage doux
         private const double DriftMax = 50;     // px : compensation plafonnée
 
+        // --- Compensation de la POSITION DE LA TÊTE ---
+        // L'étoile mémorise où était la tête pendant la mesure (_headRef). En jeu,
+        // on suit la tête (_headNow, lissée) et on apprend comment le décalage
+        // varie quand elle s'écarte de la référence (gains linéaires, appris à
+        // chaque sélection réussie — méthode LMS, plafonnée).
+        private double _hx, _hy, _hz;          // tête actuelle (lissée, 0..1)
+        private volatile bool _headSeen;
+        private (double X, double Y, double Z)? _headRef;
+        private double _gxx, _gxz, _gyy, _gyz; // gains appris (px par unité de déplacement)
+        private const double HeadMu = 0.04;    // vitesse d'apprentissage
+        private const double HeadGainMax = 600;
+        private const double HeadDeltaMax = 0.5;
+
+        /// <summary>Instance active (fenêtre de calibration : lecture de la tête).</summary>
+        public static DwellController Instance { get; private set; }
+
+        /// <summary>Position actuelle de la tête (lissée) et validité.</summary>
+        public (bool Ok, double X, double Y, double Z) CurrentHead =>
+            (_headSeen, _hx, _hy, _hz);
+
+        /// <summary>Accès sûr à la tête depuis les fenêtres (null-safe).</summary>
+        public static (bool Ok, double X, double Y, double Z) CurrentHeadSafe()
+            => Instance?.CurrentHead ?? (false, 0, 0, 0);
+
+        /// <summary>Vrai si la tête est loin de la position où l'étoile a été faite.</summary>
+        public bool HeadFarFromRef =>
+            _headRef.HasValue && _headSeen &&
+            Math.Abs(_hx - _headRef.Value.X) + Math.Abs(_hy - _headRef.Value.Y) + Math.Abs(_hz - _headRef.Value.Z) > 0.28;
+
+        /// <summary>Reçoit la position des yeux (thread SDK) pour suivre la tête.</summary>
+        public void PushHead(EyeSample s)
+        {
+            if (!s.AnyValid) return;
+            double x = s.HasLeft && s.HasRight ? (s.LX + s.RX) / 2 : (s.HasLeft ? s.LX : s.RX);
+            double y = s.HasLeft && s.HasRight ? (s.LY + s.RY) / 2 : (s.HasLeft ? s.LY : s.RY);
+            double z = s.HasLeft && s.HasRight ? (s.LZ + s.RZ) / 2 : (s.HasLeft ? s.LZ : s.RZ);
+            if (double.IsNaN(x) || double.IsNaN(y) || double.IsNaN(z)) return;
+            if (!_headSeen) { _hx = x; _hy = y; _hz = z; _headSeen = true; return; }
+            const double a = 0.12; // lissage doux
+            _hx += (x - _hx) * a; _hy += (y - _hy) * a; _hz += (z - _hz) * a;
+        }
+
+        // Écart actuel de la tête par rapport à la référence de l'étoile (borné).
+        private (double dx, double dy, double dz) HeadDelta()
+        {
+            if (!_headRef.HasValue || !_headSeen) return (0, 0, 0);
+            double C(double v) => Math.Max(-HeadDeltaMax, Math.Min(HeadDeltaMax, v));
+            return (C(_hx - _headRef.Value.X), C(_hy - _headRef.Value.Y), C(_hz - _headRef.Value.Z));
+        }
+
         // Hystérésis entre cibles voisines : il faut être NETTEMENT plus près du
         // centre de la voisine pour changer de cible.
         private const double StickyMargin = 30;
@@ -167,6 +217,7 @@ namespace MesPremiersJeux.Gaze
             };
             _tick.Tick += OnTick;
             _tick.Start();
+            Instance = this;
         }
 
         /// <summary>Règle le lissage anti-bruit (mêmes paramètres sur X et Y).</summary>
@@ -219,23 +270,39 @@ namespace MesPremiersJeux.Gaze
         // quelques points d'ancrage (coordonnées normalisées 0..1), interpolés
         // par pondération inverse à la distance, appliqués au point brut.
         // ------------------------------------------------------------------
-        public void SetBias(IList<(Point Anchor, Vector Offset)> points)
+        public void SetBias(IList<(Point Anchor, Vector Offset)> points,
+                            (double X, double Y, double Z)? headRef = null)
         {
             _bias = points != null && points.Count > 0 ? points.ToArray() : null;
-            _drift = new Vector(0, 0); // la dérive apprise repart de zéro
+            _headRef = _bias == null ? null : headRef;
+            _drift = new Vector(0, 0);              // la dérive apprise repart de zéro
+            _gxx = _gxz = _gyy = _gyz = 0;          // les gains « tête » aussi
             Lib.Log.Write("dwell", _bias == null
                 ? "Correction de précision effacée"
-                : "Correction de précision appliquée (" + _bias.Length + " points)");
+                : "Correction de précision appliquée (" + _bias.Length + " points"
+                  + (headRef.HasValue ? FormattableString.Invariant(
+                        $", tête réf. {headRef.Value.X:0.00};{headRef.Value.Y:0.00};{headRef.Value.Z:0.00}") : "")
+                  + ")");
         }
 
         public void SetBiasFromString(string s)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(s)) { _bias = null; return; }
+                if (string.IsNullOrWhiteSpace(s)) { _bias = null; _headRef = null; return; }
+                (double, double, double)? head = null;
                 var list = new List<(Point, Vector)>();
                 foreach (var part in s.Split(';'))
                 {
+                    if (part.StartsWith("H:")) // position de la tête pendant l'étoile
+                    {
+                        var hv = part.Substring(2).Split(',');
+                        if (hv.Length == 3)
+                            head = (double.Parse(hv[0], CultureInfo.InvariantCulture),
+                                    double.Parse(hv[1], CultureInfo.InvariantCulture),
+                                    double.Parse(hv[2], CultureInfo.InvariantCulture));
+                        continue;
+                    }
                     var v = part.Split(',');
                     if (v.Length != 4) continue;
                     list.Add((new Point(
@@ -245,22 +312,33 @@ namespace MesPremiersJeux.Gaze
                             double.Parse(v[2], CultureInfo.InvariantCulture),
                             double.Parse(v[3], CultureInfo.InvariantCulture))));
                 }
-                SetBias(list);
+                SetBias(list, head);
             }
-            catch { _bias = null; }
+            catch { _bias = null; _headRef = null; }
         }
 
-        public static string BiasToString(IList<(Point Anchor, Vector Offset)> points)
+        public static string BiasToString(IList<(Point Anchor, Vector Offset)> points,
+                                          (double X, double Y, double Z)? headRef = null)
         {
             if (points == null || points.Count == 0) return "";
-            return string.Join(";", points.Select(p => string.Format(CultureInfo.InvariantCulture,
+            var body = string.Join(";", points.Select(p => string.Format(CultureInfo.InvariantCulture,
                 "{0:0.####},{1:0.####},{2:0.#},{3:0.#}", p.Anchor.X, p.Anchor.Y, p.Offset.X, p.Offset.Y)));
+            if (headRef.HasValue)
+                body = string.Format(CultureInfo.InvariantCulture, "H:{0:0.###},{1:0.###},{2:0.###};",
+                    headRef.Value.X, headRef.Value.Y, headRef.Value.Z) + body;
+            return body;
         }
 
         private Point ApplyBias(Point raw)
         {
             // Dérive apprise (toujours appliquée, même sans étoile).
             raw = new Point(raw.X + _drift.X, raw.Y + _drift.Y);
+
+            // Compensation « tête » apprise : le décalage supplémentaire dû à
+            // l'écart entre la tête actuelle et la position de calibration.
+            var (hdx, hdy, hdz) = HeadDelta();
+            raw = new Point(raw.X + _gxx * hdx + _gxz * hdz,
+                            raw.Y + _gyy * hdy + _gyz * hdz);
 
             var b = _bias;
             if (b == null) return raw;
@@ -462,6 +540,17 @@ namespace MesPremiersJeux.Gaze
                     {
                         _drift = _drift * (1 - DriftAlpha) + err * DriftAlpha;
                         if (_drift.Length > DriftMax) _drift = _drift / _drift.Length * DriftMax;
+
+                        // Gains « tête » (LMS) : on n'apprend que si la tête est
+                        // réellement écartée de la référence (signal identifiable).
+                        var (hdx, hdy, hdz) = HeadDelta();
+                        double G(double g, double e, double d) =>
+                            Math.Abs(d) < 0.03 ? g :
+                            Math.Max(-HeadGainMax, Math.Min(HeadGainMax, g + HeadMu * e * Math.Sign(d) * Math.Min(1, Math.Abs(d) / 0.1)));
+                        _gxx = G(_gxx, err.X, hdx);
+                        _gxz = G(_gxz, err.X, hdz);
+                        _gyy = G(_gyy, err.Y, hdy);
+                        _gyz = G(_gyz, err.Y, hdz);
                     }
 
                     Click(c, t); // clic au CENTRE de la cible : précision maximale

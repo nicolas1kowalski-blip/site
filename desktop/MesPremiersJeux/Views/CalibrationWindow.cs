@@ -23,6 +23,12 @@ namespace MesPremiersJeux.Views
         /// <summary>Correction mesurée : points d'ancrage (0..1) + décalages (px).</summary>
         public List<(Point Anchor, Vector Offset)> Result { get; } = new List<(Point, Vector)>();
 
+        /// <summary>Position moyenne de la tête pendant la mesure (référence).</summary>
+        public (double X, double Y, double Z)? HeadRef { get; private set; }
+
+        private double _headSx, _headSy, _headSz;
+        private int _headN;
+
         // 9 points (3×3) : correction fine sur tout l'écran, décisive quand deux
         // cibles sont côte à côte.
         private static readonly Point[] Anchors =
@@ -199,6 +205,9 @@ namespace MesPremiersJeux.Views
                     if (offset.Length < 600)
                     {
                         Result.Add((Anchors[_step], offset));
+                        // Position de la tête pendant ce point (pour la compensation).
+                        var head = DwellController.CurrentHeadSafe();
+                        if (head.Ok) { _headSx += head.X; _headSy += head.Y; _headSz += head.Z; _headN++; }
                         Log.Write("etoile", FormattableString.Invariant(
                             $"Point {_step + 1} : cible=({starScreen.X:0};{starScreen.Y:0}) mesuré=({mean.X:0};{mean.Y:0}) décalage=({offset.X:0};{offset.Y:0}) ({_samples} éch.)"));
                     }
@@ -213,7 +222,10 @@ namespace MesPremiersJeux.Views
         private void Finish()
         {
             _timer.Stop();
-            Log.Write("etoile", $"Terminé : {Result.Count} points valides sur {Anchors.Length}");
+            if (_headN > 0) HeadRef = (_headSx / _headN, _headSy / _headN, _headSz / _headN);
+            Log.Write("etoile", $"Terminé : {Result.Count} points valides sur {Anchors.Length}"
+                                + (HeadRef.HasValue ? FormattableString.Invariant(
+                                    $", tête réf. {HeadRef.Value.X:0.00};{HeadRef.Value.Y:0.00};{HeadRef.Value.Z:0.00}") : ""));
             if (Result.Count >= 4)
             {
                 Speech.Say("Bravo ! C'est réglé !");

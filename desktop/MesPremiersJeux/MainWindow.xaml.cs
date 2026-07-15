@@ -79,7 +79,7 @@ namespace MesPremiersJeux
             // flux « guide » (position des yeux) — sur la I-13 le flux de regard
             // est verrouillé par licence, seul le guide fournit la présence.
             _pro.Presence += v => _dwell.PushEye(v);
-            _pro.Eyes += s => _dwell.PushEye(s.AnyValid);
+            _pro.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); };
             _pro.Connected += name => Dispatcher.Invoke(() =>
             {
                 _srcName = "Tobii";
@@ -94,7 +94,7 @@ namespace MesPremiersJeux
 
             // Source SDK grand public (Tobii Experience), puis repli curseur.
             _gaze.Gaze += p => _dwell.PushGaze(p);
-            _gaze.Eyes += s => _dwell.PushEye(s.AnyValid); // sait quand le regard est perdu
+            _gaze.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); }; // présence + tête
             _gaze.Start();
             GazeStatus.Text = "👁  Regard actif";
             _dwell.Clicked += p => Dispatcher.Invoke(() => _clicks++);
@@ -107,8 +107,10 @@ namespace MesPremiersJeux
             {
                 if (AdminCheck?.IsChecked == true || GazeGate.IsPaused) return; // texte « pause » prioritaire
                 // La vérité vient du moteur : quelle source pilote le point, là,
-                // maintenant (« Regard direct » via SDK, ou « Curseur »).
-                GazeStatus.Text = $"👁  {_dwell.ActiveSource} · Clics : {_clicks}";
+                // maintenant (« Regard direct » via SDK, ou « Curseur »). Le 🧭
+                // signale une tête loin de la position de calibration.
+                string headHint = _dwell.HeadFarFromRef ? " · 🧭 tête décalée" : "";
+                GazeStatus.Text = $"👁  {_dwell.ActiveSource}{headHint} · Clics : {_clicks}";
             };
             statusTimer.Start();
 
@@ -198,8 +200,8 @@ namespace MesPremiersJeux
             var win = new CalibrationWindow { Owner = this };
             if (win.ShowDialog() == true && win.Result.Count > 0)
             {
-                _dwell.SetBias(win.Result);
-                _settings.BiasMap = DwellController.BiasToString(win.Result);
+                _dwell.SetBias(win.Result, win.HeadRef);
+                _settings.BiasMap = DwellController.BiasToString(win.Result, win.HeadRef);
                 _settings.Save();
             }
         }
