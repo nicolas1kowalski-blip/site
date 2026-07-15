@@ -74,6 +74,8 @@
                               FontSize="15" Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
                     <Button Content="👁 Vérifier la position des yeux" FontSize="14" Padding="8,8"
                             Margin="0,8,0,0" Click="EyeTrack_Click" />
+                    <Button Content="🧾 Ouvrir le journal (diagnostic)" FontSize="14" Padding="8,8"
+                            Margin="0,6,0,0" Click="OpenLog_Click" />
                     <CheckBox x:Name="AdminCheck" Content="🔧 Mode administration (regard en pause)"
                               FontSize="15" Margin="0,8,0,0"
                               Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />

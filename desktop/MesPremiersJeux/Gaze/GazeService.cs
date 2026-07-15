@@ -45,15 +45,23 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Levé pour chaque mesure de position des yeux (hors thread UI).</summary>
         public event Action<EyeSample> Eyes;
 
+        private long _samples;
+
         public void Start()
         {
             try
             {
                 _host = new Host();
                 var stream = _host.Streams.CreateGazePointDataStream();
-                stream.GazePoint((x, y, ts) => Gaze?.Invoke(new GazePoint(x, y)));
+                stream.GazePoint((x, y, ts) =>
+                {
+                    if (++_samples == 1) Lib.Log.Write("sdk", "1er point de regard reçu (Tobii.Interaction)");
+                    else if (_samples % 2000 == 0) Lib.Log.Write("sdk", $"Points de regard reçus : {_samples}");
+                    Gaze?.Invoke(new GazePoint(x, y));
+                });
                 _stream = stream;
                 IsAvailable = true;
+                Lib.Log.Write("sdk", "SDK grand public (Tobii.Interaction) démarré");
 
                 // Flux « position des yeux » (facultatif : ignoré s'il échoue).
                 try
@@ -70,9 +78,10 @@ namespace MesPremiersJeux.Gaze
                 }
                 catch { _eyeStream = null; }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Pas de Tobii Experience installé / pas de tracker : mode souris.
+                Lib.Log.Write("sdk", "SDK grand public indisponible : " + ex.Message);
                 IsAvailable = false;
             }
         }

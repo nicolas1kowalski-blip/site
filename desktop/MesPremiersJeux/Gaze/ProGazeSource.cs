@@ -77,7 +77,15 @@ namespace MesPremiersJeux.Gaze
         {
             try
             {
+                Lib.Log.Write("pro", "Recherche de trackers (FindAllEyeTrackers)…");
                 var all = EyeTrackingOperations.FindAllEyeTrackers();
+                Lib.Log.Write("pro", $"Trackers trouvés : {(all == null ? 0 : all.Count())}");
+                if (all != null)
+                    foreach (var t in all)
+                    {
+                        try { Lib.Log.Write("pro", $"  - {t.Model} · « {t.DeviceName} » · s/n {t.SerialNumber} · {t.Address}"); }
+                        catch (Exception ex) { Lib.Log.Write("pro", "  - (illisible : " + ex.Message + ")"); }
+                    }
                 _tracker = all?.FirstOrDefault();
                 if (_tracker == null || _disposed) return;
 
@@ -94,21 +102,51 @@ namespace MesPremiersJeux.Gaze
                 catch (Exception ex) { sb.Append("\nCapacités : ERREUR ").Append(ex.Message); }
                 try { sb.Append("\nFréquence : ").Append(_tracker.GetGazeOutputFrequency()).Append(" Hz"); }
                 catch (Exception ex) { sb.Append("\nFréquence : ERREUR ").Append(ex.Message); }
+                try
+                {
+                    var freqs = _tracker.GetAllGazeOutputFrequencies();
+                    sb.Append("\nFréquences possibles : ").Append(string.Join(", ", freqs.Select(f => f.ToString("0"))));
+                }
+                catch (Exception ex) { sb.Append("\nFréquences possibles : ERREUR ").Append(ex.Message); }
                 Diagnostic = sb.ToString();
+                Lib.Log.Write("pro", "Fiche : " + Diagnostic.Replace("\n", " | "));
 
-                _tracker.GazeDataReceived += OnGazeData;
+                // Connexion perdue/retrouvée : à voir dans le journal.
+                try
+                {
+                    _tracker.ConnectionLost += (s, e) => Lib.Log.Write("pro", "⚠ CONNEXION PERDUE avec le tracker");
+                    _tracker.ConnectionRestored += (s, e) => Lib.Log.Write("pro", "Connexion rétablie avec le tracker");
+                }
+                catch (Exception ex) { Lib.Log.Write("pro", "Abonnement connexion : " + ex.Message); }
+
+                try
+                {
+                    _tracker.GazeDataReceived += OnGazeData;
+                    Lib.Log.Write("pro", "Abonné au flux de REGARD (GazeDataReceived) : OK");
+                }
+                catch (Exception ex) { Lib.Log.Write("pro", "Abonnement flux de regard : ERREUR " + ex); }
+
                 // Flux dédié au POSITIONNEMENT (fenêtre « Position des yeux ») :
                 // plus fiable que GazeOrigin sur certains trackers.
-                try { _tracker.UserPositionGuideReceived += OnGuide; } catch { }
+                try
+                {
+                    _tracker.UserPositionGuideReceived += OnGuide;
+                    Lib.Log.Write("pro", "Abonné au flux GUIDE (UserPositionGuideReceived) : OK");
+                }
+                catch (Exception ex) { Lib.Log.Write("pro", "Abonnement flux guide : ERREUR " + ex); }
+
                 IsAvailable = true;
                 Connected?.Invoke(DeviceName);
             }
-            catch
+            catch (Exception ex)
             {
                 // Pro SDK absent / aucun tracker compatible : on reste inactif.
+                Lib.Log.Write("pro", "Échec de la recherche : " + ex);
                 IsAvailable = false;
             }
         }
+
+        private int _gazeErrors;
 
         private void OnGazeData(object sender, GazeDataEventArgs e)
         {
@@ -117,6 +155,16 @@ namespace MesPremiersJeux.Gaze
                 _events++;
                 bool lv = e.LeftEye.GazePoint.Validity == Validity.Valid;
                 bool rv = e.RightEye.GazePoint.Validity == Validity.Valid;
+
+                // Journal : le tout premier échantillon en détail, puis un résumé
+                // régulier (pour voir vivre le flux sans noyer le fichier).
+                if (_events == 1)
+                    Lib.Log.Write("pro", FormattableString.Invariant(
+                        $"1er échantillon de REGARD : L={e.LeftEye.GazePoint.Validity} ({e.LeftEye.GazePoint.PositionOnDisplayArea.X:0.###};{e.LeftEye.GazePoint.PositionOnDisplayArea.Y:0.###}) " +
+                        $"R={e.RightEye.GazePoint.Validity} ({e.RightEye.GazePoint.PositionOnDisplayArea.X:0.###};{e.RightEye.GazePoint.PositionOnDisplayArea.Y:0.###}) " +
+                        $"originL={e.LeftEye.GazeOrigin.Validity} originR={e.RightEye.GazeOrigin.Validity}"));
+                else if (_events % 500 == 0)
+                    Lib.Log.Write("pro", $"Flux de regard : {_events} reçus, {_valid} valides");
 
                 // Point de regard : moyenne des yeux valides, converti en pixels.
                 double nx = 0, ny = 0;
@@ -156,8 +204,14 @@ namespace MesPremiersJeux.Gaze
                     });
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (++_gazeErrors <= 3) Lib.Log.Write("pro", "ERREUR dans OnGazeData : " + ex);
+            }
         }
+
+        private long _guideEvents;
+        private int _guideErrors;
 
         // Guide de positionnement : position normalisée de chaque œil (0..1),
         // pensé par Tobii précisément pour les écrans « placez-vous bien ».
@@ -166,6 +220,13 @@ namespace MesPremiersJeux.Gaze
             try
             {
                 _guideSeen = true;
+                _guideEvents++;
+                if (_guideEvents == 1)
+                    Lib.Log.Write("pro", FormattableString.Invariant(
+                        $"1er échantillon GUIDE : L={e.LeftEye.Validity} ({e.LeftEye.UserPosition.X:0.###};{e.LeftEye.UserPosition.Y:0.###};{e.LeftEye.UserPosition.Z:0.###}) " +
+                        $"R={e.RightEye.Validity}"));
+                else if (_guideEvents % 300 == 0)
+                    Lib.Log.Write("pro", $"Flux guide : {_guideEvents} reçus");
                 var lp = e.LeftEye.UserPosition;
                 var rp = e.RightEye.UserPosition;
                 bool lv = e.LeftEye.Validity == Validity.Valid && Ok(lp.X, lp.Y);
@@ -179,7 +240,10 @@ namespace MesPremiersJeux.Gaze
                     RX = rp.X, RY = rp.Y, RZ = rp.Z,
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (++_guideErrors <= 3) Lib.Log.Write("pro", "ERREUR dans OnGuide : " + ex);
+            }
         }
 
         private static bool Ok(double x, double y) => !double.IsNaN(x) && !double.IsNaN(y);

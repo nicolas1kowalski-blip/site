@@ -84,6 +84,7 @@ namespace MesPremiersJeux
             {
                 _srcName = "Tobii direct";
                 GazeStatus.Text = $"👁  Tobii direct : {name}";
+                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name} — arrêt du SDK grand public");
                 // Une seule source de vérité : on coupe l'ancien SDK pour éviter
                 // deux flux superposés (le suivi du curseur est ignoré de toute
                 // façon tant que le flux direct est frais).
@@ -179,6 +180,13 @@ namespace MesPremiersJeux
             SettingsPopup.IsOpen = !SettingsPopup.IsOpen;
         }
 
+        private void OpenLog_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            Lib.Log.Write("app", "Journal ouvert par l'utilisateur");
+            Lib.Log.Open();
+        }
+
         private void EyeTrack_Click(object sender, RoutedEventArgs e)
         {
             SettingsPopup.IsOpen = false;
@@ -199,7 +207,10 @@ namespace MesPremiersJeux
             // désactivé, et aucune fenêtre d'édition (parent) n'est ouverte.
             bool admin = AdminCheck != null && AdminCheck.IsChecked == true;
             AdminMode.Set(admin); // affiche/masque les outils parent partout
-            _dwell.Enabled = GazeModeCheck.IsChecked == true && !admin && !GazeGate.IsPaused;
+            bool enabled = GazeModeCheck.IsChecked == true && !admin && !GazeGate.IsPaused;
+            if (_dwell.Enabled != enabled)
+                Lib.Log.Write("app", $"Pilotage au regard : {(enabled ? "ACTIF" : "en pause")} (case={GazeModeCheck.IsChecked == true}, admin={admin}, fenêtreParent={GazeGate.IsPaused})");
+            _dwell.Enabled = enabled;
             if (admin || GazeGate.IsPaused)
                 GazeStatus.Text = "⏸  Regard en pause";
         }

@@ -57,6 +57,8 @@ namespace MesPremiersJeux.Gaze
         // Détection « regard perdu » via la validité des yeux (SDK Tobii).
         private volatile bool _eyeSeen;
         private double _lastEyeValidTime = -10;
+        private bool _lostLogged;
+        private double _lastHeartbeat = -10;
 
         // Tolérances (généreuses : enfants en situation de handicap).
         private const double HoldRadius = 150;      // px : stabilité tant qu'on reste dans ce rayon
@@ -180,14 +182,28 @@ namespace MesPremiersJeux.Gaze
             //    sélectionné tant que les yeux ne sont pas revenus. Le seuil s'adapte
             //    au rythme de la source de présence (guide Tobii = quelques Hz).
             if (_eyeSeen && (t - _lastEyeAnyTime) > 10)
+            {
                 _eyeSeen = false; // source de présence morte : on n'aveugle pas l'appli
+                Lib.Log.Write("dwell", "Source de présence muette depuis 10 s : détection de perte désactivée");
+            }
             double lostAfter = Math.Max(GazeLostSeconds, _eyeIntervalEma * 4 + 0.15);
             if (_eyeSeen && (t - _lastEyeValidTime) > lostAfter)
             {
+                if (!_lostLogged)
+                {
+                    _lostLogged = true;
+                    Lib.Log.Write("dwell", FormattableString.Invariant(
+                        $"REGARD PERDU (dernier valide il y a {t - _lastEyeValidTime:0.00}s, seuil {lostAfter:0.00}s, rythme {_eyeIntervalEma * 1000:0} ms)"));
+                }
                 HideAll();
                 _hasDisplay = false;
                 _mCount = 0; // repart proprement quand le regard revient
                 return;
+            }
+            if (_lostLogged)
+            {
+                _lostLogged = false;
+                Lib.Log.Write("dwell", "Regard retrouvé");
             }
 
             // 1) Source du point : curseur (déplacé au regard sur la I-13, souris
@@ -197,6 +213,16 @@ namespace MesPremiersJeux.Gaze
             if (sdkFresh) raw = new Point(_gx, _gy);
             else if (GetCursorPos(out var cp)) raw = new Point(cp.X, cp.Y);
             else { HideAll(); return; }
+
+            // Battement de cœur toutes les 2 s : l'état complet du moteur.
+            if (t - _lastHeartbeat > 2)
+            {
+                _lastHeartbeat = t;
+                Lib.Log.Write("dwell", FormattableString.Invariant(
+                    $"hb src={(sdkFresh ? "REGARD-DIRECT" : "CURSEUR")} pos=({raw.X:0};{raw.Y:0}) actif={Enabled} " +
+                    $"yeuxVus={_eyeSeen} âgeValide={(t - _lastEyeValidTime):0.00}s rythme={_eyeIntervalEma * 1000:0}ms " +
+                    $"fixation={_holdActive} verrou={Locked}"));
+            }
 
             // 2) Médiane courte (rejette les à-coups de tête) puis filtre 1 €.
             var med = Median(raw);
@@ -294,6 +320,7 @@ namespace MesPremiersJeux.Gaze
             }
             catch { /* rien : le prochain dwell retentera */ }
 
+            Lib.Log.Write("dwell", FormattableString.Invariant($"CLIC injecté à ({screen.X:0};{screen.Y:0})"));
             Clicked?.Invoke(screen);
         }
 
