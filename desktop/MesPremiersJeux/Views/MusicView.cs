@@ -119,15 +119,13 @@ namespace MesPremiersJeux.Views
             Grid.SetRow(_nowPlaying, 2);
             root.Children.Add(_nowPlaying);
 
-            // --- Barre de transport ⏮ ⏯ ⏹ ⏭ ---
+            // --- Barre de transport ⏯ ⏹ ---
             var transport = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 18) };
-            transport.Children.Add(TransportButton("⏮", Prev));
             _toggleGlyph = new TextBlock { Text = "⏯", FontSize = 60, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var toggleBtn = new Button { Style = Res("AnswerButton"), Width = 150, Height = 120, Content = _toggleGlyph, Margin = new Thickness(16, 0, 16, 0) };
             toggleBtn.Click += (s, e) => Toggle();
             transport.Children.Add(toggleBtn);
             transport.Children.Add(TransportButton("⏹", Stop));
-            transport.Children.Add(TransportButton("⏭", Next));
             Grid.SetRow(transport, 3);
             root.Children.Add(transport);
 
@@ -346,9 +344,6 @@ namespace MesPremiersJeux.Views
             _nowPlaying.Text = "";
             _toggleGlyph.Text = "⏯";
         }
-
-        private void Prev() { if (_active) RunJs("window.__prev()"); }
-        private void Next() { if (_active) RunJs("window.__next()"); }
 
         // ------------------------------------------------------------------
         //  WebView2 : hôte du Spotify Web Playback SDK
