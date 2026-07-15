@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using MesPremiersJeux.Gaze;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Views
@@ -25,7 +26,17 @@ namespace MesPremiersJeux.Views
         private static readonly Brush Dark = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A));
         private static readonly Brush Violet = new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2));
 
-        private readonly WebView2 _web = new WebView2 { Width = 2, Height = 2, Opacity = 0, IsHitTestVisible = false };
+        // WebView2 minuscule et non cliquable, calé dans un coin : il sert seulement
+        // d'hôte audio au SDK Spotify (Opacity est en lecture seule sur WebView2, on
+        // le rend donc « invisible » par une taille de 1 px dans un coin).
+        private readonly WebView2 _web = new WebView2
+        {
+            Width = 1,
+            Height = 1,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
         private bool _webReady;
         private string _deviceId;
 
