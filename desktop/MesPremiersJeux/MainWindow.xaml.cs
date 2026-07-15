@@ -74,7 +74,9 @@ namespace MesPremiersJeux
 
             // Source DIRECTE (Tobii Pro SDK) : prioritaire si un tracker est visible.
             _pro.Gaze += p => _dwell.PushGaze(p);
-            _pro.Eyes += s => _dwell.PushEye(s.AnyValid);
+            // Présence à plein débit (le flux « Eyes » peut être lent : il sert au
+            // positionnement, pas à la détection de perte du regard).
+            _pro.Presence += v => _dwell.PushEye(v);
             _pro.Connected += name => Dispatcher.Invoke(() =>
             {
                 _srcName = "Tobii direct";

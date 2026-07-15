@@ -31,6 +31,14 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Position des yeux dans la boîte de suivi (thread SDK).</summary>
         public event Action<EyeSample> Eyes;
 
+        /// <summary>
+        /// Présence du regard, émise à PLEIN DÉBIT avec chaque échantillon de
+        /// regard (contrairement à <see cref="Eyes"/> qui peut suivre le flux
+        /// « guide », plus lent). C'est elle qui alimente la détection
+        /// « regard perdu » du dwell.
+        /// </summary>
+        public event Action<bool> Presence;
+
         /// <summary>Levé une fois quand un tracker est trouvé (thread de recherche).</summary>
         public event Action<string> Connected;
 
@@ -94,12 +102,16 @@ namespace MesPremiersJeux.Gaze
                     Gaze?.Invoke(new GazePoint(nx / n * w, ny / n * h));
                 }
 
+                // Présence du regard, à plein débit : yeux vus si un point de
+                // regard OU une origine d'œil est valide dans cet échantillon.
+                bool lo = e.LeftEye.GazeOrigin.Validity == Validity.Valid;
+                bool ro = e.RightEye.GazeOrigin.Validity == Validity.Valid;
+                Presence?.Invoke(lv || rv || lo || ro);
+
                 // Position des yeux via GazeOrigin — seulement si le flux « guide »
                 // n'émet pas (sinon c'est lui qui fait foi).
                 if (!_guideSeen)
                 {
-                    bool lo = e.LeftEye.GazeOrigin.Validity == Validity.Valid;
-                    bool ro = e.RightEye.GazeOrigin.Validity == Validity.Valid;
                     var lp = e.LeftEye.GazeOrigin.PositionInTrackBoxCoordinates;
                     var rp = e.RightEye.GazeOrigin.PositionInTrackBoxCoordinates;
                     Eyes?.Invoke(new EyeSample
