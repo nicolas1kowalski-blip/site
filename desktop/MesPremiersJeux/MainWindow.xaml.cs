@@ -70,6 +70,7 @@ namespace MesPremiersJeux
 
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
             _gaze.Gaze += p => _dwell.PushGaze(p);
+            _gaze.Eyes += s => _dwell.PushEye(s.AnyValid); // sait quand le regard est perdu
             _gaze.Start();
             GazeStatus.Text = "👁  Regard actif";
             int clicks = 0;
@@ -127,16 +128,23 @@ namespace MesPremiersJeux
 
         private void ApplySmoothing(double s)
         {
-            // s ∈ [0,1] : 0 = réactif (peu de lissage), 1 = très stable (fort lissage).
-            // Plage plus réactive qu'avant pour éviter que le point « traîne ».
-            double minCutoff = 4.5 - s * 3.5; // 4.5 (réactif) → 1.0 (lissé)
-            double beta = 0.02 + (1 - s) * 0.05;
-            _dwell.SetSmoothing(minCutoff, beta);
+            // s ∈ [0,1] : 0 = réactif (peu de lissage), 1 = très stable (fort lissage
+            // + grande zone morte pour compenser les mouvements involontaires).
+            double minCutoff = 3.5 - s * 3.0; // 3.5 (réactif) → 0.5 (très lissé)
+            double beta = 0.015 + (1 - s) * 0.04;
+            double deadZone = 8 + s * 28;     // 8 → 36 px : micro-bougés ignorés
+            _dwell.SetStability(minCutoff, beta, deadZone);
         }
 
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
             SettingsPopup.IsOpen = !SettingsPopup.IsOpen;
+        }
+
+        private void EyeTrack_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            new EyeTrackWindow(_gaze) { Owner = this }.ShowDialog();
         }
 
         private void GazeMode_Changed(object sender, RoutedEventArgs e) => ApplyGazeMode();

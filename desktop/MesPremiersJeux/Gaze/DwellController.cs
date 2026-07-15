@@ -43,14 +43,29 @@ namespace MesPremiersJeux.Gaze
         private double _cooldownUntil = -1;
         private bool _hasLastClick;
         private Point _lastClickScreen;
-        private double _lastClickTime = -10;
+
+        // Anti-bruit renforcé : médiane (rejet des à-coups de tête) + zone morte
+        // (le point ne bouge pas tant que le regard ne se déplace pas franchement).
+        private readonly double[] _mx = new double[5];
+        private readonly double[] _my = new double[5];
+        private int _mCount;
+        private Point _display;
+        private bool _hasDisplay;
+        private double _lastMoveTime;
+        private double _deadZone = 18;   // px : micro-bougés ignorés
+
+        // Détection « regard perdu » via la validité des yeux (SDK Tobii).
+        private volatile bool _eyeSeen;
+        private double _lastEyeValidTime = -10;
 
         // Tolérances (généreuses : enfants en situation de handicap).
-        private const double HoldRadius = 140;    // px : stabilité tant qu'on reste dans ce rayon
-        private const double RearmDistance = 70;  // px : sortir de cette zone ré-arme le clic
-        private const double RearmSeconds = 2.5;  // ou attendre ce délai pour re-cliquer au même endroit
-        private const double CooldownSeconds = 0.7;
-        private const double IndicatorR = 37;     // rayon de l'arc de progression
+        private const double HoldRadius = 150;      // px : stabilité tant qu'on reste dans ce rayon
+        private const double RearmDistance = 95;    // px : il FAUT s'éloigner pour re-sélectionner
+        private const double CooldownSeconds = 0.5;
+        private const double MoveEps = 6;           // px : en deçà, on considère le point immobile
+        private const double GazeLostSeconds = 0.35; // yeux invalides plus longtemps = regard perdu
+        private const double FrozenSeconds = 2.2;   // point figé plus longtemps = pas d'action
+        private const double IndicatorR = 37;       // rayon de l'arc de progression
 
         public bool Enabled { get; set; } = true;
         public bool Locked { get; set; } = false;
@@ -98,6 +113,20 @@ namespace MesPremiersJeux.Gaze
             _fy.MinCutoff = minCutoff; _fy.Beta = beta;
         }
 
+        /// <summary>Règle la stabilité globale : lissage + taille de la zone morte.</summary>
+        public void SetStability(double minCutoff, double beta, double deadZone)
+        {
+            SetSmoothing(minCutoff, beta);
+            _deadZone = Math.Max(0, deadZone);
+        }
+
+        /// <summary>Reçoit la validité des yeux (thread SDK) pour détecter la perte du regard.</summary>
+        public void PushEye(bool anyValid)
+        {
+            _eyeSeen = true;
+            if (anyValid) _lastEyeValidTime = _clock.Elapsed.TotalSeconds;
+        }
+
         /// <summary>Règle le diamètre (px) du cercle de progression.</summary>
         public void SetIndicatorSize(double diameter)
         {
@@ -132,51 +161,68 @@ namespace MesPremiersJeux.Gaze
                 return;
             }
 
-            // 1) Source du point : curseur (déplacé au regard sur la I-13, souris
-            //    sur PC), sauf si des données SDK Tobii affluent réellement.
             double t = _clock.Elapsed.TotalSeconds;
-            bool sdkFresh = _hasGaze && (t - _lastGazeTime) < 0.4;
-            Point raw;
-            if (sdkFresh)
-            {
-                raw = new Point(_gx, _gy);
-            }
-            else if (GetCursorPos(out var cp))
-            {
-                raw = new Point(cp.X, cp.Y);
-            }
-            else
+
+            // 0) Regard perdu (yeux invalides) : le curseur disparaît et rien n'est
+            //    sélectionné tant que les yeux ne sont pas revenus.
+            if (_eyeSeen && (t - _lastEyeValidTime) > GazeLostSeconds)
             {
                 HideAll();
+                _hasDisplay = false;
+                _mCount = 0; // repart proprement quand le regard revient
                 return;
             }
 
-            // 2) Lissage anti-bruit (filtre 1 €).
-            var screen = new Point(_fx.Filter(raw.X, t), _fy.Filter(raw.Y, t));
+            // 1) Source du point : curseur (déplacé au regard sur la I-13, souris
+            //    sur PC), sauf si des données SDK Tobii affluent réellement.
+            bool sdkFresh = _hasGaze && (t - _lastGazeTime) < 0.4;
+            Point raw;
+            if (sdkFresh) raw = new Point(_gx, _gy);
+            else if (GetCursorPos(out var cp)) raw = new Point(cp.X, cp.Y);
+            else { HideAll(); return; }
+
+            // 2) Médiane courte (rejette les à-coups de tête) puis filtre 1 €.
+            var med = Median(raw);
+            var filtered = new Point(_fx.Filter(med.X, t), _fy.Filter(med.Y, t));
+
+            // 3) Zone morte : on ne déplace le point que si le regard s'est vraiment
+            //    déplacé — sinon on le fige (compense les tremblements).
+            if (!_hasDisplay)
+            {
+                _display = filtered; _hasDisplay = true; _lastMoveTime = t;
+            }
+            else if (Distance(filtered, _display) > _deadZone)
+            {
+                if (Distance(filtered, _display) > MoveEps) _lastMoveTime = t;
+                _display = filtered;
+            }
+            var screen = _display;
 
             Point local;
             try { local = _root.PointFromScreen(screen); }
             catch { HideAll(); return; }
 
-            // Point de regard toujours visible.
             PlaceDot(local);
 
             if (Locked) { ResetHold(); return; }
 
-            // 3) Petite pause après un clic.
+            // 4) Point FIGÉ trop longtemps (regard immobile / curseur gelé) : aucune
+            //    sélection. Il faut un vrai mouvement pour (re)déclencher une action.
+            if ((t - _lastMoveTime) > FrozenSeconds) { ResetHold(); return; }
+
+            // 5) Petite pause après un clic.
             if (t < _cooldownUntil) { ResetHold(); return; }
 
-            // 4) Ré-armement : pour re-cliquer au même endroit, il faut s'éloigner
-            //    un peu OU attendre un court délai (évite les clics en rafale).
-            if (_hasLastClick
-                && Distance(screen, _lastClickScreen) < RearmDistance
-                && (t - _lastClickTime) < RearmSeconds)
+            // 6) Ré-armement STRICT : pour re-sélectionner, il faut d'abord S'ÉLOIGNER
+            //    du dernier clic (plus de re-clics en rafale sur place).
+            if (_hasLastClick && Distance(screen, _lastClickScreen) < RearmDistance)
             {
                 ResetHold();
                 return;
             }
+            _hasLastClick = false; // on s'est éloigné : ré-armé
 
-            // 5) Fenêtre de stabilité : si le point sort du rayon, on repart d'ici.
+            // 7) Fenêtre de stabilité : si le point sort du rayon, on repart d'ici.
             if (!_holdActive || Distance(screen, _holdScreen) > HoldRadius)
             {
                 _holdActive = true;
@@ -189,11 +235,30 @@ namespace MesPremiersJeux.Gaze
                 return;
             }
 
-            // 6) Stable : le cercle se remplit, puis on clique POUR DE VRAI.
+            // 8) Stable : le cercle se remplit, puis on clique POUR DE VRAI.
             PlaceIndicator(_holdLocal);
             double frac = Math.Min(1.0, (t - _holdStart) * 1000.0 / DwellTime);
             UpdateProgress(frac);
             if (frac >= 1.0) Click(screen, t);
+        }
+
+        // Médiane des derniers points (rejette un pic isolé dû à un mouvement brusque).
+        private Point Median(Point p)
+        {
+            int n = _mx.Length;
+            int idx = _mCount % n;
+            _mx[idx] = p.X; _my[idx] = p.Y;
+            _mCount++;
+            int len = Math.Min(_mCount, n);
+            return new Point(MedianOf(_mx, len), MedianOf(_my, len));
+        }
+
+        private static double MedianOf(double[] src, int len)
+        {
+            var a = new double[len];
+            Array.Copy(src, a, len);
+            Array.Sort(a);
+            return len % 2 == 1 ? a[len / 2] : (a[len / 2 - 1] + a[len / 2]) / 2.0;
         }
 
         // Injecte un vrai clic souris Windows au point donné (pixels écran).
@@ -203,7 +268,6 @@ namespace MesPremiersJeux.Gaze
             _cooldownUntil = t + CooldownSeconds;
             _hasLastClick = true;
             _lastClickScreen = screen;
-            _lastClickTime = t;
 
             try
             {

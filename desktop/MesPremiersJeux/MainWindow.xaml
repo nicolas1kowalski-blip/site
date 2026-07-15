@@ -72,6 +72,8 @@
                                Foreground="#FF3B2A5A" Margin="0,0,0,12" />
                     <CheckBox x:Name="GazeModeCheck" Content="Piloter au regard (dwell)"
                               FontSize="15" Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
+                    <Button Content="👁 Vérifier la position des yeux" FontSize="14" Padding="8,8"
+                            Margin="0,8,0,0" Click="EyeTrack_Click" />
                     <CheckBox x:Name="AdminCheck" Content="🔧 Mode administration (regard en pause)"
                               FontSize="15" Margin="0,8,0,0"
                               Checked="GazeMode_Changed" Unchecked="GazeMode_Changed" />
