@@ -21,6 +21,7 @@ namespace MesPremiersJeux.Gaze
         private long _events;             // échantillons de regard reçus
         private long _valid;              // échantillons avec un point de regard valide
         private DateTime _lastGuideValid = DateTime.MinValue; // yeux vus par le guide
+        private volatile bool _guideEverValid; // le guide a-t-il DÉJÀ vu des yeux valides ?
 
         /// <summary>Vrai si un tracker a été trouvé et que le flux est actif.</summary>
         public bool IsAvailable { get; private set; }
@@ -111,6 +112,25 @@ namespace MesPremiersJeux.Gaze
                 Diagnostic = sb.ToString();
                 Lib.Log.Write("pro", "Fiche : " + Diagnostic.Replace("\n", " | "));
 
+                // Décodage EXPLICITE de la capacité « flux de regard » : l'affichage
+                // texte (« 1577 ») retombe sur un nombre dès qu'un bit n'a pas de nom
+                // dans cette version du SDK, donc on teste le bit à la main.
+                // HasGazeData = 8 dans l'énum Capabilities de Tobii.Research.
+                try
+                {
+                    long caps = Convert.ToInt64(_tracker.DeviceCapabilities);
+                    bool hasGaze = (caps & 8) != 0;
+                    Lib.Log.Write("pro", FormattableString.Invariant(
+                        $"Capacité HasGazeData = {hasGaze} (masque {caps}) — l'appareil {(hasGaze ? "DÉCLARE" : "ne déclare PAS")} le flux de regard"));
+                }
+                catch (Exception ex) { Lib.Log.Write("pro", "Décodage capacités : " + ex.Message); }
+
+                // Certains capteurs ne LIVRENT le flux de regard qu'après application
+                // d'un fichier de licence Tobii. Si un tel fichier est présent à côté
+                // de l'exe, on l'applique ici (avant de s'abonner au regard). Sans
+                // fichier, l'étape ne fait que le consigner.
+                TryApplyLicensesFromDisk();
+
                 // Connexion perdue/retrouvée : à voir dans le journal.
                 try
                 {
@@ -134,6 +154,8 @@ namespace MesPremiersJeux.Gaze
                     Lib.Log.Write("pro", "Abonné au flux GUIDE (UserPositionGuideReceived) : OK");
                 }
                 catch (Exception ex) { Lib.Log.Write("pro", "Abonnement flux guide : ERREUR " + ex); }
+
+                StartGazeWatchdog();
 
                 IsAvailable = true;
                 Connected?.Invoke(DeviceName);
@@ -228,7 +250,7 @@ namespace MesPremiersJeux.Gaze
                 var rp = e.RightEye.UserPosition;
                 bool lv = e.LeftEye.Validity == Validity.Valid && Ok(lp.X, lp.Y);
                 bool rv = e.RightEye.Validity == Validity.Valid && Ok(rp.X, rp.Y);
-                if (lv || rv) _lastGuideValid = DateTime.UtcNow;
+                if (lv || rv) { _lastGuideValid = DateTime.UtcNow; _guideEverValid = true; }
                 Eyes?.Invoke(new EyeSample
                 {
                     HasLeft = lv,
@@ -244,6 +266,103 @@ namespace MesPremiersJeux.Gaze
         }
 
         private static bool Ok(double x, double y) => !double.IsNaN(x) && !double.IsNaN(y);
+
+        /// <summary>
+        /// Cherche un fichier de licence Tobii à côté de l'exe et l'applique au
+        /// tracker via <c>TryApplyLicenses</c>. Tout passe par la RÉFLEXION : ainsi
+        /// le code compile même si les types de licence diffèrent selon la version
+        /// du SDK, et une API absente est simplement consignée sans planter.
+        /// </summary>
+        private void TryApplyLicensesFromDisk()
+        {
+            try
+            {
+                var dir = AppDomain.CurrentDomain.BaseDirectory;
+                var files = System.IO.Directory.GetFiles(dir).Where(f =>
+                {
+                    var name = System.IO.Path.GetFileName(f).ToLowerInvariant();
+                    var ext = System.IO.Path.GetExtension(f).ToLowerInvariant();
+                    return ext == ".license" || ext == ".lic" || ext == ".key"
+                           || name.Contains("license") || name.Contains("licence");
+                }).ToArray();
+
+                if (files.Length == 0)
+                {
+                    Lib.Log.Write("pro", "Licence : aucun fichier de licence à côté de l'exe. "
+                        + "Si Tobii t'a fourni un fichier de licence (.license), dépose-le ici "
+                        + "pour débloquer le flux de regard (si c'est un verrou de licence).");
+                    return;
+                }
+
+                var asm = typeof(IEyeTracker).Assembly; // Tobii.Research
+                var keyType = asm.GetType("Tobii.Research.LicenseKey");
+                var collType = asm.GetType("Tobii.Research.LicenseCollection");
+                var method = collType == null ? null
+                    : _tracker.GetType().GetMethod("TryApplyLicenses", new[] { collType });
+                if (keyType == null || collType == null || method == null)
+                {
+                    Lib.Log.Write("pro", "Licence : API TryApplyLicenses absente de cette version du SDK — étape ignorée.");
+                    return;
+                }
+
+                var coll = Activator.CreateInstance(collType);
+                var list = coll as System.Collections.IList;
+                foreach (var f in files)
+                {
+                    var bytes = System.IO.File.ReadAllBytes(f);
+                    var key = Activator.CreateInstance(keyType, new object[] { bytes });
+                    list?.Add(key);
+                    Lib.Log.Write("pro", "Licence : fichier chargé « " + System.IO.Path.GetFileName(f) + " » (" + bytes.Length + " octets)");
+                }
+
+                var failed = method.Invoke(_tracker, new object[] { coll });
+                int nFailed = 0;
+                if (failed is System.Collections.IEnumerable en)
+                    foreach (var _ in en) nFailed++;
+
+                Lib.Log.Write("pro", nFailed == 0
+                    ? "Licence : APPLIQUÉE avec succès (0 refus) — le flux de regard devrait maintenant être livré."
+                    : ("Licence : " + nFailed + " licence(s) REFUSÉE(S) par le tracker (fichier invalide ou destiné à un autre capteur)."));
+            }
+            catch (Exception ex)
+            {
+                Lib.Log.Write("pro", "Licence : tentative échouée — " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Sonde de diagnostic : à +3/+8/+15/+30 s, consigne combien d'échantillons
+        /// de REGARD sont arrivés face au flux GUIDE, et tranche la question — si les
+        /// yeux SONT vus (guide valide) alors que le regard reste à 0, le flux de
+        /// regard est accaparé/bloqué en amont (contrôle oculaire Tobii/Dynavox ou
+        /// licence), et non un problème de détection.
+        /// </summary>
+        private void StartGazeWatchdog()
+        {
+            try
+            {
+                var th = new Thread(() =>
+                {
+                    int[] deltasMs = { 3000, 5000, 7000, 15000 }; // cumul : 3, 8, 15, 30 s
+                    int total = 0;
+                    foreach (var d in deltasMs)
+                    {
+                        Thread.Sleep(d);
+                        if (_disposed) return;
+                        total += d;
+                        Lib.Log.Write("pro", FormattableString.Invariant(
+                            $"CONTRÔLE +{total / 1000}s : REGARD {_events} reçus ({_valid} valides) · GUIDE {_guideEvents} reçus · yeux déjà vus (guide) = {(_guideEverValid ? "OUI" : "non")}"));
+                        if (_events == 0 && _guideEverValid)
+                            Lib.Log.Write("pro",
+                                "  → DIAGNOSTIC : yeux vus par le guide mais 0 échantillon de REGARD "
+                                + "→ le flux de regard est accaparé/bloqué EN AMONT (contrôle oculaire "
+                                + "Tobii/Dynavox en mode souris, ou licence), pas un défaut de détection.");
+                    }
+                }) { IsBackground = true, Name = "TobiiPro-Watchdog" };
+                th.Start();
+            }
+            catch { }
+        }
 
         public void Dispose()
         {
