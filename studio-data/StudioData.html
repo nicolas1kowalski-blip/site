@@ -228,11 +228,6 @@
                             <option value="links">🗂 Vue compacte</option>
                             <option value="schema">🗺 Schéma complet (toutes les colonnes)</option>
                         </select>
-                        <select onchange="setMcdLayout(this.value)" id="mcdLayoutSelect" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600" title="Disposition du diagramme">
-                            <option value="dagre">📐 Hiérarchique (stable)</option>
-                            <option value="force">🕸️ Organique (force)</option>
-                            <option value="combo">🗃 Par domaine (zones groupées)</option>
-                        </select>
                         <span id="mcdToolbar"></span>
                         <button onclick="mcdToggleLinkMode()" class="mcdLinkBtn text-[11px] bg-white border border-indigo-300 px-2.5 py-1 rounded font-bold text-indigo-700 hover:bg-indigo-50" title="Tracer un lien à la souris : cliquez une table, puis une seconde — l'appli demande les attributs.">🖱 Tracer un lien</button>
                         <button onclick="toggleMcdFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Ouvrir le modèle en plein écran">⛶ Plein écran</button>
@@ -1263,7 +1258,7 @@
         function mcdToggleFocus() { state.graphConfig.mcdFocus = !state.graphConfig.mcdFocus; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); persistAppState(); }
         // ④ Ranger : recalcule proprement la disposition (positions figées effacées).
         function mcdRelayout() { if (typeof svgG !== 'undefined') { svgG.pos = {}; svgG.needFit = true; } if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
-        function mcdIsSvg() { return (state.graphConfig.mcdEngine || 'g6') === 'svg'; }
+        function mcdIsSvg() { return true; } // le Modèle de données est rendu en SVG (G6 retiré de cet écran)
         // ② Masquer / réafficher des tables du graphe.
         function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
         function mcdUnhideAll() { state.graphConfig.mcdHidden = []; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
@@ -1485,7 +1480,6 @@
                         <span class="mcdScopeWrap"></span>
                         <button onclick="mcdToggleLinkMode()" class="mcdLinkBtn text-[11px] bg-white border border-indigo-300 px-2.5 py-1 rounded font-bold text-indigo-700 hover:bg-indigo-50">🖱 Tracer un lien</button>
                         <select id="mcdViewSelectFull" onchange="setMcdView(this.value)" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600"><option value="links">🗂 Vue compacte</option><option value="schema">🗺 Schéma complet</option></select>
-                        <select id="mcdLayoutSelectFull" onchange="setMcdLayout(this.value)" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600"><option value="dagre">📐 Hiérarchique</option><option value="force">🕸️ Organique</option><option value="combo">🗃 Par domaine</option></select>
                         <button onclick="exportGraphImage('mcd')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Image</button>
                         <button onclick="openRelInfer()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">🪄 Déduire les liens</button>
                         <button onclick="toggleMcdFullscreen()" class="ml-auto text-sm font-black text-slate-500 hover:text-red-600 px-2" title="Fermer (Échap)">✕ Fermer</button>
@@ -1499,7 +1493,6 @@
             if (ov.classList.contains('hidden')) {
                 window._mcdGraphHome = g.parentElement;
                 const vf = el('mcdViewSelectFull'); if (vf) vf.value = state.graphConfig.mcdView === 'schema' ? 'schema' : 'links';
-                const lf = el('mcdLayoutSelectFull'); if (lf) lf.value = state.graphConfig.mcdLayout || 'dagre';
                 ov.classList.remove('hidden'); ov.classList.add('flex');
                 el('mcdFullBody').appendChild(g);
                 g.style.height = '100%';
@@ -1518,6 +1511,7 @@
         const GRAPH_CONTAINER = { mcd: 'networkGraph', model: 'modelGraphWrap', lineage: 'lineageGraphWrap', exp: 'expGraphContainer' };
         const _graphObs = {}; const _graphReflowT = {};
         function reflowGraph(which) {
+            if (which === 'mcd') { try { svgFitAll(); } catch (e) {} return; } // le MCD est en SVG : re-cadrage
             const g = graphInstanceOf(which); const cont = el(GRAPH_CONTAINER[which]);
             if (!g || !cont) return;
             try { if (g.get && g.get('destroyed')) return; } catch (e) { return; }
@@ -5375,41 +5369,25 @@
             } catch (e) { showError('Mesure impossible : ' + e.message); if (btn) { btn.disabled = false; btn.textContent = '📐 Mesurer sur les données'; } }
         }
 
+        // Le Modèle de données est rendu par le moteur SVG maison (G6 n'y est plus utilisé :
+        // rendu validé — fiable, léger, sans dépendance, et testable automatiquement).
         function renderGraph() {
             const cont = el('networkGraph'); if(!cont || !Object.keys(state.tables).length) return;
-            // Deux moteurs de rendu au choix : SVG maison (léger, sans dépendance, testable) ou G6.
-            if ((state.graphConfig.mcdEngine || 'g6') === 'svg') {
-                if (networkInstance) { try { networkInstance.destroy(); } catch (e) {} networkInstance = null; }
-                try { renderGraphSVG(cont); } catch (e) { console.error('MCD SVG error', e); cont.innerHTML = graphUnavailableHtml('Rendu SVG impossible : ' + escapeHTML(e.message)); }
-                renderMcdControls();
-                return;
-            }
-            if (g6Missing(cont)) return;
-            try { _renderGraphImpl(cont); }
-            catch (e) { console.error('MCD render error', e); if (!networkInstance) cont.innerHTML = graphUnavailableHtml('Le diagramme MCD n\'a pas pu être affiché : ' + escapeHTML(e.message)); }
-            observeGraphResize('mcd');
-        }
-        function setMcdEngine(v) {
-            state.graphConfig.mcdEngine = v;
             if (networkInstance) { try { networkInstance.destroy(); } catch (e) {} networkInstance = null; }
-            const cont = el('networkGraph'); if (cont) cont.innerHTML = '';
-            renderGraph(); persistAppState();
+            try { renderGraphSVG(cont); } catch (e) { console.error('MCD SVG error', e); cont.innerHTML = graphUnavailableHtml('Rendu du modèle impossible : ' + escapeHTML(e.message)); }
+            renderMcdControls();
         }
-        // Contrôles communs (périmètre, filtre domaine, moteur) — rendus dans les deux moteurs.
+        // Contrôles communs du modèle (périmètre, filtre domaine, boîte à outils).
         function renderMcdControls() {
             const tb = el('mcdToolbar'); if (tb && !tb.innerHTML) tb.innerHTML = graphToolbarHtml('mcd');
-            document.querySelectorAll('.mcdScopeWrap').forEach(w => { w.innerHTML = mcdScopeButtonsHtml() + mcdThemeFilterHtml() + mcdEngineToggleHtml(); });
+            document.querySelectorAll('.mcdScopeWrap').forEach(w => { w.innerHTML = mcdScopeButtonsHtml() + mcdThemeFilterHtml(); });
             document.querySelectorAll('.mcdScopeMsg').forEach(w => {
                 const emptyDesigned = mcdScope() === 'designed' && !Object.values(state.tables).some(t => t.type === 'designed');
                 w.classList.toggle('hidden', !emptyDesigned);
                 w.innerHTML = emptyDesigned ? '🧱 Aucune table conçue pour l\'instant — créez-en une dans l\'onglet <strong>Tables</strong> ; son modèle apparaîtra ici, séparé de celui des sources.' : '';
             });
         }
-        function mcdEngineToggleHtml() {
-            const svg = (state.graphConfig.mcdEngine || 'g6') === 'svg';
-            return `<button onclick="setMcdEngine('${svg ? 'g6' : 'svg'}')" class="text-[11px] px-2 py-1 rounded font-bold border ${svg ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-violet-700 border-violet-300'}" title="Basculer entre le nouveau rendu SVG (fluide, sans dépendance) et le moteur G6">${svg ? '⚡ Rendu SVG (bêta)' : '⚡ Essayer le rendu SVG'}</button>`;
-        }
-        // ======================= Rendu SVG maison du Modèle de données (bêta) =======================
+        // ======================= Rendu SVG maison du Modèle de données =======================
         // Aucune dépendance externe : on dessine des cartes (rect + textes) et des liens (path) en SVG.
         // Positions calculées par computeDomainPositions (couloirs par domaine, sans collision). Le
         // déplacement, le zoom et le pan sont gérés à la main → 100 % fiables et testables.
@@ -5613,117 +5591,7 @@
         }
         function svgClearHighlight() { mcdHighlightId = null; svgApplyFocus(); }
 
-        function _renderGraphImpl(cont) {
-            ensureG6NodeRegistered();
-            const hier = tableHierarchyInfo();
-            // Colonnes de jointure par table (marquées 🔑 dans la carte UML).
-            const keyCols = {};
-            state.relations.filter(r => r.sourceCol && r.targetCol).forEach(r => {
-                (keyCols[r.sourceTable] = keyCols[r.sourceTable] || new Set()).add(r.sourceCol);
-                (keyCols[r.targetTable] = keyCols[r.targetTable] || new Set()).add(r.targetCol);
-            });
-            const schemaMode = state.graphConfig.mcdView === 'schema';
-            const visibleIds = mcdVisibleIds();
-            const nodes = Object.values(state.tables).filter(t => visibleIds.has(t.id)).map(t => {
-                const ks = keyCols[t.id] || new Set();
-                const design = t.type === 'designed' ? (t.design || {}) : null;
-                const pk = new Set(design ? (design.key || []) : []);
-                const fmts = design ? (design.formats || {}) : {};
-                const fkAttrs = new Set(design ? (design.fks || []).map(f => f.attr) : []);
-                let cols = [...t.headers].sort((a, b) => ((pk.has(b) || ks.has(b)) ? 1 : 0) - ((pk.has(a) || ks.has(a)) ? 1 : 0)); // clés en premier
-                if (schemaMode) cols = t.headers.slice(); // schéma complet : ordre réel des colonnes
-                const lineOf = h => (pk.has(h) ? '🔑 ' : (fkAttrs.has(h) ? '🔐 ' : (ks.has(h) ? '🔗 ' : '· '))) + h + (fmts[h] ? '  〈' + tdFormatLabel(fmts[h]) + '〉' : '');
-                const max = schemaMode ? 40 : 7;
-                const rows = cols.slice(0, max).map(lineOf);
-                if (cols.length > max) rows.push(`… ${cols.length - max} autre(s) colonne(s)`);
-                const hierTxt = hierNodeContent(hier, t.id);
-                if (hierTxt) rows.unshift('🌳 ' + hierTxt);
-                const isH = isHierTable(hier, t.id);
-                const isD = t.type === 'designed';
-                // Couleur par THÈME (groupe de sources) quand il est défini — sinon codes historiques.
-                const pal = t.theme ? themePalette(t.theme.trim()) : null;
-                const _title = (isD ? '🧱 ' : (isH ? '🌳 ' : '📄 ')) + t.name;
-                return {
-                    id: t.id, type: 'studio-uml-node',
-                    title: _title, rows, size: umlNodeSize(_title, rows),
-                    comboId: t.theme && t.theme.trim() ? 'th_' + t.theme.trim() : undefined,
-                    headFill: pal ? pal.head : (isD ? '#dbeafe' : (isH ? '#d1fae5' : '#e0e7ff')),
-                    titleFill: pal ? pal.title : (isD ? '#1e40af' : (isH ? '#065f46' : '#312e81')),
-                    stroke: pal ? pal.stroke : (isD ? '#3b82f6' : (isH ? '#059669' : '#6366f1')),
-                };
-            });
-            // Zones par domaine : un combo (cadre pointillé coloré) englobe les tables du même groupe.
-            const combos = themeList().map(th => {
-                const pal = themePalette(th);
-                return { id: 'th_' + th, label: '🗂 ' + th, style: { fill: pal.zone, fillOpacity: 0.05, stroke: pal.zone, lineDash: [6, 4], lineWidth: 1.5, radius: 10 }, labelCfg: { position: 'top', style: { fill: pal.zone, fontSize: 12, fontWeight: 700 } } };
-            }).filter(c => nodes.some(n => n.comboId === c.id));
-            // Par défaut : disposition « Par domaine » dès qu'il y a des domaines (regroupe les tables
-            // d'un même domaine sans chevauchement) ; sinon hiérarchique. Un choix explicite prime.
-            const layoutMode = state.graphConfig.mcdLayout || (themeList().length && !(state.graphConfig.mcdTheme || '').trim() ? 'combo' : 'dagre');
-            // Mode « Par domaine » : positions calculées en JS (couloirs sans collision) et moteur
-            // de disposition DÉSACTIVÉ → aucun recalcul ne vient contrarier les déplacements manuels.
-            if (layoutMode === 'combo') computeDomainPositions(nodes);
-            const edges = state.relations.filter(r => r.sourceCol && r.targetCol && visibleIds.has(r.sourceTable) && visibleIds.has(r.targetTable)).map(r => {
-                const isSelf = r.sourceTable === r.targetTable;
-                const isHierEdge = Object.values(hier).some(h => h.relIds.has(r.id));
-                return {
-                    id: r.id, source: r.sourceTable, target: r.targetTable,
-                    label: (isHierEdge ? '🌳 ' : '') + relEdgeLabel(r),
-                    type: isSelf ? 'loop' : (layoutMode === 'dagre' ? 'cubic-horizontal' : undefined),
-                    loopCfg: isSelf ? { position: 'top', dist: 40 } : undefined,
-                    style: isHierEdge ? { stroke: '#059669', lineWidth: 2, endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#059669' } } : undefined,
-                };
-            });
-
-            if (!networkInstance) {
-                // Espacement ADAPTATIF : en vue schéma les cartes sont hautes → on aère davantage pour
-                // qu'aucune ne se touche. preventOverlap s'appuie sur la taille réelle (size) des nœuds.
-                const nsep = schemaMode ? 55 : 34, rsep = schemaMode ? 150 : 110;
-                let layout;
-                if (layoutMode === 'force') {
-                    layout = { type: 'gForce', preventOverlap: true, nodeSpacing: schemaMode ? 45 : 24, linkDistance: schemaMode ? 300 : 220, nodeStrength: 1200, edgeStrength: 200, maxIteration: 500, damping: 0.9, workerEnabled: true, animate: false };
-                } else if (layoutMode === 'combo') {
-                    layout = null; // positions pré-calculées (couloirs par domaine), pas de moteur
-                } else {
-                    layout = { type: 'dagre', rankdir: 'LR', nodesep: nsep, ranksep: rsep, preventOverlap: true };
-                }
-                networkInstance = createStudioGraph(cont, layout, {
-                    defaultEdge: {
-                        style: { stroke: '#94a3b8', lineWidth: 1.4, endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#94a3b8' } },
-                        labelCfg: { autoRotate: true, style: { fill: '#475569', fontSize: 10, background: { fill: '#fff', stroke: '#e2e8f0', padding: [2, 4, 2, 4], radius: 3 } } },
-                    },
-                    defaultCombo: { type: 'rect', padding: [30, 20, 20, 20], style: { radius: 10 } },
-                });
-                pinNodeOnDrag(networkInstance);
-                // Mode « Tracer un lien » : clic-clic ET glisser-déposer. Clic sur un LIEN : suppression.
-                networkInstance.on('node:click', ev => { try { const id = ev.item.getID(); if (mcdLinkMode) mcdNodeClicked(id); else if (Date.now() - _mcdLastDrag > 250) mcdHighlightNeighbors(id); } catch (e2) {} });
-                networkInstance.on('edge:click', ev => { try { const id = ev.item.getID(); if (id && String(id).startsWith('rel_')) openEdgeDeleteModal(id); } catch (e2) {} });
-                // ⑤ clic sur le fond : rétablit tout · ② clic droit sur une table : la masquer
-                networkInstance.on('canvas:click', () => { try { mcdClearHighlight(); } catch (e2) {} });
-                networkInstance.on('node:contextmenu', ev => { try { ev.preventDefault && ev.preventDefault(); const oe = ev.originalEvent; if (oe && oe.preventDefault) oe.preventDefault(); mcdHideTable(ev.item.getID()); } catch (e2) {} });
-                // ③ double-clic sur une zone de domaine : la réduire / la déployer
-                networkInstance.on('combo:dblclick', ev => { try { const id = ev.item.getID(); const c = ev.item.getModel(); c.collapsed ? networkInstance.expandCombo(id) : networkInstance.collapseCombo(id); networkInstance.refreshPositions && networkInstance.refreshPositions(); } catch (e2) {} });
-                mcdBindLinkDrag(networkInstance);
-                if (mcdLinkMode) { try { networkInstance.removeBehaviors('drag-node', 'default'); } catch (e2) {} }
-                networkInstance.data({ nodes, edges, combos });
-                try { networkInstance.render(); }
-                catch (eL) {
-                    // Disposition « Par domaine » indisponible dans ce moteur : repli hiérarchique.
-                    if (layoutMode === 'combo') { state.graphConfig.mcdLayout = 'dagre'; try { networkInstance.destroy(); } catch (e3) {} networkInstance = null; return _renderGraphImpl(cont); }
-                    throw eL;
-                }
-            } else {
-                networkInstance.changeData({ nodes, edges, combos });
-            }
-            networkInstance.fitView(20);
-            requestAnimationFrame(() => { try { mcdApplyFocus(); } catch (e) {} }); // ① estompage focus après rendu
-            const tb = el('mcdToolbar'); if (tb && !tb.innerHTML) tb.innerHTML = graphToolbarHtml('mcd');
-            const ls = el('mcdLayoutSelect'); if (ls) ls.value = layoutMode;
-            const vs = el('mcdViewSelect'); if (vs) vs.value = schemaMode ? 'schema' : 'links';
-            const lsF = el('mcdLayoutSelectFull'); if (lsF) lsF.value = layoutMode;
-            const vsF = el('mcdViewSelectFull'); if (vsF) vsF.value = schemaMode ? 'schema' : 'links';
-            renderMcdControls();
-        }
+        // (ancien rendu G6 du Modèle de données supprimé : le moteur SVG est désormais le seul rendu du MCD)
 
         function getRequiredPath(baseId, targetIds, rels) {
             const activeNodes = new Set(); activeNodes.add(baseId);

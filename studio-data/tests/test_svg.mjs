@@ -13,8 +13,8 @@ const res = await p.evaluate(()=>{
     state.tables['c']={id:'c',name:'DEPOTS',type:'csv',status:'ready',headers:['CODE','VILLE'],config:{},columnsMeta:{},theme:'Logistique'};
     state.relations.push({id:'rel_1',sourceTable:'a',sourceCol:'ID',targetTable:'b',targetCol:'CLIENT_ID',cardinality:'1-N'});
     const g=el('networkGraph'); Object.defineProperty(g,'clientWidth',{value:900,configurable:true}); Object.defineProperty(g,'clientHeight',{value:500,configurable:true});
-    // activer le moteur SVG
-    setMcdEngine('svg');
+    // le SVG est désormais LE moteur du Modèle de données
+    switchTab(2); renderGraph();
     const svg=el('mcdSvg');
     out.svgRendered = !!svg;
     out.nodeCount = svg.querySelectorAll('.svgnode').length; // 3
@@ -28,7 +28,8 @@ const res = await p.evaluate(()=>{
     out.posMutable = JSON.stringify(svgG.pos['a']) !== before;
     // zoom
     const k0 = svgG.k; graphZoom('mcd', 1.12); out.zoomWorks = svgG.k > k0;
-    graphFit('mcd'); out.fitResets = svgG.k===1;
+    graphFit('mcd');
+    out.fitShowsAll = Object.keys(svgG.pos).every(id=>{ const pp=svgG.pos[id]; const sx=pp.x*svgG.k+svgG.tx, sy=pp.y*svgG.k+svgG.ty; return sx>=-5 && sx<=905 && sy>=-5 && sy<=505; });
     // surlignage voisinage : clic sur 'a' → a & b gardés, c estompé
     svgHighlightNeighbors('a');
     out.highlight = svg.querySelector('.svgnode[data-id="c"]').classList.contains('svg-dim') && !svg.querySelector('.svgnode[data-id="a"]').classList.contains('svg-dim');
@@ -41,8 +42,8 @@ const res = await p.evaluate(()=>{
     setMcdTheme('');
     // ranger recompute
     mcdRelayout(); out.rangerOk = !!el('mcdSvg');
-    // retour G6
-    setMcdEngine('g6'); out.backToG6NoSvg = !el('mcdSvg');
+    // le rendu par défaut est bien le SVG (G6 retiré de cet écran)
+    out.svgIsDefault = !!el('mcdSvg') && mcdIsSvg();
   }catch(e){ out.err=String(e&&e.stack||e); }
   return out;
 });
