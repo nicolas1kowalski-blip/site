@@ -622,16 +622,16 @@
 
                     <div id="qual-sub-profiling" class="block space-y-6">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="profilingGlobalKpis"></div>
-                        <div class="bg-slate-50 p-5 rounded-xl border border-slate-200">
-                            <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2 text-sm uppercase tracking-wider"><i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i> Alertes Sémantiques</h3>
-                            <div id="profilingAlerts" class="space-y-2 text-sm text-slate-600"></div>
-                        </div>
-                        <div class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm">
-                            <div class="bg-amber-50 border-b border-amber-100 p-4 flex justify-between items-center"><span class="text-sm font-bold text-amber-800 uppercase flex items-center gap-2">🔍 Inspecteur d'anomalies — voir & extraire les lignes en défaut</span><span class="text-[11px] text-amber-600">recherche sur la table complète</span></div>
+                        <details open class="bg-slate-50 rounded-xl border border-slate-200 group">
+                            <summary class="cursor-pointer select-none p-5 pb-4 list-none flex items-center gap-2"><span class="text-slate-400 text-xs transition-transform group-open:rotate-90">▶</span><h3 class="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider"><i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i> Alertes Sémantiques</h3></summary>
+                            <div id="profilingAlerts" class="space-y-2 text-sm text-slate-600 px-5 pb-5"></div>
+                        </details>
+                        <details open class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm group">
+                            <summary class="cursor-pointer select-none bg-amber-50 border-b border-amber-100 p-4 list-none flex justify-between items-center"><span class="text-sm font-bold text-amber-800 uppercase flex items-center gap-2"><span class="text-amber-400 text-xs transition-transform group-open:rotate-90">▶</span>🔍 Inspecteur d'anomalies — voir & extraire les lignes en défaut</span><span class="text-[11px] text-amber-600">recherche sur la table complète</span></summary>
                             <div id="qualAnomalyList" class="p-4"></div>
-                        </div>
-                        <div class="bg-white border rounded-xl overflow-hidden shadow-sm">
-                            <div class="bg-slate-50 border-b p-4 flex justify-between items-center"><span class="text-sm font-bold text-slate-700 uppercase">Aperçu Synthétique</span></div>
+                        </details>
+                        <details open class="bg-white border rounded-xl overflow-hidden shadow-sm group">
+                            <summary class="cursor-pointer select-none bg-slate-50 border-b p-4 list-none flex justify-between items-center"><span class="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><span class="text-slate-400 text-xs transition-transform group-open:rotate-90">▶</span>Aperçu Synthétique</span></summary>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left text-sm whitespace-nowrap">
                                     <thead class="bg-slate-50/50 border-b text-xs uppercase font-bold text-slate-500">
@@ -640,7 +640,7 @@
                                     <tbody id="profilingColumnsTableBody" class="divide-y divide-slate-100"></tbody>
                                 </table>
                             </div>
-                        </div>
+                        </details>
                     </div>
 
                     <div id="qual-sub-columns" class="hidden flex flex-col lg:flex-row gap-6">
@@ -8860,6 +8860,18 @@
                         </div>`).join('') + `</div></div>`;
             }
 
+            // Anomalies de CET attribut, avec 👁 Voir / ⬇ CSV — mêmes prédicats que l'inspecteur global.
+            let colAnomaliesHtml = '';
+            try {
+                const entries = qualAnomalyEntries(currentProfilingStats, currentProfilingTableId).filter(e => e.col === cName);
+                colAnomaliesHtml = `<div class="mb-6"><h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🔍 Anomalies de cet attribut — voir & extraire</h5>` +
+                    (entries.length
+                        ? `<div class="border border-amber-200 rounded-xl overflow-hidden"><table class="w-full text-left text-xs"><tbody class="divide-y divide-amber-100">` +
+                          entries.map(e => { const esql = currentProfilingWhere ? `SELECT * FROM (${e.sql}) __flt WHERE ${currentProfilingWhere}` : e.sql; const idx = registerQualInspect(`${e.col} — ${e.kind}`, esql);
+                              return `<tr class="hover:bg-amber-50/40"><td class="p-2.5">${escapeHTML(e.kind)}</td><td class="p-2.5 text-right font-black text-amber-700 whitespace-nowrap">${e.n.toLocaleString('fr-FR')}</td><td class="p-2.5 whitespace-nowrap">${qualInspectButtons(idx)}</td></tr>`; }).join('') +
+                          `</tbody></table></div><p class="text-[10px] text-slate-400 mt-1.5">👁 Voir = échantillon paginé · ⬇ CSV = totalité des lignes en anomalie (table complète).</p>`
+                        : '<p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-2.5">✔ Aucune anomalie détectée sur cet attribut.</p>') + `</div>`;
+            } catch (e) { colAnomaliesHtml = ''; }
             panel.innerHTML = `
                 <div class="flex items-center gap-3 border-b pb-4 mb-5"><div class="p-3 bg-indigo-100 rounded-lg text-indigo-700"><i data-lucide="${typeIcon}"></i></div><div><h4 class="text-lg font-black text-slate-800">${escapeHTML(c.name)}</h4><span class="text-xs text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">${c.semanticType}</span></div></div>
                 <div class="grid grid-cols-2 gap-4 mb-6">
@@ -8872,6 +8884,7 @@
                         ${[['Espaces déb./fin', c.spaceIssues], ['Espaces multiples', c.multiSpace], ['Bouche-trous', c.placeholders], ['Variantes de casse', c.caseDupGroups], ['Aberrantes (3σ)', c.outliers]].map(([lbl, v]) => `<div class="p-2.5 border rounded-xl ${(v || 0) > 0 ? 'bg-sky-50 border-sky-200' : 'bg-slate-50'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">${lbl}</span><span class="text-sm font-black ${(v || 0) > 0 ? 'text-sky-700' : 'text-slate-400'}">${(v || 0).toLocaleString('fr-FR')}</span></div>`).join('')}
                     </div>
                 </div>
+                ${colAnomaliesHtml}
                 ${patternsHtml}
                 ${currentProfilingTableId ? `<div class="mb-6 border border-teal-200 bg-teal-50/40 rounded-xl p-4">
                     <h5 class="text-xs font-bold text-teal-800 uppercase tracking-wider mb-1">Patterns fonctionnels</h5>
