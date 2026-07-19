@@ -19,8 +19,9 @@ charge malveillante est rendue comme texte, aucun script ne s'exécute.
 **Risque** : bibliothèques chargées depuis des CDN publics en versions « flottantes »
 (`g6@4`, `lucide@latest`) sans contrôle d'intégrité — un CDN compromis aurait pu injecter du
 code arbitraire.
-**Correction** : versions **épinglées** et attribut **`integrity` (SRI)** sur `xlsx`, `@antv/g6`,
-`chart.js` et `lucide` (+ `crossorigin`/`referrerpolicy`). Le navigateur refuse d'exécuter un
+**Correction** : versions **épinglées** et attribut **`integrity` (SRI)** sur `xlsx`, `chart.js` et
+`lucide` ; **G6 a été entièrement supprimé** (tous les graphes sont rendus par un moteur SVG maison,
+sans dépendance) (+ `crossorigin`/`referrerpolicy`). Le navigateur refuse d'exécuter un
 fichier dont les octets ne correspondent pas à l'empreinte.
 
 ### 3. Politique de sécurité du contenu (CSP)

@@ -45,7 +45,7 @@ Organisée en 4 phases :
   SQL dans le navigateur ; gros fichiers gérés par « lecture directe » (vues sur fichier),
   Parquet ZSTD, base adossée au disque (OPFS) quand le navigateur le permet.
 - **Persistance : IndexedDB** (données + configuration), restauration de session automatique.
-- **Graphes : G6 (AntV)** · **Graphiques : Chart.js** · **Excel : SheetJS**.
+- **Graphes : moteur SVG maison** (aucune dépendance) · **Graphiques : Chart.js** · **Excel : SheetJS**.
 
 ## Limites connues / points d'attention
 

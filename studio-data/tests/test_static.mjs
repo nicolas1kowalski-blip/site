@@ -3,15 +3,15 @@ const H = fs.readFileSync(new URL('../StudioData.html', import.meta.url),'utf8')
 let pass=0, fail=0; const R=[];
 const ok=(n,c,d='')=>{ (c?pass++:fail++); R.push(`${c?'✅':'❌'} ${n}${d&&!c?' — '+d:''}`); };
 // 1. plus de versions flottantes
-ok('Aucune version CDN flottante (g6@4 / lucide@latest / chart.js nue)',
-   !/@antv\/g6@4\/|lucide@latest|npm\/chart\.js"/.test(H));
+ok('G6 totalement supprimé (aucun script @antv/g6)', !/@antv\/g6/.test(H));
+ok('Aucune version CDN flottante (lucide@latest / chart.js nue)', !/lucide@latest|npm\/chart\.js"/.test(H));
 // 2. SRI présents sur les 4 libs
-for (const lib of ['xlsx@0.18.5','@antv/g6@4.8.24','chart.js@4.4.6','lucide@0.474.0']) {
+for (const lib of ['xlsx@0.18.5','chart.js@4.4.6','lucide@0.474.0']) {
   const re = new RegExp('src="[^"]*'+lib.replace(/[.*+?^${}()|[\]\\/]/g,'\\$&')+'[^"]*"[^>]*integrity="sha384-');
   ok('SRI présent pour '+lib, re.test(H));
 }
 // 3. crossorigin
-ok('crossorigin=anonymous sur les libs SRI', (H.match(/crossorigin="anonymous"/g)||[]).length>=4);
+ok('crossorigin=anonymous sur les libs SRI', (H.match(/crossorigin="anonymous"/g)||[]).length>=3);
 // 4. CSP présente et directives clés
 const csp = (H.match(/Content-Security-Policy" content="([^"]+)"/)||[])[1]||'';
 ok('CSP présente', !!csp);
@@ -30,7 +30,6 @@ ok('mode sans persistance gate persistTableData', /persistTableData\(tId\)\s*\{\
 // 7. les octets servis = mes empreintes (revérif locale)
 const files = {
  'xlsx@0.18.5':(process.env.SRI_DIR||'/tmp/sri/x')+'/xlsx-0.18.5/package/dist/xlsx.full.min.js',
- '@antv/g6@4.8.24':(process.env.SRI_DIR||'/tmp/sri/x')+'/antv-g6-4.8.24/package/dist/g6.min.js',
  'chart.js@4.4.6':(process.env.SRI_DIR||'/tmp/sri/x')+'/chart.js-4.4.6/package/dist/chart.umd.js',
  'lucide@0.474.0':(process.env.SRI_DIR||'/tmp/sri/x')+'/lucide-0.474.0/package/dist/umd/lucide.min.js',
 };

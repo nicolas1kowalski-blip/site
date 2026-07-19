@@ -22,7 +22,10 @@
          contre un CDN compromis ou un fichier altéré). Ne plus utiliser de version « flottante ». -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@antv/g6@4.8.24/dist/g6.min.js" integrity="sha384-iYoticlq+TpD6YYL4Lx7pZ8jM+Loq+EKfAbFtWUe0d3639XqCkVreQ57oSygxMD1" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- G6 supprimé : tous les graphes sont rendus par le moteur SVG maison (aucune dépendance).
+         Petit stub de compatibilité : les constructions d'arêtes historiques référencent G6.Arrow ;
+         le moteur SVG ignore ces champs. -->
+    <script>window.G6 = { Arrow: { triangle: () => '', diamond: () => '' } };</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.js" integrity="sha384-MH1axGwz/uQzfIcjFdjEfsM0xlf5mmWfAwwggaOh5IPFvgKFGbJ2PZ4VBbgSYBQN" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.474.0/dist/umd/lucide.min.js" integrity="sha384-wkxmY9HYHJVzx0oZ7k8stpLQ7g7ogSqBha75ozCZmxFadwtaIw5dzXKVWWfi9I36" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
@@ -653,6 +656,10 @@
             </div>
         </div>
 
+        <div id="step-11" class="animate-fade-in hidden">
+            <div id="cockpitContent"></div>
+        </div>
+
         <div id="step-10" class="animate-fade-in hidden">
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                 <div class="flex items-start justify-between gap-4 flex-wrap">
@@ -1011,7 +1018,6 @@
         // ==========================================
         // Un seul type de nœud personnalisé, réutilisé par le graphe MCD (étape 2) et l'Explorateur 360°
         // (étape 5) : un titre en gras, et éventuellement une ligne de contenu en dessous.
-        let g6NodeRegistered = false;
         // Taille (largeur, hauteur) d'une carte UML — MÊME formule que le dessin, pour que le layout
         // connaisse la hauteur réelle (surtout en vue schéma) et n'empile jamais les cartes.
         function umlNodeSize(title, rows) {
@@ -1022,69 +1028,6 @@
             const h = headH + (rows.length ? rows.length * rowH + 12 : 10);
             return [w, h];
         }
-        function ensureG6NodeRegistered() {
-            if (g6NodeRegistered || typeof G6 === 'undefined') return;
-            G6.registerNode('studio-rich-node', {
-                draw(cfg, group) {
-                    const title = cfg.title || '';
-                    const content = cfg.content || '';
-                    const textWidth = Math.max(title.length, content.length) * 6.5 + 24;
-                    const width = Math.min(260, Math.max(120, textWidth));
-                    const height = content ? 46 : 30;
-                    const keyShape = group.addShape('rect', {
-                        attrs: {
-                            x: -width / 2, y: -height / 2, width, height, radius: 6,
-                            fill: cfg.fill || '#e0e7ff', stroke: cfg.stroke || '#4f46e5', lineWidth: 1.5,
-                        },
-                        name: 'bg-rect',
-                    });
-                    group.addShape('text', {
-                        attrs: {
-                            x: -width / 2 + 8, y: content ? -height / 2 + 15 : 0,
-                            text: title.length > 34 ? title.slice(0, 31) + '…' : title,
-                            fontSize: 12, fontWeight: 700, fill: '#312e81', textBaseline: 'middle',
-                        },
-                        name: 'title-text',
-                    });
-                    if (content) {
-                        group.addShape('text', {
-                            attrs: {
-                                x: -width / 2 + 8, y: height / 2 - 13,
-                                text: content.length > 40 ? content.slice(0, 37) + '…' : content,
-                                fontSize: 11, fill: '#334155', textBaseline: 'middle',
-                            },
-                            name: 'content-text',
-                        });
-                    }
-                    return keyShape;
-                },
-            }, 'rect');
-            // Nœud « classe UML » : en-tête coloré + liste d'attributs, ombre portée. Utilisé par le
-            // MCD (tables + colonnes, 🔑 = colonne de jointure) et le Modèle objet (objets + attributs).
-            const umlTrunc = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-            G6.registerNode('studio-uml-node', {
-                draw(cfg, group) {
-                    const title = cfg.title || '';
-                    const rows = cfg.rows || [];
-                    const [w, h] = umlNodeSize(title, rows);
-                    const headH = 28, rowH = 15;
-                    const keyShape = group.addShape('rect', {
-                        attrs: { x: -w / 2, y: -h / 2, width: w, height: h, radius: 8, fill: '#ffffff', stroke: cfg.stroke || '#6366f1', lineWidth: 1.2, shadowColor: 'rgba(15,23,42,0.18)', shadowBlur: 12, shadowOffsetY: 3 },
-                        name: 'uml-box',
-                    });
-                    group.addShape('rect', { attrs: { x: -w / 2, y: -h / 2, width: w, height: headH, radius: [8, 8, 0, 0], fill: cfg.headFill || '#eef2ff' }, name: 'uml-head' });
-                    group.addShape('text', { attrs: { x: -w / 2 + 10, y: -h / 2 + headH / 2, text: umlTrunc(title, 34), fontSize: 12, fontWeight: 700, fill: cfg.titleFill || '#312e81', textBaseline: 'middle' }, name: 'uml-title' });
-                    if (rows.length) group.addShape('path', { attrs: { path: [['M', -w / 2, -h / 2 + headH], ['L', w / 2, -h / 2 + headH]], stroke: cfg.stroke || '#c7d2fe', lineWidth: 0.8, opacity: 0.7 }, name: 'uml-sep' });
-                    rows.forEach((r, i) => group.addShape('text', {
-                        attrs: { x: -w / 2 + 10, y: -h / 2 + headH + 8 + i * rowH, text: umlTrunc(r, 38), fontSize: 10, fill: String(r).startsWith('…') ? '#94a3b8' : '#475569', fontStyle: String(r).startsWith('…') ? 'italic' : 'normal', textBaseline: 'top' },
-                        name: 'uml-row-' + i,
-                    }));
-                    return keyShape;
-                },
-                getAnchorPoints() { return [[0, 0.5], [1, 0.5], [0.5, 0], [0.5, 1]]; },
-            }, 'rect');
-            g6NodeRegistered = true;
-        }
 
         // Fabrique de graphe unifiée : layouts déterministes qui se figent (plus de simulation
         // continue qui « se rebat » quand on déplace une boîte), déplacement fluide via delegate
@@ -1093,21 +1036,6 @@
         // updateEdge=false → les liens ne sont PAS recalculés à chaque frame (cause n°1 des
         // saccades) ; ils se replacent au lâcher. drag-combo : déplacer un domaine déplace toutes
         // ses tables d'un bloc.
-        const STUDIO_DRAG_NODE = { type: 'drag-node', enableDelegate: false, updateEdge: false };
-        const STUDIO_DRAG_COMBO = { type: 'drag-combo', enableDelegate: true, delegateStyle: { fill: '#6366f1', fillOpacity: 0.06, stroke: '#6366f1', lineWidth: 1.5, lineDash: [6, 4], radius: 10 } };
-        const STUDIO_GRAPH_MODES = {
-            default: [
-                'drag-canvas',
-                { type: 'zoom-canvas', sensitivity: 1.4 },
-                STUDIO_DRAG_NODE,
-                STUDIO_DRAG_COMBO,
-                { type: 'activate-relations', trigger: 'mouseenter' }, // survol : met en avant le nœud et ses liens, estompe le reste
-            ],
-        };
-        const STUDIO_STATE_STYLES = {
-            nodeStateStyles: { active: { shadowColor: '#6366f1', shadowBlur: 16, lineWidth: 2 }, inactive: { opacity: 0.25 } },
-            edgeStateStyles: { active: { stroke: '#6366f1', lineWidth: 2.2, shadowColor: '#c7d2fe', shadowBlur: 6 }, inactive: { opacity: 0.12 } },
-        };
         // Fige la position d'un nœud après déplacement pour qu'aucun layout ne le repousse.
         let _mcdLastDrag = 0;
         function pinNodeOnDrag(graph) {
@@ -1127,21 +1055,6 @@
                 });
                 graph.refreshPositions();
             });
-        }
-        function createStudioGraph(container, layout, extra) {
-            const base = {
-                container,
-                width: container.clientWidth || 600,
-                height: container.clientHeight || 350,
-                animate: false,
-                fitViewPadding: 20,
-                modes: STUDIO_GRAPH_MODES,
-                defaultNode: { type: 'studio-rich-node' },
-            };
-            // layout falsy => positions PRÉ-CALCULÉES respectées (x/y sur les nœuds), aucun moteur
-            // de disposition ne tourne : les déplacements manuels sont donc parfaitement fiables.
-            if (layout) base.layout = layout;
-            return new G6.Graph(Object.assign(base, STUDIO_STATE_STYLES, extra || {}));
         }
         // Disposition « couloirs par domaine », calculée en JS : chaque domaine occupe son propre
         // bloc (grille de tables), les blocs sont disposés en grille avec de larges marges → AUCUN
@@ -1251,13 +1164,17 @@
             }
             // ④ Ranger proprement (relance la disposition).
             html += `<button onclick="mcdRelayout()" class="text-[11px] px-2 py-1 rounded font-bold bg-white text-slate-600 border border-slate-300 hover:bg-slate-50" title="Réaligner automatiquement toutes les tables">🧹 Ranger</button>`;
+            // 🔍 Aller à une table + 🧭 chemin entre deux tables
+            const names = Object.values(state.tables).filter(t => t.status === 'ready').map(t => t.name).sort();
+            html += `<input list="mcdGotoList" placeholder="🔍 aller à une table…" onchange="mcdGotoTable(this.value); this.value=''" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="mcdGotoList">${names.map(n => `<option value="${escapeHTML(n)}">`).join('')}</datalist>`;
+            html += `<button onclick="mcdTogglePathMode()" class="text-[11px] px-2 py-1 rounded font-bold border ${mcdPathMode ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-cyan-700 border-cyan-300'}" title="Surligner la chaîne de jointures entre deux tables">🧭 Chemin</button>`;
             // ② Tables masquées : bouton pour tout réafficher.
             if (hidden.length) html += `<button onclick="mcdUnhideAll()" class="text-[11px] px-2 py-1 rounded font-bold bg-amber-50 text-amber-700 border border-amber-300" title="Réafficher les tables masquées">👁 Réafficher (${hidden.length})</button>`;
             return html;
         }
         function mcdToggleFocus() { state.graphConfig.mcdFocus = !state.graphConfig.mcdFocus; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); persistAppState(); }
         // ④ Ranger : recalcule proprement la disposition (positions figées effacées).
-        function mcdRelayout() { if (typeof svgG !== 'undefined') { svgG.pos = {}; svgG.needFit = true; } if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
+        function mcdRelayout() { if (typeof svgG !== 'undefined') { svgG.pos = {}; svgG.needFit = true; } if (networkInstance) { try { networkInstance.destroy(); } catch (e) {} networkInstance = null; } renderGraph(); persistAppState(); }
         function mcdIsSvg() { return true; } // le Modèle de données est rendu en SVG (G6 retiré de cet écran)
         // ② Masquer / réafficher des tables du graphe.
         function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
@@ -1364,14 +1281,7 @@
                 b.classList.toggle('bg-indigo-600', mcdLinkMode); b.classList.toggle('text-white', mcdLinkMode);
                 b.classList.toggle('bg-white', !mcdLinkMode); b.classList.toggle('text-indigo-700', !mcdLinkMode);
             });
-            // En mode lien, le déplacement des cartes est suspendu : le glisser TRACE un lien.
-            try {
-                if (networkInstance) {
-                    if (mcdLinkMode) networkInstance.removeBehaviors('drag-node', 'default');
-                    else { networkInstance.addBehaviors(STUDIO_DRAG_NODE, 'default'); mcdCleanupTmpLink(); }
-                }
-            } catch (e) {}
-            mcdLinkHint(mcdLinkMode ? '🖱 Mode lien actif — <strong>cliquez</strong> une table puis une seconde, ou <strong>glissez</strong> d\'une table vers l\'autre. Recliquez le bouton pour quitter.' : '');
+            mcdLinkHint(mcdLinkMode ? '🖱 Mode lien actif — cliquez une <strong>première</strong> table puis une <strong>seconde</strong> : la fenêtre des attributs s\'ouvre. Recliquez le bouton pour quitter.' : '');
         }
         function mcdNodeClicked(tId) {
             if (!mcdLinkMode || !state.tables[tId]) return;
@@ -1385,37 +1295,6 @@
             openLinkModal(a, tId);
         }
         // --- Glisser-déposer : un trait pointillé suit la souris depuis la table de départ. ---
-        function mcdEnsureTmpLink(x, y) {
-            if (!networkInstance || !mcdDragSrc) return;
-            const ex = networkInstance.findById('__lnkTmp');
-            if (!ex) {
-                networkInstance.addItem('node', { id: '__lnkTmp', x, y, type: 'circle', size: 8, style: { fill: '#6366f1', stroke: '#fff', lineWidth: 1.5 }, label: '' });
-                networkInstance.addItem('edge', { id: '__lnkTmpE', source: mcdDragSrc, target: '__lnkTmp', style: { stroke: '#6366f1', lineWidth: 2, lineDash: [6, 4], endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#6366f1' } } });
-            } else networkInstance.updateItem(ex, { x, y });
-        }
-        function mcdCleanupTmpLink() {
-            if (!networkInstance) return;
-            try { const e = networkInstance.findById('__lnkTmpE'); if (e) networkInstance.removeItem(e); } catch (e2) {}
-            try { const n = networkInstance.findById('__lnkTmp'); if (n) networkInstance.removeItem(n); } catch (e2) {}
-        }
-        function mcdBindLinkDrag(g) {
-            g.on('node:dragstart', ev => {
-                if (!mcdLinkMode || !ev.item) return;
-                const id = ev.item.getID(); if (id === '__lnkTmp' || !state.tables[id]) return;
-                mcdDragSrc = id; mcdLinkSrc = null;
-                mcdLinkHint(`✏️ Glissez jusqu'à la table cible puis relâchez… (départ : <strong>${escapeHTML(state.tables[id].name)}</strong>)`);
-            });
-            g.on('node:drag', ev => { if (mcdLinkMode && mcdDragSrc) mcdEnsureTmpLink(ev.x, ev.y); });
-            g.on('node:drop', ev => {
-                if (!mcdLinkMode || !mcdDragSrc || !ev.item) return;
-                const t = ev.item.getID(); const s = mcdDragSrc;
-                mcdDragSrc = null; mcdJustDropped = Date.now(); mcdCleanupTmpLink();
-                if (t !== '__lnkTmp' && state.tables[t]) openLinkModal(s, t);
-            });
-            g.on('node:dragend', () => {
-                if (mcdDragSrc) { mcdDragSrc = null; mcdCleanupTmpLink(); if (mcdLinkMode) mcdLinkHint('🖱 Mode lien actif — cliquez une table puis une seconde, ou glissez d\'une table vers l\'autre.'); }
-            });
-        }
         function openLinkModal(aId, bId) {
             const A = state.tables[aId], B = state.tables[bId]; if (!A || !B) return;
             let m = el('mcdLinkModal');
@@ -1527,11 +1406,6 @@
         }
         function graphUnavailableHtml(msg) {
             return `<div class="w-full h-full flex items-center justify-center text-center p-6"><div><div class="text-3xl mb-2 opacity-40">🕸️</div><p class="text-sm text-slate-500 font-medium">${msg}</p></div></div>`;
-        }
-        function g6Missing(cont) {
-            if (typeof G6 !== 'undefined') return false;
-            if (cont) cont.innerHTML = graphUnavailableHtml('Le moteur de graphes (G6) n\'a pas pu être chargé.<br>Vérifiez votre connexion internet puis rechargez la page.');
-            return true;
         }
 
         // Indicateur de tâche d'arrière-plan : pastille flottante pendant qu'un audit tourne — vous
@@ -1715,13 +1589,15 @@
             Object.values(state.tables).forEach(t => { if (t.type === 'designed' && t.design) { const dd = { ...t.design }; delete dd.targetId; designs[t.name] = dd; } });
             const themes = {};
             Object.values(state.tables).forEach(t => { if ((t.theme || '').trim()) themes[t.name] = t.theme.trim(); });
+            const mcdPos = {};
+            try { Object.keys(svgG.pos).forEach(id => { const t = state.tables[id]; if (t) mcdPos[t.name] = { x: Math.round(svgG.pos[id].x), y: Math.round(svgG.pos[id].y) }; }); } catch (e) {}
             return {
                 savedAt: new Date().toISOString(),
                 relations: state.relations.filter(r => nameOf(r.sourceTable) && nameOf(r.targetTable)).map(r => ({ sourceTable: nameOf(r.sourceTable), sourceCol: r.sourceCol, targetTable: nameOf(r.targetTable), targetCol: r.targetCol, cardinality: r.cardinality || '', kind: r.kind || '', measured: r.measured || null })),
                 selections: byName(state.selectedCols), pivots: byName(state.pivotMode),
                 filters, hierarchy, graphConfig: byName(state.graphConfig),
                 governance: state.governance,
-                designs, themes,
+                designs, themes, mcdPos,
             };
         }
 
@@ -1743,6 +1619,8 @@
             });
             // Domaines (groupes de sources) restaurés par nom.
             Object.keys(saved.themes || {}).forEach(n => { const id = idOf(n); if (id) state.tables[id].theme = saved.themes[n]; });
+            // Positions mémorisées du Modèle de données (arrangement manuel conservé).
+            try { Object.keys(saved.mcdPos || {}).forEach(n => { const id = idOf(n); if (id) svgG.pos[id] = { x: saved.mcdPos[n].x, y: saved.mcdPos[n].y }; }); } catch (e) {}
         }
 
         function normalizeGovernance(g) {
@@ -3161,13 +3039,11 @@
         let modelGraph = null;
         function renderObjectModelDiagram() {
             const wrap = el('modelGraphWrap'); if (!wrap) return;
-            if (g6Missing(wrap)) return;
             try { _renderObjectModelImpl(wrap); }
             catch (e) { console.error('Model render error', e); wrap.innerHTML = graphUnavailableHtml('Le modèle objet n\'a pas pu être affiché : ' + escapeHTML(e.message)); return; }
             observeGraphResize('model');
         }
         function _renderObjectModelImpl(wrap) {
-            ensureG6NodeRegistered();
             const nodes = [], edges = [];
             const bos = state.governance.businessObjects;
             bos.forEach(bo => {
@@ -3210,7 +3086,7 @@
             });
             if (modelGraph) { modelGraph.destroy(); modelGraph = null; }
             if (!nodes.length) { wrap.innerHTML = '<p class="text-sm text-slate-400 italic text-center pt-24">Aucun objet métier — utilisez l\'assistant 🧬 "Concevoir depuis le modèle de données" dans l\'onglet Objets métier.</p>'; return; }
-            modelGraph = createStudioGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 28, ranksep: 100 }, {
+            modelGraph = createSvgGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 28, ranksep: 100 }, {
                 width: wrap.clientWidth || 900, height: wrap.clientHeight || 550,
                 defaultEdge: { type: 'cubic-horizontal', style: { stroke: '#94a3b8', lineWidth: 1.4 }, labelCfg: { autoRotate: true, style: { fill: '#475569', fontSize: 10, background: { fill: '#fff', stroke: '#e2e8f0', padding: [2, 4, 2, 4], radius: 3 } } } },
             });
@@ -3460,13 +3336,11 @@
         // ---- Vue Lineage (G6) ----
         function renderLineageGraph() {
             const wrap = el('lineageGraphWrap'); if (!wrap) return;
-            if (g6Missing(wrap)) return;
             try { _renderLineageImpl(wrap); }
             catch (e) { console.error('Lineage render error', e); wrap.innerHTML = graphUnavailableHtml('Le lineage n\'a pas pu être affiché : ' + escapeHTML(e.message)); return; }
             observeGraphResize('lineage');
         }
         function _renderLineageImpl(wrap) {
-            ensureG6NodeRegistered();
             const nodes = [], edges = [], seen = new Set();
             Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
                 const colors = t.type === 'extraction' ? ['#f3e8ff', '#7c3aed'] : (t.type === 'api' ? ['#cffafe', '#0891b2'] : ['#dbeafe', '#2563eb']);
@@ -3514,7 +3388,7 @@
                 linkedTables.forEach(tn => { if (seen.has(tn) && !declared.has(tn) && !ctxMasters.has(tn)) edges.push({ id: 'bo:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: 'décrit', style: { stroke: '#86efac', lineDash: [2, 3], endArrow: { path: G6.Arrow.triangle(6, 6, 0), fill: '#86efac' } } }); });
             });
             if (lineageGraph) { lineageGraph.destroy(); lineageGraph = null; }
-            lineageGraph = createStudioGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 18, ranksep: 80 }, {
+            lineageGraph = createSvgGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 18, ranksep: 80 }, {
                 width: wrap.clientWidth || 900, height: wrap.clientHeight || 550,
                 defaultEdge: { type: 'cubic-horizontal', labelCfg: { autoRotate: true, style: { fill: '#64748b', fontSize: 9, background: { fill: '#fff', stroke: '#e2e8f0', padding: [2, 4, 2, 4], radius: 3 } } } },
             });
@@ -3779,7 +3653,7 @@
         // visuellement. switchTab(num) reste l'unité atomique « afficher l'étape N ».
         const NAV_PHASES = [
             { id: 'data', badge: '①', label: 'Données & Modèle', desc: 'Charger & modéliser', color: 'blue',
-              tabs: [ { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' } ] },
+              tabs: [ { n: 11, icon: '🏠', label: 'Cockpit' }, { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' } ] },
             { id: 'etl', badge: '②', label: 'Exploitation', desc: 'ETL, croisements & analyse', color: 'indigo',
               tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
             { id: 'quality', badge: '③', label: 'Qualité & Audit', desc: 'Profiling, anomalies, doublons', color: 'amber',
@@ -3840,11 +3714,12 @@
             }
         }
         function switchTab(num) {
-            for (let i = 1; i <= 10; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
+            for (let i = 1; i <= 11; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
             const stepEl = el(`step-${num}`); if (stepEl) stepEl.classList.remove('hidden');
             currentTab = num;
             renderNav();
             if(num===10) renderTablesDesign();
+            if(num===11) renderCockpit();
             if(num===2){ renderRelationsList(); renderBizRules(); renderGraph(); requestAnimationFrame(() => reflowGraph('mcd')); }
             if(num===3) { updateBaseTableSelect(); if (advExtractOpen()) renderAdvExtract(); }
             if(num===4) { updateVizBaseTableSelect(); covPopulate(); }
@@ -4636,6 +4511,142 @@
             finally { if (btn) btn.disabled = false; }
         }
 
+        // ======================= 🏠 Cockpit =======================
+        async function renderCockpit() {
+            const c = el('cockpitContent'); if (!c) return;
+            const tables = Object.values(state.tables).filter(t => t.status === 'ready');
+            const g = state.governance;
+            const doms = themeList();
+            const noOwner = (g.businessObjects || []).filter(b => !b.globalOwner);
+            const linked = new Set(); state.relations.forEach(r => { linked.add(r.sourceTable); linked.add(r.targetTable); });
+            const unlinked = tables.filter(t => !linked.has(t.id));
+            const noDom = tables.filter(t => !(t.theme || '').trim());
+            const oldSrc = tables.filter(t => t.file && t.lastRefresh && Date.now() - t.lastRefresh > 7 * 864e5);
+            const lastQ = (g.qualityHistory || [])[0];
+            const kpi = (v, l, cls, tab2) => `<button onclick="switchTab(${tab2})" class="text-left bg-white border border-slate-200 rounded-xl shadow-sm p-4 hover:border-blue-300 transition-colors"><div class="text-2xl font-black ${cls}">${v}</div><div class="text-[11px] font-bold text-slate-500 uppercase mt-0.5">${l}</div></button>`;
+            const alert = (cond, txt, tab2) => cond ? `<button onclick="switchTab(${tab2})" class="w-full text-left flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 hover:bg-amber-100">⚠️ ${txt}</button>` : '';
+            const okOr = (arr, okTxt) => arr.length ? '' : `<div class="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-3 py-2">✔ ${okTxt}</div>`;
+            c.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+                    ${kpi(tables.length, 'Sources & tables', 'text-blue-700', 1)}
+                    ${kpi('<span id="ckRows">…</span>', 'Lignes chargées', 'text-indigo-700', 1)}
+                    ${kpi(doms.length, 'Domaines', 'text-violet-700', 1)}
+                    ${kpi(state.relations.length, 'Liens du modèle', 'text-cyan-700', 2)}
+                    ${kpi((g.businessObjects || []).length, 'Objets métier', 'text-emerald-700', 9)}
+                    ${kpi((g.qualityHistory || []).length, 'Audits réalisés', 'text-amber-700', 8)}
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+                        <h3 class="text-sm font-black text-slate-700 mb-3">🚨 Points d'attention</h3>
+                        <div class="space-y-1.5">
+                            ${alert(noOwner.length, `${noOwner.length} objet(s) métier sans propriétaire : ${escapeHTML(noOwner.slice(0, 3).map(b => b.name).join(', '))}${noOwner.length > 3 ? '…' : ''}`, 9)}
+                            ${alert(unlinked.length, `${unlinked.length} table(s) non reliée(s) au modèle : ${escapeHTML(unlinked.slice(0, 3).map(t => t.name).join(', '))}${unlinked.length > 3 ? '…' : ''}`, 2)}
+                            ${alert(noDom.length, `${noDom.length} table(s) sans domaine : ${escapeHTML(noDom.slice(0, 3).map(t => t.name).join(', '))}${noDom.length > 3 ? '…' : ''}`, 1)}
+                            ${alert(oldSrc.length, `${oldSrc.length} source(s) non rafraîchie(s) depuis plus de 7 jours`, 1)}
+                            ${okOr([...noOwner, ...unlinked, ...noDom, ...oldSrc], 'Aucun point d\'attention — gouvernance en ordre.')}
+                        </div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+                        <h3 class="text-sm font-black text-slate-700 mb-3">✅ Dernier audit qualité</h3>
+                        ${lastQ ? `<div class="text-xs text-slate-600">Table <strong>${escapeHTML(lastQ.table || '')}</strong> · ${new Date(lastQ.ts).toLocaleString('fr-FR')}<div class="flex gap-3 mt-2 flex-wrap">
+                            <span class="bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-1 font-bold text-indigo-700">${(lastQ.rows || 0).toLocaleString('fr-FR')} lignes</span>
+                            <span class="bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1 font-bold text-emerald-700">complétude ${(lastQ.avgCompleteness || 0)} %</span>
+                            <span class="bg-red-50 border border-red-100 rounded-lg px-2.5 py-1 font-bold text-red-700">${(lastQ.duplicates || 0).toLocaleString('fr-FR')} doublon(s)</span>
+                        </div></div>` : '<p class="text-xs text-slate-400 italic">Aucun audit encore lancé — onglet Qualité & Audit.</p>'}
+                        <div class="flex gap-2 mt-4 flex-wrap">
+                            <button onclick="scanPII(this)" class="text-xs bg-violet-600 hover:bg-violet-700 text-white font-bold px-3 py-2 rounded-lg">🛡 Détecter les données personnelles (RGPD)</button>
+                            <button onclick="exportGovernanceReport()" class="text-xs bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-lg">📄 Dossier de gouvernance (HTML)</button>
+                        </div>
+                        <div id="ckPii" class="mt-3"></div>
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+                    <h3 class="text-sm font-black text-slate-700 mb-3">📊 Volumétrie par table</h3>
+                    <div id="ckVol" class="text-xs text-slate-400">Comptage en cours…</div>
+                </div>`;
+            // volumétrie asynchrone (comptages mis en cache sur t.lastRows)
+            try {
+                const { conn } = await getDB();
+                let total = 0; const rows = [];
+                for (const t of tables) {
+                    if (t.lastRows == null) { try { const r = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))}`))[0]; t.lastRows = Number(r.n); } catch (e) { t.lastRows = null; } }
+                    if (t.lastRows != null) { total += t.lastRows; rows.push([t.name, t.lastRows, t.theme || '']); }
+                }
+                const ck = el('ckRows'); if (ck) ck.textContent = total.toLocaleString('fr-FR');
+                const cv = el('ckVol'); if (cv) cv.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-1.5">${rows.sort((a, b) => b[1] - a[1]).map(([n, v, d]) => `<div class="flex justify-between gap-2 border border-slate-100 rounded px-2.5 py-1.5"><span class="truncate font-medium text-slate-700">${escapeHTML(n)}${d ? ` <span class="text-[9px] text-slate-400">🗂 ${escapeHTML(d)}</span>` : ''}</span><span class="font-black text-slate-600">${v.toLocaleString('fr-FR')}</span></div>`).join('')}</div>`;
+            } catch (e) { const cv = el('ckVol'); if (cv) cv.textContent = 'Volumétrie indisponible : ' + e.message; }
+        }
+
+        // ======================= 🛡 Détection RGPD / données personnelles =======================
+        const PII_HEADER_RX = /nom|prenom|prénom|name|email|mail|tel|phone|portable|mobile|adresse|address|rue|iban|bic|naissance|birth|secu|nir|salaire|salary|cni|passeport/i;
+        async function scanPII(btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '🛡 Analyse…'; }
+            bgTaskStart('Détection des données personnelles');
+            try {
+                const { conn } = await getDB();
+                const found = [];
+                for (const t of Object.values(state.tables).filter(x => x.status === 'ready')) {
+                    for (const h of t.headers) {
+                        let motif = PII_HEADER_RX.test(h) ? 'nom de colonne' : '';
+                        if (!motif) {
+                            try {
+                                const raw = `TRIM(CAST(${sqlIdent(h)} AS VARCHAR))`;
+                                const r = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n,
+                                    SUM(CASE WHEN regexp_matches(${raw}, '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$') THEN 1 ELSE 0 END)::BIGINT AS em,
+                                    SUM(CASE WHEN regexp_matches(${raw}, '^(\\+33|0)[1-9]([ .-]?[0-9]{2}){4}$') THEN 1 ELSE 0 END)::BIGINT AS ph,
+                                    SUM(CASE WHEN regexp_matches(UPPER(${raw}), '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$') THEN 1 ELSE 0 END)::BIGINT AS ib
+                                    FROM (SELECT ${sqlIdent(h)} FROM ${sqlIdent(duckTableName(t.id))} WHERE ${sqlIdent(h)} IS NOT NULL LIMIT 300) s`))[0];
+                                const n = Number(r.n) || 1;
+                                if (Number(r.em) / n > 0.3) motif = 'emails détectés';
+                                else if (Number(r.ph) / n > 0.3) motif = 'téléphones détectés';
+                                else if (Number(r.ib) / n > 0.3) motif = 'IBAN détectés';
+                            } catch (e) {}
+                        }
+                        if (motif) {
+                            found.push({ table: t.name, col: h, motif });
+                            // pré-remplit la sensibilité du dictionnaire si vide
+                            try { const d = ensureDictEntry(t.name); if (d.columns[h] && !d.columns[h].sensitivity) d.columns[h].sensitivity = 'Personnel (RGPD)'; } catch (e) {}
+                        }
+                    }
+                }
+                persistAppState();
+                const box = el('ckPii');
+                const html2 = found.length
+                    ? `<div class="border border-violet-200 bg-violet-50/50 rounded-lg p-3"><div class="text-xs font-black text-violet-800 mb-1.5">🛡 ${found.length} colonne(s) à caractère personnel détectée(s) — sensibilité « Personnel (RGPD) » pré-remplie dans le dictionnaire :</div><div class="flex flex-wrap gap-1">${found.slice(0, 40).map(f => `<span class="text-[10px] bg-white border border-violet-200 text-violet-700 rounded px-1.5 py-0.5" title="${escapeHTML(f.motif)}">${escapeHTML(f.table)}.${escapeHTML(f.col)}</span>`).join('')}${found.length > 40 ? `<span class="text-[10px] text-slate-400">+${found.length - 40}</span>` : ''}</div></div>`
+                    : '<div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-2.5">✔ Aucune donnée personnelle évidente détectée.</div>';
+                if (box) box.innerHTML = html2; else showSuccess(`🛡 Scan RGPD : ${found.length} colonne(s) détectée(s).`);
+                bgTaskEnd(`🛡 Scan RGPD terminé : ${found.length} colonne(s) marquée(s).`);
+            } catch (e) { bgTaskEnd(); showError('Scan RGPD impossible : ' + e.message); }
+            finally { if (btn) { btn.disabled = false; btn.textContent = '🛡 Détecter les données personnelles (RGPD)'; } }
+        }
+
+        // ======================= 📄 Dossier de gouvernance exportable =======================
+        function exportGovernanceReport() {
+            const g = state.governance, e2 = escapeHTML;
+            const tables = Object.values(state.tables).filter(t => t.status === 'ready');
+            const sec = (t, b) => `<h2 style="font:700 16px system-ui;color:#312e81;border-bottom:2px solid #e0e7ff;padding-bottom:4px;margin:28px 0 10px">${t}</h2>${b}`;
+            const tbl = (heads, rows) => `<table style="width:100%;border-collapse:collapse;font:12px system-ui"><tr>${heads.map(h => `<th style="text-align:left;background:#f1f5f9;padding:6px;border:1px solid #e2e8f0">${h}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map(cx => `<td style="padding:5px 6px;border:1px solid #e2e8f0">${cx}</td>`).join('')}</tr>`).join('')}</table>`;
+            let out = `<div style="max-width:900px;margin:0 auto;padding:30px;font-family:system-ui">
+                <h1 style="font:900 26px system-ui;color:#1e1b4b">🏛️ Dossier de gouvernance des données</h1>
+                <p style="font:12px system-ui;color:#64748b">Généré par Studio Data le ${new Date().toLocaleString('fr-FR')}</p>`;
+            out += sec('1. Sources & tables', tbl(['Nom', 'Type', 'Domaine', 'Lignes', 'Colonnes'],
+                tables.map(t => [e2(t.name), t.type === 'designed' ? '🧱 table conçue' : e2(t.type), e2(t.theme || '—'), t.lastRows != null ? t.lastRows.toLocaleString('fr-FR') : '—', t.headers.length])));
+            out += sec('2. Liens du modèle de données', state.relations.length ? tbl(['De', 'Vers', 'Cardinalité'],
+                state.relations.filter(r => state.tables[r.sourceTable] && state.tables[r.targetTable]).map(r => [`${e2(state.tables[r.sourceTable].name)}.${e2(r.sourceCol)}`, `${e2(state.tables[r.targetTable].name)}.${e2(r.targetCol)}`, e2(r.cardinality || '—')])) : '<p style="font:12px system-ui;color:#94a3b8">Aucun lien défini.</p>');
+            out += sec('3. Objets métier', (g.businessObjects || []).length ? tbl(['Objet', 'Propriétaire', 'Sources (rôles)', 'Attributs', 'Hiérarchies'],
+                g.businessObjects.map(bo => [e2(bo.name), bo.globalOwner ? e2(bo.globalOwner) : '⚠️ à nommer', e2((bo.sources || []).map(s => `${s.table} (${s.role})`).join(', ') || '—'), (bo.elements || []).length, getBoHierarchies(bo).length])) : '<p style="font:12px system-ui;color:#94a3b8">Aucun objet métier.</p>');
+            const sens = [];
+            Object.entries(g.dictionary || {}).forEach(([tn, d]) => Object.entries(d.columns || {}).forEach(([cn, cc]) => { if (cc.sensitivity && cc.sensitivity !== 'Public' && cc.sensitivity !== 'Interne') sens.push([e2(tn), e2(cn), e2(cc.sensitivity)]); }));
+            out += sec('4. Colonnes sensibles (dictionnaire)', sens.length ? tbl(['Table', 'Colonne', 'Sensibilité'], sens) : '<p style="font:12px system-ui;color:#94a3b8">Aucune colonne marquée sensible — lancez le scan RGPD.</p>');
+            out += sec('5. Historique des audits qualité', (g.qualityHistory || []).length ? tbl(['Date', 'Table', 'Lignes', 'Complétude moy.', 'Doublons'],
+                g.qualityHistory.slice(0, 20).map(h => [new Date(h.ts).toLocaleString('fr-FR'), e2(h.table || ''), (h.rows || 0).toLocaleString('fr-FR'), (h.avgCompleteness || 0) + ' %', (h.duplicates || 0).toLocaleString('fr-FR')])) : '<p style="font:12px system-ui;color:#94a3b8">Aucun audit réalisé.</p>');
+            out += '</div>';
+            const blob = new Blob([`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Dossier de gouvernance — Studio Data</title></head><body style="background:#fff">${out}</body></html>`], { type: 'text/html;charset=utf-8' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Dossier_gouvernance_${new Date().toISOString().slice(0, 10)}.html`;
+            document.body.appendChild(a); a.click(); a.remove();
+            showSuccess('📄 Dossier de gouvernance exporté (HTML autoportant, imprimable en PDF).');
+        }
+
         function exportConfiguration() {
             const config = { version: "18.0", relations: state.relations.map(r=>({sourceTable:state.tables[r.sourceTable]?.name, sourceCol:r.sourceCol, targetTable:state.tables[r.targetTable]?.name, targetCol:r.targetCol})), selections:{}, pivots:{}, filters:{}, hierarchyConfig:{}, graphConfig: state.graphConfig, baseTable:null, apiSources:[] };
             Object.keys(state.tables).forEach(tId => {
@@ -5387,6 +5398,132 @@
                 w.innerHTML = emptyDesigned ? '🧱 Aucune table conçue pour l\'instant — créez-en une dans l\'onglet <strong>Tables</strong> ; son modèle apparaîtra ici, séparé de celui des sources.' : '';
             });
         }
+        // ======================= Moteur SVG universel (remplace G6 partout) =======================
+        // Petit moteur maison exposant l'API dont les écrans ont besoin (data/render/changeData/
+        // layout/fitView/findById/getNodes/getEdges/updateItem/addItem/on/zoom/downloadFullImage).
+        // Disposition en couches (BFS gauche→droite), déplacement/pan/zoom gérés à la main.
+        function createSvgGraph(container) {
+            const S = { c: container, nodes: [], edges: [], pos: {}, size: {}, k: 1, tx: 30, ty: 30, h: {}, destroyed: false, _mm: null, _mu: null };
+            const nodeSize = m => {
+                if (m.type === 'studio-uml-node') return umlNodeSize(m.title || '', m.rows || []);
+                const tl = String(m.title || '').length, cl = String(m.content || '').length;
+                return [Math.min(260, Math.max(120, Math.max(tl * 7.5, cl * 6) + 20)), m.content ? 46 : 30];
+            };
+            const layered = () => {
+                const ids = S.nodes.map(n => n.id); const idset = new Set(ids);
+                const adj = {}, indeg = {};
+                ids.forEach(i => { adj[i] = []; indeg[i] = 0; });
+                S.edges.forEach(e => { if (e.source !== e.target && idset.has(e.source) && idset.has(e.target)) { adj[e.source].push(e.target); indeg[e.target]++; } });
+                const depth = {}; const q = ids.filter(i => !indeg[i]); (q.length ? q : ids.slice(0, 1)).forEach(i => depth[i] = 0);
+                const queue = [...(q.length ? q : ids.slice(0, 1))];
+                while (queue.length) { const u = queue.shift(); (adj[u] || []).forEach(v => { if (depth[v] === undefined || depth[v] < depth[u] + 1) { depth[v] = depth[u] + 1; if (queue.length < 5000) queue.push(v); } }); }
+                ids.forEach(i => { if (depth[i] === undefined) depth[i] = 0; });
+                const cols = {}; ids.forEach(i => (cols[depth[i]] = cols[depth[i]] || []).push(i));
+                const GX = 120, GY = 46; let x = 0;
+                Object.keys(cols).sort((a, b) => a - b).forEach(d => {
+                    const colIds = cols[d]; const w = Math.max(...colIds.map(i => S.size[i][0]));
+                    let y = 0;
+                    colIds.forEach(i => { const s = S.size[i]; S.pos[i] = { x: x + w / 2, y: y + s[1] / 2 }; y += s[1] + GY; });
+                    x += w + GX;
+                });
+            };
+            const esc = escapeHTML;
+            const draw = () => {
+                if (S.destroyed) return;
+                S.nodes.forEach(n => S.size[n.id] = nodeSize(n));
+                const missing = S.nodes.filter(n => !S.pos[n.id]);
+                if (missing.length === S.nodes.length) layered();
+                else missing.forEach(n => { const ref = S.edges.find(e => (e.target === n.id && S.pos[e.source]) || (e.source === n.id && S.pos[e.target])); const rp = ref ? S.pos[ref.source === n.id ? ref.target : ref.source] : { x: 0, y: 0 }; S.pos[n.id] = { x: rp.x + 260 + Math.random() * 60, y: rp.y + (Math.random() - 0.5) * 160 }; });
+                const box = id => { const p = S.pos[id], s = S.size[id]; return { cx: p.x, cy: p.y, w: s[0], h: s[1] }; };
+                let eSvg = '';
+                S.edges.forEach(e => {
+                    if (!S.pos[e.source] || !S.pos[e.target]) return;
+                    const st = e.style || {}; const col = st.stroke || '#94a3b8'; const dash = st.lineDash ? ` stroke-dasharray="${st.lineDash.join(' ')}"` : ''; const lw = st.lineWidth || 1.4;
+                    if (e.source === e.target) { const b = box(e.source); const d = (e.loopCfg && e.loopCfg.dist) || 40;
+                        eSvg += `<g class="usvge" data-id="${esc(e.id)}"><path d="M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} marker-end="url(#uArrow)"/>${e.label ? `<text x="${b.cx}" y="${b.cy - b.h / 2 - d - 4}" text-anchor="middle" font-size="10" fill="#475569" style="paint-order:stroke;stroke:#fff;stroke-width:3px">${esc(e.label)}</text>` : ''}</g>`; return; }
+                    const a = box(e.source), b = box(e.target);
+                    const p1 = svgBorderPoint(a, b.cx, b.cy), p2 = svgBorderPoint(b, a.cx, a.cy);
+                    eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.target)}"><path d="M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} marker-end="url(#uArrow)"/>${e.label ? `<text x="${(p1.x + p2.x) / 2}" y="${(p1.y + p2.y) / 2 - 3}" text-anchor="middle" font-size="10" fill="#475569" style="paint-order:stroke;stroke:#fff;stroke-width:3px">${esc(e.label)}</text>` : ''}</g>`;
+                });
+                let nSvg = '';
+                S.nodes.forEach(m => {
+                    const [w, h] = S.size[m.id]; const p = S.pos[m.id];
+                    let inner;
+                    if (m.type === 'studio-uml-node') {
+                        const headH = 28, rowH = 15;
+                        inner = `<rect width="${w}" height="${h}" rx="8" fill="#fff" stroke="${m.stroke || '#6366f1'}" stroke-width="1.2"/><rect width="${w}" height="${headH}" rx="8" fill="${m.headFill || '#eef2ff'}"/><rect y="${headH - 8}" width="${w}" height="8" fill="${m.headFill || '#eef2ff'}"/><text x="10" y="${headH / 2 + 4}" font-size="12" font-weight="700" fill="${m.titleFill || '#312e81'}">${esc(svgTrunc(m.title || '', w))}</text>`;
+                        (m.rows || []).forEach((r, i) => inner += `<text x="10" y="${headH + 12 + i * rowH}" font-size="10" fill="#475569">${esc(svgTrunc(r, w))}</text>`);
+                    } else {
+                        inner = `<rect width="${w}" height="${h}" rx="6" fill="${m.fill || '#eef2ff'}" stroke="${m.stroke || '#6366f1'}" stroke-width="1.2"/><text x="8" y="${m.content ? 17 : h / 2 + 4}" font-size="11" font-weight="700" fill="#1e293b">${esc(svgTrunc(m.title || '', w))}</text>${m.content ? `<text x="8" y="${h - 9}" font-size="9" fill="#64748b">${esc(svgTrunc(m.content, w))}</text>` : ''}`;
+                    }
+                    nSvg += `<g class="usvgn" data-id="${esc(m.id)}" transform="translate(${p.x - w / 2},${p.y - h / 2})" style="cursor:grab">${inner}</g>`;
+                });
+                S.c.innerHTML = `<svg class="usvg" width="100%" height="100%" style="display:block"><defs><marker id="uArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs><g class="uvp" transform="translate(${S.tx},${S.ty}) scale(${S.k})">${eSvg}${nSvg}</g></svg>`;
+                bind();
+            };
+            const apply = () => { const vp = S.c.querySelector('.uvp'); if (vp) vp.setAttribute('transform', `translate(${S.tx},${S.ty}) scale(${S.k})`); };
+            const fire = (evt, id) => { (S.h[evt] || []).forEach(f => { try { f({ item: api.findById(id) }); } catch (e) {} }); };
+            const bind = () => {
+                const svg = S.c.querySelector('svg.usvg'); if (!svg) return;
+                if (S._mm) window.removeEventListener('mousemove', S._mm);
+                if (S._mu) window.removeEventListener('mouseup', S._mu);
+                const pt = ev => { const r = svg.getBoundingClientRect(); return { x: (ev.clientX - r.left - S.tx) / S.k, y: (ev.clientY - r.top - S.ty) / S.k }; };
+                let mode = null, dragId = null, last = null, moved = 0, sg = null, clicks = {};
+                svg.addEventListener('mousedown', ev => { const ng = ev.target.closest('.usvgn');
+                    if (ng) { mode = 'node'; dragId = ng.getAttribute('data-id'); sg = pt(ev); moved = 0; } else { mode = 'pan'; last = { x: ev.clientX, y: ev.clientY }; }
+                    ev.preventDefault(); });
+                window.addEventListener('mousemove', S._mm = ev => {
+                    if (mode === 'pan') { S.tx += ev.clientX - last.x; S.ty += ev.clientY - last.y; last = { x: ev.clientX, y: ev.clientY }; apply(); }
+                    else if (mode === 'node') { const g = pt(ev); const p = S.pos[dragId]; if (!p) return; p.x += g.x - sg.x; p.y += g.y - sg.y; sg = g; moved++; draw(); }
+                });
+                window.addEventListener('mouseup', S._mu = () => {
+                    if (mode === 'node' && moved < 3 && dragId) {
+                        const now = Date.now();
+                        if (clicks[dragId] && now - clicks[dragId] < 350) { fire('node:dblclick', dragId); clicks[dragId] = 0; }
+                        else { clicks[dragId] = now; fire('node:click', dragId); }
+                    }
+                    mode = null; dragId = null;
+                });
+                svg.addEventListener('wheel', ev => { ev.preventDefault(); const r = svg.getBoundingClientRect(); const mx = ev.clientX - r.left, my = ev.clientY - r.top; const f = ev.deltaY < 0 ? 1.12 : 1 / 1.12; const nk = Math.max(0.1, Math.min(3, S.k * f)); S.tx = mx - (mx - S.tx) * (nk / S.k); S.ty = my - (my - S.ty) * (nk / S.k); S.k = nk; apply(); }, { passive: false });
+            };
+            const wrap = m => m ? { getID: () => m.id, getModel: () => m, _m: m } : null;
+            const api = {
+                data(d) { S.nodes = (d && d.nodes || []).slice(); S.edges = (d && d.edges || []).slice(); },
+                render: draw,
+                changeData(d) { this.data(d); draw(); },
+                layout() { S.pos = {}; S.nodes.forEach(n => S.size[n.id] = nodeSize(n)); layered(); draw(); },
+                fitView() { const ids = S.nodes.map(n => n.id).filter(i => S.pos[i]); if (!ids.length) return;
+                    let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+                    ids.forEach(i => { const p = S.pos[i], s = S.size[i]; x1 = Math.min(x1, p.x - s[0] / 2); y1 = Math.min(y1, p.y - s[1] / 2); x2 = Math.max(x2, p.x + s[0] / 2); y2 = Math.max(y2, p.y + s[1] / 2); });
+                    const W = S.c.clientWidth || 800, H = S.c.clientHeight || 450, M = 40;
+                    S.k = Math.max(0.1, Math.min(1.4, Math.min((W - 2 * M) / Math.max(1, x2 - x1), (H - 2 * M) / Math.max(1, y2 - y1))));
+                    S.tx = (W - (x2 - x1) * S.k) / 2 - x1 * S.k; S.ty = (H - (y2 - y1) * S.k) / 2 - y1 * S.k; apply(); },
+                zoom(f) { const W = S.c.clientWidth || 800, H = S.c.clientHeight || 450; const nk = Math.max(0.1, Math.min(3, S.k * f)); S.tx = W / 2 - (W / 2 - S.tx) * (nk / S.k); S.ty = H / 2 - (H / 2 - S.ty) * (nk / S.k); S.k = nk; apply(); },
+                getWidth() { return S.c.clientWidth || 800; }, getHeight() { return S.c.clientHeight || 450; },
+                changeSize() { }, get(k2) { return k2 === 'destroyed' ? S.destroyed : undefined; },
+                getNodes() { return S.nodes.map(wrap); }, getEdges() { return S.edges.map(wrap); },
+                findById(id) { return wrap(S.nodes.find(n => n.id === id) || S.edges.find(e => e.id === id)); },
+                addItem(kind, m) { (kind === 'node' ? S.nodes : S.edges).push(m); },
+                updateItem(it, patch) { const m = it && it._m ? it._m : (typeof it === 'string' ? (S.nodes.find(n => n.id === it) || S.edges.find(e => e.id === it)) : it && it.getModel ? it.getModel() : null); if (m) Object.assign(m, patch); clearTimeout(S._rt); S._rt = setTimeout(draw, 30); },
+                setItemState() { }, refreshPositions: draw,
+                on(evt, fn) { (S.h[evt] = S.h[evt] || []).push(fn); },
+                destroy() { S.destroyed = true; if (S._mm) window.removeEventListener('mousemove', S._mm); if (S._mu) window.removeEventListener('mouseup', S._mu); S.c.innerHTML = ''; },
+                downloadFullImage(name) {
+                    try {
+                        const ids = S.nodes.map(n => n.id).filter(i => S.pos[i]); if (!ids.length) return;
+                        let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+                        ids.forEach(i => { const p = S.pos[i], s = S.size[i]; x1 = Math.min(x1, p.x - s[0] / 2); y1 = Math.min(y1, p.y - s[1] / 2); x2 = Math.max(x2, p.x + s[0] / 2); y2 = Math.max(y2, p.y + s[1] / 2); });
+                        const M = 40, w = Math.ceil(x2 - x1 + 2 * M), h = Math.ceil(y2 - y1 + 2 * M);
+                        const vp = S.c.querySelector('.uvp').cloneNode(true); vp.setAttribute('transform', `translate(${M - x1},${M - y1})`);
+                        const out = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><marker id="uArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs><rect width="${w}" height="${h}" fill="#fff"/>${new XMLSerializer().serializeToString(vp)}</svg>`;
+                        const img = new Image();
+                        img.onload = () => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0); const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = (name || 'graphe') + '.png'; document.body.appendChild(a); a.click(); a.remove(); };
+                        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out);
+                    } catch (e) { showError('Export impossible : ' + e.message); }
+                },
+            };
+            return api;
+        }
         // ======================= Rendu SVG maison du Modèle de données =======================
         // Aucune dépendance externe : on dessine des cartes (rect + textes) et des liens (path) en SVG.
         // Positions calculées par computeDomainPositions (couloirs par domaine, sans collision). Le
@@ -5426,7 +5563,7 @@
             const s = Math.min(dx ? (b.w / 2) / Math.abs(dx) : Infinity, dy ? (b.h / 2) / Math.abs(dy) : Infinity);
             return { x: b.cx + dx * s, y: b.cy + dy * s };
         }
-        function svgApplyTransform() { const vp = el('mcdVp'); if (vp) vp.setAttribute('transform', `translate(${svgG.tx},${svgG.ty}) scale(${svgG.k})`); }
+        function svgApplyTransform() { const vp = el('mcdVp'); if (vp) vp.setAttribute('transform', `translate(${svgG.tx},${svgG.ty}) scale(${svgG.k})`); try { svgRenderMinimap(); } catch (e) {} }
         function renderGraphSVG(cont) {
             const schemaMode = state.graphConfig.mcdView === 'schema';
             const visibleIds = mcdVisibleIds();
@@ -5491,6 +5628,7 @@
             if (svgG.needFit) { svgG.needFit = false; svgFitAll(); } else { svgApplyTransform(); }
             // rétablit un éventuel focus/surlignage actif
             mcdHighlightId = null; svgApplyFocus();
+            try { svgRenderMinimap(); } catch (e) {}
         }
         // « Tout voir » : cadre l'ensemble du modèle dans la fenêtre (indispensable pour naviguer).
         function svgFitAll() {
@@ -5549,7 +5687,8 @@
             window.addEventListener("mouseup", _svgWin.mu = ev => {
                 if (mode === 'pan') svg.style.cursor = 'grab';
                 if (mode === 'node') { const ng = svg.querySelector(`.svgnode[data-id="${CSS.escape(dragId)}"]`); if (ng) ng.style.cursor = 'grab';
-                    if (moved < 3) { if (mcdLinkMode) mcdNodeClicked(dragId); else svgHighlightNeighbors(dragId); } }
+                    if (moved < 3) { if (mcdLinkMode) mcdNodeClicked(dragId); else if (mcdPathMode) mcdPathClick(dragId); else svgHighlightNeighbors(dragId); } else persistAppState(); }
+                if (mode === 'zone') persistAppState();
                 mode = null; dragId = null; zoneDom = null; zoneEl = null;
             });
             svg.addEventListener('wheel', ev => {
@@ -5590,6 +5729,60 @@
             svgSetDim(keep);
         }
         function svgClearHighlight() { mcdHighlightId = null; svgApplyFocus(); }
+
+        // ---- 🔍 Recherche « aller à une table » : centre la vue et surligne le voisinage ----
+        function svgCenterOn(id) {
+            const cont = el('networkGraph'); const p = svgG.pos[id]; if (!cont || !p) return;
+            const W = cont.clientWidth || 800, H = cont.clientHeight || 500;
+            if (svgG.k < 0.5) svgG.k = 0.8;
+            svgG.tx = W / 2 - p.x * svgG.k; svgG.ty = H / 2 - p.y * svgG.k;
+            svgApplyTransform(); mcdHighlightId = null; svgHighlightNeighbors(id);
+        }
+        function mcdGotoTable(name) {
+            const t = Object.values(state.tables).find(x => x.name === name); if (!t) return;
+            if (!mcdVisibleIds().has(t.id)) { state.graphConfig.mcdTheme = ''; state.graphConfig.mcdHidden = []; renderGraph(); }
+            svgCenterOn(t.id);
+        }
+        // ---- 🧭 Chemin entre deux tables : surligne la chaîne de jointures ----
+        let mcdPathMode = false, mcdPathA = null;
+        function mcdTogglePathMode() {
+            mcdPathMode = !mcdPathMode; mcdPathA = null; mcdLinkMode = false;
+            renderMcdControls();
+            mcdLinkHint(mcdPathMode ? '🧭 Mode chemin — cliquez la <strong>première</strong> table, puis la <strong>seconde</strong> : la chaîne de jointures qui les relie sera surlignée.' : '');
+            if (!mcdPathMode) svgClearHighlight();
+        }
+        function mcdPathClick(id) {
+            if (!mcdPathA) { mcdPathA = id; mcdLinkHint(`🧭 1️⃣ <strong>${escapeHTML(state.tables[id].name)}</strong> — cliquez la table d'arrivée.`); return; }
+            const a = mcdPathA; mcdPathA = null;
+            // BFS sur les liens du modèle
+            const adj = {};
+            state.relations.forEach(r => { if (!r.sourceCol || !r.targetCol) return; (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ o: r.targetTable, r }); (adj[r.targetTable] = adj[r.targetTable] || []).push({ o: r.sourceTable, r }); });
+            const prev = { [a]: null }; const q = [a]; let ok = false;
+            while (q.length) { const u = q.shift(); if (u === id) { ok = true; break; } (adj[u] || []).forEach(v => { if (!(v.o in prev)) { prev[v.o] = u; q.push(v.o); } }); }
+            if (!ok) { mcdLinkHint(`❌ Aucun chemin de jointures entre <strong>${escapeHTML(state.tables[a].name)}</strong> et <strong>${escapeHTML(state.tables[id].name)}</strong> — ajoutez un lien dans le modèle.`); return; }
+            const path = []; let cur = id; while (cur) { path.unshift(cur); cur = prev[cur]; }
+            svgSetDim(new Set(path));
+            mcdLinkHint(`🧭 Chemin : ${path.map(x => `<strong>${escapeHTML(state.tables[x].name)}</strong>`).join(' → ')} <button onclick="svgClearHighlight(); mcdLinkHint(mcdPathMode ? '🧭 Mode chemin — cliquez deux tables.' : '')" class="ml-2 text-[10px] bg-white border border-indigo-300 rounded px-1.5 py-0.5">effacer</button>`);
+        }
+        // ---- 🗺 Mini-carte : aperçu global + fenêtre courante, clic pour se déplacer ----
+        function svgRenderMinimap() {
+            const cont = el('networkGraph'); if (!cont || !el('mcdSvg')) return;
+            let mm = cont.querySelector('.mcdMini');
+            const ids = Object.keys(svgG.pos); if (!ids.length) { if (mm) mm.remove(); return; }
+            let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+            ids.forEach(id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; x1 = Math.min(x1, p.x - s[0] / 2); y1 = Math.min(y1, p.y - s[1] / 2); x2 = Math.max(x2, p.x + s[0] / 2); y2 = Math.max(y2, p.y + s[1] / 2); });
+            const MW = 168, MH = 104, sc = Math.min(MW / Math.max(1, x2 - x1), MH / Math.max(1, y2 - y1)) * 0.92;
+            const ox = (MW - (x2 - x1) * sc) / 2 - x1 * sc, oy = (MH - (y2 - y1) * sc) / 2 - y1 * sc;
+            const W = cont.clientWidth || 800, H = cont.clientHeight || 500;
+            const vx = (0 - svgG.tx) / svgG.k, vy = (0 - svgG.ty) / svgG.k, vw = W / svgG.k, vh = H / svgG.k;
+            const rects = ids.map(id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; const t = state.tables[id]; const pal = t && t.theme ? themePalette((t.theme || '').trim()) : null;
+                return `<rect x="${(p.x - s[0] / 2) * sc + ox}" y="${(p.y - s[1] / 2) * sc + oy}" width="${Math.max(2, s[0] * sc)}" height="${Math.max(2, s[1] * sc)}" fill="${pal ? pal.zone : '#94a3b8'}" fill-opacity="0.75" rx="1"/>`; }).join('');
+            const view = `<rect x="${vx * sc + ox}" y="${vy * sc + oy}" width="${vw * sc}" height="${vh * sc}" fill="none" stroke="#4f46e5" stroke-width="1.5"/>`;
+            if (!mm) { mm = document.createElement('div'); mm.className = 'mcdMini'; mm.style.cssText = 'position:absolute;right:10px;bottom:10px;width:168px;height:104px;background:rgba(255,255,255,.92);border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 10px -4px rgba(15,23,42,.3);cursor:crosshair;z-index:5;overflow:hidden'; cont.style.position = 'relative'; cont.appendChild(mm);
+                mm.addEventListener('mousedown', ev => { ev.stopPropagation(); const r = mm.getBoundingClientRect(); const gx = (ev.clientX - r.left - mm.__ox) / mm.__sc, gy = (ev.clientY - r.top - mm.__oy) / mm.__sc; const c2 = el('networkGraph'); const W2 = c2.clientWidth || 800, H2 = c2.clientHeight || 500; svgG.tx = W2 / 2 - gx * svgG.k; svgG.ty = H2 / 2 - gy * svgG.k; svgApplyTransform(); }); }
+            mm.__sc = sc; mm.__ox = ox; mm.__oy = oy;
+            mm.innerHTML = `<svg width="${MW}" height="${MH}">${rects}${view}</svg>`;
+        }
 
         // (ancien rendu G6 du Modèle de données supprimé : le moteur SVG est désormais le seul rendu du MCD)
 
@@ -7009,10 +7202,9 @@
             const tId=el('expBaseTable').value, col=el('expCol').value, val=el('expVal').value;
             if(!tId||!col||!val) return showError("Remplissez tous les champs.");
             el('expLoading').classList.remove('hidden'); el('expWorkspace').classList.remove('hidden');
-            ensureG6NodeRegistered();
             if(!expNetInstance) {
                 const cont = el('expGraphContainer');
-                expNetInstance = createStudioGraph(cont, {
+                expNetInstance = createSvgGraph(cont, {
                     type: 'gForce', preventOverlap: true, nodeSize: 180, linkDistance: 150, nodeStrength: 800, edgeStrength: 200,
                     maxIteration: 400, damping: 0.9, workerEnabled: true, animate: false,
                 }, {
