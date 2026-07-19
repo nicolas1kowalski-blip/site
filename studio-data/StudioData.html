@@ -1421,14 +1421,15 @@
             if (doneMsg) showSuccess(doneMsg);
         }
 
-        function showError(msg) { el('globalErrorText').innerHTML = msg; el('globalError').classList.remove('hidden'); window.scrollTo({top:0, behavior:'smooth'}); }
+        function showError(msg) { el('globalErrorText').textContent = msg; el('globalError').classList.remove('hidden'); window.scrollTo({top:0, behavior:'smooth'}); }
         function hideError() { el('globalError').classList.add('hidden'); }
         function showSuccess(msg) { 
             const c = el('toastContainer'); if(!c) return; 
             const t = document.createElement('div'); 
             t.className = 'bg-emerald-100 border border-emerald-300 text-emerald-800 px-4 py-3 rounded shadow flex items-center gap-3 transition-opacity duration-500'; 
-            t.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i><span class="text-sm font-medium">${msg}</span>`; 
-            c.appendChild(t); lucide.createIcons({root:t}); 
+            t.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i><span class="text-sm font-medium"></span>`;
+            t.querySelector('span').textContent = msg; // data éventuellement piégée (nom de colonne…) : jamais interprétée en HTML
+            c.appendChild(t); lucide.createIcons({root:t});
             setTimeout(() => { t.classList.add('opacity-0'); setTimeout(() => t.remove(), 500); }, 4000); 
         }
 
