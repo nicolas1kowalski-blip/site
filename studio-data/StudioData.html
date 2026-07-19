@@ -1086,12 +1086,18 @@
         // Fabrique de graphe unifiée : layouts déterministes qui se figent (plus de simulation
         // continue qui « se rebat » quand on déplace une boîte), déplacement fluide via delegate
         // (on ne redessine pas le nœud riche à chaque frame) et animations coupées pour la réactivité.
-        const STUDIO_DRAG_NODE = { type: 'drag-node', enableDelegate: true, delegateStyle: { fill: '#c7d2fe', fillOpacity: 0.4, stroke: '#6366f1', lineWidth: 1.5, radius: 6 } };
+        // Déplacement FLUIDE : le nœud suit directement le curseur (pas de fantôme) et surtout
+        // updateEdge=false → les liens ne sont PAS recalculés à chaque frame (cause n°1 des
+        // saccades) ; ils se replacent au lâcher. drag-combo : déplacer un thème déplace toutes
+        // ses tables d'un bloc.
+        const STUDIO_DRAG_NODE = { type: 'drag-node', enableDelegate: false, updateEdge: false };
+        const STUDIO_DRAG_COMBO = { type: 'drag-combo', enableDelegate: true, delegateStyle: { fill: '#6366f1', fillOpacity: 0.06, stroke: '#6366f1', lineWidth: 1.5, lineDash: [6, 4], radius: 10 } };
         const STUDIO_GRAPH_MODES = {
             default: [
                 'drag-canvas',
                 { type: 'zoom-canvas', sensitivity: 1.4 },
                 STUDIO_DRAG_NODE,
+                STUDIO_DRAG_COMBO,
                 { type: 'activate-relations', trigger: 'mouseenter' }, // survol : met en avant le nœud et ses liens, estompe le reste
             ],
         };
@@ -1106,6 +1112,15 @@
                 const item = e.item; if (!item) return;
                 const m = item.getModel();
                 graph.updateItem(item, { fx: m.x, fy: m.y }); // gForce respecte fx/fy
+            });
+            // Après déplacement d'un thème (combo), on rafraîchit les liens (updateEdge=false pendant
+            // le drag) et on fige la nouvelle position de chaque table qu'il contient.
+            graph.on('combo:dragend', (e) => {
+                const combo = e.item; if (!combo) return;
+                (graph.getComboChildren ? (graph.getComboChildren(combo).nodes || []) : []).forEach(n => {
+                    const m = n.getModel(); graph.updateItem(n, { fx: m.x, fy: m.y });
+                });
+                graph.refreshPositions();
             });
         }
         function createStudioGraph(container, layout, extra) {
