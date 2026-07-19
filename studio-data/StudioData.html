@@ -231,7 +231,7 @@
                         <select onchange="setMcdLayout(this.value)" id="mcdLayoutSelect" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600" title="Disposition du diagramme">
                             <option value="dagre">📐 Hiérarchique (stable)</option>
                             <option value="force">🕸️ Organique (force)</option>
-                            <option value="combo">🗃 Par thème (zones groupées)</option>
+                            <option value="combo">🗃 Par domaine (zones groupées)</option>
                         </select>
                         <span id="mcdToolbar"></span>
                         <button onclick="mcdToggleLinkMode()" class="mcdLinkBtn text-[11px] bg-white border border-indigo-300 px-2.5 py-1 rounded font-bold text-indigo-700 hover:bg-indigo-50" title="Tracer un lien à la souris : cliquez une table, puis une seconde — l'appli demande les attributs.">🖱 Tracer un lien</button>
@@ -1096,7 +1096,7 @@
         // (on ne redessine pas le nœud riche à chaque frame) et animations coupées pour la réactivité.
         // Déplacement FLUIDE : le nœud suit directement le curseur (pas de fantôme) et surtout
         // updateEdge=false → les liens ne sont PAS recalculés à chaque frame (cause n°1 des
-        // saccades) ; ils se replacent au lâcher. drag-combo : déplacer un thème déplace toutes
+        // saccades) ; ils se replacent au lâcher. drag-combo : déplacer un domaine déplace toutes
         // ses tables d'un bloc.
         const STUDIO_DRAG_NODE = { type: 'drag-node', enableDelegate: false, updateEdge: false };
         const STUDIO_DRAG_COMBO = { type: 'drag-combo', enableDelegate: true, delegateStyle: { fill: '#6366f1', fillOpacity: 0.06, stroke: '#6366f1', lineWidth: 1.5, lineDash: [6, 4], radius: 10 } };
@@ -1121,7 +1121,7 @@
                 const m = item.getModel();
                 graph.updateItem(item, { fx: m.x, fy: m.y }); // gForce respecte fx/fy
             });
-            // Après déplacement d'un thème (combo), on rafraîchit les liens (updateEdge=false pendant
+            // Après déplacement d'un domaine (combo), on rafraîchit les liens (updateEdge=false pendant
             // le drag) et on fige la nouvelle position de chaque table qu'il contient.
             graph.on('combo:dragend', (e) => {
                 const combo = e.item; if (!combo) return;
@@ -1169,7 +1169,7 @@
         }
         // Périmètre du modèle : 'sources' = fichiers/API/extractions · 'designed' = tables conçues
         // (+ les tables qu'elles référencent directement) · 'all' = ensemble. Deux modèles séparés,
-        // mêmes fonctions (tracer/supprimer des liens, vues, thèmes, plein écran).
+        // mêmes fonctions (tracer/supprimer des liens, vues, domaines, plein écran).
         function mcdScope() { return state.graphConfig.mcdScope || 'sources'; }
         function setMcdScope(v) {
             state.graphConfig.mcdScope = v;
@@ -1191,9 +1191,13 @@
                     else if (ids.has(r.targetTable) && state.tables[r.sourceTable]) ids.add(r.sourceTable);
                 });
             } else ids = new Set(all.filter(t => t.type !== 'designed').map(t => t.id));
-            // Filtre par THÈME : n'afficher qu'un seul thème (grande simplification de lecture).
+            // ② Tables masquées manuellement : toujours retirées.
+            const hidden = new Set(state.graphConfig.mcdHidden || []);
+            if (hidden.size) ids = new Set([...ids].filter(id => !hidden.has(id)));
+            // Filtre par domaine : n'afficher qu'un seul domaine — SAUF en mode Focus (on garde tout
+            // et on estompe les autres après le rendu).
             const th = (state.graphConfig.mcdTheme || '').trim();
-            if (th) ids = new Set([...ids].filter(id => (state.tables[id].theme || '').trim() === th));
+            if (th && !state.graphConfig.mcdFocus) ids = new Set([...ids].filter(id => (state.tables[id].theme || '').trim() === th));
             return ids;
         }
         function setMcdTheme(v) {
@@ -1203,12 +1207,56 @@
             persistAppState();
         }
         function mcdThemeFilterHtml() {
-            const themes = themeList(); if (!themes.length) return '';
+            const themes = themeList();
             const cur = (state.graphConfig.mcdTheme || '').trim();
-            return `<select onchange="setMcdTheme(this.value)" title="N'afficher qu'un seul thème pour simplifier la lecture" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold ${cur ? 'text-indigo-700 border-indigo-300' : 'text-slate-600'}">
-                <option value="">🎨 Tous les thèmes</option>
-                ${themes.map(t => `<option value="${escapeHTML(t)}" ${t === cur ? 'selected' : ''}>🗂 ${escapeHTML(t)}</option>`).join('')}
-            </select>`;
+            const hidden = (state.graphConfig.mcdHidden || []);
+            let html = '';
+            if (themes.length) {
+                html += `<select onchange="setMcdTheme(this.value)" title="N'afficher qu'un seul domaine pour simplifier la lecture" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold ${cur ? 'text-indigo-700 border-indigo-300' : 'text-slate-600'}">
+                    <option value="">🎨 Tous les domaines</option>
+                    ${themes.map(t => `<option value="${escapeHTML(t)}" ${t === cur ? 'selected' : ''}>🗂 ${escapeHTML(t)}</option>`).join('')}
+                </select>`;
+                // ① Focus : estomper les autres domaines au lieu de les masquer.
+                if (cur) html += `<button onclick="mcdToggleFocus()" class="text-[11px] px-2 py-1 rounded font-bold border ${state.graphConfig.mcdFocus ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}" title="Focus : garder les autres domaines en gris translucide au lieu de les masquer">🔆 Focus</button>`;
+            }
+            // ④ Ranger proprement (relance la disposition).
+            html += `<button onclick="mcdRelayout()" class="text-[11px] px-2 py-1 rounded font-bold bg-white text-slate-600 border border-slate-300 hover:bg-slate-50" title="Réaligner automatiquement toutes les tables">🧹 Ranger</button>`;
+            // ② Tables masquées : bouton pour tout réafficher.
+            if (hidden.length) html += `<button onclick="mcdUnhideAll()" class="text-[11px] px-2 py-1 rounded font-bold bg-amber-50 text-amber-700 border border-amber-300" title="Réafficher les tables masquées">👁 Réafficher (${hidden.length})</button>`;
+            return html;
+        }
+        function mcdToggleFocus() { state.graphConfig.mcdFocus = !state.graphConfig.mcdFocus; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); persistAppState(); }
+        // ④ Ranger : recrée l'instance → la disposition est recalculée proprement (positions figées effacées).
+        function mcdRelayout() { if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
+        // ② Masquer / réafficher des tables du graphe.
+        function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
+        function mcdUnhideAll() { state.graphConfig.mcdHidden = []; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
+        // ① Focus + ⑤ voisinage : jouent sur les états 'active'/'inactive' (déjà stylés).
+        function mcdApplyFocus() {
+            const g = networkInstance; if (!g) return;
+            const th = (state.graphConfig.mcdTheme || '').trim();
+            if (!(th && state.graphConfig.mcdFocus)) return;
+            try {
+                g.getNodes().forEach(n => { const t = state.tables[n.getID()]; g.setItemState(n, 'inactive', !t || (t.theme || '').trim() !== th); });
+            } catch (e) {}
+        }
+        // ⑤ Surligne une table et ses voisines directes ; le reste est estompé.
+        let mcdHighlightId = null;
+        function mcdHighlightNeighbors(id) {
+            const g = networkInstance; if (!g) return;
+            if (mcdHighlightId === id) { mcdClearHighlight(); return; }
+            mcdHighlightId = id;
+            const keep = new Set([id]);
+            state.relations.forEach(r => { if (r.sourceTable === id) keep.add(r.targetTable); else if (r.targetTable === id) keep.add(r.sourceTable); });
+            try {
+                g.getNodes().forEach(n => g.setItemState(n, 'inactive', !keep.has(n.getID())));
+                g.getEdges().forEach(e => { const m = e.getModel(); g.setItemState(e, 'inactive', !(keep.has(m.source) && keep.has(m.target))); });
+            } catch (e) {}
+        }
+        function mcdClearHighlight() {
+            const g = networkInstance; if (!g) return; mcdHighlightId = null;
+            try { g.getNodes().forEach(n => g.setItemState(n, 'inactive', false)); g.getEdges().forEach(e => g.setItemState(e, 'inactive', false)); } catch (e) {}
+            mcdApplyFocus(); // rétablit l'estompage de focus s'il était actif
         }
         function mcdScopeButtonsHtml() {
             const sc = mcdScope();
@@ -1216,9 +1264,9 @@
             return `<span class="inline-flex rounded-lg overflow-hidden border border-slate-300 divide-x divide-slate-300">${btn('sources', '📥 Sources', 'Modèle des fichiers sources uniquement')}${btn('designed', '🧱 Tables', 'Modèle des tables conçues (et des tables qu\'elles référencent)')}${btn('all', '🌐 Ensemble', 'Tout le modèle, sources et tables mélangées')}</span>`;
         }
 
-        // ======================= Thèmes de sources (groupes) =======================
-        // Un thème regroupe des sources (initialisé par le nom du dossier surveillé, modifiable).
-        // Dans le graphe : zones (combos) + couleurs par thème.
+        // ======================= Domaines de sources (groupes) =======================
+        // Un domaine regroupe des sources (initialisé par le nom du dossier surveillé, modifiable).
+        // Dans le graphe : zones (combos) + couleurs par domaine.
         const THEME_PALETTE = [
             { head: '#e0e7ff', title: '#312e81', stroke: '#6366f1', zone: '#6366f1' },
             { head: '#d1fae5', title: '#065f46', stroke: '#059669', zone: '#059669' },
@@ -1398,7 +1446,7 @@
                         <span class="mcdScopeWrap"></span>
                         <button onclick="mcdToggleLinkMode()" class="mcdLinkBtn text-[11px] bg-white border border-indigo-300 px-2.5 py-1 rounded font-bold text-indigo-700 hover:bg-indigo-50">🖱 Tracer un lien</button>
                         <select id="mcdViewSelectFull" onchange="setMcdView(this.value)" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600"><option value="links">🗂 Vue compacte</option><option value="schema">🗺 Schéma complet</option></select>
-                        <select id="mcdLayoutSelectFull" onchange="setMcdLayout(this.value)" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600"><option value="dagre">📐 Hiérarchique</option><option value="force">🕸️ Organique</option><option value="combo">🗃 Par thème</option></select>
+                        <select id="mcdLayoutSelectFull" onchange="setMcdLayout(this.value)" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600"><option value="dagre">📐 Hiérarchique</option><option value="force">🕸️ Organique</option><option value="combo">🗃 Par domaine</option></select>
                         <button onclick="exportGraphImage('mcd')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Image</button>
                         <button onclick="openRelInfer()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">🪄 Déduire les liens</button>
                         <button onclick="toggleMcdFullscreen()" class="ml-auto text-sm font-black text-slate-500 hover:text-red-600 px-2" title="Fermer (Échap)">✕ Fermer</button>
@@ -1660,7 +1708,7 @@
                 state.tables[id].type = 'designed';
                 state.tables[id].design = { ...saved.designs[n], targetId: id };
             });
-            // Thèmes (groupes de sources) restaurés par nom.
+            // Domaines (groupes de sources) restaurés par nom.
             Object.keys(saved.themes || {}).forEach(n => { const id = idOf(n); if (id) state.tables[id].theme = saved.themes[n]; });
         }
 
@@ -2000,7 +2048,7 @@
         // Une ligne d'attribut (réutilisée par le cœur et par chaque bloc composant).
         function boElementRowHtml(bo, elm, names) {
             return `<tr class="hover:bg-slate-50 align-top" ondragover="reorderDragOver(event,'boel')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'boel','${elm.id}',(f,t)=>boElReorder('${bo.id}',f,t))">
-                <td class="p-2 text-center align-middle"><span draggable="true" ondragstart="reorderDragStart(event,'boel','${elm.id}')" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-emerald-600 select-none" title="Glisser pour ordonner par importance">⠿</span></td>
+                <td class="p-2 text-center align-middle whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'boel','${elm.id}')" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-emerald-600 select-none" title="Glisser pour ordonner par importance">⠿</span><br><span class="inline-flex leading-none">${[['top','⤒','Tout en haut'],['up','▲','Monter'],['down','▼','Descendre'],['bottom','⤓','Tout en bas']].map(([w,ic,ti])=>`<button onclick="boMoveEl('${bo.id}','${elm.id}','${w}')" class="text-slate-300 hover:text-emerald-600 text-[10px] font-black px-0.5" title="${ti}">${ic}</button>`).join('')}</span></td>
                 <td class="p-2"><input type="text" value="${escapeHTML(elm.name)}" onchange="updateBoElement('${bo.id}','${elm.id}','name',this.value)" class="font-bold text-xs border border-slate-300 p-1.5 rounded w-full bg-white" title="Nom métier — renommable librement"></td>
                 <td class="p-2"><input type="text" value="${escapeHTML(elm.owner || '')}" onchange="updateBoElement('${bo.id}','${elm.id}','owner',this.value)" class="text-xs border border-slate-200 p-1.5 rounded w-full" placeholder="hérite du global"></td>
                 <td class="p-2"><div class="flex flex-wrap items-center gap-1">
@@ -3840,6 +3888,22 @@
             [d.attrs[i], d.attrs[j]] = [d.attrs[j], d.attrs[i]];
             renderTablesDesign();
         }
+        function tdMoveAttrEdge(i, edge) {
+            const d = tdState.editing; if (!d || i < 0 || i >= d.attrs.length) return;
+            const [m] = d.attrs.splice(i, 1);
+            edge === 'top' ? d.attrs.unshift(m) : d.attrs.push(m);
+            renderTablesDesign();
+        }
+        // Objet métier : monter/descendre un attribut d'un cran ou tout en haut / tout en bas.
+        function boMoveEl(boId, elmId, where) {
+            const bo = state.governance.businessObjects.find(b => b.id === boId); if (!bo || !bo.elements) return;
+            const a = bo.elements, i = a.findIndex(e => e.id === elmId); if (i < 0) return;
+            const [m] = a.splice(i, 1);
+            let j = i;
+            if (where === 'top') j = 0; else if (where === 'bottom') j = a.length;
+            else if (where === 'up') j = Math.max(0, i - 1); else if (where === 'down') j = Math.min(a.length, i + 1);
+            a.splice(j, 0, m); persistAppState(); renderGovernance();
+        }
         // ---- Glisser-déposer générique pour réordonner un tableau (attributs, éléments d'objet…) ----
         let _reorderCtx = null;
         function reorderDragStart(ev, kind, i) { _reorderCtx = { kind, i }; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); } catch (e) {} const tr = ev.currentTarget; if (tr) tr.style.opacity = '0.4'; }
@@ -4265,7 +4329,7 @@
             const rows = d.attrs.map((a, i) => {
                 const isKey = d.key.includes(a);
                 return `<tr class="border-b border-slate-100 hover:bg-blue-50/30" ondragover="reorderDragOver(event,'tdattr')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'tdattr',${i},tdAttrDrop)">
-                    <td class="p-1 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'tdattr',${i})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-blue-600 select-none text-sm leading-none" title="Glisser pour réordonner">⠿</span><br><button onclick="tdMoveAttr(${i}, -1)" ${i === 0 ? 'disabled' : ''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-[10px] font-black px-0.5" title="Monter">▲</button><button onclick="tdMoveAttr(${i}, 1)" ${i === d.attrs.length - 1 ? 'disabled' : ''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-[10px] font-black px-0.5" title="Descendre">▼</button></td>
+                    <td class="p-1 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'tdattr',${i})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-blue-600 select-none text-sm leading-none" title="Glisser pour réordonner">⠿</span><br><span class="inline-flex leading-none">${[['top','⤒','Tout en haut',i===0],['−1 up','▲','Monter',i===0],['+1 down','▼','Descendre',i===d.attrs.length-1],['bottom','⤓','Tout en bas',i===d.attrs.length-1]].map(([act,ic,ti,dis])=>`<button onclick="${act==='−1 up'?`tdMoveAttr(${i},-1)`:act==='+1 down'?`tdMoveAttr(${i},1)`:`tdMoveAttrEdge(${i},'${act}')`}" ${dis?'disabled':''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-[10px] font-black px-0.5" title="${ti}">${ic}</button>`).join('')}</span></td>
                     <td class="p-1.5 text-center"><button onclick="tdToggleKey(${i})" title="${isKey ? 'Retirer de la clé primaire' : 'Ajouter à la clé primaire'}" class="text-base ${isKey ? '' : 'opacity-20 grayscale hover:opacity-60'}">🔑</button></td>
                     <td class="p-1.5"><input type="text" value="${escapeHTML(a)}" onchange="tdRenameAttr(${i}, this.value)" class="w-full border border-slate-300 rounded px-2 py-1 text-xs font-bold" title="Nom métier de l'attribut (renommez librement)"></td>
                     <td class="p-1.5"><select onchange="tdSetFormat(${i}, this.value)" title="Format cible : la valeur texte de la source est normalisée (date → AAAA-MM-JJ, décimal → point, booléen → OUI/NON, code → MAJUSCULES) ; l'inconvertible est gardé tel quel et compté non conforme." class="w-full border rounded px-1 py-1 text-xs ${(d.formats || {})[a] ? 'border-violet-300 bg-violet-50 text-violet-800 font-bold' : 'border-slate-200 bg-white text-slate-500'}">${TD_FORMATS.map(([v, l]) => `<option value="${v}" ${(d.formats || {})[a] === v || (!((d.formats || {})[a]) && !v) ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
@@ -5079,8 +5143,8 @@
                         : (t.storage === 'view' ? `<div class="text-[10px] font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded px-1.5 py-0.5 mb-1.5 inline-block" title="Gros fichier : lu à la demande depuis le disque, jamais copié en mémoire — les analyses relisent le fichier (un peu plus lentes mais sans limite de taille mémoire). Cliquez « Optimiser » pour accélérer.">⚡ Lecture directe (gros fichier)</div><br>` : '');
                     const mergedBadge = (Array.isArray(t.files)&&t.files.length?`<div class="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 mb-1.5 inline-block">🧩 Source fusionnée · ${t.files.length} fichiers</div><br>`:'');
                     html+=`<div class="max-h-28 overflow-auto text-xs bg-slate-50 p-2 rounded border border-slate-100">${mergedBadge}${storageBadge}${t.headers.map(h=>`<span class="inline-block bg-white border px-1 rounded mr-1 mb-1">${escapeHTML(h)}</span>`).join('')}</div>`;
-                    // Thème (groupe de sources) : initialisé par le dossier surveillé, modifiable librement.
-                    html+=`<div class="mt-2 flex items-center gap-2"><label class="text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">🗂 Thème</label><input list="themeDatalist" value="${escapeHTML(t.theme||'')}" onchange="updateTableTheme('${t.id}', this.value)" placeholder="ex : Achats, Référentiels…" class="flex-1 min-w-0 text-xs border border-slate-200 rounded p-1.5 ${t.theme?'bg-white font-bold text-slate-700':'bg-slate-50 text-slate-500'}" title="Groupe de sources : zones et couleurs dans le Modèle de données"></div>`;
+                    // Domaine (groupe de sources) : initialisé par le dossier surveillé, modifiable librement.
+                    html+=`<div class="mt-2 flex items-center gap-2"><label class="text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">🗂 Domaine</label><input list="themeDatalist" value="${escapeHTML(t.theme||'')}" onchange="updateTableTheme('${t.id}', this.value)" placeholder="ex : Achats, Référentiels…" class="flex-1 min-w-0 text-xs border border-slate-200 rounded p-1.5 ${t.theme?'bg-white font-bold text-slate-700':'bg-slate-50 text-slate-500'}" title="Groupe de sources : zones et couleurs dans le Modèle de données"></div>`;
                     // Bouton « Optimiser » : converti une source fichier (CSV/TXT/fusion) en Parquet compressé.
                     const canOptimize = (t.type==='csv'||t.type==='txt'||(Array.isArray(t.files)&&t.files.length)) && t.storage !== 'parquet';
                     if (canOptimize) html += `<button onclick="optimizeSourceToParquet('${t.id}', this)" class="mt-2 w-full text-[11px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded font-bold flex items-center justify-center gap-1.5" title="Convertir en Parquet compressé : analyses bien plus rapides, stockage réduit (×5 à ×10), idéal pour les gros fichiers.">🗜️ Optimiser${t.storage==='view'?' (recommandé — gros fichier)':''}</button>`;
@@ -5301,13 +5365,13 @@
                     stroke: pal ? pal.stroke : (isD ? '#3b82f6' : (isH ? '#059669' : '#6366f1')),
                 };
             });
-            // Zones par thème : un combo (cadre pointillé coloré) englobe les tables du même groupe.
+            // Zones par domaine : un combo (cadre pointillé coloré) englobe les tables du même groupe.
             const combos = themeList().map(th => {
                 const pal = themePalette(th);
                 return { id: 'th_' + th, label: '🗂 ' + th, style: { fill: pal.zone, fillOpacity: 0.05, stroke: pal.zone, lineDash: [6, 4], lineWidth: 1.5, radius: 10 }, labelCfg: { position: 'top', style: { fill: pal.zone, fontSize: 12, fontWeight: 700 } } };
             }).filter(c => nodes.some(n => n.comboId === c.id));
-            // Par défaut : disposition « Par thème » dès qu'il y a des thèmes (regroupe les tables
-            // d'un même thème sans chevauchement) ; sinon hiérarchique. Un choix explicite prime.
+            // Par défaut : disposition « Par domaine » dès qu'il y a des domaines (regroupe les tables
+            // d'un même domaine sans chevauchement) ; sinon hiérarchique. Un choix explicite prime.
             const layoutMode = state.graphConfig.mcdLayout || (themeList().length && !(state.graphConfig.mcdTheme || '').trim() ? 'combo' : 'dagre');
             const edges = state.relations.filter(r => r.sourceCol && r.targetCol && visibleIds.has(r.sourceTable) && visibleIds.has(r.targetTable)).map(r => {
                 const isSelf = r.sourceTable === r.targetTable;
@@ -5329,8 +5393,8 @@
                 if (layoutMode === 'force') {
                     layout = { type: 'gForce', preventOverlap: true, nodeSpacing: schemaMode ? 45 : 24, linkDistance: schemaMode ? 300 : 220, nodeStrength: 1200, edgeStrength: 200, maxIteration: 500, damping: 0.9, workerEnabled: true, animate: false };
                 } else if (layoutMode === 'combo') {
-                    // Par thème : combos non chevauchants (outer gForce anti-overlap) et tables du même
-                    // thème regroupées en grille compacte (inner grid). Repli sur défauts si indispo.
+                    // Par domaine : combos non chevauchants (outer gForce anti-overlap) et tables du même
+                    // domaine regroupées en grille compacte (inner grid). Repli sur défauts si indispo.
                     layout = { type: 'comboCombined', spacing: schemaMode ? 80 : 55, comboPadding: schemaMode ? 26 : 20 };
                     try { if (G6.Layout && G6.Layout.gForce) layout.outerLayout = new G6.Layout.gForce({ preventOverlap: true, linkDistance: schemaMode ? 320 : 240, nodeSpacing: 50, maxIteration: 500, animate: false }); } catch (e) {}
                     try { if (G6.Layout && G6.Layout.grid) layout.innerLayout = new G6.Layout.grid({ preventOverlap: true, nodeSize: schemaMode ? 220 : 160 }); } catch (e) {}
@@ -5346,14 +5410,19 @@
                 });
                 pinNodeOnDrag(networkInstance);
                 // Mode « Tracer un lien » : clic-clic ET glisser-déposer. Clic sur un LIEN : suppression.
-                networkInstance.on('node:click', ev => { try { mcdNodeClicked(ev.item.getID()); } catch (e2) {} });
+                networkInstance.on('node:click', ev => { try { const id = ev.item.getID(); if (mcdLinkMode) mcdNodeClicked(id); else mcdHighlightNeighbors(id); } catch (e2) {} });
                 networkInstance.on('edge:click', ev => { try { const id = ev.item.getID(); if (id && String(id).startsWith('rel_')) openEdgeDeleteModal(id); } catch (e2) {} });
+                // ⑤ clic sur le fond : rétablit tout · ② clic droit sur une table : la masquer
+                networkInstance.on('canvas:click', () => { try { mcdClearHighlight(); } catch (e2) {} });
+                networkInstance.on('node:contextmenu', ev => { try { ev.preventDefault && ev.preventDefault(); const oe = ev.originalEvent; if (oe && oe.preventDefault) oe.preventDefault(); mcdHideTable(ev.item.getID()); } catch (e2) {} });
+                // ③ double-clic sur une zone de domaine : la réduire / la déployer
+                networkInstance.on('combo:dblclick', ev => { try { const id = ev.item.getID(); const c = ev.item.getModel(); c.collapsed ? networkInstance.expandCombo(id) : networkInstance.collapseCombo(id); networkInstance.refreshPositions && networkInstance.refreshPositions(); } catch (e2) {} });
                 mcdBindLinkDrag(networkInstance);
                 if (mcdLinkMode) { try { networkInstance.removeBehaviors('drag-node', 'default'); } catch (e2) {} }
                 networkInstance.data({ nodes, edges, combos });
                 try { networkInstance.render(); }
                 catch (eL) {
-                    // Disposition « Par thème » indisponible dans ce moteur : repli hiérarchique.
+                    // Disposition « Par domaine » indisponible dans ce moteur : repli hiérarchique.
                     if (layoutMode === 'combo') { state.graphConfig.mcdLayout = 'dagre'; try { networkInstance.destroy(); } catch (e3) {} networkInstance = null; return _renderGraphImpl(cont); }
                     throw eL;
                 }
@@ -5361,6 +5430,7 @@
                 networkInstance.changeData({ nodes, edges, combos });
             }
             networkInstance.fitView(20);
+            requestAnimationFrame(() => { try { mcdApplyFocus(); } catch (e) {} }); // ① estompage focus après rendu
             const tb = el('mcdToolbar'); if (tb && !tb.innerHTML) tb.innerHTML = graphToolbarHtml('mcd');
             const ls = el('mcdLayoutSelect'); if (ls) ls.value = layoutMode;
             const vs = el('mcdViewSelect'); if (vs) vs.value = schemaMode ? 'schema' : 'links';
