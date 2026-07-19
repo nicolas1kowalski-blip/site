@@ -1181,17 +1181,34 @@
         function mcdVisibleIds() {
             const sc = mcdScope();
             const all = Object.values(state.tables);
-            if (sc === 'all') return new Set(all.map(t => t.id));
-            if (sc === 'designed') {
-                const ids = new Set(all.filter(t => t.type === 'designed').map(t => t.id));
+            let ids;
+            if (sc === 'all') ids = new Set(all.map(t => t.id));
+            else if (sc === 'designed') {
+                ids = new Set(all.filter(t => t.type === 'designed').map(t => t.id));
                 // + les tables directement référencées par un lien touchant une table conçue
                 state.relations.forEach(r => {
                     if (ids.has(r.sourceTable) && state.tables[r.targetTable]) ids.add(r.targetTable);
                     else if (ids.has(r.targetTable) && state.tables[r.sourceTable]) ids.add(r.sourceTable);
                 });
-                return ids;
-            }
-            return new Set(all.filter(t => t.type !== 'designed').map(t => t.id));
+            } else ids = new Set(all.filter(t => t.type !== 'designed').map(t => t.id));
+            // Filtre par THÈME : n'afficher qu'un seul thème (grande simplification de lecture).
+            const th = (state.graphConfig.mcdTheme || '').trim();
+            if (th) ids = new Set([...ids].filter(id => (state.tables[id].theme || '').trim() === th));
+            return ids;
+        }
+        function setMcdTheme(v) {
+            state.graphConfig.mcdTheme = v || '';
+            if (networkInstance) { networkInstance.destroy(); networkInstance = null; }
+            renderGraph(); try { renderRelationsList(); } catch (e) {}
+            persistAppState();
+        }
+        function mcdThemeFilterHtml() {
+            const themes = themeList(); if (!themes.length) return '';
+            const cur = (state.graphConfig.mcdTheme || '').trim();
+            return `<select onchange="setMcdTheme(this.value)" title="N'afficher qu'un seul thème pour simplifier la lecture" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold ${cur ? 'text-indigo-700 border-indigo-300' : 'text-slate-600'}">
+                <option value="">🎨 Tous les thèmes</option>
+                ${themes.map(t => `<option value="${escapeHTML(t)}" ${t === cur ? 'selected' : ''}>🗂 ${escapeHTML(t)}</option>`).join('')}
+            </select>`;
         }
         function mcdScopeButtonsHtml() {
             const sc = mcdScope();
@@ -5289,7 +5306,9 @@
                 const pal = themePalette(th);
                 return { id: 'th_' + th, label: '🗂 ' + th, style: { fill: pal.zone, fillOpacity: 0.05, stroke: pal.zone, lineDash: [6, 4], lineWidth: 1.5, radius: 10 }, labelCfg: { position: 'top', style: { fill: pal.zone, fontSize: 12, fontWeight: 700 } } };
             }).filter(c => nodes.some(n => n.comboId === c.id));
-            const layoutMode = state.graphConfig.mcdLayout || 'dagre';
+            // Par défaut : disposition « Par thème » dès qu'il y a des thèmes (regroupe les tables
+            // d'un même thème sans chevauchement) ; sinon hiérarchique. Un choix explicite prime.
+            const layoutMode = state.graphConfig.mcdLayout || (themeList().length && !(state.graphConfig.mcdTheme || '').trim() ? 'combo' : 'dagre');
             const edges = state.relations.filter(r => r.sourceCol && r.targetCol && visibleIds.has(r.sourceTable) && visibleIds.has(r.targetTable)).map(r => {
                 const isSelf = r.sourceTable === r.targetTable;
                 const isHierEdge = Object.values(hier).some(h => h.relIds.has(r.id));
@@ -5306,11 +5325,18 @@
                 // Espacement ADAPTATIF : en vue schéma les cartes sont hautes → on aère davantage pour
                 // qu'aucune ne se touche. preventOverlap s'appuie sur la taille réelle (size) des nœuds.
                 const nsep = schemaMode ? 55 : 34, rsep = schemaMode ? 150 : 110;
-                const layout = layoutMode === 'force'
-                    ? { type: 'gForce', preventOverlap: true, nodeSpacing: schemaMode ? 45 : 24, linkDistance: schemaMode ? 300 : 220, nodeStrength: 1200, edgeStrength: 200, maxIteration: 500, damping: 0.9, workerEnabled: true, animate: false }
-                    : (layoutMode === 'combo'
-                        ? { type: 'comboCombined', spacing: schemaMode ? 70 : 50, comboPadding: 30 }
-                        : { type: 'dagre', rankdir: 'LR', nodesep: nsep, ranksep: rsep, preventOverlap: true });
+                let layout;
+                if (layoutMode === 'force') {
+                    layout = { type: 'gForce', preventOverlap: true, nodeSpacing: schemaMode ? 45 : 24, linkDistance: schemaMode ? 300 : 220, nodeStrength: 1200, edgeStrength: 200, maxIteration: 500, damping: 0.9, workerEnabled: true, animate: false };
+                } else if (layoutMode === 'combo') {
+                    // Par thème : combos non chevauchants (outer gForce anti-overlap) et tables du même
+                    // thème regroupées en grille compacte (inner grid). Repli sur défauts si indispo.
+                    layout = { type: 'comboCombined', spacing: schemaMode ? 80 : 55, comboPadding: schemaMode ? 26 : 20 };
+                    try { if (G6.Layout && G6.Layout.gForce) layout.outerLayout = new G6.Layout.gForce({ preventOverlap: true, linkDistance: schemaMode ? 320 : 240, nodeSpacing: 50, maxIteration: 500, animate: false }); } catch (e) {}
+                    try { if (G6.Layout && G6.Layout.grid) layout.innerLayout = new G6.Layout.grid({ preventOverlap: true, nodeSize: schemaMode ? 220 : 160 }); } catch (e) {}
+                } else {
+                    layout = { type: 'dagre', rankdir: 'LR', nodesep: nsep, ranksep: rsep, preventOverlap: true };
+                }
                 networkInstance = createStudioGraph(cont, layout, {
                     defaultEdge: {
                         style: { stroke: '#94a3b8', lineWidth: 1.4, endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#94a3b8' } },
@@ -5340,7 +5366,7 @@
             const vs = el('mcdViewSelect'); if (vs) vs.value = schemaMode ? 'schema' : 'links';
             const lsF = el('mcdLayoutSelectFull'); if (lsF) lsF.value = layoutMode;
             const vsF = el('mcdViewSelectFull'); if (vsF) vsF.value = schemaMode ? 'schema' : 'links';
-            document.querySelectorAll('.mcdScopeWrap').forEach(w => { w.innerHTML = mcdScopeButtonsHtml(); });
+            document.querySelectorAll('.mcdScopeWrap').forEach(w => { w.innerHTML = mcdScopeButtonsHtml() + mcdThemeFilterHtml(); });
             document.querySelectorAll('.mcdScopeMsg').forEach(w => {
                 const emptyDesigned = mcdScope() === 'designed' && !Object.values(state.tables).some(t => t.type === 'designed');
                 w.classList.toggle('hidden', !emptyDesigned);
