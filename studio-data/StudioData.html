@@ -1114,12 +1114,14 @@
             edgeStateStyles: { active: { stroke: '#6366f1', lineWidth: 2.2, shadowColor: '#c7d2fe', shadowBlur: 6 }, inactive: { opacity: 0.12 } },
         };
         // Fige la position d'un nœud après déplacement pour qu'aucun layout ne le repousse.
+        let _mcdLastDrag = 0;
         function pinNodeOnDrag(graph) {
             if (!graph) return;
             graph.on('node:dragend', (e) => {
+                _mcdLastDrag = Date.now();
                 const item = e.item; if (!item) return;
                 const m = item.getModel();
-                graph.updateItem(item, { fx: m.x, fy: m.y }); // gForce respecte fx/fy
+                try { graph.updateItem(item, { fx: m.x, fy: m.y }); } catch (e2) {} // gForce respecte fx/fy
             });
             // Après déplacement d'un domaine (combo), on rafraîchit les liens (updateEdge=false pendant
             // le drag) et on fige la nouvelle position de chaque table qu'il contient.
@@ -1132,17 +1134,50 @@
             });
         }
         function createStudioGraph(container, layout, extra) {
-            const g = new G6.Graph(Object.assign({
+            const base = {
                 container,
                 width: container.clientWidth || 600,
                 height: container.clientHeight || 350,
                 animate: false,
                 fitViewPadding: 20,
                 modes: STUDIO_GRAPH_MODES,
-                layout,
                 defaultNode: { type: 'studio-rich-node' },
-            }, STUDIO_STATE_STYLES, extra || {}));
-            return g;
+            };
+            // layout falsy => positions PRÉ-CALCULÉES respectées (x/y sur les nœuds), aucun moteur
+            // de disposition ne tourne : les déplacements manuels sont donc parfaitement fiables.
+            if (layout) base.layout = layout;
+            return new G6.Graph(Object.assign(base, STUDIO_STATE_STYLES, extra || {}));
+        }
+        // Disposition « couloirs par domaine », calculée en JS : chaque domaine occupe son propre
+        // bloc (grille de tables), les blocs sont disposés en grille avec de larges marges → AUCUN
+        // chevauchement possible. Renvoie true si des positions ont été posées.
+        function computeDomainPositions(nodes) {
+            if (!nodes.length) return false;
+            const groups = {};
+            nodes.forEach(n => { const t = state.tables[n.id]; const dom = ((t && t.theme) || '').trim() || '(sans domaine)'; (groups[dom] = groups[dom] || []).push(n); });
+            const domains = Object.keys(groups).sort();
+            const GAP_X = 70, GAP_Y = 80, DOMAIN_GAP = 160;
+            const blocks = domains.map(dom => {
+                const ns = groups[dom];
+                const cols = Math.max(1, Math.ceil(Math.sqrt(ns.length)));
+                const rows = Math.ceil(ns.length / cols);
+                const maxW = Math.max(160, ...ns.map(n => (n.size ? n.size[0] : 180)));
+                const maxH = Math.max(60, ...ns.map(n => (n.size ? n.size[1] : 80)));
+                return { dom, ns, cols, rows, maxW, maxH, w: cols * maxW + (cols - 1) * GAP_X, h: rows * maxH + (rows - 1) * GAP_Y };
+            });
+            const perRow = Math.max(1, Math.round(Math.sqrt(blocks.length)));
+            let curX = 0, curY = 0, rowMaxH = 0;
+            blocks.forEach((blk, i) => {
+                if (i > 0 && i % perRow === 0) { curX = 0; curY += rowMaxH + DOMAIN_GAP; rowMaxH = 0; }
+                blk.ns.forEach((n, k) => {
+                    const r = Math.floor(k / blk.cols), c = k % blk.cols;
+                    n.x = curX + c * (blk.maxW + GAP_X) + blk.maxW / 2;
+                    n.y = curY + r * (blk.maxH + GAP_Y) + blk.maxH / 2;
+                });
+                curX += blk.w + DOMAIN_GAP;
+                rowMaxH = Math.max(rowMaxH, blk.h);
+            });
+            return true;
         }
         // Boîte à outils commune des graphes (zoom / recentrage) — les instances par nom.
         function graphInstanceOf(which) { return ({ mcd: networkInstance, lineage: lineageGraph, model: modelGraph, exp: expNetInstance })[which]; }
@@ -5373,6 +5408,9 @@
             // Par défaut : disposition « Par domaine » dès qu'il y a des domaines (regroupe les tables
             // d'un même domaine sans chevauchement) ; sinon hiérarchique. Un choix explicite prime.
             const layoutMode = state.graphConfig.mcdLayout || (themeList().length && !(state.graphConfig.mcdTheme || '').trim() ? 'combo' : 'dagre');
+            // Mode « Par domaine » : positions calculées en JS (couloirs sans collision) et moteur
+            // de disposition DÉSACTIVÉ → aucun recalcul ne vient contrarier les déplacements manuels.
+            if (layoutMode === 'combo') computeDomainPositions(nodes);
             const edges = state.relations.filter(r => r.sourceCol && r.targetCol && visibleIds.has(r.sourceTable) && visibleIds.has(r.targetTable)).map(r => {
                 const isSelf = r.sourceTable === r.targetTable;
                 const isHierEdge = Object.values(hier).some(h => h.relIds.has(r.id));
@@ -5393,11 +5431,7 @@
                 if (layoutMode === 'force') {
                     layout = { type: 'gForce', preventOverlap: true, nodeSpacing: schemaMode ? 45 : 24, linkDistance: schemaMode ? 300 : 220, nodeStrength: 1200, edgeStrength: 200, maxIteration: 500, damping: 0.9, workerEnabled: true, animate: false };
                 } else if (layoutMode === 'combo') {
-                    // Par domaine : combos non chevauchants (outer gForce anti-overlap) et tables du même
-                    // domaine regroupées en grille compacte (inner grid). Repli sur défauts si indispo.
-                    layout = { type: 'comboCombined', spacing: schemaMode ? 80 : 55, comboPadding: schemaMode ? 26 : 20 };
-                    try { if (G6.Layout && G6.Layout.gForce) layout.outerLayout = new G6.Layout.gForce({ preventOverlap: true, linkDistance: schemaMode ? 320 : 240, nodeSpacing: 50, maxIteration: 500, animate: false }); } catch (e) {}
-                    try { if (G6.Layout && G6.Layout.grid) layout.innerLayout = new G6.Layout.grid({ preventOverlap: true, nodeSize: schemaMode ? 220 : 160 }); } catch (e) {}
+                    layout = null; // positions pré-calculées (couloirs par domaine), pas de moteur
                 } else {
                     layout = { type: 'dagre', rankdir: 'LR', nodesep: nsep, ranksep: rsep, preventOverlap: true };
                 }
@@ -5410,7 +5444,7 @@
                 });
                 pinNodeOnDrag(networkInstance);
                 // Mode « Tracer un lien » : clic-clic ET glisser-déposer. Clic sur un LIEN : suppression.
-                networkInstance.on('node:click', ev => { try { const id = ev.item.getID(); if (mcdLinkMode) mcdNodeClicked(id); else mcdHighlightNeighbors(id); } catch (e2) {} });
+                networkInstance.on('node:click', ev => { try { const id = ev.item.getID(); if (mcdLinkMode) mcdNodeClicked(id); else if (Date.now() - _mcdLastDrag > 250) mcdHighlightNeighbors(id); } catch (e2) {} });
                 networkInstance.on('edge:click', ev => { try { const id = ev.item.getID(); if (id && String(id).startsWith('rel_')) openEdgeDeleteModal(id); } catch (e2) {} });
                 // ⑤ clic sur le fond : rétablit tout · ② clic droit sur une table : la masquer
                 networkInstance.on('canvas:click', () => { try { mcdClearHighlight(); } catch (e2) {} });
