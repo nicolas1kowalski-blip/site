@@ -1550,6 +1550,7 @@
 
         // Sauvegarde des données d'une table : blob du fichier d'origine si on l'a, sinon Parquet DuckDB.
         async function persistTableData(tId) {
+            if (state.noPersist) return; // mode sans persistance : les données ne sont pas copiées dans le stockage local
             const t = state.tables[tId]; if (!t || t.status !== 'ready') return;
             try {
                 if (t.storage === 'parquet') {
@@ -1628,6 +1629,7 @@
 
         let persistTimer = null;
         function persistAppState() {
+            if (state.noPersist) return; // mode sans persistance : rien n'est écrit sur le poste
             clearTimeout(persistTimer);
             persistTimer = setTimeout(async () => {
                 try { await idbPut('meta', 'appState', collectPersistedConfig()); updatePersistStatus(); }
@@ -3473,7 +3475,9 @@
                         <p class="text-xs text-slate-500 mb-1.5">Tout est sauvegardé automatiquement dans le navigateur : fichiers, extractions, relations, gouvernance. Rouvrez la page et tout est restauré.</p>
                         <p id="storageEstimate" class="text-xs font-mono text-slate-400 mb-4">Estimation du stockage...</p>
                         <button onclick="el('govImportFile').click()" class="bg-white border border-indigo-300 text-indigo-700 text-sm font-bold px-4 py-2.5 rounded-lg w-full mb-2 flex items-center justify-center gap-2"><i data-lucide="upload" class="w-4 h-4"></i> Importer un bundle reçu</button>
-                        <button onclick="resetLocalStorage(this)" class="bg-white border border-red-200 text-red-600 text-xs px-4 py-2 rounded-lg w-full">Réinitialiser le stockage local (2 clics)</button>
+                        <label class="flex items-start gap-2 text-xs mb-2 cursor-pointer bg-amber-50 border border-amber-200 rounded-lg p-2.5"><input type="checkbox" id="noPersistChk" ${state.noPersist ? 'checked' : ''} onchange="toggleNoPersist(this.checked)" class="mt-0.5 text-amber-600 rounded"><span><strong>🔒 Mode sans persistance</strong> (données sensibles / poste partagé)<br><span class="text-slate-500">Rien n'est enregistré sur le poste ; tout est perdu à la fermeture de l'onglet. L'activer purge aussi ce qui a déjà été écrit.</span></span></label>
+                        <button onclick="resetLocalStorage(this)" class="bg-white border border-red-200 text-red-600 text-xs font-bold px-4 py-2 rounded-lg w-full">🧹 Effacer toutes les données locales (2 clics)</button>
+                        <p class="text-[10px] text-slate-400 mt-1.5">Efface le stockage navigateur <strong>et</strong> les fichiers disque (OPFS) où le moteur garde les données — utile avant de rendre un poste partagé.</p>
                     </div>
                 </div>`;
         }
@@ -3486,11 +3490,35 @@
                 }
             } catch (e) {}
         }
+        // Purge COMPLÈTE : IndexedDB (config + données) ET les fichiers OPFS où DuckDB stocke la base
+        // et les débordements — sans quoi des données resteraient en clair sur le disque après un "reset".
+        async function wipeOpfsData() {
+            try {
+                if (!(navigator.storage && navigator.storage.getDirectory)) return;
+                const root = await navigator.storage.getDirectory();
+                for (const name of ['studio_data.db', 'studio_data.db.wal', 'studio_tmp']) {
+                    try { await root.removeEntry(name, { recursive: true }); } catch (e) {}
+                }
+            } catch (e) { console.warn('Purge OPFS partielle :', e); }
+        }
         async function resetLocalStorage(btn) {
-            if (!govState.resetArmed) { govState.resetArmed = true; btn.textContent = '⚠️ Cliquez à nouveau pour TOUT effacer'; setTimeout(() => { govState.resetArmed = false; if (btn.isConnected) btn.textContent = 'Réinitialiser le stockage local (2 clics)'; }, 4000); return; }
+            if (!govState.resetArmed) { govState.resetArmed = true; btn.textContent = '⚠️ Cliquez à nouveau pour TOUT effacer (données incluses)'; setTimeout(() => { govState.resetArmed = false; if (btn.isConnected) btn.textContent = '🧹 Effacer toutes les données locales (2 clics)'; }, 4000); return; }
             govState.resetArmed = false;
-            await idbClear('meta'); await idbClear('tabledata');
-            showSuccess('Stockage local réinitialisé. Rechargez la page pour repartir de zéro.');
+            if (btn) btn.disabled = true;
+            try {
+                await idbClear('meta'); await idbClear('tabledata');
+                await wipeOpfsData();
+                showSuccess('✅ Toutes les données locales ont été effacées (stockage + disque). Rechargez la page pour repartir de zéro.');
+            } catch (e) { showError('Effacement incomplet : ' + e.message); }
+            finally { if (btn) btn.disabled = false; }
+        }
+        // Mode sans persistance : bascule à chaud. En l'activant, on purge ce qui a déjà été écrit,
+        // pour ne rien laisser sur le poste (idéal données sensibles / poste partagé).
+        async function toggleNoPersist(on) {
+            state.noPersist = !!on;
+            if (on) { try { await idbClear('meta'); await idbClear('tabledata'); await wipeOpfsData(); } catch (e) {} showSuccess('🔒 Mode sans persistance activé : rien n\'est enregistré sur le poste ; tout disparaît à la fermeture de l\'onglet.'); }
+            else { showSuccess('💾 Persistance réactivée : le travail sera de nouveau sauvegardé localement.'); persistAppState(); }
+            renderGovernance();
         }
 
         function filterGovernanceToScope(scopeTables) {
