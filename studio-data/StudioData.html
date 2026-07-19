@@ -1181,8 +1181,8 @@
         }
         // Boîte à outils commune des graphes (zoom / recentrage) — les instances par nom.
         function graphInstanceOf(which) { return ({ mcd: networkInstance, lineage: lineageGraph, model: modelGraph, exp: expNetInstance })[which]; }
-        function graphZoom(which, f) { const g = graphInstanceOf(which); if (g) g.zoom(f, { x: g.getWidth() / 2, y: g.getHeight() / 2 }); }
-        function graphFit(which) { const g = graphInstanceOf(which); if (g) g.fitView(20); }
+        function graphZoom(which, f) { if (which === 'mcd' && mcdIsSvg()) { const svg = el('mcdSvg'); if (!svg) return; const r = svg.getBoundingClientRect(), mx = r.width / 2, my = r.height / 2, nk = Math.max(0.15, Math.min(3, svgG.k * f)); svgG.tx = mx - (mx - svgG.tx) * (nk / svgG.k); svgG.ty = my - (my - svgG.ty) * (nk / svgG.k); svgG.k = nk; svgApplyTransform(); return; } const g = graphInstanceOf(which); if (g) g.zoom(f, { x: g.getWidth() / 2, y: g.getHeight() / 2 }); }
+        function graphFit(which) { if (which === 'mcd' && mcdIsSvg()) { svgG.k = 1; svgG.tx = 40; svgG.ty = 40; svgApplyTransform(); return; } const g = graphInstanceOf(which); if (g) g.fitView(20); }
         function graphToolbarHtml(which) {
             return `<span class="inline-flex gap-1">
                 <button onclick="graphZoom('${which}', 1.25)" class="text-[11px] bg-white border border-slate-300 w-6 h-6 rounded font-black text-slate-600 hover:bg-slate-100" title="Zoom avant">+</button>
@@ -1261,13 +1261,15 @@
             return html;
         }
         function mcdToggleFocus() { state.graphConfig.mcdFocus = !state.graphConfig.mcdFocus; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); persistAppState(); }
-        // ④ Ranger : recrée l'instance → la disposition est recalculée proprement (positions figées effacées).
-        function mcdRelayout() { if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
+        // ④ Ranger : recalcule proprement la disposition (positions figées effacées).
+        function mcdRelayout() { if (typeof svgG !== 'undefined') svgG.pos = {}; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
+        function mcdIsSvg() { return (state.graphConfig.mcdEngine || 'g6') === 'svg'; }
         // ② Masquer / réafficher des tables du graphe.
         function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
         function mcdUnhideAll() { state.graphConfig.mcdHidden = []; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
         // ① Focus + ⑤ voisinage : jouent sur les états 'active'/'inactive' (déjà stylés).
         function mcdApplyFocus() {
+            if (mcdIsSvg()) return svgApplyFocus();
             const g = networkInstance; if (!g) return;
             const th = (state.graphConfig.mcdTheme || '').trim();
             if (!(th && state.graphConfig.mcdFocus)) return;
@@ -1278,6 +1280,7 @@
         // ⑤ Surligne une table et ses voisines directes ; le reste est estompé.
         let mcdHighlightId = null;
         function mcdHighlightNeighbors(id) {
+            if (mcdIsSvg()) return svgHighlightNeighbors(id);
             const g = networkInstance; if (!g) return;
             if (mcdHighlightId === id) { mcdClearHighlight(); return; }
             mcdHighlightId = id;
@@ -1289,6 +1292,7 @@
             } catch (e) {}
         }
         function mcdClearHighlight() {
+            if (mcdIsSvg()) return svgClearHighlight();
             const g = networkInstance; if (!g) return; mcdHighlightId = null;
             try { g.getNodes().forEach(n => g.setItemState(n, 'inactive', false)); g.getEdges().forEach(e => g.setItemState(e, 'inactive', false)); } catch (e) {}
             mcdApplyFocus(); // rétablit l'estompage de focus s'il était actif
@@ -5306,11 +5310,28 @@
 
         // Export PNG de n'importe quel graphe affiché.
         function exportGraphImage(which) {
+            if (which === 'mcd' && mcdIsSvg()) return svgExportImage();
             const map = { mcd: networkInstance, lineage: lineageGraph, model: modelGraph, exp: expNetInstance };
             const g = map[which];
             if (!g) return showError("Affichez d'abord le graphe avant de l'exporter.");
             try { g.downloadFullImage('StudioData_' + which + '_' + Date.now(), 'image/png', { backgroundColor: '#ffffff', padding: [20, 20, 20, 20] }); }
             catch (e) { showError('Export du graphe impossible : ' + e.message); }
+        }
+        // Export PNG du rendu SVG : on sérialise le SVG à sa taille réelle (bbox) puis on le peint sur un canvas.
+        function svgExportImage() {
+            try {
+                const svg = el('mcdSvg'); if (!svg) return showError("Affichez d'abord le graphe.");
+                const ids = Object.keys(svgG.pos); if (!ids.length) return showError('Rien à exporter.');
+                let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+                ids.forEach(id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; x1 = Math.min(x1, p.x - s[0] / 2); y1 = Math.min(y1, p.y - s[1] / 2); x2 = Math.max(x2, p.x + s[0] / 2); y2 = Math.max(y2, p.y + s[1] / 2); });
+                const M = 40, w = Math.ceil(x2 - x1 + 2 * M), h = Math.ceil(y2 - y1 + 2 * M);
+                const vp = el('mcdVp').cloneNode(true); vp.setAttribute('transform', `translate(${M - x1},${M - y1})`);
+                const out = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><marker id="svgArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs><rect width="${w}" height="${h}" fill="#fff"/>${new XMLSerializer().serializeToString(vp)}</svg>`;
+                const img = new Image();
+                img.onload = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0); const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'StudioData_modele_' + Date.now() + '.png'; document.body.appendChild(a); a.click(); a.remove(); };
+                img.onerror = () => showError('Export image impossible.');
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out);
+            } catch (e) { showError('Export image impossible : ' + e.message); }
         }
 
         // Symbole UML d'une relation pour les graphes et libellés.
@@ -5356,11 +5377,208 @@
 
         function renderGraph() {
             const cont = el('networkGraph'); if(!cont || !Object.keys(state.tables).length) return;
+            // Deux moteurs de rendu au choix : SVG maison (léger, sans dépendance, testable) ou G6.
+            if ((state.graphConfig.mcdEngine || 'g6') === 'svg') {
+                if (networkInstance) { try { networkInstance.destroy(); } catch (e) {} networkInstance = null; }
+                try { renderGraphSVG(cont); } catch (e) { console.error('MCD SVG error', e); cont.innerHTML = graphUnavailableHtml('Rendu SVG impossible : ' + escapeHTML(e.message)); }
+                renderMcdControls();
+                return;
+            }
             if (g6Missing(cont)) return;
             try { _renderGraphImpl(cont); }
             catch (e) { console.error('MCD render error', e); if (!networkInstance) cont.innerHTML = graphUnavailableHtml('Le diagramme MCD n\'a pas pu être affiché : ' + escapeHTML(e.message)); }
             observeGraphResize('mcd');
         }
+        function setMcdEngine(v) {
+            state.graphConfig.mcdEngine = v;
+            if (networkInstance) { try { networkInstance.destroy(); } catch (e) {} networkInstance = null; }
+            const cont = el('networkGraph'); if (cont) cont.innerHTML = '';
+            renderGraph(); persistAppState();
+        }
+        // Contrôles communs (périmètre, filtre domaine, moteur) — rendus dans les deux moteurs.
+        function renderMcdControls() {
+            const tb = el('mcdToolbar'); if (tb && !tb.innerHTML) tb.innerHTML = graphToolbarHtml('mcd');
+            document.querySelectorAll('.mcdScopeWrap').forEach(w => { w.innerHTML = mcdScopeButtonsHtml() + mcdThemeFilterHtml() + mcdEngineToggleHtml(); });
+            document.querySelectorAll('.mcdScopeMsg').forEach(w => {
+                const emptyDesigned = mcdScope() === 'designed' && !Object.values(state.tables).some(t => t.type === 'designed');
+                w.classList.toggle('hidden', !emptyDesigned);
+                w.innerHTML = emptyDesigned ? '🧱 Aucune table conçue pour l\'instant — créez-en une dans l\'onglet <strong>Tables</strong> ; son modèle apparaîtra ici, séparé de celui des sources.' : '';
+            });
+        }
+        function mcdEngineToggleHtml() {
+            const svg = (state.graphConfig.mcdEngine || 'g6') === 'svg';
+            return `<button onclick="setMcdEngine('${svg ? 'g6' : 'svg'}')" class="text-[11px] px-2 py-1 rounded font-bold border ${svg ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-violet-700 border-violet-300'}" title="Basculer entre le nouveau rendu SVG (fluide, sans dépendance) et le moteur G6">${svg ? '⚡ Rendu SVG (bêta)' : '⚡ Essayer le rendu SVG'}</button>`;
+        }
+        // ======================= Rendu SVG maison du Modèle de données (bêta) =======================
+        // Aucune dépendance externe : on dessine des cartes (rect + textes) et des liens (path) en SVG.
+        // Positions calculées par computeDomainPositions (couloirs par domaine, sans collision). Le
+        // déplacement, le zoom et le pan sont gérés à la main → 100 % fiables et testables.
+        let svgG = { pos: {}, k: 1, tx: 40, ty: 40, size: {} };
+        function svgBuildNodeModels(visibleIds, schemaMode) {
+            const hier = tableHierarchyInfo();
+            const keyCols = {};
+            state.relations.filter(r => r.sourceCol && r.targetCol).forEach(r => {
+                (keyCols[r.sourceTable] = keyCols[r.sourceTable] || new Set()).add(r.sourceCol);
+                (keyCols[r.targetTable] = keyCols[r.targetTable] || new Set()).add(r.targetCol);
+            });
+            return Object.values(state.tables).filter(t => visibleIds.has(t.id)).map(t => {
+                const ks = keyCols[t.id] || new Set();
+                const design = t.type === 'designed' ? (t.design || {}) : null;
+                const pk = new Set(design ? (design.key || []) : []);
+                const fmts = design ? (design.formats || {}) : {};
+                const fkAttrs = new Set(design ? (design.fks || []).map(f => f.attr) : []);
+                let cols = schemaMode ? t.headers.slice() : [...t.headers].sort((a, b) => ((pk.has(b) || ks.has(b)) ? 1 : 0) - ((pk.has(a) || ks.has(a)) ? 1 : 0));
+                const lineOf = h => (pk.has(h) ? '🔑 ' : (fkAttrs.has(h) ? '🔐 ' : (ks.has(h) ? '🔗 ' : '· '))) + h + (fmts[h] ? '  〈' + tdFormatLabel(fmts[h]) + '〉' : '');
+                const max = schemaMode ? 40 : 7;
+                const rows = cols.slice(0, max).map(lineOf);
+                if (cols.length > max) rows.push(`… ${cols.length - max} autre(s) colonne(s)`);
+                const hierTxt = hierNodeContent(hier, t.id); if (hierTxt) rows.unshift('🌳 ' + hierTxt);
+                const isH = isHierTable(hier, t.id), isD = t.type === 'designed';
+                const pal = t.theme ? themePalette(t.theme.trim()) : null;
+                const title = (isD ? '🧱 ' : (isH ? '🌳 ' : '📄 ')) + t.name;
+                return { id: t.id, title, rows, size: umlNodeSize(title, rows), theme: (t.theme || '').trim(),
+                    headFill: pal ? pal.head : (isD ? '#dbeafe' : (isH ? '#d1fae5' : '#e0e7ff')),
+                    titleFill: pal ? pal.title : (isD ? '#1e40af' : (isH ? '#065f46' : '#312e81')),
+                    stroke: pal ? pal.stroke : (isD ? '#3b82f6' : (isH ? '#059669' : '#6366f1')) };
+            });
+        }
+        function svgBorderPoint(b, tx, ty) {
+            const dx = tx - b.cx, dy = ty - b.cy; if (!dx && !dy) return { x: b.cx, y: b.cy };
+            const s = Math.min(dx ? (b.w / 2) / Math.abs(dx) : Infinity, dy ? (b.h / 2) / Math.abs(dy) : Infinity);
+            return { x: b.cx + dx * s, y: b.cy + dy * s };
+        }
+        function svgApplyTransform() { const vp = el('mcdVp'); if (vp) vp.setAttribute('transform', `translate(${svgG.tx},${svgG.ty}) scale(${svgG.k})`); }
+        function renderGraphSVG(cont) {
+            const schemaMode = state.graphConfig.mcdView === 'schema';
+            const visibleIds = mcdVisibleIds();
+            const nodes = svgBuildNodeModels(visibleIds, schemaMode);
+            nodes.forEach(n => svgG.size[n.id] = n.size);
+            // Positions : recalcule tout si rien de mémorisé, sinon place seulement les nouvelles tables.
+            const missing = nodes.filter(n => !svgG.pos[n.id]);
+            if (missing.length === nodes.length) { computeDomainPositions(nodes); nodes.forEach(n => svgG.pos[n.id] = { x: n.x, y: n.y }); }
+            else if (missing.length) { const clone = nodes.map(n => ({ id: n.id, size: n.size })); computeDomainPositions(clone); clone.forEach(c => { if (!svgG.pos[c.id]) svgG.pos[c.id] = { x: c.x, y: c.y }; }); }
+            nodes.forEach(n => { const p = svgG.pos[n.id]; n.x = p.x; n.y = p.y; });
+            const boxOf = id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; return { cx: p.x, cy: p.y, w: s[0], h: s[1] }; };
+            const idset = new Set(nodes.map(n => n.id));
+            const edges = state.relations.filter(r => r.sourceCol && r.targetCol && idset.has(r.sourceTable) && idset.has(r.targetTable))
+                .map(r => ({ id: r.id, source: r.sourceTable, target: r.targetTable, label: relEdgeLabel(r), hier: Object.values(tableHierarchyInfo()).some(h => h.relIds.has(r.id)) }));
+
+            // Zones par domaine (rectangles derrière les blocs).
+            const byDom = {}; nodes.forEach(n => { const d = n.theme || '(sans domaine)'; (byDom[d] = byDom[d] || []).push(n); });
+            let zonesSvg = '';
+            Object.keys(byDom).forEach(d => {
+                if (d === '(sans domaine)') return; const pal = themePalette(d); if (!pal) return;
+                let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+                byDom[d].forEach(n => { const b = boxOf(n.id); x1 = Math.min(x1, b.cx - b.w / 2); y1 = Math.min(y1, b.cy - b.h / 2); x2 = Math.max(x2, b.cx + b.w / 2); y2 = Math.max(y2, b.cy + b.h / 2); });
+                const P = 22;
+                zonesSvg += `<g class="svgzone"><rect x="${x1 - P}" y="${y1 - P - 16}" width="${x2 - x1 + 2 * P}" height="${y2 - y1 + 2 * P + 16}" rx="12" fill="${pal.zone}" fill-opacity="0.05" stroke="${pal.zone}" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${x1 - P + 8}" y="${y1 - P - 3}" font-size="12" font-weight="700" fill="${pal.zone}">🗂 ${escapeHTML(d)}</text></g>`;
+            });
+
+            // Liens.
+            let edgesSvg = '';
+            edges.forEach(e => {
+                const a = boxOf(e.source), b = boxOf(e.target);
+                const p1 = svgBorderPoint(a, b.cx, b.cy), p2 = svgBorderPoint(b, a.cx, a.cy);
+                const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+                const col = e.hier ? '#059669' : '#94a3b8';
+                edgesSvg += `<g class="svgedge" data-id="${e.id}" data-s="${e.source}" data-t="${e.target}">
+                    <path d="M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}" stroke="${col}" stroke-width="${e.hier ? 2 : 1.4}" fill="none" marker-end="url(#svgArrow)"/>
+                    <path class="svgedge-hit" d="M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}" stroke="transparent" stroke-width="12" fill="none" style="cursor:pointer"/>
+                    ${e.label ? `<text x="${mx}" y="${my - 3}" text-anchor="middle" font-size="10" fill="#475569" style="paint-order:stroke;stroke:#fff;stroke-width:3px">${escapeHTML((e.hier ? '🌳 ' : '') + e.label)}</text>` : ''}
+                </g>`;
+            });
+
+            // Cartes.
+            let nodesSvg = '';
+            nodes.forEach(n => {
+                const [w, h] = n.size; const headH = 28, rowH = 15;
+                const x = n.x - w / 2, y = n.y - h / 2;
+                let inner = `<rect width="${w}" height="${h}" rx="8" fill="#fff" stroke="${n.stroke}" stroke-width="1.2"/>`;
+                inner += `<path d="M0 ${headH} h${w}" stroke="${n.stroke}" stroke-opacity="0.5"/>`;
+                inner += `<rect width="${w}" height="${headH}" rx="8" fill="${n.headFill}"/><rect y="${headH - 8}" width="${w}" height="8" fill="${n.headFill}"/>`;
+                inner += `<text x="10" y="${headH / 2 + 4}" font-size="12" font-weight="700" fill="${n.titleFill}">${escapeHTML(svgTrunc(n.title, w))}</text>`;
+                n.rows.forEach((r, i) => { inner += `<text x="10" y="${headH + 12 + i * rowH}" font-size="10" fill="${String(r).startsWith('…') ? '#94a3b8' : '#475569'}">${escapeHTML(svgTrunc(r, w))}</text>`; });
+                nodesSvg += `<g class="svgnode" data-id="${n.id}" transform="translate(${x},${y})" style="cursor:grab">${inner}</g>`;
+            });
+
+            const W = cont.clientWidth || 800, H = cont.clientHeight || 520;
+            cont.innerHTML = `<svg id="mcdSvg" width="100%" height="100%" style="display:block;touch-action:none">
+                <defs><marker id="svgArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs>
+                <style>.svg-dim{opacity:.12}.svgnode:hover rect:first-child{stroke-width:2}</style>
+                <g id="mcdVp"><g class="zones">${zonesSvg}</g><g class="edges">${edgesSvg}</g><g class="nodes">${nodesSvg}</g></g>
+            </svg>`;
+            svgApplyTransform();
+            svgBindEvents(cont);
+            // rétablit un éventuel focus/surlignage actif
+            mcdHighlightId = null; svgApplyFocus();
+        }
+        function svgTrunc(s, w) { const max = Math.max(6, Math.floor((w - 20) / 6.2)); s = String(s); return s.length > max ? s.slice(0, max - 1) + '…' : s; }
+
+        // ---- Interactions SVG (drag nœud, pan, zoom, clic, clic droit) ----
+        function svgBindEvents(cont) {
+            const svg = el('mcdSvg'); if (!svg) return;
+            const ptGraph = ev => { const r = svg.getBoundingClientRect(); return { x: (ev.clientX - r.left - svgG.tx) / svgG.k, y: (ev.clientY - r.top - svgG.ty) / svgG.k }; };
+            let mode = null, dragId = null, last = null, moved = 0, startG = null;
+            svg.addEventListener('mousedown', ev => {
+                const ng = ev.target.closest('.svgnode');
+                if (ng) { mode = 'node'; dragId = ng.getAttribute('data-id'); startG = ptGraph(ev); moved = 0; ng.style.cursor = 'grabbing'; }
+                else { mode = 'pan'; last = { x: ev.clientX, y: ev.clientY }; }
+                ev.preventDefault();
+            });
+            window.addEventListener('mousemove', svg.__mm = ev => {
+                if (mode === 'pan') { svgG.tx += ev.clientX - last.x; svgG.ty += ev.clientY - last.y; last = { x: ev.clientX, y: ev.clientY }; svgApplyTransform(); }
+                else if (mode === 'node') {
+                    const g = ptGraph(ev); const p = svgG.pos[dragId]; if (!p) return;
+                    p.x += g.x - startG.x; p.y += g.y - startG.y; startG = g; moved++;
+                    const ng = svg.querySelector(`.svgnode[data-id="${CSS.escape(dragId)}"]`); const s = svgG.size[dragId] || [180, 60];
+                    if (ng) ng.setAttribute('transform', `translate(${p.x - s[0] / 2},${p.y - s[1] / 2})`);
+                    svgUpdateEdgesFor(dragId);
+                }
+            });
+            window.addEventListener('mouseup', svg.__mu = ev => {
+                if (mode === 'node') { const ng = svg.querySelector(`.svgnode[data-id="${CSS.escape(dragId)}"]`); if (ng) ng.style.cursor = 'grab';
+                    if (moved < 3) { if (mcdLinkMode) mcdNodeClicked(dragId); else svgHighlightNeighbors(dragId); } }
+                mode = null; dragId = null;
+            });
+            svg.addEventListener('wheel', ev => {
+                ev.preventDefault(); const r = svg.getBoundingClientRect(); const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+                const f = ev.deltaY < 0 ? 1.12 : 1 / 1.12; const nk = Math.max(0.15, Math.min(3, svgG.k * f));
+                svgG.tx = mx - (mx - svgG.tx) * (nk / svgG.k); svgG.ty = my - (my - svgG.ty) * (nk / svgG.k); svgG.k = nk; svgApplyTransform();
+            }, { passive: false });
+            svg.addEventListener('click', ev => { if (!ev.target.closest('.svgnode') && !ev.target.closest('.svgedge')) svgClearHighlight(); });
+            svg.addEventListener('contextmenu', ev => { const ng = ev.target.closest('.svgnode'); if (ng) { ev.preventDefault(); mcdHideTable(ng.getAttribute('data-id')); } });
+            svg.addEventListener('click', ev => { const eg = ev.target.closest('.svgedge'); if (eg) { const id = eg.getAttribute('data-id'); if (id && id.startsWith('rel_')) openEdgeDeleteModal(id); } });
+        }
+        function svgUpdateEdgesFor(id) {
+            const svg = el('mcdSvg'); if (!svg) return;
+            const boxOf = i => { const p = svgG.pos[i], s = svgG.size[i] || [180, 60]; return { cx: p.x, cy: p.y, w: s[0], h: s[1] }; };
+            svg.querySelectorAll('.svgedge').forEach(g => {
+                if (g.getAttribute('data-s') !== id && g.getAttribute('data-t') !== id) return;
+                const a = boxOf(g.getAttribute('data-s')), b = boxOf(g.getAttribute('data-t'));
+                const p1 = svgBorderPoint(a, b.cx, b.cy), p2 = svgBorderPoint(b, a.cx, a.cy);
+                g.querySelectorAll('path').forEach(pt => pt.setAttribute('d', `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`));
+                const tx = g.querySelector('text'); if (tx) { tx.setAttribute('x', (p1.x + p2.x) / 2); tx.setAttribute('y', (p1.y + p2.y) / 2 - 3); }
+            });
+        }
+        // Focus (domaine) + surlignage du voisinage en SVG (via classe .svg-dim).
+        function svgSetDim(keepIds) {
+            const svg = el('mcdSvg'); if (!svg) return;
+            svg.querySelectorAll('.svgnode').forEach(g => g.classList.toggle('svg-dim', keepIds && !keepIds.has(g.getAttribute('data-id'))));
+            svg.querySelectorAll('.svgedge').forEach(g => g.classList.toggle('svg-dim', keepIds && !(keepIds.has(g.getAttribute('data-s')) && keepIds.has(g.getAttribute('data-t')))));
+        }
+        function svgApplyFocus() {
+            const th = (state.graphConfig.mcdTheme || '').trim();
+            if (th && state.graphConfig.mcdFocus) { const keep = new Set(Object.values(state.tables).filter(t => (t.theme || '').trim() === th).map(t => t.id)); svgSetDim(keep); }
+            else svgSetDim(null);
+        }
+        function svgHighlightNeighbors(id) {
+            if (mcdHighlightId === id) { svgClearHighlight(); return; }
+            mcdHighlightId = id; const keep = new Set([id]);
+            state.relations.forEach(r => { if (r.sourceTable === id) keep.add(r.targetTable); else if (r.targetTable === id) keep.add(r.sourceTable); });
+            svgSetDim(keep);
+        }
+        function svgClearHighlight() { mcdHighlightId = null; svgApplyFocus(); }
+
         function _renderGraphImpl(cont) {
             ensureG6NodeRegistered();
             const hier = tableHierarchyInfo();
@@ -5470,12 +5688,7 @@
             const vs = el('mcdViewSelect'); if (vs) vs.value = schemaMode ? 'schema' : 'links';
             const lsF = el('mcdLayoutSelectFull'); if (lsF) lsF.value = layoutMode;
             const vsF = el('mcdViewSelectFull'); if (vsF) vsF.value = schemaMode ? 'schema' : 'links';
-            document.querySelectorAll('.mcdScopeWrap').forEach(w => { w.innerHTML = mcdScopeButtonsHtml() + mcdThemeFilterHtml(); });
-            document.querySelectorAll('.mcdScopeMsg').forEach(w => {
-                const emptyDesigned = mcdScope() === 'designed' && !Object.values(state.tables).some(t => t.type === 'designed');
-                w.classList.toggle('hidden', !emptyDesigned);
-                w.innerHTML = emptyDesigned ? '🧱 Aucune table conçue pour l\'instant — créez-en une dans l\'onglet <strong>Tables</strong> ; son modèle apparaîtra ici, séparé de celui des sources.' : '';
-            });
+            renderMcdControls();
         }
 
         function getRequiredPath(baseId, targetIds, rels) {
