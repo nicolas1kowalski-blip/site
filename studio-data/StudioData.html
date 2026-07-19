@@ -1982,7 +1982,8 @@
         function boCoreElements(bo) { getBoFacets(bo); return bo.elements || []; }
         // Une ligne d'attribut (réutilisée par le cœur et par chaque bloc composant).
         function boElementRowHtml(bo, elm, names) {
-            return `<tr class="hover:bg-slate-50 align-top">
+            return `<tr class="hover:bg-slate-50 align-top" ondragover="reorderDragOver(event,'boel')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'boel','${elm.id}',(f,t)=>boElReorder('${bo.id}',f,t))">
+                <td class="p-2 text-center align-middle"><span draggable="true" ondragstart="reorderDragStart(event,'boel','${elm.id}')" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-emerald-600 select-none" title="Glisser pour ordonner par importance">⠿</span></td>
                 <td class="p-2"><input type="text" value="${escapeHTML(elm.name)}" onchange="updateBoElement('${bo.id}','${elm.id}','name',this.value)" class="font-bold text-xs border border-slate-300 p-1.5 rounded w-full bg-white" title="Nom métier — renommable librement"></td>
                 <td class="p-2"><input type="text" value="${escapeHTML(elm.owner || '')}" onchange="updateBoElement('${bo.id}','${elm.id}','owner',this.value)" class="text-xs border border-slate-200 p-1.5 rounded w-full" placeholder="hérite du global"></td>
                 <td class="p-2"><div class="flex flex-wrap items-center gap-1">
@@ -1996,7 +1997,7 @@
         }
         function boElementsTableHtml(bo, elems, names, emptyMsg) {
             if (!elems.length) return `<p class="text-xs text-slate-400 italic">${emptyMsg || 'Aucun attribut.'}</p>`;
-            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
+            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
         }
         const CARD_OPTS = ['1–1', '1–N', 'N–1', 'N–N'];
         function facetScopeLabel(sc) { return `${sc.col} ${SCOPE_OPS[sc.op] || sc.op}${sc.op === 'empty' || sc.op === 'notempty' ? '' : ' "' + sc.val + '"'}`; }
@@ -3822,6 +3823,45 @@
             [d.attrs[i], d.attrs[j]] = [d.attrs[j], d.attrs[i]];
             renderTablesDesign();
         }
+        // ---- Glisser-déposer générique pour réordonner un tableau (attributs, éléments d'objet…) ----
+        let _reorderCtx = null;
+        function reorderDragStart(ev, kind, i) { _reorderCtx = { kind, i }; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); } catch (e) {} const tr = ev.currentTarget; if (tr) tr.style.opacity = '0.4'; }
+        function reorderDragEnd(ev) { const tr = ev.currentTarget; if (tr) tr.style.opacity = ''; }
+        function reorderDragOver(ev, kind) { if (_reorderCtx && _reorderCtx.kind === kind) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} const tr = ev.currentTarget; if (tr) tr.style.borderTop = '2px solid #3b82f6'; } }
+        function reorderDragLeave(ev) { const tr = ev.currentTarget; if (tr) tr.style.borderTop = ''; }
+        function reorderDrop(ev, kind, j, apply) {
+            ev.preventDefault(); const tr = ev.currentTarget; if (tr) tr.style.borderTop = '';
+            if (!_reorderCtx || _reorderCtx.kind !== kind) return;
+            const from = _reorderCtx.i; _reorderCtx = null;
+            if (from === j || from == null) return;
+            apply(from, j);
+        }
+        // Réordonne un tableau : retire l'élément `from` et l'insère à la position `to`.
+        function arrMove(arr, from, to) { const [m] = arr.splice(from, 1); arr.splice(to, 0, m); }
+        function tdAttrDrop(from, to) { const d = tdState.editing; if (!d) return; arrMove(d.attrs, from, to); renderTablesDesign(); }
+        function boElReorder(boId, fromId, toId) {
+            const bo = state.governance.businessObjects.find(b => b.id === boId); if (!bo || !bo.elements) return;
+            const fi = bo.elements.findIndex(e => e.id === fromId), ti = bo.elements.findIndex(e => e.id === toId);
+            if (fi < 0 || ti < 0 || fi === ti) return;
+            arrMove(bo.elements, fi, ti); persistAppState(); renderGovernance();
+        }
+
+        // ---- Valeurs proposées dans les filtres d'entrée : distinctes détectées dans la source ----
+        const tdValueCache = {}; // clé tableId+'|'+col -> [valeurs]
+        async function tdFillDatalist(dlId, srcName, col) {
+            if (!col) return;
+            const t = tableByName(srcName); if (!t || t.status !== 'ready' || !t.headers.includes(col)) return;
+            const key = t.id + '|' + col;
+            const put = vals => { const dl = el(dlId); if (dl) dl.innerHTML = vals.map(v => `<option value="${escapeHTML(v)}"></option>`).join(''); };
+            if (tdValueCache[key]) { put(tdValueCache[key]); return; }
+            try {
+                const { conn } = await getDB();
+                const raw = `TRIM(CAST(${sqlIdent(col)} AS VARCHAR))`;
+                const res = await conn.query(`SELECT ${raw} AS v, COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))} WHERE ${sqlIdent(col)} IS NOT NULL AND ${raw} <> '' GROUP BY 1 ORDER BY n DESC LIMIT 300`);
+                const vals = arrowResultToObjects(res).map(r => String(r.v));
+                tdValueCache[key] = vals; put(vals);
+            } catch (e) { console.warn('Valeurs de filtre indisponibles :', e); }
+        }
         function tdAddFk() { const d = tdState.editing; if (!d) return; d.fks = d.fks || []; d.fks.push({ attr: '', table: '', col: '' }); renderTablesDesign(); }
         function tdRemoveFk(i) { const d = tdState.editing; if (!d || !d.fks) return; d.fks.splice(i, 1); renderTablesDesign(); }
         function tdSetFk(i, field, v) { const d = tdState.editing; if (!d || !d.fks || !d.fks[i]) return; d.fks[i][field] = v; if (field === 'table') d.fks[i].col = ''; renderTablesDesign(); }
@@ -4195,6 +4235,9 @@
             }
             if (tdState.editing) html += tdEditorHtml();
             c.innerHTML = html;
+            // Remplit (en tâche de fond) les listes de valeurs proposées des filtres d'entrée.
+            const d = tdState.editing;
+            if (d) (d.sources || []).forEach((s, si) => (s.filters || []).forEach((f, fi) => { if (f.col) tdFillDatalist(`tdfval-${si}-${fi}`, s.src, f.col); }));
         }
 
         function tdEditorHtml() {
@@ -4204,8 +4247,8 @@
             const srcCols = s => { const t = tableByName(s.src); return t ? t.headers : []; };
             const rows = d.attrs.map((a, i) => {
                 const isKey = d.key.includes(a);
-                return `<tr class="border-b border-slate-100 hover:bg-blue-50/30">
-                    <td class="p-1 text-center whitespace-nowrap"><button onclick="tdMoveAttr(${i}, -1)" ${i === 0 ? 'disabled' : ''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-xs font-black px-0.5" title="Monter">▲</button><button onclick="tdMoveAttr(${i}, 1)" ${i === d.attrs.length - 1 ? 'disabled' : ''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-xs font-black px-0.5" title="Descendre">▼</button></td>
+                return `<tr class="border-b border-slate-100 hover:bg-blue-50/30" ondragover="reorderDragOver(event,'tdattr')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'tdattr',${i},tdAttrDrop)">
+                    <td class="p-1 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'tdattr',${i})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-blue-600 select-none text-sm leading-none" title="Glisser pour réordonner">⠿</span><br><button onclick="tdMoveAttr(${i}, -1)" ${i === 0 ? 'disabled' : ''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-[10px] font-black px-0.5" title="Monter">▲</button><button onclick="tdMoveAttr(${i}, 1)" ${i === d.attrs.length - 1 ? 'disabled' : ''} class="text-slate-300 hover:text-blue-600 disabled:opacity-20 text-[10px] font-black px-0.5" title="Descendre">▼</button></td>
                     <td class="p-1.5 text-center"><button onclick="tdToggleKey(${i})" title="${isKey ? 'Retirer de la clé primaire' : 'Ajouter à la clé primaire'}" class="text-base ${isKey ? '' : 'opacity-20 grayscale hover:opacity-60'}">🔑</button></td>
                     <td class="p-1.5"><input type="text" value="${escapeHTML(a)}" onchange="tdRenameAttr(${i}, this.value)" class="w-full border border-slate-300 rounded px-2 py-1 text-xs font-bold" title="Nom métier de l'attribut (renommez librement)"></td>
                     <td class="p-1.5"><select onchange="tdSetFormat(${i}, this.value)" title="Format cible : la valeur texte de la source est normalisée (date → AAAA-MM-JJ, décimal → point, booléen → OUI/NON, code → MAJUSCULES) ; l'inconvertible est gardé tel quel et compté non conforme." class="w-full border rounded px-1 py-1 text-xs ${(d.formats || {})[a] ? 'border-violet-300 bg-violet-50 text-violet-800 font-bold' : 'border-slate-200 bg-white text-slate-500'}">${TD_FORMATS.map(([v, l]) => `<option value="${v}" ${(d.formats || {})[a] === v || (!((d.formats || {})[a]) && !v) ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
@@ -4234,12 +4277,13 @@
                     <div class="mt-2">${d.sources.map((s, si) => `<div class="mb-2">
                         <div class="flex items-center gap-2"><span class="text-[11px] font-bold text-blue-700">📥 ${escapeHTML(s.src)}</span>
                         <button onclick="tdAddFilter(${si})" class="text-[10px] bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-500 hover:bg-slate-50">+ condition</button></div>
-                        ${(s.filters || []).map((f, fi) => `<div class="flex items-center gap-1.5 mt-1 pl-5">
+                        ${(s.filters || []).map((f, fi) => { const dlId = `tdfval-${si}-${fi}`; return `<div class="flex items-center gap-1.5 mt-1 pl-5">
                             <select onchange="tdSetFilter(${si},${fi},'col',this.value)" class="border border-slate-300 rounded px-1.5 py-1 text-xs bg-white"><option value="">— colonne —</option>${srcCols(s).map(h => `<option value="${escapeHTML(h)}" ${f.col === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
                             <select onchange="tdSetFilter(${si},${fi},'op',this.value)" class="border border-slate-300 rounded px-1 py-1 text-xs bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${f.op === o.v ? 'selected' : ''}>${o.t}</option>`).join('')}</select>
-                            <input type="text" value="${escapeHTML(f.val || '')}" oninput="tdSetFilter(${si},${fi},'val',this.value)" placeholder="valeur" class="w-32 border border-slate-300 rounded px-1.5 py-1 text-xs ${['empty', 'nempty'].includes(f.op) ? 'invisible' : ''}">
+                            <input type="text" list="${dlId}" value="${escapeHTML(f.val || '')}" oninput="tdSetFilter(${si},${fi},'val',this.value)" placeholder="valeur (ou choisir)" class="w-36 border border-slate-300 rounded px-1.5 py-1 text-xs ${['empty', 'nempty'].includes(f.op) ? 'invisible' : ''}" title="Les valeurs présentes dans la source sont proposées ; vous pouvez aussi saisir une autre valeur.">
+                            <datalist id="${dlId}"></datalist>
                             <button onclick="tdRemoveFilter(${si},${fi})" class="text-slate-300 hover:text-red-500 font-bold">✕</button>
-                        </div>`).join('')}
+                        </div>`; }).join('')}
                     </div>`).join('')}</div>
                 </details>` : ''}
                 ${d.attrs.length ? `<div class="border border-slate-200 rounded-lg overflow-x-auto mb-2"><table class="w-full text-left text-xs">
