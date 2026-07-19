@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Studio Data — Data Gouvernance</title>
+
+  <!-- PONT NATIF chargé en premier : il pose window.__duckdbPromise avant l'appli. -->
+  <script src="native-duck.js"></script>
+</head>
+<body>
+  <!--
+    PHASE 1 — emplacement du front.
+
+    Deux options pour brancher l'application existante :
+
+    A) Le plus simple pour démarrer : copier ici tout le <body> de StudioData.html
+       (et ses <script> CDN dans le <head>), PUIS SUPPRIMER le bloc
+       <script type="module"> qui initialise DuckDB-Wasm — le pont natif le remplace.
+
+    B) Propre à terme : un petit script de build qui injecte StudioData.html en
+       retirant automatiquement ce bloc module. (À faire en phase 5.)
+
+    Pour ce squelette, on affiche un écran de vérification qui exécute une VRAIE
+    requête sur DuckDB natif : si le chiffre s'affiche, le pont fonctionne.
+  -->
+  <main style="font-family: system-ui, sans-serif; max-width: 640px; margin: 12vh auto; text-align: center; color: #1e293b;">
+    <div style="font-size: 3rem;">🏛️</div>
+    <h1 style="margin: .3em 0;">Studio Data — version bureau</h1>
+    <p style="color:#64748b;">Squelette phase 1. Vérification du moteur DuckDB natif…</p>
+    <pre id="probe" style="display:inline-block; text-align:left; background:#0f172a; color:#6ee7b7; padding:1rem 1.5rem; border-radius:.75rem; font-size:.85rem;">initialisation…</pre>
+    <p style="color:#94a3b8; font-size:.8rem; margin-top:2rem;">Ensuite : coller le corps de <code>StudioData.html</code> ici (voir commentaire ci-dessus).</p>
+  </main>
+
+  <script>
+    (async () => {
+      const probe = document.getElementById('probe');
+      try {
+        const { conn } = await window.__duckdbPromise;
+        // Requête réelle : version du moteur + un petit calcul.
+        const res = await conn.query("SELECT version() AS moteur, 40 + 2 AS reponse");
+        const row = res.toArray()[0] || {};
+        probe.textContent =
+          "✔ DuckDB natif opérationnel\n" +
+          "moteur  : " + (row.moteur ?? '?') + "\n" +
+          "test    : 40 + 2 = " + (row.reponse ?? '?') + "\n" +
+          "backend : " + (window.__duckdbNative ? 'Tauri (natif)' : 'WebAssembly');
+      } catch (e) {
+        probe.textContent = "✖ Erreur : " + e.message +
+          "\n\nLancez via `cargo tauri dev` (hors Tauri, le pont natif reste inactif).";
+      }
+    })();
+  </script>
+</body>
+</html>
