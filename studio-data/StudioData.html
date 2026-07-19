@@ -1017,6 +1017,16 @@
         // Un seul type de nœud personnalisé, réutilisé par le graphe MCD (étape 2) et l'Explorateur 360°
         // (étape 5) : un titre en gras, et éventuellement une ligne de contenu en dessous.
         let g6NodeRegistered = false;
+        // Taille (largeur, hauteur) d'une carte UML — MÊME formule que le dessin, pour que le layout
+        // connaisse la hauteur réelle (surtout en vue schéma) et n'empile jamais les cartes.
+        function umlNodeSize(title, rows) {
+            rows = rows || []; title = title || '';
+            const maxLen = Math.max(String(title).length + 2, 12, ...rows.map(r => String(r).length));
+            const w = Math.min(280, Math.max(150, maxLen * 6.4 + 28));
+            const headH = 28, rowH = 15;
+            const h = headH + (rows.length ? rows.length * rowH + 12 : 10);
+            return [w, h];
+        }
         function ensureG6NodeRegistered() {
             if (g6NodeRegistered || typeof G6 === 'undefined') return;
             G6.registerNode('studio-rich-node', {
@@ -1061,10 +1071,8 @@
                 draw(cfg, group) {
                     const title = cfg.title || '';
                     const rows = cfg.rows || [];
-                    const maxLen = Math.max(title.length + 2, 12, ...rows.map(r => String(r).length));
-                    const w = Math.min(280, Math.max(150, maxLen * 6.4 + 28));
+                    const [w, h] = umlNodeSize(title, rows);
                     const headH = 28, rowH = 15;
-                    const h = headH + (rows.length ? rows.length * rowH + 12 : 10);
                     const keyShape = group.addShape('rect', {
                         attrs: { x: -w / 2, y: -h / 2, width: w, height: h, radius: 8, fill: '#ffffff', stroke: cfg.stroke || '#6366f1', lineWidth: 1.2, shadowColor: 'rgba(15,23,42,0.18)', shadowBlur: 12, shadowOffsetY: 3 },
                         name: 'uml-box',
@@ -5222,9 +5230,10 @@
                 const isD = t.type === 'designed';
                 // Couleur par THÈME (groupe de sources) quand il est défini — sinon codes historiques.
                 const pal = t.theme ? themePalette(t.theme.trim()) : null;
+                const _title = (isD ? '🧱 ' : (isH ? '🌳 ' : '📄 ')) + t.name;
                 return {
                     id: t.id, type: 'studio-uml-node',
-                    title: (isD ? '🧱 ' : (isH ? '🌳 ' : '📄 ')) + t.name, rows,
+                    title: _title, rows, size: umlNodeSize(_title, rows),
                     comboId: t.theme && t.theme.trim() ? 'th_' + t.theme.trim() : undefined,
                     headFill: pal ? pal.head : (isD ? '#dbeafe' : (isH ? '#d1fae5' : '#e0e7ff')),
                     titleFill: pal ? pal.title : (isD ? '#1e40af' : (isH ? '#065f46' : '#312e81')),
@@ -5250,11 +5259,14 @@
             });
 
             if (!networkInstance) {
+                // Espacement ADAPTATIF : en vue schéma les cartes sont hautes → on aère davantage pour
+                // qu'aucune ne se touche. preventOverlap s'appuie sur la taille réelle (size) des nœuds.
+                const nsep = schemaMode ? 55 : 34, rsep = schemaMode ? 150 : 110;
                 const layout = layoutMode === 'force'
-                    ? { type: 'gForce', preventOverlap: true, nodeSize: 200, linkDistance: 220, nodeStrength: 1000, edgeStrength: 200, maxIteration: 400, damping: 0.9, workerEnabled: true, animate: false }
+                    ? { type: 'gForce', preventOverlap: true, nodeSpacing: schemaMode ? 45 : 24, linkDistance: schemaMode ? 300 : 220, nodeStrength: 1200, edgeStrength: 200, maxIteration: 500, damping: 0.9, workerEnabled: true, animate: false }
                     : (layoutMode === 'combo'
-                        ? { type: 'comboCombined', spacing: 50, comboPadding: 30 }
-                        : { type: 'dagre', rankdir: 'LR', nodesep: 34, ranksep: 110 });
+                        ? { type: 'comboCombined', spacing: schemaMode ? 70 : 50, comboPadding: 30 }
+                        : { type: 'dagre', rankdir: 'LR', nodesep: nsep, ranksep: rsep, preventOverlap: true });
                 networkInstance = createStudioGraph(cont, layout, {
                     defaultEdge: {
                         style: { stroke: '#94a3b8', lineWidth: 1.4, endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#94a3b8' } },
