@@ -1182,7 +1182,7 @@
         // Boîte à outils commune des graphes (zoom / recentrage) — les instances par nom.
         function graphInstanceOf(which) { return ({ mcd: networkInstance, lineage: lineageGraph, model: modelGraph, exp: expNetInstance })[which]; }
         function graphZoom(which, f) { if (which === 'mcd' && mcdIsSvg()) { const svg = el('mcdSvg'); if (!svg) return; const r = svg.getBoundingClientRect(), mx = r.width / 2, my = r.height / 2, nk = Math.max(0.15, Math.min(3, svgG.k * f)); svgG.tx = mx - (mx - svgG.tx) * (nk / svgG.k); svgG.ty = my - (my - svgG.ty) * (nk / svgG.k); svgG.k = nk; svgApplyTransform(); return; } const g = graphInstanceOf(which); if (g) g.zoom(f, { x: g.getWidth() / 2, y: g.getHeight() / 2 }); }
-        function graphFit(which) { if (which === 'mcd' && mcdIsSvg()) { svgG.k = 1; svgG.tx = 40; svgG.ty = 40; svgApplyTransform(); return; } const g = graphInstanceOf(which); if (g) g.fitView(20); }
+        function graphFit(which) { if (which === 'mcd' && mcdIsSvg()) { svgFitAll(); return; } const g = graphInstanceOf(which); if (g) g.fitView(20); }
         function graphToolbarHtml(which) {
             return `<span class="inline-flex gap-1">
                 <button onclick="graphZoom('${which}', 1.25)" class="text-[11px] bg-white border border-slate-300 w-6 h-6 rounded font-black text-slate-600 hover:bg-slate-100" title="Zoom avant">+</button>
@@ -1262,7 +1262,7 @@
         }
         function mcdToggleFocus() { state.graphConfig.mcdFocus = !state.graphConfig.mcdFocus; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); persistAppState(); }
         // ④ Ranger : recalcule proprement la disposition (positions figées effacées).
-        function mcdRelayout() { if (typeof svgG !== 'undefined') svgG.pos = {}; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
+        function mcdRelayout() { if (typeof svgG !== 'undefined') { svgG.pos = {}; svgG.needFit = true; } if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); }
         function mcdIsSvg() { return (state.graphConfig.mcdEngine || 'g6') === 'svg'; }
         // ② Masquer / réafficher des tables du graphe.
         function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
@@ -5414,6 +5414,7 @@
         // Positions calculées par computeDomainPositions (couloirs par domaine, sans collision). Le
         // déplacement, le zoom et le pan sont gérés à la main → 100 % fiables et testables.
         let svgG = { pos: {}, k: 1, tx: 40, ty: 40, size: {} };
+        let _svgWin = { mm: null, mu: null };
         function svgBuildNodeModels(visibleIds, schemaMode) {
             const hier = tableHierarchyInfo();
             const keyCols = {};
@@ -5455,7 +5456,7 @@
             nodes.forEach(n => svgG.size[n.id] = n.size);
             // Positions : recalcule tout si rien de mémorisé, sinon place seulement les nouvelles tables.
             const missing = nodes.filter(n => !svgG.pos[n.id]);
-            if (missing.length === nodes.length) { computeDomainPositions(nodes); nodes.forEach(n => svgG.pos[n.id] = { x: n.x, y: n.y }); }
+            if (missing.length === nodes.length) { computeDomainPositions(nodes); nodes.forEach(n => svgG.pos[n.id] = { x: n.x, y: n.y }); svgG.needFit = true; }
             else if (missing.length) { const clone = nodes.map(n => ({ id: n.id, size: n.size })); computeDomainPositions(clone); clone.forEach(c => { if (!svgG.pos[c.id]) svgG.pos[c.id] = { x: c.x, y: c.y }; }); }
             nodes.forEach(n => { const p = svgG.pos[n.id]; n.x = p.x; n.y = p.y; });
             const boxOf = id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; return { cx: p.x, cy: p.y, w: s[0], h: s[1] }; };
@@ -5471,7 +5472,7 @@
                 let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
                 byDom[d].forEach(n => { const b = boxOf(n.id); x1 = Math.min(x1, b.cx - b.w / 2); y1 = Math.min(y1, b.cy - b.h / 2); x2 = Math.max(x2, b.cx + b.w / 2); y2 = Math.max(y2, b.cy + b.h / 2); });
                 const P = 22;
-                zonesSvg += `<g class="svgzone"><rect x="${x1 - P}" y="${y1 - P - 16}" width="${x2 - x1 + 2 * P}" height="${y2 - y1 + 2 * P + 16}" rx="12" fill="${pal.zone}" fill-opacity="0.05" stroke="${pal.zone}" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${x1 - P + 8}" y="${y1 - P - 3}" font-size="12" font-weight="700" fill="${pal.zone}">🗂 ${escapeHTML(d)}</text></g>`;
+                zonesSvg += `<g class="svgzone" data-dom="${escapeHTML(d)}" style="cursor:move"><rect x="${x1 - P}" y="${y1 - P - 16}" width="${x2 - x1 + 2 * P}" height="${y2 - y1 + 2 * P + 16}" rx="12" fill="${pal.zone}" fill-opacity="0.05" stroke="${pal.zone}" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${x1 - P + 8}" y="${y1 - P - 3}" font-size="12" font-weight="700" fill="${pal.zone}">🗂 ${escapeHTML(d)} <tspan fill="${pal.zone}" fill-opacity="0.6">— glisser pour déplacer le domaine</tspan></text></g>`;
             });
 
             // Liens.
@@ -5507,38 +5508,71 @@
                 <style>.svg-dim{opacity:.12}.svgnode:hover rect:first-child{stroke-width:2}</style>
                 <g id="mcdVp"><g class="zones">${zonesSvg}</g><g class="edges">${edgesSvg}</g><g class="nodes">${nodesSvg}</g></g>
             </svg>`;
-            svgApplyTransform();
             svgBindEvents(cont);
+            // Cadrage automatique tant que l'utilisateur n'a pas navigué manuellement (ou après « Ranger »).
+            if (svgG.needFit) { svgG.needFit = false; svgFitAll(); } else { svgApplyTransform(); }
             // rétablit un éventuel focus/surlignage actif
             mcdHighlightId = null; svgApplyFocus();
+        }
+        // « Tout voir » : cadre l'ensemble du modèle dans la fenêtre (indispensable pour naviguer).
+        function svgFitAll() {
+            const cont = el('networkGraph'); if (!cont) return;
+            const ids = Object.keys(svgG.pos); if (!ids.length) { svgApplyTransform(); return; }
+            let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+            ids.forEach(id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; x1 = Math.min(x1, p.x - s[0] / 2); y1 = Math.min(y1, p.y - s[1] / 2); x2 = Math.max(x2, p.x + s[0] / 2); y2 = Math.max(y2, p.y + s[1] / 2); });
+            const W = cont.clientWidth || 800, H = cont.clientHeight || 500, M = 50;
+            const bw = x2 - x1, bh = y2 - y1; if (bw <= 0 || bh <= 0) { svgApplyTransform(); return; }
+            svgG.k = Math.max(0.12, Math.min(1.4, Math.min((W - 2 * M) / bw, (H - 2 * M) / bh)));
+            svgG.tx = (W - bw * svgG.k) / 2 - x1 * svgG.k;
+            svgG.ty = (H - bh * svgG.k) / 2 - y1 * svgG.k;
+            svgApplyTransform();
         }
         function svgTrunc(s, w) { const max = Math.max(6, Math.floor((w - 20) / 6.2)); s = String(s); return s.length > max ? s.slice(0, max - 1) + '…' : s; }
 
         // ---- Interactions SVG (drag nœud, pan, zoom, clic, clic droit) ----
         function svgBindEvents(cont) {
             const svg = el('mcdSvg'); if (!svg) return;
+            // Évite l'accumulation de listeners globaux entre deux rendus (fuite mémoire).
+            if (_svgWin.mm) window.removeEventListener('mousemove', _svgWin.mm);
+            if (_svgWin.mu) window.removeEventListener('mouseup', _svgWin.mu);
             const ptGraph = ev => { const r = svg.getBoundingClientRect(); return { x: (ev.clientX - r.left - svgG.tx) / svgG.k, y: (ev.clientY - r.top - svgG.ty) / svgG.k }; };
-            let mode = null, dragId = null, last = null, moved = 0, startG = null;
+            let mode = null, dragId = null, last = null, moved = 0, startG = null, zoneDom = null, zoneEl = null, zoneAcc = null;
+            svg.style.cursor = 'grab';
             svg.addEventListener('mousedown', ev => {
                 const ng = ev.target.closest('.svgnode');
+                const zn = ev.target.closest('.svgzone');
                 if (ng) { mode = 'node'; dragId = ng.getAttribute('data-id'); startG = ptGraph(ev); moved = 0; ng.style.cursor = 'grabbing'; }
-                else { mode = 'pan'; last = { x: ev.clientX, y: ev.clientY }; }
+                else if (zn) { mode = 'zone'; zoneDom = zn.getAttribute('data-dom'); zoneEl = zn; zoneAcc = { x: 0, y: 0 }; startG = ptGraph(ev); svgG.userMoved = true; }
+                else { mode = 'pan'; last = { x: ev.clientX, y: ev.clientY }; svg.style.cursor = 'grabbing'; svgG.userMoved = true; }
                 ev.preventDefault();
             });
-            window.addEventListener('mousemove', svg.__mm = ev => {
+            window.addEventListener("mousemove", _svgWin.mm = ev => {
                 if (mode === 'pan') { svgG.tx += ev.clientX - last.x; svgG.ty += ev.clientY - last.y; last = { x: ev.clientX, y: ev.clientY }; svgApplyTransform(); }
                 else if (mode === 'node') {
                     const g = ptGraph(ev); const p = svgG.pos[dragId]; if (!p) return;
-                    p.x += g.x - startG.x; p.y += g.y - startG.y; startG = g; moved++;
+                    p.x += g.x - startG.x; p.y += g.y - startG.y; startG = g; moved++; svgG.userMoved = true;
                     const ng = svg.querySelector(`.svgnode[data-id="${CSS.escape(dragId)}"]`); const s = svgG.size[dragId] || [180, 60];
                     if (ng) ng.setAttribute('transform', `translate(${p.x - s[0] / 2},${p.y - s[1] / 2})`);
                     svgUpdateEdgesFor(dragId);
                 }
+                else if (mode === 'zone') {
+                    // Déplace UNIQUEMENT les tables du domaine saisi (pas les autres domaines, pas le fond).
+                    const g = ptGraph(ev); const dx = g.x - startG.x, dy = g.y - startG.y; startG = g;
+                    Object.keys(svgG.pos).forEach(id => {
+                        const t = state.tables[id]; if (!t || (t.theme || '').trim() !== zoneDom) return;
+                        const p = svgG.pos[id]; p.x += dx; p.y += dy;
+                        const nng = svg.querySelector(`.svgnode[data-id="${CSS.escape(id)}"]`); const s = svgG.size[id] || [180, 60];
+                        if (nng) nng.setAttribute('transform', `translate(${p.x - s[0] / 2},${p.y - s[1] / 2})`);
+                        svgUpdateEdgesFor(id);
+                    });
+                    zoneAcc.x += dx; zoneAcc.y += dy; if (zoneEl) zoneEl.setAttribute('transform', `translate(${zoneAcc.x},${zoneAcc.y})`);
+                }
             });
-            window.addEventListener('mouseup', svg.__mu = ev => {
+            window.addEventListener("mouseup", _svgWin.mu = ev => {
+                if (mode === 'pan') svg.style.cursor = 'grab';
                 if (mode === 'node') { const ng = svg.querySelector(`.svgnode[data-id="${CSS.escape(dragId)}"]`); if (ng) ng.style.cursor = 'grab';
                     if (moved < 3) { if (mcdLinkMode) mcdNodeClicked(dragId); else svgHighlightNeighbors(dragId); } }
-                mode = null; dragId = null;
+                mode = null; dragId = null; zoneDom = null; zoneEl = null;
             });
             svg.addEventListener('wheel', ev => {
                 ev.preventDefault(); const r = svg.getBoundingClientRect(); const mx = ev.clientX - r.left, my = ev.clientY - r.top;
