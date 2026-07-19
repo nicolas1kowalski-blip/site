@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Politique de sécurité du contenu : verrouille ce qui ne casse aucune fonctionnalité
+         légitime (pas de plugins, pas de détournement de <base>, pas d'inclusion en iframe) et
+         restreint le chargement de scripts/styles aux seules origines connues. Les gestionnaires
+         inline (onclick), les workers en blob (DuckDB) et le WebAssembly restent autorisés car
+         l'application repose dessus. connect-src reste large : les sources API sont saisies par
+         l'utilisateur et le moteur télécharge son WASM. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; worker-src blob:; child-src blob:; img-src 'self' data: blob:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https: data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
     <title>Studio Data - Qualité & BI</title>
     <script>
         const _ResizeObserver = window.ResizeObserver;
@@ -10,11 +17,14 @@
             constructor(callback) { super((entries, observer) => { window.requestAnimationFrame(() => { try { callback(entries, observer); } catch (e) {} }); }); }
         };
     </script>
+    <!-- Bibliothèques épinglées à une version exacte + contrôle d'intégrité (SRI) : le navigateur
+         REFUSE d'exécuter le fichier si ses octets ne correspondent pas à l'empreinte (protection
+         contre un CDN compromis ou un fichier altéré). Ne plus utiliser de version « flottante ». -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://unpkg.com/@antv/g6@4/dist/g6.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@antv/g6@4.8.24/dist/g6.min.js" integrity="sha384-iYoticlq+TpD6YYL4Lx7pZ8jM+Loq+EKfAbFtWUe0d3639XqCkVreQ57oSygxMD1" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.js" integrity="sha384-MH1axGwz/uQzfIcjFdjEfsM0xlf5mmWfAwwggaOh5IPFvgKFGbJ2PZ4VBbgSYBQN" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.474.0/dist/umd/lucide.min.js" integrity="sha384-wkxmY9HYHJVzx0oZ7k8stpLQ7g7ogSqBha75ozCZmxFadwtaIw5dzXKVWWfi9I36" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <!-- DuckDB-Wasm : moteur SQL embarqué (WebAssembly + Web Worker) utilisé pour stocker les tables
          et exécuter les jointures/agrégations sans devoir tout charger en mémoire JS. -->

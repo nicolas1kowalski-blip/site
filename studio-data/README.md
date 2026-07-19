@@ -49,8 +49,9 @@ Organisée en 4 phases :
 
 ## Limites connues / points d'attention
 
-- Bibliothèques chargées depuis des **CDN** (jsDelivr…) : nécessite internet au chargement ;
-  voir l'audit sécurité pour la version « entreprise autonome » envisagée.
+- Bibliothèques chargées depuis des **CDN** (jsDelivr…), désormais en **versions figées avec
+  contrôle d'intégrité (SRI)** : nécessite internet au premier chargement. Voir `SECURITY.md`
+  pour l'audit complet et la piste « entreprise 100 % autonome ».
 - Volumétrie : confortable jusqu'à ~5-10 M de lignes (au-delà : Parquet/OPFS, puis la piste
   bureau `studio-desktop/`).
 - Outil **local mono-utilisateur** : pas d'authentification ni de traçabilité multi-utilisateurs
