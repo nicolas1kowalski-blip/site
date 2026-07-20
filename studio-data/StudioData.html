@@ -3861,6 +3861,7 @@
             const d = tdState.editing; if (!d || !d.joins || !d.joins[i]) return;
             d.joins[i][field] = v;
             if (field === 'src') { d.joins[i].srcKey = ''; d.joins[i].col = ''; }
+            if (field === 'viaSrc') { d.joins[i].viaIn = ''; d.joins[i].viaOut = ''; }
             if (field === 'col' && !String(d.joins[i].as || '').trim()) d.joins[i].as = v;
             renderTablesDesign();
         }
@@ -3912,14 +3913,34 @@
             }
             // Enrichissements : LEFT JOIN vers une autre source via une clé (une ligne par clé côté
             // enrichissement — pas de démultiplication des lignes de la table).
-            const joins = tdValidJoins(d);
+            const joins = tdValidJoins(d).filter(j => !j.viaSrc || (j.viaIn && j.viaOut));
             if (joins.length) {
+                const dateE = e => `TRY_CAST(${tdNormExpr('date', e)} AS DATE)`;
+                const validSql = (j, al) => {
+                    if (j.validMode === 'status' && j.vCol) { const f = qualCondSql({ col: j.vCol, op: j.vOp || 'eq', val: j.vVal || '' }); return f ? ' AND ' + f.replaceAll(sqlIdent(j.vCol), al + '.' + sqlIdent(j.vCol)) : ''; }
+                    if (j.validMode === 'period' && j.vStart) {
+                        let c2 = ` AND ${dateE(`CAST(${al}.${sqlIdent(j.vStart)} AS VARCHAR)`)} <= CURRENT_DATE`;
+                        if (j.vEnd) c2 += ` AND (${al}.${sqlIdent(j.vEnd)} IS NULL OR TRIM(CAST(${al}.${sqlIdent(j.vEnd)} AS VARCHAR)) = '' OR ${dateE(`CAST(${al}.${sqlIdent(j.vEnd)} AS VARCHAR)`)} >= CURRENT_DATE)`;
+                        return c2;
+                    }
+                    return '';
+                };
                 const groups = new Map();
-                joins.forEach(j => { const k = j.src + '' + j.srcKey + '' + j.attr; if (!groups.has(k)) groups.set(k, { src: j.src, srcKey: j.srcKey, attr: j.attr, cols: [] }); groups.get(k).cols.push({ col: j.col, as: j.as.trim() }); });
+                joins.forEach((j, ji) => { const k = j.viaSrc ? ('via' + ji) : (j.src + '|' + j.srcKey + '|' + j.attr); if (!groups.has(k)) groups.set(k, { src: j.src, srcKey: j.srcKey, attr: j.attr, cols: [], rows: [] }); groups.get(k).cols.push({ col: j.col, as: j.as.trim() }); groups.get(k).rows.push(j); });
                 let n = 0; const joinSqls = []; const selCols = [];
                 for (const g of groups.values()) {
                     const t = tableByName(g.src); if (!t || t.status !== 'ready') throw new Error(`La source d'enrichissement "${g.src}" n'est pas chargée.`);
                     const alias = 'e' + (++n);
+                    const j0 = g.rows ? g.rows[0] : null;
+                    if (j0 && j0.viaSrc) {
+                        // Jointure en 2 SAUTS : table -> table de lien (lignes VALIDES seulement) -> cible.
+                        const lt = tableByName(j0.viaSrc); if (!lt || lt.status !== 'ready') throw new Error(`La table de lien "${j0.viaSrc}" n'est pas chargée.`);
+                        const nrm = c2 => `NULLIF(UPPER(TRIM(CAST(${c2} AS VARCHAR))), '')`;
+                        const ordSql = j0.validMode === 'period' && j0.vStart ? `${dateE(`CAST(lk.${sqlIdent(j0.vStart)} AS VARCHAR)`)} DESC NULLS LAST` : `lk.${sqlIdent(j0.viaIn)}`;
+                        joinSqls.push(`LEFT JOIN (SELECT ${nrm('lk.' + sqlIdent(j0.viaIn))} AS __k, ${g.cols.map(c => `CAST(tg.${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(lt.id))} lk JOIN ${sqlIdent(duckTableName(t.id))} tg ON ${nrm('tg.' + sqlIdent(g.srcKey))} = ${nrm('lk.' + sqlIdent(j0.viaOut))} WHERE ${nrm('lk.' + sqlIdent(j0.viaIn))} IS NOT NULL${validSql(j0, 'lk')} QUALIFY row_number() OVER (PARTITION BY ${nrm('lk.' + sqlIdent(j0.viaIn))} ORDER BY ${ordSql}) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`);
+                        g.cols.forEach(c => selCols.push(`${alias}.${sqlIdent(c.as)}`));
+                        continue;
+                    }
                     const kn = `COALESCE(UPPER(TRIM(CAST(${sqlIdent(g.srcKey)} AS VARCHAR))), chr(2))`;
                     joinSqls.push(`LEFT JOIN (SELECT ${kn} AS __k, ${g.cols.map(c => `CAST(${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(t.id))} QUALIFY row_number() OVER (PARTITION BY ${kn} ORDER BY __k) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`);
                     g.cols.forEach(c => selCols.push(`${alias}.${sqlIdent(c.as)}`));
@@ -3943,7 +3964,7 @@
         // d'enrichissement) — appelé automatiquement après la mise à jour de la source.
         async function tdAutoRebuildFor(srcName) {
             const deps = Object.values(state.tables).filter(x => x.type === 'designed' && x.design &&
-                ((x.design.sources || []).some(s => s.src === srcName) || (x.design.joins || []).some(j => j.src === srcName)));
+                ((x.design.sources || []).some(s => s.src === srcName) || (x.design.joins || []).some(j => j.src === srcName || j.viaSrc === srcName)));
             for (const dt of deps) {
                 try {
                     await tdMaterialize(JSON.parse(JSON.stringify(dt.design)));
@@ -4298,6 +4319,16 @@
                                 <span class="text-[10px] text-slate-400">sous le nom</span>
                                 <input type="text" value="${escapeHTML(j.as || '')}" onchange="tdSetJoin(${i},'as',this.value)" placeholder="nom" class="w-32 border border-slate-300 rounded px-1.5 py-1 text-xs font-bold">
                                 <button onclick="tdRemoveJoin(${i})" class="text-slate-300 hover:text-red-500 font-bold">✕</button>
+                            </div>
+                            <div class="flex items-center gap-1.5 mb-1.5 flex-wrap pl-6 text-[10px]">
+                                <span class="text-slate-400">↳ via table de lien</span>
+                                <select onchange="tdSetJoin(${i},'viaSrc',this.value)" class="border border-slate-300 rounded px-1 py-0.5 text-[11px] bg-white max-w-[150px]"><option value="">— directe —</option>${Object.values(state.tables).filter(t2 => t2.status === 'ready' && t2.id !== d.targetId && t2.name !== j.src).map(t2 => `<option value="${escapeHTML(t2.name)}" ${j.viaSrc === t2.name ? 'selected' : ''}>${escapeHTML(t2.name)}</option>`).join('')}</select>
+                                ${(() => { if (!j.viaSrc) return ''; const vt = tableByName(j.viaSrc); const vh = vt ? vt.headers : [];
+                                    const sel = (f2, cur, opts, ph) => `<select onchange="tdSetJoin(${i},'${f2}',this.value)" class="border border-slate-300 rounded px-1 py-0.5 text-[11px] bg-white max-w-[130px]"><option value="">${ph}</option>${opts.map(h => `<option value="${escapeHTML(h)}" ${cur === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+                                    let html3 = `<span class="text-slate-400">entrée (= attribut)</span>${sel('viaIn', j.viaIn, vh, '— col —')}<span class="text-slate-400">sortie (→ clé cible)</span>${sel('viaOut', j.viaOut, vh, '— col —')}<span class="text-slate-400">· validité</span><select onchange="tdSetJoin(${i},'validMode',this.value)" class="border border-slate-300 rounded px-1 py-0.5 text-[11px] bg-white"><option value="">toutes les lignes</option><option value="status" ${j.validMode === 'status' ? 'selected' : ''}>par statut</option><option value="period" ${j.validMode === 'period' ? 'selected' : ''}>période active</option></select>`;
+                                    if (j.validMode === 'status') html3 += `${sel('vCol', j.vCol, vh, '— col —')}<select onchange="tdSetJoin(${i},'vOp',this.value)" class="border border-slate-300 rounded px-1 py-0.5 text-[11px] bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${(j.vOp || 'eq') === o.v ? 'selected' : ''}>${o.t}</option>`).join('')}</select><input type="text" value="${escapeHTML(j.vVal || '')}" onchange="tdSetJoin(${i},'vVal',this.value)" placeholder="valeur" class="w-20 border border-slate-300 rounded px-1 py-0.5 text-[11px]">`;
+                                    if (j.validMode === 'period') html3 += `<span class="text-slate-400">début</span>${sel('vStart', j.vStart, vh, '— col —')}<span class="text-slate-400">fin</span>${sel('vEnd', j.vEnd, vh, '— (ouverte) —')}`;
+                                    return html3; })()}
                             </div>`;
                         }).join('')}
                         <button onclick="tdAddJoin()" class="text-[11px] bg-white border border-blue-300 rounded px-2.5 py-1 font-bold text-blue-700 hover:bg-blue-50 mt-1">+ Enrichissement</button>
