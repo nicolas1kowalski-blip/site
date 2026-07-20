@@ -30,6 +30,7 @@ const out = await p.evaluate(async ()=>{
   ok('Nav: sous-onglets gouvernance présents', document.querySelectorAll('#subTabNav button').length>=9);
   // --- No-persist ---
   const w=[]; const op=window.idbPut; window.idbPut=async(...a)=>{w.push(a[0]);};
+  window.confirm=()=>true; // la purge du mode sans persistance exige désormais une confirmation
   await toggleNoPersist(true); persistAppState(); await persistTableData('x');
   ok('No-persist: aucune écriture locale', w.length===0 && state.noPersist===true);
   await toggleNoPersist(false); ok('No-persist: réactivation OK', state.noPersist===false);
