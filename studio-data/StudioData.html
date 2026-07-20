@@ -3983,7 +3983,11 @@
                 };
                 const groups = new Map();
                 joins.forEach((j, ji) => { const k = j.viaSrc ? ('via' + ji) : (j.src + '|' + j.srcKey + '|' + j.attr); if (!groups.has(k)) groups.set(k, { src: j.src, srcKey: j.srcKey, attr: j.attr, cols: [], rows: [] }); groups.get(k).cols.push({ col: j.col, as: j.as.trim() }); groups.get(k).rows.push(j); });
-                let n = 0; const joinSqls = []; const selCols = [];
+                let n = 0;
+                // Application EN COUCHES successives : chaque enrichissement est joint sur le
+                // résultat des précédents, si bien que son attribut d'accroche peut être une
+                // colonne ramenée par un enrichissement antérieur (chaînage 3e, 4e niveau, ...).
+                const addLayer = (alias, joinSql, cols) => { sql = 'SELECT u.*, ' + cols.map(c => alias + '.' + sqlIdent(c.as)).join(', ') + ' FROM (\n' + sql + '\n) u\n' + joinSql; };
                 for (const g of groups.values()) {
                     const t = tableByName(g.src); if (!t || t.status !== 'ready') throw new Error(`La source d'enrichissement "${g.src}" n'est pas chargée.`);
                     const alias = 'e' + (++n);
@@ -3993,15 +3997,12 @@
                         const lt = tableByName(j0.viaSrc); if (!lt || lt.status !== 'ready') throw new Error(`La table de lien "${j0.viaSrc}" n'est pas chargée.`);
                         const nrm = c2 => `NULLIF(UPPER(TRIM(CAST(${c2} AS VARCHAR))), '')`;
                         const ordSql = j0.validMode === 'period' && j0.vStart ? `${dateE(`CAST(lk.${sqlIdent(j0.vStart)} AS VARCHAR)`)} DESC NULLS LAST` : `lk.${sqlIdent(j0.viaIn)}`;
-                        joinSqls.push(`LEFT JOIN (SELECT ${nrm('lk.' + sqlIdent(j0.viaIn))} AS __k, ${g.cols.map(c => `CAST(tg.${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(lt.id))} lk JOIN ${sqlIdent(duckTableName(t.id))} tg ON ${nrm('tg.' + sqlIdent(g.srcKey))} = ${nrm('lk.' + sqlIdent(j0.viaOut))} WHERE ${nrm('lk.' + sqlIdent(j0.viaIn))} IS NOT NULL${validSql(j0, 'lk')} QUALIFY row_number() OVER (PARTITION BY ${nrm('lk.' + sqlIdent(j0.viaIn))} ORDER BY ${ordSql}) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`);
-                        g.cols.forEach(c => selCols.push(`${alias}.${sqlIdent(c.as)}`));
+                        addLayer(alias, `LEFT JOIN (SELECT ${nrm('lk.' + sqlIdent(j0.viaIn))} AS __k, ${g.cols.map(c => `CAST(tg.${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(lt.id))} lk JOIN ${sqlIdent(duckTableName(t.id))} tg ON ${nrm('tg.' + sqlIdent(g.srcKey))} = ${nrm('lk.' + sqlIdent(j0.viaOut))} WHERE ${nrm('lk.' + sqlIdent(j0.viaIn))} IS NOT NULL${validSql(j0, 'lk')} QUALIFY row_number() OVER (PARTITION BY ${nrm('lk.' + sqlIdent(j0.viaIn))} ORDER BY ${ordSql}) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`, g.cols);
                         continue;
                     }
                     const kn = `COALESCE(UPPER(TRIM(CAST(${sqlIdent(g.srcKey)} AS VARCHAR))), chr(2))`;
-                    joinSqls.push(`LEFT JOIN (SELECT ${kn} AS __k, ${g.cols.map(c => `CAST(${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(t.id))} QUALIFY row_number() OVER (PARTITION BY ${kn} ORDER BY __k) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`);
-                    g.cols.forEach(c => selCols.push(`${alias}.${sqlIdent(c.as)}`));
+                    addLayer(alias, `LEFT JOIN (SELECT ${kn} AS __k, ${g.cols.map(c => `CAST(${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(t.id))} QUALIFY row_number() OVER (PARTITION BY ${kn} ORDER BY __k) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`, g.cols);
                 }
-                sql = `SELECT u.*, ${selCols.join(', ')} FROM (\n${sql}\n) u\n${joinSqls.join('\n')}`;
             }
             const calcs = d.calcs.filter(cx => cx.name && String(cx.formula || '').trim());
             if (calcs.length) sql = `SELECT *, ${calcs.map(cx => `(${tdFormulaSql(cx.formula)}) AS ${sqlIdent(cx.name)}`).join(', ')} FROM (\n${sql}\n) c`;
@@ -4369,7 +4370,7 @@
                                 <span class="text-[10px] text-slate-400">sa clé</span>
                                 <select onchange="tdSetJoin(${i},'srcKey',this.value)" class="border border-slate-300 rounded px-1 py-1 text-xs bg-white max-w-[130px]"><option value="">— col —</option>${jh.map(h => `<option value="${escapeHTML(h)}" ${j.srcKey === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
                                 <span class="text-[10px] text-slate-400">= attribut</span>
-                                <select onchange="tdSetJoin(${i},'attr',this.value)" class="border border-slate-300 rounded px-1 py-1 text-xs bg-white max-w-[130px]"><option value="">— attr —</option>${d.attrs.map(a2 => `<option value="${escapeHTML(a2)}" ${j.attr === a2 ? 'selected' : ''}>${escapeHTML(a2)}</option>`).join('')}</select>
+                                <select onchange="tdSetJoin(${i},'attr',this.value)" class="border border-slate-300 rounded px-1 py-1 text-xs bg-white max-w-[130px]"><option value="">— attr —</option>${d.attrs.concat((d.joins || []).slice(0, i).map(pj => String(pj.as || '').trim()).filter(a3 => a3 && !d.attrs.includes(a3))).map(a2 => `<option value="${escapeHTML(a2)}" ${j.attr === a2 ? 'selected' : ''}>${escapeHTML(a2)}</option>`).join('')}</select>
                                 <span class="text-[10px] text-slate-400">ramener</span>
                                 <select onchange="tdSetJoin(${i},'col',this.value)" class="border border-slate-300 rounded px-1 py-1 text-xs bg-white max-w-[130px]"><option value="">— col —</option>${jh.map(h => `<option value="${escapeHTML(h)}" ${j.col === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
                                 <span class="text-[10px] text-slate-400">sous le nom</span>
@@ -4388,7 +4389,7 @@
                             </div>`;
                         }).join('')}
                         <button onclick="tdAddJoin()" class="text-[11px] bg-white border border-blue-300 rounded px-2.5 py-1 font-bold text-blue-700 hover:bg-blue-50 mt-1">+ Enrichissement</button>
-                        <p class="text-[10px] text-slate-400 mt-1.5">Une seule ligne d'enrichissement est retenue par clé (pas de démultiplication). Les colonnes ramenées sont utilisables dans les calculs via [nom].</p>
+                        <p class="text-[10px] text-slate-400 mt-1.5">Une seule ligne d'enrichissement est retenue par clé (pas de démultiplication). Les colonnes ramenées sont utilisables dans les calculs via [nom]. <strong>Chaînage</strong> : un enrichissement peut s'accrocher à un attribut ramené par un enrichissement précédent (l'ordre des lignes compte) — permet d'aller chercher une donnée au 3e, 4e niveau via plusieurs tables de lien.</p>
                     </div>
                 </details>
                 <details class="mb-4 border border-slate-200 rounded-lg px-3 py-2" ${(d.fks || []).length ? 'open' : ''}>
