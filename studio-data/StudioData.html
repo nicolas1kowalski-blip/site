@@ -1621,7 +1621,10 @@
                 relations: state.relations.filter(r => nameOf(r.sourceTable) && nameOf(r.targetTable)).map(r => ({ sourceTable: nameOf(r.sourceTable), sourceCol: r.sourceCol, targetTable: nameOf(r.targetTable), targetCol: r.targetCol, cardinality: r.cardinality || '', kind: r.kind || '', measured: r.measured || null })),
                 selections: byName(state.selectedCols), pivots: byName(state.pivotMode),
                 filters, hierarchy, graphConfig: byName(state.graphConfig),
-                governance: state.governance,
+                // L'historique qualité est volumineux (jusqu'à 300 audits x 80 colonnes) : il est
+                // sauvegardé À PART (clé 'qualityHistory'), uniquement après un audit — pas à
+                // chaque frappe dans la gouvernance.
+                governance: { ...state.governance, qualityHistory: [] },
                 designs, themes, mcdPos,
             };
         }
@@ -1661,6 +1664,59 @@
             };
         }
 
+        // --- Sauvegarde automatique SUR FICHIER (dossier local choisi par l'utilisateur) ---
+        // Insensible aux purges du navigateur : la configuration (modèle, tables conçues,
+        // domaines, gouvernance) est réécrite dans le dossier au fil du travail (>= 5 min d'écart).
+        let _fsBackupLast = 0;
+        async function fsBackupDirPick() {
+            try {
+                if (!fsDirSupported()) return showError('La sauvegarde sur dossier nécessite Chrome ou Edge sur ordinateur.');
+                const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+                await idbPut('meta', 'backupDir', h);
+                showSuccess('💾 Dossier de sauvegarde configuré : « ' + h.name + ' » — la configuration y sera recopiée automatiquement.');
+                await fsBackupWrite(true);
+                renderGovernance();
+            } catch (e) { if (e && e.name !== 'AbortError') showError('Choix du dossier impossible : ' + e.message); }
+        }
+        async function fsBackupWrite(force) {
+            try {
+                if (state.noPersist) return;
+                const now = Date.now(); if (!force && now - _fsBackupLast < 5 * 60 * 1000) return;
+                const h = await idbGet('meta', 'backupDir'); if (!h) return;
+                if ((await h.queryPermission({ mode: 'readwrite' })) !== 'granted') return; // bouton « Réautoriser »
+                _fsBackupLast = now;
+                const cfg = collectPersistedConfig();
+                const payload = JSON.stringify({ kind: 'studio-data-config', savedAt: cfg.savedAt, cfg });
+                for (const name of ['StudioData_secours.json', 'StudioData_secours_' + new Date().toISOString().slice(0, 10) + '.json']) {
+                    const fh = await h.getFileHandle(name, { create: true });
+                    const w = await fh.createWritable(); await w.write(payload); await w.close();
+                }
+                const st2 = el('fsBackupStatus'); if (st2) st2.textContent = ' · dernier fichier écrit à ' + new Date().toLocaleTimeString('fr-FR');
+            } catch (e) { console.warn('Sauvegarde fichier impossible :', e); }
+        }
+        async function fsBackupReauth() {
+            try { const h = await idbGet('meta', 'backupDir'); if (h && (await h.requestPermission({ mode: 'readwrite' })) === 'granted') { showSuccess('💾 Dossier de sauvegarde réautorisé.'); await fsBackupWrite(true); } } catch (e) {}
+            renderGovernance();
+        }
+        async function fsBackupDisable() { try { await idbDel('meta', 'backupDir'); } catch (e) {} showSuccess('Sauvegarde sur fichier désactivée.'); renderGovernance(); }
+        function importConfigFile(inputEl) {
+            const f = inputEl.files && inputEl.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = () => {
+                try {
+                    const j = JSON.parse(r.result);
+                    const cfg = j && j.kind === 'studio-data-config' ? j.cfg : j;
+                    if (!cfg || (!cfg.relations && !cfg.governance && !cfg.designs)) throw new Error('fichier non reconnu (attendu : StudioData_secours*.json).');
+                    applyPersistedConfig(cfg);
+                    restoreCompleted = true;
+                    persistAppState();
+                    renderTables(); updateBaseTableSelect(); populateQualTables(); renderGovernance();
+                    showSuccess('↩ Configuration restaurée depuis le fichier' + (cfg.savedAt ? ' (état du ' + new Date(cfg.savedAt).toLocaleString('fr-FR') + ')' : '') + ' — modèle, tables conçues, domaines et gouvernance.');
+                } catch (e) { showError('Import impossible : ' + e.message); }
+            };
+            r.readAsText(f); inputEl.value = '';
+        }
+        function persistQualityHistory() { if (state.noPersist) return; idbPut('meta', 'qualityHistory', state.governance.qualityHistory || []).catch(() => {}); }
         let persistTimer = null;
         let restoreCompleted = false; // tant que la restauration n'a pas abouti, on n'écrase JAMAIS la sauvegarde existante
         let sessionBackupDone = false;
@@ -1698,6 +1754,7 @@
                     if (cfgRichness(cfg) === 0 && _prevRichness > 0) { console.warn('Sauvegarde ignorée : configuration vide alors qu\'une sauvegarde non vide existe.'); return; }
                     await idbPut('meta', 'appState', cfg); updatePersistStatus();
                     _prevRichness = cfgRichness(cfg);
+                    fsBackupWrite();
                 }
                 catch (e) { console.error('Sauvegarde locale échouée', e); }
             }, 600);
@@ -1790,6 +1847,7 @@
                     }
                 }
                 if (saved) applyPersistedConfig(saved);
+                try { const qh = await idbGet('meta', 'qualityHistory'); if (Array.isArray(qh) && qh.length > (state.governance.qualityHistory || []).length) state.governance.qualityHistory = qh; } catch (e2) {}
                 restoreCompleted = true; // la sauvegarde automatique ne démarre qu'une fois la restauration aboutie
                 renderTables(); updateBaseTableSelect(); populateQualTables();
                 if (keys && keys.length) showSuccess(`Session restaurée : ${keys.length} table(s) rechargée(s) depuis le stockage local` + (saved && saved.savedAt ? ` (sauvegarde du ${new Date(saved.savedAt).toLocaleString('fr-FR')})` : '') + '.');
@@ -3511,6 +3569,7 @@
                 columnsSummary,
             });
             if (state.governance.qualityHistory.length > 300) state.governance.qualityHistory.length = 300;
+            persistQualityHistory();
             persistAppState();
         }
         function renderGovHistory() {
@@ -3550,7 +3609,7 @@
             const rows = h.map(e => `<tr class="hover:bg-slate-50"><td class="p-2.5 text-xs text-slate-500 whitespace-nowrap">${new Date(e.ts).toLocaleString('fr-FR')}</td><td class="p-2.5 text-sm font-bold text-slate-700">${escapeHTML(e.table)}</td><td class="p-2.5 text-xs">${escapeHTML(e.col)}</td><td class="p-2.5 text-xs text-right">${e.rows.toLocaleString('fr-FR')}</td><td class="p-2.5 text-xs text-right font-bold ${e.avgCompleteness >= 95 ? 'text-emerald-600' : (e.avgCompleteness >= 75 ? 'text-amber-600' : 'text-red-600')}">${e.avgCompleteness}%</td><td class="p-2.5 text-xs text-right">${e.density}%</td><td class="p-2.5 text-xs text-right">${e.duplicates.toLocaleString('fr-FR')}</td></tr>`).join('');
             return `<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
                     <div class="flex items-center gap-2"><p class="text-sm text-slate-500">Comparer l'évolution de :</p><select onchange="govState.histTable=this.value; renderGovernance()" class="border border-slate-300 p-1.5 rounded text-xs bg-white font-bold">${tablesInHist.map(t2 => `<option ${t2 === govState.histTable ? 'selected' : ''}>${escapeHTML(t2)}</option>`).join('')}</select></div>
-                    <button onclick="state.governance.qualityHistory=[]; persistAppState(); renderGovernance()" class="text-xs text-red-500 border border-red-200 px-3 py-1.5 rounded hover:bg-red-50">Vider l'historique</button>
+                    <button onclick="state.governance.qualityHistory=[]; persistQualityHistory(); persistAppState(); renderGovernance()" class="text-xs text-red-500 border border-red-200 px-3 py-1.5 rounded hover:bg-red-50">Vider l'historique</button>
                 </div>
                 ${compareHtml}
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2.5">Date</th><th class="p-2.5">Table</th><th class="p-2.5">Colonne</th><th class="p-2.5 text-right">Lignes</th><th class="p-2.5 text-right">Complétude moy.</th><th class="p-2.5 text-right">Densité</th><th class="p-2.5 text-right">Doublons</th></tr></thead><tbody class="divide-y divide-slate-100">${rows}</tbody></table></div>`;
@@ -3587,12 +3646,31 @@
                             <p class="text-[10px] text-slate-400 mb-1.5">À chaque session, l'état précédent (relations, tables conçues, domaines, gouvernance) est archivé — 10 générations. En cas de perte, restaurez ici.</p>
                             <div id="backupsList" class="space-y-1 text-xs text-slate-500">Chargement…</div>
                         </div>
+                        <div class="mt-3 pt-3 border-t border-slate-200">
+                            <h4 class="text-xs font-bold text-slate-700 mb-1">💾 Sauvegarde automatique sur fichier (recommandé)</h4>
+                            <p class="text-[10px] text-slate-400 mb-1.5">La configuration (modèle, tables conçues, domaines, gouvernance) est recopiée dans un dossier de <strong>votre disque</strong> — hors de portée des purges du navigateur. Fichier courant + fichier daté du jour, réécrits au fil du travail.</p>
+                            <div id="fsBackupPanel" class="text-xs text-slate-500 mb-2">Chargement…</div>
+                            <button onclick="el('cfgImportFile').click()" class="bg-white border border-indigo-300 text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-lg">↩ Restaurer depuis un fichier de sauvegarde…</button>
+                            <input type="file" id="cfgImportFile" accept=".json,application/json" class="hidden" onchange="importConfigFile(this)">
+                        </div>
                     </div>
                 </div>`;
         }
         async function fillBackupsList() {
             const c = el('backupsList'); if (!c) return;
             try {
+                const fp = el('fsBackupPanel');
+                if (fp) {
+                    if (!fsDirSupported()) fp.innerHTML = '<span class="text-slate-400">Non supporté par ce navigateur — utilisez l\'export de bundle ci-contre.</span>';
+                    else {
+                        let h = null; try { h = await idbGet('meta', 'backupDir'); } catch (e4) {}
+                        if (!h) fp.innerHTML = '<button onclick="fsBackupDirPick()" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">📁 Choisir un dossier de sauvegarde</button>';
+                        else {
+                            let perm = 'prompt'; try { perm = await h.queryPermission({ mode: 'readwrite' }); } catch (e5) {}
+                            fp.innerHTML = `Dossier : <strong>${escapeHTML(h.name)}</strong> — ${perm === 'granted' ? '<span class="text-emerald-600 font-bold">actif ✅</span>' : '<button onclick="fsBackupReauth()" class="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded">🔓 Réautoriser l\'accès</button>'} <button onclick="fsBackupDisable()" class="text-slate-400 hover:text-red-500 ml-2">✕ désactiver</button><span id="fsBackupStatus"></span>`;
+                        }
+                    }
+                }
                 const dg = el('storageDiag');
                 if (dg) {
                     try {
@@ -3743,6 +3821,7 @@
                 const knownTs = new Set(g.qualityHistory.map(h => h.ts));
                 ig.qualityHistory.forEach(h => { if (!knownTs.has(h.ts)) g.qualityHistory.push(h); });
                 g.qualityHistory.sort((a, b) => b.ts - a.ts); if (g.qualityHistory.length > 300) g.qualityHistory.length = 300;
+                persistQualityHistory();
                 const idOf = n => Object.keys(state.tables).find(i => state.tables[i].name === n);
                 ((bundle.config || {}).relations || []).forEach(r => {
                     const s = idOf(r.sourceTable), t = idOf(r.targetTable);
