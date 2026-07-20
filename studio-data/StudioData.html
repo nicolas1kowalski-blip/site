@@ -1640,6 +1640,7 @@
         let persistTimer = null;
         let restoreCompleted = false; // tant que la restauration n'a pas abouti, on n'écrase JAMAIS la sauvegarde existante
         let sessionBackupDone = false;
+        let _prevRichness = 0; // richesse de la dernière sauvegarde connue (évite de relire l'état complet à chaque sauvegarde)
         // « Richesse » d'une configuration : garde-fou pour ne jamais remplacer une sauvegarde
         // non vide par une sauvegarde vide (symptôme typique d'une restauration incomplète).
         function cfgRichness(c) {
@@ -1655,20 +1656,24 @@
             persistTimer = setTimeout(async () => {
                 try {
                     const cfg = collectPersistedConfig();
-                    const prev = await idbGet('meta', 'appState');
-                    if (cfgRichness(cfg) === 0 && cfgRichness(prev) > 0) { console.warn('Sauvegarde ignorée : configuration vide alors qu\'une sauvegarde non vide existe.'); return; }
-                    // Sauvegarde de secours : au premier enregistrement de la session, l'état
-                    // précédent est archivé (10 générations, restaurables depuis
-                    // Gouvernance ▸ Sauvegarde & partage).
-                    if (prev && !sessionBackupDone) {
+                    // La sauvegarde précédente n'est lue qu'UNE fois par session (archivage de
+                    // secours) ; ensuite seule sa « richesse » est gardée en mémoire — relire tout
+                    // l'état à chaque frappe rendait les écrans de gouvernance très lents.
+                    if (!sessionBackupDone) {
                         sessionBackupDone = true;
                         try {
-                            const list = (await idbGet('meta', 'appStateBackups')) || [];
-                            list.unshift({ at: new Date().toISOString(), cfg: prev });
-                            await idbPut('meta', 'appStateBackups', list.slice(0, 10));
+                            const prev = await idbGet('meta', 'appState');
+                            _prevRichness = cfgRichness(prev);
+                            if (prev) {
+                                const list = (await idbGet('meta', 'appStateBackups')) || [];
+                                list.unshift({ at: new Date().toISOString(), cfg: prev });
+                                await idbPut('meta', 'appStateBackups', list.slice(0, 10));
+                            }
                         } catch (e2) {}
                     }
+                    if (cfgRichness(cfg) === 0 && _prevRichness > 0) { console.warn('Sauvegarde ignorée : configuration vide alors qu\'une sauvegarde non vide existe.'); return; }
                     await idbPut('meta', 'appState', cfg); updatePersistStatus();
+                    _prevRichness = cfgRichness(cfg);
                 }
                 catch (e) { console.error('Sauvegarde locale échouée', e); }
             }, 600);
@@ -7524,7 +7529,7 @@
         // compte comme "vide" quels que soient les réglages), NULLIF(...,'') pour une clé de jointure
         // (une clé vide ne doit jamais matcher une autre clé vide, exactement comme avant).
         function comparisonNormExpr(alias, col, ignoreSpace, ignoreCase, forKey) {
-            let expr = `CAST(${alias}.${sqlIdent(col)} AS VARCHAR)`;
+            let expr = `CAST(${alias ? alias + '.' : ''}${sqlIdent(col)} AS VARCHAR)`;
             if (ignoreSpace) expr = `TRIM(${expr})`;
             if (ignoreCase) expr = `LOWER(${expr})`;
             return forKey ? `NULLIF(${expr}, '')` : `COALESCE(${expr}, '')`;
@@ -7553,8 +7558,8 @@
                 const { conn } = await getDB();
                 st.innerText = "Exécution de la jointure SQL...";
 
-                const keyExprA = comparisonNormExpr('a', keyA, ignoreSpace, ignoreCase, true);
-                const keyExprB = comparisonNormExpr('b', keyB, ignoreSpace, ignoreCase, true);
+                const keyExprA = comparisonNormExpr('', keyA, ignoreSpace, ignoreCase, true);
+                const keyExprB = comparisonNormExpr('', keyB, ignoreSpace, ignoreCase, true);
 
                 const outSchema = ['CLE_IDENTIFICATION', 'STATUT_LIGNE'];
                 const selectExprs = [`COALESCE(a.${sqlIdent(keyA)}, b.__nk) AS ${sqlIdent('CLE_IDENTIFICATION')}`];
