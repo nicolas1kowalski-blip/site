@@ -8590,6 +8590,7 @@
                     <span id="btnDupExport" class="hidden flex gap-2">
                         <button onclick="exportDupCsv(this)" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600 hover:bg-slate-50">⬇ Toutes les clés en double (CSV)</button>
                         <button onclick="exportDupRowsCsv(this)" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600 hover:bg-slate-50">⬇ Toutes les lignes en double (CSV)</button>
+                        <button onclick="exportDupRowsXlsx(this)" class="text-xs bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-lg font-bold text-emerald-700 hover:bg-emerald-100">📗 Lignes en double (Excel, 3 onglets)</button>
                     </span>
                 </div>
                 <div id="dupResults"></div>`;
@@ -8966,60 +8967,88 @@
             finally { if (btn) { btn.disabled = false; btn.textContent = '⬇ Toutes les clés en double (CSV)'; } }
         }
 
-        // Export COMPLET des LIGNES en double (données réelles, directement corrigeables), pour les
-        // TROIS rapprochements : EXACT (clé strictement identique), NORMALISE (identique une fois
-        // casse/accents/ponctuation tolérés) et FLOU (paires suspectes >= seuil, composants flous).
+        // Collecte des LIGNES en double pour les TROIS rapprochements : EXACT (clé strictement
+        // identique), NORMALISE (identique une fois casse/accents/ponctuation tolérés) et FLOU
+        // (lignes des deux côtés de chaque paire suspecte >= seuil). Partagée par les exports CSV et Excel.
+        async function collectDupRowsByType() {
+            const { conn } = await getDB();
+            const SEP = String.fromCharCode(31);
+            const notEmpty = `TRIM(REPLACE(ke, chr(31), '')) <> ''`;
+            const R2 = { cols: null, types: { EXACT: [], NORMALISE: [], FLOU: [] } };
+            for (const res of lastDupResults.profiles) {
+                const scope = profileScopeLabel(res.profile);
+                const rowsSql = buildDupSrcSql(lastDupResults.tId, res.profile.parts, lastDupResults.sampleSql, 'rows', res.profile);
+                const pushRows = (rowsArr, type, groupOf) => {
+                    rowsArr.forEach(r => {
+                        if (!R2.cols) R2.cols = Object.keys(r).filter(c => c !== 'ke' && c !== 'kn' && c !== 'kb' && c !== 'kf' && c !== '__pid' && c !== '__sim');
+                        R2.types[type].push([scope, groupOf(r), String(r.ke).split(SEP).join(' | '), ...R2.cols.map(c => r[c])]);
+                    });
+                };
+                pushRows(arrowResultToObjects(await conn.query(`WITH src AS (${rowsSql})
+                    SELECT * FROM src WHERE ${notEmpty} AND ke IN (SELECT ke FROM src WHERE ${notEmpty} GROUP BY 1 HAVING COUNT(*) > 1)
+                    ORDER BY ke LIMIT 50000`)), 'EXACT', r => String(r.ke).split(SEP).join(' | '));
+                pushRows(arrowResultToObjects(await conn.query(`WITH src AS (${rowsSql})
+                    SELECT * FROM src WHERE ${notEmpty} AND kn IN (SELECT kn FROM src WHERE ${notEmpty} GROUP BY 1 HAVING COUNT(*) > 1 AND COUNT(DISTINCT ke) > 1)
+                    ORDER BY kn, ke LIMIT 50000`)), 'NORMALISE', r => String(r.kn).split(SEP).join(' | '));
+                const hasFuzzy = res.profile.parts.some(p2 => (p2.match || 'fuzzy') === 'fuzzy');
+                if (hasFuzzy) {
+                    pushRows(arrowResultToObjects(await conn.query(`WITH src AS (${rowsSql}),
+                        d AS (SELECT kb, kf, COUNT(*)::BIGINT AS n FROM src WHERE ${notEmpty} AND LENGTH(kf) >= 3 GROUP BY 1, 2),
+                        pr AS (SELECT a.kb AS kb, a.kf AS kf1, b.kf AS kf2, jaro_winkler_similarity(a.kf, b.kf) AS s
+                               FROM d a JOIN d b ON a.kb = b.kb AND left(a.kf, 4) = left(b.kf, 4) AND a.kf < b.kf
+                               WHERE jaro_winkler_similarity(a.kf, b.kf) >= ${lastDupResults.threshold}
+                               ORDER BY s DESC LIMIT 2000),
+                        pn AS (SELECT row_number() OVER (ORDER BY s DESC) AS __pid, * FROM pr)
+                        SELECT pn.__pid, pn.s AS __sim, src.* FROM pn JOIN src ON src.kb = pn.kb AND (src.kf = pn.kf1 OR src.kf = pn.kf2)
+                        ORDER BY pn.__pid LIMIT 50000`)), 'FLOU', r => `paire ${Number(r.__pid)} (similarité ${(Number(r.__sim) * 100).toFixed(1)} %)`);
+                }
+            }
+            return R2;
+        }
+
         async function exportDupRowsCsv(btn) {
             if (!lastDupResults) return;
             if (btn) { btn.disabled = true; btn.textContent = 'Export...'; }
-            const SEP = String.fromCharCode(31);
             try {
-                const { conn } = await getDB();
-                const notEmpty = `TRIM(REPLACE(ke, chr(31), '')) <> ''`;
-                const out = [];
-                let header = null;
-                const counts = { EXACT: 0, NORMALISE: 0, FLOU: 0 };
-                for (const res of lastDupResults.profiles) {
-                    const scope = profileScopeLabel(res.profile);
-                    const rowsSql = buildDupSrcSql(lastDupResults.tId, res.profile.parts, lastDupResults.sampleSql, 'rows', res.profile);
-                    const pushRows = (rowsArr, type, groupOf) => {
-                        rowsArr.forEach(r => {
-                            const cols = Object.keys(r).filter(c => c !== 'ke' && c !== 'kn' && c !== 'kb' && c !== 'kf' && c !== '__pid' && c !== '__sim');
-                            if (!header) { header = ['PROFIL', 'TYPE', 'GROUPE', 'CLE_FONCTIONNELLE', ...cols]; out.push(header.map(escapeCSV).join(';')); }
-                            counts[type]++;
-                            out.push([scope, type, groupOf(r), String(r.ke).split(SEP).join(' | '), ...cols.map(c => r[c])].map(escapeCSV).join(';'));
-                        });
-                    };
-                    // 1) Doublons STRICTS : clé exacte en plusieurs exemplaires.
-                    pushRows(arrowResultToObjects(await conn.query(`WITH src AS (${rowsSql})
-                        SELECT * FROM src WHERE ${notEmpty} AND ke IN (SELECT ke FROM src WHERE ${notEmpty} GROUP BY 1 HAVING COUNT(*) > 1)
-                        ORDER BY ke LIMIT 50000`)), 'EXACT', r => String(r.ke).split(SEP).join(' | '));
-                    // 2) Doublons NORMALISÉS : même clé une fois casse/accents/ponctuation tolérés,
-                    //    mais clés exactes différentes (sinon déjà comptés en strict).
-                    pushRows(arrowResultToObjects(await conn.query(`WITH src AS (${rowsSql})
-                        SELECT * FROM src WHERE ${notEmpty} AND kn IN (SELECT kn FROM src WHERE ${notEmpty} GROUP BY 1 HAVING COUNT(*) > 1 AND COUNT(DISTINCT ke) > 1)
-                        ORDER BY kn, ke LIMIT 50000`)), 'NORMALISE', r => String(r.kn).split(SEP).join(' | '));
-                    // 3) Doublons FLOUS : lignes des deux côtés de chaque paire suspecte (>= seuil).
-                    const hasFuzzy = res.profile.parts.some(p2 => (p2.match || 'fuzzy') === 'fuzzy');
-                    if (hasFuzzy) {
-                        pushRows(arrowResultToObjects(await conn.query(`WITH src AS (${rowsSql}),
-                            d AS (SELECT kb, kf, COUNT(*)::BIGINT AS n FROM src WHERE ${notEmpty} AND LENGTH(kf) >= 3 GROUP BY 1, 2),
-                            pr AS (SELECT a.kb AS kb, a.kf AS kf1, b.kf AS kf2, jaro_winkler_similarity(a.kf, b.kf) AS s
-                                   FROM d a JOIN d b ON a.kb = b.kb AND left(a.kf, 4) = left(b.kf, 4) AND a.kf < b.kf
-                                   WHERE jaro_winkler_similarity(a.kf, b.kf) >= ${lastDupResults.threshold}
-                                   ORDER BY s DESC LIMIT 2000),
-                            pn AS (SELECT row_number() OVER (ORDER BY s DESC) AS __pid, * FROM pr)
-                            SELECT pn.__pid, pn.s AS __sim, src.* FROM pn JOIN src ON src.kb = pn.kb AND (src.kf = pn.kf1 OR src.kf = pn.kf2)
-                            ORDER BY pn.__pid LIMIT 50000`)), 'FLOU', r => `paire ${Number(r.__pid)} (similarité ${(Number(r.__sim) * 100).toFixed(1)} %)`);
-                    }
-                }
-                if (!out.length) { showSuccess('Aucune ligne en double à exporter.'); }
+                const R2 = await collectDupRowsByType();
+                const total = R2.types.EXACT.length + R2.types.NORMALISE.length + R2.types.FLOU.length;
+                if (!total) { showSuccess('Aucune ligne en double à exporter.'); }
                 else {
+                    const out = [['PROFIL', 'TYPE', 'GROUPE', 'CLE_FONCTIONNELLE', ...(R2.cols || [])].map(escapeCSV).join(';')];
+                    for (const type of ['EXACT', 'NORMALISE', 'FLOU']) R2.types[type].forEach(row => out.push([row[0], type, ...row.slice(1)].map(escapeCSV).join(';')));
                     downloadTextFile(`Doublons_lignes_${lastDupResults.table.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.csv`, out.join('\n'));
-                    showSuccess(`Export : ${out.length - 1} ligne(s) — ${counts.EXACT} stricte(s), ${counts.NORMALISE} normalisée(s), ${counts.FLOU} floue(s).`);
+                    showSuccess(`Export : ${total} ligne(s) — ${R2.types.EXACT.length} stricte(s), ${R2.types.NORMALISE.length} normalisée(s), ${R2.types.FLOU.length} floue(s).`);
                 }
             } catch (e) { showError('Export impossible : ' + e.message); }
             finally { if (btn) { btn.disabled = false; btn.textContent = '⬇ Toutes les lignes en double (CSV)'; } }
+        }
+
+        // Export Excel : un ONGLET par rapprochement (+ synthèse) — plus lisible pour arbitrer.
+        async function exportDupRowsXlsx(btn) {
+            if (!lastDupResults) return;
+            if (typeof XLSX === 'undefined') return showError('Export Excel indisponible (bibliothèque non chargée) — utilisez l\'export CSV.');
+            if (btn) { btn.disabled = true; btn.textContent = 'Export...'; }
+            try {
+                const R2 = await collectDupRowsByType();
+                const total = R2.types.EXACT.length + R2.types.NORMALISE.length + R2.types.FLOU.length;
+                if (!total) { showSuccess('Aucune ligne en double à exporter.'); return; }
+                const wb = XLSX.utils.book_new();
+                const synth = [['Table', lastDupResults.table], ['Exporté le', new Date().toLocaleString('fr-FR')], ['Seuil de similarité (flou)', lastDupResults.threshold], [],
+                    ['Onglet', 'Rapprochement', 'Lignes'],
+                    ['Stricts', 'Clé strictement identique', R2.types.EXACT.length],
+                    ['Casse-accents tolérés', 'Identique une fois casse, accents, espaces et ponctuation tolérés', R2.types.NORMALISE.length],
+                    ['Paires floues', 'Paires suspectes au-dessus du seuil (les 2 lignes de chaque paire)', R2.types.FLOU.length]];
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(synth), 'Synthèse');
+                const header = ['PROFIL', 'GROUPE', 'CLE_FONCTIONNELLE', ...(R2.cols || [])];
+                const sheets = [['EXACT', 'Stricts'], ['NORMALISE', 'Casse-accents tolérés'], ['FLOU', 'Paires floues']];
+                for (const [type, name] of sheets) {
+                    const aoa = R2.types[type].length ? [header, ...R2.types[type]] : [['Aucune ligne pour ce rapprochement.']];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+                }
+                XLSX.writeFile(wb, `Doublons_${lastDupResults.table.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`);
+                showSuccess(`📗 Excel exporté : ${R2.types.EXACT.length} stricte(s), ${R2.types.NORMALISE.length} normalisée(s), ${R2.types.FLOU.length} floue(s) — un onglet par rapprochement.`);
+            } catch (e) { showError('Export Excel impossible : ' + e.message); }
+            finally { if (btn) { btn.disabled = false; btn.textContent = '📗 Lignes en double (Excel, 3 onglets)'; } }
         }
 
         // ---- Export des résultats d'audit (pour retravailler la donnée à l'extérieur) ----
