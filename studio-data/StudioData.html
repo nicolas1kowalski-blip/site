@@ -73,11 +73,35 @@
             if (opfsBacked) {
                 try {
                     const res = await conn.query("SELECT table_name FROM information_schema.tables WHERE table_name LIKE 't\\_tb\\_%' ESCAPE '\\'");
+                    const orphans = [];
                     for (const row of res.toArray ? res.toArray() : res) {
                         const n = (row.toJSON ? row.toJSON() : row).table_name;
-                        if (n) { const qn = `"${String(n).replace(/"/g, '""')}"`; await bestEffort(`DROP TABLE IF EXISTS ${qn}`); await bestEffort(`DROP VIEW IF EXISTS ${qn}`); }
+                        if (n) orphans.push(String(n));
                     }
-                    await bestEffort('CHECKPOINT');
+                    // FILET DE SÉCURITÉ : si le stockage navigateur (IndexedDB) est VIDE alors que des
+                    // tables ont survécu dans la base disque, on ne les supprime plus — elles sont
+                    // proposées à la récupération au démarrage (bandeau dans ① Sources).
+                    let idbEmpty = false;
+                    try {
+                        idbEmpty = await new Promise((resolve) => {
+                            const rq = indexedDB.open('studio_data_db');
+                            rq.onupgradeneeded = () => { const d2 = rq.result; if (!d2.objectStoreNames.contains('meta')) d2.createObjectStore('meta'); if (!d2.objectStoreNames.contains('tabledata')) d2.createObjectStore('tabledata'); };
+                            rq.onerror = () => resolve(false);
+                            rq.onsuccess = () => {
+                                const d2 = rq.result;
+                                if (!d2.objectStoreNames.contains('tabledata')) { d2.close(); resolve(true); return; }
+                                const cr = d2.transaction('tabledata', 'readonly').objectStore('tabledata').count();
+                                cr.onsuccess = () => { d2.close(); resolve(cr.result === 0); };
+                                cr.onerror = () => { d2.close(); resolve(false); };
+                            };
+                        });
+                    } catch (e2) {}
+                    if (idbEmpty && orphans.length) {
+                        window.__opfsOrphans = orphans;
+                    } else {
+                        for (const n of orphans) { const qn = `"${n.replace(/"/g, '""')}"`; await bestEffort(`DROP TABLE IF EXISTS ${qn}`); await bestEffort(`DROP VIEW IF EXISTS ${qn}`); }
+                        await bestEffort('CHECKPOINT');
+                    }
                 } catch (e) {}
             }
             window.__duckdbOpfs = opfsBacked;
@@ -1684,6 +1708,41 @@
             const top = el('persistStatusTop'); if (top) top.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Sauvegardé ${heure}`;
         }
 
+        // Tables survivantes de la base disque (OPFS) alors que le stockage navigateur est vide :
+        // bandeau de récupération dans ① Sources, réimport comme sources + re-sauvegarde.
+        function renderOpfsRecovery() {
+            const n = (window.__opfsOrphans || []).length; if (!n || el('opfsRecoveryBanner')) return;
+            const grid = el('tablesGrid'); if (!grid) return;
+            const div = document.createElement('div');
+            div.id = 'opfsRecoveryBanner';
+            div.className = 'col-span-full bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm text-amber-900 flex items-center gap-3 flex-wrap mb-3';
+            div.innerHTML = `<strong>🛟 Données récupérables :</strong> ${n} table(s) ont survécu dans la base disque du moteur alors que le stockage du navigateur est vide. <button onclick="recoverOpfsTables(this)" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded">Récupérer maintenant</button> <span class="text-xs">Réimportées comme sources (noms génériques à renommer), puis re-sauvegardées.</span>`;
+            grid.parentNode.insertBefore(div, grid);
+            const es = el('emptyStateSources'); if (es) es.classList.add('hidden');
+            showSuccess(`🛟 ${n} table(s) récupérable(s) détectée(s) — voir le bandeau dans ① Sources.`);
+        }
+        async function recoverOpfsTables(btn) {
+            if (btn) btn.disabled = true;
+            let done = 0;
+            for (const dn of (window.__opfsOrphans || [])) {
+                const tId = String(dn).replace(/^t_/, '');
+                if (state.tables[tId]) continue;
+                try {
+                    state.tables[tId] = { id: tId, name: 'RECUPERE_' + (done + 1), file: null, type: 'extraction', size: 0, config: {}, headers: [], columnsMeta: {}, status: 'loading' };
+                    state.pivotMode[tId] = 'none';
+                    const t = state.tables[tId];
+                    t.headers = await duckTableHeaders(tId);
+                    t.sampleData = await duckSampleRows(tId, 6);
+                    t.storage = 'table'; t.status = 'ready'; done++;
+                    try { await persistTableData(tId); } catch (e2) {}
+                } catch (e) { console.warn('Récupération impossible pour', dn, e); delete state.tables[tId]; }
+            }
+            window.__opfsOrphans = [];
+            const b2 = el('opfsRecoveryBanner'); if (b2) b2.remove();
+            renderTables(); updateBaseTableSelect(); populateQualTables(); persistAppState();
+            showSuccess(`🛟 ${done} table(s) récupérée(s) depuis la base disque — renommez-les, puis exportez un bundle par sécurité.`);
+            if (btn) btn.disabled = false;
+        }
         async function restoreSession() {
             try {
                 const saved = await idbGet('meta', 'appState');
@@ -1735,6 +1794,7 @@
                 renderTables(); updateBaseTableSelect(); populateQualTables();
                 if (keys && keys.length) showSuccess(`Session restaurée : ${keys.length} table(s) rechargée(s) depuis le stockage local` + (saved && saved.savedAt ? ` (sauvegarde du ${new Date(saved.savedAt).toLocaleString('fr-FR')})` : '') + '.');
                 updatePersistStatus();
+                getDB().then(() => { if (window.__opfsOrphans && window.__opfsOrphans.length) renderOpfsRecovery(); }).catch(() => {});
             } catch (e) {
                 console.error('Restauration de session échouée', e);
                 showError('Restauration de session échouée : ' + String((e && e.message) || e) + ' — votre sauvegarde locale est conservée intacte ; la sauvegarde automatique est suspendue pour cette session afin de ne rien écraser. Rechargez la page pour réessayer.');
