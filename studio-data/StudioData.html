@@ -3911,6 +3911,66 @@
         function tdAddFk() { const d = tdState.editing; if (!d) return; d.fks = d.fks || []; d.fks.push({ attr: '', table: '', col: '' }); renderTablesDesign(); }
         function tdRemoveFk(i) { const d = tdState.editing; if (!d || !d.fks) return; d.fks.splice(i, 1); renderTablesDesign(); }
         function tdSetFk(i, field, v) { const d = tdState.editing; if (!d || !d.fks || !d.fks[i]) return; d.fks[i][field] = v; if (field === 'table') d.fks[i].col = ''; renderTablesDesign(); }
+        // ---- Assistant d'enrichissement pas à pas ----
+        function tdWizStart() { tdState.wiz = { tgt: '', col: '', as: '', mode: 'via', attr: '', srcKey: '', viaSrc: '', viaIn: '', viaOut: '', validMode: '', vCol: '', vOp: 'eq', vVal: '', vStart: '', vEnd: '' }; renderTablesDesign(); }
+        function tdWizCancel() { tdState.wiz = null; renderTablesDesign(); }
+        function tdWizSet(f, v) {
+            const w = tdState.wiz; if (!w) return;
+            w[f] = v;
+            if (f === 'tgt') { w.col = ''; w.srcKey = ''; }
+            if (f === 'viaSrc') { w.viaIn = ''; w.viaOut = ''; w.vCol = ''; w.vStart = ''; w.vEnd = ''; }
+            if (f === 'col' && !String(w.as || '').trim()) w.as = v;
+            renderTablesDesign();
+        }
+        function tdWizAdd() {
+            const d = tdState.editing, w = tdState.wiz; if (!d || !w) return;
+            try {
+                if (!w.tgt) throw new Error('Choisissez la table où se trouve la donnée à ramener (étape 1).');
+                if (!w.col) throw new Error('Choisissez la colonne à ramener (étape 1).');
+                if (!String(w.as || '').trim()) throw new Error('Donnez un nom à la nouvelle colonne (étape 1).');
+                if (!w.attr) throw new Error('Choisissez la colonne de VOTRE table qui sert d\'accroche (étape 2).');
+                if (!w.srcKey) throw new Error(`Choisissez la clé de la table « ${w.tgt} » (étape 2).`);
+                if (w.mode === 'via' && (!w.viaSrc || !w.viaIn || !w.viaOut)) throw new Error('Complétez la table de lien : ses colonnes d\'entrée et de sortie (étape 2).');
+                if (w.validMode === 'status' && !w.vCol) throw new Error('Choisissez la colonne de statut (étape 3).');
+                if (w.validMode === 'period' && !w.vStart) throw new Error('Choisissez la colonne de début de période (étape 3).');
+                d.joins = d.joins || [];
+                d.joins.push({ src: w.tgt, srcKey: w.srcKey, attr: w.attr, col: w.col, as: String(w.as).trim(),
+                    viaSrc: w.mode === 'via' ? w.viaSrc : '', viaIn: w.mode === 'via' ? w.viaIn : '', viaOut: w.mode === 'via' ? w.viaOut : '',
+                    validMode: w.mode === 'via' ? w.validMode : '', vCol: w.vCol, vOp: w.vOp || 'eq', vVal: w.vVal, vStart: w.vStart, vEnd: w.vEnd });
+                tdState.wiz = null;
+                renderTablesDesign();
+                showSuccess(`Enrichissement ajouté : la colonne « ${String(w.as).trim()} » sera ramenée depuis « ${w.tgt} ». Pour aller un niveau plus loin, relancez l'assistant en vous accrochant à « ${String(w.as).trim()} ».`);
+            } catch (e) { showError(e.message); }
+        }
+        function tdWizHtml(d) {
+            const w = tdState.wiz; if (!w) return '';
+            const tables = Object.values(state.tables).filter(t2 => t2.status === 'ready' && t2.id !== d.targetId);
+            const myCols = d.attrs.concat((d.joins || []).map(j2 => String(j2.as || '').trim()).filter(a3 => a3 && !d.attrs.includes(a3)));
+            const hdrs = nm => { const t2 = nm ? tableByName(nm) : null; return t2 ? t2.headers : []; };
+            const sel = (f, cur, opts, ph) => `<select onchange="tdWizSet('${f}',this.value)" class="border border-indigo-300 rounded px-1.5 py-1 text-xs bg-white max-w-[180px]"><option value="">${ph}</option>${opts.map(h => `<option value="${escapeHTML(h)}" ${cur === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+            const tNames = tables.map(t2 => t2.name);
+            let html3 = `<div class="border-2 border-indigo-300 bg-indigo-50/60 rounded-xl p-3 mb-2 space-y-2 text-xs">
+                <div class="font-bold text-indigo-800">🧭 Assistant — ramener une donnée d'une autre table</div>
+                <div class="flex items-center gap-1.5 flex-wrap"><span class="font-bold text-slate-600 w-14">Étape 1</span><span>La donnée se trouve dans</span>${sel('tgt', w.tgt, tNames, '— table —')}${w.tgt ? `<span>· colonne à ramener</span>${sel('col', w.col, hdrs(w.tgt), '— colonne —')}<span>· nom dans ma table</span><input type="text" value="${escapeHTML(w.as || '')}" onchange="tdWizSet('as',this.value)" class="w-32 border border-indigo-300 rounded px-1.5 py-1 text-xs font-bold">` : ''}</div>`;
+            if (w.tgt) {
+                html3 += `<div class="flex items-center gap-1.5 flex-wrap"><span class="font-bold text-slate-600 w-14">Étape 2</span><span>J'y accède</span>
+                    <label class="flex items-center gap-1"><input type="radio" name="wizMode" ${w.mode === 'direct' ? 'checked' : ''} onchange="tdWizSet('mode','direct')"> directement (clé commune)</label>
+                    <label class="flex items-center gap-1"><input type="radio" name="wizMode" ${w.mode === 'via' ? 'checked' : ''} onchange="tdWizSet('mode','via')"> par une table de lien</label></div>`;
+                if (w.mode === 'via') html3 += `<div class="flex items-center gap-1.5 flex-wrap pl-16"><span>Table de lien :</span>${sel('viaSrc', w.viaSrc, tNames.filter(n2 => n2 !== w.tgt), '— table —')}${w.viaSrc ? `<span>· sa colonne côté MA table</span>${sel('viaIn', w.viaIn, hdrs(w.viaSrc), '— colonne —')}<span>· sa colonne côté « ${escapeHTML(w.tgt)} »</span>${sel('viaOut', w.viaOut, hdrs(w.viaSrc), '— colonne —')}` : ''}</div>`;
+                html3 += `<div class="flex items-center gap-1.5 flex-wrap pl-16"><span>Ma colonne d'accroche :</span>${sel('attr', w.attr, myCols, '— colonne de ma table —')}<span>= clé de « ${escapeHTML(w.tgt)} » :</span>${sel('srcKey', w.srcKey, hdrs(w.tgt), '— colonne —')}</div>`;
+                if (w.mode === 'via' && w.viaSrc) {
+                    html3 += `<div class="flex items-center gap-1.5 flex-wrap"><span class="font-bold text-slate-600 w-14">Étape 3</span><span>Lignes de lien à retenir :</span>
+                        <select onchange="tdWizSet('validMode',this.value)" class="border border-indigo-300 rounded px-1.5 py-1 text-xs bg-white"><option value="">toutes</option><option value="status" ${w.validMode === 'status' ? 'selected' : ''}>valides par statut</option><option value="period" ${w.validMode === 'period' ? 'selected' : ''}>période active (aujourd'hui)</option></select>`;
+                    if (w.validMode === 'status') html3 += `${sel('vCol', w.vCol, hdrs(w.viaSrc), '— colonne statut —')}<select onchange="tdWizSet('vOp',this.value)" class="border border-indigo-300 rounded px-1.5 py-1 text-xs bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${(w.vOp || 'eq') === o.v ? 'selected' : ''}>${o.t}</option>`).join('')}</select><input type="text" value="${escapeHTML(w.vVal || '')}" onchange="tdWizSet('vVal',this.value)" placeholder="valeur (ex. ACTIF)" class="w-28 border border-indigo-300 rounded px-1.5 py-1 text-xs">`;
+                    if (w.validMode === 'period') html3 += `<span>début</span>${sel('vStart', w.vStart, hdrs(w.viaSrc), '— colonne —')}<span>fin</span>${sel('vEnd', w.vEnd, hdrs(w.viaSrc), '— (ouverte) —')}<span class="text-slate-400">(si plusieurs périodes actives : la plus récente)</span>`;
+                    html3 += `</div>`;
+                }
+            }
+            html3 += `<div class="flex items-center gap-2 pt-1"><button onclick="tdWizAdd()" class="bg-indigo-600 text-white font-bold px-3 py-1.5 rounded">✔ Ajouter cet enrichissement</button><button onclick="tdWizCancel()" class="text-slate-500 hover:text-slate-700">Annuler</button><span class="text-slate-400">Donnée encore plus loin (2 tables de lien) ? Ajoutez d'abord l'identifiant intermédiaire, puis relancez l'assistant en vous accrochant dessus.</span></div>
+            </div>`;
+            return html3;
+        }
+
         function tdAddJoin() { const d = tdState.editing; if (!d) return; d.joins = d.joins || []; d.joins.push({ src: '', srcKey: '', attr: '', col: '', as: '' }); renderTablesDesign(); }
         function tdRemoveJoin(i) { const d = tdState.editing; if (!d || !d.joins) return; d.joins.splice(i, 1); renderTablesDesign(); }
         function tdSetJoin(i, field, v) {
@@ -4388,7 +4448,7 @@
                                     return html3; })()}
                             </div>`;
                         }).join('')}
-                        <button onclick="tdAddJoin()" class="text-[11px] bg-white border border-blue-300 rounded px-2.5 py-1 font-bold text-blue-700 hover:bg-blue-50 mt-1">+ Enrichissement</button>
+                        ${tdWizHtml(d)}<div class="flex items-center gap-2 mt-1"><button onclick="tdWizStart()" class="text-[11px] bg-indigo-600 text-white rounded px-2.5 py-1 font-bold hover:bg-indigo-700">🧭 Assistant pas à pas</button><button onclick="tdAddJoin()" class="text-[11px] bg-white border border-blue-300 rounded px-2.5 py-1 font-bold text-blue-700 hover:bg-blue-50">+ Enrichissement (mode expert)</button></div>
                         <p class="text-[10px] text-slate-400 mt-1.5">Une seule ligne d'enrichissement est retenue par clé (pas de démultiplication). Les colonnes ramenées sont utilisables dans les calculs via [nom]. <strong>Chaînage</strong> : un enrichissement peut s'accrocher à un attribut ramené par un enrichissement précédent (l'ordre des lignes compte) — permet d'aller chercher une donnée au 3e, 4e niveau via plusieurs tables de lien.</p>
                     </div>
                 </details>
