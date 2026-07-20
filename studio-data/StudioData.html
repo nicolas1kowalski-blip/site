@@ -1638,11 +1638,38 @@
         }
 
         let persistTimer = null;
+        let restoreCompleted = false; // tant que la restauration n'a pas abouti, on n'écrase JAMAIS la sauvegarde existante
+        let sessionBackupDone = false;
+        // « Richesse » d'une configuration : garde-fou pour ne jamais remplacer une sauvegarde
+        // non vide par une sauvegarde vide (symptôme typique d'une restauration incomplète).
+        function cfgRichness(c) {
+            if (!c) return 0;
+            const g = c.governance || {};
+            return ((c.relations || []).length) + Object.keys(c.designs || {}).length + Object.keys(c.themes || {}).length +
+                ((g.businessObjects || []).length) + Object.keys(g.dictionary || {}).length + ((g.glossary || []).length) + ((g.useCases || []).length);
+        }
         function persistAppState() {
             if (state.noPersist) return; // mode sans persistance : rien n'est écrit sur le poste
+            if (!restoreCompleted) return; // restauration en cours ou échouée : la sauvegarde existante est protégée
             clearTimeout(persistTimer);
             persistTimer = setTimeout(async () => {
-                try { await idbPut('meta', 'appState', collectPersistedConfig()); updatePersistStatus(); }
+                try {
+                    const cfg = collectPersistedConfig();
+                    const prev = await idbGet('meta', 'appState');
+                    if (cfgRichness(cfg) === 0 && cfgRichness(prev) > 0) { console.warn('Sauvegarde ignorée : configuration vide alors qu\'une sauvegarde non vide existe.'); return; }
+                    // Sauvegarde de secours : au premier enregistrement de la session, l'état
+                    // précédent est archivé (10 générations, restaurables depuis
+                    // Gouvernance ▸ Sauvegarde & partage).
+                    if (prev && !sessionBackupDone) {
+                        sessionBackupDone = true;
+                        try {
+                            const list = (await idbGet('meta', 'appStateBackups')) || [];
+                            list.unshift({ at: new Date().toISOString(), cfg: prev });
+                            await idbPut('meta', 'appStateBackups', list.slice(0, 10));
+                        } catch (e2) {}
+                    }
+                    await idbPut('meta', 'appState', cfg); updatePersistStatus();
+                }
                 catch (e) { console.error('Sauvegarde locale échouée', e); }
             }, 600);
         }
@@ -1699,10 +1726,14 @@
                     }
                 }
                 if (saved) applyPersistedConfig(saved);
+                restoreCompleted = true; // la sauvegarde automatique ne démarre qu'une fois la restauration aboutie
                 renderTables(); updateBaseTableSelect(); populateQualTables();
-                if (keys && keys.length) showSuccess(`Session restaurée : ${keys.length} table(s) rechargée(s) depuis le stockage local.`);
+                if (keys && keys.length) showSuccess(`Session restaurée : ${keys.length} table(s) rechargée(s) depuis le stockage local` + (saved && saved.savedAt ? ` (sauvegarde du ${new Date(saved.savedAt).toLocaleString('fr-FR')})` : '') + '.');
                 updatePersistStatus();
-            } catch (e) { console.error('Restauration de session échouée', e); }
+            } catch (e) {
+                console.error('Restauration de session échouée', e);
+                showError('Restauration de session échouée : ' + String((e && e.message) || e) + ' — votre sauvegarde locale est conservée intacte ; la sauvegarde automatique est suspendue pour cette session afin de ne rien écraser. Rechargez la page pour réessayer.');
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1750,7 +1781,7 @@
             else if (govState.tab === 'glossary') c.innerHTML = renderGovGlossary();
             else if (govState.tab === 'usecases') c.innerHTML = renderGovUseCases();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
-            else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); }
+            else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); fillBackupsList(); }
             else if (govState.tab === 'lineage') { c.innerHTML = '<div class="flex justify-end gap-2 mb-2">' + graphToolbarHtml('lineage') + '<button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l\'image</button></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Ambre : cas d\'usage métier · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : utilisation métier · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong>.</p>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
         }
@@ -3485,8 +3516,33 @@
                         <label class="flex items-start gap-2 text-xs mb-2 cursor-pointer bg-amber-50 border border-amber-200 rounded-lg p-2.5"><input type="checkbox" id="noPersistChk" ${state.noPersist ? 'checked' : ''} onchange="toggleNoPersist(this.checked)" class="mt-0.5 text-amber-600 rounded"><span><strong>🔒 Mode sans persistance</strong> (données sensibles / poste partagé)<br><span class="text-slate-500">Rien n'est enregistré sur le poste ; tout est perdu à la fermeture de l'onglet. L'activer purge aussi ce qui a déjà été écrit.</span></span></label>
                         <button onclick="resetLocalStorage(this)" class="bg-white border border-red-200 text-red-600 text-xs font-bold px-4 py-2 rounded-lg w-full">🧹 Effacer toutes les données locales (2 clics)</button>
                         <p class="text-[10px] text-slate-400 mt-1.5">Efface le stockage navigateur <strong>et</strong> les fichiers disque (OPFS) où le moteur garde les données — utile avant de rendre un poste partagé.</p>
+                        <div class="mt-3 pt-3 border-t border-slate-200">
+                            <h4 class="text-xs font-bold text-slate-700 mb-1">🛟 Sauvegardes de secours</h4>
+                            <p class="text-[10px] text-slate-400 mb-1.5">À chaque session, l'état précédent (relations, tables conçues, domaines, gouvernance) est archivé — 10 générations. En cas de perte, restaurez ici.</p>
+                            <div id="backupsList" class="space-y-1 text-xs text-slate-500">Chargement…</div>
+                        </div>
                     </div>
                 </div>`;
+        }
+        async function fillBackupsList() {
+            const c = el('backupsList'); if (!c) return;
+            try {
+                const list = (await idbGet('meta', 'appStateBackups')) || [];
+                if (!list.length) { c.textContent = 'Aucune sauvegarde de secours pour le moment.'; return; }
+                c.innerHTML = list.map((b, i) => `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1"><span class="font-mono">${escapeHTML(new Date(b.at).toLocaleString('fr-FR'))}</span><span class="text-slate-400">${cfgRichness(b.cfg)} élément(s) de configuration</span><button onclick="restoreBackup(${i}, this)" class="ml-auto px-2 py-0.5 rounded font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100">Restaurer</button></div>`).join('');
+            } catch (e) { c.textContent = 'Lecture des sauvegardes impossible : ' + String(e.message || e); }
+        }
+        async function restoreBackup(i, btn) {
+            try {
+                const list = (await idbGet('meta', 'appStateBackups')) || [];
+                const b = list[i]; if (!b) return;
+                if (btn && !btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Confirmer ?'; setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Restaurer'; } }, 4000); return; }
+                applyPersistedConfig(b.cfg);
+                restoreCompleted = true; sessionBackupDone = true;
+                await idbPut('meta', 'appState', b.cfg);
+                renderTables(); updateBaseTableSelect(); populateQualTables(); renderGovernance();
+                showSuccess('🛟 Sauvegarde du ' + new Date(b.at).toLocaleString('fr-FR') + ' restaurée (modèle, tables conçues, domaines, gouvernance).');
+            } catch (e) { showError('Restauration de la sauvegarde impossible : ' + String(e.message || e)); }
         }
         async function fillStorageEstimate() {
             try {
