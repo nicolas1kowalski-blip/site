@@ -22,10 +22,7 @@
          contre un CDN compromis ou un fichier altéré). Ne plus utiliser de version « flottante ». -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <!-- G6 supprimé : tous les graphes sont rendus par le moteur SVG maison (aucune dépendance).
-         Petit stub de compatibilité : les constructions d'arêtes historiques référencent G6.Arrow ;
-         le moteur SVG ignore ces champs. -->
-    <script>window.G6 = { Arrow: { triangle: () => '', diamond: () => '' } };</script>
+    <!-- G6 totalement supprimé : tous les graphes sont rendus par le moteur SVG maison (aucune dépendance externe). -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.js" integrity="sha384-MH1axGwz/uQzfIcjFdjEfsM0xlf5mmWfAwwggaOh5IPFvgKFGbJ2PZ4VBbgSYBQN" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.474.0/dist/umd/lucide.min.js" integrity="sha384-wkxmY9HYHJVzx0oZ7k8stpLQ7g7ogSqBha75ozCZmxFadwtaIw5dzXKVWWfi9I36" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
@@ -1039,7 +1036,7 @@
         }
 
         // ==========================================
-        //  RENDU DES GRAPHES : G6 (AntV)
+        //  RENDU DES GRAPHES : moteur SVG maison
         // ==========================================
         // Un seul type de nœud personnalisé, réutilisé par le graphe MCD (étape 2) et l'Explorateur 360°
         // (étape 5) : un titre en gras, et éventuellement une ligne de contenu en dessous.
@@ -1200,7 +1197,7 @@
         function mcdToggleFocus() { state.graphConfig.mcdFocus = !state.graphConfig.mcdFocus; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); persistAppState(); }
         // ④ Ranger : recalcule proprement la disposition (positions figées effacées).
         function mcdRelayout() { if (typeof svgG !== 'undefined') { svgG.pos = {}; svgG.needFit = true; } if (networkInstance) { try { networkInstance.destroy(); } catch (e) {} networkInstance = null; } renderGraph(); persistAppState(); }
-        function mcdIsSvg() { return true; } // le Modèle de données est rendu en SVG (G6 retiré de cet écran)
+        function mcdIsSvg() { return true; } // le Modèle de données est rendu par le moteur SVG maison
         // ② Masquer / réafficher des tables du graphe.
         function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
         function mcdUnhideAll() { state.graphConfig.mcdHidden = []; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
@@ -1370,7 +1367,7 @@
         }
 
         // ======================= Plein écran du modèle =======================
-        // Le conteneur du graphe est DÉPLACÉ dans une surcouche plein écran (même instance G6,
+        // Le conteneur du graphe est DÉPLACÉ dans une surcouche plein écran (même instance de graphe,
         // redimensionnée par le ResizeObserver), puis remis à sa place à la fermeture.
         function toggleMcdFullscreen() {
             const g = el('networkGraph'); if (!g) return;
@@ -1409,7 +1406,7 @@
             }
         }
         // --- Robustesse des graphes : dimensionnement fiable + repli visible ---
-        // Le bug classique de G6 dans une appli à onglets : un graphe rendu dans un conteneur masqué
+        // Bug classique d'un graphe dans une appli à onglets : un rendu dans un conteneur masqué
         // (0×0) s'affiche minuscule ou décalé. On recale la taille sur le conteneur réel dès qu'il
         // devient visible, et on suit les redimensionnements via ResizeObserver.
         const GRAPH_CONTAINER = { mcd: 'networkGraph', model: 'modelGraphWrap', lineage: 'lineageGraphWrap', exp: 'expGraphContainer' };
@@ -3190,7 +3187,7 @@
             showSuccess(`Objet "${name}" généré depuis le modèle de données (${bo.structure.length} composition(s), ${bo.references.length} référence(s)).`);
         }
 
-        // ---- Diagramme du modèle objet (UML-like, G6) ----
+        // ---- Diagramme du modèle objet (UML-like, moteur SVG) ----
         let modelGraph = null;
         function renderObjectModelDiagram() {
             const wrap = el('modelGraphWrap'); if (!wrap) return;
@@ -3216,9 +3213,9 @@
                     const lvlId = name => 'lvl:' + bo.id + ':' + hi + ':' + name;
                     lvls.forEach(lv => {
                         nodes.push({ id: lvlId(lv.name), type: 'studio-rich-node', title: lv.name, content: (lv.parents || []).length ? '' : 'racine', fill: '#f0fdf4', stroke: '#6ee7b7' });
-                        if (!(lv.parents || []).length) edges.push({ id: 'er' + lvlId(lv.name), source: 'bo:' + bo.id, target: lvlId(lv.name), label: h2.name || 'niveaux', style: { stroke: '#6ee7b7', lineDash: [3, 3], endArrow: { path: G6.Arrow.triangle(6, 6, 0), fill: '#6ee7b7' } } });
+                        if (!(lv.parents || []).length) edges.push({ id: 'er' + lvlId(lv.name), source: 'bo:' + bo.id, target: lvlId(lv.name), label: h2.name || 'niveaux', style: { stroke: '#6ee7b7', lineDash: [3, 3], endArrow: { path: '', fill: '#6ee7b7' } } });
                         (lv.parents || []).forEach(pn => {
-                            if (lvls.some(x => x.name === pn)) edges.push({ id: 'ep' + lvlId(lv.name) + ':' + pn, source: lvlId(pn), target: lvlId(lv.name), label: 'contient', style: { stroke: '#6ee7b7', lineDash: [3, 3], endArrow: { path: G6.Arrow.triangle(6, 6, 0), fill: '#6ee7b7' } } });
+                            if (lvls.some(x => x.name === pn)) edges.push({ id: 'ep' + lvlId(lv.name) + ':' + pn, source: lvlId(pn), target: lvlId(lv.name), label: 'contient', style: { stroke: '#6ee7b7', lineDash: [3, 3], endArrow: { path: '', fill: '#6ee7b7' } } });
                         });
                     });
                 });
@@ -3232,11 +3229,11 @@
                     nodes.push({ id: cid, type: 'studio-uml-node', title: '◆ ' + title, rows: fRows, headFill: '#f0fdf4', titleFill: '#166534', stroke: '#86efac' });
                     const appliesTxt = (c2.applies || []).length ? ' [si ' + (c2.applies || []).map(facetScopeLabel).join(' et ') + ']' : '';
                     // UML : composition = losange plein côté « tout » (l'objet). Pas de flèche côté partie.
-                    edges.push({ id: 'e' + cid, source: 'bo:' + bo.id, target: cid, label: `${c2.cardinality || ''}${appliesTxt}`, style: { stroke: '#16a34a', lineWidth: 1.6, startArrow: { path: G6.Arrow.diamond(14, 10, 0), fill: '#16a34a' }, endArrow: false } });
+                    edges.push({ id: 'e' + cid, source: 'bo:' + bo.id, target: cid, label: `${c2.cardinality || ''}${appliesTxt}`, style: { stroke: '#16a34a', lineWidth: 1.6, startArrow: { path: '', fill: '#16a34a' }, endArrow: false } });
                 });
                 (bo.references || []).forEach((rf, j) => {
                     if (!bos.some(b => b.id === rf.boId)) return;
-                    edges.push({ id: 'ref:' + bo.id + ':' + j, source: 'bo:' + bo.id, target: 'bo:' + rf.boId, label: `→ ${rf.cardinality || ''}${rf.viaLabel ? ' (' + rf.viaLabel + ')' : ''}`, style: { stroke: '#0d9488', lineDash: [6, 3], endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#0d9488' } } });
+                    edges.push({ id: 'ref:' + bo.id + ':' + j, source: 'bo:' + bo.id, target: 'bo:' + rf.boId, label: `→ ${rf.cardinality || ''}${rf.viaLabel ? ' (' + rf.viaLabel + ')' : ''}`, style: { stroke: '#0d9488', lineDash: [6, 3], endArrow: { path: '', fill: '#0d9488' } } });
                 });
             });
             if (modelGraph) { modelGraph.destroy(); modelGraph = null; }
@@ -3488,7 +3485,7 @@
             el('impactResult').innerHTML = html;
         }
 
-        // ---- Vue Lineage (G6) ----
+        // ---- Vue Lineage (moteur SVG) ----
         function renderLineageGraph() {
             const wrap = el('lineageGraphWrap'); if (!wrap) return;
             try { _renderLineageImpl(wrap); }
@@ -3505,7 +3502,7 @@
             Object.keys(state.governance.lineage).forEach(derived => {
                 if (!seen.has(derived)) return;
                 (state.governance.lineage[derived].from || []).forEach(src => {
-                    if (seen.has(src) && src !== derived) edges.push({ id: 'lin:' + src + '>' + derived, source: 'tbl:' + src, target: 'tbl:' + derived, label: 'alimente', style: { stroke: '#7c3aed', lineWidth: 2, endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#7c3aed' } } });
+                    if (seen.has(src) && src !== derived) edges.push({ id: 'lin:' + src + '>' + derived, source: 'tbl:' + src, target: 'tbl:' + derived, label: 'alimente', style: { stroke: '#7c3aed', lineWidth: 2, endArrow: { path: '', fill: '#7c3aed' } } });
                 });
             });
             state.relations.forEach(r => {
@@ -3519,7 +3516,7 @@
             state.governance.useCases.forEach(uc => {
                 nodes.push({ id: 'uc:' + uc.id, type: 'studio-rich-node', title: '🎯 ' + uc.name, content: uc.criticality || '', fill: '#fef3c7', stroke: '#d97706' });
                 const linkedTables = new Set([...(uc.tables || []), ...(uc.columns || []).map(c => c.table)]);
-                linkedTables.forEach(tn => { if (seen.has(tn)) edges.push({ id: 'use:' + uc.id + ':' + tn, source: 'tbl:' + tn, target: 'uc:' + uc.id, label: 'utilisé par', style: { stroke: '#d97706', endArrow: { path: G6.Arrow.triangle(7, 7, 0), fill: '#d97706' } } }); });
+                linkedTables.forEach(tn => { if (seen.has(tn)) edges.push({ id: 'use:' + uc.id + ':' + tn, source: 'tbl:' + tn, target: 'uc:' + uc.id, label: 'utilisé par', style: { stroke: '#d97706', endArrow: { path: '', fill: '#d97706' } } }); });
             });
             state.governance.businessObjects.forEach(bo => {
                 nodes.push({ id: 'bo:' + bo.id, type: 'studio-rich-node', title: '🏛️ ' + bo.name, content: bo.globalOwner ? 'Prop. : ' + bo.globalOwner : '⚠️ sans propriétaire', fill: '#dcfce7', stroke: '#16a34a' });
@@ -3528,19 +3525,19 @@
                 // l'objet est diffusé vers les destinataires.
                 (bo.sources || []).forEach(s => {
                     if (!seen.has(s.table)) return; declared.add(s.table);
-                    if (s.role === 'maitre') edges.push({ id: 'bos:' + bo.id + ':' + s.table, source: 'tbl:' + s.table, target: 'bo:' + bo.id, label: '👑 maître', style: { stroke: '#16a34a', lineWidth: 2.5, endArrow: { path: G6.Arrow.triangle(9, 9, 0), fill: '#16a34a' } } });
-                    else if (s.role === 'contributeur') edges.push({ id: 'bos:' + bo.id + ':' + s.table, source: 'tbl:' + s.table, target: 'bo:' + bo.id, label: 'contribue', style: { stroke: '#16a34a', lineDash: [4, 3], endArrow: { path: G6.Arrow.triangle(7, 7, 0), fill: '#16a34a' } } });
-                    else edges.push({ id: 'bos:' + bo.id + ':' + s.table, source: 'bo:' + bo.id, target: 'tbl:' + s.table, label: 'diffusé vers', style: { stroke: '#0d9488', endArrow: { path: G6.Arrow.triangle(7, 7, 0), fill: '#0d9488' } } });
+                    if (s.role === 'maitre') edges.push({ id: 'bos:' + bo.id + ':' + s.table, source: 'tbl:' + s.table, target: 'bo:' + bo.id, label: '👑 maître', style: { stroke: '#16a34a', lineWidth: 2.5, endArrow: { path: '', fill: '#16a34a' } } });
+                    else if (s.role === 'contributeur') edges.push({ id: 'bos:' + bo.id + ':' + s.table, source: 'tbl:' + s.table, target: 'bo:' + bo.id, label: 'contribue', style: { stroke: '#16a34a', lineDash: [4, 3], endArrow: { path: '', fill: '#16a34a' } } });
+                    else edges.push({ id: 'bos:' + bo.id + ':' + s.table, source: 'bo:' + bo.id, target: 'tbl:' + s.table, label: 'diffusé vers', style: { stroke: '#0d9488', endArrow: { path: '', fill: '#0d9488' } } });
                 });
                 // Maîtres contextuels (règles de maîtrise) : la source fait foi pour certaines valeurs
                 // du contexte seulement — flèche maître en pointillés longs, sauf si déjà maître global.
                 const globalMasters = new Set((bo.sources || []).filter(s => s.role === 'maitre').map(s => s.table));
                 const ctxElem = (bo.elements || []).find(e2 => e2.id === (bo.contextRules || {}).elementId);
                 const ctxMasters = new Set((((bo.contextRules || {}).rules) || []).map(r => r.masterTable).filter(Boolean));
-                ctxMasters.forEach(tn => { if (seen.has(tn) && !globalMasters.has(tn)) edges.push({ id: 'boc:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: `👑 maître selon ${ctxElem ? ctxElem.name : 'contexte'}`, style: { stroke: '#16a34a', lineWidth: 2, lineDash: [8, 4], endArrow: { path: G6.Arrow.triangle(9, 9, 0), fill: '#16a34a' } } }); });
+                ctxMasters.forEach(tn => { if (seen.has(tn) && !globalMasters.has(tn)) edges.push({ id: 'boc:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: `👑 maître selon ${ctxElem ? ctxElem.name : 'contexte'}`, style: { stroke: '#16a34a', lineWidth: 2, lineDash: [8, 4], endArrow: { path: '', fill: '#16a34a' } } }); });
                 // Tables mappées via les sous-éléments mais sans rôle déclaré : simple lien descriptif.
                 const linkedTables = new Set(); (bo.elements || []).forEach(e2 => (e2.mappings || []).forEach(m => linkedTables.add(m.table)));
-                linkedTables.forEach(tn => { if (seen.has(tn) && !declared.has(tn) && !ctxMasters.has(tn)) edges.push({ id: 'bo:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: 'décrit', style: { stroke: '#86efac', lineDash: [2, 3], endArrow: { path: G6.Arrow.triangle(6, 6, 0), fill: '#86efac' } } }); });
+                linkedTables.forEach(tn => { if (seen.has(tn) && !declared.has(tn) && !ctxMasters.has(tn)) edges.push({ id: 'bo:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: 'décrit', style: { stroke: '#86efac', lineDash: [2, 3], endArrow: { path: '', fill: '#86efac' } } }); });
             });
             if (lineageGraph) { lineageGraph.destroy(); lineageGraph = null; }
             lineageGraph = createSvgGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 18, ranksep: 80 }, {
@@ -5695,7 +5692,7 @@
             } catch (e) { showError('Mesure impossible : ' + e.message); if (btn) { btn.disabled = false; btn.textContent = '📐 Mesurer sur les données'; } }
         }
 
-        // Le Modèle de données est rendu par le moteur SVG maison (G6 n'y est plus utilisé :
+        // Le Modèle de données est rendu par le moteur SVG maison (
         // rendu validé — fiable, léger, sans dépendance, et testable automatiquement).
         function renderGraph() {
             const cont = el('networkGraph'); if(!cont || !Object.keys(state.tables).length) return;
@@ -5713,7 +5710,7 @@
                 w.innerHTML = emptyDesigned ? '🧱 Aucune table conçue pour l\'instant — créez-en une dans l\'onglet <strong>Tables</strong> ; son modèle apparaîtra ici, séparé de celui des sources.' : '';
             });
         }
-        // ======================= Moteur SVG universel (remplace G6 partout) =======================
+        // ======================= Moteur SVG universel (unique moteur de graphes) =======================
         // Petit moteur maison exposant l'API dont les écrans ont besoin (data/render/changeData/
         // layout/fitView/findById/getNodes/getEdges/updateItem/addItem/on/zoom/downloadFullImage).
         // Disposition en couches (BFS gauche→droite), déplacement/pan/zoom gérés à la main.
@@ -6099,7 +6096,7 @@
             mm.innerHTML = `<svg width="${MW}" height="${MH}">${rects}${view}</svg>`;
         }
 
-        // (ancien rendu G6 du Modèle de données supprimé : le moteur SVG est désormais le seul rendu du MCD)
+        // (le moteur SVG est le seul rendu du Modèle de données)
 
         function getRequiredPath(baseId, targetIds, rels) {
             const activeNodes = new Set(); activeNodes.add(baseId);
@@ -7445,7 +7442,7 @@
                 });
             }
         }
-        // Renvoie {title, content} : le nœud personnalisé G6 dessine le titre en gras et le contenu en
+        // Renvoie {title, content} : le nœud du moteur SVG dessine le titre en gras et le contenu en
         // dessous (voir studio-rich-node), au lieu du sous-ensemble HTML approximatif utilisé par vis-network.
         function buildNodeLabel(tId, row) {
             const table = state.tables[tId]; let title = table.name.length > 20 ? table.name.substring(0, 17) + '...' : table.name; let content = '';
@@ -7525,7 +7522,7 @@
                 }, {
                     width: cont.clientWidth || 800, height: cont.clientHeight || 600,
                     defaultEdge: {
-                        style: { stroke: '#94a3b8', endArrow: { path: G6.Arrow.triangle(8, 8, 0), fill: '#94a3b8' } },
+                        style: { stroke: '#94a3b8', endArrow: { path: '', fill: '#94a3b8' } },
                         labelCfg: { autoRotate: true, style: { fill: '#475569', fontSize: 10, background: { fill: '#fff', padding: [1, 3, 1, 3], radius: 2 } } },
                     },
                 });
