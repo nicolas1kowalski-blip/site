@@ -4528,7 +4528,7 @@
         function covRelChanged() { covFilters.rel = []; covRenderFilters('rel'); }
         function covScopeTable(scope) { return scope === 'base' ? el('covBase').value : el('covRel').value; }
         function covAddFilter(scope) { covFilters[scope].push({ col: '', op: 'eq', val: '', conn: scope === 'rel' ? 'OR' : 'AND' }); covRenderFilters(scope); }
-        function covSetFilter(scope, i, f, v) { if (covFilters[scope][i]) { covFilters[scope][i][f] = v; if (f === 'op') covRenderFilters(scope); } }
+        function covSetFilter(scope, i, f, v) { if (covFilters[scope][i]) { covFilters[scope][i][f] = v; if (f === 'op' || f === 'col') covRenderFilters(scope); } }
         function covDelFilter(scope, i) { covFilters[scope].splice(i, 1); covRenderFilters(scope); }
         function covRenderFilters(scope) {
             const box = el('covFilterRows-' + scope); if (!box) return;
@@ -4543,10 +4543,13 @@
                     ${conn}
                     <select onchange="covSetFilter('${scope}',${i},'col',this.value)" class="flex-1 min-w-0 border border-slate-300 rounded px-1 py-1 text-[11px] bg-white"><option value="">— col —</option>${headers.map(h => `<option value="${escapeHTML(h)}" ${c.col === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
                     <select onchange="covSetFilter('${scope}',${i},'op',this.value)" class="shrink-0 border border-slate-300 rounded px-0.5 py-1 text-[11px] bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${o.v === c.op ? 'selected' : ''}>${o.t}</option>`).join('')}</select>
-                    <input type="text" value="${escapeHTML(c.val || '')}" oninput="covSetFilter('${scope}',${i},'val',this.value)" placeholder="val." class="w-16 shrink-0 border border-slate-300 rounded px-1 py-1 text-[11px] ${needVal ? '' : 'invisible'}">
+                    <input type="text" list="covfval-${scope}-${i}" value="${escapeHTML(c.val || '')}" oninput="covSetFilter('${scope}',${i},'val',this.value)" placeholder="val." class="w-24 shrink-0 border border-slate-300 rounded px-1 py-1 text-[11px] ${needVal ? '' : 'invisible'}" title="Les valeurs présentes dans la table sont proposées ; vous pouvez aussi saisir une autre valeur.">
+                    <datalist id="covfval-${scope}-${i}"></datalist>
                     <button onclick="covDelFilter('${scope}',${i})" class="shrink-0 text-slate-300 hover:text-red-500 text-xs font-bold">✕</button>
                 </div>`;
             }).join('');
+            // Valeurs détectées proposées dans chaque champ valeur (comme les autres filtres de l'app).
+            if (tId && state.tables[tId]) rows.forEach((c, i) => { if (c.col) tdFillDatalist(`covfval-${scope}-${i}`, state.tables[tId].name, c.col); });
         }
         function covWhere(scope) {
             const valid = covFilters[scope].filter(c => c.col && c.op && (['empty', 'nempty'].includes(c.op) || String(c.val || '').length));
