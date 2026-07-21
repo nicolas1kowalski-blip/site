@@ -881,6 +881,7 @@
                     <h2 class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="landmark" class="w-5 h-5"></i> Gouvernance des données</h2>
                     <span id="persistStatus" class="text-xs text-slate-400"></span>
                 </div>
+                <div id="govFamTabs" class="flex items-center gap-1.5 flex-wrap mb-4"></div>
                 <div id="govContent"></div>
             </div>
             <input type="file" id="govImportFile" accept=".json" class="hidden" onchange="importGovernanceBundle(event)">
@@ -2156,6 +2157,15 @@
         function switchGovTab(tab) { govState.tab = tab; renderGovernance(); renderNav(); }
 
         function renderGovernance() {
+            // Chips de la famille active (2 à 4 écrans) — le détail sous la famille, jamais 12 onglets d'un coup.
+            const famBar = el('govFamTabs');
+            if (famBar) {
+                const govTabs = (NAV_PHASES.find(p => p.id === 'gov') || { tabs: [] }).tabs;
+                const cur = govTabs.find(t => t.g === govState.tab) || govTabs[0];
+                const sibl = govTabs.filter(t => t.fam === cur.fam);
+                famBar.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">${escapeHTML(cur.fam || '')}</span>` + sibl.map(t =>
+                    `<button onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === govState.tab ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('');
+            }
             const c = el('govContent');
             if (govState.tab === 'dictionary') c.innerHTML = renderGovDictionary();
             else if (govState.tab === 'objects') {
@@ -4677,13 +4687,22 @@
                 else {
                     const c = PHASE_COLORS[activePhase.color];
                     stn.classList.remove('hidden');
-                    let lastFam = null;
-                    stn.innerHTML = activePhase.tabs.map(t => {
+                    if (activePhase.id === 'gov') {
+                        // V3 UX : simplification — la barre ne montre que les FAMILLES (5 entrées),
+                        // les écrans de la famille active s'affichent en chips dans la page.
+                        const fams = [];
+                        activePhase.tabs.forEach(t => { if (!fams.some(f => f.name === t.fam)) fams.push({ name: t.fam, icon: t.icon, first: t.g, tabs: [] }); fams.find(f => f.name === t.fam).tabs.push(t); });
+                        const curFam = (activePhase.tabs.find(t => t.g === govState.tab) || {}).fam;
+                        stn.innerHTML = fams.map(f => {
+                            const on = currentTab === activePhase.step && f.name === curFam;
+                            const tgt = on ? govState.tab : (f.tabs.some(t => t.g === govState.tab) ? govState.tab : f.first);
+                            return `<button onclick="openGovTab('${tgt}')" aria-label="Famille ${escapeHTML(f.name)}" title="${escapeHTML(f.tabs.map(t => t.label).join(' · '))}" class="whitespace-nowrap pb-2.5 pt-2 px-3 flex items-center gap-2 border-b-2 transition-colors ${on ? c.sub + ' font-bold' : 'border-transparent text-slate-400 hover:text-slate-600'}">
+                                <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs ${on ? c.subDot : 'bg-slate-100 text-slate-400'}">${f.icon}</span>${f.name}<span class="text-[9px] font-bold ${on ? 'opacity-60' : 'text-slate-300'}">${f.tabs.length}</span></button>`;
+                        }).join('');
+                    } else stn.innerHTML = activePhase.tabs.map(t => {
                         const on = t.n ? (t.n === currentTab) : (currentTab === activePhase.step && govState.tab === t.g);
                         const click = t.n ? `switchTab(${t.n})` : `openGovTab('${t.g}')`;
-                        let fam = '';
-                        if (t.fam && t.fam !== lastFam) { fam = `<span class="subfam" aria-hidden="true">${t.fam}</span>`; lastFam = t.fam; }
-                        return fam + `<button onclick="${click}" aria-label="${escapeHTML(t.label)}" class="whitespace-nowrap pb-2.5 pt-2 px-3 flex items-center gap-2 border-b-2 transition-colors ${on ? c.sub + ' font-bold' : 'border-transparent text-slate-400 hover:text-slate-600'}">
+                        return `<button onclick="${click}" aria-label="${escapeHTML(t.label)}" class="whitespace-nowrap pb-2.5 pt-2 px-3 flex items-center gap-2 border-b-2 transition-colors ${on ? c.sub + ' font-bold' : 'border-transparent text-slate-400 hover:text-slate-600'}">
                             <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs ${on ? c.subDot : 'bg-slate-100 text-slate-400'}">${t.icon}</span>${t.label}</button>`;
                     }).join('');
                 }
