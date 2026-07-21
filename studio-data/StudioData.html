@@ -2497,6 +2497,11 @@
                     </div>`; }).join('')}
                     ${sources.some(s => (s.filters || []).length) ? '<p class="text-[10px] text-slate-400">▼ L\'objet est un SOUS-ENSEMBLE filtré : la volumétrie, l\'audit de l\'objet et les contrôles de facettes appliquent ces conditions.</p>' : ''}
                 </div>${flow}
+                ${(() => { const att = [];
+                    (state.governance.perimeters || []).forEach(p2 => { if ((p2.boIds || []).includes(bo.id)) att.push('🗂 ' + p2.name); });
+                    (state.governance.glossary || []).forEach(g2 => { if ((g2.boIds || []).includes(bo.id)) att.push('📖 ' + g2.term); });
+                    (state.governance.useCases || []).forEach(u2 => { if ((u2.boIds || []).includes(bo.id)) att.push('🎯 ' + u2.name); });
+                    return att.length ? `<div class="text-[11px] text-slate-500 mt-2"><span class="text-[10px] uppercase font-bold text-slate-400">Rattaché à :</span> ${att.map(escapeHTML).join(' · ')}</div>` : ''; })()}
             </div>`;
         }
 
@@ -2824,8 +2829,8 @@
                 ['Pas de conflit de maîtres', masters.length <= 1 || hasCtxRules],
                 ['Au moins un attribut décrit', (bo.elements || []).length > 0],
                 ['Fiche dictionnaire de la source maître validée', dictEntry.status === 'Validé'],
-                ['Rattaché à un périmètre métier', t ? g.perimeters.some(p => (p.tables || []).includes(t.name)) : false],
-                ['Utilisé par au moins un cas d\'usage déclaré', t ? g.useCases.some(uc => (uc.tables || []).includes(t.name) || (uc.columns || []).some(c => c.table === t.name)) : false],
+                ['Rattaché à un périmètre métier', g.perimeters.some(p => (p.boIds || []).includes(bo.id) || (t && (p.tables || []).includes(t.name)))],
+                ['Utilisé par au moins un cas d\'usage déclaré', g.useCases.some(uc => (uc.boIds || []).includes(bo.id) || (t && ((uc.tables || []).includes(t.name) || (uc.columns || []).some(c => c.table === t.name))))],
             ];
             const passed = checks.filter(c => c[1]).length;
             const score = Math.round((passed / checks.length) * 100);
@@ -3392,11 +3397,34 @@
                         <button onclick="removePerimeter('${p.id}')" class="text-red-500 hover:text-red-700 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>
                     <input type="text" value="${escapeHTML(p.description || '')}" placeholder="Description du domaine..." onchange="updatePerimeter('${p.id}','description',this.value)" class="w-full border border-slate-200 p-1.5 rounded text-xs mb-3 bg-white">
-                    <div class="flex flex-wrap gap-1.5">${names.map(n => `<label class="text-xs border rounded px-2 py-1 cursor-pointer ${(p.tables || []).includes(n) ? 'bg-indigo-100 border-indigo-300 text-indigo-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}"><input type="checkbox" class="hidden" ${(p.tables || []).includes(n) ? 'checked' : ''} onchange="togglePerimeterTable('${p.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${escapeHTML(n)}</label>`).join('') || '<span class="text-xs text-slate-400 italic">Aucune table chargée</span>'}</div>
+                    ${boAttachHtml('per', p)}
+                    <details ${(p.tables || []).length ? 'open' : ''}><summary class="text-[10px] uppercase font-bold text-slate-400 cursor-pointer mb-1">Tables techniques (${(p.tables || []).length})</summary>
+                    <div class="flex flex-wrap gap-1.5 mt-1">${names.map(n => `<label class="text-xs border rounded px-2 py-1 cursor-pointer ${(p.tables || []).includes(n) ? 'bg-indigo-100 border-indigo-300 text-indigo-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}"><input type="checkbox" class="hidden" ${(p.tables || []).includes(n) ? 'checked' : ''} onchange="togglePerimeterTable('${p.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${escapeHTML(n)}</label>`).join('') || '<span class="text-xs text-slate-400 italic">Aucune table chargée</span>'}</div></details>
                 </div>`;
             });
             return html + '</div>';
         }
+        // Rattachement d'objets métier aux périmètres / termes de glossaire / cas d'usage.
+        function boAttachHtml(kind, ent) {
+            const bos = state.governance.businessObjects || [];
+            const ids = ent.boIds || [];
+            const chips = ids.map(id => { const bo = bos.find(b => b.id === id); if (!bo) return '';
+                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+            const remain = bos.filter(b => !ids.includes(b.id));
+            return `<div class="flex flex-wrap items-center gap-1.5 mb-2">
+                <span class="text-[10px] uppercase font-bold text-emerald-600">🏛️ Objets métier</span>
+                ${chips || '<span class="text-xs text-slate-400 italic">aucun objet rattaché</span>'}
+                ${remain.length ? `<select id="boatt-${kind}-${ent.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${remain.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select><button onclick="toggleEntityBo('${kind}','${ent.id}', el('boatt-${kind}-${ent.id}').value, true)" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-2 py-1 rounded font-bold hover:bg-emerald-50">Rattacher</button>` : (bos.length ? '' : '<span class="text-[10px] text-slate-300">(créez des objets dans l\'onglet Objets métier)</span>')}
+            </div>`;
+        }
+        function toggleEntityBo(kind, id, boId, on) {
+            const coll = kind === 'per' ? state.governance.perimeters : (kind === 'gl' ? state.governance.glossary : state.governance.useCases);
+            const ent = (coll || []).find(x => x.id === id); if (!ent || !boId) return;
+            ent.boIds = ent.boIds || [];
+            if (on) { if (!ent.boIds.includes(boId)) ent.boIds.push(boId); } else ent.boIds = ent.boIds.filter(x => x !== boId);
+            persistAppState(); renderGovernance();
+        }
+        function openBoFiche(boId) { govState.tab = 'objects'; govState.selectedBoId = boId; renderGovernance(); }
         function addPerimeter() { state.governance.perimeters.push({ id: 'per_' + generateId(), name: 'Nouveau périmètre', description: '', tables: [] }); persistAppState(); renderGovernance(); }
         function updatePerimeter(id, f, v) { const p = state.governance.perimeters.find(x => x.id === id); if (p) { p[f] = v; persistAppState(); } }
         function removePerimeter(id) { state.governance.perimeters = state.governance.perimeters.filter(x => x.id !== id); persistAppState(); renderGovernance(); }
@@ -3415,6 +3443,7 @@
                         <button onclick="removeGlossaryTerm('${g.id}')" class="text-red-500 hover:text-red-700 p-1 ml-auto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>
                     <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme..." class="w-full border border-slate-200 p-2 rounded text-xs mb-2 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>
+                    ${boAttachHtml('gl', g)}
                     <div class="flex flex-wrap items-center gap-2">
                         ${(g.links || []).map((l, i) => `<span class="text-xs bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full px-2 py-0.5 flex items-center gap-1">${escapeHTML(l.table)}.${escapeHTML(l.col)} <button onclick="removeGlossaryLink('${g.id}',${i})" class="text-indigo-400 hover:text-red-500">✕</button></span>`).join('')}
                         <select id="gl-tbl-${g.id}" onchange="populateGlossLinkCols('${g.id}',this.value)" class="border border-slate-200 p-1 rounded text-xs bg-white">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select>
@@ -3456,6 +3485,7 @@
                         <button onclick="removeUseCase('${uc.id}')" class="text-red-500 hover:text-red-700 p-1 ml-auto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>
                     <textarea onchange="updateUseCase('${uc.id}','description',this.value)" placeholder="Description du cas d'usage (rapport, processus, application...)" class="w-full border border-slate-200 p-2 rounded text-xs mb-2 bg-white h-12">${escapeHTML(uc.description || '')}</textarea>
+                    ${boAttachHtml('uc', uc)}
                     <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Tables utilisées</div>
                     <div class="flex flex-wrap gap-1.5 mb-2">${names.map(n => `<label class="text-xs border rounded px-2 py-1 cursor-pointer ${(uc.tables || []).includes(n) ? 'bg-amber-100 border-amber-300 text-amber-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}"><input type="checkbox" class="hidden" ${(uc.tables || []).includes(n) ? 'checked' : ''} onchange="toggleUseCaseTable('${uc.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${escapeHTML(n)}</label>`).join('')}</div>
                     <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Colonnes critiques utilisées</div>
