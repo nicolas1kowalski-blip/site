@@ -451,7 +451,10 @@
                         <div id="covFilterRows-rel" class="space-y-1"></div>
                     </div>
                 </div>
-                <button onclick="runCoverageAnalysis(this)" id="btnCovRun" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg shadow text-sm">🎯 Lancer l'analyse</button>
+                <div class="flex items-center gap-4 flex-wrap">
+                    <button onclick="runCoverageAnalysis(this)" id="btnCovRun" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg shadow text-sm">🎯 Lancer l'analyse</button>
+                    <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer"><input type="checkbox" id="covCompareTotal" class="w-4 h-4 text-teal-600 rounded"> Afficher aussi la <strong>totalité (sans les filtres)</strong> — barre grise à côté de chaque pile</label>
+                </div>
                 <div id="covResult" class="mt-5 hidden">
                     <div id="covSummary" class="mb-3"></div>
                     <div class="h-[340px] relative"><canvas id="covChart"></canvas></div>
@@ -4812,6 +4815,17 @@
                 const withSql = `WITH b AS (SELECT * FROM ${Tb}${fb ? ' WHERE ' + fb : ''}),
                     e AS (SELECT DISTINCT ${norm(sqlIdent(rKey))} AS k FROM ${Tr} WHERE ${norm(sqlIdent(rKey))} IS NOT NULL${fr ? ' AND (' + fr + ')' : ''})`;
                 const hasCond = `${norm('b.' + sqlIdent(bKey))} IN (SELECT k FROM e)`;
+                // Comparaison à la TOTALITÉ (sans les filtres de population) : mêmes dimensions,
+                // même table, aucun filtre — pour visualiser ce que les filtres écartent.
+                const compareTotal = !!(el('covCompareTotal') && el('covCompareTotal').checked);
+                let totMap = null;
+                if (compareTotal) {
+                    const resT = await conn.query(`WITH b AS (SELECT * FROM ${Tb})
+                        SELECT ${dimSel} AS dim${dim3Sel ? `, ${dim3Sel} AS dim3` : ''}, COUNT(*)::BIGINT AS total
+                        FROM b ${dJoin} GROUP BY ${dim3Sel ? '1, 2' : '1'} LIMIT 5000`);
+                    totMap = new Map();
+                    arrowResultToObjects(resT).forEach(r => totMap.set((dim3Sel ? String(r.dim3) : '') + '' + String(r.dim), Number(r.total)));
+                }
                 const grpCols = ['1', dim2Sel ? '2' : null, dim3Sel ? (dim2Sel ? '3' : '2') : null].filter(Boolean).join(', ');
                 const res = await conn.query(`${withSql}
                     SELECT ${dimSel} AS dim${dim2Sel ? `, ${dim2Sel} AS dim2` : ''}${dim3Sel ? `, ${dim3Sel} AS dim3` : ''}, COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${hasCond} THEN 1 ELSE 0 END)::BIGINT AS avec
@@ -4833,10 +4847,13 @@
                     const oldFac = el('covFacets'); if (oldFac) oldFac.remove();
                     const chartWrap = el('covChart').parentElement;
                     // Construit {labels, datasets} pour un sous-ensemble de lignes (partagé facettes / global).
-                    const buildChartData = subset => {
-                        if (!dim2Sel) return { labels: subset.map(r => r.dim), datasets: [
+                    const buildChartData = (subset, facetVal) => {
+                        const totOf = lbl => totMap ? (totMap.get((facetVal || '') + '' + lbl) || 0) : 0;
+                        const totDs = labels2 => totMap ? [{ label: 'Totalité (sans filtres)', data: labels2.map(totOf), backgroundColor: '#cbd5e1', stack: '__total__' }] : [];
+                        if (!dim2Sel) { const labels2 = subset.map(r => r.dim); return { labels: labels2, datasets: [
                             { label: '✔ Avec', data: subset.map(r => r.avec), backgroundColor: '#10b981', stack: 's' },
-                            { label: '✖ Sans', data: subset.map(r => r.sans), backgroundColor: '#ef4444', stack: 's' }] };
+                            { label: '✖ Sans', data: subset.map(r => r.sans), backgroundColor: '#ef4444', stack: 's' },
+                            ...totDs(labels2)] }; }
                         const totBy = (arr, key) => { const m = new Map(); arr.forEach(r => m.set(r[key], (m.get(r[key]) || 0) + r.total)); return m; };
                         const d1Top = [...totBy(subset, 'dim')].sort((a, b2) => String(dC).startsWith('__annee__|') ? (a[0] < b2[0] ? -1 : 1) : b2[1] - a[1]).slice(0, 15).map(x => x[0]);
                         const d2Top = [...totBy(subset, 'dim2')].sort((a, b2) => b2[1] - a[1]).slice(0, 5).map(x => x[0]);
@@ -4850,7 +4867,7 @@
                             datasets.push({ label: `${v} ✔`, data: d1Top.map(d1 => (cell[d1 + '' + v] || {}).avec || 0), backgroundColor: col, stack: v });
                             datasets.push({ label: `${v} ✖`, data: d1Top.map(d1 => (cell[d1 + '' + v] || {}).sans || 0), backgroundColor: col + '55', stack: v });
                         });
-                        return { labels: d1Top, datasets };
+                        return { labels: d1Top, datasets: datasets.concat(totDs(d1Top)) };
                     };
                     const mkChart = (canvas, data, title) => new Chart(canvas.getContext('2d'), {
                         type: 'bar', data,
@@ -4860,7 +4877,7 @@
                     });
                     if (!dim3Sel) {
                         el('covChart').style.display = '';
-                        covChartInst = mkChart(el('covChart'), buildChartData(rows), null);
+                        covChartInst = mkChart(el('covChart'), buildChartData(rows, ''), null);
                     } else {
                         // FACETTES : top 6 valeurs de la dim 3 (les plus peuplées), le reste en (autres).
                         el('covChart').style.display = 'none';
@@ -4881,7 +4898,7 @@
                             const cv = document.createElement('canvas');
                             card.firstChild.appendChild(cv);
                             fac.appendChild(card);
-                            window.covFacetCharts.push(mkChart(cv, buildChartData(subset), `${v3} — ${tot.toLocaleString('fr-FR')} entité(s)`));
+                            window.covFacetCharts.push(mkChart(cv, buildChartData(subset, v3), `${v3} — ${tot.toLocaleString('fr-FR')} entité(s)`));
                         });
                     }
                 } catch (eC) { console.warn('Graphique indisponible :', eC); }
@@ -4891,8 +4908,8 @@
                 const iA = registerQualInspect('Entités AVEC élément(s) lié(s)', rowsSql(false));
                 const iS = registerQualInspect('Entités SANS élément lié', rowsSql(true));
                 el('covTable').innerHTML = `<div class="border border-slate-200 rounded-lg overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0"><tr><th class="p-2">${escapeHTML(dC)}</th>${dim2Sel ? `<th class="p-2">${escapeHTML(d2C)}</th>` : ''}${dim3Sel ? `<th class="p-2">${escapeHTML(d3C)}</th>` : ''}<th class="p-2 text-right">Population</th><th class="p-2 text-right">✔ Avec</th><th class="p-2 text-right">✖ Sans</th><th class="p-2 text-right">Couverture</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr class="hover:bg-teal-50/40"><td class="p-2 font-bold">${escapeHTML(r.dim)}</td>${dim2Sel ? `<td class="p-2">${escapeHTML(r.dim2)}</td>` : ''}${dim3Sel ? `<td class="p-2">${escapeHTML(r.dim3)}</td>` : ''}<td class="p-2 text-right">${r.total.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-emerald-700 font-bold">${r.avec.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-red-600 font-bold">${r.sans.toLocaleString('fr-FR')}</td><td class="p-2 text-right font-black">${(r.avec / r.total * 100).toFixed(1)} %</td></tr>`).join('')}</tbody></table></div>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0"><tr><th class="p-2">${escapeHTML(dC)}</th>${dim2Sel ? `<th class="p-2">${escapeHTML(d2C)}</th>` : ''}${dim3Sel ? `<th class="p-2">${escapeHTML(d3C)}</th>` : ''}<th class="p-2 text-right">Population</th>${totMap && !dim2Sel ? '<th class="p-2 text-right">Totalité (sans filtres)</th>' : ''}<th class="p-2 text-right">✔ Avec</th><th class="p-2 text-right">✖ Sans</th><th class="p-2 text-right">Couverture</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr class="hover:bg-teal-50/40"><td class="p-2 font-bold">${escapeHTML(r.dim)}</td>${dim2Sel ? `<td class="p-2">${escapeHTML(r.dim2)}</td>` : ''}${dim3Sel ? `<td class="p-2">${escapeHTML(r.dim3)}</td>` : ''}<td class="p-2 text-right">${r.total.toLocaleString('fr-FR')}</td>${totMap && !dim2Sel ? `<td class="p-2 text-right text-slate-500">${(totMap.get((r.dim3 || '') + '' + r.dim) || 0).toLocaleString('fr-FR')}</td>` : ''}<td class="p-2 text-right text-emerald-700 font-bold">${r.avec.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-red-600 font-bold">${r.sans.toLocaleString('fr-FR')}</td><td class="p-2 text-right font-black">${(r.avec / r.total * 100).toFixed(1)} %</td></tr>`).join('')}</tbody></table></div>
                     <div class="mt-2 flex flex-wrap gap-2 text-xs items-center"><span class="text-slate-400">Consulter / exporter les lignes :</span>${qualInspectButtons(iA)} <span class="text-emerald-700 font-bold">avec</span> · ${qualInspectButtons(iS)} <span class="text-red-600 font-bold">sans</span></div>
                     ${dim2Sel && rows.length >= 400 ? '<p class="text-[10px] text-slate-400 mt-1">Affichage limité aux 400 premiers croisements (les plus peuplés) — le graphique montre les 15 premières valeurs de l\'axe × 5 de la dimension 2.</p>' : (!dim2Sel && rows.length >= 40 ? '<p class="text-[10px] text-slate-400 mt-1">Affichage limité aux 40 premières valeurs de la dimension (les plus peuplées).</p>' : '')}`;
                 bgTaskEnd(`🎯 Analyse terminée : ${(gA / gT * 100).toFixed(1)} % de couverture sur ${gT.toLocaleString('fr-FR')} entités.`);
