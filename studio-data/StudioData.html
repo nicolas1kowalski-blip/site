@@ -1967,7 +1967,15 @@
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
             else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); fillBackupsList(); }
-            else if (govState.tab === 'lineage') { c.innerHTML = '<div id="lineageFsWrap"><div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'ucs,🎯 Cas d\'usage,lineageUcs', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Ambre : cas d\'usage métier · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : utilisation métier · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
+            else if (govState.tab === 'lineage') { const _am = govState.lineageView === 'attr'; const _bos = state.governance.businessObjects || [];
+                c.innerHTML = '<div id="lineageFsWrap"><div class="flex items-center gap-2 mb-2 flex-wrap">'
+                + '<div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">'
+                + '<button onclick="govState.lineageView=\'global\'; renderGovernance()" class="px-3 py-1.5 ' + (_am ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-indigo-600 text-white') + '">🌐 Vue globale</button>'
+                + '<button onclick="govState.lineageView=\'attr\'; renderGovernance()" class="px-3 py-1.5 ' + (_am ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50') + '">🔬 Par attribut</button></div>'
+                + (_am ? '<select onchange="govState.lineageAttrBo=this.value; renderLineageGraph()" class="border border-emerald-300 rounded-lg px-2 py-1.5 text-xs font-bold bg-emerald-50/50">' + _bos.map(b2 => '<option value="' + b2.id + '"' + (govState.lineageAttrBo === b2.id ? ' selected' : '') + '>🏛️ ' + escapeHTML(b2.name) + '</option>').join('') + '</select>'
+                    + '<input type="text" value="' + escapeHTML(govState.lineageAttrQ || '') + '" oninput="govState.lineageAttrQ=this.value; attrFlowApplyFocus()" placeholder="🔍 filtrer les attributs…" class="text-[11px] border border-slate-300 rounded px-2 py-1.5 w-44 bg-white">' : '')
+                + '</div>'
+                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'ucs,🎯 Cas d\'usage,lineageUcs', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Ambre : cas d\'usage métier · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : utilisation métier · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
         }
 
@@ -3856,9 +3864,102 @@
         // ---- Vue Lineage (moteur SVG) ----
         function renderLineageGraph() {
             const wrap = el('lineageGraphWrap'); if (!wrap) return;
+            if (govState.lineageView === 'attr') {
+                try { renderAttrFlow(wrap); } catch (e) { console.error('Vue par attribut', e); wrap.innerHTML = graphUnavailableHtml('Vue par attribut impossible : ' + escapeHTML(e.message)); }
+                return;
+            }
             try { _renderLineageImpl(wrap); }
             catch (e) { console.error('Lineage render error', e); wrap.innerHTML = graphUnavailableHtml('Le lineage n\'a pas pu être affiché : ' + escapeHTML(e.message)); return; }
             observeGraphResize('lineage');
+        }
+        // ================= 🔬 LINEAGE PAR ATTRIBUT : vue en COLONNES =================
+        // Applications sources -> colonnes techniques -> attributs de l'objet -> consommateurs.
+        // Lisible même avec beaucoup d'applications : clic = isoler une chaîne, recherche = filtrer.
+        let _afData = null;
+        function renderAttrFlow(wrap) {
+            const bos = state.governance.businessObjects || [];
+            if (!bos.length) { wrap.innerHTML = '<p class="p-8 text-sm text-slate-400 italic text-center">Créez un objet métier pour utiliser la vue par attribut.</p>'; return; }
+            if (!govState.lineageAttrBo || !bos.some(b => b.id === govState.lineageAttrBo)) govState.lineageAttrBo = bos[0].id;
+            const bo = bos.find(b => b.id === govState.lineageAttrBo);
+            const rows = boAllAttrRows(bo);
+            const prod = new Map(), cols = new Map(), cons = new Map(), links = [];
+            const attrs = [];
+            rows.forEach(r => {
+                const e2 = r.el; const aid = 'a:' + e2.id;
+                const facetTable = r.stId ? (getBoFacets(bo).find(x => x.id === r.stId) || {}).table : null;
+                const maps = r.stId ? (e2.col ? [{ table: facetTable, col: e2.col }] : []) : (e2.mappings || []);
+                let srcApp = assetById(e2.sourceApp) || assetById((bo.producedBy || [])[0]) || null;
+                if (!srcApp && maps[0]) { const sys = String((state.governance.dictionary[maps[0].table] || {}).sourceSystem || '').trim().toLowerCase(); if (sys) srcApp = (state.governance.assets || []).find(x => x.kind === 'app' && String(x.name).trim().toLowerCase() === sys) || null; }
+                attrs.push({ id: aid, el: e2, facet: r.facet, maps, srcApp, diff: !!(e2.sourceApp && e2.sourceApp !== ((bo.producedBy || [])[0] || '')) });
+                if (srcApp) prod.set(srcApp.id, srcApp);
+                maps.forEach(m => { const key = m.table + '.' + m.col; cols.set(key, m); links.push(['c:' + key, aid]); if (srcApp) links.push(['p:' + srcApp.id, 'c:' + key]); });
+                if (!maps.length && srcApp) links.push(['p:' + srcApp.id, aid]);
+                (e2.usedBy || []).forEach(id => { const a = assetById(id); if (a) { cons.set(id, a); links.push([aid, 'u:' + id]); } });
+            });
+            const pill = (fid, main, sub, cls) => `<div data-fid="${escapeHTML(fid)}" onclick="attrFlowClick('${escapeHTML(fid)}')" class="af-pill cursor-pointer border rounded-lg px-2.5 py-1.5 mb-1.5 text-[11px] leading-tight ${cls}"><div class="font-bold truncate">${main}</div>${sub ? `<div class="text-[9px] opacity-70 truncate">${sub}</div>` : ''}</div>`;
+            const deg = fid => links.filter(l => l[0] === fid || l[1] === fid).length;
+            const colHtml = (title, items) => `<div class="flex-1 min-w-[160px] relative z-10"><div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5 text-center">${title}</div>${items.join('') || '<div class="text-[10px] text-slate-300 italic text-center py-3">—</div>'}</div>`;
+            const noUse = attrs.filter(a => !(a.el.usedBy || []).length).length;
+            wrap.style.height = 'auto'; wrap.style.minHeight = '300px';
+            wrap.innerHTML = `<div class="p-3">
+                <div class="flex items-center gap-2 mb-2 flex-wrap text-[11px] text-slate-500">
+                    <span class="font-bold text-slate-700">🏛️ ${escapeHTML(bo.name)}</span>
+                    <span>${attrs.length} attribut(s) · ${prod.size} application(s) source · ${cons.size} consommateur(s)</span>
+                    ${noUse ? `<span class="bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5 font-bold">😴 ${noUse} sans usage</span>` : ''}
+                    <span class="text-slate-300">·</span><span>💡 cliquez un élément pour isoler sa chaîne, re-cliquez pour tout revoir</span>
+                </div>
+                <div id="afBoard" class="relative flex gap-8 items-start">
+                    <svg id="afSvg" class="absolute inset-0 w-full h-full z-0 pointer-events-none"></svg>
+                    ${colHtml('🖥 Applications sources', [...prod.values()].sort((x, y) => deg('p:' + y.id) - deg('p:' + x.id)).map(a => pill('p:' + a.id, '🖥 ' + escapeHTML(a.name), deg('p:' + a.id) + ' flux', 'bg-slate-100 border-slate-300 text-slate-700')))}
+                    ${colHtml('📄 Colonnes techniques', [...cols.entries()].map(([k, m]) => pill('c:' + k, escapeHTML(m.col), escapeHTML(m.table), 'bg-blue-50 border-blue-200 text-blue-800')))}
+                    ${colHtml('🏛️ Attributs de l\'objet', attrs.map(a => pill(a.id, escapeHTML(a.el.name) + (a.diff ? ' <span class="text-amber-600 font-black">≠</span>' : '') + ((a.el.usedBy || []).length ? '' : ' 😴'), a.facet ? '◆ ' + escapeHTML(a.facet) : '', 'bg-emerald-50 border-emerald-300 text-emerald-900')))}
+                    ${colHtml('🖥⚙️ Consommateurs', [...cons.values()].sort((x, y) => deg('u:' + y.id) - deg('u:' + x.id)).map(a => pill('u:' + a.id, escapeHTML(assetLabel(a)), deg('u:' + a.id) + ' attribut(s)', a.kind === 'app' ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-orange-50 border-orange-200 text-orange-800')))}
+                </div>
+                ${prod.size || cons.size ? '' : '<p class="text-[11px] text-amber-600 mt-2">⚠️ Déclarez les sources et usages dans la fiche de l\'objet (onglet 🔌 Applis & usages) pour peupler cette vue.</p>'}
+            </div>`;
+            _afData = { links, focus: null };
+            requestAnimationFrame(attrFlowDraw);
+        }
+        function attrFlowDraw() {
+            const board = el('afBoard'), svg = el('afSvg'); if (!board || !svg || !_afData) return;
+            const keep = _afData.focusSet;
+            const els = {}; board.querySelectorAll('.af-pill').forEach(x => els[x.getAttribute('data-fid')] = x);
+            svg.setAttribute('viewBox', `0 0 ${board.clientWidth} ${board.scrollHeight}`);
+            svg.style.height = board.scrollHeight + 'px';
+            let paths = '';
+            _afData.links.forEach(([f, t]) => {
+                const A = els[f], B = els[t]; if (!A || !B) return;
+                const dimmed = keep && !(keep.has(f) && keep.has(t));
+                const x1 = A.offsetLeft + A.offsetWidth, y1 = A.offsetTop + A.offsetHeight / 2;
+                const x2 = B.offsetLeft, y2 = B.offsetTop + B.offsetHeight / 2;
+                const mx = (x1 + x2) / 2;
+                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none" stroke="${dimmed ? '#e2e8f0' : (f.startsWith('a:') || t.startsWith('u:') ? '#ea580c' : '#64748b')}" stroke-width="${dimmed ? 1 : 1.8}" stroke-opacity="${dimmed ? 0.5 : 0.75}"/>`;
+            });
+            svg.innerHTML = paths;
+            board.querySelectorAll('.af-pill').forEach(x => { const on = !keep || keep.has(x.getAttribute('data-fid')); x.style.opacity = on ? '' : '0.25'; x.style.borderWidth = (!keep || !on) ? '' : '2px'; });
+        }
+        function attrFlowClick(fid) {
+            if (!_afData) return;
+            if (_afData.focus === fid) { _afData.focus = null; _afData.focusSet = null; attrFlowDraw(); return; }
+            _afData.focus = fid;
+            const adj = {}; _afData.links.forEach(([f, t]) => { (adj[f] = adj[f] || []).push(t); (adj[t] = adj[t] || []).push(f); });
+            const keep = new Set([fid]); const q = [fid];
+            while (q.length) { const u = q.shift(); (adj[u] || []).forEach(v => { if (!keep.has(v)) { keep.add(v); q.push(v); } }); }
+            _afData.focusSet = keep; attrFlowDraw();
+        }
+        function attrFlowApplyFocus() {
+            if (!_afData) return;
+            const q = srcNorm(govState.lineageAttrQ || '');
+            if (!q) { _afData.focus = null; _afData.focusSet = null; attrFlowDraw(); return; }
+            const board = el('afBoard'); if (!board) return;
+            const keep = new Set();
+            const adj = {}; _afData.links.forEach(([f, t]) => { (adj[f] = adj[f] || []).push(t); (adj[t] = adj[t] || []).push(f); });
+            board.querySelectorAll('.af-pill').forEach(x => {
+                const fid = x.getAttribute('data-fid');
+                if (!fid.startsWith('a:')) return;
+                if (srcNorm(x.textContent).includes(q)) { const qq = [fid]; keep.add(fid); while (qq.length) { const u = qq.shift(); (adj[u] || []).forEach(v => { if (!keep.has(v)) { keep.add(v); qq.push(v); } }); } }
+            });
+            _afData.focus = '__search__'; _afData.focusSet = keep; attrFlowDraw();
         }
         function _renderLineageImpl(wrap) {
             const nodes = [], edges = [], seen = new Set();
