@@ -5476,7 +5476,7 @@
         }
 
         function renderTables() {
-            const grid = el('tablesGrid'); if (!grid) return; grid.innerHTML = '';
+            const grid = el('tablesGrid'); if (!grid) return; let _gridHtml = '';
             const dl = el('themeDatalist'); if (dl) dl.innerHTML = themeList().map(th => `<option value="${escapeHTML(th)}">`).join('');
             Object.values(state.tables).forEach(t => {
                 let html = `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 relative group">
@@ -5514,8 +5514,9 @@
                         <div class="flex items-end"><label class="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer pb-1"><input type="checkbox" ${t.config.ignoreErrors?'checked':''} onchange="updateTableConfig('${t.id}', 'ignoreErrors', this.checked)"> Ignorer lignes en erreur</label></div>
                     </div>`;
                 }
-                grid.innerHTML += html + `</div>`;
+                _gridHtml += html + `</div>`;
             }); 
+            grid.innerHTML = _gridHtml;
             lucide.createIcons();
         }
 
@@ -5529,6 +5530,19 @@
         function removeRelation(id) { state.relations = state.relations.filter(r=>r.id!==id); renderRelationsList(); renderGraph(); persistAppState(); }
         function updateRelation(id, f, v) { const r=state.relations.find(x=>x.id===id); if(r){ r[f]=v; renderRelationsList(); renderGraph(); persistAppState(); } }
 
+        // Remplissage différé des listes de la vue « liens » (voir renderRelationsList).
+        function fillRelTableSel(sel) {
+            if (sel.dataset.filled) return; sel.dataset.filled = '1';
+            const cur = sel.value;
+            sel.innerHTML = tableOptionsHtml({ readyOnly: true });
+            sel.value = cur;
+        }
+        function fillRelColSel(sel, tId) {
+            if (sel.dataset.filled) return; sel.dataset.filled = '1';
+            const cur = sel.value; const t = state.tables[tId];
+            sel.innerHTML = '<option value="">Choisir colonne...</option>' + (t ? t.headers.map(h => `<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join('') : '');
+            sel.value = cur;
+        }
         function renderRelationsList() {
             const list = el('relationsList');
             if (!list) return;
@@ -5545,17 +5559,17 @@
                 list.innerHTML = `<div class="p-6 text-center text-slate-400 italic">Aucune liaison dans ce périmètre (${mcdScope() === 'designed' ? 'tables conçues' : 'sources'}) — changez de périmètre au-dessus du graphe pour voir les autres.</div>`;
                 return;
             }
-            const tOpts = tableOptionsHtml({ readyOnly: true });
+            let _rowsHtml = '';
+            // Listes déroulantes PARESSEUSES : seule l'option courante est rendue ; la liste
+            // complète (potentiellement des centaines de tables/colonnes) n'est construite qu'au
+            // premier clic. Divise par ~100 le DOM inséré à l'ouverture de l'onglet.
             scoped.forEach(r => {
-                const getCOpts = (tId, sv) => {
-                    const t = state.tables[tId];
-                    if (!t) return '<option value="">Choisir colonne...</option>';
-                    return '<option value="">Choisir colonne...</option>' + t.headers.map(h => `<option value="${escapeHTML(h)}" ${sv === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('');
-                };
-                const sSelect = `<select class="border p-2 rounded text-sm w-1/2" onchange="updateRelation('${r.id}', 'sourceTable', this.value); renderRelationsList()">${tOpts.replace(`value="${r.sourceTable}"`, `value="${r.sourceTable}" selected`)}</select>`;
-                const sColSelect = `<select class="border p-2 rounded text-sm w-1/2" onchange="updateRelation('${r.id}', 'sourceCol', this.value)">${getCOpts(r.sourceTable, r.sourceCol)}</select>`;
-                const tSelect = `<select class="border p-2 rounded text-sm w-1/2" onchange="updateRelation('${r.id}', 'targetTable', this.value); renderRelationsList()">${tOpts.replace(`value="${r.targetTable}"`, `value="${r.targetTable}" selected`)}</select>`;
-                const tColSelect = `<select class="border p-2 rounded text-sm w-1/2" onchange="updateRelation('${r.id}', 'targetCol', this.value)">${getCOpts(r.targetTable, r.targetCol)}</select>`;
+                const curOpt = (v, lbl) => v ? `<option value="${escapeHTML(v)}" selected>${escapeHTML(lbl)}</option>` : '<option value="" selected>Choisir...</option>';
+                const tblName = id => state.tables[id] ? state.tables[id].name : id;
+                const sSelect = `<select class="border p-2 rounded text-sm w-1/2" onfocus="fillRelTableSel(this)" onchange="updateRelation('${r.id}', 'sourceTable', this.value); renderRelationsList()">${curOpt(r.sourceTable, tblName(r.sourceTable))}</select>`;
+                const sColSelect = `<select class="border p-2 rounded text-sm w-1/2" onfocus="fillRelColSel(this, '${r.sourceTable}')" onchange="updateRelation('${r.id}', 'sourceCol', this.value)">${curOpt(r.sourceCol, r.sourceCol)}</select>`;
+                const tSelect = `<select class="border p-2 rounded text-sm w-1/2" onfocus="fillRelTableSel(this)" onchange="updateRelation('${r.id}', 'targetTable', this.value); renderRelationsList()">${curOpt(r.targetTable, tblName(r.targetTable))}</select>`;
+                const tColSelect = `<select class="border p-2 rounded text-sm w-1/2" onfocus="fillRelColSel(this, '${r.targetTable}')" onchange="updateRelation('${r.id}', 'targetCol', this.value)">${curOpt(r.targetCol, r.targetCol)}</select>`;
 
                 // Cardinalité déclarée + nature UML + mesure sur les données réelles
                 const m = r.measured;
@@ -5565,7 +5579,7 @@
                 const measuredHtml = m
                     ? `<span class="text-[11px] ${mismatch ? 'text-red-600 font-bold' : 'text-slate-500'}">Mesuré : <strong>${m.suggested}</strong>${mismatch ? ' ⚠️ ≠ déclaré' : ''} — max ${m.tmax} ligne(s) de ${escapeHTML(tN2)} par clé, ${Number(m.sorph).toLocaleString('fr-FR')} ligne(s) de ${escapeHTML(sN)} sans correspondance, ${Number(m.torph).toLocaleString('fr-FR')} orpheline(s) de ${escapeHTML(tN2)}</span>`
                     : '<span class="text-[11px] text-slate-300 italic">cardinalité non mesurée</span>';
-                list.innerHTML += `<div class="px-6 py-3 hover:bg-slate-50 border-b border-slate-50">
+                _rowsHtml += `<div class="px-6 py-3 hover:bg-slate-50 border-b border-slate-50">
                     <div class="flex items-center gap-4">
                         <div class="flex gap-2 w-5/12">${sSelect}${sColSelect}</div>
                         <div class="w-2/12 flex justify-center items-center gap-2"><button onclick="deduceRelationRow('${r.id}', this)" class="text-indigo-600 hover:text-indigo-800 p-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-sm leading-none" title="Déduire la table/colonne cible à partir des données (source déjà choisie)">🪄</button><button onclick="removeRelation('${r.id}')" class="text-red-500 hover:text-red-700 p-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Supprimer ce lien"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>
@@ -5583,6 +5597,7 @@
                     </div>
                 </div>`;
             });
+            list.innerHTML = _rowsHtml;
             lucide.createIcons();
         }
 
@@ -5921,8 +5936,9 @@
             nodes.forEach(n => { const p = svgG.pos[n.id]; n.x = p.x; n.y = p.y; });
             const boxOf = id => { const p = svgG.pos[id], s = svgG.size[id] || [180, 60]; return { cx: p.x, cy: p.y, w: s[0], h: s[1] }; };
             const idset = new Set(nodes.map(n => n.id));
+            const _hierRelIds = new Set(); Object.values(tableHierarchyInfo()).forEach(h => h.relIds.forEach(id2 => _hierRelIds.add(id2)));
             const edges = state.relations.filter(r => r.sourceCol && r.targetCol && idset.has(r.sourceTable) && idset.has(r.targetTable))
-                .map(r => ({ id: r.id, source: r.sourceTable, target: r.targetTable, label: relEdgeLabel(r), hier: Object.values(tableHierarchyInfo()).some(h => h.relIds.has(r.id)) }));
+                .map(r => ({ id: r.id, source: r.sourceTable, target: r.targetTable, label: relEdgeLabel(r), hier: _hierRelIds.has(r.id) }));
 
             // Zones par domaine (rectangles derrière les blocs).
             const byDom = {}; nodes.forEach(n => { const d = n.theme || '(sans domaine)'; (byDom[d] = byDom[d] || []).push(n); });
@@ -6185,6 +6201,7 @@
 
         function renderExtractionColumns() {
             const baseId = el('baseTableSelect').value; const cont = el('extractionColumns'); cont.innerHTML=''; if (!baseId) return;
+            let _cardsHtml = '';
             const targetIdsForVisual = new Set(Object.keys(state.selectedCols).filter(id => state.selectedCols[id] && state.selectedCols[id].length > 0));
             Object.keys(state.filters).forEach(tId => { if (Object.keys(state.filters[tId]).length > 0) targetIdsForVisual.add(tId); });
             Object.keys(state.pivotMode).forEach(tId => { if (state.pivotMode[tId] === 'hierarchy' || state.pivotMode[tId] === 'count' || state.pivotMode[tId] === 'count_values' || state.pivotMode[tId] === 'values') targetIdsForVisual.add(tId); });
@@ -6223,8 +6240,9 @@
                 else if (hasCols || state.pivotMode[tableId] === 'count') { styleClasses = 'table-active border-indigo-300 shadow-md'; headerBg = 'bg-indigo-100 text-indigo-800'; } 
                 else { styleClasses = 'table-inactive border-slate-200 shadow-sm'; headerBg = 'bg-slate-100 text-slate-500'; headerBadge = '<span class="text-[9px] uppercase font-bold text-slate-400">Ignorée</span>'; }
 
-                cont.innerHTML += `<div class="bg-white border rounded-xl overflow-hidden flex flex-col max-h-[42rem] ${styleClasses}"><div class="${headerBg} border-b px-4 py-3 flex items-center gap-2 sticky top-0 z-10 transition-colors"><i data-lucide="${isBase ? 'database' : (isBridge ? 'link' : 'table')}" class="w-5 h-5"></i><h3 class="font-bold text-sm truncate flex-grow">${escapeHTML(table.name)}</h3>${headerBadge}</div>${pivotToggleHtml}${hierarchyHtml}<div class="p-3 overflow-y-auto custom-scrollbar flex-grow bg-slate-50"><div class="bg-white border border-slate-100 rounded-lg p-1 shadow-sm">${checksHtml}</div></div></div>`;
+                _cardsHtml += `<div class="bg-white border rounded-xl overflow-hidden flex flex-col max-h-[42rem] ${styleClasses}"><div class="${headerBg} border-b px-4 py-3 flex items-center gap-2 sticky top-0 z-10 transition-colors"><i data-lucide="${isBase ? 'database' : (isBridge ? 'link' : 'table')}" class="w-5 h-5"></i><h3 class="font-bold text-sm truncate flex-grow">${escapeHTML(table.name)}</h3>${headerBadge}</div>${pivotToggleHtml}${hierarchyHtml}<div class="p-3 overflow-y-auto custom-scrollbar flex-grow bg-slate-50"><div class="bg-white border border-slate-100 rounded-lg p-1 shadow-sm">${checksHtml}</div></div></div>`;
             });
+            cont.innerHTML = _cardsHtml;
             lucide.createIcons(); validateExtractionState();
         }
 
@@ -7339,10 +7357,12 @@
                         headerDiv.innerHTML = `<span class="flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-blue-500"></i> Valeurs</span><div class="flex gap-2"><button type="button" onclick="document.querySelectorAll('.filter-val-checkbox-${ctx}').forEach(cb => cb.checked = true)" class="text-xs bg-white border border-slate-300 py-1 px-2 rounded shadow-sm hover:bg-slate-50">Tout cocher</button><button type="button" onclick="document.querySelectorAll('.filter-val-checkbox-${ctx}').forEach(cb => cb.checked = false)" class="text-xs bg-white border border-slate-300 py-1 px-2 rounded shadow-sm hover:bg-slate-50">Tout décocher</button></div>`;
                         container.appendChild(headerDiv);
                         const gridDiv = document.createElement('div'); gridDiv.className = 'grid grid-cols-2 md:grid-cols-4 gap-2';
+                        let _valsHtml = '';
                         sortedVals.forEach(v => {
                             const displayV = v === '' ? '(Vide)' : escapeHTML(v); const safeVal = escapeHTML(JSON.stringify(v));
-                            gridDiv.innerHTML += `<label class="flex items-center gap-2 py-1.5 px-2 bg-white hover:bg-indigo-50 rounded cursor-pointer border border-slate-200 shadow-sm"><input type="checkbox" data-val="${safeVal}" class="filter-val-checkbox-${ctx} w-4 h-4 text-indigo-600 rounded"><span class="text-xs font-medium text-slate-700 truncate" title="${displayV}">${displayV}</span></label>`;
+                            _valsHtml += `<label class="flex items-center gap-2 py-1.5 px-2 bg-white hover:bg-indigo-50 rounded cursor-pointer border border-slate-200 shadow-sm"><input type="checkbox" data-val="${safeVal}" class="filter-val-checkbox-${ctx} w-4 h-4 text-indigo-600 rounded"><span class="text-xs font-medium text-slate-700 truncate" title="${displayV}">${displayV}</span></label>`;
                         });
+                        gridDiv.innerHTML = _valsHtml;
                         container.appendChild(gridDiv); el(`addFilterBtn_${ctx}`).classList.remove('hidden');
                     }
                 }
@@ -9161,12 +9181,13 @@
             if (alertsList.length === 0) { alertsDiv.innerHTML = `<p class="text-xs text-green-700 italic">Aucune alerte sémantique détectée sur cet échantillon.</p>`; } 
             else { alertsDiv.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${alertsList.join('')}</div>`; }
 
-            const tbody = el('profilingColumnsTableBody'); tbody.innerHTML = '';
+            const tbody = el('profilingColumnsTableBody');
+            let _tbodyHtml = '';
             for (let cName in stats.columns) {
                 const c = stats.columns[cName]; const pct = c.completeness;
                 const fillBarColor = pct > 95 ? 'bg-green-500' : (pct > 75 ? 'bg-amber-500' : 'bg-red-500');
                 
-                tbody.innerHTML += `
+                _tbodyHtml += `
                     <tr class="hover:bg-slate-50 transition-colors">
                         <td class="p-3 font-semibold text-slate-800">${escapeHTML(cName)}</td>
                         <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 border border-indigo-100 text-indigo-700">${c.semanticType}</span></td>
@@ -9182,16 +9203,19 @@
                     </tr>
                 `;
             }
+            tbody.innerHTML = _tbodyHtml;
 
-            const listSelector = el('qualColsList'); listSelector.innerHTML = '';
+            const listSelector = el('qualColsList');
+            let _selHtml = '';
             for (let cName in stats.columns) {
                 const c = stats.columns[cName];
-                listSelector.innerHTML += `
+                _selHtml += `
                     <button onclick="showColumnProfilingDetail('${escapeHTML(cName.replace(/'/g, "\\'"))}')" id="btn-col-select-${cName}" class="w-full text-left p-2.5 rounded-lg text-xs font-bold text-slate-700 hover:bg-indigo-50 border border-transparent transition-colors flex justify-between items-center">
                         <span class="truncate pr-2">${escapeHTML(cName)}</span><span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-indigo-700 uppercase">${c.semanticType}</span>
                     </button>
                 `;
             }
+            listSelector.innerHTML = _selHtml;
 
             const firstCol = Object.keys(stats.columns)[0]; if (firstCol) showColumnProfilingDetail(firstCol);
             lucide.createIcons();
