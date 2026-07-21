@@ -327,13 +327,6 @@
         </div>
 
         <div id="step-3" class="animate-fade-in hidden">
-            <div class="bg-white rounded-xl border border-violet-200 shadow-sm mb-6 overflow-hidden">
-                <button type="button" onclick="nlTogglePanel()" class="w-full flex justify-between items-center px-6 py-4 bg-violet-50/50 hover:bg-violet-50 transition-colors">
-                    <span class="text-lg font-bold text-violet-800 flex items-center gap-2">🪄 Assistant IA — langage naturel → extraction <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-600">optionnel, désactivé par défaut</span></span>
-                    <span id="nlPanelChevron" class="text-violet-400 font-bold">▸</span>
-                </button>
-                <div id="nlPanel" class="hidden px-6 pb-6 pt-2"><div id="nlContent"></div></div>
-            </div>
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                 <h2 class="text-lg font-bold text-indigo-800 mb-4 flex items-center gap-2"><i data-lucide="database-zap" class="w-5 h-5"></i> 1. Table Principale</h2>
                 <select id="baseTableSelect" onchange="handleBaseTableChange()" class="w-full md:w-1/2 border border-slate-300 p-3 rounded-lg bg-slate-50"></select>
@@ -1681,7 +1674,6 @@
                 linkages: state.linkages || [],
                 qualityMinScore: state.qualityMinScore != null ? state.qualityMinScore : null,
                 connectors: (state.connectors || []).map(c => { const c2 = { ...c }; delete c2.targetId; return c2; }),
-                nlCfg: state.nlCfg || null,
             };
         }
 
@@ -1711,7 +1703,6 @@
             if (Array.isArray(saved.linkages)) state.linkages = saved.linkages;
             if (saved.qualityMinScore != null) state.qualityMinScore = saved.qualityMinScore;
             if (Array.isArray(saved.connectors)) state.connectors = saved.connectors;
-            if (saved.nlCfg && typeof saved.nlCfg === 'object') state.nlCfg = { ...nlDefaults(), ...saved.nlCfg };
         }
 
         function normalizeGovernance(g) {
@@ -7074,171 +7065,6 @@
             out.innerHTML = `<table class="w-full text-left text-[11px] border border-slate-200 rounded"><thead class="bg-slate-50 text-[9px] uppercase font-bold text-slate-500"><tr><th class="p-1.5">Table</th><th class="p-1.5 text-right">${new Date(A.at).toLocaleDateString('fr-FR')}</th><th class="p-1.5 text-right">${new Date(B.at).toLocaleDateString('fr-FR')}</th><th class="p-1.5 text-right">Δ</th></tr></thead>
                 <tbody>${tns.map(tn => { const a2 = (A.tables[tn] || {}).score, b2 = (B.tables[tn] || {}).score; const d = a2 != null && b2 != null ? b2 - a2 : null;
                     return `<tr class="border-t border-slate-100"><td class="p-1.5 font-bold">${escapeHTML(tn)}</td><td class="p-1.5 text-right">${a2 == null ? '—' : a2}</td><td class="p-1.5 text-right">${b2 == null ? '—' : b2}</td><td class="p-1.5 text-right font-black ${d == null ? '' : (d >= 0 ? 'text-emerald-600' : 'text-red-600')}">${d == null ? '—' : (d > 0 ? '+' : '') + d}</td></tr>`; }).join('')}</tbody></table>`;
-        }
-
-        // ======================= E13 (V2) : ASSISTANT LANGAGE NATUREL -> EXTRACTION =======================
-        // Garanties (feuille de route) : OPT-IN désactivé par défaut ; clé d'API fournie par
-        // l'utilisateur et stockée UNIQUEMENT sur cette machine ; seul le SCHÉMA est envoyé
-        // (noms de tables / colonnes / relations — JAMAIS une valeur de donnée) ; le SQL généré
-        // n'est JAMAIS exécuté sans validation humaine explicite (et seuls les SELECT sont admis).
-        function nlDefaults() { return { enabled: false, provider: 'anthropic', model: 'claude-opus-4-8', key: '', url: '' }; }
-        function nlCfg() { return state.nlCfg = state.nlCfg || nlDefaults(); }
-        let nlState = { busy: false, pending: null, preview: null, lastQ: '' };
-        function nlTogglePanel() { const p = el('nlPanel'); if (!p) return; p.classList.toggle('hidden'); el('nlPanelChevron').textContent = p.classList.contains('hidden') ? '▸' : '▾'; if (!p.classList.contains('hidden')) renderNlAssistant(); }
-        function nlSet(f, v) { nlCfg()[f] = f === 'enabled' ? !!v : v; persistAppState(); renderNlAssistant(); }
-        // Schéma envoyé au modèle : STRICTEMENT des métadonnées.
-        function nlSchemaText() {
-            const lines = [];
-            Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
-                lines.push(`- Table « ${t.name} » (nom SQL : "${duckTableName(t.id)}") : colonnes ${(t.headers || []).map(h => '"' + h + '"').join(', ')}`);
-            });
-            const nameOf = id => (state.tables[id] || {}).name;
-            (state.relations || []).forEach(r => {
-                const a = nameOf(r.sourceTable), b = nameOf(r.targetTable);
-                if (a && b) lines.push(`- Relation : « ${a} ».${r.sourceCol} -> « ${b} ».${r.targetCol}`);
-            });
-            return lines.join('\n');
-        }
-        function nlSystemPrompt() {
-            return `Tu es un assistant SQL pour DuckDB intégré à un outil de gouvernance de données. On te fournit UNIQUEMENT le schéma (noms de tables et de colonnes), jamais les données. Réponds STRICTEMENT en JSON : {"sql": "...", "explication": "..."}.
-Règles impératives :
-- UNE seule requête SELECT DuckDB (WITH autorisé). Jamais d'écriture (INSERT/UPDATE/DELETE/DROP/CREATE...).
-- Utilise les noms SQL fournis (ex. "t_xxx") entre guillemets doubles, et les noms de colonnes exacts entre guillemets doubles.
-- Toutes les colonnes sont typées VARCHAR : pour les calculs numériques utilise TRY_CAST(REPLACE(col, ',', '.') AS DOUBLE), pour les dates TRY_CAST(col AS DATE).
-- Chaque table possède une colonne technique "__rn" (numéro de ligne) à ne pas afficher.
-- L'explication est en français, brève, et dit ce que fait la requête.`;
-        }
-        async function nlCall(question) {
-            const C = nlCfg();
-            const user = `Schéma disponible :\n${nlSchemaText()}\n\nDemande de l'utilisateur : ${question}`;
-            let resp, txt;
-            if (C.provider === 'anthropic') {
-                resp = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json', 'x-api-key': C.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-                    body: JSON.stringify({ model: C.model || 'claude-opus-4-8', max_tokens: 2048, system: nlSystemPrompt(), messages: [{ role: 'user', content: user }] }),
-                });
-                if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — vérifiez la clé d\'API et le modèle.');
-                const d = await resp.json();
-                if (d.stop_reason === 'refusal') throw new Error('le modèle a décliné la demande.');
-                txt = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-            } else {
-                const url = String(C.url || '').replace(/\/$/, '') + '/chat/completions';
-                resp = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json', 'Authorization': 'Bearer ' + C.key },
-                    body: JSON.stringify({ model: C.model, messages: [{ role: 'system', content: nlSystemPrompt() }, { role: 'user', content: user }] }),
-                });
-                if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — vérifiez l\'URL, la clé et le modèle.');
-                const d = await resp.json();
-                txt = ((d.choices || [])[0] || {}).message ? d.choices[0].message.content : '';
-            }
-            const m = String(txt || '').match(/\{[\s\S]*\}/);
-            if (!m) throw new Error('réponse du modèle illisible (pas de JSON).');
-            const out = JSON.parse(m[0]);
-            if (!out.sql) throw new Error('le modèle n\'a pas produit de requête.');
-            return { sql: String(out.sql), explication: String(out.explication || '') };
-        }
-        // Garde-fou : le SQL (généré OU modifié à la main) doit être une unique requête de LECTURE.
-        function nlSqlIsSafe(sql) {
-            const s2 = String(sql || '').trim().replace(/;\s*$/, '');
-            if (!s2 || s2.includes(';')) return false;
-            if (!/^(SELECT|WITH)\b/i.test(s2)) return false;
-            const noStr = s2.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
-            return !/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|DETACH|COPY|EXPORT|IMPORT|INSTALL|LOAD|PRAGMA|SET|CALL|TRUNCATE|VACUUM|GRANT)\b/i.test(noStr);
-        }
-        async function nlAsk(btn) {
-            const C = nlCfg();
-            if (!C.enabled) return showError('Activez d\'abord l\'assistant (case à cocher) — il est désactivé par défaut.');
-            if (!String(C.key || '').trim()) return showError('Renseignez votre clé d\'API (elle reste sur cette machine).');
-            const q = String((el('nlQuestion') || {}).value || '').trim();
-            if (!q) return showError('Décrivez l\'extraction souhaitée en français.');
-            if (!Object.values(state.tables).some(t => t.status === 'ready')) return showError('Chargez d\'abord au moins une source.');
-            nlState.busy = true; nlState.lastQ = q; nlState.pending = null; nlState.preview = null; renderNlAssistant();
-            if (btn) btn.disabled = true;
-            try {
-                const out = await nlCall(q);
-                nlState.pending = out;
-            } catch (e) { showError('Assistant : ' + e.message); }
-            finally { nlState.busy = false; if (btn) btn.disabled = false; renderNlAssistant(); const ta = el('nlSql'); if (ta && nlState.pending) ta.value = nlState.pending.sql; }
-        }
-        // Exécution APRÈS validation humaine uniquement (bouton dédié), sur le SQL affiché/modifié.
-        async function nlRun(btn) {
-            const sql = String((el('nlSql') || {}).value || '').trim();
-            if (!sql) return showError('Aucune requête à exécuter.');
-            if (!nlSqlIsSafe(sql)) return showError('Requête refusée : seule une requête SELECT unique (lecture seule) peut être exécutée.');
-            if (btn) btn.disabled = true;
-            bgTaskStart('Exécution de la requête validée');
-            try {
-                const { conn } = await getDB();
-                const res = arrowResultToObjects(await conn.query(`SELECT * FROM (\n${sql.replace(/;\s*$/, '')}\n) q LIMIT 200`));
-                nlState.preview = { sql, rows: res, cols: res.length ? Object.keys(res[0]) : [] };
-                bgTaskEnd(`🪄 Aperçu : ${res.length} ligne(s) (limité à 200).`);
-            } catch (e) { bgTaskEnd(); showError('Exécution impossible : ' + e.message); }
-            finally { if (btn) btn.disabled = false; renderNlAssistant(); const ta = el('nlSql'); if (ta) ta.value = sql; }
-        }
-        async function nlMakeTable(btn) {
-            if (!nlState.preview) return;
-            const sql = nlState.preview.sql;
-            if (!nlSqlIsSafe(sql)) return showError('Requête refusée.');
-            const nm = prompt('Nom de la table à créer depuis ce résultat :', 'IA_EXTRACTION');
-            if (!nm || !nm.trim()) return;
-            const name = nm.trim();
-            if (Object.values(state.tables).find(t => t.name === name)) return showError(`Le nom "${name}" est déjà utilisé.`);
-            if (btn) btn.disabled = true;
-            bgTaskStart('Création de la table');
-            try {
-                const { conn } = await getDB();
-                const tId = 'tb_' + generateId();
-                state.tables[tId] = { id: tId, name, file: null, type: 'extraction', size: 0, config: {}, headers: [], columnsMeta: {}, status: 'loading' };
-                state.pivotMode[tId] = 'none';
-                await conn.query(`CREATE TABLE ${sqlIdent(duckTableName(tId))} AS SELECT row_number() OVER () AS __rn, * FROM (\n${sql.replace(/;\s*$/, '')}\n) q`);
-                const t = state.tables[tId]; t.headers = await duckTableHeaders(tId); t.storage = 'table'; t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready';
-                state.governance.lineage[name] = { from: ['Assistant IA (requête validée)'] };
-                renderTables(); updateBaseTableSelect(); populateQualTables(); persistAppState();
-                try { await persistTableData(tId); } catch (e2) {}
-                bgTaskEnd(`🪄 Table « ${name} » créée — visible dans les Sources.`);
-            } catch (e) { bgTaskEnd(); showError('Création impossible : ' + e.message); }
-            finally { if (btn) btn.disabled = false; }
-        }
-        function renderNlAssistant() {
-            const c = el('nlContent'); if (!c) return;
-            const C = nlCfg();
-            let html = `<div class="border border-violet-100 rounded-lg p-3 bg-violet-50/40 text-[11px] text-slate-600 mb-3 leading-relaxed">
-                🔐 <strong>Confidentialité (opt-in)</strong> : cet assistant appelle un modèle d'IA <strong>avec votre propre clé d'API</strong>, uniquement quand vous cliquez sur « Proposer une requête ».
-                Seul le <strong>schéma</strong> est transmis (noms de tables, de colonnes et relations) — <strong>jamais vos données</strong>. La clé reste stockée sur cette machine (jamais dans le bundle de partage).
-                La requête proposée n'est <strong>jamais exécutée automatiquement</strong> : vous la relisez, pouvez la modifier, puis la validez explicitement. Seules les requêtes de lecture (SELECT) sont admises.</div>
-            <label class="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3"><input type="checkbox" ${C.enabled ? 'checked' : ''} onchange="nlSet('enabled', this.checked)" class="w-4 h-4 rounded text-violet-600"> Activer l'assistant (désactivé par défaut)</label>`;
-            if (C.enabled) {
-                html += `<div class="flex items-center gap-2 flex-wrap text-[11px] mb-3">
-                    <select onchange="nlSet('provider', this.value)" class="border border-slate-200 rounded px-2 py-1.5 bg-white"><option value="anthropic" ${C.provider === 'anthropic' ? 'selected' : ''}>Claude (Anthropic)</option><option value="custom" ${C.provider === 'custom' ? 'selected' : ''}>Autre (API compatible OpenAI)</option></select>
-                    ${C.provider === 'custom' ? `<input type="text" value="${escapeHTML(C.url || '')}" onchange="nlSet('url', this.value)" placeholder="https://serveur/v1" class="border border-slate-200 rounded px-2 py-1.5 w-64 bg-white">` : ''}
-                    modèle <input type="text" value="${escapeHTML(C.model || '')}" onchange="nlSet('model', this.value)" placeholder="${C.provider === 'anthropic' ? 'claude-opus-4-8' : 'nom du modèle'}" class="border border-slate-200 rounded px-2 py-1.5 w-44 bg-white">
-                    clé d'API <input type="password" value="${escapeHTML(C.key || '')}" onchange="nlSet('key', this.value)" placeholder="reste locale" class="border border-violet-200 rounded px-2 py-1.5 w-56 bg-white">
-                </div>
-                <div class="flex items-start gap-2 mb-3">
-                    <textarea id="nlQuestion" rows="2" placeholder="Ex. : le chiffre d'affaires par département, trié du plus grand au plus petit" class="flex-grow border border-violet-300 rounded-lg px-3 py-2 text-sm">${escapeHTML(nlState.lastQ)}</textarea>
-                    <button onclick="nlAsk(this)" class="bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shrink-0">${nlState.busy ? '⏳…' : '🪄 Proposer une requête'}</button>
-                </div>`;
-                if (nlState.pending) {
-                    html += `<div class="border border-violet-200 rounded-lg p-3 bg-white mb-3">
-                        <div class="text-[11px] text-slate-600 mb-2">💬 ${escapeHTML(nlState.pending.explication)}</div>
-                        <textarea id="nlSql" rows="6" spellcheck="false" class="w-full border border-slate-300 rounded-lg p-2.5 font-mono text-[11px] bg-slate-50">${escapeHTML(nlState.pending.sql)}</textarea>
-                        <div class="flex items-center gap-2 mt-2">
-                            <button onclick="nlRun(this)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg">✔ Valider et exécuter (aperçu 200 lignes)</button>
-                            <span class="text-[10px] text-slate-400">Relisez / modifiez la requête ci-dessus avant d'exécuter — rien ne part ni ne s'exécute sans ce clic.</span>
-                        </div></div>`;
-                }
-                if (nlState.preview) {
-                    const P = nlState.preview;
-                    html += `<div class="border border-emerald-200 rounded-lg p-3 bg-emerald-50/30">
-                        <div class="flex items-center gap-2 mb-2"><span class="text-xs font-bold text-emerald-700">Aperçu (${P.rows.length} ligne(s), max 200)</span>
-                        <button onclick="nlMakeTable(this)" class="ml-auto text-[11px] bg-white border border-emerald-300 text-emerald-700 font-bold px-3 py-1 rounded">➕ Créer une table depuis ce résultat</button></div>
-                        <div class="overflow-auto max-h-[300px]"><table class="w-full text-left text-[11px] bg-white"><thead class="bg-slate-50 font-bold sticky top-0"><tr>${P.cols.map(h => `<th class="p-1.5">${escapeHTML(h)}</th>`).join('')}</tr></thead>
-                        <tbody>${P.rows.slice(0, 200).map(r => `<tr class="border-t border-slate-100">${P.cols.map(h => `<td class="p-1.5">${escapeHTML(String(r[h] == null ? '' : r[h]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
-                }
-            }
-            c.innerHTML = html;
         }
 
         // ======================= E11 (V2) : CONNECTEURS API / JSON / PARQUET / GOOGLE SHEETS =======================
