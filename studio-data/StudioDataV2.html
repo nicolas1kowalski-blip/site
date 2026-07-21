@@ -2032,6 +2032,7 @@
             else if (govState.tab === 'usecases') c.innerHTML = renderGovUseCases();
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
+            else if (govState.tab === 'catalog') c.innerHTML = renderGovCatalog();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
             else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); fillBackupsList(); }
             else if (govState.tab === 'lineage') { const _am = govState.lineageView === 'attr'; const _bos = state.governance.businessObjects || [];
@@ -4492,6 +4493,7 @@
             // MÊME barre que ceux des autres phases, et pilotent govState.tab au lieu d'un numéro d'écran.
             { id: 'gov', badge: '④', label: 'Gouvernance', desc: 'Objets, dictionnaire, lineage', color: 'emerald', step: 9,
               tabs: [
+                  { g: 'catalog', icon: '🗂️', label: 'Catalogue' },
                   { g: 'dictionary', icon: '📚', label: 'Dictionnaire' },
                   { g: 'objects', icon: '🏛️', label: 'Objets métier' },
                   { g: 'model', icon: '🧬', label: 'Modèle objet' },
@@ -6007,6 +6009,103 @@
                 await persistTableData(tId); persistAppState();
                 return tId;
             } catch (err) { state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null; }
+        }
+
+        // ======================= E10 (V2) : CATALOGUE DE DONNÉES RECHERCHABLE =======================
+        // Index plein-texte 100 % local, construit sur les MÉTADONNÉES uniquement (noms, définitions,
+        // propriétaires, statuts) — jamais sur les valeurs des données. Recherche insensible aux accents.
+        let catState = { q: '', type: '', status: '', level: '', sel: null };
+        let catRes = [];
+        const CAT_TYPES = { source: ['📥', 'Source'], column: ['🧬', 'Attribut'], bo: ['🏛️', 'Objet métier'], term: ['📖', 'Terme'], perimeter: ['🧩', 'Périmètre'], usecase: ['🎯', 'Cas d\'usage'], asset: ['🖥️', 'Appli / processus'], rule: ['📏', 'Règle qualité'], recipe: ['🧪', 'Recette'], dashboard: ['📋', 'Tableau de bord'], linkage: ['🤝', 'Rapprochement'] };
+        function catNorm(s2) { return String(s2 == null ? '' : s2).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+        function catBuildIndex() {
+            const g = state.governance; const ix = [];
+            const push = (type, id, title, sub, text, meta, extra) => ix.push(Object.assign({ type, id, title: String(title || ''), sub: String(sub || ''), blob: catNorm([title, sub, text].filter(Boolean).join(' ')), meta: meta || {} }, extra || {}));
+            Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
+                const d = g.dictionary[t.name] || {};
+                push('source', t.name, t.name, d.description || '', (t.headers || []).join(' ') + ' ' + (d.owner || '') + ' ' + (d.sourceSystem || '') + ' ' + (t.type || ''), { 'Type': t.type || '—', 'Colonnes': String((t.headers || []).length), 'Propriétaire': d.owner || '—', 'Système source': d.sourceSystem || '—' }, { status: d.status || '', statusAt: d.statusAt, statusBy: d.statusBy });
+                (t.headers || []).forEach(h => {
+                    const lvl = pvLevelOf(t.name, h);
+                    push('column', t.name, h, 'dans ' + t.name, t.name, { 'Table': t.name, 'Sensibilité': (PV_LEVELS[lvl] || ['', lvl]).join(' ') }, { level: lvl });
+                });
+            });
+            (g.businessObjects || []).forEach(bo => push('bo', bo.id, bo.name, bo.definition || '', (bo.elements || []).map(e2 => e2.name).join(' ') + ' ' + (bo.globalOwner || ''), { 'Propriétaire': bo.globalOwner || '—', 'Attributs': String((bo.elements || []).length), 'Définition': bo.definition || '—' }, { status: bo.status || '', statusAt: bo.statusAt, statusBy: bo.statusBy }));
+            (g.glossary || []).forEach(t2 => push('term', t2.id, t2.term, t2.definition || '', (t2.links || []).map(l => l.table + ' ' + l.col).join(' '), { 'Définition': t2.definition || '—', 'Colonnes liées': String((t2.links || []).length) }));
+            (g.perimeters || []).forEach(p2 => push('perimeter', p2.id, p2.name, p2.description || '', (p2.tables || []).join(' '), { 'Description': p2.description || '—', 'Tables': (p2.tables || []).join(', ') || '—' }));
+            (g.useCases || []).forEach(uc => push('usecase', uc.id, uc.name, uc.description || '', (uc.owner || '') + ' ' + (uc.tables || []).join(' '), { 'Responsable': uc.owner || '—', 'Criticité': uc.criticality || '—', 'Tables': (uc.tables || []).join(', ') || '—' }));
+            (g.assets || []).forEach(a => push('asset', a.id, a.name, a.kind === 'app' ? 'Application' : 'Processus', a.description || '', { 'Nature': a.kind === 'app' ? 'Application' : 'Processus', 'Criticité': a.criticality || '—' }));
+            (g.qualityRules || []).forEach(r => push('rule', r.id, r.name, (r.table || '') + (r.col ? ' · ' + r.col : ''), (QR_TYPES[r.type] || r.type) + ' ' + (r.crit || ''), { 'Table': r.table || '—', 'Colonne': r.col || '—', 'Contrôle': QR_TYPES[r.type] || r.type, 'Criticité': r.crit || '—', 'Active': r.enabled === false ? 'non' : 'oui' }));
+            (state.recipes || []).forEach(r => push('recipe', r.id, r.name, (r.src || '?') + ' → ' + (r.out || '?'), (r.steps || []).map(s2 => s2.kind).join(' '), { 'Source': r.src || '—', 'Table produite': r.out || '—', 'Étapes': String((r.steps || []).length) }));
+            (state.dashboards || []).forEach(d2 => push('dashboard', d2.id, d2.name, (d2.tiles || []).length + ' tuile(s)', (d2.tiles || []).map(t2 => t2.title).join(' '), { 'Tuiles': (d2.tiles || []).map(t2 => t2.title).filter(Boolean).join(', ') || '—' }));
+            (state.linkages || []).forEach(L => push('linkage', L.id, L.name, (L.a || '?') + ' ↔ ' + (L.b || '?'), '', { 'Source A': L.a || '—', 'Source B': L.b || '—', 'Décisions humaines': String(Object.keys(L.decisions || {}).length) }));
+            return ix;
+        }
+        function catSearch(ix) {
+            const toks = catNorm(catState.q).split(/\s+/).filter(Boolean);
+            const res = ix.filter(e2 => (!catState.type || e2.type === catState.type)
+                && (!catState.status || (e2.status || '') === catState.status)
+                && (!catState.level || (e2.level || '') === catState.level)
+                && toks.every(tk => e2.blob.includes(tk)));
+            if (toks.length) {
+                const sc = e2 => { const t2 = catNorm(e2.title); return toks.reduce((a2, tk) => a2 + (t2 === tk ? 30 : (t2.startsWith(tk) ? 20 : (t2.includes(tk) ? 10 : 1))), 0); };
+                res.sort((a2, b2) => sc(b2) - sc(a2) || a2.title.localeCompare(b2.title));
+            } else res.sort((a2, b2) => a2.title.localeCompare(b2.title));
+            return res;
+        }
+        function catSet(f, v) {
+            catState[f] = v; catState.sel = null; renderGovernance();
+            if (f === 'q') { const inp = el('catQ'); if (inp) { inp.focus(); const n2 = inp.value.length; inp.setSelectionRange(n2, n2); } }
+        }
+        function catSel(i) { catState.sel = i; renderGovernance(); }
+        function catOpenIdx(i) {
+            const e2 = catRes[i]; if (!e2) return;
+            if (e2.type === 'source') switchTab(1);
+            else if (e2.type === 'column') { govState.dictTable = e2.id; openGovTab('dictionary'); }
+            else if (e2.type === 'bo') openBoFiche(e2.id);
+            else if (e2.type === 'term') openGovTab('glossary');
+            else if (e2.type === 'perimeter') openGovTab('perimeters');
+            else if (e2.type === 'usecase') openGovTab('usecases');
+            else if (e2.type === 'asset') openGovTab('assets');
+            else if (e2.type === 'rule') switchTab(12);
+            else if (e2.type === 'recipe') switchTab(13);
+            else if (e2.type === 'dashboard') switchTab(14);
+            else if (e2.type === 'linkage') switchTab(15);
+        }
+        function renderGovCatalog() {
+            const ix = catBuildIndex();
+            const res = catRes = catSearch(ix);
+            const statuses = Array.from(new Set(ix.map(e2 => e2.status).filter(Boolean)));
+            const levels = Array.from(new Set(ix.map(e2 => e2.level).filter(Boolean)));
+            const counts = {}; ix.forEach(e2 => { counts[e2.type] = (counts[e2.type] || 0) + 1; });
+            let html = `<div class="flex items-center gap-3 mb-4 flex-wrap"><h2 class="text-lg font-bold text-slate-800">🗂️ Catalogue de données</h2>
+                <span class="text-xs text-slate-400">${ix.length} actif(s) référencé(s) — index 100 % local, métadonnées uniquement (jamais les valeurs)</span></div>
+            <div class="flex items-center gap-2 mb-3 flex-wrap">
+                <input id="catQ" type="text" value="${escapeHTML(catState.q)}" oninput="catSet('q', this.value)" placeholder="🔎 Rechercher un actif (table, attribut, objet métier, terme, règle…)" class="border border-emerald-300 rounded-lg px-3 py-2 text-sm w-full max-w-md bg-white">
+                ${statuses.length ? `<select onchange="catSet('status', this.value)" class="border border-slate-200 rounded px-2 py-1.5 text-xs bg-white"><option value="">Statut : tous</option>${statuses.map(s2 => `<option ${catState.status === s2 ? 'selected' : ''}>${escapeHTML(s2)}</option>`).join('')}</select>` : ''}
+                ${levels.length ? `<select onchange="catSet('level', this.value)" class="border border-slate-200 rounded px-2 py-1.5 text-xs bg-white"><option value="">Sensibilité : toutes</option>${levels.map(s2 => `<option value="${escapeHTML(s2)}" ${catState.level === s2 ? 'selected' : ''}>${escapeHTML((PV_LEVELS[s2] || ['', s2]).join(' '))}</option>`).join('')}</select>` : ''}</div>
+            <div class="flex gap-1.5 mb-4 flex-wrap">
+                <button onclick="catSet('type','')" class="text-[11px] px-2.5 py-1 rounded-full font-bold ${!catState.type ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}">Tous (${ix.length})</button>
+                ${Object.keys(CAT_TYPES).filter(k => counts[k]).map(k => `<button onclick="catSet('type','${k}')" class="text-[11px] px-2.5 py-1 rounded-full font-bold ${catState.type === k ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}">${CAT_TYPES[k][0]} ${CAT_TYPES[k][1]} (${counts[k]})</button>`).join('')}</div>`;
+            const selE = catState.sel != null ? res[catState.sel] : null;
+            html += `<div class="grid grid-cols-1 ${selE ? 'lg:grid-cols-[1fr_380px]' : ''} gap-4"><div id="catList">`;
+            if (!res.length) html += '<p class="text-sm text-slate-400 italic py-10 text-center">Aucun actif ne correspond à la recherche.</p>';
+            html += res.slice(0, 200).map((e2, i) => `<button onclick="catSel(${i})" class="w-full text-left flex items-center gap-2.5 border ${catState.sel === i ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-100 bg-white hover:bg-slate-50'} rounded-lg px-3 py-2 mb-1.5">
+                <span class="text-base shrink-0">${CAT_TYPES[e2.type][0]}</span>
+                <span class="min-w-0"><span class="block text-sm font-bold text-slate-700 truncate">${escapeHTML(e2.title)}</span><span class="block text-[11px] text-slate-400 truncate">${CAT_TYPES[e2.type][1]}${e2.sub ? ' · ' + escapeHTML(e2.sub) : ''}</span></span>
+                ${e2.level ? `<span class="ml-auto text-[10px] shrink-0" title="Sensibilité">${(PV_LEVELS[e2.level] || [''])[0]}</span>` : ''}
+                ${e2.status ? `<span class="${e2.level ? '' : 'ml-auto'} shrink-0">${wfBadge(e2)}</span>` : ''}</button>`).join('');
+            if (res.length > 200) html += `<p class="text-[11px] text-slate-400 italic mt-1">… ${res.length - 200} autre(s) résultat(s) — précisez la recherche.</p>`;
+            html += '</div>';
+            if (selE) {
+                html += `<div class="border border-emerald-200 rounded-xl bg-white p-4 h-fit lg:sticky lg:top-4">
+                    <div class="flex items-center gap-2 mb-1"><span class="text-xl">${CAT_TYPES[selE.type][0]}</span><span class="font-bold text-slate-800 text-sm break-all">${escapeHTML(selE.title)}</span><button onclick="catSel(null)" class="ml-auto text-slate-300 hover:text-slate-500 font-bold shrink-0">✕</button></div>
+                    <p class="text-[11px] text-slate-400 mb-3">${CAT_TYPES[selE.type][1]}${selE.sub ? ' · ' + escapeHTML(selE.sub) : ''}</p>
+                    <table class="w-full text-xs mb-3">${Object.entries(selE.meta).map(([k2, v2]) => `<tr><td class="py-1 pr-3 font-bold text-slate-500 align-top whitespace-nowrap">${escapeHTML(k2)}</td><td class="py-1 text-slate-700 break-words">${escapeHTML(String(v2))}</td></tr>`).join('')}</table>
+                    ${selE.status ? `<p class="text-xs mb-3 flex items-center gap-2"><span class="font-bold text-slate-500">Statut</span> ${wfBadge(selE)}</p>` : ''}
+                    <button onclick="catOpenIdx(${catState.sel})" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-lg">↗ Ouvrir dans l\'écran dédié</button></div>`;
+            }
+            html += '</div>';
+            return html;
         }
 
         // ======================= E5 (V2) : RAPPROCHEMENT INTER-SOURCES (RECORD LINKAGE) =======================
