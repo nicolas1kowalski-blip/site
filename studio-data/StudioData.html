@@ -120,6 +120,8 @@
         .table-active { opacity: 1; filter: grayscale(0%); transition: all 0.3s; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border-color: #818cf8 !important; }
         .table-bridge { opacity: 0.9; border-style: dashed; border-color: #60a5fa !important; }
         .sticky-header th { position: sticky; top: 0; background-color: #f8fafc; z-index: 10; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        #lineageFsWrap:fullscreen { background: #fff; padding: 1rem; overflow: auto; }
+        #lineageFsWrap:fullscreen #lineageGraphWrap { height: calc(100vh - 90px) !important; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
@@ -1919,7 +1921,7 @@
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
             else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); fillBackupsList(); }
-            else if (govState.tab === 'lineage') { c.innerHTML = '<div class="flex justify-end items-center gap-3 mb-2 flex-wrap"><label class="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState.lineageApps !== false ? 'checked' : '') + ' onchange="govState.lineageApps=this.checked; renderLineageGraph()"> 🖥 Applications</label><label class="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState.lineageProcs !== false ? 'checked' : '') + ' onchange="govState.lineageProcs=this.checked; renderLineageGraph()"> ⚙️ Processus</label>' + graphToolbarHtml('lineage') + '<button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l\'image</button></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Ambre : cas d\'usage métier · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : utilisation métier · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong>.</p>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
+            else if (govState.tab === 'lineage') { c.innerHTML = '<div id="lineageFsWrap"><div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'ucs,🎯 Cas d\'usage,lineageUcs', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Ambre : cas d\'usage métier · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : utilisation métier · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
         }
 
@@ -3657,7 +3659,8 @@
         }
         function _renderLineageImpl(wrap) {
             const nodes = [], edges = [], seen = new Set();
-            Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
+            const showSrcs = govState.lineageSrcs !== false, showBos = govState.lineageBos !== false, showUcs = govState.lineageUcs !== false;
+            if (showSrcs) Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
                 const colors = t.type === 'extraction' ? ['#f3e8ff', '#7c3aed'] : (t.type === 'api' ? ['#cffafe', '#0891b2'] : ['#dbeafe', '#2563eb']);
                 nodes.push({ id: 'tbl:' + t.name, type: 'studio-rich-node', title: t.name, content: (state.governance.dictionary[t.name] || {}).sourceSystem || '', fill: colors[0], stroke: colors[1] });
                 seen.add(t.name);
@@ -3694,12 +3697,18 @@
             (state.governance.useCases || []).forEach(uc => (uc.assetIds || []).forEach(id => { const a = assetById(id); if (!assetOk(a)) return; usedAssets.add(id); edges.push({ id: 'ucas:' + uc.id + '>' + id, source: 'uc:' + uc.id, target: 'as:' + id, label: 'via', style: { stroke: '#94a3b8', lineDash: [4, 3], endArrow: { path: '', fill: '#94a3b8' } } }); }));
             assets.forEach(a => { if (!usedAssets.has(a.id)) return; const isApp = a.kind === 'app';
                 nodes.push({ id: 'as:' + a.id, type: 'studio-rich-node', title: (isApp ? '🖥 ' : '⚙️ ') + a.name, content: a.criticality || '', fill: isApp ? '#e2e8f0' : '#ffedd5', stroke: isApp ? '#334155' : '#ea580c' }); });
-            state.governance.useCases.forEach(uc => {
+            if (showUcs) state.governance.useCases.forEach(uc => {
                 nodes.push({ id: 'uc:' + uc.id, type: 'studio-rich-node', title: '🎯 ' + uc.name, content: uc.criticality || '', fill: '#fef3c7', stroke: '#d97706' });
                 const linkedTables = new Set([...(uc.tables || []), ...(uc.columns || []).map(c => c.table)]);
                 linkedTables.forEach(tn => { if (seen.has(tn)) edges.push({ id: 'use:' + uc.id + ':' + tn, source: 'tbl:' + tn, target: 'uc:' + uc.id, label: 'utilisé par', style: { stroke: '#d97706', endArrow: { path: '', fill: '#d97706' } } }); });
             });
-            state.governance.businessObjects.forEach(bo => {
+            if (showBos) state.governance.businessObjects.forEach(bo => {
+                // Vision fine : les attributs de l'objet avec leur colonne source (mode 🔬).
+                if (govState.lineageBoDetail && (bo.elements || []).length) {
+                    const rows = (bo.elements || []).slice(0, 14).map(e2 => { const m = (e2.mappings || [])[0]; return e2.name + (m ? '  ←  ' + m.table + '.' + m.col : ''); });
+                    if ((bo.elements || []).length > 14) rows.push('… +' + ((bo.elements || []).length - 14) + ' attribut(s)');
+                    nodes.push({ id: 'bo:' + bo.id, type: 'studio-uml-node', title: '🏛️ ' + bo.name, rows, headFill: '#dcfce7', titleFill: '#14532d', stroke: '#16a34a' });
+                } else
                 nodes.push({ id: 'bo:' + bo.id, type: 'studio-rich-node', title: '🏛️ ' + bo.name, content: bo.globalOwner ? 'Prop. : ' + bo.globalOwner : '⚠️ sans propriétaire', fill: '#dcfce7', stroke: '#16a34a' });
                 const declared = new Set();
                 // Circulation de la donnée selon le rôle : maître/contributeur alimentent l'objet,
@@ -3720,16 +3729,51 @@
                 const linkedTables = new Set(); (bo.elements || []).forEach(e2 => (e2.mappings || []).forEach(m => linkedTables.add(m.table)));
                 linkedTables.forEach(tn => { if (seen.has(tn) && !declared.has(tn) && !ctxMasters.has(tn)) edges.push({ id: 'bo:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: 'décrit', style: { stroke: '#86efac', lineDash: [2, 3], endArrow: { path: '', fill: '#86efac' } } }); });
             });
+            // Les liens vers des nœuds masqués par les filtres sont écartés.
+            const nodeIds = new Set(nodes.map(n => n.id));
+            const shownEdges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
             if (lineageGraph) { lineageGraph.destroy(); lineageGraph = null; }
             lineageGraph = createSvgGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 18, ranksep: 80 }, {
                 width: wrap.clientWidth || 900, height: wrap.clientHeight || 550,
                 defaultEdge: { type: 'cubic-horizontal', labelCfg: { autoRotate: true, style: { fill: '#64748b', fontSize: 9, background: { fill: '#fff', stroke: '#e2e8f0', padding: [2, 4, 2, 4], radius: 3 } } } },
             });
             pinNodeOnDrag(lineageGraph);
-            lineageGraph.data({ nodes, edges });
+            lineageGraph.data({ nodes, edges: shownEdges });
             lineageGraph.render();
             lineageGraph.fitView(20);
+            // Chaîne de bout en bout au clic + recherche « aller à ».
+            window._linData = { nodes, edges: shownEdges };
+            window._linFocus = null;
+            lineageGraph.on('node:click', ev => { const id = ev.item && ev.item.getID ? ev.item.getID() : null; if (id) lineageChainFocus(id); });
+            const dl = el('linGotoList'); if (dl) dl.innerHTML = nodes.map(n => `<option value="${escapeHTML(n.title)}">`).join('');
         }
+        // Mise en évidence de la chaîne COMPLÈTE (amont + aval) d'un nœud du lineage.
+        function lineageChainFocus(id) {
+            const hint = el('lineageHint');
+            if (!lineageGraph || !window._linData) return;
+            if (window._linFocus === id) { window._linFocus = null; lineageGraph.dimExcept(null); if (hint) hint.classList.add('hidden'); return; }
+            window._linFocus = id;
+            const up = {}, down = {};
+            window._linData.edges.forEach(e => { (down[e.source] = down[e.source] || []).push(e.target); (up[e.target] = up[e.target] || []).push(e.source); });
+            const keep = new Set([id]);
+            const bfs = adj => { const q = [id]; const vis = new Set([id]); while (q.length) { const u = q.shift(); (adj[u] || []).forEach(v => { if (!vis.has(v)) { vis.add(v); keep.add(v); q.push(v); } }); } };
+            bfs(up); bfs(down);
+            lineageGraph.dimExcept(keep);
+            const n0 = window._linData.nodes.find(n => n.id === id);
+            if (hint) { hint.classList.remove('hidden'); hint.innerHTML = `🔗 Chaîne de <strong>${escapeHTML(n0 ? n0.title : id)}</strong> : ${keep.size} élément(s) de bout en bout (amont + aval). <button onclick="lineageChainFocus('${escapeHTML(id)}')" class="ml-2 text-[10px] bg-white border border-emerald-300 rounded px-1.5 py-0.5 font-bold">effacer</button>`; }
+        }
+        function lineageGoto(title) {
+            if (!window._linData || !lineageGraph) return;
+            const n0 = window._linData.nodes.find(n => n.title === title); if (!n0) return;
+            lineageGraph.centerOn(n0.id);
+            lineageChainFocus(n0.id);
+        }
+        function lineageFullscreen() {
+            const w = el('lineageFsWrap'); if (!w) return;
+            if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
+            else { w.requestFullscreen().then(() => setTimeout(() => reflowGraph('lineage'), 200)).catch(e => showError('Plein écran refusé : ' + e.message)); }
+        }
+        document.addEventListener('fullscreenchange', () => { if (el('lineageFsWrap')) setTimeout(() => reflowGraph('lineage'), 150); });
 
         // ---- Historique qualité ----
         function recordQualityHistory(stats, col) {
@@ -6155,6 +6199,11 @@
                     S.k = Math.max(0.1, Math.min(1.4, Math.min((W - 2 * M) / Math.max(1, x2 - x1), (H - 2 * M) / Math.max(1, y2 - y1))));
                     S.tx = (W - (x2 - x1) * S.k) / 2 - x1 * S.k; S.ty = (H - (y2 - y1) * S.k) / 2 - y1 * S.k; apply(); },
                 zoom(f) { const W = S.c.clientWidth || 800, H = S.c.clientHeight || 450; const nk = Math.max(0.1, Math.min(3, S.k * f)); S.tx = W / 2 - (W / 2 - S.tx) * (nk / S.k); S.ty = H / 2 - (H / 2 - S.ty) * (nk / S.k); S.k = nk; apply(); },
+                centerOn(id) { const p2 = S.pos[id]; if (!p2) return; const W = S.c.clientWidth || 800, H = S.c.clientHeight || 450; if (S.k < 0.6) S.k = 0.9; S.tx = W / 2 - p2.x * S.k; S.ty = H / 2 - p2.y * S.k; apply(); },
+                dimExcept(keep) {
+                    S.c.querySelectorAll('.usvgn').forEach(g => g.style.opacity = (!keep || keep.has(g.getAttribute('data-id'))) ? '' : '0.12');
+                    S.c.querySelectorAll('.usvge').forEach(g => { const s2 = g.getAttribute('data-s'), t2 = g.getAttribute('data-t'); g.style.opacity = (!keep || (keep.has(s2) && keep.has(t2))) ? '' : '0.08'; });
+                },
                 getWidth() { return S.c.clientWidth || 800; }, getHeight() { return S.c.clientHeight || 450; },
                 changeSize() { }, get(k2) { return k2 === 'destroyed' ? S.destroyed : undefined; },
                 getNodes() { return S.nodes.map(wrap); }, getEdges() { return S.edges.map(wrap); },
