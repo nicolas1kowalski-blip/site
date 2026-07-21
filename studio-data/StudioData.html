@@ -437,7 +437,12 @@
                             <select id="covDim2Table" onchange="covDim2TableChanged()" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
                             <select id="covDim2Col" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
                         </div>
-                        <p class="text-[10px] text-slate-400 mt-1.5">Ex : axe = site, dimension 2 = nature → couverture par site <em>et</em> par nature.</p>
+                        <label class="text-[10px] uppercase font-bold text-slate-400 block mt-3 mb-1">Dimension 3 (optionnelle — un graphique par valeur)</label>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <select id="covDim3Table" onchange="covDim3TableChanged()" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
+                            <select id="covDim3Col" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1.5">Ex : axe = 📅 année, dim 2 = nature de document, dim 3 = DAS → un histogramme année × nature <em>par DAS</em>.</p>
                     </div>
                     <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
                         <label class="text-xs font-bold text-slate-600 block mb-1.5">3️⃣ Éléments liés (table N)</label>
@@ -4680,6 +4685,8 @@
             rs.innerHTML = (nb.length ? '' : '<option value="">— aucune table liée dans le modèle —</option>') + nb.map(id => `<option value="${id}" ${id === curR ? 'selected' : ''}>${escapeHTML(state.tables[id].name)}</option>`).join('');
             const d2 = el('covDim2Table');
             if (d2) { const cur2 = d2.value; d2.innerHTML = `<option value="">— aucune —</option><option value="${bId}" ${cur2 === bId ? 'selected' : ''}>${escapeHTML(state.tables[bId].name)}</option>` + nb.map(id => `<option value="${id}" ${id === cur2 ? 'selected' : ''}>${escapeHTML(state.tables[id].name)}</option>`).join(''); covDim2TableChanged(); }
+            const d3 = el('covDim3Table');
+            if (d3) { const cur3 = d3.value; d3.innerHTML = `<option value="">— aucune —</option><option value="${bId}" ${cur3 === bId ? 'selected' : ''}>${escapeHTML(state.tables[bId].name)}</option>` + nb.map(id => `<option value="${id}" ${id === cur3 ? 'selected' : ''}>${escapeHTML(state.tables[id].name)}</option>`).join(''); covDim3TableChanged(); }
             covDimTableChanged(); covRenderFilters('base'); covRenderFilters('rel');
         }
         function covDimColOptions(tId, cur) {
@@ -4697,6 +4704,10 @@
         }
         function covDim2TableChanged() {
             const tId = el('covDim2Table') ? el('covDim2Table').value : ''; const dc = el('covDim2Col'); if (!dc) return;
+            dc.innerHTML = tId ? covDimColOptions(tId, dc.value) : '<option value="">—</option>';
+        }
+        function covDim3TableChanged() {
+            const tId = el('covDim3Table') ? el('covDim3Table').value : ''; const dc = el('covDim3Col'); if (!dc) return;
             dc.innerHTML = tId ? covDimColOptions(tId, dc.value) : '<option value="">—</option>';
         }
         function covRelChanged() { covFilters.rel = []; covRenderFilters('rel'); }
@@ -4745,6 +4756,8 @@
             const bId = el('covBase').value, dT = el('covDimTable').value, dC = el('covDimCol').value, rId = el('covRel').value;
             const d2T = el('covDim2Table') ? el('covDim2Table').value : '', d2C = el('covDim2Col') ? el('covDim2Col').value : '';
             const dim2On = !!(d2T && d2C);
+            const d3T = el('covDim3Table') ? el('covDim3Table').value : '', d3C = el('covDim3Col') ? el('covDim3Col').value : '';
+            const dim3On = !!(d3T && d3C);
             if (!bId) return showError('Choisissez la table de base (population).');
             if (!dT || !dC) return showError('Choisissez la dimension d\'analyse.');
             if (!rId) return showError('Choisissez la table des éléments liés (elle doit être reliée à la base dans le Modèle de données).');
@@ -4754,6 +4767,8 @@
             if (dT !== bId) { rd = covRelBetween(bId, dT); if (!rd) return showError(`Aucun lien du modèle entre "${state.tables[bId].name}" et "${state.tables[dT].name}".`); }
             let rd2 = null;
             if (dim2On && d2T !== bId && d2T !== dT) { rd2 = covRelBetween(bId, d2T); if (!rd2) return showError(`Aucun lien du modèle entre "${state.tables[bId].name}" et "${state.tables[d2T].name}" (dimension 2).`); }
+            let rd3 = null;
+            if (dim3On && d3T !== bId && d3T !== dT && !(dim2On && d3T === d2T)) { rd3 = covRelBetween(bId, d3T); if (!rd3) return showError(`Aucun lien du modèle entre "${state.tables[bId].name}" et "${state.tables[d3T].name}" (dimension 3).`); }
             if (btn) btn.disabled = true;
             bgTaskStart('Analyse de couverture en cours');
             try {
@@ -4786,14 +4801,22 @@
                     else if (d2T === dT && rd) dim2Sel = dimExpr('d', d2C);
                     else { joins.push(dimJoin(rd2, 'd2')); dim2Sel = dimExpr('d2', d2C); }
                 }
+                let dim3Sel = null;
+                if (dim3On) {
+                    if (d3T === bId) dim3Sel = dimExpr('b', d3C);
+                    else if (d3T === dT && rd) dim3Sel = dimExpr('d', d3C);
+                    else if (dim2On && d3T === d2T && rd2) dim3Sel = dimExpr('d2', d3C);
+                    else { joins.push(dimJoin(rd3, 'd3')); dim3Sel = dimExpr('d3', d3C); }
+                }
                 const dJoin = joins.join('\n');
                 const withSql = `WITH b AS (SELECT * FROM ${Tb}${fb ? ' WHERE ' + fb : ''}),
                     e AS (SELECT DISTINCT ${norm(sqlIdent(rKey))} AS k FROM ${Tr} WHERE ${norm(sqlIdent(rKey))} IS NOT NULL${fr ? ' AND (' + fr + ')' : ''})`;
                 const hasCond = `${norm('b.' + sqlIdent(bKey))} IN (SELECT k FROM e)`;
+                const grpCols = ['1', dim2Sel ? '2' : null, dim3Sel ? (dim2Sel ? '3' : '2') : null].filter(Boolean).join(', ');
                 const res = await conn.query(`${withSql}
-                    SELECT ${dimSel} AS dim${dim2Sel ? `, ${dim2Sel} AS dim2` : ''}, COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${hasCond} THEN 1 ELSE 0 END)::BIGINT AS avec
-                    FROM b ${dJoin} GROUP BY ${dim2Sel ? '1, 2' : '1'} ORDER BY ${String(dC).startsWith('__annee__|') ? '1 ASC' : 'total DESC'} LIMIT ${dim2Sel ? 400 : 40}`);
-                const rows = arrowResultToObjects(res).map(r => ({ dim: String(r.dim), dim2: dim2Sel ? String(r.dim2) : null, total: Number(r.total), avec: Number(r.avec), sans: Number(r.total) - Number(r.avec) }));
+                    SELECT ${dimSel} AS dim${dim2Sel ? `, ${dim2Sel} AS dim2` : ''}${dim3Sel ? `, ${dim3Sel} AS dim3` : ''}, COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${hasCond} THEN 1 ELSE 0 END)::BIGINT AS avec
+                    FROM b ${dJoin} GROUP BY ${grpCols} ORDER BY ${String(dC).startsWith('__annee__|') ? '1 ASC' : 'total DESC'} LIMIT ${dim3Sel ? 2000 : (dim2Sel ? 400 : 40)}`);
+                const rows = arrowResultToObjects(res).map(r => ({ dim: String(r.dim), dim2: dim2Sel ? String(r.dim2) : null, dim3: dim3Sel ? String(r.dim3) : null, total: Number(r.total), avec: Number(r.avec), sans: Number(r.total) - Number(r.avec) }));
                 if (!rows.length) { bgTaskEnd(); showError('Population vide avec ces filtres.'); return; }
                 const gT = rows.reduce((a, r) => a + r.total, 0), gA = rows.reduce((a, r) => a + r.avec, 0);
                 el('covResult').classList.remove('hidden');
@@ -4802,49 +4825,74 @@
                     <span class="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 font-bold text-emerald-700">✔ Avec élément(s) : ${gA.toLocaleString('fr-FR')} (${(gA / gT * 100).toFixed(1)} %)</span>
                     <span class="bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 font-bold text-red-700">✖ Sans : ${(gT - gA).toLocaleString('fr-FR')} (${((gT - gA) / gT * 100).toFixed(1)} %)</span>
                 </div>`;
-                // Histogramme : empilé simple (1 dim) ou groupé par dimension 2 (piles côte à côte).
+                // Histogramme : empilé simple (1 dim), groupé par dim 2, et FACETTES par dim 3
+                // (un graphique par valeur de la dimension 3).
                 try {
                     if (covChartInst) { covChartInst.destroy(); covChartInst = null; }
-                    let datasets, labels;
-                    if (!dim2Sel) {
-                        labels = rows.map(r => r.dim);
-                        datasets = [
-                            { label: '✔ Avec', data: rows.map(r => r.avec), backgroundColor: '#10b981', stack: 's' },
-                            { label: '✖ Sans', data: rows.map(r => r.sans), backgroundColor: '#ef4444', stack: 's' },
-                        ];
-                    } else {
-                        // Axe X : top 15 valeurs de la dim 1 · une pile par valeur de dim 2 (top 5, reste = (autres))
+                    (window.covFacetCharts || []).forEach(ch => { try { ch.destroy(); } catch (e2) {} }); window.covFacetCharts = [];
+                    const oldFac = el('covFacets'); if (oldFac) oldFac.remove();
+                    const chartWrap = el('covChart').parentElement;
+                    // Construit {labels, datasets} pour un sous-ensemble de lignes (partagé facettes / global).
+                    const buildChartData = subset => {
+                        if (!dim2Sel) return { labels: subset.map(r => r.dim), datasets: [
+                            { label: '✔ Avec', data: subset.map(r => r.avec), backgroundColor: '#10b981', stack: 's' },
+                            { label: '✖ Sans', data: subset.map(r => r.sans), backgroundColor: '#ef4444', stack: 's' }] };
                         const totBy = (arr, key) => { const m = new Map(); arr.forEach(r => m.set(r[key], (m.get(r[key]) || 0) + r.total)); return m; };
-                        const d1Top = [...totBy(rows, 'dim')].sort((a, b2) => b2[1] - a[1]).slice(0, 15).map(x => x[0]);
-                        const d2Top = [...totBy(rows, 'dim2')].sort((a, b2) => b2[1] - a[1]).slice(0, 5).map(x => x[0]);
+                        const d1Top = [...totBy(subset, 'dim')].sort((a, b2) => String(dC).startsWith('__annee__|') ? (a[0] < b2[0] ? -1 : 1) : b2[1] - a[1]).slice(0, 15).map(x => x[0]);
+                        const d2Top = [...totBy(subset, 'dim2')].sort((a, b2) => b2[1] - a[1]).slice(0, 5).map(x => x[0]);
                         const d2Of = r => d2Top.includes(r.dim2) ? r.dim2 : '(autres)';
-                        const d2Vals = [...new Set(rows.map(d2Of))];
+                        const d2Vals = [...new Set(subset.map(d2Of))];
                         const cell = {};
-                        rows.forEach(r => { if (!d1Top.includes(r.dim)) return; const k = r.dim + '' + d2Of(r); cell[k] = cell[k] || { avec: 0, sans: 0 }; cell[k].avec += r.avec; cell[k].sans += r.sans; });
-                        labels = d1Top;
-                        datasets = [];
+                        subset.forEach(r => { if (!d1Top.includes(r.dim)) return; const k = r.dim + '' + d2Of(r); cell[k] = cell[k] || { avec: 0, sans: 0 }; cell[k].avec += r.avec; cell[k].sans += r.sans; });
+                        const datasets = [];
                         d2Vals.forEach((v, i) => {
                             const col = THEME_PALETTE[i % THEME_PALETTE.length].zone;
                             datasets.push({ label: `${v} ✔`, data: d1Top.map(d1 => (cell[d1 + '' + v] || {}).avec || 0), backgroundColor: col, stack: v });
                             datasets.push({ label: `${v} ✖`, data: d1Top.map(d1 => (cell[d1 + '' + v] || {}).sans || 0), backgroundColor: col + '55', stack: v });
                         });
-                    }
-                    covChartInst = new Chart(el('covChart').getContext('2d'), {
-                        type: 'bar',
-                        data: { labels, datasets },
+                        return { labels: d1Top, datasets };
+                    };
+                    const mkChart = (canvas, data, title) => new Chart(canvas.getContext('2d'), {
+                        type: 'bar', data,
                         options: { responsive: true, maintainAspectRatio: false,
-                            scales: { x: { stacked: true, ticks: { autoSkip: false, maxRotation: 60 } }, y: { stacked: true, beginAtZero: true } },
-                            plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } } },
+                            scales: { x: { stacked: true, ticks: { autoSkip: false, maxRotation: 60, font: { size: 9 } } }, y: { stacked: true, beginAtZero: true } },
+                            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 9 } } }, title: title ? { display: true, text: title, font: { size: 12, weight: 'bold' } } : undefined } },
                     });
+                    if (!dim3Sel) {
+                        el('covChart').style.display = '';
+                        covChartInst = mkChart(el('covChart'), buildChartData(rows), null);
+                    } else {
+                        // FACETTES : top 6 valeurs de la dim 3 (les plus peuplées), le reste en (autres).
+                        el('covChart').style.display = 'none';
+                        const totBy3 = new Map(); rows.forEach(r => totBy3.set(r.dim3, (totBy3.get(r.dim3) || 0) + r.total));
+                        const d3Top = [...totBy3].sort((a, b2) => b2[1] - a[1]).slice(0, 6).map(x => x[0]);
+                        const d3Of = r => d3Top.includes(r.dim3) ? r.dim3 : '(autres)';
+                        const d3Vals = [...new Set(rows.map(d3Of))];
+                        const fac = document.createElement('div');
+                        fac.id = 'covFacets';
+                        fac.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+                        chartWrap.appendChild(fac);
+                        d3Vals.forEach(v3 => {
+                            const subset = rows.filter(r => d3Of(r) === v3);
+                            const tot = subset.reduce((a2, r) => a2 + r.total, 0);
+                            const card = document.createElement('div');
+                            card.className = 'border border-slate-200 rounded-lg p-2 bg-white';
+                            card.innerHTML = `<div class="h-[240px] relative"></div>`;
+                            const cv = document.createElement('canvas');
+                            card.firstChild.appendChild(cv);
+                            fac.appendChild(card);
+                            window.covFacetCharts.push(mkChart(cv, buildChartData(subset), `${v3} — ${tot.toLocaleString('fr-FR')} entité(s)`));
+                        });
+                    }
                 } catch (eC) { console.warn('Graphique indisponible :', eC); }
                 // Tableau + consultation/export des lignes
                 qualInspectRegistry = qualInspectRegistry || [];
-                const rowsSql = neg => `${withSql} SELECT ${dimSel} AS "Axe d'analyse"${dim2Sel ? `, ${dim2Sel} AS "Dimension 2"` : ''}, b.* EXCLUDE (__rn) FROM b ${dJoin} WHERE ${neg ? 'NOT (' + hasCond + ')' : hasCond}`;
+                const rowsSql = neg => `${withSql} SELECT ${dimSel} AS "Axe d'analyse"${dim2Sel ? `, ${dim2Sel} AS "Dimension 2"` : ''}${dim3Sel ? `, ${dim3Sel} AS "Dimension 3"` : ''}, b.* EXCLUDE (__rn) FROM b ${dJoin} WHERE ${neg ? 'NOT (' + hasCond + ')' : hasCond}`;
                 const iA = registerQualInspect('Entités AVEC élément(s) lié(s)', rowsSql(false));
                 const iS = registerQualInspect('Entités SANS élément lié', rowsSql(true));
                 el('covTable').innerHTML = `<div class="border border-slate-200 rounded-lg overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0"><tr><th class="p-2">${escapeHTML(dC)}</th>${dim2Sel ? `<th class="p-2">${escapeHTML(d2C)}</th>` : ''}<th class="p-2 text-right">Population</th><th class="p-2 text-right">✔ Avec</th><th class="p-2 text-right">✖ Sans</th><th class="p-2 text-right">Couverture</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr class="hover:bg-teal-50/40"><td class="p-2 font-bold">${escapeHTML(r.dim)}</td>${dim2Sel ? `<td class="p-2">${escapeHTML(r.dim2)}</td>` : ''}<td class="p-2 text-right">${r.total.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-emerald-700 font-bold">${r.avec.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-red-600 font-bold">${r.sans.toLocaleString('fr-FR')}</td><td class="p-2 text-right font-black">${(r.avec / r.total * 100).toFixed(1)} %</td></tr>`).join('')}</tbody></table></div>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0"><tr><th class="p-2">${escapeHTML(dC)}</th>${dim2Sel ? `<th class="p-2">${escapeHTML(d2C)}</th>` : ''}${dim3Sel ? `<th class="p-2">${escapeHTML(d3C)}</th>` : ''}<th class="p-2 text-right">Population</th><th class="p-2 text-right">✔ Avec</th><th class="p-2 text-right">✖ Sans</th><th class="p-2 text-right">Couverture</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr class="hover:bg-teal-50/40"><td class="p-2 font-bold">${escapeHTML(r.dim)}</td>${dim2Sel ? `<td class="p-2">${escapeHTML(r.dim2)}</td>` : ''}${dim3Sel ? `<td class="p-2">${escapeHTML(r.dim3)}</td>` : ''}<td class="p-2 text-right">${r.total.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-emerald-700 font-bold">${r.avec.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-red-600 font-bold">${r.sans.toLocaleString('fr-FR')}</td><td class="p-2 text-right font-black">${(r.avec / r.total * 100).toFixed(1)} %</td></tr>`).join('')}</tbody></table></div>
                     <div class="mt-2 flex flex-wrap gap-2 text-xs items-center"><span class="text-slate-400">Consulter / exporter les lignes :</span>${qualInspectButtons(iA)} <span class="text-emerald-700 font-bold">avec</span> · ${qualInspectButtons(iS)} <span class="text-red-600 font-bold">sans</span></div>
                     ${dim2Sel && rows.length >= 400 ? '<p class="text-[10px] text-slate-400 mt-1">Affichage limité aux 400 premiers croisements (les plus peuplés) — le graphique montre les 15 premières valeurs de l\'axe × 5 de la dimension 2.</p>' : (!dim2Sel && rows.length >= 40 ? '<p class="text-[10px] text-slate-400 mt-1">Affichage limité aux 40 premières valeurs de la dimension (les plus peuplées).</p>' : '')}`;
                 bgTaskEnd(`🎯 Analyse terminée : ${(gA / gT * 100).toFixed(1)} % de couverture sur ${gT.toLocaleString('fr-FR')} entités.`);
