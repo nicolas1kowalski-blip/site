@@ -71,6 +71,11 @@ namespace MesPremiersJeux.Games
         private readonly bool[] _firstRoll = new bool[2];  // ouverture à deux dés
         private int _current, _lastD1, _lastD2, _lastTotal, _gchain;
         private bool _win, _gazePaused;
+        private string _recapEmoji = "🎲", _recapMsg = "";
+
+        // Centre du plateau (pour la carte de fin de tour).
+        private double BoardCx => Bx + Cols * Cs / 2.0;
+        private double BoardCy => By + Rows * Cs / 2.0;
 
         private int N => Cols * Rows; // 63
         private int FinishIdx => N - 1;
@@ -564,14 +569,25 @@ namespace MesPremiersJeux.Games
         {
             int p = _current;
 
+            // Récapitulatif par défaut : le résultat des dés (peut être remplacé par
+            // un évènement spécial au moment où le pion se pose).
+            _recapEmoji = "🎲";
+            _recapMsg = PlayerName[p] + "\n" + _lastD1 + " + " + _lastD2 + " = " + _lastTotal;
+
             // Ouverture au tout premier lancer : 3+6 → 26, 4+5 → 53.
             if (_firstRoll[p])
             {
                 _firstRoll[p] = false;
                 if ((_lastD1 == 3 && _lastD2 == 6) || (_lastD1 == 6 && _lastD2 == 3))
-                { Teleport(p, 25, "Trois et six ! Tu files à la case 26 !"); return; }
+                {
+                    _recapEmoji = "🚀"; _recapMsg = PlayerName[p] + " file à la case 26 !";
+                    Teleport(p, 25, "Trois et six ! Tu files à la case 26 !"); return;
+                }
                 if ((_lastD1 == 4 && _lastD2 == 5) || (_lastD1 == 5 && _lastD2 == 4))
-                { Teleport(p, 52, "Quatre et cinq ! Tu files à la case 53 !"); return; }
+                {
+                    _recapEmoji = "🚀"; _recapMsg = PlayerName[p] + " file à la case 53 !";
+                    Teleport(p, 52, "Quatre et cinq ! Tu files à la case 53 !"); return;
+                }
             }
 
             MoveBy(p, _lastTotal, () => ResolveLanding(p));
@@ -619,6 +635,7 @@ namespace MesPremiersJeux.Games
                 {
                     _gchain++;
                     HighlightCell(idx);
+                    _recapEmoji = "🪿"; _recapMsg = PlayerName[p] + " trouve une oie !\nIl rejoue (+" + _lastTotal + ")";
                     Speak("Une oie ! Tu avances encore de " + _lastTotal + " !");
                     Schedule(650, () => MoveBy(p, _lastTotal, () => ResolveLanding(p)));
                     return;
@@ -631,6 +648,7 @@ namespace MesPremiersJeux.Games
             {
                 case Kind.Pont:
                     HighlightCell(idx);
+                    _recapEmoji = "🌉"; _recapMsg = PlayerName[p] + " prend le pont !\nDirection la case 12 !";
                     Speak("Le pont ! Tu sautes à la case 12 !");
                     Teleport(p, 11, null);
                     return;
@@ -638,17 +656,20 @@ namespace MesPremiersJeux.Games
                 case Kind.Auberge:
                     _skip[p] = true;
                     HighlightCell(idx);
+                    _recapEmoji = "🛏️"; _recapMsg = PlayerName[p] + " dort à l'auberge.\nIl passe un tour.";
                     Speak("L'auberge ! Tu dors ici et tu passes un tour.");
                     break;
 
                 case Kind.Labyrinthe:
                     HighlightCell(idx);
+                    _recapEmoji = "🌀"; _recapMsg = PlayerName[p] + " se perd dans le labyrinthe.\nIl recule de 3.";
                     Speak("Le labyrinthe ! Tu recules de trois cases.");
                     Teleport(p, Math.Max(0, idx - 3), null);
                     return;
 
                 case Kind.Mort:
                     HighlightCell(idx);
+                    _recapEmoji = "👻"; _recapMsg = PlayerName[p] + " croise un fantôme farceur !\nIl recule de 10.";
                     Speak("Hou ! Un petit fantôme farceur te fait reculer de dix cases !");
                     Teleport(p, Math.Max(0, idx - 10), null);
                     return;
@@ -669,6 +690,7 @@ namespace MesPremiersJeux.Games
         private void TrapPlayer(int p, int idx, string name)
         {
             int other = 1 - p;
+            string ic = idx == 30 ? "🕳️" : "🔒";
             HighlightCell(idx);
             if (_stuck[other] && _stuckAt[other] == idx)
             {
@@ -676,12 +698,14 @@ namespace MesPremiersJeux.Games
                 _stuckAt[other] = -1;
                 _stuck[p] = true;
                 _stuckAt[p] = idx;
+                _recapEmoji = "🤝"; _recapMsg = PlayerName[p] + " libère " + PlayerName[other] + " !\nMais il prend sa place.";
                 Speak("Tu libères " + PlayerName[other] + " ! Mais tu prends sa place à " + name + ".");
             }
             else
             {
                 _stuck[p] = true;
                 _stuckAt[p] = idx;
+                _recapEmoji = ic; _recapMsg = PlayerName[p] + " est coincé à " + name + " !\nIl attend d'être libéré.";
                 Speak("Aïe, " + name + " ! Tu es coincé, il faudra qu'on te libère.");
             }
             EndTurn();
@@ -703,7 +727,9 @@ namespace MesPremiersJeux.Games
         private void EndTurn()
         {
             if (_win) return;
-            Schedule(900, () => { _current = 1 - _current; StartTurn(); });
+            // Carte animée de fin de tour : on montre et on dit ce qui vient de se
+            // passer, PUIS on passe la main.
+            ShowRecap(_recapEmoji, _recapMsg, _current, () => { _current = 1 - _current; StartTurn(); });
         }
 
         private void Win(int p)
@@ -717,7 +743,129 @@ namespace MesPremiersJeux.Games
             Speak("Bravo ! " + PlayerName[p] + " est arrivé à la case 63 ! Il a gagné !");
             BounceToken(p);
             Celebrate();
+            ShowRecap("🏆", PlayerName[p] + " a gagné !\nBravo ! 🎉", p, null);
             ScheduleNext(5200);
+        }
+
+        // Carte centrale qui « pop » : emoji + message de ce qui vient d'arriver,
+        // sur un fond assombri, avec des étincelles. Renforce le retour visuel à
+        // chaque fin de tour.
+        private void ShowRecap(string emoji, string msg, int player, Action after)
+        {
+            const double cardW = 470;
+
+            // Voile sombre pour concentrer l'attention.
+            var scrim = new Rectangle
+            {
+                Width = W,
+                Height = H,
+                Fill = new SolidColorBrush(Color.FromArgb(0x4A, 0x22, 0x12, 0x40)),
+                IsHitTestVisible = false,
+            };
+            scrim.SetValue(Panel.ZIndexProperty, 100);
+            scrim.Opacity = 0;
+            _canvas.Children.Add(scrim);
+            scrim.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+
+            var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            sp.Children.Add(new TextBlock
+            {
+                Text = emoji,
+                FontSize = 96,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            sp.Children.Add(new TextBlock
+            {
+                Text = msg,
+                FontSize = 34,
+                FontWeight = FontWeights.Bold,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = cardW - 60,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+                Margin = new Thickness(0, 6, 0, 0),
+            });
+
+            var card = new Border
+            {
+                Width = cardW,
+                CornerRadius = new CornerRadius(30),
+                Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
+                BorderBrush = new SolidColorBrush(PlayerColor[player]),
+                BorderThickness = new Thickness(7),
+                Padding = new Thickness(34, 24, 34, 30),
+                Child = sp,
+                Opacity = 0,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+            };
+            var st = new ScaleTransform(0.2, 0.2);
+            card.RenderTransform = st;
+            card.SetValue(Panel.ZIndexProperty, 102);
+            Canvas.SetLeft(card, BoardCx - cardW / 2);
+            Canvas.SetTop(card, BoardCy - 150);
+            _canvas.Children.Add(card);
+
+            SpawnSparkles(BoardCx, BoardCy - 40, PlayerColor[player]);
+
+            // Entrée : « pop » avec rebond + apparition.
+            card.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+            var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(420))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.9 } };
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            st.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+
+            // Sortie après un temps de lecture, puis nettoyage + suite.
+            Schedule(1450, () =>
+            {
+                var outOp = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(280));
+                outOp.Completed += (s, e) =>
+                {
+                    _canvas.Children.Remove(card);
+                    _canvas.Children.Remove(scrim);
+                    after?.Invoke();
+                };
+                card.BeginAnimation(UIElement.OpacityProperty, outOp);
+                scrim.BeginAnimation(UIElement.OpacityProperty,
+                    new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(280)));
+                var outSc = new DoubleAnimation(1, 1.14, TimeSpan.FromMilliseconds(280));
+                st.BeginAnimation(ScaleTransform.ScaleXProperty, outSc);
+                st.BeginAnimation(ScaleTransform.ScaleYProperty, outSc);
+            });
+        }
+
+        private void SpawnSparkles(double cx, double cy, Color tint)
+        {
+            var rng = new Random();
+            for (int i = 0; i < 9; i++)
+            {
+                var star = new TextBlock
+                {
+                    Text = "✨",
+                    FontSize = 26 + rng.Next(16),
+                    IsHitTestVisible = false,
+                };
+                star.SetValue(Panel.ZIndexProperty, 101);
+                Canvas.SetLeft(star, cx - 14);
+                Canvas.SetTop(star, cy - 14);
+                _canvas.Children.Add(star);
+
+                double ang = rng.NextDouble() * Math.PI * 2;
+                double dist = 150 + rng.Next(140);
+                var tt = new TranslateTransform();
+                star.RenderTransform = tt;
+
+                var dur = TimeSpan.FromMilliseconds(700 + rng.Next(500));
+                tt.BeginAnimation(TranslateTransform.XProperty,
+                    new DoubleAnimation(0, Math.Cos(ang) * dist, dur) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+                tt.BeginAnimation(TranslateTransform.YProperty,
+                    new DoubleAnimation(0, Math.Sin(ang) * dist, dur) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+                var fade = new DoubleAnimation(1, 0, dur);
+                var captured = star;
+                fade.Completed += (s, e) => _canvas.Children.Remove(captured);
+                star.BeginAnimation(UIElement.OpacityProperty, fade);
+            }
         }
 
         // --- Animations ---
