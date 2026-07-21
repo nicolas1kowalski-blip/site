@@ -453,7 +453,7 @@
                 </div>
                 <div class="flex items-center gap-4 flex-wrap">
                     <button onclick="runCoverageAnalysis(this)" id="btnCovRun" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg shadow text-sm">🎯 Lancer l'analyse</button>
-                    <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer"><input type="checkbox" id="covCompareTotal" class="w-4 h-4 text-teal-600 rounded"> Afficher aussi la <strong>totalité (sans les filtres)</strong> — barre grise à côté de chaque pile</label>
+                    <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer"><input type="checkbox" id="covCompareTotal" class="w-4 h-4 text-teal-600 rounded"> Afficher aussi la <strong>totalité (sans les filtres)</strong> — segment gris ajouté au sommet de chaque barre (dimensions 2 et 3 comprises)</label>
                 </div>
                 <div id="covResult" class="mt-5 hidden">
                     <div id="covSummary" class="mb-3"></div>
@@ -4792,7 +4792,9 @@
                     if (String(col).startsWith('__annee__|')) {
                         const c2 = String(col).slice(10);
                         const raw2 = `CAST(${alias}.${sqlIdent(c2)} AS VARCHAR)`;
-                        return `COALESCE(CAST(YEAR(TRY_CAST(${tdNormExpr('date', raw2)} AS DATE)) AS VARCHAR), '(vide)')`;
+                        // Année robuste : formats date normalisés, PUIS timestamp (avec heure),
+                        // PUIS extraction d'une année 19xx/20xx — les dates avec heure donnaient (vide).
+                        return `COALESCE(CAST(YEAR(TRY_CAST(${tdNormExpr('date', raw2)} AS DATE)) AS VARCHAR), CAST(YEAR(TRY_CAST(${raw2} AS TIMESTAMP)) AS VARCHAR), NULLIF(regexp_extract(TRIM(${raw2}), '((?:19|20)\\d\\d)', 1), ''), '(vide)')`;
                     }
                     return `COALESCE(NULLIF(TRIM(CAST(${alias}.${sqlIdent(col)} AS VARCHAR)), ''), '(vide)')`;
                 };
@@ -4820,11 +4822,12 @@
                 const compareTotal = !!(el('covCompareTotal') && el('covCompareTotal').checked);
                 let totMap = null;
                 if (compareTotal) {
+                    const selT = `${dimSel} AS dim${dim2Sel ? `, ${dim2Sel} AS dim2` : ''}${dim3Sel ? `, ${dim3Sel} AS dim3` : ''}`;
+                    const grpT = ['1', dim2Sel ? '2' : null, dim3Sel ? (dim2Sel ? '3' : '2') : null].filter(Boolean).join(', ');
                     const resT = await conn.query(`WITH b AS (SELECT * FROM ${Tb})
-                        SELECT ${dimSel} AS dim${dim3Sel ? `, ${dim3Sel} AS dim3` : ''}, COUNT(*)::BIGINT AS total
-                        FROM b ${dJoin} GROUP BY ${dim3Sel ? '1, 2' : '1'} LIMIT 5000`);
+                        SELECT ${selT}, COUNT(*)::BIGINT AS total FROM b ${dJoin} GROUP BY ${grpT} LIMIT 20000`);
                     totMap = new Map();
-                    arrowResultToObjects(resT).forEach(r => totMap.set((dim3Sel ? String(r.dim3) : '') + '' + String(r.dim), Number(r.total)));
+                    arrowResultToObjects(resT).forEach(r => totMap.set((dim3Sel ? String(r.dim3) : '') + '' + (dim2Sel ? String(r.dim2) : '') + '' + String(r.dim), Number(r.total)));
                 }
                 const grpCols = ['1', dim2Sel ? '2' : null, dim3Sel ? (dim2Sel ? '3' : '2') : null].filter(Boolean).join(', ');
                 const res = await conn.query(`${withSql}
@@ -4848,26 +4851,29 @@
                     const chartWrap = el('covChart').parentElement;
                     // Construit {labels, datasets} pour un sous-ensemble de lignes (partagé facettes / global).
                     const buildChartData = (subset, facetVal) => {
-                        const totOf = lbl => totMap ? (totMap.get((facetVal || '') + '' + lbl) || 0) : 0;
-                        const totDs = labels2 => totMap ? [{ label: 'Totalité (sans filtres)', data: labels2.map(totOf), backgroundColor: '#cbd5e1', stack: '__total__' }] : [];
-                        if (!dim2Sel) { const labels2 = subset.map(r => r.dim); return { labels: labels2, datasets: [
+                        const totOf = (d2v, d1v) => totMap ? (totMap.get((facetVal || '') + '' + (d2v || '') + '' + d1v) || 0) : 0;
+                        if (!dim2Sel) { const labels2 = subset.map(r => r.dim); const ds = [
                             { label: '✔ Avec', data: subset.map(r => r.avec), backgroundColor: '#10b981', stack: 's' },
-                            { label: '✖ Sans', data: subset.map(r => r.sans), backgroundColor: '#ef4444', stack: 's' },
-                            ...totDs(labels2)] }; }
+                            { label: '✖ Sans', data: subset.map(r => r.sans), backgroundColor: '#ef4444', stack: 's' }];
+                            // Segment gris AU SOMMET de la barre : ce que les filtres écartent (totalité - filtré).
+                            if (totMap) ds.push({ label: '⬜ Écarté par les filtres', data: subset.map(r => Math.max(0, totOf('', r.dim) - r.total)), backgroundColor: '#cbd5e1', stack: 's' });
+                            return { labels: labels2, datasets: ds }; }
                         const totBy = (arr, key) => { const m = new Map(); arr.forEach(r => m.set(r[key], (m.get(r[key]) || 0) + r.total)); return m; };
                         const d1Top = [...totBy(subset, 'dim')].sort((a, b2) => String(dC).startsWith('__annee__|') ? (a[0] < b2[0] ? -1 : 1) : b2[1] - a[1]).slice(0, 15).map(x => x[0]);
                         const d2Top = [...totBy(subset, 'dim2')].sort((a, b2) => b2[1] - a[1]).slice(0, 5).map(x => x[0]);
                         const d2Of = r => d2Top.includes(r.dim2) ? r.dim2 : '(autres)';
                         const d2Vals = [...new Set(subset.map(d2Of))];
                         const cell = {};
-                        subset.forEach(r => { if (!d1Top.includes(r.dim)) return; const k = r.dim + '' + d2Of(r); cell[k] = cell[k] || { avec: 0, sans: 0 }; cell[k].avec += r.avec; cell[k].sans += r.sans; });
+                        subset.forEach(r => { if (!d1Top.includes(r.dim)) return; const k = r.dim + '' + d2Of(r); cell[k] = cell[k] || { avec: 0, sans: 0, tot: 0 }; cell[k].avec += r.avec; cell[k].sans += r.sans; cell[k].tot += totOf(r.dim2, r.dim); });
                         const datasets = [];
                         d2Vals.forEach((v, i) => {
                             const col = THEME_PALETTE[i % THEME_PALETTE.length].zone;
                             datasets.push({ label: `${v} ✔`, data: d1Top.map(d1 => (cell[d1 + '' + v] || {}).avec || 0), backgroundColor: col, stack: v });
                             datasets.push({ label: `${v} ✖`, data: d1Top.map(d1 => (cell[d1 + '' + v] || {}).sans || 0), backgroundColor: col + '55', stack: v });
+                            // Reste écarté par les filtres, empilé au sommet de la barre de CE croisement.
+                            if (totMap) datasets.push({ label: `${v} ⬜`, data: d1Top.map(d1 => { const c2 = cell[d1 + '' + v]; return c2 ? Math.max(0, c2.tot - c2.avec - c2.sans) : 0; }), backgroundColor: '#cbd5e1', stack: v });
                         });
-                        return { labels: d1Top, datasets: datasets.concat(totDs(d1Top)) };
+                        return { labels: d1Top, datasets };
                     };
                     const mkChart = (canvas, data, title) => new Chart(canvas.getContext('2d'), {
                         type: 'bar', data,
@@ -4908,8 +4914,8 @@
                 const iA = registerQualInspect('Entités AVEC élément(s) lié(s)', rowsSql(false));
                 const iS = registerQualInspect('Entités SANS élément lié', rowsSql(true));
                 el('covTable').innerHTML = `<div class="border border-slate-200 rounded-lg overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0"><tr><th class="p-2">${escapeHTML(dC)}</th>${dim2Sel ? `<th class="p-2">${escapeHTML(d2C)}</th>` : ''}${dim3Sel ? `<th class="p-2">${escapeHTML(d3C)}</th>` : ''}<th class="p-2 text-right">Population</th>${totMap && !dim2Sel ? '<th class="p-2 text-right">Totalité (sans filtres)</th>' : ''}<th class="p-2 text-right">✔ Avec</th><th class="p-2 text-right">✖ Sans</th><th class="p-2 text-right">Couverture</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr class="hover:bg-teal-50/40"><td class="p-2 font-bold">${escapeHTML(r.dim)}</td>${dim2Sel ? `<td class="p-2">${escapeHTML(r.dim2)}</td>` : ''}${dim3Sel ? `<td class="p-2">${escapeHTML(r.dim3)}</td>` : ''}<td class="p-2 text-right">${r.total.toLocaleString('fr-FR')}</td>${totMap && !dim2Sel ? `<td class="p-2 text-right text-slate-500">${(totMap.get((r.dim3 || '') + '' + r.dim) || 0).toLocaleString('fr-FR')}</td>` : ''}<td class="p-2 text-right text-emerald-700 font-bold">${r.avec.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-red-600 font-bold">${r.sans.toLocaleString('fr-FR')}</td><td class="p-2 text-right font-black">${(r.avec / r.total * 100).toFixed(1)} %</td></tr>`).join('')}</tbody></table></div>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0"><tr><th class="p-2">${escapeHTML(dC)}</th>${dim2Sel ? `<th class="p-2">${escapeHTML(d2C)}</th>` : ''}${dim3Sel ? `<th class="p-2">${escapeHTML(d3C)}</th>` : ''}<th class="p-2 text-right">Population</th>${totMap ? '<th class="p-2 text-right">Totalité (sans filtres)</th>' : ''}<th class="p-2 text-right">✔ Avec</th><th class="p-2 text-right">✖ Sans</th><th class="p-2 text-right">Couverture</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr class="hover:bg-teal-50/40"><td class="p-2 font-bold">${escapeHTML(r.dim)}</td>${dim2Sel ? `<td class="p-2">${escapeHTML(r.dim2)}</td>` : ''}${dim3Sel ? `<td class="p-2">${escapeHTML(r.dim3)}</td>` : ''}<td class="p-2 text-right">${r.total.toLocaleString('fr-FR')}</td>${totMap ? `<td class="p-2 text-right text-slate-500">${(totMap.get((r.dim3 || '') + '' + (r.dim2 || '') + '' + r.dim) || 0).toLocaleString('fr-FR')}</td>` : ''}<td class="p-2 text-right text-emerald-700 font-bold">${r.avec.toLocaleString('fr-FR')}</td><td class="p-2 text-right text-red-600 font-bold">${r.sans.toLocaleString('fr-FR')}</td><td class="p-2 text-right font-black">${(r.avec / r.total * 100).toFixed(1)} %</td></tr>`).join('')}</tbody></table></div>
                     <div class="mt-2 flex flex-wrap gap-2 text-xs items-center"><span class="text-slate-400">Consulter / exporter les lignes :</span>${qualInspectButtons(iA)} <span class="text-emerald-700 font-bold">avec</span> · ${qualInspectButtons(iS)} <span class="text-red-600 font-bold">sans</span></div>
                     ${dim2Sel && rows.length >= 400 ? '<p class="text-[10px] text-slate-400 mt-1">Affichage limité aux 400 premiers croisements (les plus peuplés) — le graphique montre les 15 premières valeurs de l\'axe × 5 de la dimension 2.</p>' : (!dim2Sel && rows.length >= 40 ? '<p class="text-[10px] text-slate-400 mt-1">Affichage limité aux 40 premières valeurs de la dimension (les plus peuplées).</p>' : '')}`;
                 bgTaskEnd(`🎯 Analyse terminée : ${(gA / gT * 100).toFixed(1)} % de couverture sur ${gT.toLocaleString('fr-FR')} entités.`);
@@ -8140,7 +8146,7 @@
                     // normalisation tolérante des deux côtés (01/02/2025 ≡ 2025-02-01) — la
                     // comparaison numérique donnait NULL sur les dates, donc toujours faux.
                     if (/^\d{4}-\d{2}-\d{2}$/.test(c.val) || /^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}$/.test(c.val)) {
-                        return `TRY_CAST(${tdNormExpr('date', raw)} AS DATE) ${sym} TRY_CAST(${tdNormExpr('date', lit(c.val))} AS DATE)`;
+                        return `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE)) ${sym} TRY_CAST(${tdNormExpr('date', lit(c.val))} AS DATE)`;
                     }
                     return `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE) ${sym} TRY_CAST(REPLACE(${lit(c.val)}, ',', '.') AS DOUBLE)`;
                 }
