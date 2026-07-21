@@ -1894,6 +1894,50 @@
         function readyTableNames() { return Object.values(state.tables).filter(t => t.status === 'ready').map(t => t.name); }
         function tableByName(n) { return Object.values(state.tables).find(t => t.name === n); }
 
+        // Dictionnaire orienté OBJET MÉTIER : l'objet est la fiche de référence ; les définitions
+        // d'attributs s'écrivent dans le dictionnaire de la colonne mappée (aucune double saisie).
+        function renderGovDictionaryBo(bos) {
+            if (!bos.length) return '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun objet métier — créez-en dans l\'onglet Objets métier, ou basculez « Par table technique ».</p>';
+            if (!govState.dictBoId || !bos.some(b => b.id === govState.dictBoId)) govState.dictBoId = bos[0].id;
+            const bo = bos.find(b => b.id === govState.dictBoId);
+            const master = boMasterTable(bo);
+            const md = master ? ensureDictEntry(master.name) : null;
+            const rows = [];
+            (boCoreElements(bo) || []).forEach(e2 => rows.push({ el: e2, facet: '' }));
+            getBoFacets(bo).forEach(st => (st.elements || []).forEach(fe => rows.push({ el: { ...fe, mappings: fe.col ? [{ table: st.table, col: fe.col }] : [] }, facet: st.name })));
+            const selOpts = (opts, cur) => opts.map(o => `<option ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
+            const glossOpts = cur => '<option value="">— Aucun terme —</option>' + state.governance.glossary.map(g => `<option value="${g.id}" ${g.id === cur ? 'selected' : ''}>${escapeHTML(g.term)}</option>`).join('');
+            let rowsHtml = '';
+            rows.forEach(r => {
+                const m = (r.el.mappings || [])[0];
+                const dc = m ? (ensureDictEntry(m.table).columns[m.col] = ensureDictEntry(m.table).columns[m.col] || {}) : null;
+                const T = m ? escapeHTML(m.table) : '', C = m ? escapeHTML(String(m.col).replace(/'/g, "\\'")) : '';
+                rowsHtml += `<tr class="hover:bg-slate-50">
+                    <td class="p-2 font-semibold text-slate-700 text-xs whitespace-nowrap">${escapeHTML(r.el.name)}${r.facet ? `<br><span class="text-[9px] text-emerald-600 font-bold">◆ ${escapeHTML(r.facet)}</span>` : ''}</td>
+                    <td class="p-2 text-[10px] font-mono text-slate-400 whitespace-nowrap">${m ? escapeHTML(m.table + '.' + m.col) : '<span class="italic">non mappé</span>'}</td>
+                    ${dc ? `<td class="p-2"><input type="text" value="${escapeHTML(dc.definition || '')}" placeholder="Définition métier..." onchange="updateDictColField('${T}','${C}','definition',this.value)" class="w-full border border-slate-200 p-1.5 rounded text-xs"></td>
+                    <td class="p-2"><input type="text" value="${escapeHTML(dc.examples || '')}" placeholder="exemples..." onchange="updateDictColField('${T}','${C}','examples',this.value)" class="w-36 border border-slate-200 p-1.5 rounded text-xs"></td>
+                    <td class="p-2"><select onchange="updateDictColField('${T}','${C}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, dc.sensitivity)}</select></td>
+                    <td class="p-2"><select onchange="updateDictColField('${T}','${C}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(dc.term)}</select></td>`
+                    : '<td class="p-2 text-xs text-slate-300 italic" colspan="4">Mappez cet attribut à une colonne (fiche objet ▸ Structure) pour le documenter.</td>'}
+                </tr>`;
+            });
+            return `<div class="flex items-center gap-3 mb-4 flex-wrap">
+                    <select onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
+                    <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
+                    ${master ? `<span class="text-[11px] text-slate-400">Table maître : <strong>${escapeHTML(master.name)}</strong></span>` : '<span class="text-[11px] text-amber-600 font-bold">⚠️ pas de table maître chargée</span>'}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="md:col-span-3"><label class="text-xs font-bold text-slate-500 block mb-1">Définition de l'objet métier</label><textarea onchange="updateBusinessObject('${bo.id}','definition',this.value)" placeholder="Ce que représente cet objet pour le métier..." class="w-full border border-slate-300 p-2 rounded text-sm bg-white h-16">${escapeHTML(bo.definition || '')}</textarea></div>
+                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Propriétaire global</label><input type="text" value="${escapeHTML(bo.globalOwner || '')}" placeholder="Direction / personne" onchange="updateBusinessObject('${bo.id}','globalOwner',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white"></div>
+                    ${md ? `<div><label class="text-xs font-bold text-slate-500 block mb-1">Référent (Data Steward)</label><input type="text" value="${escapeHTML(md.steward || '')}" placeholder="Personne référente" onchange="updateDictField('${escapeHTML(master.name)}','steward',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white"></div>
+                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Statut de la fiche</label><select onchange="updateDictField('${escapeHTML(master.name)}','status',this.value); renderGovernance()" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">${selOpts(STATUS_OPTS, md.status)}</select></div>` : ''}
+                </div>
+                <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${rows.length}) <span class="text-slate-400 font-medium text-xs">— les définitions s'enregistrent sur la colonne mappée (partagées avec la vue par table)</span></h3>
+                <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier</th><th class="p-2">Colonne</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="6" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
+        }
         function ensureDictEntry(tableName) {
             const d = state.governance.dictionary;
             if (!d[tableName]) d[tableName] = { description: '', owner: '', steward: '', sourceSystem: '', updateFrequency: '', sensitivity: 'Interne', status: 'Brouillon', columns: {} };
@@ -1931,6 +1975,14 @@
         function renderGovDictionary() {
             const names = readyTableNames();
             if (!names.length) return '<p class="text-sm text-slate-400 italic py-8 text-center">Chargez d\'abord des tables (onglet Sources) pour documenter la donnée.</p>';
+            // Mode PAR OBJET MÉTIER (référence) ou par table technique (détail).
+            const bos = state.governance.businessObjects || [];
+            if (govState.dictMode === undefined) govState.dictMode = bos.length ? 'bo' : 'table';
+            const modeBar = `<div class="flex items-center gap-1.5 mb-4">
+                <button onclick="govState.dictMode='bo'; renderGovernance()" class="text-xs font-bold px-3 py-1.5 rounded-lg border ${govState.dictMode === 'bo' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}">🏛️ Par objet métier</button>
+                <button onclick="govState.dictMode='table'; renderGovernance()" class="text-xs font-bold px-3 py-1.5 rounded-lg border ${govState.dictMode !== 'bo' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}">📄 Par table technique</button>
+            </div>`;
+            if (govState.dictMode === 'bo') return modeBar + renderGovDictionaryBo(bos);
             if (!govState.dictTable || !names.includes(govState.dictTable)) govState.dictTable = names[0];
             const tn = govState.dictTable; const d = ensureDictEntry(tn);
             const inp = (field, val, ph) => `<input type="text" value="${escapeHTML(val || '')}" placeholder="${ph}" onchange="updateDictField('${escapeHTML(tn)}','${field}',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">`;
@@ -1949,7 +2001,7 @@
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select></td>
                 </tr>`;
             });
-            return `
+            return modeBar + `
                 <div class="flex items-center gap-4 mb-5">
                     <select onchange="govState.dictTable=this.value; renderGovernance()" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-bold text-sm">${names.map(n => `<option ${n === tn ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
                     <span class="text-xs px-2 py-1 rounded font-bold ${d.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${d.status}</span>
