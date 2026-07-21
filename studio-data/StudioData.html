@@ -4682,21 +4682,34 @@
             if (d2) { const cur2 = d2.value; d2.innerHTML = `<option value="">— aucune —</option><option value="${bId}" ${cur2 === bId ? 'selected' : ''}>${escapeHTML(state.tables[bId].name)}</option>` + nb.map(id => `<option value="${id}" ${id === cur2 ? 'selected' : ''}>${escapeHTML(state.tables[id].name)}</option>`).join(''); covDim2TableChanged(); }
             covDimTableChanged(); covRenderFilters('base'); covRenderFilters('rel');
         }
+        function covDimColOptions(tId, cur) {
+            if (!tId || !state.tables[tId]) return '';
+            const hs = state.tables[tId].headers;
+            let html = hs.map(h => `<option value="${escapeHTML(h)}" ${h === cur ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('');
+            // Colonnes date : axe/dimension par ANNÉE (regroupement automatique).
+            const dts = hs.filter(h => covColIsDate(tId, h));
+            if (dts.length) html += dts.map(h => { const v = '__annee__|' + h; return `<option value="${escapeHTML(v)}" ${v === cur ? 'selected' : ''}>📅 Année de ${escapeHTML(h)}</option>`; }).join('');
+            return html;
+        }
         function covDimTableChanged() {
             const tId = el('covDimTable').value; const dc = el('covDimCol');
-            const cur = dc.value;
-            dc.innerHTML = (tId && state.tables[tId]) ? state.tables[tId].headers.map(h => `<option ${h === cur ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('') : '';
+            dc.innerHTML = covDimColOptions(tId, dc.value);
         }
         function covDim2TableChanged() {
             const tId = el('covDim2Table') ? el('covDim2Table').value : ''; const dc = el('covDim2Col'); if (!dc) return;
-            const cur = dc.value;
-            dc.innerHTML = (tId && state.tables[tId]) ? state.tables[tId].headers.map(h => `<option ${h === cur ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('') : '<option value="">—</option>';
+            dc.innerHTML = tId ? covDimColOptions(tId, dc.value) : '<option value="">—</option>';
         }
         function covRelChanged() { covFilters.rel = []; covRenderFilters('rel'); }
         function covScopeTable(scope) { return scope === 'base' ? el('covBase').value : el('covRel').value; }
         function covAddFilter(scope) { covFilters[scope].push({ col: '', op: 'eq', val: '', conn: scope === 'rel' ? 'OR' : 'AND' }); covRenderFilters(scope); }
         function covSetFilter(scope, i, f, v) { if (covFilters[scope][i]) { covFilters[scope][i][f] = v; if (f === 'op' || f === 'col') covRenderFilters(scope); } }
         function covDelFilter(scope, i) { covFilters[scope].splice(i, 1); covRenderFilters(scope); }
+        // Colonne « date » : au nom (date/début/fin/échéance…) ou aux valeurs détectées en cache.
+        function covColIsDate(tId, col) {
+            if (/date|debut|début|_fin$|^fin_|echean|échéan|_dt$|^dt_/i.test(String(col))) return true;
+            try { const vals = tdValueCache[(tId || '') + '|' + col]; if (vals && vals.length) { const d = vals.slice(0, 8).filter(v => /^\d{4}-\d{2}-\d{2}/.test(v) || /^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}/.test(v)); return d.length >= Math.ceil(Math.min(vals.length, 8) / 2); } } catch (e) {}
+            return false;
+        }
         function covRenderFilters(scope) {
             const box = el('covFilterRows-' + scope); if (!box) return;
             const tId = covScopeTable(scope); const headers = (tId && state.tables[tId]) ? state.tables[tId].headers : [];
@@ -4710,13 +4723,15 @@
                     ${conn}
                     <select onchange="covSetFilter('${scope}',${i},'col',this.value)" class="flex-1 min-w-0 border border-slate-300 rounded px-1 py-1 text-[11px] bg-white"><option value="">— col —</option>${headers.map(h => `<option value="${escapeHTML(h)}" ${c.col === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
                     <select onchange="covSetFilter('${scope}',${i},'op',this.value)" class="shrink-0 border border-slate-300 rounded px-0.5 py-1 text-[11px] bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${o.v === c.op ? 'selected' : ''}>${o.t}</option>`).join('')}</select>
-                    <input type="text" list="covfval-${scope}-${i}" value="${escapeHTML(c.val || '')}" oninput="covSetFilter('${scope}',${i},'val',this.value)" placeholder="val." class="w-24 shrink-0 border border-slate-300 rounded px-1 py-1 text-[11px] ${needVal ? '' : 'invisible'}" title="Les valeurs présentes dans la table sont proposées ; vous pouvez aussi saisir une autre valeur.">
+                    ${covColIsDate(tId, c.col) && !['contains', 'ncontains', 'starts', 'ends'].includes(c.op)
+                        ? `<input type="date" value="${escapeHTML(c.val || '')}" onchange="covSetFilter('${scope}',${i},'val',this.value)" class="w-32 shrink-0 border border-slate-300 rounded px-1 py-0.5 text-[11px] ${needVal ? '' : 'invisible'}" title="Choix par calendrier (colonne de type date).">`
+                        : `<input type="text" list="covfval-${scope}-${i}" value="${escapeHTML(c.val || '')}" oninput="covSetFilter('${scope}',${i},'val',this.value)" placeholder="val." class="w-24 shrink-0 border border-slate-300 rounded px-1 py-1 text-[11px] ${needVal ? '' : 'invisible'}" title="Les valeurs présentes dans la table sont proposées ; vous pouvez aussi saisir une autre valeur.">`}
                     <datalist id="covfval-${scope}-${i}"></datalist>
                     <button onclick="covDelFilter('${scope}',${i})" class="shrink-0 text-slate-300 hover:text-red-500 text-xs font-bold">✕</button>
                 </div>`;
             }).join('');
             // Valeurs détectées proposées dans chaque champ valeur (comme les autres filtres de l'app).
-            if (tId && state.tables[tId]) rows.forEach((c, i) => { if (c.col) tdFillDatalist(`covfval-${scope}-${i}`, state.tables[tId].name, c.col); });
+            if (tId && state.tables[tId]) rows.forEach((c, i) => { if (c.col && !covColIsDate(tId, c.col)) tdFillDatalist(`covfval-${scope}-${i}`, state.tables[tId].name, c.col); });
         }
         function covWhere(scope) {
             const valid = covFilters[scope].filter(c => c.col && c.op && (['empty', 'nempty'].includes(c.op) || String(c.val || '').length));
@@ -4755,7 +4770,14 @@
                     const Td = sqlIdent(duckTableName(rel.sourceTable === bId ? rel.targetTable : rel.sourceTable));
                     return `LEFT JOIN (SELECT * FROM ${Td} QUALIFY row_number() OVER (PARTITION BY ${norm(sqlIdent(dCol))} ORDER BY __rn) = 1) ${alias} ON ${norm('b.' + sqlIdent(bCol))} = ${norm(alias + '.' + sqlIdent(dCol))}`;
                 };
-                const dimExpr = (alias, col) => `COALESCE(NULLIF(TRIM(CAST(${alias}.${sqlIdent(col)} AS VARCHAR)), ''), '(vide)')`;
+                const dimExpr = (alias, col) => {
+                    if (String(col).startsWith('__annee__|')) {
+                        const c2 = String(col).slice(10);
+                        const raw2 = `CAST(${alias}.${sqlIdent(c2)} AS VARCHAR)`;
+                        return `COALESCE(CAST(YEAR(TRY_CAST(${tdNormExpr('date', raw2)} AS DATE)) AS VARCHAR), '(vide)')`;
+                    }
+                    return `COALESCE(NULLIF(TRIM(CAST(${alias}.${sqlIdent(col)} AS VARCHAR)), ''), '(vide)')`;
+                };
                 let joins = [];
                 const dimSel = rd ? (joins.push(dimJoin(rd, 'd')), dimExpr('d', dC)) : dimExpr('b', dC);
                 let dim2Sel = null;
@@ -4770,7 +4792,7 @@
                 const hasCond = `${norm('b.' + sqlIdent(bKey))} IN (SELECT k FROM e)`;
                 const res = await conn.query(`${withSql}
                     SELECT ${dimSel} AS dim${dim2Sel ? `, ${dim2Sel} AS dim2` : ''}, COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${hasCond} THEN 1 ELSE 0 END)::BIGINT AS avec
-                    FROM b ${dJoin} GROUP BY ${dim2Sel ? '1, 2' : '1'} ORDER BY total DESC LIMIT ${dim2Sel ? 400 : 40}`);
+                    FROM b ${dJoin} GROUP BY ${dim2Sel ? '1, 2' : '1'} ORDER BY ${String(dC).startsWith('__annee__|') ? '1 ASC' : 'total DESC'} LIMIT ${dim2Sel ? 400 : 40}`);
                 const rows = arrowResultToObjects(res).map(r => ({ dim: String(r.dim), dim2: dim2Sel ? String(r.dim2) : null, total: Number(r.total), avec: Number(r.avec), sans: Number(r.total) - Number(r.avec) }));
                 if (!rows.length) { bgTaskEnd(); showError('Population vide avec ces filtres.'); return; }
                 const gT = rows.reduce((a, r) => a + r.total, 0), gA = rows.reduce((a, r) => a + r.avec, 0);
@@ -8047,10 +8069,16 @@
                 case 'ends': return `${raw} ILIKE ${lit('%' + c.val)}`;
                 case 'empty': return `(${id} IS NULL OR TRIM(${raw}) = '')`;
                 case 'nempty': return `(${id} IS NOT NULL AND TRIM(${raw}) <> '')`;
-                case 'gt': return `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE) > TRY_CAST(REPLACE(${lit(c.val)}, ',', '.') AS DOUBLE)`;
-                case 'gte': return `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE) >= TRY_CAST(REPLACE(${lit(c.val)}, ',', '.') AS DOUBLE)`;
-                case 'lt': return `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE) < TRY_CAST(REPLACE(${lit(c.val)}, ',', '.') AS DOUBLE)`;
-                case 'lte': return `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE) <= TRY_CAST(REPLACE(${lit(c.val)}, ',', '.') AS DOUBLE)`;
+                case 'gt': case 'gte': case 'lt': case 'lte': {
+                    const sym = { gt: '>', gte: '>=', lt: '<', lte: '<=' }[c.op];
+                    // Valeur au format date (calendrier ou saisie) : comparaison en DATE avec
+                    // normalisation tolérante des deux côtés (01/02/2025 ≡ 2025-02-01) — la
+                    // comparaison numérique donnait NULL sur les dates, donc toujours faux.
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(c.val) || /^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}$/.test(c.val)) {
+                        return `TRY_CAST(${tdNormExpr('date', raw)} AS DATE) ${sym} TRY_CAST(${tdNormExpr('date', lit(c.val))} AS DATE)`;
+                    }
+                    return `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE) ${sym} TRY_CAST(REPLACE(${lit(c.val)}, ',', '.') AS DOUBLE)`;
+                }
             }
             return '';
         }
