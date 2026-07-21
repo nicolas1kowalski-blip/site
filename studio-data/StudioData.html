@@ -2479,6 +2479,23 @@
                     <select id="bo-src-tbl-${bo.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select>
                     <select id="bo-src-role-${bo.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${Object.keys(BO_ROLES).map(r => `<option value="${r}">${BO_ROLES[r]}</option>`).join('')}</select>
                     <button onclick="addBoSource('${bo.id}')" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-medium hover:bg-slate-50">Ajouter</button>
+                </div>
+                <div class="mt-2 space-y-1.5">
+                    ${sources.map((s, si) => { const tb2 = tableByName(s.table); const hs = tb2 ? tb2.headers : [];
+                        return `<div class="text-[11px]">
+                        <span class="font-bold text-slate-500">${escapeHTML(s.table)}</span>
+                        <button onclick="boSrcAddFilter('${bo.id}',${si})" class="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-slate-500 hover:bg-slate-50 ml-1">+ filtre</button>
+                        ${(s.filters || []).length ? '' : '<span class="text-slate-300 italic ml-1">objet = toutes les lignes de cette source</span>'}
+                        ${(s.filters || []).map((f, fi) => { const dlId = `bofval-${bo.id}-${si}-${fi}`; return `<div class="flex items-center gap-1 mt-1 pl-4 flex-wrap">
+                            ${fi === 0 ? '<span class="text-[10px] font-bold text-slate-400 w-8 text-center">Où</span>' : `<select onchange="boSrcSetFilter('${bo.id}',${si},${fi},'conn',this.value)" class="w-10 border rounded text-[10px] font-bold px-0.5 py-0.5 bg-white ${f.conn === 'OR' ? 'text-amber-700 border-amber-300' : 'text-indigo-700 border-indigo-300'}"><option value="AND" ${f.conn !== 'OR' ? 'selected' : ''}>ET</option><option value="OR" ${f.conn === 'OR' ? 'selected' : ''}>OU</option></select>`}
+                            <select onchange="boSrcSetFilter('${bo.id}',${si},${fi},'col',this.value)" class="border border-slate-300 rounded px-1 py-0.5 text-[11px] bg-white max-w-[140px]"><option value="">— col —</option>${hs.map(h => `<option value="${escapeHTML(h)}" ${f.col === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
+                            <select onchange="boSrcSetFilter('${bo.id}',${si},${fi},'op',this.value)" class="border border-slate-300 rounded px-0.5 py-0.5 text-[11px] bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${o.v === f.op ? 'selected' : ''}>${o.t}</option>`).join('')}</select>
+                            <input type="text" list="${dlId}" value="${escapeHTML(f.val || '')}" onfocus="tdFillDatalist('${dlId}','${escapeHTML(s.table.replace(/'/g, "\\'"))}','${escapeHTML(String(f.col || '').replace(/'/g, "\\'"))}')" oninput="boSrcSetFilter('${bo.id}',${si},${fi},'val',this.value)" class="w-28 border border-slate-300 rounded px-1 py-0.5 text-[11px] ${['empty', 'nempty'].includes(f.op) ? 'invisible' : ''}" placeholder="valeur">
+                            <datalist id="${dlId}"></datalist>
+                            <button onclick="boSrcDelFilter('${bo.id}',${si},${fi})" class="text-slate-300 hover:text-red-500 font-bold">✕</button>
+                        </div>`; }).join('')}
+                    </div>`; }).join('')}
+                    ${sources.some(s => (s.filters || []).length) ? '<p class="text-[10px] text-slate-400">▼ L\'objet est un SOUS-ENSEMBLE filtré : la volumétrie, l\'audit de l\'objet et les contrôles de facettes appliquent ces conditions.</p>' : ''}
                 </div>${flow}
             </div>`;
         }
@@ -2487,6 +2504,17 @@
         // Un objet peut porter PLUSIEURS hiérarchies. Chaque niveau déclare ses PARENTS ADMIS
         // (matrice, pas un ordre strict : un LOCAL peut être rattaché à un NIVEAU, une AIRE ou un
         // BATIMENT). Une profondeur max optionnelle est contrôlée par l'audit.
+        // Filtres déclarés sur UNE source d'un objet métier -> clause WHERE composée (ET/OU).
+        function boSourceWhere(bo, tableName) {
+            const src = (bo.sources || []).find(s2 => s2.table === tableName); if (!src) return '';
+            const valid = (src.filters || []).filter(c => c.col && c.op && (['empty', 'nempty'].includes(c.op) || String(c.val || '').length));
+            let sql = '';
+            valid.forEach(c => { const f = qualCondSql(c); if (!f) return; sql = sql ? `(${sql}) ${c.conn === 'OR' ? 'OR' : 'AND'} ${f}` : f; });
+            return sql;
+        }
+        function boSrcAddFilter(boId, si) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo || !bo.sources[si]) return; (bo.sources[si].filters = bo.sources[si].filters || []).push({ col: '', op: 'eq', val: '', conn: 'AND' }); persistAppState(); renderGovernance(); }
+        function boSrcSetFilter(boId, si, fi, f, v) { const bo = state.governance.businessObjects.find(x => x.id === boId); const flt = bo && bo.sources[si] && (bo.sources[si].filters || [])[fi]; if (!flt) return; flt[f] = v; persistAppState(); if (f === 'op' || f === 'col') renderGovernance(); }
+        function boSrcDelFilter(boId, si, fi) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo || !bo.sources[si]) return; bo.sources[si].filters.splice(fi, 1); persistAppState(); renderGovernance(); }
         function boMasterTable(bo) {
             const src = (bo.sources || []).find(s2 => s2.role === 'maitre') || (bo.sources || [])[0];
             return src ? tableByName(src.table) : null;
@@ -2512,13 +2540,14 @@
                 const counts = [];
                 for (const n of names) {
                     const tb = tableByName(n); if (!tb) continue;
-                    try { const res = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tb.id))}`); counts.push({ name: n, n: Number(arrowResultToObjects(res)[0].n), master: t && n === t.name }); }
+                    const w = boSourceWhere(bo, n);
+                    try { const res = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tb.id))}${w ? ' WHERE ' + w : ''}`); counts.push({ name: n, n: Number(arrowResultToObjects(res)[0].n), master: t && n === t.name, filtered: !!w }); }
                     catch (e) { counts.push({ name: n, n: null, master: t && n === t.name }); }
                 }
                 const total = counts.reduce((a, c) => a + (c.n || 0), 0);
                 cont.innerHTML = `<div class="flex flex-wrap gap-1.5 items-center">
                     <span class="text-[10px] uppercase font-bold text-slate-400 mr-0.5">📦 Volumétrie</span>
-                    ${counts.map(c => `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-[11px] ${c.master ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-white border-slate-200 text-slate-600'}"><strong>${escapeHTML(c.name)}</strong>${c.master ? ' <span class="text-[8px] uppercase font-bold text-indigo-400">maître</span>' : ''} : ${c.n == null ? '—' : c.n.toLocaleString('fr-FR')}</span>`).join('')}
+                    ${counts.map(c => `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-[11px] ${c.master ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-white border-slate-200 text-slate-600'}"><strong>${escapeHTML(c.name)}</strong>${c.master ? ' <span class="text-[8px] uppercase font-bold text-indigo-400">maître</span>' : ''}${c.filtered ? ' <span title="Filtres de l\'objet appliqués">▼</span>' : ''} : ${c.n == null ? '—' : c.n.toLocaleString('fr-FR')}</span>`).join('')}
                     <span class="inline-flex items-center rounded-full px-2.5 py-0.5 bg-slate-800 text-white font-bold text-[11px]">Σ ${total.toLocaleString('fr-FR')} lignes</span>
                 </div>${opts && opts.note ? '<p class="text-[10px] text-slate-400 mt-1.5">Le total additionne les lignes de toutes les tables de l\'objet ; le profilage porte, lui, sur la table <strong>maître</strong>.</p>' : ''}`;
             } catch (e) { cont.innerHTML = `<span class="text-[11px] text-red-600">Comptage impossible : ${escapeHTML(e.message)}</span>`; }
@@ -4785,8 +4814,13 @@
                 const dimJoin = (rel, alias) => {
                     const bCol = rel.sourceTable === bId ? rel.sourceCol : rel.targetCol;
                     const dCol = rel.sourceTable === bId ? rel.targetCol : rel.sourceCol;
-                    const Td = sqlIdent(duckTableName(rel.sourceTable === bId ? rel.targetTable : rel.sourceTable));
-                    return `LEFT JOIN (SELECT * FROM ${Td} QUALIFY row_number() OVER (PARTITION BY ${norm(sqlIdent(dCol))} ORDER BY __rn) = 1) ${alias} ON ${norm('b.' + sqlIdent(bCol))} = ${norm(alias + '.' + sqlIdent(dCol))}`;
+                    const dTid = rel.sourceTable === bId ? rel.targetTable : rel.sourceTable;
+                    const Td = sqlIdent(duckTableName(dTid));
+                    // Si la table de dimension EST la table des éléments liés, ses filtres s'appliquent
+                    // aussi à la jointure de dimension (sinon la dimension affichait des valeurs
+                    // provenant de lignes exclues par les filtres).
+                    const fd = (dTid === rId && fr) ? ` WHERE ${fr}` : '';
+                    return `LEFT JOIN (SELECT * FROM ${Td}${fd} QUALIFY row_number() OVER (PARTITION BY ${norm(sqlIdent(dCol))} ORDER BY __rn) = 1) ${alias} ON ${norm('b.' + sqlIdent(bCol))} = ${norm(alias + '.' + sqlIdent(dCol))}`;
                 };
                 const dimExpr = (alias, col) => {
                     if (String(col).startsWith('__annee__|')) {
@@ -8015,9 +8049,10 @@
             const appliesSql = (st.applies || []).length ? ' AND ' + (st.applies || []).map(c => scopeCondSql(c).replaceAll(sqlIdent(c.col), 'p.' + sqlIdent(c.col))).join(' AND ') : '';
             const { conn } = await getDB();
             const norm = (a, c) => `NULLIF(UPPER(TRIM(CAST(${a}.${sqlIdent(c)} AS VARCHAR))), '')`;
+            const wMaster = boSourceWhere(bo, master.name), wChild = boSourceWhere(bo, st.table);
             const res = await conn.query(`
-                WITH par AS (SELECT DISTINCT ${norm('p', pCol)} AS k, MIN(TRIM(CAST(p.${sqlIdent(pCol)} AS VARCHAR))) AS disp FROM ${sqlIdent(duckTableName(master.id))} p WHERE ${norm('p', pCol)} IS NOT NULL ${appliesSql} GROUP BY 1),
-                cnt AS (SELECT ${norm('x', cCol)} AS k, COUNT(*)::BIGINT AS c FROM ${sqlIdent(duckTableName(child.id))} x WHERE ${norm('x', cCol)} IS NOT NULL ${condSql} GROUP BY 1)
+                WITH par AS (SELECT DISTINCT ${norm('p', pCol)} AS k, MIN(TRIM(CAST(p.${sqlIdent(pCol)} AS VARCHAR))) AS disp FROM ${sqlIdent(duckTableName(master.id))} p WHERE ${norm('p', pCol)} IS NOT NULL ${appliesSql}${wMaster ? ' AND (' + wMaster + ')' : ''} GROUP BY 1),
+                cnt AS (SELECT ${norm('x', cCol)} AS k, COUNT(*)::BIGINT AS c FROM ${sqlIdent(duckTableName(child.id))} x WHERE ${norm('x', cCol)} IS NOT NULL ${condSql}${wChild ? ' AND (' + wChild + ')' : ''} GROUP BY 1)
                 SELECT (SELECT COUNT(*) FROM par)::BIGINT AS total,
                        SUM(CASE WHEN COALESCE(cnt.c, 0) = 0 THEN 1 ELSE 0 END)::BIGINT AS missing,
                        SUM(CASE WHEN COALESCE(cnt.c, 0) > 1 THEN 1 ELSE 0 END)::BIGINT AS multi,
@@ -8041,7 +8076,10 @@
                 // On reporte le volume choisi ici sur le sélecteur du fichier, pour que runQualityAudit l'applique.
                 el('qualTable').value = master.id; handleQualTableChange();
                 const boSample = el('qualBoSampleSize'); if (boSample) el('qualSampleSize').value = boSample.value;
-                qualAuditWhereOverride = buildQualWhere('bo'); // reporte les filtres de l'objet sur la table maître
+                // Filtres DÉCLARÉS sur la source maître de l'objet + filtres saisis dans l'écran Qualité.
+                const declaredW = boSourceWhere(bo, master.name);
+                const adhocW = buildQualWhere('bo');
+                qualAuditWhereOverride = [declaredW, adhocW].filter(Boolean).map(x => `(${x})`).join(' AND ');
                 await runQualityAudit();
                 const alerts = el('profilingAlerts'); if (!alerts) return;
                 // 2. En-tête + conteneurs, PUIS audit global (check-list, règles du périmètre, hiérarchies)
