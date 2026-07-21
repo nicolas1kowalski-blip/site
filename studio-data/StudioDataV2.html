@@ -695,6 +695,20 @@
             </div>
         </div>
 
+        <div id="step-14" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-sky-800 mb-1 flex items-center gap-2">📋 Tableaux de bord</h2>
+                <p class="text-xs text-slate-500 mb-4">Composez des tuiles (graphes, tableaux, indicateurs) avec des filtres globaux, sauvegardez, dupliquez : à la réouverture, chaque tuile rejoue sa requête sur les données courantes. Export HTML autonome sans aucun appel réseau.</p>
+                <div id="dbContent"></div>
+            </div>
+        </div>
+        <div id="step-13" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-teal-800 mb-1 flex items-center gap-2">🧪 Recettes de transformation</h2>
+                <p class="text-xs text-slate-500 mb-4">Enchaînez des étapes de nettoyage/normalisation attachées à une source : le résultat est une table dérivée <strong>reproductible</strong>, relancée automatiquement quand la source est mise à jour, et journalisée dans le lineage.</p>
+                <div id="rcContent"></div>
+            </div>
+        </div>
         <div id="step-12" class="animate-fade-in hidden">
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                 <h2 class="text-lg font-bold text-purple-800 mb-1 flex items-center gap-2">📏 Règles de qualité & score</h2>
@@ -1648,6 +1662,8 @@
                 governance: { ...state.governance, qualityHistory: [] },
                 designs, themes, mcdPos,
                 zipMappings: state.zipMappings || {},
+                recipes: (state.recipes || []).map(r => { const c2 = { ...r }; delete c2.targetId; return c2; }),
+                dashboards: (state.dashboards || []).map(d2 => ({ ...d2, tiles: (d2.tiles || []).map(t2 => { const c2 = { ...t2 }; delete c2._rows; return c2; }) })),
             };
         }
 
@@ -1672,6 +1688,8 @@
             // Positions mémorisées du Modèle de données (arrangement manuel conservé).
             try { Object.keys(saved.mcdPos || {}).forEach(n => { const id = idOf(n); if (id) svgG.pos[id] = { x: saved.mcdPos[n].x, y: saved.mcdPos[n].y }; }); } catch (e) {}
             if (saved.zipMappings && typeof saved.zipMappings === 'object') state.zipMappings = saved.zipMappings;
+            if (Array.isArray(saved.recipes)) state.recipes = saved.recipes;
+            if (Array.isArray(saved.dashboards)) state.dashboards = saved.dashboards;
         }
 
         function normalizeGovernance(g) {
@@ -4408,7 +4426,7 @@
             { id: 'data', badge: '①', label: 'Données & Modèle', desc: 'Charger & modéliser', color: 'blue',
               tabs: [ { n: 11, icon: '🏠', label: 'Cockpit' }, { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' } ] },
             { id: 'etl', badge: '②', label: 'Exploitation', desc: 'ETL, croisements & analyse', color: 'indigo',
-              tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
+              tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 13, icon: '🧪', label: 'Recettes' }, { n: 14, icon: '📋', label: 'Tableaux de bord' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
             { id: 'quality', badge: '③', label: 'Qualité & Audit', desc: 'Profiling, anomalies, doublons', color: 'amber',
               tabs: [ { n: 8, icon: '✅', label: 'Qualité & Audit' }, { n: 12, icon: '📏', label: 'Règles & score' } ] },
             // La phase Gouvernance vit dans l'écran 9 : ses sous-onglets (g:...) sont rendus dans la
@@ -4468,13 +4486,15 @@
             }
         }
         function switchTab(num) {
-            for (let i = 1; i <= 12; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
+            for (let i = 1; i <= 14; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
             const stepEl = el(`step-${num}`); if (stepEl) stepEl.classList.remove('hidden');
             currentTab = num;
             renderNav();
             if(num===10) renderTablesDesign();
             if(num===11) renderCockpit();
             if(num===12) renderQualityRules();
+            if(num===13) renderRecipes();
+            if(num===14) renderDashboards();
             if(num===2){ renderRelationsList(); renderBizRules(); renderGraph(); requestAnimationFrame(() => reflowGraph('mcd')); }
             if(num===3) { updateBaseTableSelect(); if (advExtractOpen()) renderAdvExtract(); comboifyTableSelect('baseTableSelect'); }
             if(num===4) { updateVizBaseTableSelect(); covPopulate(); ['covBase', 'covDimTable', 'covRel'].forEach(comboifyTableSelect); }
@@ -5928,6 +5948,320 @@
             } catch (err) { state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null; }
         }
 
+        // ======================= E4 (V2) : TABLEAUX DE BORD COMPOSABLES & SAUVEGARDABLES =======================
+        const DB_KINDS = { bar: '📊 Barres', line: '📈 Courbe', pie: '🥧 Camembert', table: '▦ Tableau', kpi: '#️⃣ Indicateur' };
+        const DB_AGGS = { count: 'Nombre de lignes', countd: 'Valeurs distinctes de…', sum: 'Somme de…', avg: 'Moyenne de…', min: 'Min de…', max: 'Max de…' };
+        let dbState = { openId: null };
+        window._dbCharts = window._dbCharts || {};
+        function dbList() { return state.dashboards = state.dashboards || []; }
+        function dbById(id) { return dbList().find(x => x.id === id); }
+        function dbAdd() { const d = { id: 'db_' + generateId(), name: 'Nouveau tableau de bord', filters: [], tiles: [] }; dbList().push(d); dbState.openId = d.id; persistAppState(); renderDashboards(); }
+        function dbOpen(id) { dbState.openId = id; renderDashboards(); }
+        function dbClose() { dbState.openId = null; renderDashboards(); }
+        function dbDup(id) { const d = dbById(id); if (!d) return; const c2 = JSON.parse(JSON.stringify(d)); c2.id = 'db_' + generateId(); c2.name = d.name + ' (copie)'; c2.tiles.forEach(t => t.id = 'tl_' + generateId()); dbList().push(c2); persistAppState(); renderDashboards(); }
+        function dbDel(id) { state.dashboards = dbList().filter(x => x.id !== id); if (dbState.openId === id) dbState.openId = null; persistAppState(); renderDashboards(); }
+        function dbSet(id, f, v) { const d = dbById(id); if (!d) return; d[f] = v; persistAppState(); }
+        function dbAddTile(id) { const d = dbById(id); if (!d) return; d.tiles.push({ id: 'tl_' + generateId(), title: 'Nouvelle tuile', table: '', kind: 'bar', dim: '', agg: 'count', aggCol: '', topN: 12 }); persistAppState(); renderDashboards(); }
+        function dbSetTile(id, tid, f, v) { const d = dbById(id); const t = d && d.tiles.find(x => x.id === tid); if (!t) return; t[f] = v; persistAppState(); if (f === 'table' || f === 'kind') renderDashboards(); else dbRunTile(id, tid); }
+        function dbDelTile(id, tid) { const d = dbById(id); if (!d) return; d.tiles = d.tiles.filter(x => x.id !== tid); persistAppState(); renderDashboards(); }
+        function dbAddFilter(id) { const d = dbById(id); if (!d) return; d.filters.push({ col: '', op: 'eq', val: '', conn: 'AND' }); persistAppState(); renderDashboards(); }
+        function dbSetFilter(id, i, f, v) { const d = dbById(id); if (!d || !d.filters[i]) return; d.filters[i][f] = v; persistAppState(); if (f === 'op') renderDashboards(); }
+        function dbDelFilter(id, i) { const d = dbById(id); if (!d) return; d.filters.splice(i, 1); persistAppState(); renderDashboards(); }
+        // Filtres GLOBAUX : appliqués à chaque tuile dont la table possède la colonne.
+        function dbWhereFor(d, tableName) {
+            const t = tableByName(tableName); if (!t) return '';
+            let sql = '';
+            (d.filters || []).forEach(c => {
+                if (!c.col || !t.headers.includes(c.col)) return;
+                if (!(['empty', 'nempty'].includes(c.op) || String(c.val || '').length)) return;
+                const f = qualCondSql(c); if (!f) return;
+                sql = sql ? `(${sql}) ${c.conn === 'OR' ? 'OR' : 'AND'} ${f}` : f;
+            });
+            return sql;
+        }
+        function dbTileSql(d, t) {
+            const tb = tableByName(t.table); if (!tb || tb.status !== 'ready') return null;
+            const T = sqlIdent(duckTableName(tb.id));
+            const w = dbWhereFor(d, t.table); const W = w ? ` WHERE ${w}` : '';
+            const num = c => `TRY_CAST(REPLACE(CAST(${sqlIdent(c)} AS VARCHAR), ',', '.') AS DOUBLE)`;
+            const agg = t.agg === 'count' ? 'COUNT(*)' : t.agg === 'countd' ? `COUNT(DISTINCT ${t.aggCol ? sqlIdent(t.aggCol) : '1'})` : `${(t.agg || 'sum').toUpperCase()}(${t.aggCol ? num(t.aggCol) : 'NULL'})`;
+            if (t.kind === 'kpi') return `SELECT ${agg} AS v FROM ${T}${W}`;
+            if (!t.dim) return null;
+            const dexpr = `COALESCE(NULLIF(TRIM(CAST(${sqlIdent(t.dim)} AS VARCHAR)), ''), '(vide)')`;
+            return `SELECT ${dexpr} AS d, ${agg} AS v FROM ${T}${W} GROUP BY 1 ORDER BY 2 DESC LIMIT ${parseInt(t.topN) || 12}`;
+        }
+        async function dbRunTile(id, tid) {
+            const d = dbById(id); const t = d && d.tiles.find(x => x.id === tid); if (!t) return;
+            const body = el('dbTileBody-' + tid); if (!body) return;
+            const sql = dbTileSql(d, t);
+            if (!sql) { body.innerHTML = '<p class="text-[11px] text-slate-300 italic p-3">Configurez la tuile (table' + (t.kind !== 'kpi' ? ', axe' : '') + (t.agg !== 'count' ? ', colonne agrégée' : '') + ').</p>'; return; }
+            try {
+                const { conn } = await getDB();
+                const rows = arrowResultToObjects(await conn.query(sql));
+                t._rows = rows;
+                if (t.kind === 'kpi') {
+                    const v = rows[0] ? Number(rows[0].v) : 0;
+                    body.innerHTML = `<div class="text-4xl font-black text-sky-700 text-center py-6">${(Math.round(v * 100) / 100).toLocaleString('fr-FR')}</div>`;
+                    return;
+                }
+                if (t.kind === 'table') {
+                    body.innerHTML = `<div class="overflow-auto max-h-[240px]"><table class="w-full text-left text-[11px]"><thead class="bg-slate-50 font-bold sticky top-0"><tr><th class="p-1.5">${escapeHTML(t.dim)}</th><th class="p-1.5 text-right">${DB_AGGS[t.agg] || t.agg}${t.aggCol ? ' ' + escapeHTML(t.aggCol) : ''}</th></tr></thead>
+                        <tbody>${rows.map(r => `<tr class="border-t border-slate-100"><td class="p-1.5">${escapeHTML(String(r.d))}</td><td class="p-1.5 text-right font-bold">${Number(r.v).toLocaleString('fr-FR')}</td></tr>`).join('')}</tbody></table></div>`;
+                    return;
+                }
+                body.innerHTML = `<div class="h-[220px] relative"><canvas id="dbCv-${tid}"></canvas></div>`;
+                if (window._dbCharts[tid]) { try { window._dbCharts[tid].destroy(); } catch (e2) {} }
+                if (typeof Chart === 'undefined') { body.innerHTML = '<p class="text-[11px] text-slate-400 p-3">Graphique indisponible (bibliothèque non chargée).</p>'; return; }
+                const colors = rows.map((_, i) => THEME_PALETTE[i % THEME_PALETTE.length].zone);
+                window._dbCharts[tid] = new Chart(el('dbCv-' + tid).getContext('2d'), {
+                    type: t.kind === 'pie' ? 'doughnut' : t.kind,
+                    data: { labels: rows.map(r => String(r.d)), datasets: [{ label: DB_AGGS[t.agg] || '', data: rows.map(r => Number(r.v)), backgroundColor: t.kind === 'line' ? '#0284c755' : colors, borderColor: t.kind === 'line' ? '#0284c7' : colors, fill: t.kind === 'line' }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: t.kind === 'pie', position: 'right', labels: { boxWidth: 10, font: { size: 9 } } } }, scales: t.kind === 'pie' ? {} : { y: { beginAtZero: true } } },
+                });
+            } catch (e) { body.innerHTML = `<p class="text-[11px] text-red-600 p-3">Erreur : ${escapeHTML(e.message)}</p>`; }
+        }
+        async function dbRunAll(id) { const d = dbById(id); if (!d) return; for (const t of d.tiles) await dbRunTile(id, t.id); }
+        function dbExportHtml(id) {
+            const d = dbById(id); if (!d) return;
+            const parts = d.tiles.map(t => {
+                let inner = '';
+                if (t.kind === 'kpi') inner = `<div style="font-size:42px;font-weight:900;color:#0369a1;text-align:center;padding:24px">${((t._rows || [])[0] ? Number(t._rows[0].v) : 0).toLocaleString('fr-FR')}</div>`;
+                else if (t.kind === 'table' || !el('dbCv-' + t.id)) inner = `<table style="width:100%;border-collapse:collapse;font:11px system-ui">${(t._rows || []).map(r => `<tr><td style="border-top:1px solid #eee;padding:4px">${escapeHTML(String(r.d))}</td><td style="border-top:1px solid #eee;padding:4px;text-align:right;font-weight:700">${Number(r.v).toLocaleString('fr-FR')}</td></tr>`).join('')}</table>`;
+                else { try { inner = `<img src="${el('dbCv-' + t.id).toDataURL('image/png')}" style="max-width:100%">`; } catch (e) { inner = '(graphique)'; } }
+                return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;background:#fff"><div style="font:700 13px system-ui;color:#334155;margin-bottom:8px">${escapeHTML(t.title)}</div>${inner}</div>`;
+            }).join('');
+            const filt = (d.filters || []).filter(f => f.col).map(f => `${f.col} ${f.op} ${f.val || ''}`).join(' · ');
+            const html2 = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHTML(d.name)}</title></head><body style="font-family:system-ui;background:#f8fafc;padding:24px;margin:0">
+                <h1 style="font-size:20px;color:#0f172a">📋 ${escapeHTML(d.name)}</h1>
+                <p style="font-size:11px;color:#64748b">Exporté le ${new Date().toLocaleString('fr-FR')}${filt ? ' · Filtres : ' + escapeHTML(filt) : ''} — généré localement par Studio Data (aucune donnée transmise).</p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px">${parts}</div></body></html>`;
+            const blob = new Blob([html2], { type: 'text/html' });
+            const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `${d.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.html`; document.body.appendChild(a2); a2.click(); a2.remove();
+        }
+        function renderDashboards() {
+            const c = el('dbContent'); if (!c) return;
+            const tables = Object.values(state.tables).filter(t => t.status === 'ready');
+            const d = dbState.openId ? dbById(dbState.openId) : null;
+            if (!d) {
+                c.innerHTML = `<div class="flex items-center gap-2 mb-4"><button onclick="dbAdd()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Tableau de bord</button></div>
+                    ${dbList().length ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${dbList().map(d2 => `<div class="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:border-sky-300 cursor-pointer" onclick="dbOpen('${d2.id}')">
+                        <div class="font-bold text-sm text-slate-800">📋 ${escapeHTML(d2.name)}</div>
+                        <div class="text-[11px] text-slate-400 mt-1">${d2.tiles.length} tuile(s) · ${(d2.filters || []).filter(f => f.col).length} filtre(s) global(aux)</div>
+                        <div class="flex gap-2 mt-2"><button onclick="event.stopPropagation(); dbDup('${d2.id}')" class="text-[10px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-500">⧉ Dupliquer</button><button onclick="event.stopPropagation(); dbDel('${d2.id}')" class="text-[10px] text-red-400 hover:text-red-600 font-bold">✕ Supprimer</button></div>
+                    </div>`).join('')}</div>` : '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun tableau de bord — créez-en un pour transformer vos analyses en livrable réutilisable.</p>'}`;
+                return;
+            }
+            const allCols = [...new Set(tables.flatMap(t => t.headers))];
+            let html = `<div class="flex items-center gap-2 mb-3 flex-wrap">
+                <button onclick="dbClose()" class="text-xs bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg font-bold text-slate-600">← Tableaux</button>
+                <input type="text" value="${escapeHTML(d.name)}" onchange="dbSet('${d.id}','name',this.value)" class="font-bold text-base border border-slate-300 p-1.5 rounded-lg w-72">
+                <button onclick="dbAddTile('${d.id}')" class="bg-sky-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">+ Tuile</button>
+                <button onclick="dbRunAll('${d.id}')" class="bg-white border border-sky-300 text-sky-700 text-xs font-bold px-3 py-1.5 rounded-lg">🔄 Tout actualiser</button>
+                <span class="flex-grow"></span>
+                <button onclick="dbExportHtml('${d.id}')" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬇ Export HTML autonome</button>
+            </div>
+            <div class="border border-slate-200 rounded-lg p-2.5 bg-slate-50/50 mb-4">
+                <div class="flex items-center justify-between mb-1"><span class="text-[10px] uppercase font-bold text-slate-400">Filtres globaux (appliqués à chaque tuile dont la table possède la colonne)</span><button onclick="dbAddFilter('${d.id}')" class="text-[10px] bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-500">+ Filtre</button></div>
+                ${(d.filters || []).map((f, i) => `<div class="flex items-center gap-1.5 mb-1">
+                    ${i === 0 ? '<span class="text-[10px] font-bold text-slate-400 w-8 text-center">Où</span>' : `<select onchange="dbSetFilter('${d.id}',${i},'conn',this.value)" class="w-10 border rounded text-[10px] font-bold px-0.5 py-0.5 bg-white"><option value="AND" ${f.conn !== 'OR' ? 'selected' : ''}>ET</option><option value="OR" ${f.conn === 'OR' ? 'selected' : ''}>OU</option></select>`}
+                    <input type="text" list="dbCols-${d.id}" value="${escapeHTML(f.col || '')}" onchange="dbSetFilter('${d.id}',${i},'col',this.value)" placeholder="colonne" class="border border-slate-300 rounded px-1.5 py-1 text-[11px] w-40 bg-white">
+                    <select onchange="dbSetFilter('${d.id}',${i},'op',this.value)" class="border border-slate-300 rounded px-1 py-1 text-[11px] bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${f.op === o.v ? 'selected' : ''}>${o.t}</option>`).join('')}</select>
+                    <input type="text" value="${escapeHTML(f.val || '')}" onchange="dbSetFilter('${d.id}',${i},'val',this.value)" placeholder="valeur" class="border border-slate-300 rounded px-1.5 py-1 text-[11px] w-32 ${['empty', 'nempty'].includes(f.op) ? 'invisible' : ''}">
+                    <button onclick="dbDelFilter('${d.id}',${i})" class="text-slate-300 hover:text-red-500 font-bold">✕</button>
+                </div>`).join('') || '<p class="text-[10px] text-slate-300 italic">Aucun filtre global.</p>'}
+                <datalist id="dbCols-${d.id}">${allCols.map(h => `<option value="${escapeHTML(h)}">`).join('')}</datalist>
+                ${(d.filters || []).some(f => f.col) ? `<button onclick="dbRunAll('${d.id}')" class="text-[10px] bg-sky-600 text-white rounded px-2 py-0.5 font-bold mt-1">Appliquer</button>` : ''}
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${d.tiles.map(t => { const tb = tableByName(t.table); const hs = tb ? tb.headers : [];
+                const colSel = (f, cur, ph) => `<select onchange="dbSetTile('${d.id}','${t.id}','${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white max-w-[110px]"><option value="">${ph}</option>${hs.map(h => `<option value="${escapeHTML(h)}" ${cur === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+                return `<div class="border border-slate-200 rounded-xl bg-white">
+                <div class="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 flex-wrap">
+                    <input type="text" value="${escapeHTML(t.title)}" onchange="dbSetTile('${d.id}','${t.id}','title',this.value)" class="font-bold text-xs border border-slate-200 p-1 rounded flex-grow min-w-[120px]">
+                    <button onclick="dbDelTile('${d.id}','${t.id}')" class="text-slate-300 hover:text-red-500 font-bold">✕</button>
+                </div>
+                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50/60 flex-wrap text-[10px]">
+                    <select onchange="dbSetTile('${d.id}','${t.id}','table',this.value)" class="border border-slate-200 rounded px-1 py-0.5 bg-white max-w-[120px] font-bold"><option value="">— table —</option>${tables.map(t2 => `<option value="${escapeHTML(t2.name)}" ${t.table === t2.name ? 'selected' : ''}>${escapeHTML(t2.name)}</option>`).join('')}</select>
+                    <select onchange="dbSetTile('${d.id}','${t.id}','kind',this.value)" class="border border-slate-200 rounded px-1 py-0.5 bg-white">${Object.entries(DB_KINDS).map(([k, l]) => `<option value="${k}" ${t.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+                    ${t.kind !== 'kpi' ? `<span class="text-slate-400">axe</span>${colSel('dim', t.dim, '— axe —')}` : ''}
+                    <select onchange="dbSetTile('${d.id}','${t.id}','agg',this.value)" class="border border-slate-200 rounded px-1 py-0.5 bg-white">${Object.entries(DB_AGGS).map(([k, l]) => `<option value="${k}" ${t.agg === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+                    ${t.agg !== 'count' ? colSel('aggCol', t.aggCol, '— col —') : ''}
+                    ${t.kind !== 'kpi' ? `<span class="text-slate-400">top</span><input type="number" value="${t.topN || 12}" onchange="dbSetTile('${d.id}','${t.id}','topN',this.value)" class="border border-slate-200 rounded px-1 py-0.5 w-12">` : ''}
+                </div>
+                <div id="dbTileBody-${t.id}" class="p-2"></div>
+            </div>`; }).join('')}</div>
+            ${d.tiles.length ? '' : '<p class="text-sm text-slate-400 italic py-6 text-center">Ajoutez des tuiles avec « + Tuile ».</p>'}`;
+            c.innerHTML = html;
+            dbRunAll(d.id);
+        }
+
+        // ======================= E3 (V2) : RECETTES DE TRANSFORMATION REPRODUCTIBLES =======================
+        const RC_STEPS = { filter: '▼ Filtrer', clean: '🧼 Nettoyer', normalize: '📐 Normaliser (format)', calc: '🧮 Colonne calculée', dedup: '♊ Dédoublonner', rename: '✏️ Renommer', drop: '🗑 Supprimer colonnes' };
+        const RC_CLEAN = { trim: 'espaces début/fin', upper: 'MAJUSCULES', lower: 'minuscules', noaccents: 'sans accents', squeeze: 'espaces multiples → un seul' };
+        let rcState = { openId: null, preview: null };
+        function rcList() { return state.recipes = state.recipes || []; }
+        function rcAdd() { const r = { id: 'rc_' + generateId(), name: 'Nouvelle recette', src: '', out: '', steps: [] }; rcList().push(r); rcState.openId = r.id; persistAppState(); renderRecipes(); }
+        function rcById(id) { return rcList().find(x => x.id === id); }
+        function rcSet(id, f, v) { const r = rcById(id); if (!r) return; r[f] = v; if (f === 'src' && !r.out) r.out = 'RECETTE_' + String(v).replace(/\.[^.]+$/, ''); persistAppState(); if (f === 'src') renderRecipes(); }
+        function rcDel(id) { state.recipes = rcList().filter(x => x.id !== id); persistAppState(); renderRecipes(); }
+        function rcAddStep(id, type) { const r = rcById(id); if (!r) return; r.steps.push({ id: 'st_' + generateId(), type, enabled: true, p: {} }); persistAppState(); renderRecipes(); }
+        function rcSetStep(id, sid, f, v) { const r = rcById(id); const st = r && r.steps.find(x => x.id === sid); if (!st) return; if (f.startsWith('p.')) st.p[f.slice(2)] = v; else st[f] = v; persistAppState(); if (f === 'enabled' || f === 'type') renderRecipes(); }
+        function rcDelStep(id, sid) { const r = rcById(id); if (!r) return; r.steps = r.steps.filter(x => x.id !== sid); persistAppState(); renderRecipes(); }
+        function rcMoveStep(id, sid, dir) { const r = rcById(id); if (!r) return; const i = r.steps.findIndex(x => x.id === sid); const j = i + dir; if (i < 0 || j < 0 || j >= r.steps.length) return; const [st] = r.steps.splice(i, 1); r.steps.splice(j, 0, st); persistAppState(); renderRecipes(); }
+        // SQL d'une recette, jusqu'à l'étape uptoIdx incluse (déterministe : même entrée -> même sortie).
+        function rcBuildSql(r, uptoIdx) {
+            const t = tableByName(r.src); if (!t || t.status !== 'ready') throw new Error(`La source "${r.src}" n'est pas chargée.`);
+            let sql = `SELECT * EXCLUDE (__rn) FROM ${sqlIdent(duckTableName(t.id))}`;
+            const steps = r.steps.filter(st => st.enabled);
+            const upto = uptoIdx == null ? steps.length : Math.min(uptoIdx + 1, steps.length);
+            for (let i = 0; i < upto; i++) {
+                const st = steps[i]; const P = st.p || {}; const c = P.col ? sqlIdent(P.col) : null; const raw = c ? `CAST(${c} AS VARCHAR)` : null;
+                switch (st.type) {
+                    case 'filter': { const f = P.col && P.op ? qualCondSql({ col: P.col, op: P.op, val: P.val || '' }) : ''; if (f) sql = `SELECT * FROM (\n${sql}\n) q WHERE ${f}`; break; }
+                    case 'clean': { if (!c) break; const A = P.action || 'trim';
+                        const ex = A === 'trim' ? `TRIM(${raw})` : A === 'upper' ? `UPPER(${raw})` : A === 'lower' ? `LOWER(${raw})` : A === 'noaccents' ? `strip_accents(${raw})` : `regexp_replace(TRIM(${raw}), ' +', ' ', 'g')`;
+                        sql = `SELECT * REPLACE (${ex} AS ${c}) FROM (\n${sql}\n) q`; break; }
+                    case 'normalize': { if (!c || !P.fmt) break; const ne = tdNormExpr(P.fmt, raw); if (!ne) break;
+                        sql = `SELECT * REPLACE (COALESCE(${ne}, ${raw}) AS ${c}) FROM (\n${sql}\n) q`; break; }
+                    case 'calc': { if (!P.name || !String(P.formula || '').trim()) break;
+                        sql = `SELECT *, (${tdFormulaSql(P.formula)}) AS ${sqlIdent(P.name)} FROM (\n${sql}\n) q`; break; }
+                    case 'dedup': { const keys = String(P.keys || '').split(';').map(x => x.trim()).filter(Boolean); if (!keys.length) break;
+                        const k = keys.map(k2 => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(k2)} AS VARCHAR))), '')`).join(` || chr(1) || `);
+                        sql = `SELECT * FROM (\n${sql}\n) q QUALIFY row_number() OVER (PARTITION BY ${k} ORDER BY md5(CAST(q AS VARCHAR))) = 1`; break; }
+                    case 'rename': { if (!c || !String(P.to || '').trim()) break; sql = `SELECT * RENAME (${c} AS ${sqlIdent(P.to.trim())}) FROM (\n${sql}\n) q`; break; }
+                    case 'drop': { const cols = String(P.cols || '').split(';').map(x => x.trim()).filter(Boolean); if (!cols.length) break;
+                        sql = `SELECT * EXCLUDE (${cols.map(sqlIdent).join(', ')}) FROM (\n${sql}\n) q`; break; }
+                }
+            }
+            return sql;
+        }
+        async function rcRun(id, btn) {
+            const r = rcById(id); if (!r) return;
+            if (!r.src) return showError('Choisissez la source de la recette.');
+            if (!String(r.out || '').trim()) return showError('Donnez un nom à la table produite.');
+            const clash = Object.values(state.tables).find(t => t.name === r.out && t.id !== r.targetId);
+            if (clash) return showError(`Le nom "${r.out}" est déjà utilisé par une autre source/table.`);
+            if (btn) btn.disabled = true;
+            bgTaskStart(`Recette « ${r.name} » en cours`);
+            try {
+                const { conn } = await getDB();
+                const inner = rcBuildSql(r, null);
+                const tId = r.targetId && state.tables[r.targetId] ? r.targetId : ('tb_' + generateId());
+                if (!state.tables[tId]) { state.tables[tId] = { id: tId, name: r.out, file: null, type: 'extraction', size: 0, config: {}, headers: [], columnsMeta: {}, status: 'loading' }; state.pivotMode[tId] = 'none'; }
+                const t = state.tables[tId]; t.name = r.out; t.status = 'loading';
+                await duckDropTable(tId);
+                await conn.query(`CREATE TABLE ${sqlIdent(duckTableName(tId))} AS SELECT row_number() OVER () AS __rn, * FROM (\n${inner}\n) f`);
+                t.headers = await duckTableHeaders(tId); t.storage = 'table'; t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready';
+                const cRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tId))}`);
+                r.lastRows = Number(arrowResultToObjects(cRes)[0].n); r.lastAt = Date.now(); r.targetId = tId;
+                // Journalisation lineage : la table produite est alimentée par la source.
+                state.governance.lineage[r.out] = { from: [r.src] };
+                renderTables(); updateBaseTableSelect(); populateQualTables();
+                try { await persistTableData(tId); } catch (e2) {}
+                persistAppState(); renderRecipes();
+                bgTaskEnd(`🧪 Recette « ${r.name} » : table « ${r.out} » produite (${r.lastRows.toLocaleString('fr-FR')} lignes).`);
+                try { await qrAutoRun(r.out); } catch (e2) {}
+            } catch (e) { bgTaskEnd(); showError('Recette impossible : ' + e.message); }
+            finally { if (btn) btn.disabled = false; }
+        }
+        async function rcAutoRun(srcName) { for (const r of rcList().filter(x => x.src === srcName && x.steps.length)) { try { await rcRun(r.id, null); } catch (e) { console.warn('Recette auto :', e); } } }
+        async function rcPreview(id, uptoIdx) {
+            const r = rcById(id); if (!r) return;
+            try {
+                const { conn } = await getDB();
+                const res = await conn.query(`SELECT * FROM (\n${rcBuildSql(r, uptoIdx)}\n) p LIMIT 8`);
+                const rows = arrowResultToObjects(res);
+                const box = el('rcPreview-' + id); if (!box) return;
+                if (!rows.length) { box.innerHTML = '<p class="text-[11px] text-slate-400 italic p-2">Aucune ligne après cette étape.</p>'; return; }
+                const cols = Object.keys(rows[0]);
+                box.innerHTML = `<div class="text-[10px] font-bold text-teal-700 mb-1">Aperçu après l'étape ${uptoIdx == null ? 'finale' : uptoIdx + 1} (8 premières lignes)</div>
+                    <div class="border border-slate-200 rounded overflow-x-auto"><table class="w-full text-left text-[10px]"><thead class="bg-slate-50 font-bold"><tr>${cols.map(c2 => `<th class="p-1 whitespace-nowrap">${escapeHTML(c2)}</th>`).join('')}</tr></thead>
+                    <tbody>${rows.map(rw => `<tr class="border-t border-slate-100">${cols.map(c2 => `<td class="p-1 whitespace-nowrap max-w-[160px] truncate">${escapeHTML(rw[c2] == null ? '' : String(rw[c2]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+            } catch (e) { const box = el('rcPreview-' + id); if (box) box.innerHTML = `<p class="text-[11px] text-red-600 p-2">Aperçu impossible : ${escapeHTML(e.message)}</p>`; }
+        }
+        function rcExport() {
+            const blob = new Blob([JSON.stringify({ kind: 'studio-data-recipes', recipes: rcList().map(r => { const c2 = { ...r }; delete c2.targetId; return c2; }) }, null, 2)], { type: 'application/json' });
+            const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `Recettes_${Date.now()}.json`; document.body.appendChild(a2); a2.click(); a2.remove();
+        }
+        function rcImport(inputEl) {
+            const f = inputEl.files && inputEl.files[0]; if (!f) return;
+            const rd = new FileReader();
+            rd.onload = () => { try {
+                const j = JSON.parse(rd.result); const list = j && j.kind === 'studio-data-recipes' ? j.recipes : (Array.isArray(j) ? j : null);
+                if (!list) throw new Error('fichier non reconnu.');
+                let n = 0; list.forEach(r => { if (r && r.id && r.steps) { r.id = 'rc_' + generateId(); delete r.targetId; rcList().push(r); n++; } });
+                persistAppState(); renderRecipes(); showSuccess(`🧪 ${n} recette(s) importée(s).`);
+            } catch (e) { showError('Import impossible : ' + e.message); } };
+            rd.readAsText(f); inputEl.value = '';
+        }
+        function rcStepParamsHtml(r, st) {
+            const t = tableByName(r.src); const hs = t ? t.headers : [];
+            const P = st.p || {};
+            const colSel = (f, cur) => `<select onchange="rcSetStep('${r.id}','${st.id}','${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[130px]"><option value="">— colonne —</option>${hs.map(h => `<option value="${escapeHTML(h)}" ${cur === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+            const inp = (f, cur, ph, w) => `<input type="text" value="${escapeHTML(cur == null ? '' : String(cur))}" onchange="rcSetStep('${r.id}','${st.id}','p.${f}',this.value)" placeholder="${ph}" class="border border-slate-200 rounded px-1.5 py-0.5 text-[11px] ${w || 'w-32'}">`;
+            switch (st.type) {
+                case 'filter': return colSel('p.col', P.col) + ` <select onchange="rcSetStep('${r.id}','${st.id}','p.op',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white">${QUAL_FILTER_OPS.map(o => `<option value="${o.v}" ${P.op === o.v ? 'selected' : ''}>${o.t}</option>`).join('')}</select> ` + inp('val', P.val, 'valeur');
+                case 'clean': return colSel('p.col', P.col) + ` <select onchange="rcSetStep('${r.id}','${st.id}','p.action',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white">${Object.entries(RC_CLEAN).map(([k, l]) => `<option value="${k}" ${(P.action || 'trim') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+                case 'normalize': return colSel('p.col', P.col) + ` <select onchange="rcSetStep('${r.id}','${st.id}','p.fmt',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white"><option value="">— format —</option><option value="date" ${P.fmt === 'date' ? 'selected' : ''}>date → AAAA-MM-JJ</option><option value="dec" ${P.fmt === 'dec' ? 'selected' : ''}>décimal (1 234,5 → 1234.5)</option><option value="int" ${P.fmt === 'int' ? 'selected' : ''}>entier</option><option value="code" ${P.fmt === 'code' ? 'selected' : ''}>code (MAJ, sans espaces)</option><option value="bool" ${P.fmt === 'bool' ? 'selected' : ''}>booléen</option></select>`;
+                case 'calc': return inp('name', P.name, 'nom de la colonne', 'w-36') + ' = ' + inp('formula', P.formula, 'ex : [PRIX] * [QTE]', 'w-64');
+                case 'dedup': return 'clé : ' + inp('keys', P.keys, 'colonnes séparées par ;', 'w-56');
+                case 'rename': return colSel('p.col', P.col) + ' → ' + inp('to', P.to, 'nouveau nom', 'w-36');
+                case 'drop': return inp('cols', P.cols, 'colonnes à supprimer, séparées par ;', 'w-72');
+                default: return '';
+            }
+        }
+        function renderRecipes() {
+            const c = el('rcContent'); if (!c) return;
+            const tables = Object.values(state.tables).filter(t => t.status === 'ready' && t.type !== 'designed');
+            let html = `<div class="flex items-center gap-2 mb-4 flex-wrap">
+                <button onclick="rcAdd()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Recette</button>
+                <span class="flex-grow"></span>
+                <button onclick="rcExport()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬇ Exporter (JSON)</button>
+                <button onclick="el('rcImportFile').click()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬆ Importer</button>
+                <input type="file" id="rcImportFile" accept=".json" class="hidden" onchange="rcImport(this)">
+            </div>`;
+            if (!rcList().length) html += '<p class="text-sm text-slate-400 italic py-8 text-center">Aucune recette — créez-en une pour rendre vos nettoyages reproductibles.</p>';
+            rcList().forEach(r => {
+                const open = rcState.openId === r.id;
+                html += `<details class="border border-teal-200 rounded-xl bg-white mb-3 group" ${open ? 'open' : ''}>
+                    <summary class="bg-teal-50/60 px-4 py-2.5 cursor-pointer flex items-center gap-2 flex-wrap list-none" onclick="rcState.openId='${r.id}'">
+                        <span class="text-teal-400 group-open:rotate-90 transition-transform">▶</span>
+                        <input type="text" value="${escapeHTML(r.name)}" onclick="event.stopPropagation()" onchange="rcSet('${r.id}','name',this.value)" class="font-bold text-sm border border-teal-200 p-1 rounded bg-white w-56">
+                        <span class="text-[11px] text-slate-500">📥 ${escapeHTML(r.src || '?')} → 🧪 <strong>${escapeHTML(r.out || '?')}</strong> · ${r.steps.length} étape(s)</span>
+                        ${r.lastAt ? `<span class="text-[10px] text-emerald-600 font-bold">✔ ${new Date(r.lastAt).toLocaleString('fr-FR')} · ${(r.lastRows || 0).toLocaleString('fr-FR')} lignes</span>` : ''}
+                        <span class="ml-auto"></span>
+                        <button onclick="event.preventDefault(); rcRun('${r.id}', this)" class="bg-teal-600 text-white text-xs font-bold px-3 py-1 rounded">▶ Exécuter</button>
+                        <button onclick="event.preventDefault(); rcDel('${r.id}')" class="text-red-400 hover:text-red-600 font-bold px-1">✕</button>
+                    </summary>
+                    <div class="p-4">
+                        <div class="flex items-center gap-2 mb-3 flex-wrap text-xs">
+                            <span class="font-bold text-slate-500">Source</span>
+                            <select onchange="rcSet('${r.id}','src',this.value)" class="border border-slate-300 rounded p-1.5 bg-white"><option value="">— source —</option>${tables.map(t => `<option value="${escapeHTML(t.name)}" ${r.src === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select>
+                            <span class="font-bold text-slate-500">Table produite</span>
+                            <input type="text" value="${escapeHTML(r.out || '')}" onchange="rcSet('${r.id}','out',this.value)" class="border border-slate-300 rounded p-1.5 w-52 font-bold">
+                        </div>
+                        ${r.steps.map((st, i) => `<div class="flex items-center gap-1.5 mb-1.5 flex-wrap ${st.enabled ? '' : 'opacity-40'}">
+                            <span class="w-5 h-5 rounded-full bg-teal-600 text-white text-[10px] font-black flex items-center justify-center">${i + 1}</span>
+                            <input type="checkbox" ${st.enabled ? 'checked' : ''} onchange="rcSetStep('${r.id}','${st.id}','enabled',this.checked)" title="Étape active" class="w-3.5 h-3.5 rounded text-teal-600">
+                            <select onchange="rcSetStep('${r.id}','${st.id}','type',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white font-bold">${Object.entries(RC_STEPS).map(([k, l]) => `<option value="${k}" ${st.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+                            ${rcStepParamsHtml(r, st)}
+                            <span class="ml-auto"></span>
+                            <button onclick="rcPreview('${r.id}',${i})" class="text-[10px] bg-white border border-teal-200 text-teal-700 px-1.5 py-0.5 rounded font-bold" title="Aperçu après cette étape">👁</button>
+                            <button onclick="rcMoveStep('${r.id}','${st.id}',-1)" class="text-slate-300 hover:text-teal-600 font-black text-[10px]">▲</button>
+                            <button onclick="rcMoveStep('${r.id}','${st.id}',1)" class="text-slate-300 hover:text-teal-600 font-black text-[10px]">▼</button>
+                            <button onclick="rcDelStep('${r.id}','${st.id}')" class="text-slate-300 hover:text-red-500 font-bold">✕</button>
+                        </div>`).join('')}
+                        <div class="flex items-center gap-1.5 flex-wrap mt-2">
+                            <span class="text-[10px] uppercase font-bold text-slate-400">+ étape :</span>
+                            ${Object.entries(RC_STEPS).map(([k, l]) => `<button onclick="rcAddStep('${r.id}','${k}')" class="text-[11px] bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-600 hover:bg-teal-50">${l}</button>`).join('')}
+                        </div>
+                        <div id="rcPreview-${r.id}" class="mt-3"></div>
+                        <p class="text-[10px] text-slate-400 mt-2">La recette est relancée automatiquement quand « ${escapeHTML(r.src || 'la source')} » est mise à jour · la table produite apparaît dans les Sources et le lineage · même entrée → même sortie.</p>
+                    </div>
+                </details>`;
+            });
+            c.innerHTML = html;
+        }
+
         // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
         const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)' };
         const QR_W = { 'Faible': 1, 'Moyenne': 2, 'Haute': 3, 'Critique': 5 };
@@ -6278,6 +6612,8 @@
             await persistTableData(tId); persistAppState();
             // Les tables conçues qui dépendent de cette source sont reconstruites automatiquement.
             try { await tdAutoRebuildFor(t.name); } catch (e) { console.warn('Reconstruction auto ignorée :', e); }
+            // E3 : les recettes attachées à cette source sont relancées automatiquement.
+            try { await rcAutoRun(t.name); } catch (e) { console.warn('Recettes non relancées :', e); }
             // E1 : les règles de qualité de cette table sont rejouées automatiquement.
             try { await qrAutoRun(t.name); } catch (e) { console.warn('Règles qualité non rejouées :', e); }
             return { ok: true, refreshed: true };
