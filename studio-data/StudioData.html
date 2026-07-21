@@ -2130,6 +2130,37 @@
         // Attributs du cœur = attributs à plat restants (non déplacés dans une facette).
         function boCoreElements(bo) { getBoFacets(bo); return bo.elements || []; }
         // Une ligne d'attribut (réutilisée par le cœur et par chaque bloc composant).
+        // Usage par attribut : quelles applications / quels processus utilisent CET attribut,
+        // et source spécifique si elle diffère de celle de l'objet (application « produite par »).
+        function boElToggleUsedBy(boId, elId, assetId, on) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo || !assetId) return;
+            const elm = (bo.elements || []).find(e => e.id === elId); if (!elm) return;
+            elm.usedBy = elm.usedBy || [];
+            if (on) { if (!elm.usedBy.includes(assetId)) elm.usedBy.push(assetId); } else elm.usedBy = elm.usedBy.filter(x => x !== assetId);
+            persistAppState(); renderGovernance();
+        }
+        function boElSetField(boId, elId, f, v) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
+            const elm = (bo.elements || []).find(e => e.id === elId); if (!elm) return;
+            elm[f] = v; persistAppState(); renderGovernance();
+        }
+        function boElUsageCellHtml(bo, elm) {
+            const assets = state.governance.assets || [];
+            const used = elm.usedBy || [];
+            const chips = used.map(id => { const a = assetById(id); if (!a) return '';
+                return `<span class="text-[10px] bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-1.5 py-0.5 inline-flex items-center gap-1">${escapeHTML(assetLabel(a))}<button onclick="boElToggleUsedBy('${bo.id}','${elm.id}','${a.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+            const remain = assets.filter(a => !used.includes(a.id));
+            const globalSrc = (bo.producedBy || [])[0] || '';
+            const appOpts = assets.filter(a => a.kind === 'app');
+            const diff = elm.sourceApp && elm.sourceApp !== globalSrc;
+            return `<div class="flex flex-wrap items-center gap-1">
+                ${chips || '<span class="text-[10px] bg-slate-50 border border-slate-200 text-slate-400 rounded-full px-1.5 py-0.5" title="Aucune application / aucun processus déclaré comme utilisateur de cet attribut">😴 sans usage déclaré</span>'}
+                ${remain.length ? `<select id="bo-use-${elm.id}" class="border border-slate-200 p-0.5 rounded text-[10px] bg-white max-w-[120px]">${remain.map(a => `<option value="${a.id}">${escapeHTML(assetLabel(a))}</option>`).join('')}</select><button onclick="boElToggleUsedBy('${bo.id}','${elm.id}', el('bo-use-${elm.id}').value, true)" class="text-[10px] bg-white border border-slate-300 px-1.5 py-0.5 rounded font-bold hover:bg-slate-50" title="Déclarer un utilisateur de cet attribut">+</button>` : (assets.length ? '' : '<span class="text-[9px] text-slate-300">(déclarez des applis/processus dans Gouvernance)</span>')}
+            </div>
+            ${appOpts.length ? `<div class="flex items-center gap-1 mt-1"><span class="text-[9px] uppercase font-bold text-slate-400" title="Source de CET attribut, si différente de celle de l'objet">src</span>
+                <select onchange="boElSetField('${bo.id}','${elm.id}','sourceApp',this.value)" class="border p-0.5 rounded text-[10px] ${diff ? 'border-amber-400 bg-amber-50 font-bold' : 'border-slate-200 bg-white'}"><option value="">(celle de l'objet)</option>${appOpts.map(a => `<option value="${a.id}" ${elm.sourceApp === a.id ? 'selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
+                ${diff ? '<span class="text-[9px] font-black text-amber-600" title="Cet attribut vient d\'une autre application que l\'objet">≠ objet</span>' : ''}</div>` : ''}`;
+        }
         function boElementRowHtml(bo, elm, names) {
             return `<tr class="hover:bg-slate-50 align-top" ondragover="reorderDragOver(event,'boel')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'boel','${elm.id}',(f,t)=>boElReorder('${bo.id}',f,t))">
                 <td class="p-2 text-center align-middle whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'boel','${elm.id}')" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-emerald-600 select-none" title="Glisser pour ordonner par importance">⠿</span><br><span class="inline-flex leading-none">${[['top','⤒','Tout en haut'],['up','▲','Monter'],['down','▼','Descendre'],['bottom','⤓','Tout en bas']].map(([w,ic,ti])=>`<button onclick="boMoveEl('${bo.id}','${elm.id}','${w}')" class="text-slate-300 hover:text-emerald-600 text-[10px] font-black px-0.5" title="${ti}">${ic}</button>`).join('')}</span></td>
@@ -2141,12 +2172,13 @@
                     <select id="bo-col-${elm.id}" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${names[0] ? (tableByName(names[0]) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
                     <button onclick="addBoMapping('${bo.id}','${elm.id}')" class="text-[11px] bg-white border border-slate-300 px-1.5 py-0.5 rounded font-medium hover:bg-slate-50">+</button>
                 </div></td>
+                <td class="p-2">${boElUsageCellHtml(bo, elm)}</td>
                 <td class="p-2 text-right"><button onclick="removeBoElement('${bo.id}','${elm.id}')" class="text-red-400 hover:text-red-600 p-1"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>
             </tr>`;
         }
         function boElementsTableHtml(bo, elems, names, emptyMsg) {
             if (!elems.length) return `<p class="text-xs text-slate-400 italic">${emptyMsg || 'Aucun attribut.'}</p>`;
-            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
+            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-56">Usage (applis / processus) & source</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
         }
         const CARD_OPTS = ['1–1', '1–N', 'N–1', 'N–N'];
         function facetScopeLabel(sc) { return `${sc.col} ${SCOPE_OPS[sc.op] || sc.op}${sc.op === 'empty' || sc.op === 'notempty' ? '' : ' "' + sc.val + '"'}`; }
@@ -2237,6 +2269,7 @@
                     <span class="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
                     <span class="text-[11px] font-bold text-slate-600">🏛️ Attributs propres de l'objet <span class="text-slate-400 font-medium">(table maître)</span></span>
                     <span class="text-[10px] font-bold bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5">${core.length}</span>
+                    ${(state.governance.assets || []).length && core.some(e2 => !(e2.usedBy || []).length) ? `<span class="text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-1.5 py-0.5" title="Attributs sans application/processus utilisateur déclaré">😴 ${core.filter(e2 => !(e2.usedBy || []).length).length} sans usage</span>` : ''}
                     ${core.length ? `<span class="text-[10px] text-slate-400 truncate max-w-[50%]">${core.slice(0, 5).map(e2 => escapeHTML(e2.name)).join(' · ')}${core.length > 5 ? ' …' : ''}</span>` : ''}
                     <button onclick="event.preventDefault();addBoElement('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-2.5 py-1 rounded font-medium hover:bg-emerald-50 ml-auto">+ Attribut</button>
                 </summary>
@@ -3707,7 +3740,9 @@
             if (showBos) state.governance.businessObjects.forEach(bo => {
                 // Vision fine : les attributs de l'objet avec leur colonne source (mode 🔬).
                 if (govState.lineageBoDetail && (bo.elements || []).length) {
-                    const rows = (bo.elements || []).slice(0, 14).map(e2 => { const m = (e2.mappings || [])[0]; return e2.name + (m ? '  ←  ' + m.table + '.' + m.col : ''); });
+                    const rows = (bo.elements || []).slice(0, 14).map(e2 => { const m = (e2.mappings || [])[0];
+                        const srcA = e2.sourceApp && e2.sourceApp !== ((bo.producedBy || [])[0] || '') ? assetById(e2.sourceApp) : null;
+                        return e2.name + (m ? '  ←  ' + m.table + '.' + m.col : '') + (srcA ? '  [src: ' + srcA.name + ']' : '') + (((e2.usedBy || []).length || !(state.governance.assets || []).length) ? '' : '  😴'); });
                     if ((bo.elements || []).length > 14) rows.push('… +' + ((bo.elements || []).length - 14) + ' attribut(s)');
                     nodes.push({ id: 'bo:' + bo.id, type: 'studio-uml-node', title: '🏛️ ' + bo.name, rows, headFill: '#dcfce7', titleFill: '#14532d', stroke: '#16a34a' });
                 } else
