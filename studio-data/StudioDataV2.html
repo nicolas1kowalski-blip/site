@@ -1704,6 +1704,7 @@
                 qualityHistory: Array.isArray(g.qualityHistory) ? g.qualityHistory : [],
                 assets: Array.isArray(g.assets) ? g.assets : [],
                 qualityRules: Array.isArray(g.qualityRules) ? g.qualityRules : [],
+                privacy: g.privacy && typeof g.privacy === 'object' ? g.privacy : { levels: {}, actions: { personnel: 'pseudo', confidentiel: 'mask', interne: 'none', public: 'none' } },
             };
         }
 
@@ -2021,6 +2022,7 @@
             else if (govState.tab === 'glossary') c.innerHTML = renderGovGlossary();
             else if (govState.tab === 'usecases') c.innerHTML = renderGovUseCases();
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
+            else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
             else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); fillBackupsList(); }
             else if (govState.tab === 'lineage') { const _am = govState.lineageView === 'attr'; const _bos = state.governance.businessObjects || [];
@@ -4488,6 +4490,7 @@
                   { g: 'glossary', icon: '📖', label: 'Glossaire' },
                   { g: 'usecases', icon: '🎯', label: 'Cas d\'usage' },
                   { g: 'assets', icon: '🖥', label: 'Applis & processus' },
+                  { g: 'privacy', icon: '🔐', label: 'Sensibilité' },
                   { g: 'lineage', icon: '🕸️', label: 'Lineage' },
                   { g: 'history', icon: '📈', label: 'Historique' },
                   { g: 'share', icon: '💾', label: 'Sauvegarde' },
@@ -5996,6 +5999,99 @@
             } catch (err) { state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null; }
         }
 
+        // ======================= E6 (V2) : CLASSIFICATION DE SENSIBILITÉ & ANONYMISATION =======================
+        const PV_LEVELS = { public: ['🟢', 'Public'], interne: ['🔵', 'Interne'], confidentiel: ['🟠', 'Confidentiel'], personnel: ['🔴', 'Données personnelles'] };
+        const PV_ACTIONS = { none: 'aucune (en clair)', mask: 'masquage (1er caractère + •••)', pseudo: 'pseudonymisation (jeton stable salé)', generalize: 'généralisation (tranches / année)', drop: 'suppression de la colonne' };
+        function pvCfg() { const g = state.governance; g.privacy = g.privacy || { levels: {}, actions: { personnel: 'pseudo', confidentiel: 'mask', interne: 'none', public: 'none' } }; g.privacy.levels = g.privacy.levels || {}; g.privacy.actions = g.privacy.actions || { personnel: 'pseudo', confidentiel: 'mask', interne: 'none', public: 'none' }; return g.privacy; }
+        // Niveau proposé automatiquement : classification déjà saisie > sensibilité du dictionnaire > détection PII par nom.
+        function pvSuggestLevel(tn, col) {
+            const dictCol = ((state.governance.dictionary[tn] || {}).columns || {})[col] || {};
+            if (dictCol.sensitivity === 'Personnel (RGPD)') return 'personnel';
+            if (dictCol.sensitivity === 'Sensible') return 'confidentiel';
+            if (dictCol.sensitivity === 'Public') return 'public';
+            try { if ((typeof PII_HEADER_RX !== 'undefined' && PII_HEADER_RX.test(col)) || /naiss|birthd/i.test(col)) return 'personnel'; } catch (e) {}
+            return 'interne';
+        }
+        function pvLevelOf(tn, col) { const lv = (pvCfg().levels[tn] || {})[col]; return lv || pvSuggestLevel(tn, col); }
+        function pvSetLevel(tn, col, v) { const P = pvCfg(); (P.levels[tn] = P.levels[tn] || {})[col] = v; persistAppState(); renderGovernance(); }
+        function pvSetAction(level, v) { pvCfg().actions[level] = v; persistAppState(); renderGovernance(); }
+        // Expression SQL anonymisée d'une colonne (sel de session : jeton stable AU SEIN d'un export).
+        function pvAnonExpr(tn, col, action, salt) {
+            const c = sqlIdent(col); const raw = `CAST(${c} AS VARCHAR)`;
+            switch (action) {
+                case 'mask': return `CASE WHEN ${c} IS NULL OR TRIM(${raw}) = '' THEN NULL ELSE substr(TRIM(${raw}), 1, 1) || '•••' END AS ${c}`;
+                case 'pseudo': return `CASE WHEN ${c} IS NULL OR TRIM(${raw}) = '' THEN NULL ELSE 'P_' || substr(md5(${sqlLiteral(salt)} || UPPER(TRIM(${raw}))), 1, 12) END AS ${c}`;
+                case 'generalize': {
+                    if (covColIsDate(null, col)) { const d = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`; return `CAST(YEAR(${d}) AS VARCHAR) AS ${c}`; }
+                    const num = `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE)`;
+                    return `CASE WHEN ${num} IS NULL THEN NULL ELSE CAST(CAST(floor(${num} / 10) * 10 AS BIGINT) AS VARCHAR) || '–' || CAST(CAST(floor(${num} / 10) * 10 + 10 AS BIGINT) AS VARCHAR) END AS ${c}`;
+                }
+                default: return null;
+            }
+        }
+        function pvPlan(tn) {
+            const t = tableByName(tn); if (!t) return [];
+            const acts = pvCfg().actions;
+            return t.headers.map(col => { const level = pvLevelOf(tn, col); const action = acts[level] || 'none'; return { col, level, action }; });
+        }
+        async function pvExport(btn) {
+            const tn = el('pvTable') ? el('pvTable').value : ''; const t = tableByName(tn);
+            if (!t) return showError('Choisissez une table.');
+            const plan = pvPlan(tn);
+            const salt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x => x.toString(16).padStart(2, '0')).join('');
+            const sel = plan.filter(p2 => p2.action !== 'drop').map(p2 => pvAnonExpr(tn, p2.col, p2.action, salt) || sqlIdent(p2.col));
+            if (!sel.length) return showError('Toutes les colonnes sont supprimées — rien à exporter.');
+            if (btn) btn.disabled = true;
+            bgTaskStart('Export anonymisé en cours');
+            const tmp = 'pvx_' + generateId();
+            try {
+                const { conn } = await getDB();
+                await conn.query(`CREATE TABLE ${sqlIdent(duckTableName(tmp))} AS SELECT row_number() OVER () AS __rn, ${sel.join(', ')} FROM ${sqlIdent(duckTableName(t.id))}`);
+                const headers = await duckTableHeaders(tmp);
+                const parts = [headers.map(escapeCSV).join(';') + '\n']; let buf = [];
+                await duckStreamRows(tmp, 0, async (row) => { buf.push(headers.map(h => escapeCSV(row[h])).join(';')); if (buf.length >= 5000) { parts.push(buf.join('\n') + '\n'); buf = []; } });
+                if (buf.length) parts.push(buf.join('\n') + '\n');
+                const blob = new Blob(['\ufeff', ...parts], { type: 'text/csv;charset=utf-8;' });
+                const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `${tn.replace(/[^a-zA-Z0-9]/g, '_')}_ANONYMISE_${Date.now()}.csv`; document.body.appendChild(a2); a2.click(); a2.remove();
+                // Rapport de transformation
+                const rep2 = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Rapport d'anonymisation</title></head><body style="font-family:system-ui;padding:24px">
+                    <h1 style="font-size:18px">🔐 Rapport d'anonymisation — ${escapeHTML(tn)}</h1>
+                    <p style="font-size:12px;color:#64748b">Généré le ${new Date().toLocaleString('fr-FR')} · pseudonymisation stable au sein de cet export (sel de session, non conservé) · traitement 100 % local.</p>
+                    <table style="border-collapse:collapse;font-size:12px">${'<tr><th style="text-align:left;padding:6px;border-bottom:2px solid #334155">Colonne</th><th style="text-align:left;padding:6px;border-bottom:2px solid #334155">Classification</th><th style="text-align:left;padding:6px;border-bottom:2px solid #334155">Règle appliquée</th></tr>'}
+                    ${plan.map(p2 => `<tr><td style="padding:5px;border-bottom:1px solid #e2e8f0"><code>${escapeHTML(p2.col)}</code></td><td style="padding:5px;border-bottom:1px solid #e2e8f0">${PV_LEVELS[p2.level][0]} ${PV_LEVELS[p2.level][1]}</td><td style="padding:5px;border-bottom:1px solid #e2e8f0">${PV_ACTIONS[p2.action]}</td></tr>`).join('')}</table></body></html>`;
+                const b2 = new Blob([rep2], { type: 'text/html' });
+                const a3 = document.createElement('a'); a3.href = URL.createObjectURL(b2); a3.download = `${tn.replace(/[^a-zA-Z0-9]/g, '_')}_RAPPORT_ANONYMISATION_${Date.now()}.html`; document.body.appendChild(a3); a3.click(); a3.remove();
+                bgTaskEnd(`🔐 Export anonymisé de « ${tn} » téléchargé, accompagné de son rapport.`);
+            } catch (e) { bgTaskEnd(); showError('Export anonymisé impossible : ' + e.message); }
+            finally { try { await duckDropTable(tmp); } catch (e2) {} if (btn) btn.disabled = false; }
+        }
+        function renderGovPrivacy() {
+            const tables = Object.values(state.tables).filter(t => t.status === 'ready');
+            if (!tables.length) return '<p class="text-sm text-slate-400 italic py-8 text-center">Chargez des sources pour classifier leurs colonnes.</p>';
+            if (!govState.pvTable || !tableByName(govState.pvTable)) govState.pvTable = tables[0].name;
+            const tn = govState.pvTable; const acts = pvCfg().actions;
+            const plan = pvPlan(tn);
+            const nPerso = plan.filter(p2 => p2.level === 'personnel').length;
+            return `<p class="text-sm text-slate-500 mb-4">Classez chaque colonne (pré-rempli depuis la détection RGPD et le dictionnaire), choisissez l'action par niveau, puis exportez un <strong>jeu anonymisé partageable</strong> avec son rapport. La pseudonymisation est <strong>stable au sein d'un export</strong> (même valeur → même jeton) grâce à un sel de session jamais conservé.</p>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                ${Object.entries(PV_LEVELS).map(([k, [ic, lbl]]) => `<div class="border border-slate-200 rounded-lg p-2.5 bg-slate-50/50"><div class="text-xs font-bold mb-1">${ic} ${lbl}</div>
+                    <select onchange="pvSetAction('${k}',this.value)" class="w-full border border-slate-300 rounded p-1.5 text-[11px] bg-white">${Object.entries(PV_ACTIONS).map(([a2, l2]) => `<option value="${a2}" ${acts[k] === a2 ? 'selected' : ''}>${l2}</option>`).join('')}</select></div>`).join('')}
+            </div>
+            <div class="flex items-center gap-3 mb-3 flex-wrap">
+                <select id="pvTable" onchange="govState.pvTable=this.value; renderGovernance()" class="border border-slate-300 p-2 rounded-lg bg-white font-bold text-sm">${tables.map(t => `<option ${t.name === tn ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select>
+                ${nPerso ? `<span class="text-xs bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 font-bold">🔴 ${nPerso} colonne(s) personnelle(s)</span>` : ''}
+                <span class="flex-grow"></span>
+                <button onclick="pvExport(this)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 rounded-lg">🔐 Exporter le jeu anonymisé + rapport</button>
+            </div>
+            <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2 w-56">Classification</th><th class="p-2">Règle qui s'appliquera à l'export</th></tr></thead>
+                <tbody class="divide-y divide-slate-100">${plan.map(p2 => `<tr class="hover:bg-slate-50 ${p2.level === 'personnel' ? 'bg-red-50/30' : ''}">
+                    <td class="p-2 font-bold font-mono">${escapeHTML(p2.col)}</td>
+                    <td class="p-2"><select onchange="pvSetLevel('${escapeHTML(tn)}','${escapeHTML(p2.col.replace(/'/g, "\\'"))}',this.value)" class="border border-slate-200 rounded p-1 bg-white">${Object.entries(PV_LEVELS).map(([k, [ic, lbl]]) => `<option value="${k}" ${p2.level === k ? 'selected' : ''}>${ic} ${lbl}</option>`).join('')}</select></td>
+                    <td class="p-2 ${p2.action === 'none' ? 'text-slate-400' : 'font-bold text-slate-700'}">${PV_ACTIONS[p2.action]}</td>
+                </tr>`).join('')}</tbody></table></div>`;
+        }
+
         // ======================= E9 (V2) : ANALYSE D'IMPACT SUR LE MODÈLE =======================
         // Depuis une table (et éventuellement une colonne) : tous les objets AVAL qui en dépendent.
         function modelImpact(tn, col) {
@@ -6204,7 +6300,20 @@
         }
 
         // ======================= E3 (V2) : RECETTES DE TRANSFORMATION REPRODUCTIBLES =======================
-        const RC_STEPS = { filter: '▼ Filtrer', clean: '🧼 Nettoyer', normalize: '📐 Normaliser (format)', calc: '🧮 Colonne calculée', dedup: '♊ Dédoublonner', rename: '✏️ Renommer', drop: '🗑 Supprimer colonnes' };
+        const RC_STEPS = { filter: '▼ Filtrer', clean: '🧼 Nettoyer', normalize: '📐 Normaliser (format)', std: '☎️ Standardiser (tél/email)', enrich: '🌍 Enrichir (référentiel)', calc: '🧮 Colonne calculée', dedup: '♊ Dédoublonner', rename: '✏️ Renommer', drop: '🗑 Supprimer colonnes' };
+        // E8 : référentiels EMBARQUÉS (fonctionnement hors ligne).
+        const RC_REFS = {
+            pays: { label: 'Pays (ISO 3166)', key: 'CODE', cols: ['CODE', 'PAYS', 'DEVISE'], rows: [
+                ['FR','France','EUR'],['DE','Allemagne','EUR'],['IT','Italie','EUR'],['ES','Espagne','EUR'],['PT','Portugal','EUR'],['BE','Belgique','EUR'],['NL','Pays-Bas','EUR'],['LU','Luxembourg','EUR'],['CH','Suisse','CHF'],['GB','Royaume-Uni','GBP'],['IE','Irlande','EUR'],['AT','Autriche','EUR'],['PL','Pologne','PLN'],['CZ','Tchéquie','CZK'],['SE','Suède','SEK'],['NO','Norvège','NOK'],['DK','Danemark','DKK'],['FI','Finlande','EUR'],['GR','Grèce','EUR'],['RO','Roumanie','RON'],['HU','Hongrie','HUF'],['US','États-Unis','USD'],['CA','Canada','CAD'],['MX','Mexique','MXN'],['BR','Brésil','BRL'],['AR','Argentine','ARS'],['CN','Chine','CNY'],['JP','Japon','JPY'],['KR','Corée du Sud','KRW'],['IN','Inde','INR'],['AU','Australie','AUD'],['NZ','Nouvelle-Zélande','NZD'],['MA','Maroc','MAD'],['DZ','Algérie','DZD'],['TN','Tunisie','TND'],['SN','Sénégal','XOF'],['CI','Côte d\'Ivoire','XOF'],['CM','Cameroun','XAF'],['TR','Turquie','TRY'],['SA','Arabie saoudite','SAR'],['AE','Émirats arabes unis','AED'],['ZA','Afrique du Sud','ZAR'],['RU','Russie','RUB'],['UA','Ukraine','UAH'],['SG','Singapour','SGD'],['HK','Hong Kong','HKD'],['TH','Thaïlande','THB'],['VN','Viêt Nam','VND'],['ID','Indonésie','IDR'],['MY','Malaisie','MYR']] },
+            devises: { label: 'Devises (ISO 4217)', key: 'CODE', cols: ['CODE', 'DEVISE', 'SYMBOLE'], rows: [
+                ['EUR','Euro','€'],['USD','Dollar américain','$'],['GBP','Livre sterling','£'],['CHF','Franc suisse','CHF'],['JPY','Yen','¥'],['CNY','Yuan','¥'],['CAD','Dollar canadien','$'],['AUD','Dollar australien','$'],['SEK','Couronne suédoise','kr'],['NOK','Couronne norvégienne','kr'],['DKK','Couronne danoise','kr'],['PLN','Zloty','zł'],['CZK','Couronne tchèque','Kč'],['HUF','Forint','Ft'],['RON','Leu','lei'],['TRY','Livre turque','₺'],['MAD','Dirham marocain','DH'],['XOF','Franc CFA (UEMOA)','CFA'],['XAF','Franc CFA (CEMAC)','CFA'],['INR','Roupie indienne','₹'],['BRL','Réal','R$'],['MXN','Peso mexicain','$'],['SGD','Dollar de Singapour','$'],['HKD','Dollar de Hong Kong','$'],['ZAR','Rand','R'],['AED','Dirham (EAU)','د.إ'],['SAR','Riyal saoudien','﷼'],['KRW','Won','₩'],['THB','Baht','฿'],['RUB','Rouble','₽']] },
+            deptfr: { label: 'Départements français', key: 'CODE', cols: ['CODE', 'DEPARTEMENT', 'REGION'], rows: [
+                ['01','Ain','Auvergne-Rhône-Alpes'],['02','Aisne','Hauts-de-France'],['03','Allier','Auvergne-Rhône-Alpes'],['04','Alpes-de-Haute-Provence','PACA'],['05','Hautes-Alpes','PACA'],['06','Alpes-Maritimes','PACA'],['07','Ardèche','Auvergne-Rhône-Alpes'],['08','Ardennes','Grand Est'],['09','Ariège','Occitanie'],['10','Aube','Grand Est'],['11','Aude','Occitanie'],['12','Aveyron','Occitanie'],['13','Bouches-du-Rhône','PACA'],['14','Calvados','Normandie'],['15','Cantal','Auvergne-Rhône-Alpes'],['16','Charente','Nouvelle-Aquitaine'],['17','Charente-Maritime','Nouvelle-Aquitaine'],['18','Cher','Centre-Val de Loire'],['19','Corrèze','Nouvelle-Aquitaine'],['2A','Corse-du-Sud','Corse'],['2B','Haute-Corse','Corse'],['21','Côte-d\'Or','Bourgogne-Franche-Comté'],['22','Côtes-d\'Armor','Bretagne'],['23','Creuse','Nouvelle-Aquitaine'],['24','Dordogne','Nouvelle-Aquitaine'],['25','Doubs','Bourgogne-Franche-Comté'],['26','Drôme','Auvergne-Rhône-Alpes'],['27','Eure','Normandie'],['28','Eure-et-Loir','Centre-Val de Loire'],['29','Finistère','Bretagne'],['30','Gard','Occitanie'],['31','Haute-Garonne','Occitanie'],['32','Gers','Occitanie'],['33','Gironde','Nouvelle-Aquitaine'],['34','Hérault','Occitanie'],['35','Ille-et-Vilaine','Bretagne'],['36','Indre','Centre-Val de Loire'],['37','Indre-et-Loire','Centre-Val de Loire'],['38','Isère','Auvergne-Rhône-Alpes'],['39','Jura','Bourgogne-Franche-Comté'],['40','Landes','Nouvelle-Aquitaine'],['41','Loir-et-Cher','Centre-Val de Loire'],['42','Loire','Auvergne-Rhône-Alpes'],['43','Haute-Loire','Auvergne-Rhône-Alpes'],['44','Loire-Atlantique','Pays de la Loire'],['45','Loiret','Centre-Val de Loire'],['46','Lot','Occitanie'],['47','Lot-et-Garonne','Nouvelle-Aquitaine'],['48','Lozère','Occitanie'],['49','Maine-et-Loire','Pays de la Loire'],['50','Manche','Normandie'],['51','Marne','Grand Est'],['52','Haute-Marne','Grand Est'],['53','Mayenne','Pays de la Loire'],['54','Meurthe-et-Moselle','Grand Est'],['55','Meuse','Grand Est'],['56','Morbihan','Bretagne'],['57','Moselle','Grand Est'],['58','Nièvre','Bourgogne-Franche-Comté'],['59','Nord','Hauts-de-France'],['60','Oise','Hauts-de-France'],['61','Orne','Normandie'],['62','Pas-de-Calais','Hauts-de-France'],['63','Puy-de-Dôme','Auvergne-Rhône-Alpes'],['64','Pyrénées-Atlantiques','Nouvelle-Aquitaine'],['65','Hautes-Pyrénées','Occitanie'],['66','Pyrénées-Orientales','Occitanie'],['67','Bas-Rhin','Grand Est'],['68','Haut-Rhin','Grand Est'],['69','Rhône','Auvergne-Rhône-Alpes'],['70','Haute-Saône','Bourgogne-Franche-Comté'],['71','Saône-et-Loire','Bourgogne-Franche-Comté'],['72','Sarthe','Pays de la Loire'],['73','Savoie','Auvergne-Rhône-Alpes'],['74','Haute-Savoie','Auvergne-Rhône-Alpes'],['75','Paris','Île-de-France'],['76','Seine-Maritime','Normandie'],['77','Seine-et-Marne','Île-de-France'],['78','Yvelines','Île-de-France'],['79','Deux-Sèvres','Nouvelle-Aquitaine'],['80','Somme','Hauts-de-France'],['81','Tarn','Occitanie'],['82','Tarn-et-Garonne','Occitanie'],['83','Var','PACA'],['84','Vaucluse','PACA'],['85','Vendée','Pays de la Loire'],['86','Vienne','Nouvelle-Aquitaine'],['87','Haute-Vienne','Nouvelle-Aquitaine'],['88','Vosges','Grand Est'],['89','Yonne','Bourgogne-Franche-Comté'],['90','Territoire de Belfort','Bourgogne-Franche-Comté'],['91','Essonne','Île-de-France'],['92','Hauts-de-Seine','Île-de-France'],['93','Seine-Saint-Denis','Île-de-France'],['94','Val-de-Marne','Île-de-France'],['95','Val-d\'Oise','Île-de-France']] },
+        };
+        function rcRefValuesSql(refKey) {
+            const R2 = RC_REFS[refKey]; if (!R2) return null;
+            return `(VALUES ${R2.rows.map(r => `(${r.map(v => sqlLiteral(v)).join(', ')})`).join(', ')}) ref(${R2.cols.map(sqlIdent).join(', ')})`;
+        }
         const RC_CLEAN = { trim: 'espaces début/fin', upper: 'MAJUSCULES', lower: 'minuscules', noaccents: 'sans accents', squeeze: 'espaces multiples → un seul' };
         let rcState = { openId: null, preview: null };
         function rcList() { return state.recipes = state.recipes || []; }
@@ -6236,6 +6345,21 @@
                     case 'dedup': { const keys = String(P.keys || '').split(';').map(x => x.trim()).filter(Boolean); if (!keys.length) break;
                         const k = keys.map(k2 => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(k2)} AS VARCHAR))), '')`).join(` || chr(1) || `);
                         sql = `SELECT * FROM (\n${sql}\n) q QUALIFY row_number() OVER (PARTITION BY ${k} ORDER BY md5(CAST(q AS VARCHAR))) = 1`; break; }
+                    case 'std': { if (!c) break;
+                        if ((P.what || 'phone') === 'phone') {
+                            // Téléphone FR -> format international +33 : chiffres seuls, 0XXXXXXXXX -> +33XXXXXXXXX.
+                            const digits = `regexp_replace(${raw}, '[^0-9]', '', 'g')`;
+                            sql = `SELECT * REPLACE (CASE WHEN ${c} IS NULL OR TRIM(${raw}) = '' THEN ${raw} WHEN length(${digits}) = 10 AND substr(${digits}, 1, 1) = '0' THEN '+33' || substr(${digits}, 2) WHEN length(${digits}) = 11 AND substr(${digits}, 1, 2) = '33' THEN '+' || ${digits} WHEN length(${digits}) = 13 AND substr(${digits}, 1, 4) = '0033' THEN '+33' || substr(${digits}, 5) WHEN substr(TRIM(${raw}), 1, 1) = '+' THEN '+' || ${digits} ELSE ${raw} END AS ${c}) FROM (\n${sql}\n) q`;
+                        } else {
+                            sql = `SELECT * REPLACE (LOWER(TRIM(${raw})) AS ${c}) FROM (\n${sql}\n) q`;
+                        }
+                        break; }
+                    case 'enrich': { const R2 = RC_REFS[P.ref]; if (!c || !R2) break;
+                        const vals = rcRefValuesSql(P.ref);
+                        const nv = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
+                        const added = R2.cols.filter(c2 => c2 !== R2.key);
+                        sql = `SELECT q.*, ${added.map(c2 => `ref.${sqlIdent(c2)} AS ${sqlIdent((P.prefix || '') + c2)}`).join(', ')} FROM (\n${sql}\n) q LEFT JOIN ${vals} ON ${nv('q.' + c)} = ${nv('ref.' + sqlIdent(R2.key))}`;
+                        break; }
                     case 'rename': { if (!c || !String(P.to || '').trim()) break; sql = `SELECT * RENAME (${c} AS ${sqlIdent(P.to.trim())}) FROM (\n${sql}\n) q`; break; }
                     case 'drop': { const cols = String(P.cols || '').split(';').map(x => x.trim()).filter(Boolean); if (!cols.length) break;
                         sql = `SELECT * EXCLUDE (${cols.map(sqlIdent).join(', ')}) FROM (\n${sql}\n) q`; break; }
@@ -6262,6 +6386,14 @@
                 t.headers = await duckTableHeaders(tId); t.storage = 'table'; t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready';
                 const cRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tId))}`);
                 r.lastRows = Number(arrowResultToObjects(cRes)[0].n); r.lastAt = Date.now(); r.targetId = tId;
+                // E8 : taux d'appariement de chaque étape d'enrichissement (rapport de correspondance).
+                for (const st of r.steps.filter(s2 => s2.enabled && s2.type === 'enrich' && (s2.p || {}).ref && (s2.p || {}).col)) {
+                    try { const R2 = RC_REFS[st.p.ref]; const added = R2.cols.filter(c2 => c2 !== R2.key)[0];
+                        const mRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n, SUM(CASE WHEN ${sqlIdent((st.p.prefix || '') + added)} IS NOT NULL THEN 1 ELSE 0 END)::BIGINT AS m FROM ${sqlIdent(duckTableName(tId))} WHERE ${sqlIdent(st.p.col)} IS NOT NULL AND TRIM(CAST(${sqlIdent(st.p.col)} AS VARCHAR)) <> ''`);
+                        const o2 = arrowResultToObjects(mRes)[0];
+                        st.lastMatch = Number(o2.n) ? Math.round(100 * Number(o2.m) / Number(o2.n)) : 100;
+                    } catch (e2) { st.lastMatch = null; }
+                }
                 // Journalisation lineage : la table produite est alimentée par la source.
                 state.governance.lineage[r.out] = { from: [r.src] };
                 renderTables(); updateBaseTableSelect(); populateQualTables();
@@ -6313,6 +6445,8 @@
                 case 'normalize': return colSel('p.col', P.col) + ` <select onchange="rcSetStep('${r.id}','${st.id}','p.fmt',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white"><option value="">— format —</option><option value="date" ${P.fmt === 'date' ? 'selected' : ''}>date → AAAA-MM-JJ</option><option value="dec" ${P.fmt === 'dec' ? 'selected' : ''}>décimal (1 234,5 → 1234.5)</option><option value="int" ${P.fmt === 'int' ? 'selected' : ''}>entier</option><option value="code" ${P.fmt === 'code' ? 'selected' : ''}>code (MAJ, sans espaces)</option><option value="bool" ${P.fmt === 'bool' ? 'selected' : ''}>booléen</option></select>`;
                 case 'calc': return inp('name', P.name, 'nom de la colonne', 'w-36') + ' = ' + inp('formula', P.formula, 'ex : [PRIX] * [QTE]', 'w-64');
                 case 'dedup': return 'clé : ' + inp('keys', P.keys, 'colonnes séparées par ;', 'w-56');
+                case 'std': return colSel('p.col', P.col) + ` <select onchange="rcSetStep('${r.id}','${st.id}','p.what',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white"><option value="phone" ${(P.what || 'phone') === 'phone' ? 'selected' : ''}>téléphone → +33…</option><option value="email" ${P.what === 'email' ? 'selected' : ''}>email → minuscules</option></select>`;
+                case 'enrich': return colSel('p.col', P.col) + ` <select onchange="rcSetStep('${r.id}','${st.id}','p.ref',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white"><option value="">— référentiel —</option>${Object.entries(RC_REFS).map(([k, R2]) => `<option value="${k}" ${P.ref === k ? 'selected' : ''}>${R2.label}</option>`).join('')}</select> préfixe ` + inp('prefix', P.prefix, 'REF_', 'w-16') + (st.lastMatch != null ? ` <span class="text-[10px] font-bold ${st.lastMatch >= 90 ? 'text-emerald-600' : 'text-amber-600'}">${st.lastMatch} % appariés</span>` : '');
                 case 'rename': return colSel('p.col', P.col) + ' → ' + inp('to', P.to, 'nouveau nom', 'w-36');
                 case 'drop': return inp('cols', P.cols, 'colonnes à supprimer, séparées par ;', 'w-72');
                 default: return '';
