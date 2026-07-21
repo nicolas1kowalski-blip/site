@@ -2196,6 +2196,101 @@
             const elm = (bo.elements || []).find(e => e.id === elId); if (!elm) return;
             elm[f] = v; persistAppState(); renderGovernance();
         }
+        // Badge compact dans la structure : état usage/source, clic -> onglet 🔌 Applis & usages.
+        function boUsageBadgeHtml(bo, elm) {
+            if (!(state.governance.assets || []).length) return '<span class="text-[10px] text-slate-200">—</span>';
+            const n = (elm.usedBy || []).length;
+            const diff = elm.sourceApp && elm.sourceApp !== ((bo.producedBy || [])[0] || '');
+            return `<button onclick="setBoTab('usage')" class="text-[10px] font-bold rounded-full px-1.5 py-0.5 border ${n ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400'}" title="${n ? n + ' utilisateur(s) déclaré(s)' : 'Aucun usage déclaré'} — cliquer pour ouvrir Applis & usages">${n ? '🔌 ' + n : '😴'}</button>${diff ? `<button onclick="setBoTab('usage')" class="text-[10px] font-black text-amber-600 ml-0.5" title="Source différente de celle de l'objet — cliquer pour ouvrir Applis & usages">≠</button>` : ''}`;
+        }
+        // Tous les attributs (cœur + facettes) sous forme de lignes homogènes.
+        function boAllAttrRows(bo) {
+            const rows = [];
+            (bo.elements || []).forEach(e2 => rows.push({ el: e2, facet: '', stId: null }));
+            getBoFacets(bo).forEach(st => (st.elements || []).forEach(fe => rows.push({ el: fe, facet: st.name, stId: st.id })));
+            return rows;
+        }
+        // 🔌 MATRICE attributs x applications/processus : usage par cases à cocher, source par ligne.
+        function renderBoUsageMatrix(bo) {
+            const assets = state.governance.assets || [];
+            if (!assets.length) return '<p class="text-sm text-slate-400 italic py-6 text-center">Déclarez d\'abord des applications et des processus dans <strong>Gouvernance ▸ Applis & processus</strong>.</p>';
+            const rows = boAllAttrRows(bo);
+            if (!rows.length) return '<p class="text-sm text-slate-400 italic py-6 text-center">Aucun attribut — définissez la structure de l\'objet d\'abord.</p>';
+            const apps = assets.filter(a => a.kind === 'app');
+            const globalSrc = (bo.producedBy || [])[0] || '';
+            const globalA = assetById(globalSrc);
+            const noUse = rows.filter(r => !(r.el.usedBy || []).length).length;
+            const nDiff = rows.filter(r => r.el.sourceApp && r.el.sourceApp !== globalSrc).length;
+            const tglAll = (aid, on) => `boUsageMatrixAll('${bo.id}','${aid}',${on})`;
+            return `<div class="flex items-center gap-2 mb-3 flex-wrap text-xs">
+                <span class="font-bold text-slate-600">Source de l'objet :</span>
+                ${globalA ? `<span class="bg-slate-100 border border-slate-300 rounded-full px-2.5 py-1 font-bold">${escapeHTML(assetLabel(globalA))}</span>` : '<span class="text-slate-400 italic">aucune (fiche ▸ Sources ▸ Produite par)</span>'}
+                ${noUse ? `<span class="bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2.5 py-1 font-bold">😴 ${noUse} attribut(s) sans usage</span>` : '<span class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full px-2.5 py-1 font-bold">✔ tous les attributs ont un usage</span>'}
+                ${nDiff ? `<span class="bg-amber-50 border border-amber-300 text-amber-800 rounded-full px-2.5 py-1 font-bold">≠ ${nDiff} source(s) spécifique(s)</span>` : ''}
+            </div>
+            <div class="border border-slate-200 rounded-lg overflow-x-auto max-h-[520px] overflow-y-auto"><table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 sticky top-0 z-10"><tr>
+                    <th class="p-2 min-w-[150px] bg-slate-50">Attribut</th>
+                    <th class="p-2 min-w-[150px] bg-slate-50" title="Application d'où vient CET attribut, si différente de la source de l'objet">Source (application)</th>
+                    ${assets.map(a => `<th class="p-1.5 text-center bg-slate-50 min-w-[70px]"><div class="font-black">${ASSET_KINDS[a.kind][0]}</div><div class="normal-case leading-tight">${escapeHTML(a.name)}</div><div class="mt-0.5"><button onclick="${tglAll(a.id, true)}" class="text-emerald-500 hover:text-emerald-700" title="Tout cocher">✔</button> <button onclick="${tglAll(a.id, false)}" class="text-slate-300 hover:text-red-500" title="Tout décocher">✕</button></div></th>`).join('')}
+                    <th class="p-2 bg-slate-50" title="Lineage de cet attribut">🕸</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-100">${rows.map(r => {
+                    const e2 = r.el; const used = e2.usedBy || [];
+                    const diff = e2.sourceApp && e2.sourceApp !== globalSrc;
+                    const setF = r.stId ? `boFacetElSetField('${bo.id}','${r.stId}','${e2.id}'` : `boElSetField('${bo.id}','${e2.id}'`;
+                    const tgl = aid => (r.stId ? `boFacetElToggleUsedBy('${bo.id}','${r.stId}','${e2.id}'` : `boElToggleUsedBy('${bo.id}','${e2.id}'`) + `,'${aid}',this.checked)`;
+                    const m = r.stId ? (e2.col ? { table: r.facet, col: e2.col } : null) : (e2.mappings || [])[0];
+                    return `<tr class="hover:bg-slate-50 ${used.length ? '' : 'bg-amber-50/30'}">
+                        <td class="p-2 font-bold text-slate-700 whitespace-nowrap">${escapeHTML(e2.name)}${r.facet ? `<br><span class="text-[9px] text-emerald-600 font-bold">◆ ${escapeHTML(r.facet)}</span>` : ''}${used.length ? '' : ' <span title="Aucun usage déclaré">😴</span>'}</td>
+                        <td class="p-2"><select onchange="${setF},'sourceApp',this.value)" class="w-full border p-1 rounded text-[11px] ${diff ? 'border-amber-400 bg-amber-50 font-bold' : 'border-slate-200 bg-white'}"><option value="">${globalA ? '= objet (' + escapeHTML(globalA.name) + ')' : '(celle de l\'objet)'}</option>${apps.map(a => `<option value="${a.id}" ${e2.sourceApp === a.id ? 'selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>${diff ? '<span class="text-[9px] font-black text-amber-600">≠ objet</span>' : ''}</td>
+                        ${assets.map(a => `<td class="p-1.5 text-center"><input type="checkbox" ${used.includes(a.id) ? 'checked' : ''} onchange="${tgl(a.id)}" class="w-4 h-4 rounded ${a.kind === 'app' ? 'text-slate-600' : 'text-orange-500'}" title="${escapeHTML(e2.name)} utilisé par ${escapeHTML(a.name)}"></td>`).join('')}
+                        <td class="p-1.5 text-center"><button onclick="openAttrLineage('${bo.id}','${r.stId || ''}','${e2.id}')" class="text-indigo-500 hover:text-indigo-700 font-bold" title="Lineage de cet attribut">🕸</button></td>
+                    </tr>`; }).join('')}</tbody></table></div>
+            <p class="text-[10px] text-slate-400 mt-2">Cochez les applications 🖥 et processus ⚙️ qui <strong>utilisent</strong> chaque attribut · colonne « Source » = application d'origine de l'attribut si différente de celle de l'objet · 🕸 = lineage de bout en bout de l'attribut.</p>
+            <div id="attrLineageBox" class="hidden mt-3 border-2 border-indigo-200 rounded-xl bg-white p-3"></div>`;
+        }
+        function boUsageMatrixAll(boId, assetId, on) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
+            boAllAttrRows(bo).forEach(r => { r.el.usedBy = r.el.usedBy || []; if (on) { if (!r.el.usedBy.includes(assetId)) r.el.usedBy.push(assetId); } else r.el.usedBy = r.el.usedBy.filter(x => x !== assetId); });
+            persistAppState(); renderGovernance();
+        }
+        // 🕸 LINEAGE PAR ATTRIBUT : application source -> colonne(s) technique(s) -> attribut -> utilisateurs.
+        let attrLineageGraph = null;
+        function openAttrLineage(boId, stId, elId) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
+            const st = stId ? getBoFacets(bo).find(x => x.id === stId) : null;
+            const e2 = st ? (st.elements || []).find(x => x.id === elId) : (bo.elements || []).find(x => x.id === elId);
+            if (!e2) return;
+            const box = el('attrLineageBox'); if (!box) return;
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'attribut « ${escapeHTML(e2.name)} »${st ? ' <span class="text-emerald-600">◆ ' + escapeHTML(st.name) + '</span>' : ''}</span><button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="attrLineageWrap" class="h-[300px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            const nodes = [], edges = [];
+            const attrId = 'attr:' + e2.id;
+            nodes.push({ id: attrId, type: 'studio-rich-node', title: '🔹 ' + e2.name, content: '🏛️ ' + bo.name + (st ? ' ◆ ' + st.name : ''), fill: '#dcfce7', stroke: '#16a34a' });
+            // Source applicative : celle de l'attribut, sinon celle de l'objet.
+            const srcA = assetById(e2.sourceApp) || assetById((bo.producedBy || [])[0]);
+            if (srcA) { nodes.push({ id: 'as:' + srcA.id, type: 'studio-rich-node', title: '🖥 ' + srcA.name, content: e2.sourceApp && e2.sourceApp !== ((bo.producedBy || [])[0] || '') ? '≠ source de l\'objet' : 'source de l\'objet', fill: '#e2e8f0', stroke: '#334155' }); }
+            // Colonnes techniques mappées.
+            const maps = st ? (e2.col ? [{ table: st.table, col: e2.col }] : []) : (e2.mappings || []);
+            maps.forEach((m, i) => {
+                nodes.push({ id: 'col:' + i, type: 'studio-rich-node', title: m.table, content: m.col, fill: '#dbeafe', stroke: '#2563eb' });
+                if (srcA) edges.push({ id: 'e1' + i, source: 'as:' + srcA.id, target: 'col:' + i, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
+                edges.push({ id: 'e2' + i, source: 'col:' + i, target: attrId, label: 'alimente', style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } });
+            });
+            if (!maps.length && srcA) edges.push({ id: 'e0', source: 'as:' + srcA.id, target: attrId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
+            // Utilisateurs déclarés.
+            (e2.usedBy || []).forEach(id => { const a = assetById(id); if (!a) return;
+                nodes.push({ id: 'use:' + id, type: 'studio-rich-node', title: assetLabel(a), content: a.criticality || '', fill: a.kind === 'app' ? '#e2e8f0' : '#ffedd5', stroke: a.kind === 'app' ? '#334155' : '#ea580c' });
+                edges.push({ id: 'eu' + id, source: attrId, target: 'use:' + id, label: 'utilisé par', style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
+            if (!(e2.usedBy || []).length) { nodes.push({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: 'candidat au nettoyage ?', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: attrId, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
+            if (attrLineageGraph) { try { attrLineageGraph.destroy(); } catch (e3) {} attrLineageGraph = null; }
+            attrLineageGraph = createSvgGraph(el('attrLineageWrap'));
+            attrLineageGraph.data({ nodes, edges });
+            attrLineageGraph.render();
+            attrLineageGraph.fitView(20);
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
         function boElUsageCellHtml(bo, elm, stId) {
             const assets = state.governance.assets || [];
             const used = elm.usedBy || [];
@@ -2241,13 +2336,13 @@
                     <select id="bo-col-${elm.id}" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${names[0] ? (tableByName(names[0]) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
                     <button onclick="addBoMapping('${bo.id}','${elm.id}')" class="text-[11px] bg-white border border-slate-300 px-1.5 py-0.5 rounded font-medium hover:bg-slate-50">+</button>
                 </div></td>
-                <td class="p-2">${boElUsageCellHtml(bo, elm)}</td>
+                <td class="p-2">${boUsageBadgeHtml(bo, elm)}</td>
                 <td class="p-2 text-right"><button onclick="removeBoElement('${bo.id}','${elm.id}')" class="text-red-400 hover:text-red-600 p-1"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>
             </tr>`;
         }
         function boElementsTableHtml(bo, elems, names, emptyMsg) {
             if (!elems.length) return `<p class="text-xs text-slate-400 italic">${emptyMsg || 'Aucun attribut.'}</p>`;
-            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-56">Usage (applis / processus) & source</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
+            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-20">🔌</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
         }
         const CARD_OPTS = ['1–1', '1–N', 'N–1', 'N–N'];
         function facetScopeLabel(sc) { return `${sc.col} ${SCOPE_OPS[sc.op] || sc.op}${sc.op === 'empty' || sc.op === 'notempty' ? '' : ' "' + sc.val + '"'}`; }
@@ -2259,7 +2354,7 @@
                 <td class="p-2"><input type="text" value="${escapeHTML(fe.name)}" onchange="updateFacetElement('${bo.id}','${st.id}','${fe.id}','name',this.value)" class="font-bold text-xs border border-slate-300 p-1.5 rounded w-full bg-white" title="Nom métier — renommable"></td>
                 <td class="p-2"><input type="text" value="${escapeHTML(fe.owner || '')}" onchange="updateFacetElement('${bo.id}','${st.id}','${fe.id}','owner',this.value)" class="text-xs border border-slate-200 p-1.5 rounded w-full" placeholder="hérite du global"></td>
                 <td class="p-2"><select onchange="updateFacetElement('${bo.id}','${st.id}','${fe.id}','col',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white font-mono">${cols.map(h => `<option ${h === fe.col ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select></td>
-                <td class="p-2">${boElUsageCellHtml(bo, fe, st.id)}</td>
+                <td class="p-2">${boUsageBadgeHtml(bo, fe)}</td>
                 <td class="p-2 text-right"><button onclick="removeFacetElement('${bo.id}','${st.id}','${fe.id}')" class="text-red-400 hover:text-red-600 p-1"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>
             </tr>`;
         }
@@ -2272,7 +2367,7 @@
                 : '<span class="text-[11px] text-slate-400 italic">Toute la table (aucun filtre) — pensez à filtrer si cette table porte plusieurs objets fonctionnels.</span>';
             const attrs = Array.isArray(st.elements) ? st.elements : [];
             const attrTable = attrs.length
-                ? `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Colonne technique</th><th class="p-2 w-56">Usage (applis / processus) & source</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${attrs.map(fe => facetElementRowHtml(bo, st, fe)).join('')}</tbody></table></div>`
+                ? `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Colonne technique</th><th class="p-2 w-20">🔌</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${attrs.map(fe => facetElementRowHtml(bo, st, fe)).join('')}</tbody></table></div>`
                 : '<p class="text-xs text-slate-400 italic">Aucun attribut.</p>';
             const filterSummary = (st.scope || []).length ? (st.scope || []).map(facetScopeLabel).join(' · ') : 'toute la table';
             const appliesSummary = (st.applies || []).length ? ` · <span class="text-purple-600">si ${(st.applies || []).map(facetScopeLabel).map(escapeHTML).join(' et ')}</span>` : '';
@@ -2542,6 +2637,7 @@
                 ['sources', '🔗 Sources', (bo.sources || []).length],
                 ['hierarchies', '🌳 Hiérarchies', getBoHierarchies(bo).length],
                 ['mastery', '⚖️ Maîtrise', ((bo.contextRules || {}).rules || []).length],
+                ['usage', '🔌 Applis & usages', (state.governance.assets || []).length ? boAllAttrRows(bo).filter(r => !(r.el.usedBy || []).length).length || null : null],
                 ['audit', '🔎 Audit', null],
             ];
             const cur = govState.boTab && tabs.some(t => t[0] === govState.boTab) ? govState.boTab : 'structure';
@@ -2556,6 +2652,7 @@
             else if (cur === 'sources') html += renderBoSourcesBlock(bo, names);
             else if (cur === 'hierarchies') html += renderBoHierarchy(bo);
             else if (cur === 'mastery') html += renderBoContextRules(bo, names);
+            else if (cur === 'usage') html += renderBoUsageMatrix(bo);
             else if (cur === 'audit') html += `<div class="text-center mb-3"><button onclick="auditBusinessObject('${bo.id}')" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold shadow-sm">🔎 Lancer l'audit global de l'objet</button><p class="text-[11px] text-slate-400 mt-1.5">Gouvernance (score), règles métier du périmètre, hiérarchies et facettes 1–1.</p></div><div id="bo-global-audit-${bo.id}"></div>`;
 
             html += '</div></div>';
