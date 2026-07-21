@@ -221,6 +221,13 @@
                 <div id="sourceUpdateBody" class="hidden p-5 border-t border-slate-100"></div>
             </div>
             <div id="emptyStateSources" class="text-center py-16 bg-white border border-dashed border-slate-300 rounded-xl mb-6"><h3 class="text-lg font-bold text-slate-700">Aucune donnée chargée</h3></div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="relative flex-1 max-w-md">
+                    <input type="text" id="srcSearchInput" oninput="srcSearchChanged(this.value)" placeholder="🔍 Rechercher une source (nom, domaine, colonne)…" class="w-full border border-slate-300 rounded-lg pl-3 pr-8 py-2.5 text-sm bg-white shadow-sm focus:border-indigo-400">
+                    <button onclick="el('srcSearchInput').value=''; srcSearchChanged('')" id="srcSearchClear" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 font-bold">✕</button>
+                </div>
+                <span id="srcSearchCount" class="text-xs text-slate-400"></span>
+            </div>
             <div id="tablesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
         </div>
 
@@ -3933,12 +3940,12 @@
             if(num===10) renderTablesDesign();
             if(num===11) renderCockpit();
             if(num===2){ renderRelationsList(); renderBizRules(); renderGraph(); requestAnimationFrame(() => reflowGraph('mcd')); }
-            if(num===3) { updateBaseTableSelect(); if (advExtractOpen()) renderAdvExtract(); }
-            if(num===4) { updateVizBaseTableSelect(); covPopulate(); }
-            if(num===5) populateExpTableSelect();
-            if(num===6) populateBrowserTableSelect();
-            if(num===7) populateCompareTables();
-            if(num===8) populateQualTables();
+            if(num===3) { updateBaseTableSelect(); if (advExtractOpen()) renderAdvExtract(); comboifyTableSelect('baseTableSelect'); }
+            if(num===4) { updateVizBaseTableSelect(); covPopulate(); ['covBase', 'covDimTable', 'covRel'].forEach(comboifyTableSelect); }
+            if(num===5) { populateExpTableSelect(); ['expBaseTable', 'expConfigTable'].forEach(comboifyTableSelect); }
+            if(num===6) { populateBrowserTableSelect(); comboifyTableSelect('browserTableSelect'); }
+            if(num===7) { populateCompareTables(); ['compTableA', 'compTableB'].forEach(comboifyTableSelect); }
+            if(num===8) { populateQualTables(); comboifyTableSelect('qualTable'); }
             if(num===9) renderGovernance();
         }
 
@@ -5475,10 +5482,36 @@
             if(!el('step-2').classList.contains('hidden')){ renderRelationsList(); renderGraph(); }
         }
 
+        // Auto-complétion sur un <select> de tables : champ de filtre inséré au-dessus, options
+        // masquées en direct, Entrée = sélectionner la première correspondance.
+        function comboifyTableSelect(selId) {
+            const sel = el(selId); if (!sel || sel.dataset.combo) return; sel.dataset.combo = '1';
+            const inp = document.createElement('input');
+            inp.type = 'text'; inp.placeholder = '🔍 taper pour filtrer les tables…';
+            inp.className = 'w-full border border-slate-200 rounded px-2 py-1 text-xs mb-1 bg-slate-50 focus:bg-white focus:border-indigo-400';
+            inp.addEventListener('input', () => {
+                const q = srcNorm(inp.value);
+                let first = null;
+                Array.from(sel.options).forEach(o => { const m = !o.value || !q || srcNorm(o.textContent).includes(q); o.hidden = !m; if (m && o.value && !first) first = o; });
+                if (q && first) { if (sel.value !== first.value) { sel.value = first.value; sel.dispatchEvent(new Event('change')); } }
+            });
+            inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); sel.focus(); } });
+            sel.parentNode.insertBefore(inp, sel);
+        }
+        function srcNorm(x) { return String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+        let _srcSearchT = null;
+        function srcSearchChanged(v) { window.srcSearchQ = v; clearTimeout(_srcSearchT); _srcSearchT = setTimeout(renderTables, 120); }
         function renderTables() {
             const grid = el('tablesGrid'); if (!grid) return; let _gridHtml = '';
             const dl = el('themeDatalist'); if (dl) dl.innerHTML = themeList().map(th => `<option value="${escapeHTML(th)}">`).join('');
-            Object.values(state.tables).forEach(t => {
+            // Recherche de source : nom, domaine ou nom de colonne (casse et accents ignorés).
+            const _q = srcNorm(window.srcSearchQ || '');
+            const _all = Object.values(state.tables);
+            const _shown = !_q ? _all : _all.filter(t => srcNorm(t.name).includes(_q) || srcNorm(t.theme || '').includes(_q) || (t.headers || []).some(h => srcNorm(h).includes(_q)));
+            const _cnt = el('srcSearchCount'); if (_cnt) _cnt.textContent = _q ? `${_shown.length} / ${_all.length} source(s)` : (_all.length ? `${_all.length} source(s)` : '');
+            const _clr = el('srcSearchClear'); if (_clr) _clr.classList.toggle('hidden', !_q);
+            if (_q && !_shown.length) _gridHtml = `<div class="col-span-full text-center text-sm text-slate-400 italic py-10 bg-white border border-dashed border-slate-200 rounded-xl">Aucune source ne correspond à « ${escapeHTML(window.srcSearchQ)} ».</div>`;
+            _shown.forEach(t => {
                 let html = `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 relative group">
                     <div class="absolute top-3 right-3 flex items-center gap-1">
                         ${t.type === 'designed' ? `<button onclick="tdRebuild('${t.id}', this)" title="Reconstruire la table depuis ses sources" class="text-blue-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : (t.type !== 'api' && t.type !== 'extraction' ? `<button onclick="manualUpdateSource('${t.id}')" title="Mettre à jour : recharger un fichier à la place de celui-ci" class="text-indigo-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : '')}
