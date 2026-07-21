@@ -15,7 +15,8 @@ namespace MesPremiersJeux.Games
     /// spirale de 63 cases, DEUX dés, deux joueurs (l'enfant et un parent). On lance
     /// les dés au regard. Cases spéciales authentiques : le pont (6→12), l'auberge
     /// (19, passe un tour), le puits (31) et la prison (52, on attend d'être libéré),
-    /// le labyrinthe (42, recule de 3), la mort (58, retour au départ), les oies
+    /// le labyrinthe (42, recule de 3), le fantôme (58, recule de 10 — version
+    /// adoucie de la « mort »), les oies
     /// (cases dont la somme des chiffres fait 5 ou 9 → on rejoue du même nombre).
     /// Ouvertures au premier lancer : 3+6 → 26, 4+5 → 53. Premier à 63 pile gagne.
     /// </summary>
@@ -321,7 +322,7 @@ namespace MesPremiersJeux.Games
                 case Kind.Puits: return Color.FromRgb(0x8E, 0x6B, 0xE6);
                 case Kind.Prison: return Color.FromRgb(0x88, 0x92, 0xA6);
                 case Kind.Labyrinthe: return Color.FromRgb(0xFF, 0x5F, 0xA2);
-                case Kind.Mort: return Color.FromRgb(0x4A, 0x4A, 0x5A);
+                case Kind.Mort: return Color.FromRgb(0xB6, 0xA8, 0xEC);
                 default: return Rainbow[i % Rainbow.Length];
             }
         }
@@ -338,7 +339,7 @@ namespace MesPremiersJeux.Games
                 case Kind.Puits: return "🕳️";
                 case Kind.Prison: return "🔒";
                 case Kind.Labyrinthe: return "🌀";
-                case Kind.Mort: return "💀";
+                case Kind.Mort: return "👻";
                 default: return "";
             }
         }
@@ -648,8 +649,8 @@ namespace MesPremiersJeux.Games
 
                 case Kind.Mort:
                     HighlightCell(idx);
-                    Speak("Oh non, la tête de mort ! Tu recommences depuis le départ.");
-                    Teleport(p, 0, null);
+                    Speak("Hou ! Un petit fantôme farceur te fait reculer de dix cases !");
+                    Teleport(p, Math.Max(0, idx - 10), null);
                     return;
 
                 case Kind.Puits:
