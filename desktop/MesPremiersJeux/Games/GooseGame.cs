@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using MesPremiersJeux.Gaze;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
@@ -54,13 +55,33 @@ namespace MesPremiersJeux.Games
         private int _lastVal;
         private int _gooseChain;
         private bool _win;
+        private bool _gazePaused; // le regard est-il en pause (tour du parent) ?
 
         private int N => Cols * Rows;
 
-        public GooseGame(Action celebrate) : base(celebrate) { }
+        public GooseGame(Action celebrate) : base(celebrate)
+        {
+            // Sécurité : si on quitte le jeu, on rend le regard à l'appli.
+            Unloaded += (s, e) => ReleaseGaze();
+        }
+
+        // Tour de l'enfant (joueur 0) : regard actif. Tour du parent (joueur 1) :
+        // regard EN PAUSE — le dé se lance alors à la souris / au toucher, pour que
+        // le regard de l'enfant ne déclenche pas le dé à la place du parent.
+        private void SetGazeForPlayer(int p)
+        {
+            if (p == 0) ReleaseGaze();
+            else if (!_gazePaused) { GazeGate.Push(); _gazePaused = true; }
+        }
+
+        private void ReleaseGaze()
+        {
+            if (_gazePaused) { GazeGate.Pop(); _gazePaused = false; }
+        }
 
         protected override void NewRound()
         {
+            ReleaseGaze(); // repart d'un état de regard propre
             _win = false;
             Locked = false;
             _current = 0;
@@ -241,7 +262,7 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(_dieBtn, 250);
             _canvas.Children.Add(_dieBtn);
 
-            _canvas.Children.Add(Hint("👀  Regarde le dé pour lancer", colX, 500));
+            _canvas.Children.Add(Hint("🐥 l'enfant regarde le dé  ·  ✋ le parent le touche", colX, 500));
 
             // Légende des pions.
             for (int p = 0; p < 2; p++)
@@ -325,6 +346,7 @@ namespace MesPremiersJeux.Games
         private void StartTurn()
         {
             if (_win) return;
+            SetGazeForPlayer(_current); // regard actif (enfant) / en pause (parent)
 
             if (_skip[_current])
             {
@@ -338,7 +360,8 @@ namespace MesPremiersJeux.Games
             Locked = false;
             _dieBtn.IsEnabled = true;
             _banner.Background = new SolidColorBrush(PlayerColor[_current]);
-            UpdateBanner("C'est à toi, " + PlayerName[_current] + " !\nRegarde le dé 🎲", _current);
+            string how = _current == 0 ? "Regarde le dé 🎲" : "Touche le dé ✋";
+            UpdateBanner("C'est à toi, " + PlayerName[_current] + " !\n" + how, _current);
             PulseDie();
         }
 
@@ -436,6 +459,7 @@ namespace MesPremiersJeux.Games
             if (_win) return;
             _win = true;
             Locked = true;
+            ReleaseGaze(); // fin de partie : le regard revient à l'appli
             _dieBtn.IsEnabled = false;
             UpdateBanner("🎉  " + PlayerName[p] + " a gagné ! 🎉", p);
             Speak("Bravo ! " + PlayerName[p] + " est arrivé au jardin de l'oie ! Il a gagné !");

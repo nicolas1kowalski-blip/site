@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using MesPremiersJeux.Gaze;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
@@ -43,13 +44,31 @@ namespace MesPremiersJeux.Games
         private int _current;
         private int _lastVal;
         private bool _win;
+        private bool _gazePaused; // le regard est-il en pause (tour du parent) ?
 
         private double Seg => (FinishX - StartX) / TrackLen;
 
-        public HorseGame(Action celebrate) : base(celebrate) { }
+        public HorseGame(Action celebrate) : base(celebrate)
+        {
+            Unloaded += (s, e) => ReleaseGaze();
+        }
+
+        // Tour de l'enfant (0) : regard actif. Tour du parent (1) : regard en pause,
+        // le dé se lance à la souris / au toucher.
+        private void SetGazeForPlayer(int p)
+        {
+            if (p == 0) ReleaseGaze();
+            else if (!_gazePaused) { GazeGate.Push(); _gazePaused = true; }
+        }
+
+        private void ReleaseGaze()
+        {
+            if (_gazePaused) { GazeGate.Pop(); _gazePaused = false; }
+        }
 
         protected override void NewRound()
         {
+            ReleaseGaze();
             _win = false;
             Locked = false;
             _current = 0;
@@ -174,7 +193,7 @@ namespace MesPremiersJeux.Games
 
             var hint = new TextBlock
             {
-                Text = "👀  Regarde le dé pour lancer",
+                Text = "🐴 l'enfant regarde  ·  ✋ le parent touche",
                 FontSize = 21,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5A, 0x8A)),
                 Width = 340,
@@ -225,10 +244,12 @@ namespace MesPremiersJeux.Games
         private void StartTurn()
         {
             if (_win) return;
+            SetGazeForPlayer(_current); // regard actif (enfant) / en pause (parent)
             Locked = false;
             _dieBtn.IsEnabled = true;
             _banner.Background = new SolidColorBrush(PlayerColor[_current]);
-            _bannerText.Text = "À toi, " + PlayerName[_current] + " !\nRegarde le dé 🎲";
+            string how = _current == 0 ? "Regarde le dé 🎲" : "Touche le dé ✋";
+            _bannerText.Text = "À toi, " + PlayerName[_current] + " !\n" + how;
             PulseDie();
         }
 
@@ -274,6 +295,7 @@ namespace MesPremiersJeux.Games
             if (_win) return;
             _win = true;
             Locked = true;
+            ReleaseGaze();
             _dieBtn.IsEnabled = false;
             _banner.Background = new SolidColorBrush(PlayerColor[p]);
             _bannerText.Text = "🎉  " + PlayerName[p] + " a gagné ! 🎉";
