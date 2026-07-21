@@ -210,6 +210,14 @@
         /* Familles de sous-onglets Gouvernance */
         .subfam{align-self:center;font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:0 6px 2px 12px;border-left:1px solid var(--border);white-space:nowrap}
         .subfam:first-child{border-left:none;padding-left:2px}
+        /* Badges de format (écran Sources) */
+        .fmt-ux{font-size:9px;font-weight:800;color:#fff;border-radius:5px;padding:2px 6px;letter-spacing:.3px}
+        .fmt-csv{background:#0ea5e9}.fmt-xlsx{background:#16a34a}.fmt-api{background:#8b5cf6}.fmt-extr{background:#9333ea}.fmt-built{background:#2563eb}.fmt-txt{background:#64748b}.fmt-json{background:#d97706}
+        .drawer-ux.wide{width:760px}
+        .empty-ux{grid-column:1/-1;text-align:center;background:var(--panel);border:1px dashed var(--border-strong);border-radius:var(--radius);padding:34px 20px}
+        .empty-ux .em{font-size:34px}
+        .empty-ux .ti{font-size:14.5px;font-weight:800;color:var(--ink);margin:8px 0 4px}
+        .empty-ux .tx{font-size:12px;color:var(--muted);max-width:520px;margin:0 auto 14px;line-height:1.55}
         /* Légende + état vide */
         .legend-ux{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:8px}
         .legend-ux span{display:inline-flex;align-items:center;gap:5px}
@@ -4720,15 +4728,28 @@
             }
             return null;
         }
+        // État vide pédagogique : jamais un écran blanc — une consigne + une action.
+        function emptyStateHtml(em, title, text, ctaLabel, ctaOnclick) {
+            return `<div class="empty-ux"><div class="em" aria-hidden="true">${em}</div><div class="ti">${escapeHTML(title)}</div><div class="tx">${escapeHTML(text)}</div>${ctaLabel ? `<button onclick="${ctaOnclick}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg">${escapeHTML(ctaLabel)}</button>` : ''}</div>`;
+        }
+        function fmtBadgeUx(t) {
+            const k = t.type === 'designed' ? ['built', 'CONÇUE'] : (t.type === 'extraction' ? ['extr', 'EXTR.'] : (t.type === 'api' ? ['api', 'API'] : (t.type === 'xlsx' || /xls/i.test(t.type || '') ? ['xlsx', 'XLSX'] : (t.type === 'json' ? ['json', 'JSON'] : (t.type === 'txt' ? ['txt', 'TXT'] : ['csv', 'CSV'])))));
+            return `<span class="fmt-ux fmt-${k[0]}">${k[1]}</span>`;
+        }
+        // Dernière complétude moyenne connue pour une table (issue de l'historique d'audits).
+        function lastAuditFor(tableName) {
+            return (state.governance.qualityHistory || []).find(h => h.table === tableName) || null;
+        }
         // ---- Barre de contexte persistante ----
         const _ctxRowsCache = {};
         function renderContextBar() {
             const bar = el('ctxBar'); if (!bar) return;
             let t = null;
-            const sel8 = el('qualTable'), sel3 = el('baseTableSelect');
-            if (currentTab === 8 && sel8 && sel8.value) t = state.tables[sel8.value] || tableByName(sel8.value);
-            else if (currentTab === 3 && sel3 && sel3.value) t = state.tables[sel3.value] || tableByName(sel3.value);
-            if (!t && currentProfilingTableId && state.tables[currentProfilingTableId]) t = state.tables[currentProfilingTableId];
+            const CTX_SEL = { 3: 'baseTableSelect', 4: 'vizBaseTable', 5: 'expBaseTable', 6: 'browserTableSelect', 7: 'compTableA', 8: 'qualTable' };
+            const selId = CTX_SEL[currentTab];
+            const sel2 = selId ? el(selId) : null;
+            if (sel2 && sel2.value) t = state.tables[sel2.value] || tableByName(sel2.value);
+            if (!t && currentTab === 8 && currentProfilingTableId && state.tables[currentProfilingTableId]) t = state.tables[currentProfilingTableId];
             const ready = Object.values(state.tables).filter(x => x.status === 'ready');
             el('ctxSource').textContent = t ? t.name : (ready.length ? ready.length + ' source(s) chargée(s)' : 'aucune source');
             el('ctxCols').textContent = t ? String((t.headers || []).length) : '—';
@@ -4744,7 +4765,7 @@
             const ph = phaseOfTab(currentTab);
             el('ctxCrumb').innerHTML = NAV_PHASES.map((p2, i) => (p2.id === ph.id ? `<b>${escapeHTML(p2.badge + ' ' + p2.label)}</b>` : `<span>${escapeHTML(p2.badge + ' ' + p2.label)}</span>`)).join(' <span aria-hidden="true">›</span> ');
         }
-        document.addEventListener('change', e => { const id = e.target && e.target.id; if (id === 'qualTable' || id === 'baseTableSelect') renderContextBar(); });
+        document.addEventListener('change', e => { const id = e.target && e.target.id; if (['qualTable', 'baseTableSelect', 'vizBaseTable', 'expBaseTable', 'browserTableSelect', 'compTableA'].includes(id)) renderContextBar(); });
         // ---- Drawer global (détail sans perdre le contexte) ----
         function openUxDrawer(o, row) {
             document.querySelectorAll('tr.sel').forEach(r => r.classList.remove('sel'));
@@ -5835,13 +5856,16 @@
             const alert = (cond, txt, tab2) => cond ? `<button onclick="switchTab(${tab2})" class="w-full text-left flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 hover:bg-amber-100">⚠️ ${txt}</button>` : '';
             const okOr = (arr, okTxt) => arr.length ? '' : `<div class="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-3 py-2">✔ ${okTxt}</div>`;
             c.innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-6">
                     ${kpi(tables.length, 'Sources & tables', 'text-blue-700', 1)}
                     ${kpi('<span id="ckRows">…</span>', 'Lignes chargées', 'text-indigo-700', 1)}
                     ${kpi(doms.length, 'Domaines', 'text-violet-700', 1)}
                     ${kpi(state.relations.length, 'Liens du modèle', 'text-cyan-700', 2)}
                     ${kpi((g.businessObjects || []).length, 'Objets métier', 'text-emerald-700', 9)}
                     ${kpi((g.qualityHistory || []).length, 'Audits réalisés', 'text-amber-700', 8)}
+                    ${(() => { const sn = (typeof qrSnapshots !== 'undefined' && qrSnapshots.length) ? qrSnapshots[qrSnapshots.length - 1] : null;
+                        const sc = sn && sn.global != null ? sn.global : null;
+                        return `<button onclick="switchTab(12)" class="text-left bg-white border border-slate-200 rounded-xl shadow-sm p-4 hover:border-blue-300 transition-colors"><div class="text-2xl font-black" style="color:${sc == null ? 'var(--faint)' : meterColor(sc)}">${sc == null ? '—' : sc + '<span class=\"text-sm\" style=\"color:var(--faint)\">/100</span>'}</div><div class="text-[11px] font-bold text-slate-500 uppercase mt-0.5">Score qualité <span class="normal-case font-medium text-slate-400">(règles 📏)</span></div></button>`; })()}
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
@@ -6486,8 +6510,11 @@
         function renderLinkage() {
             const c = el('lkContent'); if (!c) return;
             const tables = Object.values(state.tables).filter(t => t.status === 'ready');
-            let html = `<div class="flex items-center gap-2 mb-4"><button onclick="lkAdd()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Rapprochement</button></div>`;
-            if (!lkList().length) html += '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun rapprochement configuré.</p>';
+            let html = `<div class="flex items-center gap-2 mb-4 flex-wrap"><button onclick="lkAdd()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Rapprochement</button>
+                <span class="text-[11px] text-slate-400">Relier deux sources décrivant les mêmes entités <span class="text-slate-300">(record linkage / fuzzy matching)</span></span></div>`;
+            if (!lkList().length) html += emptyStateHtml('🤝', 'Aucun rapprochement configuré',
+                'Le rapprochement (correspondances approchées, dites « fuzzy ») relie deux sources qui parlent des mêmes entités — clients CRM et clients Facturation par exemple — puis produit un golden record fusionné.',
+                '+ Configurer un rapprochement', 'lkAdd()');
             lkList().forEach(L => {
                 const tA = tableByName(L.a), tB = tableByName(L.b);
                 const hA = tA ? tA.headers : [], hB = tB ? tB.headers : [];
@@ -6797,7 +6824,7 @@
                         <div class="font-bold text-sm text-slate-800">📋 ${escapeHTML(d2.name)}</div>
                         <div class="text-[11px] text-slate-400 mt-1">${d2.tiles.length} tuile(s) · ${(d2.filters || []).filter(f => f.col).length} filtre(s) global(aux)</div>
                         <div class="flex gap-2 mt-2"><button onclick="event.stopPropagation(); dbDup('${d2.id}')" class="text-[10px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-500">⧉ Dupliquer</button><button onclick="event.stopPropagation(); dbDel('${d2.id}')" class="text-[10px] text-red-400 hover:text-red-600 font-bold">✕ Supprimer</button></div>
-                    </div>`).join('')}</div>` : '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun tableau de bord — créez-en un pour transformer vos analyses en livrable réutilisable.</p>'}`;
+                    </div>`).join('')}</div>` : emptyStateHtml('📋', 'Aucun tableau de bord', 'Composez des tuiles (indicateurs, barres, camemberts) sur vos tables, ajoutez des seuils d\'alerte, puis exportez un livrable HTML autonome à partager.', '+ Créer un tableau de bord', 'dbAdd()')}`;
                 return;
             }
             const allCols = [...new Set(tables.flatMap(t => t.headers))];
@@ -7086,7 +7113,9 @@
                 <button onclick="el('rcImportFile').click()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬆ Importer</button>
                 <input type="file" id="rcImportFile" accept=".json" class="hidden" onchange="rcImport(this)">
             </div>`;
-            if (!rcList().length) html += '<p class="text-sm text-slate-400 italic py-8 text-center">Aucune recette — créez-en une pour rendre vos nettoyages reproductibles.</p>';
+            if (!rcList().length) html += emptyStateHtml('🧪', 'Aucune recette pour le moment',
+                'Une recette enchaîne des étapes de nettoyage (filtrer, standardiser, dédoublonner, enrichir…) et produit une table propre, reproductible à chaque mise à jour de la source.',
+                '+ Créer ma première recette', 'rcAdd()');
             rcList().forEach(r => {
                 const open = rcState.openId === r.id;
                 html += `<details class="border border-teal-200 rounded-xl bg-white mb-3 group" ${open ? 'open' : ''}>
@@ -7825,12 +7854,15 @@
             const _cnt = el('srcSearchCount'); if (_cnt) _cnt.textContent = _q ? `${_shown.length} / ${_all.length} source(s)` : (_all.length ? `${_all.length} source(s)` : '');
             const _clr = el('srcSearchClear'); if (_clr) _clr.classList.toggle('hidden', !_q);
             if (_q && !_shown.length) _gridHtml = `<div class="col-span-full text-center text-sm text-slate-400 italic py-10 bg-white border border-dashed border-slate-200 rounded-xl">Aucune source ne correspond à « ${escapeHTML(window.srcSearchQ)} ».</div>`;
+            if (!_q && !_all.length) _gridHtml = emptyStateHtml('📥', 'Importez un fichier pour commencer',
+                'Déposez un CSV, un Excel, un ZIP ou branchez un connecteur : Studio Data profile vos données, construit le modèle et prépare la gouvernance — 100 % local, rien ne quitte votre machine.',
+                '⤓ Choisir des fichiers…', "el('fileUploader') && el('fileUploader').click()");
             _shown.forEach(t => {
                 let html = `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 relative group">
                     <div class="absolute top-3 right-3 flex items-center gap-1">
                         ${t.type === 'designed' ? `<button onclick="tdRebuild('${t.id}', this)" title="Reconstruire la table depuis ses sources" class="text-blue-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : (t.type !== 'api' && t.type !== 'extraction' ? `<button onclick="manualUpdateSource('${t.id}')" title="Mettre à jour : recharger un fichier à la place de celui-ci" class="text-indigo-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : '')}
                         ${t.status === 'ready' ? `<button onclick="openBoWizard('${escapeHTML(t.name.replace(/'/g, "\\'"))}')" title="Constituer / rattacher un objet métier depuis cette source" class="text-emerald-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🏛️</button>` : ''}
-                        <button onclick="removeTable('${t.id}')" class="text-red-500 opacity-0 group-hover:opacity-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                        <button onclick="removeTable('${t.id}')" aria-label="Supprimer la source ${escapeHTML(t.name)}" class="text-red-500 opacity-0 group-hover:opacity-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                     </div>`;
                 const typeIcon = t.type === 'api' ? 'database' : (t.type === 'extraction' ? 'combine' : (t.type === 'designed' ? 'layers' : 'file'));
                 html += `<div class="flex items-center gap-3 mb-3"><div class="${t.type === 'designed' ? 'bg-blue-100 p-2 rounded text-blue-600' : 'bg-indigo-100 p-2 rounded text-indigo-600'}"><i data-lucide="${typeIcon}" class="w-5 h-5"></i></div><div class="truncate"><h3 class="font-bold text-sm" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</h3>${t.type==='extraction'?'<span class="text-[9px] uppercase font-bold text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded">Source dérivée (Extraction)</span>':(t.type==='designed'?'<span class="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">🧱 Table conçue — gérée dans l\'onglet Tables</span>':(t.lastRefresh?`<span class="text-[9px] font-bold text-emerald-600" title="Dernière mise à jour">🔄 maj ${new Date(t.lastRefresh).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''))}</div></div>`;
@@ -7845,6 +7877,12 @@
                         ? `<div class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5 mb-1.5 inline-block" title="Source convertie en Parquet compressé : format colonnaire, analyses 5 à 20× plus rapides, lu hors de la mémoire.">🗜️ Optimisée (Parquet)${t.pqSize?` · ${(t.pqSize/1048576).toFixed(1)} Mo`:''}</div><br>`
                         : (t.storage === 'view' ? `<div class="text-[10px] font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded px-1.5 py-0.5 mb-1.5 inline-block" title="Gros fichier : lu à la demande depuis le disque, jamais copié en mémoire — les analyses relisent le fichier (un peu plus lentes mais sans limite de taille mémoire). Cliquez « Optimiser » pour accélérer.">⚡ Lecture directe (gros fichier)</div><br>` : '');
                     const mergedBadge = (Array.isArray(t.files)&&t.files.length?`<div class="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 mb-1.5 inline-block">🧩 Source fusionnée · ${t.files.length} fichiers</div><br>`:'');
+                    // V3 UX : faits lisibles d'un regard — format, volumétrie, complétude du dernier audit.
+                    const lq = lastAuditFor(t.name);
+                    html += `<div class="flex items-center gap-2 mb-2 text-[11px] text-slate-500 flex-wrap">${fmtBadgeUx(t)}
+                        <span><strong class="text-slate-700">${t.lastRows != null ? Number(t.lastRows).toLocaleString('fr-FR') : '—'}</strong> lignes</span><span aria-hidden="true">·</span>
+                        <span><strong class="text-slate-700">${(t.headers || []).length}</strong> colonnes</span>
+                        ${lq && lq.avgCompleteness != null ? `<span class="flex-grow"></span><span class="meter" style="min-width:110px" title="Complétude moyenne au dernier audit (${new Date(lq.ts).toLocaleDateString('fr-FR')})"><span class="bar"><i style="width:${Math.min(100, lq.avgCompleteness)}%;background:${meterColor(lq.avgCompleteness)}"></i></span><span class="pct" style="color:${meterColor(lq.avgCompleteness)}">${Math.round(lq.avgCompleteness)}%</span></span>` : ''}</div>`;
                     html+=`<div class="max-h-28 overflow-auto text-xs bg-slate-50 p-2 rounded border border-slate-100">${mergedBadge}${storageBadge}${t.headers.map(h=>`<span class="inline-block bg-white border px-1 rounded mr-1 mb-1">${escapeHTML(h)}</span>`).join('')}</div>`;
                     // Domaine (groupe de sources) : initialisé par le dossier surveillé, modifiable librement.
                     html+=`<div class="mt-2 flex items-center gap-2"><label class="text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">🗂 Domaine</label><input list="themeDatalist" value="${escapeHTML(t.theme||'')}" onchange="updateTableTheme('${t.id}', this.value)" placeholder="ex : Achats, Référentiels…" class="flex-1 min-w-0 text-xs border border-slate-200 rounded p-1.5 ${t.theme?'bg-white font-bold text-slate-700':'bg-slate-50 text-slate-500'}" title="Groupe de sources : zones et couleurs dans le Modèle de données"></div>`;
@@ -10420,26 +10458,14 @@
         function qualInspectButtons(idx) {
             return `<span class="inline-flex gap-1 ml-2"><button onclick="qualViewInspect(${idx}, this, 0)" class="text-[10px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-50">👁 Voir</button><button onclick="qualExportInspect(${idx}, this)" class="text-[10px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-50">⬇ CSV</button></span>`;
         }
-        // Fenêtre modale de consultation : ne déforme jamais la page — table défilante dans un
-        // panneau centré, fermeture par ✕, clic sur le fond ou touche Échap.
+        // V3 UX : l'inspecteur d'anomalies s'ouvre dans le PANNEAU LATÉRAL (drawer), pas en modale —
+        // la liste des anomalies reste visible derrière, on enchaîne les consultations sans se perdre.
         function qualInspectModal() {
-            let m = el('qualInspectModal');
-            if (!m) {
-                m = document.createElement('div');
-                m.id = 'qualInspectModal';
-                m.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4';
-                m.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden">
-                    <div id="qualInspectModalHead" class="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-2 flex-wrap text-xs"></div>
-                    <div id="qualInspectModalBody" class="overflow-auto flex-grow"></div>
-                </div>`;
-                m.addEventListener('click', e => { if (e.target === m) closeQualInspectModal(); });
-                document.addEventListener('keydown', e => { if (e.key === 'Escape') closeQualInspectModal(); });
-                document.body.appendChild(m);
-            }
-            m.classList.remove('hidden'); m.classList.add('flex');
-            return m;
+            el('uxDrawer').classList.add('wide');
+            openUxDrawer({ sem: '', title: 'Lignes en anomalie', sub: 'Consultation sans quitter l\'écran — Échap pour fermer',
+                body: `<div id="qualInspectModalHead" class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap text-xs mb-3"></div><div id="qualInspectModalBody" class="overflow-auto border border-slate-100 rounded-lg"></div>`, foot: '' });
         }
-        function closeQualInspectModal() { const m = el('qualInspectModal'); if (m) { m.classList.add('hidden'); m.classList.remove('flex'); } }
+        function closeQualInspectModal() { el('uxDrawer').classList.remove('wide'); closeUxDrawer(); }
         async function qualViewInspect(idx, btn, offset) {
             const entry = qualInspectRegistry[idx]; if (!entry) return;
             qualInspectModal();
