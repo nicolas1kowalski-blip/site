@@ -93,6 +93,7 @@ namespace MesPremiersJeux.Games
             BuildKinds();
 
             _canvas = new Canvas { Width = W, Height = H };
+            DrawBackground();
             DrawBoard();
             DrawControls();
             DrawTokens();
@@ -143,64 +144,175 @@ namespace MesPremiersJeux.Games
             return new Point(Bx + c * Cs + Cs / 2, By + r * Cs + Cs / 2);
         }
 
-        private void DrawBoard()
+        // Palette vive : les pastilles « normales » défilent dans l'arc-en-ciel.
+        private static readonly Color[] Rainbow =
         {
-            for (int i = 0; i < N; i++)
-            {
-                var (c, r) = _path[i];
-                double x = Bx + c * Cs, y = By + r * Cs;
+            Color.FromRgb(0xFF, 0x6B, 0x6B), Color.FromRgb(0xFF, 0x9F, 0x45),
+            Color.FromRgb(0xFF, 0xD9, 0x3D), Color.FromRgb(0x6B, 0xCB, 0x77),
+            Color.FromRgb(0x4D, 0x96, 0xFF), Color.FromRgb(0x9B, 0x72, 0xF2),
+            Color.FromRgb(0xFF, 0x6F, 0xB5),
+        };
 
-                var cell = new Border
-                {
-                    Width = Cs - 8,
-                    Height = Cs - 8,
-                    CornerRadius = new CornerRadius(16),
-                    BorderThickness = new Thickness(3),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x5B, 0x46, 0x8C)),
-                    Background = CellFill(_kind[i], i),
-                };
-                Canvas.SetLeft(cell, x + 4);
-                Canvas.SetTop(cell, y + 4);
-                _canvas.Children.Add(cell);
+        // Fond « jardin » : dégradé ciel→herbe + décors (fleurs, arbres, nuages).
+        private void DrawBackground()
+        {
+            var lg = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            lg.GradientStops.Add(new GradientStop(Color.FromRgb(0xBF, 0xE6, 0xFF), 0.0));
+            lg.GradientStops.Add(new GradientStop(Color.FromRgb(0xDD, 0xF3, 0xD6), 0.55));
+            lg.GradientStops.Add(new GradientStop(Color.FromRgb(0xC0, 0xEA, 0x9B), 1.0));
+            _canvas.Children.Add(new Rectangle { Width = W, Height = H, Fill = lg });
 
-                var stack = new Grid();
-                string emoji = CellEmoji(_kind[i]);
-                if (!string.IsNullOrEmpty(emoji))
-                    stack.Children.Add(new TextBlock
-                    {
-                        Text = emoji,
-                        FontSize = _kind[i] == Kind.Finish || _kind[i] == Kind.Start ? 34 : 44,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    });
-                // Numéro de case (petit, en haut à gauche).
-                stack.Children.Add(new TextBlock
-                {
-                    Text = (i + 1).ToString(),
-                    FontSize = 15,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(Color.FromArgb(0xAA, 0x33, 0x22, 0x55)),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top,
-                    Margin = new Thickness(6, 4, 0, 0),
-                });
-                cell.Child = stack;
-            }
+            var rng = new Random(7);
+            string[] flowers = { "🌷", "🌼", "🌸", "🌻", "🍄", "🌿" };
+            double baseY = By + Rows * Cs + 20; // bande sous le plateau
+            for (double x = Bx + 8; x < Bx + Cols * Cs - 40; x += 92)
+                _canvas.Children.Add(Emoji(flowers[rng.Next(flowers.Length)], x, baseY + rng.Next(16), 40));
+            _canvas.Children.Add(Emoji("🌳", Bx - 10, baseY - 30, 72));
+            _canvas.Children.Add(Emoji("🌳", Bx + Cols * Cs - 66, baseY - 30, 72));
+            _canvas.Children.Add(Emoji("☁️", Bx + 150, 0, 50));
+            _canvas.Children.Add(Emoji("☁️", Bx + 470, -8, 58));
         }
 
-        private static Brush CellFill(Kind k, int i)
+        private static TextBlock Emoji(string s, double x, double y, double size)
+        {
+            var t = new TextBlock { Text = s, FontSize = size, IsHitTestVisible = false, Opacity = 0.95 };
+            Canvas.SetLeft(t, x);
+            Canvas.SetTop(t, y);
+            return t;
+        }
+
+        private PointCollection PathPoints()
+        {
+            var pc = new PointCollection();
+            for (int i = 0; i < N; i++) pc.Add(Center(i));
+            return pc;
+        }
+
+        private void DrawBoard()
+        {
+            // 1) La ROUTE qui serpente : une large bande arrondie qui relie toutes
+            //    les cases (bords ronds → un vrai chemin, pas une grille).
+            _canvas.Children.Add(new Polyline
+            {
+                Points = PathPoints(),
+                Stroke = new SolidColorBrush(Color.FromRgb(0xB9, 0x7A, 0x46)),
+                StrokeThickness = 66,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+            _canvas.Children.Add(new Polyline
+            {
+                Points = PathPoints(),
+                Stroke = new SolidColorBrush(Color.FromRgb(0xF6, 0xE6, 0xC3)),
+                StrokeThickness = 46,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+            _canvas.Children.Add(new Polyline
+            {
+                Points = PathPoints(),
+                Stroke = new SolidColorBrush(Color.FromArgb(0x99, 0xC9, 0x8A, 0x54)),
+                StrokeThickness = 4,
+                StrokeDashArray = new DoubleCollection { 2, 3.5 },
+                StrokeLineJoin = PenLineJoin.Round,
+            });
+
+            // 2) Les CASES : des pastilles rondes, colorées et brillantes.
+            for (int i = 0; i < N; i++) DrawTile(i);
+        }
+
+        private void DrawTile(int i)
+        {
+            var k = _kind[i];
+            var c = Center(i);
+            bool big = k == Kind.Finish || k == Kind.Start;
+            double d = big ? 116 : (k == Kind.Normal ? 92 : 106);
+            Color col = TileColor(k, i);
+
+            // Halo lumineux pour l'arrivée et les cases spéciales.
+            if (k != Kind.Normal)
+            {
+                double halo = d + (big ? 34 : 22);
+                var glow = new Ellipse
+                {
+                    Width = halo,
+                    Height = halo,
+                    Fill = new RadialGradientBrush(
+                        Color.FromArgb((byte)(big ? 0x88 : 0x55), col.R, col.G, col.B),
+                        Color.FromArgb(0x00, col.R, col.G, col.B)),
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(glow, c.X - halo / 2);
+                Canvas.SetTop(glow, c.Y - halo / 2);
+                _canvas.Children.Add(glow);
+            }
+
+            // Ombre douce sous la pastille.
+            var shadow = new Ellipse
+            {
+                Width = d,
+                Height = d,
+                Fill = new SolidColorBrush(Color.FromArgb(0x30, 0x2A, 0x1A, 0x00)),
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(shadow, c.X - d / 2);
+            Canvas.SetTop(shadow, c.Y - d / 2 + 5);
+            _canvas.Children.Add(shadow);
+
+            // La pastille : dégradé radial (reflet en haut à gauche) + liseré blanc.
+            var tileFill = new RadialGradientBrush(Lighten(col), col)
+            {
+                GradientOrigin = new Point(0.35, 0.30),
+                Center = new Point(0.35, 0.30),
+                RadiusX = 0.85,
+                RadiusY = 0.85,
+            };
+            var g = new Grid { Width = d, Height = d };
+            g.Children.Add(new Ellipse
+            {
+                Fill = tileFill,
+                Stroke = Brushes.White,
+                StrokeThickness = big ? 6 : 5,
+            });
+
+            string emoji = CellEmoji(k);
+            if (!string.IsNullOrEmpty(emoji))
+                g.Children.Add(new TextBlock
+                {
+                    Text = emoji,
+                    FontSize = big ? 44 : 46,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+            else
+                g.Children.Add(new TextBlock
+                {
+                    Text = (i + 1).ToString(),
+                    FontSize = 22,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+
+            Canvas.SetLeft(g, c.X - d / 2);
+            Canvas.SetTop(g, c.Y - d / 2);
+            _canvas.Children.Add(g);
+        }
+
+        private static Color TileColor(Kind k, int i)
         {
             switch (k)
             {
-                case Kind.Start: return new SolidColorBrush(Color.FromRgb(0xC8, 0xF7, 0xC5));
-                case Kind.Finish: return new SolidColorBrush(Color.FromRgb(0xFF, 0xE7, 0x8A));
-                case Kind.Goose: return new SolidColorBrush(Color.FromRgb(0xD8, 0xF3, 0xFF));
-                case Kind.Bridge: return new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xC2));
-                case Kind.Star: return new SolidColorBrush(Color.FromRgb(0xFF, 0xF3, 0xBF));
-                case Kind.Well: return new SolidColorBrush(Color.FromRgb(0xE7, 0xDC, 0xFF));
-                default:
-                    return new SolidColorBrush((i % 2 == 0)
-                        ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0xF3, 0xEC, 0xFF));
+                case Kind.Start: return Color.FromRgb(0x36, 0xD3, 0x99);
+                case Kind.Finish: return Color.FromRgb(0xFF, 0xC0, 0x2E);
+                case Kind.Goose: return Color.FromRgb(0x2E, 0xC4, 0xB6);
+                case Kind.Bridge: return Color.FromRgb(0xFF, 0x8A, 0x3D);
+                case Kind.Star: return Color.FromRgb(0xFF, 0xD1, 0x2E);
+                case Kind.Well: return Color.FromRgb(0x8E, 0x6B, 0xE6);
+                default: return Rainbow[i % Rainbow.Length];
             }
         }
 
@@ -223,6 +335,20 @@ namespace MesPremiersJeux.Games
         private void DrawControls()
         {
             const double colX = 880;
+
+            // Panneau translucide qui regroupe joliment la bannière et le dé.
+            var panel = new Border
+            {
+                Width = 560,
+                Height = 620,
+                CornerRadius = new CornerRadius(34),
+                Background = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xE6, 0xD8, 0xFF)),
+                BorderThickness = new Thickness(3),
+            };
+            Canvas.SetLeft(panel, 852);
+            Canvas.SetTop(panel, 40);
+            _canvas.Children.Add(panel);
 
             _banner = new Border
             {
@@ -285,7 +411,7 @@ namespace MesPremiersJeux.Games
                     Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                 });
                 Canvas.SetLeft(row, colX + 40);
-                Canvas.SetTop(row, 580 + p * 60);
+                Canvas.SetTop(row, 556 + p * 54);
                 _canvas.Children.Add(row);
             }
         }
