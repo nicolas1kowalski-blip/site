@@ -11,21 +11,27 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// Le vrai jeu de l'oie : un plateau en spirale, deux pions (l'enfant et un
-    /// parent), un grand dé animé qu'on lance au regard. Les cases spéciales — l'oie
-    /// (on rejoue), le pont (on saute en avant), l'étoile (bonus) et le puits (on
-    /// passe un tour) — donnent l'effet « waouh ». Premier au jardin de l'oie gagne.
+    /// Le vrai jeu de l'oie (règles traditionnelles, sans la mise) : plateau en
+    /// spirale de 63 cases, DEUX dés, deux joueurs (l'enfant et un parent). On lance
+    /// les dés au regard. Cases spéciales authentiques : le pont (6→12), l'auberge
+    /// (19, passe un tour), le puits (31) et la prison (52, on attend d'être libéré),
+    /// le labyrinthe (42, recule de 3), la mort (58, retour au départ), les oies
+    /// (cases dont la somme des chiffres fait 5 ou 9 → on rejoue du même nombre).
+    /// Ouvertures au premier lancer : 3+6 → 26, 4+5 → 53. Premier à 63 pile gagne.
     /// </summary>
     public sealed class GooseGame : GameControl
     {
         private const double W = 1440, H = 760;
-        private const int Cols = 7, Rows = 5;              // 35 cases
-        private const double Bx = 28, By = 46, Cs = 114;   // origine + taille de case
-        private const double Tok = 60;                     // taille d'un pion
+        private const int Cols = 9, Rows = 7;             // 63 cases
+        private const double Bx = 26, By = 30, Cs = 86;   // origine + taille de case
+        private const double Tok = 48;                    // taille d'un pion
 
-        private enum Kind { Normal, Goose, Bridge, Star, Well, Start, Finish }
+        private enum Kind { Normal, Goose, Pont, Auberge, Puits, Prison, Labyrinthe, Mort, Start, Finish }
 
-        // Deux joueurs : couleur, nom, emoji de pion.
+        // Cases « oie » : sommes des chiffres = 5 ou 9 (numéros 1-based).
+        private static readonly int[] GooseCases =
+            { 5, 9, 14, 18, 23, 27, 32, 36, 41, 45, 50, 54, 59 };
+
         private static readonly Color[] PlayerColor =
         {
             Color.FromRgb(0xFF, 0x6B, 0x3C), // orange — l'enfant
@@ -33,14 +39,21 @@ namespace MesPremiersJeux.Games
         };
         private static readonly string[] PlayerName = { "Le poussin", "Le renard" };
         private static readonly string[] PlayerEmoji = { "🐥", "🦊" };
-        private static readonly Point[] PlayerNudge = { new Point(-20, -14), new Point(20, 14) };
+        private static readonly Point[] PlayerNudge = { new Point(-14, -9), new Point(14, 9) };
+
+        private static readonly Color[] Rainbow =
+        {
+            Color.FromRgb(0xFF, 0x6B, 0x6B), Color.FromRgb(0xFF, 0x9F, 0x45),
+            Color.FromRgb(0xFF, 0xD9, 0x3D), Color.FromRgb(0x6B, 0xCB, 0x77),
+            Color.FromRgb(0x4D, 0x96, 0xFF), Color.FromRgb(0x9B, 0x72, 0xF2),
+            Color.FromRgb(0xFF, 0x6F, 0xB5),
+        };
 
         private readonly List<(int C, int R)> _path = new List<(int, int)>();
-        private readonly Dictionary<int, int> _bridgeTo = new Dictionary<int, int>();
         private Kind[] _kind;
 
         private Canvas _canvas;
-        private DiceView _dice;
+        private DiceView _dice1, _dice2;
         private Button _dieBtn;
         private Border _banner;
         private TextBlock _bannerText;
@@ -49,25 +62,25 @@ namespace MesPremiersJeux.Games
         private readonly ScaleTransform[] _ts = new ScaleTransform[2];
         private readonly Grid[] _token = new Grid[2];
         private ScaleTransform _dieScale;
-        private readonly int[] _pos = new int[2];
-        private readonly bool[] _skip = new bool[2];
-        private int _current;
-        private int _lastVal;
-        private int _gooseChain;
-        private bool _win;
-        private bool _gazePaused; // le regard est-il en pause (tour du parent) ?
 
-        private int N => Cols * Rows;
+        private readonly int[] _pos = new int[2];
+        private readonly bool[] _skip = new bool[2];       // auberge : passe un tour
+        private readonly bool[] _stuck = new bool[2];      // puits / prison
+        private readonly int[] _stuckAt = { -1, -1 };
+        private readonly bool[] _firstRoll = new bool[2];  // ouverture à deux dés
+        private int _current, _lastD1, _lastD2, _lastTotal, _gchain;
+        private bool _win, _gazePaused;
+
+        private int N => Cols * Rows; // 63
+        private int FinishIdx => N - 1;
 
         public GooseGame(Action celebrate) : base(celebrate)
         {
-            // Sécurité : si on quitte le jeu, on rend le regard à l'appli.
             Unloaded += (s, e) => ReleaseGaze();
         }
 
-        // Tour de l'enfant (joueur 0) : regard actif. Tour du parent (joueur 1) :
-        // regard EN PAUSE — le dé se lance alors à la souris / au toucher, pour que
-        // le regard de l'enfant ne déclenche pas le dé à la place du parent.
+        // Regard actif pour l'enfant (0), en pause pour le parent (1) : au tour du
+        // parent, les dés se lancent à la souris / au toucher.
         private void SetGazeForPlayer(int p)
         {
             if (p == 0) ReleaseGaze();
@@ -81,12 +94,18 @@ namespace MesPremiersJeux.Games
 
         protected override void NewRound()
         {
-            ReleaseGaze(); // repart d'un état de regard propre
+            ReleaseGaze();
             _win = false;
             Locked = false;
             _current = 0;
-            _pos[0] = _pos[1] = 0;
-            _skip[0] = _skip[1] = false;
+            for (int p = 0; p < 2; p++)
+            {
+                _pos[p] = 0;
+                _skip[p] = false;
+                _stuck[p] = false;
+                _stuckAt[p] = -1;
+                _firstRoll[p] = true;
+            }
             Question.Text = "🪿  Le jeu de l'oie";
 
             BuildPath();
@@ -101,12 +120,12 @@ namespace MesPremiersJeux.Games
 
             Schedule(500, () =>
             {
-                Speak("Le jeu de l'oie ! " + PlayerName[0] + ", regarde le dé pour lancer !");
+                Speak("Le jeu de l'oie ! " + PlayerName[0] + ", regarde les dés pour lancer !");
                 StartTurn();
             });
         }
 
-        // --- Construction du plateau ---
+        // --- Plateau ---
 
         private void BuildPath()
         {
@@ -127,16 +146,20 @@ namespace MesPremiersJeux.Games
         {
             _kind = new Kind[N];
             for (int i = 0; i < N; i++) _kind[i] = Kind.Normal;
+            foreach (var caseNo in GooseCases)
+            {
+                int idx = caseNo - 1;
+                if (idx > 0 && idx < N - 1) _kind[idx] = Kind.Goose;
+            }
+            _kind[5] = Kind.Pont;         // case 6
+            _kind[18] = Kind.Auberge;     // case 19
+            _kind[30] = Kind.Puits;       // case 31
+            _kind[41] = Kind.Labyrinthe;  // case 42
+            _kind[51] = Kind.Prison;      // case 52
+            _kind[57] = Kind.Mort;        // case 58
             _kind[0] = Kind.Start;
             _kind[N - 1] = Kind.Finish;
-
-            foreach (var i in new[] { 3, 8, 13, 17, 22, 26, 30 }) if (Ok(i)) _kind[i] = Kind.Goose;
-            foreach (var i in new[] { 11, 20, 29 }) if (Ok(i)) _kind[i] = Kind.Star;
-            if (Ok(15)) _kind[15] = Kind.Well;
-            if (Ok(5)) { _kind[5] = Kind.Bridge; _bridgeTo[5] = 10; }
         }
-
-        private bool Ok(int i) => i > 0 && i < N - 1 && _kind[i] == Kind.Normal;
 
         private Point Center(int idx)
         {
@@ -144,16 +167,6 @@ namespace MesPremiersJeux.Games
             return new Point(Bx + c * Cs + Cs / 2, By + r * Cs + Cs / 2);
         }
 
-        // Palette vive : les pastilles « normales » défilent dans l'arc-en-ciel.
-        private static readonly Color[] Rainbow =
-        {
-            Color.FromRgb(0xFF, 0x6B, 0x6B), Color.FromRgb(0xFF, 0x9F, 0x45),
-            Color.FromRgb(0xFF, 0xD9, 0x3D), Color.FromRgb(0x6B, 0xCB, 0x77),
-            Color.FromRgb(0x4D, 0x96, 0xFF), Color.FromRgb(0x9B, 0x72, 0xF2),
-            Color.FromRgb(0xFF, 0x6F, 0xB5),
-        };
-
-        // Fond « jardin » : dégradé ciel→herbe + décors (fleurs, arbres, nuages).
         private void DrawBackground()
         {
             var lg = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
@@ -164,13 +177,13 @@ namespace MesPremiersJeux.Games
 
             var rng = new Random(7);
             string[] flowers = { "🌷", "🌼", "🌸", "🌻", "🍄", "🌿" };
-            double baseY = By + Rows * Cs + 20; // bande sous le plateau
-            for (double x = Bx + 8; x < Bx + Cols * Cs - 40; x += 92)
-                _canvas.Children.Add(Emoji(flowers[rng.Next(flowers.Length)], x, baseY + rng.Next(16), 40));
-            _canvas.Children.Add(Emoji("🌳", Bx - 10, baseY - 30, 72));
-            _canvas.Children.Add(Emoji("🌳", Bx + Cols * Cs - 66, baseY - 30, 72));
-            _canvas.Children.Add(Emoji("☁️", Bx + 150, 0, 50));
-            _canvas.Children.Add(Emoji("☁️", Bx + 470, -8, 58));
+            double baseY = By + Rows * Cs + 18;
+            for (double x = Bx + 8; x < Bx + Cols * Cs - 40; x += 90)
+                _canvas.Children.Add(Emoji(flowers[rng.Next(flowers.Length)], x, baseY + rng.Next(14), 36));
+            _canvas.Children.Add(Emoji("🌳", Bx - 10, baseY - 26, 66));
+            _canvas.Children.Add(Emoji("🌳", Bx + Cols * Cs - 58, baseY - 26, 66));
+            _canvas.Children.Add(Emoji("☁️", Bx + 150, -4, 48));
+            _canvas.Children.Add(Emoji("☁️", Bx + 470, -10, 54));
         }
 
         private static TextBlock Emoji(string s, double x, double y, double size)
@@ -190,13 +203,11 @@ namespace MesPremiersJeux.Games
 
         private void DrawBoard()
         {
-            // 1) La ROUTE qui serpente : une large bande arrondie qui relie toutes
-            //    les cases (bords ronds → un vrai chemin, pas une grille).
             _canvas.Children.Add(new Polyline
             {
                 Points = PathPoints(),
                 Stroke = new SolidColorBrush(Color.FromRgb(0xB9, 0x7A, 0x46)),
-                StrokeThickness = 66,
+                StrokeThickness = 50,
                 StrokeLineJoin = PenLineJoin.Round,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
@@ -205,7 +216,7 @@ namespace MesPremiersJeux.Games
             {
                 Points = PathPoints(),
                 Stroke = new SolidColorBrush(Color.FromRgb(0xF6, 0xE6, 0xC3)),
-                StrokeThickness = 46,
+                StrokeThickness = 34,
                 StrokeLineJoin = PenLineJoin.Round,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
@@ -214,12 +225,11 @@ namespace MesPremiersJeux.Games
             {
                 Points = PathPoints(),
                 Stroke = new SolidColorBrush(Color.FromArgb(0x99, 0xC9, 0x8A, 0x54)),
-                StrokeThickness = 4,
+                StrokeThickness = 3,
                 StrokeDashArray = new DoubleCollection { 2, 3.5 },
                 StrokeLineJoin = PenLineJoin.Round,
             });
 
-            // 2) Les CASES : des pastilles rondes, colorées et brillantes.
             for (int i = 0; i < N; i++) DrawTile(i);
         }
 
@@ -228,13 +238,12 @@ namespace MesPremiersJeux.Games
             var k = _kind[i];
             var c = Center(i);
             bool big = k == Kind.Finish || k == Kind.Start;
-            double d = big ? 116 : (k == Kind.Normal ? 92 : 106);
+            double d = big ? 88 : (k == Kind.Normal ? 66 : 78);
             Color col = TileColor(k, i);
 
-            // Halo lumineux pour l'arrivée et les cases spéciales.
             if (k != Kind.Normal)
             {
-                double halo = d + (big ? 34 : 22);
+                double halo = d + (big ? 30 : 18);
                 var glow = new Ellipse
                 {
                     Width = halo,
@@ -249,7 +258,6 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(glow);
             }
 
-            // Ombre douce sous la pastille.
             var shadow = new Ellipse
             {
                 Width = d,
@@ -258,10 +266,9 @@ namespace MesPremiersJeux.Games
                 IsHitTestVisible = false,
             };
             Canvas.SetLeft(shadow, c.X - d / 2);
-            Canvas.SetTop(shadow, c.Y - d / 2 + 5);
+            Canvas.SetTop(shadow, c.Y - d / 2 + 4);
             _canvas.Children.Add(shadow);
 
-            // La pastille : dégradé radial (reflet en haut à gauche) + liseré blanc.
             var tileFill = new RadialGradientBrush(Lighten(col), col)
             {
                 GradientOrigin = new Point(0.35, 0.30),
@@ -274,7 +281,7 @@ namespace MesPremiersJeux.Games
             {
                 Fill = tileFill,
                 Stroke = Brushes.White,
-                StrokeThickness = big ? 6 : 5,
+                StrokeThickness = big ? 5 : 4,
             });
 
             string emoji = CellEmoji(k);
@@ -282,7 +289,7 @@ namespace MesPremiersJeux.Games
                 g.Children.Add(new TextBlock
                 {
                     Text = emoji,
-                    FontSize = big ? 44 : 46,
+                    FontSize = big ? 30 : 32,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 });
@@ -290,7 +297,7 @@ namespace MesPremiersJeux.Games
                 g.Children.Add(new TextBlock
                 {
                     Text = (i + 1).ToString(),
-                    FontSize = 22,
+                    FontSize = 17,
                     FontWeight = FontWeights.Bold,
                     Foreground = Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -309,9 +316,12 @@ namespace MesPremiersJeux.Games
                 case Kind.Start: return Color.FromRgb(0x36, 0xD3, 0x99);
                 case Kind.Finish: return Color.FromRgb(0xFF, 0xC0, 0x2E);
                 case Kind.Goose: return Color.FromRgb(0x2E, 0xC4, 0xB6);
-                case Kind.Bridge: return Color.FromRgb(0xFF, 0x8A, 0x3D);
-                case Kind.Star: return Color.FromRgb(0xFF, 0xD1, 0x2E);
-                case Kind.Well: return Color.FromRgb(0x8E, 0x6B, 0xE6);
+                case Kind.Pont: return Color.FromRgb(0xFF, 0x8A, 0x3D);
+                case Kind.Auberge: return Color.FromRgb(0xE0, 0xA9, 0x6D);
+                case Kind.Puits: return Color.FromRgb(0x8E, 0x6B, 0xE6);
+                case Kind.Prison: return Color.FromRgb(0x88, 0x92, 0xA6);
+                case Kind.Labyrinthe: return Color.FromRgb(0xFF, 0x5F, 0xA2);
+                case Kind.Mort: return Color.FromRgb(0x4A, 0x4A, 0x5A);
                 default: return Rainbow[i % Rainbow.Length];
             }
         }
@@ -323,20 +333,22 @@ namespace MesPremiersJeux.Games
                 case Kind.Start: return "🏁";
                 case Kind.Finish: return "🏡";
                 case Kind.Goose: return "🪿";
-                case Kind.Bridge: return "🌉";
-                case Kind.Star: return "⭐";
-                case Kind.Well: return "🕳️";
+                case Kind.Pont: return "🌉";
+                case Kind.Auberge: return "🛏️";
+                case Kind.Puits: return "🕳️";
+                case Kind.Prison: return "🔒";
+                case Kind.Labyrinthe: return "🌀";
+                case Kind.Mort: return "💀";
                 default: return "";
             }
         }
 
-        // --- Panneau de droite : bannière de tour + grand dé ---
+        // --- Panneau de droite : bannière + deux dés ---
 
         private void DrawControls()
         {
-            const double colX = 880;
+            const double colX = 872;
 
-            // Panneau translucide qui regroupe joliment la bannière et le dé.
             var panel = new Border
             {
                 Width = 560,
@@ -359,7 +371,6 @@ namespace MesPremiersJeux.Games
             };
             _bannerText = new TextBlock
             {
-                Text = "",
                 FontSize = 30,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
@@ -372,63 +383,69 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(_banner, 60);
             _canvas.Children.Add(_banner);
 
-            _dice = new DiceView();
+            _dice1 = new DiceView();
+            _dice2 = new DiceView();
+            _dice1.Root.Margin = new Thickness(0, 0, 10, 0);
+            _dice2.Root.Margin = new Thickness(10, 0, 0, 0);
+            var dp = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            dp.Children.Add(_dice1.Root);
+            dp.Children.Add(_dice2.Root);
+
             _dieBtn = new Button
             {
                 Style = (Style)Application.Current.Resources["BalloonButton"],
-                Width = 224,
-                Height = 224,
-                Content = _dice.Root,
+                Width = 372,
+                Height = 200,
+                Content = dp,
             };
             _dieBtn.Click += (s, e) => Roll();
             _dieBtn.RenderTransformOrigin = new Point(0.5, 0.5);
             _dieScale = new ScaleTransform(1, 1);
             _dieBtn.RenderTransform = _dieScale;
-            Canvas.SetLeft(_dieBtn, colX + 260 - 112);
+            Canvas.SetLeft(_dieBtn, colX + 260 - 186);
             Canvas.SetTop(_dieBtn, 250);
             _canvas.Children.Add(_dieBtn);
 
-            _canvas.Children.Add(Hint("🐥 l'enfant regarde le dé  ·  ✋ le parent le touche", colX, 500));
+            var hint = new TextBlock
+            {
+                Text = "🐥 l'enfant regarde les dés  ·  ✋ le parent les touche",
+                FontSize = 20,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5A, 0x8A)),
+                Width = 520,
+                TextAlignment = TextAlignment.Center,
+            };
+            Canvas.SetLeft(hint, colX);
+            Canvas.SetTop(hint, 484);
+            _canvas.Children.Add(hint);
 
-            // Légende des pions.
             for (int p = 0; p < 2; p++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
                 row.Children.Add(new Border
                 {
-                    Width = 44,
-                    Height = 44,
-                    CornerRadius = new CornerRadius(22),
+                    Width = 42,
+                    Height = 42,
+                    CornerRadius = new CornerRadius(21),
                     Background = new SolidColorBrush(PlayerColor[p]),
-                    Child = new TextBlock { Text = PlayerEmoji[p], FontSize = 26, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    Child = new TextBlock { Text = PlayerEmoji[p], FontSize = 24, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 });
                 row.Children.Add(new TextBlock
                 {
                     Text = "  " + PlayerName[p],
-                    FontSize = 24,
+                    FontSize = 23,
                     FontWeight = FontWeights.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                 });
-                Canvas.SetLeft(row, colX + 40);
-                Canvas.SetTop(row, 556 + p * 54);
+                Canvas.SetLeft(row, colX + 46);
+                Canvas.SetTop(row, 540 + p * 52);
                 _canvas.Children.Add(row);
             }
-        }
-
-        private static TextBlock Hint(string text, double x, double y)
-        {
-            var t = new TextBlock
-            {
-                Text = text,
-                FontSize = 22,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5A, 0x8A)),
-                Width = 520,
-                TextAlignment = TextAlignment.Center,
-            };
-            Canvas.SetLeft(t, x);
-            Canvas.SetTop(t, y);
-            return t;
         }
 
         private void DrawTokens()
@@ -446,7 +463,7 @@ namespace MesPremiersJeux.Games
                 ring.Children.Add(new TextBlock
                 {
                     Text = PlayerEmoji[p],
-                    FontSize = 34,
+                    FontSize = 28,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 });
@@ -472,21 +489,40 @@ namespace MesPremiersJeux.Games
         private void StartTurn()
         {
             if (_win) return;
-            SetGazeForPlayer(_current); // regard actif (enfant) / en pause (parent)
+            SetGazeForPlayer(_current);
+            int other = 1 - _current;
 
+            // Coincé au puits / en prison : on attend d'être libéré.
+            if (_stuck[_current])
+            {
+                if (_stuck[other]) // les deux coincés : on libère d'office pour ne pas bloquer
+                {
+                    _stuck[_current] = false;
+                    _stuckAt[_current] = -1;
+                    Speak(PlayerName[_current] + " est libéré !");
+                }
+                else
+                {
+                    UpdateBanner(PlayerName[_current] + " est coincé…\nil attend d'être libéré", _current);
+                    Speak(PlayerName[_current] + " est coincé, il attend d'être libéré.");
+                    Schedule(1700, () => { _current = 1 - _current; StartTurn(); });
+                    return;
+                }
+            }
+
+            // Auberge : passe un tour.
             if (_skip[_current])
             {
                 _skip[_current] = false;
-                UpdateBanner(PlayerName[_current] + " passe son tour…", _current);
+                UpdateBanner(PlayerName[_current] + " dort à l'auberge…\nil passe un tour", _current);
                 Speak(PlayerName[_current] + " passe son tour.");
-                Schedule(1600, () => { _current = 1 - _current; StartTurn(); });
+                Schedule(1700, () => { _current = 1 - _current; StartTurn(); });
                 return;
             }
 
             Locked = false;
             _dieBtn.IsEnabled = true;
-            _banner.Background = new SolidColorBrush(PlayerColor[_current]);
-            string how = _current == 0 ? "Regarde le dé 🎲" : "Touche le dé ✋";
+            string how = _current == 0 ? "Regarde les dés 🎲" : "Touche les dés ✋";
             UpdateBanner("C'est à toi, " + PlayerName[_current] + " !\n" + how, _current);
             PulseDie();
         }
@@ -503,75 +539,164 @@ namespace MesPremiersJeux.Games
             Locked = true;
             _dieBtn.IsEnabled = false;
 
-            _lastVal = 1 + GameKit.RandInt(6);
-            _dice.RollTo(_lastVal, () =>
+            _lastD1 = 1 + GameKit.RandInt(6);
+            _lastD2 = 1 + GameKit.RandInt(6);
+            _lastTotal = _lastD1 + _lastD2;
+            _gchain = 0;
+
+            RollBoth(_lastD1, _lastD2, () =>
             {
-                Speak(NumberWord(_lastVal) + " !");
-                _gooseChain = 0;
-                Schedule(300, () => MoveSteps(_current, _lastVal, () => ResolveLanding(_current)));
+                Speak(_lastD1 + " et " + _lastD2 + ", ça fait " + _lastTotal + " !");
+                Schedule(350, AfterRoll);
             });
         }
 
-        private void MoveSteps(int p, int steps, Action done)
+        private void RollBoth(int v1, int v2, Action done)
+        {
+            int c = 0;
+            Action f = () => { if (++c == 2) done(); };
+            _dice1.RollTo(v1, f);
+            _dice2.RollTo(v2, f);
+        }
+
+        private void AfterRoll()
+        {
+            int p = _current;
+
+            // Ouverture au tout premier lancer : 3+6 → 26, 4+5 → 53.
+            if (_firstRoll[p])
+            {
+                _firstRoll[p] = false;
+                if ((_lastD1 == 3 && _lastD2 == 6) || (_lastD1 == 6 && _lastD2 == 3))
+                { Teleport(p, 25, "Trois et six ! Tu files à la case 26 !"); return; }
+                if ((_lastD1 == 4 && _lastD2 == 5) || (_lastD1 == 5 && _lastD2 == 4))
+                { Teleport(p, 52, "Quatre et cinq ! Tu files à la case 53 !"); return; }
+            }
+
+            MoveBy(p, _lastTotal, () => ResolveLanding(p));
+        }
+
+        // Avance de « total » cases, avec REBOND sur 63 (il faut arriver pile).
+        private void MoveBy(int p, int total, Action done)
+        {
+            var seq = new List<int>();
+            int pos = _pos[p], dir = 1, rem = total;
+            while (rem > 0)
+            {
+                if (pos == FinishIdx) dir = -1; // arrivé au bout : on rebondit
+                pos += dir;
+                if (pos < 0) { pos = 0; dir = 1; }
+                seq.Add(pos);
+                rem--;
+            }
+            HopThrough(p, seq, 0, () =>
+            {
+                if (_pos[p] == FinishIdx) { Win(p); return; }
+                done();
+            });
+        }
+
+        private void HopThrough(int p, List<int> seq, int i, Action done)
         {
             if (_win) return;
-            if (steps <= 0) { done(); return; }
-
+            if (i >= seq.Count) { done(); return; }
             int from = _pos[p];
-            int to = from + 1;
-            bool reachedEnd = to >= N - 1;
-            if (reachedEnd) to = N - 1;
+            int to = seq[i];
             _pos[p] = to;
-
-            AnimateMove(p, from, to, 250, () =>
-            {
-                if (reachedEnd) { Win(p); return; }
-                MoveSteps(p, steps - 1, done);
-            });
+            AnimateMove(p, from, to, 230, () => HopThrough(p, seq, i + 1, done));
         }
 
         private void ResolveLanding(int p)
         {
             if (_win) return;
             int idx = _pos[p];
-            switch (_kind[idx])
-            {
-                case Kind.Goose:
-                    if (_gooseChain < 4)
-                    {
-                        _gooseChain++;
-                        HighlightCell(idx);
-                        Speak("Une oie ! Tu avances encore !");
-                        Schedule(650, () => MoveSteps(p, _lastVal, () => ResolveLanding(p)));
-                        return;
-                    }
-                    break;
+            var k = _kind[idx];
 
-                case Kind.Bridge:
-                    int target = _bridgeTo.TryGetValue(idx, out var t) ? t : idx;
+            if (k == Kind.Goose)
+            {
+                if (_gchain < 8)
+                {
+                    _gchain++;
                     HighlightCell(idx);
-                    Speak("Le pont ! Hop, tu sautes en avant !");
-                    int from = _pos[p];
-                    _pos[p] = target;
-                    Schedule(500, () => AnimateMove(p, from, target, 620, () =>
-                    {
-                        if (target >= N - 1) Win(p); else ResolveLanding(p);
-                    }));
+                    Speak("Une oie ! Tu avances encore de " + _lastTotal + " !");
+                    Schedule(650, () => MoveBy(p, _lastTotal, () => ResolveLanding(p)));
+                    return;
+                }
+                EndTurn();
+                return;
+            }
+
+            switch (k)
+            {
+                case Kind.Pont:
+                    HighlightCell(idx);
+                    Speak("Le pont ! Tu sautes à la case 12 !");
+                    Teleport(p, 11, null);
                     return;
 
-                case Kind.Star:
-                    RewardStore.Add();
-                    HighlightCell(idx);
-                    Speak("Une étoile bonus ! Bravo !");
-                    break;
-
-                case Kind.Well:
+                case Kind.Auberge:
                     _skip[p] = true;
                     HighlightCell(idx);
-                    Speak("Oh, le puits ! Tu passes un tour.");
+                    Speak("L'auberge ! Tu dors ici et tu passes un tour.");
                     break;
+
+                case Kind.Labyrinthe:
+                    HighlightCell(idx);
+                    Speak("Le labyrinthe ! Tu recules de trois cases.");
+                    Teleport(p, Math.Max(0, idx - 3), null);
+                    return;
+
+                case Kind.Mort:
+                    HighlightCell(idx);
+                    Speak("Oh non, la tête de mort ! Tu recommences depuis le départ.");
+                    Teleport(p, 0, null);
+                    return;
+
+                case Kind.Puits:
+                    TrapPlayer(p, idx, "le puits");
+                    return;
+
+                case Kind.Prison:
+                    TrapPlayer(p, idx, "la prison");
+                    return;
             }
             EndTurn();
+        }
+
+        // Puits / prison : on reste coincé jusqu'à ce que l'autre joueur arrive sur
+        // la même case (il prend alors notre place et nous libère).
+        private void TrapPlayer(int p, int idx, string name)
+        {
+            int other = 1 - p;
+            HighlightCell(idx);
+            if (_stuck[other] && _stuckAt[other] == idx)
+            {
+                _stuck[other] = false;
+                _stuckAt[other] = -1;
+                _stuck[p] = true;
+                _stuckAt[p] = idx;
+                Speak("Tu libères " + PlayerName[other] + " ! Mais tu prends sa place à " + name + ".");
+            }
+            else
+            {
+                _stuck[p] = true;
+                _stuckAt[p] = idx;
+                Speak("Aïe, " + name + " ! Tu es coincé, il faudra qu'on te libère.");
+            }
+            EndTurn();
+        }
+
+        // Déplacement direct (pont, labyrinthe, mort, ouvertures) : pas de nouvelle
+        // case spéciale déclenchée à l'arrivée (les destinations sont neutres).
+        private void Teleport(int p, int toIdx, string speak)
+        {
+            if (speak != null) Speak(speak);
+            int from = _pos[p];
+            _pos[p] = toIdx;
+            Schedule(400, () => AnimateMove(p, from, toIdx, 640, () =>
+            {
+                if (_pos[p] == FinishIdx) Win(p); else EndTurn();
+            }));
         }
 
         private void EndTurn()
@@ -585,10 +710,10 @@ namespace MesPremiersJeux.Games
             if (_win) return;
             _win = true;
             Locked = true;
-            ReleaseGaze(); // fin de partie : le regard revient à l'appli
+            ReleaseGaze();
             _dieBtn.IsEnabled = false;
             UpdateBanner("🎉  " + PlayerName[p] + " a gagné ! 🎉", p);
-            Speak("Bravo ! " + PlayerName[p] + " est arrivé au jardin de l'oie ! Il a gagné !");
+            Speak("Bravo ! " + PlayerName[p] + " est arrivé à la case 63 ! Il a gagné !");
             BounceToken(p);
             Celebrate();
             ScheduleNext(5200);
@@ -612,13 +737,12 @@ namespace MesPremiersJeux.Games
             var ax = new DoubleAnimation(o0.X, o1.X, TimeSpan.FromMilliseconds(ms))
             { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } };
 
-            // Saut : la case Y descend vers la cible mais avec une petite bosse (hop).
             var ay = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(ms) };
-            double mid = Math.Min(o0.Y, o1.Y) - 26;
+            double mid = Math.Min(o0.Y, o1.Y) - 24;
             ay.KeyFrames.Add(new SplineDoubleKeyFrame(mid, KeyTime.FromPercent(0.5), new KeySpline(0.2, 0.8, 0.3, 1)));
             ay.KeyFrames.Add(new SplineDoubleKeyFrame(o1.Y, KeyTime.FromPercent(1), new KeySpline(0.4, 0, 0.7, 1)));
 
-            _token[p].SetValue(Panel.ZIndexProperty, 50); // le pion qui bouge passe devant
+            _token[p].SetValue(Panel.ZIndexProperty, 50);
             ay.Completed += (s, e) => done?.Invoke();
             tt.BeginAnimation(TranslateTransform.XProperty, ax);
             tt.BeginAnimation(TranslateTransform.YProperty, ay);
@@ -634,7 +758,7 @@ namespace MesPremiersJeux.Games
 
         private void PulseDie()
         {
-            var a = new DoubleAnimation(1, 1.08, TimeSpan.FromMilliseconds(620))
+            var a = new DoubleAnimation(1, 1.07, TimeSpan.FromMilliseconds(620))
             { AutoReverse = true, RepeatBehavior = new RepeatBehavior(3), EasingFunction = new SineEase() };
             _dieScale.BeginAnimation(ScaleTransform.ScaleXProperty, a);
             _dieScale.BeginAnimation(ScaleTransform.ScaleYProperty, a);
@@ -645,9 +769,10 @@ namespace MesPremiersJeux.Games
             var c = Center(idx);
             var halo = new Ellipse
             {
-                Width = Cs, Height = Cs,
+                Width = Cs,
+                Height = Cs,
                 Stroke = new SolidColorBrush(Color.FromRgb(0xFF, 0xD9, 0x3C)),
-                StrokeThickness = 8,
+                StrokeThickness = 7,
                 IsHitTestVisible = false,
             };
             Canvas.SetLeft(halo, c.X - Cs / 2);
@@ -657,29 +782,15 @@ namespace MesPremiersJeux.Games
             var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(1100));
             fade.Completed += (s, e) => _canvas.Children.Remove(halo);
             halo.BeginAnimation(UIElement.OpacityProperty, fade);
-            var grow = new DoubleAnimation(0.7, 1.15, TimeSpan.FromMilliseconds(1100));
-            var sc = new ScaleTransform(0.7, 0.7);
             halo.RenderTransformOrigin = new Point(0.5, 0.5);
+            var sc = new ScaleTransform(0.7, 0.7);
             halo.RenderTransform = sc;
+            var grow = new DoubleAnimation(0.7, 1.15, TimeSpan.FromMilliseconds(1100));
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
         }
 
         private static Color Lighten(Color c) => Color.FromRgb(
             (byte)(c.R + (255 - c.R) * 0.4), (byte)(c.G + (255 - c.G) * 0.4), (byte)(c.B + (255 - c.B) * 0.4));
-
-        private static string NumberWord(int n)
-        {
-            switch (n)
-            {
-                case 1: return "Un";
-                case 2: return "Deux";
-                case 3: return "Trois";
-                case 4: return "Quatre";
-                case 5: return "Cinq";
-                case 6: return "Six";
-                default: return n.ToString();
-            }
-        }
     }
 }
