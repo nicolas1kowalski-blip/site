@@ -1914,7 +1914,36 @@
         //  GOUVERNANCE : DICTIONNAIRE / PÉRIMÈTRES / GLOSSAIRE / CAS D'USAGE / LINEAGE
         // ==========================================
         const SENSITIVITY_OPTS = ['Public', 'Interne', 'Personnel (RGPD)', 'Sensible'];
-        const STATUS_OPTS = ['Brouillon', 'Validé', 'Obsolète'];
+        const STATUS_OPTS = ['Brouillon', 'Proposé', 'Validé', 'Obsolète'];
+        // E7 : transition de statut horodatée + attribuée + historisée (dictionnaire & objets métier).
+        function wfTransition(entry, newStatus, comment) {
+            const from = entry.status || 'Brouillon';
+            if (from === newStatus) return;
+            entry.status = newStatus;
+            entry.statusAt = new Date().toISOString();
+            entry.statusBy = (state.governance.reviewer || '').trim() || '(non renseigné)';
+            entry.history = entry.history || [];
+            entry.history.push({ at: entry.statusAt, from, to: newStatus, by: entry.statusBy, comment: comment || '' });
+            if (entry.history.length > 100) entry.history = entry.history.slice(-100);
+        }
+        function wfBadge(entry) {
+            const st = entry.status || 'Brouillon';
+            const cls = st === 'Validé' ? 'bg-emerald-100 text-emerald-700' : (st === 'Proposé' ? 'bg-amber-100 text-amber-700' : (st === 'Obsolète' ? 'bg-slate-200 text-slate-500 line-through' : 'bg-slate-100 text-slate-500'));
+            return `<span class="text-[10px] px-2 py-0.5 rounded font-bold ${cls}" title="${entry.statusAt ? escapeHTML('Depuis le ' + new Date(entry.statusAt).toLocaleString('fr-FR') + ' par ' + (entry.statusBy || '?')) : ''}">${st}</span>`;
+        }
+        function wfHistoryHtml(entry) {
+            if (!(entry.history || []).length) return '';
+            return `<details class="mt-1"><summary class="text-[10px] text-slate-400 cursor-pointer">🕓 Historique des statuts (${entry.history.length})</summary>
+                <div class="mt-1 space-y-0.5">${entry.history.slice().reverse().map(h => `<div class="text-[10px] text-slate-500">${new Date(h.at).toLocaleString('fr-FR')} — <strong>${escapeHTML(h.from)}</strong> → <strong>${escapeHTML(h.to)}</strong> par ${escapeHTML(h.by)}${h.comment ? ' · « ' + escapeHTML(h.comment) + ' »' : ''}</div>`).join('')}</div></details>`;
+        }
+        function wfSetDictStatus(tn, v) { const d = ensureDictEntry(tn); const c = v === 'Validé' ? (prompt('Commentaire de validation (optionnel) :') || '') : ''; wfTransition(d, v, c); persistAppState(); renderGovernance(); }
+        function wfSetBoStatus(boId, v) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return; const c = v === 'Validé' ? (prompt('Commentaire de validation (optionnel) :') || '') : ''; wfTransition(bo, v, c); persistAppState(); renderGovernance(); }
+        function wfStats() {
+            const dicts = Object.entries(state.governance.dictionary || {}).filter(([n]) => tableByName(n));
+            const bos = state.governance.businessObjects || [];
+            const all = dicts.map(([n, d]) => ({ kind: 'dict', name: n, e: d })).concat(bos.map(b => ({ kind: 'bo', name: b.name, e: b })));
+            return { all, toReview: all.filter(x => (x.e.status || 'Brouillon') === 'Proposé'), validated: all.filter(x => x.e.status === 'Validé'), obsolete: all.filter(x => x.e.status === 'Obsolète') };
+        }
         const CRITICALITY_OPTS = ['Faible', 'Moyenne', 'Haute', 'Critique'];
         const CRIT_COLORS = { 'Faible': 'bg-slate-100 text-slate-600', 'Moyenne': 'bg-blue-100 text-blue-700', 'Haute': 'bg-amber-100 text-amber-800', 'Critique': 'bg-red-100 text-red-700' };
 
@@ -2017,7 +2046,24 @@
                 <button onclick="govState.dictMode='bo'; renderGovernance()" class="text-xs font-bold px-3 py-1.5 rounded-lg border ${govState.dictMode === 'bo' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}">🏛️ Par objet métier</button>
                 <button onclick="govState.dictMode='table'; renderGovernance()" class="text-xs font-bold px-3 py-1.5 rounded-lg border ${govState.dictMode !== 'bo' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}">📄 Par table technique</button>
             </div>`;
-            if (govState.dictMode === 'bo') return modeBar + renderGovDictionaryBo(bos);
+            const wf = wfStats();
+            const wfBar = wf.all.length ? `<div class="flex items-center gap-2 mb-4 flex-wrap text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <span class="font-bold text-slate-600">✅ Validation :</span>
+                <span class="font-black ${wf.validated.length === wf.all.length ? 'text-emerald-600' : 'text-slate-700'}">${Math.round(100 * wf.validated.length / wf.all.length)} %</span>
+                <span class="text-slate-400">(${wf.validated.length}/${wf.all.length} validé(s))</span>
+                ${wf.toReview.length ? `<button onclick="govState.dictWfFilter = !govState.dictWfFilter; renderGovernance()" class="bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2.5 py-0.5 font-bold hover:bg-amber-200">📋 ${wf.toReview.length} à valider ${govState.dictWfFilter ? '(filtre actif ✕)' : ''}</button>` : '<span class="text-emerald-600">rien en attente</span>'}
+                ${wf.obsolete.length ? `<span class="text-slate-400">🗑 ${wf.obsolete.length} obsolète(s)</span>` : ''}
+                <span class="ml-auto text-slate-400">Relecteur :</span><input type="text" value="${escapeHTML(state.governance.reviewer || '')}" onchange="state.governance.reviewer = this.value; persistAppState()" placeholder="votre nom" class="border border-slate-200 rounded px-1.5 py-0.5 text-[11px] w-32 bg-white">
+            </div>` : '';
+            if (govState.dictWfFilter && wf.toReview.length) {
+                return modeBar + wfBar + `<div class="space-y-2">${wf.toReview.map(x => `<div class="flex items-center gap-2 border border-amber-200 bg-amber-50/40 rounded-lg p-3 text-sm">
+                    <span>${x.kind === 'bo' ? '🏛️' : '📄'}</span><strong>${escapeHTML(x.name)}</strong>${wfBadge(x.e)}
+                    <span class="ml-auto"></span>
+                    <button onclick="${x.kind === 'bo' ? `wfSetBoStatus('${x.e.id}','Validé')` : `wfSetDictStatus('${escapeHTML(x.name)}','Validé')`}" class="text-xs bg-emerald-600 text-white px-3 py-1 rounded font-bold">✔ Valider</button>
+                    <button onclick="${x.kind === 'bo' ? `wfSetBoStatus('${x.e.id}','Brouillon')` : `wfSetDictStatus('${escapeHTML(x.name)}','Brouillon')`}" class="text-xs bg-white border border-slate-300 px-3 py-1 rounded font-bold text-slate-600">↩ Renvoyer en brouillon</button>
+                </div>`).join('')}</div>`;
+            }
+            if (govState.dictMode === 'bo') return modeBar + wfBar + renderGovDictionaryBo(bos);
             if (!govState.dictTable || !names.includes(govState.dictTable)) govState.dictTable = names[0];
             const tn = govState.dictTable; const d = ensureDictEntry(tn);
             const inp = (field, val, ph) => `<input type="text" value="${escapeHTML(val || '')}" placeholder="${ph}" onchange="updateDictField('${escapeHTML(tn)}','${field}',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">`;
@@ -2036,7 +2082,7 @@
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select></td>
                 </tr>`;
             });
-            return modeBar + `
+            return modeBar + wfBar + `
                 <div class="flex items-center gap-4 mb-5">
                     <select onchange="govState.dictTable=this.value; renderGovernance()" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-bold text-sm">${names.map(n => `<option ${n === tn ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
                     <span class="text-xs px-2 py-1 rounded font-bold ${d.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${d.status}</span>
@@ -2048,7 +2094,7 @@
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Système source <span class="text-[9px] text-slate-400">(= application du lineage)</span></label><input type="text" list="dictAppsList" value="${escapeHTML(d.sourceSystem || '')}" placeholder="ex: SAP, GMAO, export Excel..." onchange="updateDictField('${escapeHTML(tn)}','sourceSystem',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white"><datalist id="dictAppsList">${(state.governance.assets || []).filter(a => a.kind === 'app').map(a => `<option value="${escapeHTML(a.name)}">`).join('')}</datalist></div>
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Fréquence de mise à jour</label>${inp('updateFrequency', d.updateFrequency, 'ex: quotidienne, mensuelle')}</div>
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Sensibilité globale</label><select onchange="updateDictField('${escapeHTML(tn)}','sensitivity',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">${selOpts(SENSITIVITY_OPTS, d.sensitivity)}</select></div>
-                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Statut de la fiche</label><select onchange="updateDictField('${escapeHTML(tn)}','status',this.value); renderGovernance()" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">${selOpts(STATUS_OPTS, d.status)}</select></div>
+                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Statut de la fiche ${wfBadge(d)}</label><select onchange="wfSetDictStatus('${escapeHTML(tn)}',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">${selOpts(STATUS_OPTS, d.status)}</select>${wfHistoryHtml(d)}</div>
                 </div>
                 <div class="flex justify-between items-center mt-6 mb-2">
                     <h3 class="text-sm font-bold text-slate-700">Attributs (définition fonctionnelle & technique)</h3>
@@ -2676,6 +2722,7 @@
                 ['audit', '🔎 Audit', null],
             ];
             const cur = govState.boTab && tabs.some(t => t[0] === govState.boTab) ? govState.boTab : 'structure';
+            html += `<div class="px-4 pt-2 flex items-center gap-2 bg-slate-50/60 text-xs">${wfBadge(bo)}<select onchange="wfSetBoStatus('${bo.id}',this.value)" class="border border-slate-200 rounded p-1 text-[11px] bg-white">${STATUS_OPTS.map(o => `<option ${o === (bo.status || 'Brouillon') ? 'selected' : ''}>${o}</option>`).join('')}</select><span class="text-[10px] text-slate-400">cycle : Brouillon → Proposé → Validé → Obsolète</span></div>`;
             html += `<div class="border-b border-slate-200 px-4 flex gap-1 flex-wrap bg-slate-50/60">`;
             tabs.forEach(([id, lbl, n]) => {
                 const active = id === cur;
@@ -3885,6 +3932,7 @@
                         ${[...hits].map(([id, why]) => { const a = assetById(id); return `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2.5 mb-1.5"><span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${CRIT_COLORS[a.criticality] || CRIT_COLORS['Faible']}">${a.criticality || 'Moyenne'}</span><span class="text-sm font-bold text-slate-800">${escapeHTML(assetLabel(a))}</span><span class="text-xs text-slate-400">${escapeHTML(a.owner || '')}</span><span class="text-[10px] text-slate-400 ml-auto italic">${escapeHTML(why)}</span></div>`; }).join('')}</div>`;
                 }
             }
+            html += renderModelImpactPanel();
             el('impactResult').innerHTML = html;
         }
 
@@ -5948,6 +5996,67 @@
             } catch (err) { state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null; }
         }
 
+        // ======================= E9 (V2) : ANALYSE D'IMPACT SUR LE MODÈLE =======================
+        // Depuis une table (et éventuellement une colonne) : tous les objets AVAL qui en dépendent.
+        function modelImpact(tn, col) {
+            const out = [];
+            const usesCol = (v) => !col || String(v || '') === col;
+            const txtHasCol = (txt) => !col || new RegExp('\\[' + col.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]').test(String(txt || ''));
+            // Tables conçues (sources contributrices, mappings, jointures, formules)
+            Object.values(state.tables).forEach(t => {
+                if (t.type !== 'designed' || !t.design) return;
+                const d = t.design;
+                const hits = [];
+                (d.sources || []).forEach(sr => { if (sr.src === tn) { if (!col || Object.values(sr.map || {}).includes(col) || (sr.filters || []).some(f => f.col === col)) hits.push('source'); } });
+                (d.joins || []).forEach(j => { if ((j.src === tn && usesCol(j.srcKey)) || (j.viaSrc === tn && (!col || j.viaIn === col || j.viaOut === col || j.vCol === col || j.vStart === col || j.vEnd === col))) hits.push('enrichissement'); });
+                (d.fks || []).forEach(fk => { if (fk.table === tn && usesCol(fk.col)) hits.push('clé étrangère'); });
+                if (hits.length) out.push({ type: '🧱 Table conçue', name: t.name, how: [...new Set(hits)].join(', ') });
+            });
+            // Recettes
+            (state.recipes || []).forEach(r => {
+                if (r.src !== tn) return;
+                if (!col) { out.push({ type: '🧪 Recette', name: r.name + ' → ' + r.out, how: 'source de la recette' }); return; }
+                const st = (r.steps || []).find(st2 => { const P = st2.p || {}; return P.col === col || String(P.keys || '').split(';').map(x => x.trim()).includes(col) || String(P.cols || '').split(';').map(x => x.trim()).includes(col) || txtHasCol(P.formula); });
+                if (st) out.push({ type: '🧪 Recette', name: r.name + ' → ' + r.out, how: 'étape ' + (RC_STEPS[st.type] || st.type) });
+            });
+            // Règles de qualité
+            (state.governance.qualityRules || []).forEach(r => {
+                if (r.table === tn && (usesCol(r.col) || (!col ? false : (String((r.p || {}).cols || '').split(';').map(x => x.trim()).includes(col) || txtHasCol((r.p || {}).formula))))) out.push({ type: '📏 Règle qualité', name: r.name, how: QR_TYPES[r.type] || r.type });
+                if ((r.p || {}).refTable === tn && usesCol((r.p || {}).refCol)) out.push({ type: '📏 Règle qualité', name: r.name, how: 'table de référence (FK)' });
+            });
+            // Tableaux de bord
+            (state.dashboards || []).forEach(d => (d.tiles || []).forEach(t => {
+                if (t.table === tn && (!col || t.dim === col || t.aggCol === col)) out.push({ type: '📋 Tableau de bord', name: d.name + ' · ' + t.title, how: t.dim === col ? 'axe' : (t.aggCol === col ? 'agrégat' : 'table de la tuile') });
+            }));
+            // Relations du modèle
+            state.relations.forEach(rl => {
+                const sN = state.tables[rl.sourceTable] ? state.tables[rl.sourceTable].name : null;
+                const tN = state.tables[rl.targetTable] ? state.tables[rl.targetTable].name : null;
+                if ((sN === tn && usesCol(rl.sourceCol)) || (tN === tn && usesCol(rl.targetCol))) out.push({ type: '🔗 Lien du modèle', name: `${sN} → ${tN}`, how: `${rl.sourceCol} = ${rl.targetCol}` });
+            });
+            // Objets métier (mappings, sources, facettes)
+            (state.governance.businessObjects || []).forEach(bo => {
+                const hits = [];
+                (bo.sources || []).forEach(sr => { if (sr.table === tn && (!col || (sr.filters || []).some(f => f.col === col))) hits.push('source ' + (sr.role || '')); });
+                (bo.elements || []).forEach(e2 => (e2.mappings || []).forEach(m => { if (m.table === tn && usesCol(m.col)) hits.push('attribut ' + e2.name); }));
+                getBoFacets(bo).forEach(st => { if (st.table === tn && (!col || (st.elements || []).some(fe => fe.col === col) || (st.scope || []).some(sc => sc.col === col))) hits.push('facette ' + st.name); });
+                if (hits.length) out.push({ type: '🏛️ Objet métier', name: bo.name, how: [...new Set(hits)].slice(0, 3).join(', ') });
+            });
+            // Lineage déclaré (tables alimentées)
+            Object.entries(state.governance.lineage || {}).forEach(([derived, v]) => { if ((v.from || []).includes(tn) && !col) out.push({ type: '🕸️ Alimente', name: derived, how: 'lineage' }); });
+            // Cas d'usage (colonnes critiques)
+            (state.governance.useCases || []).forEach(uc => { if ((uc.columns || []).some(c2 => c2.table === tn && usesCol(c2.col))) out.push({ type: '🎯 Cas d\'usage', name: uc.name, how: 'colonne critique' }); });
+            return out;
+        }
+        function renderModelImpactPanel() {
+            const tn = el('impactTable') ? el('impactTable').value : ''; if (!tn) return '';
+            const cn = el('impactCol') ? (el('impactCol').value || null) : null;
+            const deps = modelImpact(tn, cn);
+            return `<div class="mt-3"><div class="text-xs font-bold text-slate-600 mb-1.5">🧩 Objets techniques dépendants (${deps.length}) — « que casse-t-on en aval ? »</div>
+                ${deps.length ? deps.map(d => `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 mb-1 text-xs"><span class="font-bold text-slate-500 w-36">${d.type}</span><strong>${escapeHTML(d.name)}</strong><span class="text-slate-400 ml-auto italic">${escapeHTML(d.how)}</span></div>`).join('')
+                : '<p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">Aucun objet technique ne dépend de ' + escapeHTML(tn) + (cn ? '.' + escapeHTML(cn) : '') + ' — modification sans risque connu.</p>'}</div>`;
+        }
+
         // ======================= E4 (V2) : TABLEAUX DE BORD COMPOSABLES & SAUVEGARDABLES =======================
         const DB_KINDS = { bar: '📊 Barres', line: '📈 Courbe', pie: '🥧 Camembert', table: '▦ Tableau', kpi: '#️⃣ Indicateur' };
         const DB_AGGS = { count: 'Nombre de lignes', countd: 'Valeurs distinctes de…', sum: 'Somme de…', avg: 'Moyenne de…', min: 'Min de…', max: 'Max de…' };
@@ -6601,6 +6710,7 @@
         // Ré-ingère un fichier dans une source EXISTANTE (même id/nom : toute la gouvernance survit).
         async function refreshTableFromFile(tId, file, opts) {
             const t = state.tables[tId]; if (!t) return { ok: false };
+            const oldHeaders = (t.headers || []).slice(); // E9 : détection des colonnes disparues
             const ext = file.name.split('.').pop().toLowerCase();
             if (!['csv','txt','xlsx','xls'].includes(ext)) throw new Error('Type non pris en charge : ' + file.name);
             if (opts && opts.skipUnchanged && t.srcModified && file.lastModified && file.lastModified <= t.srcModified) return { ok: true, skipped: true };
@@ -6612,6 +6722,11 @@
             await persistTableData(tId); persistAppState();
             // Les tables conçues qui dépendent de cette source sont reconstruites automatiquement.
             try { await tdAutoRebuildFor(t.name); } catch (e) { console.warn('Reconstruction auto ignorée :', e); }
+            // E9 : colonnes disparues -> alerte listant les objets aval qui vont casser.
+            try {
+                const gone = (oldHeaders || []).filter(h => !t.headers.includes(h));
+                gone.forEach(h => { const deps = modelImpact(t.name, h); if (deps.length) showError(`⚠️ La colonne « ${h} » a disparu de « ${t.name} » au rafraîchissement — ${deps.length} objet(s) dépendant(s) risquent de casser : ${deps.slice(0, 5).map(d => d.type + ' ' + d.name).join(' · ')}${deps.length > 5 ? '…' : ''}`); });
+            } catch (e) {}
             // E3 : les recettes attachées à cette source sont relancées automatiquement.
             try { await rcAutoRun(t.name); } catch (e) { console.warn('Recettes non relancées :', e); }
             // E1 : les règles de qualité de cette table sont rejouées automatiquement.
