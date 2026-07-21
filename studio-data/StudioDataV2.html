@@ -695,6 +695,13 @@
             </div>
         </div>
 
+        <div id="step-12" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-purple-800 mb-1 flex items-center gap-2">📏 Règles de qualité & score</h2>
+                <p class="text-xs text-slate-500 mb-4">Formalisez vos contrôles en règles réutilisables, exécutez-les en une passe (SQL DuckDB), suivez le score 0–100 pondéré par criticité et son évolution dans le temps.</p>
+                <div id="qrContent"></div>
+            </div>
+        </div>
         <div id="step-11" class="animate-fade-in hidden">
             <div id="cockpitContent"></div>
         </div>
@@ -1678,6 +1685,7 @@
                 lineage: g.lineage && typeof g.lineage === 'object' ? g.lineage : {},
                 qualityHistory: Array.isArray(g.qualityHistory) ? g.qualityHistory : [],
                 assets: Array.isArray(g.assets) ? g.assets : [],
+                qualityRules: Array.isArray(g.qualityRules) ? g.qualityRules : [],
             };
         }
 
@@ -1865,6 +1873,7 @@
                 }
                 if (saved) applyPersistedConfig(saved);
                 try { const qh = await idbGet('meta', 'qualityHistory'); if (Array.isArray(qh) && qh.length > (state.governance.qualityHistory || []).length) state.governance.qualityHistory = qh; } catch (e2) {}
+                try { const snaps = await idbGet('meta', 'qrSnapshots'); if (Array.isArray(snaps)) qrSnapshots = snaps; } catch (e2) {}
                 restoreCompleted = true; // la sauvegarde automatique ne démarre qu'une fois la restauration aboutie
                 renderTables(); updateBaseTableSelect(); populateQualTables();
                 if (keys && keys.length) showSuccess(`Session restaurée : ${keys.length} table(s) rechargée(s) depuis le stockage local` + (saved && saved.savedAt ? ` (sauvegarde du ${new Date(saved.savedAt).toLocaleString('fr-FR')})` : '') + '.');
@@ -4401,7 +4410,7 @@
             { id: 'etl', badge: '②', label: 'Exploitation', desc: 'ETL, croisements & analyse', color: 'indigo',
               tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
             { id: 'quality', badge: '③', label: 'Qualité & Audit', desc: 'Profiling, anomalies, doublons', color: 'amber',
-              tabs: [ { n: 8, icon: '✅', label: 'Qualité & Audit' } ] },
+              tabs: [ { n: 8, icon: '✅', label: 'Qualité & Audit' }, { n: 12, icon: '📏', label: 'Règles & score' } ] },
             // La phase Gouvernance vit dans l'écran 9 : ses sous-onglets (g:...) sont rendus dans la
             // MÊME barre que ceux des autres phases, et pilotent govState.tab au lieu d'un numéro d'écran.
             { id: 'gov', badge: '④', label: 'Gouvernance', desc: 'Objets, dictionnaire, lineage', color: 'emerald', step: 9,
@@ -4459,12 +4468,13 @@
             }
         }
         function switchTab(num) {
-            for (let i = 1; i <= 11; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
+            for (let i = 1; i <= 12; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
             const stepEl = el(`step-${num}`); if (stepEl) stepEl.classList.remove('hidden');
             currentTab = num;
             renderNav();
             if(num===10) renderTablesDesign();
             if(num===11) renderCockpit();
+            if(num===12) renderQualityRules();
             if(num===2){ renderRelationsList(); renderBizRules(); renderGraph(); requestAnimationFrame(() => reflowGraph('mcd')); }
             if(num===3) { updateBaseTableSelect(); if (advExtractOpen()) renderAdvExtract(); comboifyTableSelect('baseTableSelect'); }
             if(num===4) { updateVizBaseTableSelect(); covPopulate(); ['covBase', 'covDimTable', 'covRel'].forEach(comboifyTableSelect); }
@@ -5918,6 +5928,220 @@
             } catch (err) { state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null; }
         }
 
+        // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
+        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)' };
+        const QR_W = { 'Faible': 1, 'Moyenne': 2, 'Haute': 3, 'Critique': 5 };
+        let qrSnapshots = [];   // instantanés E2 (persistés à part, comme l'historique qualité)
+        let qrChartInst = null;
+        function qrRules() { return state.governance.qualityRules = state.governance.qualityRules || []; }
+        function qrAdd() { qrRules().push({ id: 'qr_' + generateId(), name: 'Nouvelle règle', table: '', col: '', type: 'notnull', p: {}, crit: 'Moyenne', enabled: true }); persistAppState(); renderQualityRules(); }
+        function qrSet(id, f, v) {
+            const r = qrRules().find(x => x.id === id); if (!r) return;
+            if (f.startsWith('p.')) { r.p = r.p || {}; r.p[f.slice(2)] = v; } else r[f] = v;
+            if (f === 'table') { r.col = ''; r.p = {}; }
+            persistAppState();
+            if (f === 'table' || f === 'type' || f === 'enabled' || f === 'p.refTable') renderQualityRules();
+        }
+        function qrDup(id) { const r = qrRules().find(x => x.id === id); if (!r) return; const c = JSON.parse(JSON.stringify(r)); c.id = 'qr_' + generateId(); c.name = r.name + ' (copie)'; delete c.last; qrRules().push(c); persistAppState(); renderQualityRules(); }
+        function qrDel(id) { state.governance.qualityRules = qrRules().filter(x => x.id !== id); persistAppState(); renderQualityRules(); }
+        // Condition d'échec SQL (par ligne). Les types agrégés (unicité) sont traités à part.
+        function qrFailCond(r) {
+            const c = r.col ? sqlIdent(r.col) : null; if (!c && r.type !== 'expr') return null;
+            const raw = c ? `CAST(${c} AS VARCHAR)` : null;
+            const P = r.p || {};
+            switch (r.type) {
+                case 'notnull': return `(${c} IS NULL OR TRIM(${raw}) = '')`;
+                case 'format': return String(P.regex || '').trim() ? `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND NOT regexp_matches(${raw}, ${sqlLiteral(P.regex)}))` : null;
+                case 'range': { const num = `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE)`; const conds = [];
+                    if (String(P.min ?? '').trim() !== '') conds.push(`${num} < ${parseFloat(String(P.min).replace(',', '.'))}`);
+                    if (String(P.max ?? '').trim() !== '') conds.push(`${num} > ${parseFloat(String(P.max).replace(',', '.'))}`);
+                    return conds.length ? `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND (${num} IS NULL OR ${conds.join(' OR ')}))` : null; }
+                case 'inlist': { const vals = String(P.list || '').split(';').map(x => x.trim()).filter(Boolean); if (!vals.length) return null;
+                    return `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND UPPER(TRIM(${raw})) NOT IN (${vals.map(v => sqlLiteral(v.toUpperCase())).join(', ')}))`; }
+                case 'fk': { const rt = tableByName(P.refTable); if (!rt || !P.refCol) return null;
+                    const nv = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
+                    return `(${nv(c)} IS NOT NULL AND ${nv(c)} NOT IN (SELECT ${nv(sqlIdent(P.refCol))} FROM ${sqlIdent(duckTableName(rt.id))} WHERE ${nv(sqlIdent(P.refCol))} IS NOT NULL))`; }
+                case 'expr': { const e2 = String(P.formula || '').trim(); return e2 ? `(NOT COALESCE((${tdFormulaSql(e2)}), TRUE))` : null; }
+                case 'fresh': { const n = parseInt(P.days) || 365;
+                    const d = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
+                    return `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND (${d} IS NULL OR ${d} < CURRENT_DATE - INTERVAL ${n} DAY))`; }
+                default: return null;
+            }
+        }
+        function qrUniqueKey(r) { const cols = (String((r.p || {}).cols || r.col || '')).split(';').map(x => x.trim()).filter(Boolean); return cols; }
+        function qrInspectSql(r) {
+            const t = tableByName(r.table); if (!t) return null;
+            const T = sqlIdent(duckTableName(t.id));
+            if (r.type === 'unique') { const cols = qrUniqueKey(r); if (!cols.length) return null;
+                const k = `COALESCE(UPPER(TRIM(concat_ws(chr(1), ${cols.map(c2 => `CAST(${sqlIdent(c2)} AS VARCHAR)`).join(', ')}))), '')`;
+                return `SELECT * FROM ${T} WHERE ${k} IN (SELECT ${k} FROM ${T} GROUP BY 1 HAVING COUNT(*) > 1) ORDER BY ${k}`; }
+            const fc = qrFailCond(r); return fc ? `SELECT * FROM ${T} WHERE ${fc}` : null;
+        }
+        // Exécution d'une suite (toutes les tables, une table, ou un domaine) — UNE passe par table
+        // pour toutes les règles « par ligne », requêtes dédiées pour l'unicité.
+        async function qrRun(btn) {
+            const scope = el('qrScope') ? el('qrScope').value : '';
+            const rules = qrRules().filter(r => { if (!r.enabled || !r.table) return false; const t = tableByName(r.table); if (!t || t.status !== 'ready') return false;
+                if (!scope) return true; if (scope.startsWith('t:')) return r.table === scope.slice(2); if (scope.startsWith('d:')) return (t.theme || '').trim() === scope.slice(2); return true; });
+            if (!rules.length) return showError('Aucune règle active dans ce périmètre — créez des règles ci-dessous.');
+            if (btn) btn.disabled = true;
+            bgTaskStart('Exécution des règles de qualité');
+            try {
+                const { conn } = await getDB();
+                const byTable = {}; rules.forEach(r => (byTable[r.table] = byTable[r.table] || []).push(r));
+                for (const tn of Object.keys(byTable)) {
+                    const t = tableByName(tn); const T = sqlIdent(duckTableName(t.id));
+                    const rowRules = byTable[tn].map(r => ({ r, fc: r.type === 'unique' ? null : qrFailCond(r) })).filter(x => x.fc);
+                    if (rowRules.length) {
+                        const sel = rowRules.map((x, i) => `SUM(CASE WHEN ${x.fc} THEN 1 ELSE 0 END)::BIGINT AS f${i}`).join(', ');
+                        const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, ${sel} FROM ${T}`))[0];
+                        rowRules.forEach((x, i) => { const tot = Number(res.total), f = Number(res['f' + i] || 0); x.r.last = { at: Date.now(), total: tot, fails: f, rate: tot ? (1 - f / tot) : 1 }; });
+                    }
+                    for (const r of byTable[tn].filter(r2 => r2.type === 'unique')) {
+                        const cols = qrUniqueKey(r); if (!cols.length) { r.last = null; continue; }
+                        const k = `COALESCE(UPPER(TRIM(concat_ws(chr(1), ${cols.map(c2 => `CAST(${sqlIdent(c2)} AS VARCHAR)`).join(', ')}))), '')`;
+                        const res = arrowResultToObjects(await conn.query(`SELECT (SELECT COUNT(*) FROM ${T})::BIGINT AS total, COALESCE(SUM(c), 0)::BIGINT AS fails FROM (SELECT COUNT(*)::BIGINT AS c FROM ${T} GROUP BY ${k} HAVING COUNT(*) > 1)`))[0];
+                        const tot = Number(res.total), f = Number(res.fails || 0);
+                        r.last = { at: Date.now(), total: tot, fails: f, rate: tot ? (1 - f / tot) : 1 };
+                    }
+                    const invalids = byTable[tn].filter(r2 => r2.type !== 'unique' && !qrFailCond(r2));
+                    invalids.forEach(r2 => r2.last = null);
+                }
+                persistAppState();
+                qrTakeSnapshot(rules);
+                renderQualityRules();
+                const totF = rules.reduce((a2, r) => a2 + ((r.last || {}).fails || 0), 0);
+                bgTaskEnd(`📏 ${rules.length} règle(s) exécutée(s) — ${totF.toLocaleString('fr-FR')} ligne(s) en échec au total.`);
+            } catch (e) { bgTaskEnd(); showError('Exécution des règles impossible : ' + e.message); }
+            finally { if (btn) btn.disabled = false; }
+        }
+        async function qrAutoRun(tableName) {
+            if (!qrRules().some(r => r.enabled && r.table === tableName)) return;
+            const sc = el('qrScope'); const prev = sc ? sc.value : null;
+            if (sc) sc.value = 't:' + tableName;
+            try { await qrRun(null); } finally { if (sc && prev !== null) sc.value = prev; }
+        }
+        // ---- E2 : score pondéré + instantanés + tendance ----
+        function qrScore(rs) { let sw = 0, sv = 0; rs.forEach(r => { if (!r.last) return; const w = QR_W[r.crit] || 2; sw += w; sv += w * r.last.rate; }); return sw ? Math.round(100 * sv / sw) : null; }
+        function qrTakeSnapshot(rules) {
+            const byTable = {}, byDomain = {};
+            const ran = rules.filter(r => r.last);
+            ran.forEach(r => { (byTable[r.table] = byTable[r.table] || []).push(r); const t = tableByName(r.table); const d = t && (t.theme || '').trim() || '(sans domaine)'; (byDomain[d] = byDomain[d] || []).push(r); });
+            const snap = { at: new Date().toISOString(), global: qrScore(ran),
+                tables: Object.fromEntries(Object.entries(byTable).map(([k, v]) => [k, { score: qrScore(v), rules: v.map(r => ({ id: r.id, name: r.name, crit: r.crit, rate: +r.last.rate.toFixed(4), fails: r.last.fails })) }])),
+                domains: Object.fromEntries(Object.entries(byDomain).map(([k, v]) => [k, qrScore(v)])) };
+            qrSnapshots.push(snap); if (qrSnapshots.length > 300) qrSnapshots = qrSnapshots.slice(-300);
+            if (!state.noPersist) idbPut('meta', 'qrSnapshots', qrSnapshots).catch(() => {});
+        }
+        function qrScoreColor(v) { return v == null ? 'text-slate-300' : (v >= 90 ? 'text-emerald-600' : (v >= 70 ? 'text-amber-600' : 'text-red-600')); }
+        function qrExportCsv() {
+            const rows = [['REGLE', 'TABLE', 'TYPE', 'CRITICITE', 'TAUX_CONFORMITE_PCT', 'LIGNES_EN_ECHEC', 'TOTAL', 'EXECUTEE_LE'].map(escapeCSV).join(';')];
+            qrRules().forEach(r => rows.push([r.name, r.table, QR_TYPES[r.type] || r.type, r.crit, r.last ? (100 * r.last.rate).toFixed(2) : '', r.last ? r.last.fails : '', r.last ? r.last.total : '', r.last ? new Date(r.last.at).toISOString() : ''].map(escapeCSV).join(';')));
+            downloadTextFile(`Regles_qualite_${Date.now()}.csv`, rows.join('\n'));
+        }
+        function qrExportJson() {
+            const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), rules: qrRules(), snapshots: qrSnapshots.slice(-30) }, null, 2)], { type: 'application/json' });
+            const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `Scorecard_${Date.now()}.json`; document.body.appendChild(a2); a2.click(); a2.remove();
+        }
+        function qrParamsHtml(r) {
+            const t = tableByName(r.table); const hs = t ? t.headers : [];
+            const colSel = (f, cur, ph) => `<select onchange="qrSet('${r.id}','${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[130px]"><option value="">${ph || '— colonne —'}</option>${hs.map(h => `<option value="${escapeHTML(h)}" ${cur === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+            const P = r.p || {};
+            const inp = (f, cur, ph, w) => `<input type="text" value="${escapeHTML(cur == null ? '' : String(cur))}" onchange="qrSet('${r.id}','p.${f}',this.value)" placeholder="${ph}" class="border border-slate-200 rounded px-1.5 py-0.5 text-[11px] ${w || 'w-28'}">`;
+            switch (r.type) {
+                case 'notnull': return colSel('col', r.col);
+                case 'unique': return inp('cols', P.cols || r.col, 'colonnes clé (séparées par ;)', 'w-56');
+                case 'format': return colSel('col', r.col) + ' ' + inp('regex', P.regex, 'regex, ex : ^[A-Z]{2}\\d{4}$', 'w-52');
+                case 'range': return colSel('col', r.col) + ' min ' + inp('min', P.min, '0', 'w-16') + ' max ' + inp('max', P.max, '100', 'w-16');
+                case 'inlist': return colSel('col', r.col) + ' ' + inp('list', P.list, 'valeurs autorisées séparées par ;', 'w-56');
+                case 'fk': { const others = Object.values(state.tables).filter(t2 => t2.status === 'ready' && t2.name !== r.table); const rt = tableByName(P.refTable);
+                    return colSel('col', r.col) + ` → <select onchange="qrSet('${r.id}','p.refTable',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[120px]"><option value="">— table réf —</option>${others.map(t2 => `<option value="${escapeHTML(t2.name)}" ${P.refTable === t2.name ? 'selected' : ''}>${escapeHTML(t2.name)}</option>`).join('')}</select> <select onchange="qrSet('${r.id}','p.refCol',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[110px]"><option value="">— col —</option>${(rt ? rt.headers : []).map(h => `<option value="${escapeHTML(h)}" ${P.refCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`; }
+                case 'expr': return inp('formula', P.formula, 'ex : [DATE_FIN] >= [DATE_DEBUT]', 'w-64');
+                case 'fresh': return colSel('col', r.col) + ' âge max ' + inp('days', P.days, '365', 'w-14') + ' jours';
+                default: return '';
+            }
+        }
+        function renderQualityRules() {
+            const c = el('qrContent'); if (!c) return;
+            const rules = qrRules();
+            const tables = Object.values(state.tables).filter(t => t.status === 'ready');
+            const doms = themeList();
+            const ran = rules.filter(r => r.last);
+            const globalScore = qrScore(ran);
+            // dettes : impact = poids x lignes en échec
+            const debts = ran.filter(r => r.last.fails > 0).sort((x, y) => (QR_W[y.crit] || 2) * y.last.fails - (QR_W[x.crit] || 2) * x.last.fails).slice(0, 10);
+            const byTable = {}; ran.forEach(r => (byTable[r.table] = byTable[r.table] || []).push(r));
+            qualInspectRegistry = qualInspectRegistry || [];
+            let html = `<div class="flex items-center gap-3 flex-wrap mb-4">
+                <button onclick="qrRun(this)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-5 rounded-lg text-sm">▶ Exécuter</button>
+                <select id="qrScope" class="border border-slate-300 rounded-lg p-2 text-sm bg-white">
+                    <option value="">Toutes les tables</option>
+                    ${tables.map(t => `<option value="t:${escapeHTML(t.name)}">Table : ${escapeHTML(t.name)}</option>`).join('')}
+                    ${doms.map(d => `<option value="d:${escapeHTML(d)}">Domaine : ${escapeHTML(d)}</option>`).join('')}
+                </select>
+                ${globalScore != null ? `<span class="text-3xl font-black ${qrScoreColor(globalScore)}">${globalScore}<span class="text-sm text-slate-400">/100</span></span><span class="text-[10px] uppercase font-bold text-slate-400">score global<br>pondéré criticité</span>` : '<span class="text-xs text-slate-400 italic">exécutez une suite pour obtenir le score</span>'}
+                <span class="flex-grow"></span>
+                <button onclick="qrExportCsv()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬇ Résultats CSV</button>
+                <button onclick="qrExportJson()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬇ Scorecard JSON</button>
+            </div>`;
+            // Scorecard par domaine / table
+            if (Object.keys(byTable).length) {
+                html += `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${Object.entries(byTable).map(([tn, rs]) => { const sc = qrScore(rs); const t = tableByName(tn);
+                    return `<div class="border border-slate-200 rounded-xl p-3 bg-slate-50/50"><div class="text-2xl font-black ${qrScoreColor(sc)}">${sc == null ? '—' : sc}</div><div class="text-[11px] font-bold text-slate-700 truncate">${escapeHTML(tn)}</div><div class="text-[9px] text-slate-400">${t && (t.theme || '').trim() ? '🗂 ' + escapeHTML(t.theme) + ' · ' : ''}${rs.length} règle(s) · ${rs.reduce((a2, r) => a2 + r.last.fails, 0).toLocaleString('fr-FR')} échec(s)</div></div>`; }).join('')}</div>`;
+            }
+            // Dettes qualité
+            if (debts.length) {
+                html += `<details class="mb-4 border border-red-100 rounded-lg px-3 py-2 bg-red-50/40" open><summary class="text-xs font-bold text-red-700 cursor-pointer">🧨 Dettes qualité — règles les plus en échec (impact = criticité × lignes)</summary>
+                <div class="mt-2 space-y-1">${debts.map(r => { const sql2 = qrInspectSql(r); const idx = sql2 ? registerQualInspect('Règle : ' + r.name, sql2) : null;
+                    return `<div class="flex items-center gap-2 text-xs bg-white border border-slate-200 rounded px-2 py-1.5"><span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${CRIT_COLORS[r.crit] || CRIT_COLORS['Faible']}">${r.crit}</span><strong>${escapeHTML(r.name)}</strong><span class="text-slate-400">${escapeHTML(r.table)}</span><span class="ml-auto font-bold text-red-600">${r.last.fails.toLocaleString('fr-FR')} ligne(s)</span><span class="text-slate-400">${(100 * r.last.rate).toFixed(1)} %</span>${idx != null ? qualInspectButtons(idx) : ''}</div>`; }).join('')}</div></details>`;
+            }
+            // Tendance + comparaison (E2)
+            if (qrSnapshots.length) {
+                const opts = qrSnapshots.map((s2, i) => `<option value="${i}">${new Date(s2.at).toLocaleString('fr-FR')} — ${s2.global == null ? '—' : s2.global}/100</option>`).join('');
+                html += `<details class="mb-4 border border-slate-200 rounded-lg px-3 py-2" open><summary class="text-xs font-bold text-slate-600 cursor-pointer">📈 Tendance (${qrSnapshots.length} instantané(s)) & comparaison</summary>
+                    <div class="h-[180px] relative mt-2"><canvas id="qrTrend"></canvas></div>
+                    <div class="flex items-center gap-2 mt-2 text-xs flex-wrap">Comparer <select id="qrCmpA" class="border border-slate-200 rounded p-1 text-[11px] bg-white">${opts}</select> à <select id="qrCmpB" class="border border-slate-200 rounded p-1 text-[11px] bg-white">${opts}</select> <button onclick="qrCompare()" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600">Δ Comparer</button></div>
+                    <div id="qrCmpOut" class="mt-2"></div></details>`;
+            }
+            // CRUD des règles
+            html += `<div class="flex items-center justify-between mb-1.5"><h3 class="text-sm font-bold text-slate-700">Règles (${rules.length})</h3><button onclick="qrAdd()" class="text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg font-bold">+ Règle</button></div>
+            <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-8" title="Active">✓</th><th class="p-2 w-44">Nom</th><th class="p-2 w-36">Table</th><th class="p-2 w-40">Type</th><th class="p-2">Paramètres</th><th class="p-2 w-24">Criticité</th><th class="p-2 w-44">Dernier résultat</th><th class="p-2 w-16"></th></tr></thead>
+                <tbody class="divide-y divide-slate-100">${rules.map(r => {
+                    const sql2 = r.last && r.last.fails > 0 ? qrInspectSql(r) : null; const idx = sql2 ? registerQualInspect('Règle : ' + r.name, sql2) : null;
+                    return `<tr class="${r.enabled ? '' : 'opacity-40'} hover:bg-slate-50 align-top">
+                    <td class="p-2"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="qrSet('${r.id}','enabled',this.checked)" class="w-4 h-4 rounded text-purple-600"></td>
+                    <td class="p-2"><input type="text" value="${escapeHTML(r.name)}" onchange="qrSet('${r.id}','name',this.value)" class="font-bold border border-slate-200 p-1 rounded w-full"></td>
+                    <td class="p-2"><select onchange="qrSet('${r.id}','table',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white w-full"><option value="">— table —</option>${tables.map(t => `<option value="${escapeHTML(t.name)}" ${r.table === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select></td>
+                    <td class="p-2"><select onchange="qrSet('${r.id}','type',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white w-full">${Object.entries(QR_TYPES).map(([k, l]) => `<option value="${k}" ${r.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+                    <td class="p-2">${r.table ? qrParamsHtml(r) : '<span class="text-slate-300 italic">choisissez une table</span>'}</td>
+                    <td class="p-2"><select onchange="qrSet('${r.id}','crit',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === r.crit ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
+                    <td class="p-2">${r.last ? `<span class="font-black ${qrScoreColor(Math.round(100 * r.last.rate))}">${(100 * r.last.rate).toFixed(1)} %</span> <span class="text-slate-400">· ${r.last.fails.toLocaleString('fr-FR')} échec(s)</span>${idx != null ? '<br>' + qualInspectButtons(idx) : ''}` : '<span class="text-slate-300 italic">jamais exécutée</span>'}</td>
+                    <td class="p-2 whitespace-nowrap"><button onclick="qrDup('${r.id}')" class="text-slate-300 hover:text-indigo-600" title="Dupliquer">⧉</button> <button onclick="qrDel('${r.id}')" class="text-slate-300 hover:text-red-500 font-bold" title="Supprimer">✕</button></td>
+                </tr>`; }).join('')}</tbody></table></div>
+            <p class="text-[10px] text-slate-400 mt-1.5">Les règles sont persistées avec la gouvernance (bundles compris) et <strong>rejouées automatiquement</strong> quand la source correspondante est rafraîchie. Tout le calcul est fait en SQL DuckDB, en une passe par table.</p>`;
+            c.innerHTML = html;
+            // tendance (Chart.js si dispo)
+            try {
+                if (qrChartInst) { qrChartInst.destroy(); qrChartInst = null; }
+                const cv = el('qrTrend');
+                if (cv && typeof Chart !== 'undefined' && qrSnapshots.length) {
+                    qrChartInst = new Chart(cv.getContext('2d'), { type: 'line',
+                        data: { labels: qrSnapshots.map(s2 => new Date(s2.at).toLocaleDateString('fr-FR') + ' ' + new Date(s2.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })),
+                            datasets: [{ label: 'Score global', data: qrSnapshots.map(s2 => s2.global), borderColor: '#7c3aed', backgroundColor: '#7c3aed22', tension: 0.25, fill: true }] },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } }, plugins: { legend: { display: false } } } });
+                }
+            } catch (e) { console.warn('Tendance indisponible :', e); }
+        }
+        function qrCompare() {
+            const A = qrSnapshots[parseInt(el('qrCmpA').value)], B = qrSnapshots[parseInt(el('qrCmpB').value)];
+            const out = el('qrCmpOut'); if (!A || !B || !out) return;
+            const tns = [...new Set([...Object.keys(A.tables || {}), ...Object.keys(B.tables || {})])];
+            out.innerHTML = `<table class="w-full text-left text-[11px] border border-slate-200 rounded"><thead class="bg-slate-50 text-[9px] uppercase font-bold text-slate-500"><tr><th class="p-1.5">Table</th><th class="p-1.5 text-right">${new Date(A.at).toLocaleDateString('fr-FR')}</th><th class="p-1.5 text-right">${new Date(B.at).toLocaleDateString('fr-FR')}</th><th class="p-1.5 text-right">Δ</th></tr></thead>
+                <tbody>${tns.map(tn => { const a2 = (A.tables[tn] || {}).score, b2 = (B.tables[tn] || {}).score; const d = a2 != null && b2 != null ? b2 - a2 : null;
+                    return `<tr class="border-t border-slate-100"><td class="p-1.5 font-bold">${escapeHTML(tn)}</td><td class="p-1.5 text-right">${a2 == null ? '—' : a2}</td><td class="p-1.5 text-right">${b2 == null ? '—' : b2}</td><td class="p-1.5 text-right font-black ${d == null ? '' : (d >= 0 ? 'text-emerald-600' : 'text-red-600')}">${d == null ? '—' : (d > 0 ? '+' : '') + d}</td></tr>`; }).join('')}</tbody></table>`;
+        }
+
         // ======================= Livraison ZIP (sans dépendance : DecompressionStream natif) =======================
         state.zipMappings = state.zipMappings || {};   // { dossier: { mode:'folder'|'files', dest:'domaine'|'', files:{ nomFichier: 'domaine'|'' } } }
         let _zipDelivery = null;                        // { name, buf, entries:[{name, folder, base, ...}] }
@@ -6054,6 +6278,8 @@
             await persistTableData(tId); persistAppState();
             // Les tables conçues qui dépendent de cette source sont reconstruites automatiquement.
             try { await tdAutoRebuildFor(t.name); } catch (e) { console.warn('Reconstruction auto ignorée :', e); }
+            // E1 : les règles de qualité de cette table sont rejouées automatiquement.
+            try { await qrAutoRun(t.name); } catch (e) { console.warn('Règles qualité non rejouées :', e); }
             return { ok: true, refreshed: true };
         }
         function manualUpdateSource(tId) {
