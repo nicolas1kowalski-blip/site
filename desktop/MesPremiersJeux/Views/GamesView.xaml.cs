@@ -29,6 +29,8 @@ namespace MesPremiersJeux.Views
             ("🧩", "Puzzle",       c => new PuzzleGame(c)),
             ("🗂️", "Les familles", c => new FamiliesGame(c)),
             ("🃏", "Les paires",   c => new MemoryGame(c)),
+            ("🪿", "Le jeu de l'oie", c => new GooseGame(c)),
+            ("🐴", "Les chevaux",  c => new HorseGame(c)),
         };
 
         private readonly Random _rng = new Random();
