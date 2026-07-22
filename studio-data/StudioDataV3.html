@@ -2148,6 +2148,7 @@
         function ensureDictEntry(tableName) {
             const d = state.governance.dictionary;
             if (!d[tableName]) d[tableName] = { description: '', owner: '', steward: '', sourceSystem: '', updateFrequency: '', sensitivity: 'Interne', status: 'Brouillon', columns: {} };
+            if (!d[tableName].columns || typeof d[tableName].columns !== 'object') d[tableName].columns = {};
             const t = tableByName(tableName);
             if (t) t.headers.forEach(h => { if (!d[tableName].columns[h]) d[tableName].columns[h] = { definition: '', technicalType: '', sensitivity: '', term: '' }; });
             return d[tableName];
@@ -4683,10 +4684,10 @@
                   { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Définir' },
                   { g: 'model', icon: '🧬', label: 'Modèle objet', fam: 'Définir' },
                   { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Définir' },
+                  { g: 'assets', icon: '🖥', label: 'Applis & processus', fam: 'Définir' },
                   { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Classer' },
                   { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Classer' },
                   { g: 'lineage', icon: '🕸️', label: 'Lineage', fam: 'Tracer' },
-                  { g: 'assets', icon: '🖥', label: 'Applis & processus', fam: 'Tracer' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Tracer' },
                   { g: 'usecases', icon: '🎯', label: 'Cas d\'usage', fam: 'Partager' },
               ] },
@@ -8182,7 +8183,8 @@
                 S.edges.forEach(e => { if (e.source !== e.target && idset.has(e.source) && idset.has(e.target)) { adj[e.source].push(e.target); indeg[e.target]++; } });
                 const depth = {}; const q = ids.filter(i => !indeg[i]); (q.length ? q : ids.slice(0, 1)).forEach(i => depth[i] = 0);
                 const queue = [...(q.length ? q : ids.slice(0, 1))];
-                while (queue.length) { const u = queue.shift(); (adj[u] || []).forEach(v => { if (depth[v] === undefined || depth[v] < depth[u] + 1) { depth[v] = depth[u] + 1; if (queue.length < 5000) queue.push(v); } }); }
+                const maxDepth = ids.length; // les cycles ne peuvent pas allonger un chemin simple au-delà de n
+                while (queue.length) { const u = queue.shift(); const nd = depth[u] + 1; if (nd >= maxDepth) continue; (adj[u] || []).forEach(v => { if (depth[v] === undefined || depth[v] < nd) { depth[v] = nd; queue.push(v); } }); }
                 ids.forEach(i => { if (depth[i] === undefined) depth[i] = 0; });
                 const cols = {}; ids.forEach(i => (cols[depth[i]] = cols[depth[i]] || []).push(i));
                 const GX = 120, GY = 46; let x = 0;
