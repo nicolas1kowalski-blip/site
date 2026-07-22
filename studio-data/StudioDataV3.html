@@ -4182,6 +4182,7 @@
                 </div>
                 <div id="afBoard" class="relative flex gap-8 items-start">
                     <svg id="afSvg" class="absolute inset-0 w-full h-full z-0 pointer-events-none"></svg>
+                    <div id="afHint" class="hidden absolute left-1/2 top-24 -translate-x-1/2 z-20 bg-white/95 border border-indigo-200 rounded-full px-4 py-2 text-[11px] font-bold text-indigo-700 shadow-sm pointer-events-none">👆 Cliquez un attribut, une colonne ou une application : sa chaîne s'affiche seule, le reste s'estompe</div>
                     ${colHtml('🖥 Applications sources', [...prod.values()].sort((x, y) => deg('p:' + y.id) - deg('p:' + x.id)).map(a => pill('p:' + a.id, '🖥 ' + escapeHTML(a.name), deg('p:' + a.id) + ' flux', 'bg-slate-100 border-slate-300 text-slate-700')))}
                     ${colHtml('📄 Colonnes techniques', [...cols.entries()].map(([k, m]) => pill('c:' + k, escapeHTML(m.col), escapeHTML(m.table), 'bg-blue-50 border-blue-200 text-blue-800')))}
                     ${colHtml('🏛️ Attributs de l\'objet', attrs.map(a => pill(a.id, escapeHTML(a.el.name) + (a.diff ? ' <span class="text-amber-600 font-black">≠</span>' : '') + ((a.el.usedBy || []).length ? '' : ' 😴'), a.facet ? '◆ ' + escapeHTML(a.facet) : '', 'bg-emerald-50 border-emerald-300 text-emerald-900')))}
@@ -4195,29 +4196,52 @@
         function attrFlowDraw() {
             const board = el('afBoard'), svg = el('afSvg'); if (!board || !svg || !_afData) return;
             const keep = _afData.focusSet;
+            const many = _afData.links.length > 30;
+            const hint = el('afHint'); if (hint) hint.classList.toggle('hidden', !!keep || !many);
             const els = {}; board.querySelectorAll('.af-pill').forEach(x => els[x.getAttribute('data-fid')] = x);
             svg.setAttribute('viewBox', `0 0 ${board.clientWidth} ${board.scrollHeight}`);
             svg.style.height = board.scrollHeight + 'px';
             let paths = '';
             _afData.links.forEach(([f, t]) => {
                 const A = els[f], B = els[t]; if (!A || !B) return;
-                const dimmed = keep && !(keep.has(f) && keep.has(t));
+                const onChain = keep && keep.has(f) && keep.has(t);
+                // Lisibilité d'abord : quand c'est dense, AUCUNE courbe hors sélection —
+                // la pelote de 80 liens ne se dessine plus jamais.
+                if (!onChain && many) return;
+                const dimmed = keep && !onChain;
                 const x1 = A.offsetLeft + A.offsetWidth, y1 = A.offsetTop + A.offsetHeight / 2;
                 const x2 = B.offsetLeft, y2 = B.offsetTop + B.offsetHeight / 2;
                 const mx = (x1 + x2) / 2;
-                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none" stroke="${dimmed ? '#e2e8f0' : (f.startsWith('a:') || t.startsWith('u:') ? '#ea580c' : '#64748b')}" stroke-width="${dimmed ? 1 : 1.8}" stroke-opacity="${dimmed ? 0.5 : 0.75}"/>`;
+                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none" stroke="${dimmed ? '#e2e8f0' : (f.startsWith('a:') || t.startsWith('u:') ? '#ea580c' : '#4f46e5')}" stroke-width="${dimmed ? 1 : (onChain ? 2.4 : 1.6)}" stroke-opacity="${dimmed ? 0.4 : 0.9}"/>`;
             });
             svg.innerHTML = paths;
-            board.querySelectorAll('.af-pill').forEach(x => { const on = !keep || keep.has(x.getAttribute('data-fid')); x.style.opacity = on ? '' : '0.25'; x.style.borderWidth = (!keep || !on) ? '' : '2px'; });
+            board.querySelectorAll('.af-pill').forEach(x => {
+                const fid = x.getAttribute('data-fid');
+                const on = !keep || keep.has(fid);
+                x.style.opacity = on ? '' : '0.15';
+                x.style.boxShadow = keep && on ? '0 0 0 2px ' + (fid === _afData.focus ? '#4f46e5' : '#a5b4fc') : '';
+                x.style.fontWeight = keep && fid === _afData.focus ? '800' : '';
+            });
         }
         function attrFlowClick(fid) {
             if (!_afData) return;
             if (_afData.focus === fid) { _afData.focus = null; _afData.focusSet = null; attrFlowDraw(); return; }
             _afData.focus = fid;
-            const adj = {}; _afData.links.forEach(([f, t]) => { (adj[f] = adj[f] || []).push(t); (adj[t] = adj[t] || []).push(f); });
-            const keep = new Set([fid]); const q = [fid];
-            while (q.length) { const u = q.shift(); (adj[u] || []).forEach(v => { if (!keep.has(v)) { keep.add(v); q.push(v); } }); }
-            _afData.focusSet = keep; attrFlowDraw();
+            _afData.focusSet = attrFlowChain([fid]); attrFlowDraw();
+        }
+        // Chaîne de bout en bout ORIENTÉE : on remonte l'amont et on descend l'aval du noeud
+        // choisi, sans jamais « rebondir » latéralement par les applications-hubs — cliquer un
+        // attribut n'allume donc que SES colonnes, SON application source et SES consommateurs.
+        function attrFlowChain(startIds) {
+            const fwd = {}, back = {};
+            _afData.links.forEach(([f, t]) => { (fwd[f] = fwd[f] || []).push(t); (back[t] = back[t] || []).push(f); });
+            const keep = new Set(startIds);
+            let q = [...startIds];
+            while (q.length) { const u = q.shift(); (fwd[u] || []).forEach(v => { if (!keep.has(v)) { keep.add(v); q.push(v); } }); }
+            q = [...startIds];
+            const backSeen = new Set(startIds);
+            while (q.length) { const u = q.shift(); (back[u] || []).forEach(v => { if (!backSeen.has(v)) { backSeen.add(v); keep.add(v); q.push(v); } }); }
+            return keep;
         }
         function attrFlowApplyFocus() {
             if (!_afData) return;
@@ -4225,11 +4249,10 @@
             if (!q) { _afData.focus = null; _afData.focusSet = null; attrFlowDraw(); return; }
             const board = el('afBoard'); if (!board) return;
             const keep = new Set();
-            const adj = {}; _afData.links.forEach(([f, t]) => { (adj[f] = adj[f] || []).push(t); (adj[t] = adj[t] || []).push(f); });
             board.querySelectorAll('.af-pill').forEach(x => {
                 const fid = x.getAttribute('data-fid');
                 if (!fid.startsWith('a:')) return;
-                if (srcNorm(x.textContent).includes(q)) { const qq = [fid]; keep.add(fid); while (qq.length) { const u = qq.shift(); (adj[u] || []).forEach(v => { if (!keep.has(v)) { keep.add(v); qq.push(v); } }); } }
+                if (srcNorm(x.textContent).includes(q)) attrFlowChain([fid]).forEach(v => keep.add(v));
             });
             _afData.focus = '__search__'; _afData.focusSet = keep; attrFlowDraw();
         }
