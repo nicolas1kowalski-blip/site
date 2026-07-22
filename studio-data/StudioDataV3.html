@@ -4439,6 +4439,50 @@
                 body: '<div id="giBody"></div>', foot: `<button onclick="closeBackupCenter()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Fermer (Échap)</button>` });
             giRender();
         }
+        // Modèle d'alimentation pré-rempli : les CLÉS INTERNES réelles (tables×colonnes,
+        // objets×attributs, applications) sont déjà dans le fichier — on ne remplit que les valeurs.
+        function giTemplateRows(target) {
+            const g = state.governance;
+            if (target === 'dict') {
+                const out = [['Table', 'Colonne', 'Définition', 'Type attendu', 'Sensibilité', 'Terme de glossaire']];
+                Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => (t.headers || []).forEach(h => {
+                    const c = ((g.dictionary[t.name] || {}).columns || {})[h] || {};
+                    out.push([t.name, h, c.definition || '', c.technicalType || '', c.sensitivity || '', c.term || '']);
+                }));
+                return out;
+            }
+            if (target === 'gloss') {
+                const out = [['Terme', 'Définition', 'Table liée', 'Colonne liée']];
+                (g.glossary || []).forEach(t2 => { const l = (t2.links || [])[0] || {}; out.push([t2.term, t2.definition || '', l.table || '', l.col || '']); });
+                if (out.length === 1) out.push(['Exemple de terme', 'Sa définition métier', '', '']);
+                return out;
+            }
+            if (target === 'assets') {
+                const out = [['Nom', 'Type', 'Criticité', 'Description']];
+                (g.assets || []).forEach(a => out.push([a.name, a.kind === 'process' ? 'processus' : 'application', a.criticality || '', a.description || '']));
+                if (out.length === 1) out.push(['SAP', 'application', 'Haute', ''], ['Clôture mensuelle', 'processus', '', '']);
+                return out;
+            }
+            if (target === 'usage') {
+                const out = [['Objet métier', 'Attribut', 'Application']];
+                (g.businessObjects || []).forEach(bo => boAllAttrRows(bo).forEach(r => {
+                    const used = (r.el.usedBy || []).map(assetById).filter(Boolean);
+                    if (used.length) used.forEach(a => out.push([bo.name, r.el.name, a.name]));
+                    else out.push([bo.name, r.el.name, '']);
+                }));
+                return out;
+            }
+            return [[]];
+        }
+        function giDownloadTemplate() {
+            const rows = giTemplateRows(giState.target);
+            const csv = '\ufeff' + rows.map(r => r.map(v => { const x = String(v == null ? '' : v); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob);
+            a2.download = `MODELE_${giState.target.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a2); a2.click(); a2.remove();
+            showSuccess(`📥 Modèle « ${GI_TARGETS[giState.target].label.replace(/^[^ ]+ /, '')} » téléchargé : ${rows.length - 1} ligne(s) pré-remplie(s) avec vos clés — complétez puis réimportez ce fichier tel quel (le mapping sera automatique).`);
+        }
         function giNorm(x) { return String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
         function giAutoMap() {
             const T = GI_TARGETS[giState.target]; giState.map = {};
@@ -4483,6 +4527,9 @@
             let html = `<div class="dsect"><h4>1 · Que voulez-vous remplir ?</h4>
                 <select onchange="giState.target=this.value; giAutoMap(); giRender()" class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white">${Object.entries(GI_TARGETS).map(([k, t]) => `<option value="${k}" ${giState.target === k ? 'selected' : ''}>${t.label}</option>`).join('')}</select></div>
                 <div class="dsect"><h4>2 · Votre fichier (CSV ou Excel)</h4>
+                ${(() => { const n = giTemplateRows(giState.target).length - 1; return `<div class="flex items-start gap-2 bg-indigo-50/60 border border-indigo-100 rounded-lg px-3 py-2 mb-2 text-[11px] text-indigo-900">
+                    <span aria-hidden="true">💡</span><div><strong>Partez du modèle pré-rempli</strong> : il contient déjà ${n ? `vos <strong>${n.toLocaleString('fr-FR')} clé(s) interne(s)</strong> (${giState.target === 'dict' ? 'tables × colonnes réelles' : giState.target === 'usage' ? 'objets métier × attributs réels' : giState.target === 'assets' ? 'applications et processus déclarés' : 'termes existants'}) et les valeurs déjà connues` : 'les bons en-têtes de colonnes'} — complétez les cases vides dans votre tableur, réimportez tel quel : le mapping sera reconnu automatiquement.</div>
+                    <button onclick="giDownloadTemplate()" class="ml-auto shrink-0 bg-white border border-indigo-300 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-100">📥 Télécharger le modèle</button></div>`; })()}
                 <div class="flex items-center gap-2"><button onclick="el('giFile').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg">📄 Choisir un fichier…</button>
                 <input type="file" id="giFile" accept=".csv,.txt,.xlsx,.xls" class="hidden" onchange="giLoadFile(this)">
                 ${giState.fileName ? `<span class="text-xs font-bold text-slate-600">${escapeHTML(giState.fileName)}</span><span class="text-[11px] text-slate-400">${giState.rows.length.toLocaleString('fr-FR')} ligne(s), ${giState.cols.length} colonne(s)</span>` : '<span class="text-[11px] text-slate-400 italic">1 ligne = 1 élément à créer ou mettre à jour.</span>'}</div></div>`;
