@@ -1865,8 +1865,29 @@
             if (Array.isArray(saved.connectors)) state.connectors = saved.connectors;
         }
 
+        // v3.7 : les « cas d'usage » fusionnent dans les processus (Applis & processus).
+        // Migration sans perte : nom, description, propriétaire, criticité, tables, colonnes,
+        // objets métier rattachés et applications « via » sont repris sur un processus.
+        function migrateUseCasesToAssets(g) {
+            if (!Array.isArray(g.useCases) || !g.useCases.length) return g;
+            g.assets = g.assets || [];
+            g.useCases.forEach(uc => {
+                let a = g.assets.find(x => String(x.name).trim().toLowerCase() === String(uc.name).trim().toLowerCase());
+                if (!a) { a = { id: 'as_' + generateId(), kind: 'process', name: uc.name, owner: '', criticality: 'Moyenne', description: '', domain: '', appIds: [], tables: [], columns: [], boIds: [] }; g.assets.push(a); }
+                if (uc.owner && !a.owner) a.owner = uc.owner;
+                if (uc.criticality) a.criticality = uc.criticality;
+                if (uc.description && !a.description) a.description = uc.description;
+                a.tables = Array.from(new Set([...(a.tables || []), ...(uc.tables || [])]));
+                a.columns = [...(a.columns || [])];
+                (uc.columns || []).forEach(c2 => { if (!a.columns.some(x => x.table === c2.table && x.col === c2.col)) a.columns.push({ table: c2.table, col: c2.col }); });
+                a.boIds = Array.from(new Set([...(a.boIds || []), ...(uc.boIds || [])]));
+                a.appIds = Array.from(new Set([...(a.appIds || []), ...(uc.assetIds || []).filter(id => { const x = g.assets.find(y => y.id === id); return x && x.kind === 'app'; })]));
+            });
+            g.useCases = [];
+            return g;
+        }
         function normalizeGovernance(g) {
-            return {
+            return migrateUseCasesToAssets({
                 perimeters: Array.isArray(g.perimeters) ? g.perimeters : [],
                 dictionary: g.dictionary && typeof g.dictionary === 'object' ? g.dictionary : {},
                 glossary: Array.isArray(g.glossary) ? g.glossary : [],
@@ -1878,7 +1899,7 @@
                 assets: Array.isArray(g.assets) ? g.assets : [],
                 qualityRules: Array.isArray(g.qualityRules) ? g.qualityRules : [],
                 privacy: g.privacy && typeof g.privacy === 'object' ? g.privacy : { levels: {}, actions: { personnel: 'pseudo', confidentiel: 'mask', interne: 'none', public: 'none' } },
-            };
+            });
         }
 
         // --- Sauvegarde automatique SUR FICHIER (dossier local choisi par l'utilisateur) ---
@@ -1944,7 +1965,7 @@
             if (!c) return 0;
             const g = c.governance || {};
             return ((c.relations || []).length) + Object.keys(c.designs || {}).length + Object.keys(c.themes || {}).length +
-                ((g.businessObjects || []).length) + Object.keys(g.dictionary || {}).length + ((g.glossary || []).length) + ((g.useCases || []).length);
+                ((g.businessObjects || []).length) + Object.keys(g.dictionary || {}).length + ((g.glossary || []).length) + ((g.useCases || []).length) + ((g.assets || []).length);
         }
         function persistAppState() {
             if (state.noPersist) return; // mode sans persistance : rien n'est écrit sur le poste
@@ -2204,7 +2225,7 @@
             else if (govState.tab === 'model') { c.innerHTML = '<div class="flex justify-end gap-2 mb-2">' + graphToolbarHtml('model') + '<button onclick="exportGraphImage(\'model\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l\'image</button></div><div id="modelGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Diagramme du modèle métier : 🏛️ objets (vert), ◆ compositions (ce qui fait partie de l\'objet), → références entre objets, cardinalités sur les liens. Construit via l\'assistant "Concevoir depuis le modèle de données".</p>'; renderObjectModelDiagram(); requestAnimationFrame(() => reflowGraph('model')); }
             else if (govState.tab === 'perimeters') c.innerHTML = renderGovPerimeters();
             else if (govState.tab === 'glossary') c.innerHTML = renderGovGlossary();
-            else if (govState.tab === 'usecases') c.innerHTML = renderGovUseCases();
+            else if (govState.tab === 'usecases') { govState.tab = 'assets'; c.innerHTML = renderGovAssets(); }
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
             else if (govState.tab === 'catalog') c.innerHTML = renderGovCatalog();
@@ -2218,7 +2239,7 @@
                 + (_am ? '<select onchange="govState.lineageAttrBo=this.value; renderLineageGraph()" class="border border-emerald-300 rounded-lg px-2 py-1.5 text-xs font-bold bg-emerald-50/50">' + _bos.map(b2 => '<option value="' + b2.id + '"' + (govState.lineageAttrBo === b2.id ? ' selected' : '') + '>🏛️ ' + escapeHTML(b2.name) + '</option>').join('') + '</select>'
                     + '<input type="text" value="' + escapeHTML(govState.lineageAttrQ || '') + '" oninput="govState.lineageAttrQ=this.value; attrFlowApplyFocus()" placeholder="🔍 filtrer les attributs…" class="text-[11px] border border-slate-300 rounded px-2 py-1.5 w-44 bg-white">' : '')
                 + '</div>'
-                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'ucs,🎯 Cas d\'usage,lineageUcs', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Ambre : cas d\'usage métier · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : utilisation métier · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
+                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
         }
 
@@ -3011,7 +3032,7 @@
                 ${(() => { const att = [];
                     (state.governance.perimeters || []).forEach(p2 => { if ((p2.boIds || []).includes(bo.id)) att.push('🗂 ' + p2.name); });
                     (state.governance.glossary || []).forEach(g2 => { if ((g2.boIds || []).includes(bo.id)) att.push('📖 ' + g2.term); });
-                    (state.governance.useCases || []).forEach(u2 => { if ((u2.boIds || []).includes(bo.id)) att.push('🎯 ' + u2.name); });
+                    (state.governance.assets || []).forEach(u2 => { if ((u2.boIds || []).includes(bo.id)) att.push((u2.kind === 'process' ? '⚙️ ' : '🖥 ') + u2.name); });
                     return att.length ? `<div class="text-[11px] text-slate-500 mt-2"><span class="text-[10px] uppercase font-bold text-slate-400">Rattaché à :</span> ${att.map(escapeHTML).join(' · ')}</div>` : ''; })()}
             </div>`;
         }
@@ -3341,7 +3362,7 @@
                 ['Au moins un attribut décrit', (bo.elements || []).length > 0],
                 ['Fiche dictionnaire de la source maître validée', dictEntry.status === 'Validé'],
                 ['Rattaché à un périmètre métier', g.perimeters.some(p => (p.boIds || []).includes(bo.id) || (t && (p.tables || []).includes(t.name)))],
-                ['Utilisé par au moins un cas d\'usage déclaré', g.useCases.some(uc => (uc.boIds || []).includes(bo.id) || (t && ((uc.tables || []).includes(t.name) || (uc.columns || []).some(c => c.table === t.name))))],
+                ['Utilisé par au moins une application ou un processus', ((g.assets || []).some(a2 => (a2.boIds || []).includes(bo.id) || (t && ((a2.tables || []).includes(t.name) || (a2.columns || []).some(c => c.table === t.name)))) || (bo.consumedBy || []).length > 0 || (bo.elements || []).some(e2 => (e2.usedBy || []).length > 0))],
             ];
             const passed = checks.filter(c => c[1]).length;
             const score = Math.round((passed / checks.length) * 100);
@@ -3924,20 +3945,50 @@
             const nm = String(a.name || '').trim().toLowerCase();
             const srcs = a.kind === 'app' ? Object.keys(dict).filter(n => String(dict[n].sourceSystem || '').trim().toLowerCase() === nm && tableByName(n)) : [];
             const bos = (state.governance.businessObjects || []).filter(bo => (bo.producedBy || []).includes(a.id) || (bo.consumedBy || []).includes(a.id));
-            const ucs = (state.governance.useCases || []).filter(uc => (uc.assetIds || []).includes(a.id));
-            return { srcs, bos, ucs };
+            const procs = a.kind === 'app' ? (state.governance.assets || []).filter(x => x.kind === 'process' && (x.appIds || []).includes(a.id)) : [];
+            return { srcs, bos, procs };
         }
+        // Domaine effectif : celui saisi, sinon (processus) hérité des applications liées.
+        function assetDomainEff(a) {
+            if (a.domain && String(a.domain).trim()) return String(a.domain).trim();
+            if (a.kind === 'process') { const doms = Array.from(new Set((a.appIds || []).map(assetById).filter(Boolean).map(x => String(x.domain || '').trim()).filter(Boolean))); return doms.join(' · '); }
+            return '';
+        }
+        function assetAppLink(procId, appId, on) {
+            const a = assetById(procId); if (!a || !appId) return;
+            a.appIds = a.appIds || [];
+            if (on) { if (!a.appIds.includes(appId)) a.appIds.push(appId); } else a.appIds = a.appIds.filter(x => x !== appId);
+            persistAppState(); renderGovernance();
+        }
+        function toggleAssetTable(id, name, checked) { const a = assetById(id); if (!a) return; a.tables = a.tables || []; if (checked) { if (!a.tables.includes(name)) a.tables.push(name); } else a.tables = a.tables.filter(t => t !== name); persistAppState(); renderGovernance(); }
+        function populateAssetCols(id, tableName) { const t = tableByName(tableName); const s2 = el('as-col-' + id); if (s2) s2.innerHTML = (t ? t.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function addAssetCol(id) { const a = assetById(id); if (!a) return; const tbl = el('as-tbl-' + id).value, col = el('as-col-' + id).value; if (!tbl || !col) return; a.columns = a.columns || []; if (!a.columns.some(l => l.table === tbl && l.col === col)) a.columns.push({ table: tbl, col }); persistAppState(); renderGovernance(); }
+        function removeAssetCol(id, idx) { const a = assetById(id); if (a && a.columns) { a.columns.splice(idx, 1); persistAppState(); renderGovernance(); } }
         function renderGovAssets() {
             const assets = state.governance.assets || [];
-            let html = `<p class="text-sm text-slate-500 mb-4">Déclarez les <strong>applications</strong> qui produisent la donnée et les <strong>processus</strong> qui la consomment : ils complètent le lineage de bout en bout (Application → source → table → objet → processus) et l'analyse d'impact. Reliez une application à une source via le champ « Système source » du Dictionnaire, et aux objets métier dans leur fiche (onglet Sources).</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">`;
+            const names = readyTableNames();
+            const apps = assets.filter(a => a.kind === 'app');
+            const doms = Array.from(new Set([...themeList(), ...assets.map(a => String(a.domain || '').trim()).filter(Boolean)])).sort();
+            let html = `<div class="bg-indigo-50/60 border border-indigo-200 rounded-xl p-4 mb-6">
+                <h3 class="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Analyse d'impact — "si cette donnée a un problème, qui est touché ?"</h3>
+                <div class="flex flex-wrap gap-3 items-end">
+                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Table</label><select id="impactTable" onchange="populateImpactCols()" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Choisir...</option>${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select></div>
+                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Colonne (optionnel)</label><select id="impactCol" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Toute la table</option></select></div>
+                    <button onclick="runImpactAnalysis()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">Analyser l'impact</button>
+                </div>
+                <div id="impactResult" class="mt-4"></div>
+            </div>
+            <p class="text-sm text-slate-500 mb-4">Déclarez les <strong>applications</strong> qui produisent ou portent la donnée et les <strong>processus</strong> qui la consomment. Un processus s'appuie sur <strong>une ou plusieurs applications</strong> et hérite de leur domaine ; il déclare aussi les tables et colonnes critiques qu'il utilise (c'est ce qui alimente l'analyse d'impact ci-dessus). Reliez une application à une source via le champ « Système source » du Dictionnaire.</p>
+            <datalist id="assetDomList">${doms.map(d => `<option value="${escapeHTML(d)}">`).join('')}</datalist>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">`;
             for (const kind of ['app', 'process']) {
                 const [ic, lbl] = ASSET_KINDS[kind];
                 const list = assets.filter(a => a.kind === kind);
                 html += `<div>
                     <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-bold text-slate-700">${ic} ${lbl}s (${list.length})</h3><button onclick="addGovAsset('${kind}')" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">+ ${lbl}</button></div>
                     ${list.length ? '' : `<p class="text-xs text-slate-400 italic py-4 text-center border border-dashed border-slate-200 rounded-lg">Aucun(e) ${lbl.toLowerCase()} déclaré(e).</p>`}
-                    ${list.map(a => { const u = assetUsage(a); const nUse = u.srcs.length + u.bos.length + u.ucs.length;
+                    ${list.map(a => { const u = assetUsage(a); const nUse = u.srcs.length + u.bos.length + u.procs.length;
+                        const domEff = assetDomainEff(a);
                         return `<div class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">
                         <div class="flex items-center gap-2 mb-1.5">
                             <span>${ic}</span>
@@ -3945,22 +3996,40 @@
                             <select onchange="updateGovAsset('${a.id}','criticality',this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === (a.criticality || 'Moyenne') ? 'selected' : ''}>${o}</option>`).join('')}</select>
                             <button onclick="removeGovAsset('${a.id}')" class="text-red-500 hover:text-red-700 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
-                        <div class="flex gap-2 mb-1.5">
-                            <input type="text" value="${escapeHTML(a.owner || '')}" placeholder="${kind === 'app' ? 'Responsable applicatif' : 'Responsable du processus'}" onchange="updateGovAsset('${a.id}','owner',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-56">
-                            <input type="text" value="${escapeHTML(a.description || '')}" placeholder="Description…" onchange="updateGovAsset('${a.id}','description',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white flex-grow">
+                        <div class="flex gap-2 mb-1.5 flex-wrap">
+                            <input type="text" value="${escapeHTML(a.owner || '')}" placeholder="${kind === 'app' ? 'Responsable applicatif' : 'Responsable du processus'}" onchange="updateGovAsset('${a.id}','owner',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-44">
+                            <input type="text" value="${escapeHTML(a.domain || '')}" list="assetDomList" placeholder="${kind === 'process' && domEff && !(a.domain || '').trim() ? 'Domaine hérité : ' + domEff : 'Domaine métier'}" onchange="updateGovAsset('${a.id}','domain',this.value)" title="Domaine métier${kind === 'process' ? ' — laissé vide, il est hérité des applications liées' : ''}" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-40 ${kind === 'process' && domEff && !(a.domain || '').trim() ? 'placeholder-emerald-600' : ''}">
+                            <input type="text" value="${escapeHTML(a.description || '')}" placeholder="Description…" onchange="updateGovAsset('${a.id}','description',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white flex-grow min-w-[140px]">
                         </div>
-                        <div class="text-[11px] text-slate-500">${nUse ? [u.srcs.length ? u.srcs.length + ' source(s)' : '', u.bos.length ? u.bos.length + ' objet(s) métier' : '', u.ucs.length ? u.ucs.length + ' cas d\'usage' : ''].filter(Boolean).join(' · ') : '<span class="italic text-slate-300">pas encore relié — dictionnaire (Système source), fiche objet ou cas d\'usage</span>'}</div>
+                        ${kind === 'process' ? `
+                        <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+                            <span class="text-[10px] uppercase font-bold text-slate-400">🖥 Applications</span>
+                            ${(a.appIds || []).map(id => { const x = assetById(id); return x ? `<span class="text-xs bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold">🖥 ${escapeHTML(x.name)}<button onclick="assetAppLink('${a.id}','${x.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>` : ''; }).join('') || '<span class="text-xs text-slate-300 italic">aucune application liée</span>'}
+                            ${apps.filter(x => !(a.appIds || []).includes(x.id)).length ? `<select id="asapp-${a.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${apps.filter(x => !(a.appIds || []).includes(x.id)).map(x => `<option value="${x.id}">${escapeHTML(x.name)}</option>`).join('')}</select><button onclick="assetAppLink('${a.id}', el('asapp-${a.id}').value, true)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600 hover:bg-slate-50">Relier</button>` : (apps.length ? '' : '<span class="text-[10px] text-slate-300">(déclarez d\'abord des applications)</span>')}
+                        </div>
+                        ${boAttachHtml('as', a)}
+                        <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Tables utilisées</div>
+                        <div class="flex flex-wrap gap-1.5 mb-2">${names.map(n => `<label class="text-xs border rounded px-2 py-1 cursor-pointer ${(a.tables || []).includes(n) ? 'bg-amber-100 border-amber-300 text-amber-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}"><input type="checkbox" class="hidden" ${(a.tables || []).includes(n) ? 'checked' : ''} onchange="toggleAssetTable('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${escapeHTML(n)}</label>`).join('') || '<span class="text-xs text-slate-400 italic">Aucune table chargée</span>'}</div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Colonnes critiques utilisées</div>
+                        <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                            ${(a.columns || []).map((l, i) => `<span class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 flex items-center gap-1">${escapeHTML(l.table)}.${escapeHTML(l.col)} <button onclick="removeAssetCol('${a.id}',${i})" class="text-amber-400 hover:text-red-500">✕</button></span>`).join('')}
+                            <select id="as-tbl-${a.id}" onchange="populateAssetCols('${a.id}',this.value)" class="border border-slate-200 p-1 rounded text-xs bg-white">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select>
+                            <select id="as-col-${a.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${names[0] ? (tableByName(names[0]) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
+                            <button onclick="addAssetCol('${a.id}')" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-medium hover:bg-slate-50">Lier colonne</button>
+                        </div>` : ''}
+                        <div class="text-[11px] text-slate-500">${nUse ? [u.srcs.length ? u.srcs.length + ' source(s)' : '', u.bos.length ? u.bos.length + ' objet(s) métier' : '', u.procs.length ? u.procs.length + ' processus outillé(s)' : ''].filter(Boolean).join(' · ') : '<span class="italic text-slate-300">pas encore relié — dictionnaire (Système source), fiche objet, applications ou tables ci-dessus</span>'}</div>
                     </div>`; }).join('')}
                 </div>`;
             }
             return html + '</div>';
         }
-        function addGovAsset(kind) { (state.governance.assets = state.governance.assets || []).push({ id: 'as_' + generateId(), kind, name: kind === 'app' ? 'Nouvelle application' : 'Nouveau processus', owner: '', criticality: 'Moyenne', description: '' }); persistAppState(); renderGovernance(); }
+        function addGovAsset(kind) { (state.governance.assets = state.governance.assets || []).push({ id: 'as_' + generateId(), kind, name: kind === 'app' ? 'Nouvelle application' : 'Nouveau processus', owner: '', criticality: 'Moyenne', description: '', domain: '', appIds: [], tables: [], columns: [], boIds: [] }); persistAppState(); renderGovernance(); }
         function updateGovAsset(id, f, v) { const a = assetById(id); if (a) { a[f] = v; persistAppState(); } }
         function removeGovAsset(id) {
             state.governance.assets = (state.governance.assets || []).filter(a => a.id !== id);
             (state.governance.businessObjects || []).forEach(bo => { bo.producedBy = (bo.producedBy || []).filter(x => x !== id); bo.consumedBy = (bo.consumedBy || []).filter(x => x !== id); });
             (state.governance.useCases || []).forEach(uc => { uc.assetIds = (uc.assetIds || []).filter(x => x !== id); });
+            (state.governance.assets || []).forEach(a => { if (a.appIds) a.appIds = a.appIds.filter(x => x !== id); });
             persistAppState(); renderGovernance();
         }
         // Rattachement générique d'actifs (objets métier : produite par / consommée par ; cas d'usage).
@@ -3997,7 +4066,7 @@
             </div>`;
         }
         function toggleEntityBo(kind, id, boId, on) {
-            const coll = kind === 'per' ? state.governance.perimeters : (kind === 'gl' ? state.governance.glossary : state.governance.useCases);
+            const coll = kind === 'per' ? state.governance.perimeters : (kind === 'gl' ? state.governance.glossary : (kind === 'as' ? state.governance.assets : state.governance.useCases));
             const ent = (coll || []).find(x => x.id === id); if (!ent || !boId) return;
             ent.boIds = ent.boIds || [];
             if (on) { if (!ent.boIds.includes(boId)) ent.boIds.push(boId); } else ent.boIds = ent.boIds.filter(x => x !== boId);
@@ -4040,62 +4109,18 @@
         function addGlossaryLink(id) { const g = state.governance.glossary.find(x => x.id === id); if (!g) return; const tbl = el('gl-tbl-' + id).value, col = el('gl-col-' + id).value; if (!tbl || !col) return; g.links = g.links || []; if (!g.links.some(l => l.table === tbl && l.col === col)) g.links.push({ table: tbl, col }); persistAppState(); renderGovernance(); }
         function removeGlossaryLink(id, idx) { const g = state.governance.glossary.find(x => x.id === id); if (g && g.links) { g.links.splice(idx, 1); persistAppState(); renderGovernance(); } }
 
-        // ---- Cas d'usage métier + analyse d'impact ----
-        function renderGovUseCases() {
-            const names = readyTableNames();
-            let html = `<div class="bg-indigo-50/60 border border-indigo-200 rounded-xl p-4 mb-6">
-                <h3 class="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Analyse d'impact — "si cette donnée a un problème, qui est touché ?"</h3>
-                <div class="flex flex-wrap gap-3 items-end">
-                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Table</label><select id="impactTable" onchange="populateImpactCols()" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Choisir...</option>${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select></div>
-                    <div><label class="text-xs font-bold text-slate-500 block mb-1">Colonne (optionnel)</label><select id="impactCol" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Toute la table</option></select></div>
-                    <button onclick="runImpactAnalysis()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">Analyser l'impact</button>
-                </div>
-                <div id="impactResult" class="mt-4"></div>
-            </div>
-            <div class="flex justify-between items-center mb-4"><p class="text-sm text-slate-500">Déclarez où la donnée est utilisée : rapports, processus, applications métier...</p><button onclick="addUseCase()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> Nouveau cas d'usage</button></div>`;
-            if (!state.governance.useCases.length) html += '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun cas d\'usage déclaré.</p>';
-            state.governance.useCases.forEach(uc => {
-                html += `<div class="border border-slate-200 rounded-xl p-4 mb-3 bg-slate-50/50">
-                    <div class="flex items-center gap-2 mb-2 flex-wrap">
-                        <input type="text" value="${escapeHTML(uc.name)}" onchange="updateUseCase('${uc.id}','name',this.value)" class="font-bold text-sm border border-slate-300 p-1.5 rounded w-72 bg-white">
-                        <select onchange="updateUseCase('${uc.id}','criticality',this.value); renderGovernance()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === uc.criticality ? 'selected' : ''}>${o}</option>`).join('')}</select>
-                        <span class="text-[10px] uppercase font-bold px-2 py-1 rounded ${CRIT_COLORS[uc.criticality] || CRIT_COLORS['Faible']}">${uc.criticality || 'Faible'}</span>
-                        <input type="text" value="${escapeHTML(uc.owner || '')}" placeholder="Responsable métier" onchange="updateUseCase('${uc.id}','owner',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-44">
-                        <button onclick="removeUseCase('${uc.id}')" class="text-red-500 hover:text-red-700 p-1 ml-auto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                    </div>
-                    <textarea onchange="updateUseCase('${uc.id}','description',this.value)" placeholder="Description du cas d'usage (rapport, processus, application...)" class="w-full border border-slate-200 p-2 rounded text-xs mb-2 bg-white h-12">${escapeHTML(uc.description || '')}</textarea>
-                    ${boAttachHtml('uc', uc)}
-                    ${assetAttachHtml('uc', uc.id, 'assetIds', uc.assetIds, '🖥⚙️ Via (appli/processus)')}
-                    <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Tables utilisées</div>
-                    <div class="flex flex-wrap gap-1.5 mb-2">${names.map(n => `<label class="text-xs border rounded px-2 py-1 cursor-pointer ${(uc.tables || []).includes(n) ? 'bg-amber-100 border-amber-300 text-amber-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}"><input type="checkbox" class="hidden" ${(uc.tables || []).includes(n) ? 'checked' : ''} onchange="toggleUseCaseTable('${uc.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${escapeHTML(n)}</label>`).join('')}</div>
-                    <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Colonnes critiques utilisées</div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        ${(uc.columns || []).map((l, i) => `<span class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 flex items-center gap-1">${escapeHTML(l.table)}.${escapeHTML(l.col)} <button onclick="removeUseCaseCol('${uc.id}',${i})" class="text-amber-400 hover:text-red-500">✕</button></span>`).join('')}
-                        <select id="uc-tbl-${uc.id}" onchange="populateUseCaseCols('${uc.id}',this.value)" class="border border-slate-200 p-1 rounded text-xs bg-white">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select>
-                        <select id="uc-col-${uc.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${names[0] ? (tableByName(names[0]) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
-                        <button onclick="addUseCaseCol('${uc.id}')" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-medium hover:bg-slate-50">Lier colonne</button>
-                    </div>
-                </div>`;
-            });
-            return html;
-        }
-        function addUseCase() { state.governance.useCases.push({ id: 'uc_' + generateId(), name: 'Nouveau cas d\'usage', description: '', owner: '', criticality: 'Moyenne', tables: [], columns: [] }); persistAppState(); renderGovernance(); }
-        function updateUseCase(id, f, v) { const u = state.governance.useCases.find(x => x.id === id); if (u) { u[f] = v; persistAppState(); } }
-        function removeUseCase(id) { state.governance.useCases = state.governance.useCases.filter(x => x.id !== id); persistAppState(); renderGovernance(); }
-        function toggleUseCaseTable(id, name, checked) { const u = state.governance.useCases.find(x => x.id === id); if (!u) return; u.tables = u.tables || []; if (checked) { if (!u.tables.includes(name)) u.tables.push(name); } else u.tables = u.tables.filter(t => t !== name); persistAppState(); renderGovernance(); }
-        function populateUseCaseCols(id, tableName) { const t = tableByName(tableName); const s = el('uc-col-' + id); if (s) s.innerHTML = (t ? t.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
-        function addUseCaseCol(id) { const u = state.governance.useCases.find(x => x.id === id); if (!u) return; const tbl = el('uc-tbl-' + id).value, col = el('uc-col-' + id).value; if (!tbl || !col) return; u.columns = u.columns || []; if (!u.columns.some(l => l.table === tbl && l.col === col)) u.columns.push({ table: tbl, col }); persistAppState(); renderGovernance(); }
-        function removeUseCaseCol(id, idx) { const u = state.governance.useCases.find(x => x.id === id); if (u && u.columns) { u.columns.splice(idx, 1); persistAppState(); renderGovernance(); } }
+        // ---- Analyse d'impact (l'écran Cas d'usage a fusionné dans Applis & processus en v3.7) ----
         function populateImpactCols() { const tn = el('impactTable').value; const t = tableByName(tn); el('impactCol').innerHTML = '<option value="">Toute la table</option>' + (t ? t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''); }
 
-        // Analyse d'impact : cas d'usage touchés directement, via le lineage (tables dérivées en aval),
+        // Analyse d'impact : processus touchés directement, via le lineage (tables dérivées en aval),
         // ou via les relations du modèle de données (tables jointes sur cette colonne/table).
         function computeImpact(tableName, colName) {
             const g = state.governance;
+            const PROCS = (g.assets || []).filter(a => a.kind === 'process');
             const ucTouches = (uc, tn, cn) => cn
                 ? (uc.columns || []).some(c => c.table === tn && c.col === cn)
                 : ((uc.tables || []).includes(tn) || (uc.columns || []).some(c => c.table === tn));
-            const direct = g.useCases.filter(uc => ucTouches(uc, tableName, colName));
+            const direct = PROCS.filter(uc => ucTouches(uc, tableName, colName));
             // Aval du lineage : les tables dérivées construites (directement ou en cascade) depuis cette table.
             const downstream = new Set(); const queue = [tableName];
             while (queue.length) {
@@ -4104,7 +4129,7 @@
                     if ((g.lineage[derived].from || []).includes(cur) && !downstream.has(derived)) { downstream.add(derived); queue.push(derived); }
                 });
             }
-            const viaLineage = g.useCases.filter(uc => !direct.includes(uc) && Array.from(downstream).some(dn => ucTouches(uc, dn, null)));
+            const viaLineage = PROCS.filter(uc => !direct.includes(uc) && Array.from(downstream).some(dn => ucTouches(uc, dn, null)));
             // Tables reliées via le modèle de données (si colonne fournie : uniquement les relations passant par cette colonne).
             const related = new Set();
             state.relations.forEach(r => {
@@ -4115,7 +4140,7 @@
                 if (tN === tableName && (!colName || r.targetCol === colName)) related.add(sN);
             });
             related.delete(tableName);
-            const viaRelations = g.useCases.filter(uc => !direct.includes(uc) && !viaLineage.includes(uc) && Array.from(related).some(rn => ucTouches(uc, rn, null)));
+            const viaRelations = PROCS.filter(uc => !direct.includes(uc) && !viaLineage.includes(uc) && Array.from(related).some(rn => ucTouches(uc, rn, null)));
             return { direct, viaLineage, viaRelations, downstream: Array.from(downstream), related: Array.from(related) };
         }
         function runImpactAnalysis() {
@@ -4131,12 +4156,12 @@
             };
             const total = r.direct.length + r.viaLineage.length + r.viaRelations.length;
             let html = total === 0
-                ? '<p class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">Aucun cas d\'usage déclaré n\'utilise cette donnée. Pensez à déclarer les usages pour fiabiliser l\'analyse.</p>'
-                : `<p class="text-sm font-bold text-slate-700 mb-3">${total} cas d'usage potentiellement impacté(s) par un problème sur <span class="text-indigo-700">${escapeHTML(tn)}${cn ? '.' + escapeHTML(cn) : ''}</span> :</p>`
-                    + block('🎯 Impact direct (utilise cette donnée)', r.direct, 'direct')
+                ? '<p class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">Aucun processus déclaré n\'utilise cette donnée. Reliez des tables/colonnes à vos processus ci-dessous pour fiabiliser l\'analyse.</p>'
+                : `<p class="text-sm font-bold text-slate-700 mb-3">${total} processus potentiellement impacté(s) par un problème sur <span class="text-indigo-700">${escapeHTML(tn)}${cn ? '.' + escapeHTML(cn) : ''}</span> :</p>`
+                    + block('⚙️ Impact direct (utilise cette donnée)', r.direct, 'direct')
                     + block('🕸️ Via le lineage (extractions alimentées : ' + r.downstream.map(escapeHTML).join(', ') + ')', r.viaLineage, 'lineage')
                     + block('🔗 Via les relations du modèle de données (tables jointes : ' + r.related.map(escapeHTML).join(', ') + ')', r.viaRelations, 'relation');
-            // Applications & processus touchés (via sources produites, objets consommés, cas d'usage support)
+            // Applications touchées (via sources produites, objets consommés, processus outillés)
             const assets = state.governance.assets || [];
             if (assets.length) {
                 const impactedTables = [tn, ...(r.downstream || []), ...(r.related || [])];
@@ -4146,9 +4171,9 @@
                     if (!(bo.sources || []).some(s2 => impactedTables.includes(s2.table))) return;
                     [...(bo.consumedBy || []), ...(bo.producedBy || [])].forEach(id => { const a = assetById(id); if (a && !hits.has(a.id)) hits.set(a.id, ((bo.consumedBy || []).includes(id) ? 'consomme' : 'produit') + ' l\'objet ' + bo.name); });
                 });
-                [...(r.direct || []), ...(r.viaLineage || []), ...(r.viaRelations || [])].forEach(uc => (uc.assetIds || []).forEach(id => { const a = assetById(id); if (a && !hits.has(a.id)) hits.set(a.id, 'support du cas d\'usage ' + uc.name); }));
+                [...(r.direct || []), ...(r.viaLineage || []), ...(r.viaRelations || [])].forEach(pr => (pr.appIds || []).forEach(id => { const a = assetById(id); if (a && !hits.has(a.id)) hits.set(a.id, 'outille le processus ' + pr.name); }));
                 if (hits.size) {
-                    html += `<div class="mt-3"><div class="text-xs font-bold text-slate-600 mb-1.5">🖥⚙️ Applications & processus touchés (${hits.size})</div>
+                    html += `<div class="mt-3"><div class="text-xs font-bold text-slate-600 mb-1.5">🖥 Applications touchées (${hits.size})</div>
                         ${[...hits].map(([id, why]) => { const a = assetById(id); return `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2.5 mb-1.5"><span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${CRIT_COLORS[a.criticality] || CRIT_COLORS['Faible']}">${a.criticality || 'Moyenne'}</span><span class="text-sm font-bold text-slate-800">${escapeHTML(assetLabel(a))}</span><span class="text-xs text-slate-400">${escapeHTML(a.owner || '')}</span><span class="text-[10px] text-slate-400 ml-auto italic">${escapeHTML(why)}</span></div>`; }).join('')}</div>`;
                 }
             }
@@ -4281,7 +4306,7 @@
         }
         function _renderLineageImpl(wrap) {
             const nodes = [], edges = [], seen = new Set();
-            const showSrcs = govState.lineageSrcs !== false, showBos = govState.lineageBos !== false, showUcs = govState.lineageUcs !== false;
+            const showSrcs = govState.lineageSrcs !== false, showBos = govState.lineageBos !== false;
             if (showSrcs) Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
                 const colors = t.type === 'extraction' ? ['#f3e8ff', '#7c3aed'] : (t.type === 'api' ? ['#cffafe', '#0891b2'] : ['#dbeafe', '#2563eb']);
                 nodes.push({ id: 'tbl:' + t.name, type: 'studio-rich-node', title: t.name, content: (state.governance.dictionary[t.name] || {}).sourceSystem || '', fill: colors[0], stroke: colors[1] });
@@ -4316,14 +4341,15 @@
                 (bo.producedBy || []).forEach(id => { const a = assetById(id); if (!assetOk(a)) return; usedAssets.add(id); edges.push({ id: 'prod:' + id + '>' + bo.id, source: 'as:' + id, target: 'bo:' + bo.id, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } }); });
                 (bo.consumedBy || []).forEach(id => { const a = assetById(id); if (!assetOk(a)) return; usedAssets.add(id); edges.push({ id: 'cons:' + bo.id + '>' + id, source: 'bo:' + bo.id, target: 'as:' + id, label: 'consommé par', style: { stroke: '#ea580c', lineWidth: 1.6, endArrow: { path: '', fill: '#ea580c' } } }); });
             });
-            (state.governance.useCases || []).forEach(uc => (uc.assetIds || []).forEach(id => { const a = assetById(id); if (!assetOk(a)) return; usedAssets.add(id); edges.push({ id: 'ucas:' + uc.id + '>' + id, source: 'uc:' + uc.id, target: 'as:' + id, label: 'via', style: { stroke: '#94a3b8', lineDash: [4, 3], endArrow: { path: '', fill: '#94a3b8' } } }); }));
-            assets.forEach(a => { if (!usedAssets.has(a.id)) return; const isApp = a.kind === 'app';
-                nodes.push({ id: 'as:' + a.id, type: 'studio-rich-node', title: (isApp ? '🖥 ' : '⚙️ ') + a.name, content: a.criticality || '', fill: isApp ? '#e2e8f0' : '#ffedd5', stroke: isApp ? '#334155' : '#ea580c' }); });
-            if (showUcs) state.governance.useCases.forEach(uc => {
-                nodes.push({ id: 'uc:' + uc.id, type: 'studio-rich-node', title: '🎯 ' + uc.name, content: uc.criticality || '', fill: '#fef3c7', stroke: '#d97706' });
-                const linkedTables = new Set([...(uc.tables || []), ...(uc.columns || []).map(c => c.table)]);
-                linkedTables.forEach(tn => { if (seen.has(tn)) edges.push({ id: 'use:' + uc.id + ':' + tn, source: 'tbl:' + tn, target: 'uc:' + uc.id, label: 'utilisé par', style: { stroke: '#d97706', endArrow: { path: '', fill: '#d97706' } } }); });
+            // Un processus s'appuie sur une ou plusieurs applications (v3.7).
+            assets.filter(a2 => a2.kind === 'process').forEach(pr => {
+                if (!assetOk(pr)) return;
+                (pr.appIds || []).forEach(id => { const a = assetById(id); if (!assetOk(a)) return; usedAssets.add(id); usedAssets.add(pr.id); edges.push({ id: 'papp:' + id + '>' + pr.id, source: 'as:' + id, target: 'as:' + pr.id, label: 'outille', style: { stroke: '#94a3b8', lineDash: [4, 3], endArrow: { path: '', fill: '#94a3b8' } } }); });
+                const linkedTables = new Set([...(pr.tables || []), ...(pr.columns || []).map(c => c.table)]);
+                linkedTables.forEach(tn => { if (seen.has(tn)) { usedAssets.add(pr.id); edges.push({ id: 'use:' + pr.id + ':' + tn, source: 'tbl:' + tn, target: 'as:' + pr.id, label: 'utilisé par', style: { stroke: '#d97706', endArrow: { path: '', fill: '#d97706' } } }); } });
             });
+            assets.forEach(a => { if (!usedAssets.has(a.id)) return; const isApp = a.kind === 'app';
+                nodes.push({ id: 'as:' + a.id, type: 'studio-rich-node', title: (isApp ? '🖥 ' : '⚙️ ') + a.name, content: [assetDomainEff(a), a.criticality || ''].filter(Boolean).join(' · '), fill: isApp ? '#e2e8f0' : '#ffedd5', stroke: isApp ? '#334155' : '#ea580c' }); });
             if (showBos) state.governance.businessObjects.forEach(bo => {
                 // Vision fine : les attributs de l'objet avec leur colonne source (mode 🔬).
                 if (govState.lineageBoDetail && (bo.elements || []).length) {
@@ -4473,7 +4499,8 @@
             gloss: { label: '📖 Glossaire', fields: [
                 ['term', 'Terme (clé)', true], ['definition', 'Définition', false], ['table', 'Table liée', false], ['col', 'Colonne liée', false]] },
             assets: { label: '🖥 Applications & processus', fields: [
-                ['name', 'Nom (clé)', true], ['kind', 'Type (application / processus)', false], ['criticality', 'Criticité', false], ['description', 'Description', false]] },
+                ['name', 'Nom (clé)', true], ['kind', 'Type (application / processus)', false], ['criticality', 'Criticité', false], ['description', 'Description', false],
+                ['owner', 'Responsable', false], ['domain', 'Domaine métier', false], ['apps', 'Applications du processus (séparées par ;)', false]] },
             usage: { label: '🔌 Usages attribut ↔ application', fields: [
                 ['bo', 'Objet métier (clé)', true], ['attr', 'Attribut (clé)', true], ['app', 'Application / processus (clé)', true]] },
         };
@@ -4504,9 +4531,9 @@
                 return out;
             }
             if (target === 'assets') {
-                const out = [['Nom', 'Type', 'Criticité', 'Description']];
-                (g.assets || []).forEach(a => out.push([a.name, a.kind === 'process' ? 'processus' : 'application', a.criticality || '', a.description || '']));
-                if (out.length === 1) out.push(['SAP', 'application', 'Haute', ''], ['Clôture mensuelle', 'processus', '', '']);
+                const out = [['Nom', 'Type', 'Criticité', 'Description', 'Responsable', 'Domaine', 'Applications']];
+                (g.assets || []).forEach(a => out.push([a.name, a.kind === 'process' ? 'processus' : 'application', a.criticality || '', a.description || '', a.owner || '', a.domain || '', (a.appIds || []).map(id => (assetById(id) || {}).name).filter(Boolean).join(';')]));
+                if (out.length === 1) out.push(['SAP', 'application', 'Haute', '', '', 'Finance', ''], ['Clôture mensuelle', 'processus', '', '', '', '', 'SAP']);
                 return out;
             }
             if (target === 'usage') {
@@ -4535,7 +4562,8 @@
             const hints = { table: ['table', 'source'], col: ['colonne', 'col', 'column', 'attribut', 'champ'], definition: ['definition', 'description', 'def'],
                 type: ['type', 'format'], sensitivity: ['sensibilite', 'sensitivity', 'rgpd'], term: ['terme', 'term', 'glossaire'],
                 name: ['nom', 'name', 'application', 'appli', 'processus'], kind: ['type', 'kind', 'nature'], criticality: ['criticite', 'criticality'],
-                description: ['description', 'commentaire'], bo: ['objet', 'objetmetier', 'bo', 'entite'], attr: ['attribut', 'attr', 'element', 'champ'], app: ['application', 'appli', 'app', 'processus', 'systeme'] };
+                description: ['description', 'commentaire'], bo: ['objet', 'objetmetier', 'bo', 'entite'], attr: ['attribut', 'attr', 'element', 'champ'], app: ['application', 'appli', 'app', 'processus', 'systeme'],
+                owner: ['responsable', 'proprietaire', 'owner'], domain: ['domaine', 'domain'], apps: ['applications', 'applis', 'apps'] };
             T.fields.forEach(([f]) => {
                 const hs = hints[f] || [f];
                 const hit = giState.cols.find(c => { const n = giNorm(c); return hs.some(h => n === giNorm(h)); })
@@ -4627,6 +4655,15 @@
                         if (giVal(row, 'kind')) a.kind = kind;
                         setIf(a, 'criticality', giVal(row, 'criticality'));
                         setIf(a, 'description', giVal(row, 'description'));
+                        setIf(a, 'owner', giVal(row, 'owner'));
+                        setIf(a, 'domain', giVal(row, 'domain'));
+                        const appsList = giVal(row, 'apps').split(';').map(x => x.trim()).filter(Boolean);
+                        if (appsList.length && a.kind === 'process') {
+                            a.appIds = a.appIds || [];
+                            appsList.forEach(nm2 => { let ap = (g.assets || []).find(x => x.kind === 'app' && giNorm(x.name) === giNorm(nm2));
+                                if (!ap) { ap = { id: 'as_' + generateId(), kind: 'app', name: nm2, criticality: '', description: '', domain: '', appIds: [] }; g.assets.push(ap); created++; }
+                                if (!a.appIds.includes(ap.id)) a.appIds.push(ap.id); });
+                        }
                     } else if (giState.target === 'usage') {
                         const boN = giVal(row, 'bo'), attrN = giVal(row, 'attr'), appN = giVal(row, 'app');
                         if (!boN || !attrN || !appN) { skipped++; return; }
@@ -4883,6 +4920,17 @@
                 Object.keys(ig.dictionary).forEach(n => { g.dictionary[n] = ig.dictionary[n]; });
                 ig.glossary.forEach(it => { const ex = g.glossary.find(x => x.term === it.term); if (ex) { if (it.definition) ex.definition = it.definition; ex.links = [...(ex.links || []), ...(it.links || []).filter(l => !(ex.links || []).some(e2 => e2.table === l.table && e2.col === l.col))]; } else g.glossary.push(it); });
                 ig.useCases.forEach(it => { const ex = g.useCases.find(x => x.name === it.name); if (ex) Object.assign(ex, it, { id: ex.id }); else g.useCases.push(it); });
+                const asMap = {};
+                (ig.assets || []).forEach(it => {
+                    let ex = (g.assets || []).find(x => String(x.name).trim().toLowerCase() === String(it.name).trim().toLowerCase());
+                    if (ex) { if (it.owner && !ex.owner) ex.owner = it.owner; if (it.domain && !ex.domain) ex.domain = it.domain; if (it.criticality) ex.criticality = it.criticality; if (it.description && !ex.description) ex.description = it.description;
+                        ex.tables = Array.from(new Set([...(ex.tables || []), ...(it.tables || [])]));
+                        ex.columns = [...(ex.columns || [])]; (it.columns || []).forEach(c2 => { if (!ex.columns.some(x => x.table === c2.table && x.col === c2.col)) ex.columns.push(c2); });
+                    } else { ex = { ...it, id: 'as_' + generateId() }; g.assets.push(ex); }
+                    asMap[it.id] = ex.id;
+                });
+                (g.assets || []).forEach(a => { if (a.appIds) a.appIds = a.appIds.map(id => asMap[id] || id); });
+                migrateUseCasesToAssets(g);
                 ig.businessObjects.forEach(it => { const ex = g.businessObjects.find(x => x.name === it.name); if (ex) Object.assign(ex, it, { id: ex.id }); else g.businessObjects.push(it); });
                 Object.keys(ig.lineage).forEach(n => { g.lineage[n] = ig.lineage[n]; });
                 (ig.rules || []).forEach(ir => { const sig = r2 => [r2.parentTable, r2.parentCol, r2.childTable, r2.childCol, JSON.stringify(r2.cond || null), r2.expect, r2.n].join('|'); if (!(g.rules || []).some(r2 => r2.id === ir.id || sig(r2) === sig(ir))) g.rules.push(ir); });
@@ -4955,7 +5003,6 @@
                   { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Classer' },
                   { g: 'lineage', icon: '🕸️', label: 'Lineage', fam: 'Tracer' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Tracer' },
-                  { g: 'usecases', icon: '🎯', label: 'Cas d\'usage', fam: 'Partager' },
               ] },
         ];
         const PHASE_COLORS = {
@@ -6690,8 +6737,7 @@
                 tags: ['objet métier'], bo: bo.id }));
             (g.glossary || []).forEach(t2 => push({ type: 'term', id: t2.id, title: t2.term, sub: (t2.links || []).length + ' colonne(s) liée(s)', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null, tags: ['glossaire'] }));
             (g.perimeters || []).forEach(p2 => push({ type: 'perimeter', id: p2.id, title: p2.name, sub: (p2.tables || []).length + ' table(s)', desc: p2.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [] }));
-            (g.useCases || []).forEach(uc => push({ type: 'usecase', id: uc.id, title: uc.name, sub: uc.criticality || '', desc: uc.description || '', dom: '—', own: uc.owner || '', q: null, sens: null, val: null, fresh: null, tags: ['cas d\'usage'] }));
-            (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' : 'Application', desc: a.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
+            (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' + ((a.appIds || []).length ? ' · ' + (a.appIds || []).length + ' appli(s)' : '') : 'Application', desc: a.description || '', dom: assetDomainEff(a) || '—', own: a.owner || '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
             (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.table || '') + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
             (state.recipes || []).forEach(r => push({ type: 'recipe', id: r.id, title: r.name, sub: (r.src || '?') + ' → ' + (r.out || '?'), desc: (r.steps || []).length + ' étape(s) de nettoyage, rejouées automatiquement à chaque mise à jour de la source.', dom: '—', own: '', q: null, sens: null, val: null, fresh: r.lastAt || null, tags: ['préparation'] }));
             (state.dashboards || []).forEach(d2 => push({ type: 'report', id: d2.id, title: d2.name, sub: (d2.tiles || []).length + ' tuile(s)', desc: 'Tableau de bord composable : ' + (d2.tiles || []).map(t2 => t2.title).filter(Boolean).slice(0, 4).join(', '), dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['dashboard'] }));
@@ -6852,7 +6898,7 @@
                 up = ((g.lineage[e2.tbl] || {}).from || []).length;
                 Object.keys(g.lineage).forEach(k => { if (k !== e2.tbl && ((g.lineage[k] || {}).from || []).includes(e2.tbl)) down++; });
                 (g.businessObjects || []).forEach(bo => { if ((bo.sources || []).some(s2 => s2.table === e2.tbl)) down++; });
-                (g.useCases || []).forEach(uc => { if ((uc.tables || []).includes(e2.tbl)) down++; });
+                (g.assets || []).forEach(a2 => { if (a2.kind === 'process' && ((a2.tables || []).includes(e2.tbl) || (a2.columns || []).some(c2 => c2.table === e2.tbl))) down++; });
             } else if (e2.type === 'column' && typeof modelImpact === 'function') down = modelImpact(e2.tbl, e2.col).length;
             else if (e2.type === 'bo') { const bo = g.businessObjects.find(x => x.id === e2.bo); if (bo) { up = (bo.sources || []).length; down = new Set(boAllAttrRows(bo).flatMap(r => r.el.usedBy || [])).size; } }
             return [up, down];
@@ -7198,8 +7244,9 @@
             });
             // Lineage déclaré (tables alimentées)
             Object.entries(state.governance.lineage || {}).forEach(([derived, v]) => { if ((v.from || []).includes(tn) && !col) out.push({ type: '🕸️ Alimente', name: derived, how: 'lineage' }); });
-            // Cas d'usage (colonnes critiques)
-            (state.governance.useCases || []).forEach(uc => { if ((uc.columns || []).some(c2 => c2.table === tn && usesCol(c2.col))) out.push({ type: '🎯 Cas d\'usage', name: uc.name, how: 'colonne critique' }); });
+            // Processus (tables et colonnes critiques déclarées)
+            (state.governance.assets || []).forEach(a2 => { const hitCol = (a2.columns || []).some(c2 => c2.table === tn && usesCol(c2.col));
+                if (hitCol || (!col && (a2.tables || []).includes(tn))) out.push({ type: a2.kind === 'process' ? '⚙️ Processus' : '🖥 Application', name: a2.name, how: hitCol ? 'colonne critique' : 'table utilisée' }); });
             return out;
         }
         function renderModelImpactPanel() {
@@ -7672,8 +7719,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '3.6.0';
+        const APP_VERSION = '3.7.0';
         const APP_CHANGELOG = [
+            { v: '3.7.0', d: '2026-07-22', t: 'Fusion cas d\'usage → processus, domaines', items: [
+                'Les « cas d\'usage » fusionnent dans Applis & processus : vos cas d\'usage existants sont migrés automatiquement en processus, sans perte (nom, responsable, criticité, tables, colonnes critiques, objets métier, applications).',
+                'Un processus s\'appuie désormais sur une ou plusieurs applications, et déclare les tables et colonnes qu\'il utilise.',
+                'Domaine métier sur les applications et les processus (hérité automatiquement des applications liées si non saisi).',
+                'Analyse d\'impact, lineage, catalogue, check-list objet et import en masse rebranchés sur les processus.'] },
             { v: '3.6.0', d: '2026-07-22', t: 'Règles conditionnelles & versionnage', items: [
                 'Règles de qualité : nouveau type « Condition (si… alors…) » — si un attribut est rempli, vide, ou vaut une valeur (fixe ou dans une liste), alors un autre attribut doit être vide, rempli, ou valoir une valeur (fixe ou dans une liste).',
                 'Numéro de version affiché dans l\'en-tête, avec ces notes de version.'] },
