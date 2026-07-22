@@ -270,7 +270,7 @@
                 <!-- Pastille logo dégradée -->
                 <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/30 flex items-center justify-center text-2xl">🏛️</div>
                 <div class="leading-tight">
-                    <h1 class="text-xl font-black tracking-tight text-slate-900">Studio&nbsp;Data</h1>
+                    <h1 class="text-xl font-black tracking-tight text-slate-900 flex items-center gap-2">Studio&nbsp;Data <button id="appVersionBadge" onclick="openVersionNotes()" title="Voir les notes de version" aria-label="Notes de version" class="text-[10px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5 hover:bg-indigo-100 transition-colors"></button></h1>
                     <p class="text-[11px] font-semibold text-slate-400 tracking-wide">Data Gouvernance · Qualité · Lignage</p>
                 </div>
             </div>
@@ -7175,7 +7175,7 @@
             });
             // Règles de qualité
             (state.governance.qualityRules || []).forEach(r => {
-                if (r.table === tn && (usesCol(r.col) || (!col ? false : (String((r.p || {}).cols || '').split(';').map(x => x.trim()).includes(col) || txtHasCol((r.p || {}).formula))))) out.push({ type: '📏 Règle qualité', name: r.name, how: QR_TYPES[r.type] || r.type });
+                if (r.table === tn && (usesCol(r.col) || (!col ? false : (String((r.p || {}).cols || '').split(';').map(x => x.trim()).includes(col) || String((r.p || {}).thenCol || '') === col || txtHasCol((r.p || {}).formula))))) out.push({ type: '📏 Règle qualité', name: r.name, how: QR_TYPES[r.type] || r.type });
                 if ((r.p || {}).refTable === tn && usesCol((r.p || {}).refCol)) out.push({ type: '📏 Règle qualité', name: r.name, how: 'table de référence (FK)' });
             });
             // Tableaux de bord
@@ -7669,8 +7669,42 @@
             c.innerHTML = html;
         }
 
+        // ======================= VERSIONNAGE DE L'APPLICATION =======================
+        // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
+        // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
+        const APP_VERSION = '3.6.0';
+        const APP_CHANGELOG = [
+            { v: '3.6.0', d: '2026-07-22', t: 'Règles conditionnelles & versionnage', items: [
+                'Règles de qualité : nouveau type « Condition (si… alors…) » — si un attribut est rempli, vide, ou vaut une valeur (fixe ou dans une liste), alors un autre attribut doit être vide, rempli, ou valoir une valeur (fixe ou dans une liste).',
+                'Numéro de version affiché dans l\'en-tête, avec ces notes de version.'] },
+            { v: '3.5.0', d: '2026-07-22', t: 'Préparation de données', items: [
+                'Les « Recettes » deviennent « 🧹 Préparation de données », avec une explication intégrée à l\'écran (problème, solution, exemple).',
+                'Les tables produites sont préfixées PROPRE_.'] },
+            { v: '3.4.0', d: '2026-07-22', t: 'Catalogue consommateur de données', items: [
+                'Recherche héros avec exemples et chiffres de confiance réels, facettes à compteurs vivants, cartes de confiance.',
+                'Fiche en drawer : à quoi ça sert, identité, structure avec les vrais types de colonnes, traçabilité amont/aval, actions.'] },
+            { v: '3.3.0', d: '2026-07-22', t: 'Confort de saisie & import en masse', items: [
+                'Le défilement et le champ actif sont préservés à chaque modification.',
+                'Usages « par application », import en masse de la gouvernance avec modèles pré-remplis, taux de remplissage jamais trompeurs, lineage par attribut lisible.'] },
+            { v: '3.2.0', d: '2026-07-22', t: 'Sauvegarde & performances', items: [
+                'Centre de sauvegarde permanent dans l\'en-tête.',
+                'Correctif majeur de performance de la Gouvernance (graphes cycliques).'] },
+            { v: '3.1.0', d: '2026-07-21', t: 'Passe UX écran par écran', items: [
+                'Menu Gouvernance en 5 familles, sources enrichies, inspecteur en drawer, états vides guidants.'] },
+            { v: '3.0.0', d: '2026-07-21', t: 'Refonte ergonomique V3', items: [
+                'Jetons de design, barre de contexte, tableau de profil enrichi, drawer, tooltips, accessibilité.'] },
+        ];
+        function appVersionShort() { return APP_VERSION.replace(/\.0$/, ''); }
+        function openVersionNotes() {
+            const body = `<div class="dsect"><p class="text-[12px] text-slate-500">Chaque évolution de Studio Data porte un numéro de version <strong>majeur.mineur.correctif</strong> : le mineur augmente à chaque évolution fonctionnelle, le majeur pour les refontes d'ampleur.</p></div>` +
+                APP_CHANGELOG.map(c2 => `<div class="dsect"><h4>v${c2.v} — ${escapeHTML(c2.t)} <span class="font-normal text-slate-400 text-[10px]">(${new Date(c2.d).toLocaleDateString('fr-FR')})</span></h4>
+                    <ul class="text-[12px] text-slate-600 space-y-1 mt-1">${c2.items.map(it => `<li>• ${escapeHTML(it)}</li>`).join('')}</ul></div>`).join('');
+            openUxDrawer({ sem: '', title: 'Studio Data — v' + appVersionShort(), sub: 'Notes de version', body, foot: '' });
+        }
+        (function () { const b2 = el('appVersionBadge'); if (b2) b2.textContent = 'v' + appVersionShort(); })();
+
         // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
-        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)' };
+        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', cond: 'Condition (si… alors…)', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)' };
         const QR_W = { 'Faible': 1, 'Moyenne': 2, 'Haute': 3, 'Critique': 5 };
         let qrSnapshots = [];   // instantanés E2 (persistés à part, comme l'historique qualité)
         let qrChartInst = null;
@@ -7681,7 +7715,7 @@
             if (f.startsWith('p.')) { r.p = r.p || {}; r.p[f.slice(2)] = v; } else r[f] = v;
             if (f === 'table') { r.col = ''; r.p = {}; }
             persistAppState();
-            if (f === 'table' || f === 'type' || f === 'enabled' || f === 'p.refTable') renderQualityRules();
+            if (f === 'table' || f === 'type' || f === 'enabled' || f === 'p.refTable' || f === 'p.ifOp' || f === 'p.thenOp') renderQualityRules();
         }
         function qrDup(id) { const r = qrRules().find(x => x.id === id); if (!r) return; const c = JSON.parse(JSON.stringify(r)); c.id = 'qr_' + generateId(); c.name = r.name + ' (copie)'; delete c.last; qrRules().push(c); persistAppState(); renderQualityRules(); }
         function qrDel(id) { state.governance.qualityRules = qrRules().filter(x => x.id !== id); persistAppState(); renderQualityRules(); }
@@ -7702,6 +7736,18 @@
                 case 'fk': { const rt = tableByName(P.refTable); if (!rt || !P.refCol) return null;
                     const nv = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
                     return `(${nv(c)} IS NOT NULL AND ${nv(c)} NOT IN (SELECT ${nv(sqlIdent(P.refCol))} FROM ${sqlIdent(duckTableName(rt.id))} WHERE ${nv(sqlIdent(P.refCol))} IS NOT NULL))`; }
+                case 'cond': {
+                    const c2 = P.thenCol && P.thenCol !== r.col ? sqlIdent(P.thenCol) : null; if (!c2) return null;
+                    const raw2 = `CAST(${c2} AS VARCHAR)`;
+                    const part = (cc, rr, op, val) => {
+                        if (op === 'filled') return `(${cc} IS NOT NULL AND TRIM(${rr}) <> '')`;
+                        if (op === 'empty') return `(${cc} IS NULL OR TRIM(${rr}) = '')`;
+                        const vals = String(val || '').split(';').map(x => x.trim()).filter(Boolean); if (!vals.length) return null;
+                        return `(${cc} IS NOT NULL AND UPPER(TRIM(${rr})) IN (${vals.map(v2 => sqlLiteral(v2.toUpperCase())).join(', ')}))`;
+                    };
+                    const ifC = part(c, raw, P.ifOp || 'filled', P.ifVal);
+                    const thenC = part(c2, raw2, P.thenOp || 'empty', P.thenVal);
+                    return (ifC && thenC) ? `(${ifC} AND NOT ${thenC})` : null; }
                 case 'expr': { const e2 = String(P.formula || '').trim(); return e2 ? `(NOT COALESCE((${tdFormulaSql(e2)}), TRUE))` : null; }
                 case 'fresh': { const n = parseInt(P.days) || 365;
                     const d = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
@@ -7797,6 +7843,11 @@
                 case 'inlist': return colSel('col', r.col) + ' ' + inp('list', P.list, 'valeurs autorisées séparées par ;', 'w-56');
                 case 'fk': { const others = Object.values(state.tables).filter(t2 => t2.status === 'ready' && t2.name !== r.table); const rt = tableByName(P.refTable);
                     return colSel('col', r.col) + ` → <select onchange="qrSet('${r.id}','p.refTable',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[120px]"><option value="">— table réf —</option>${others.map(t2 => `<option value="${escapeHTML(t2.name)}" ${P.refTable === t2.name ? 'selected' : ''}>${escapeHTML(t2.name)}</option>`).join('')}</select> <select onchange="qrSet('${r.id}','p.refCol',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[110px]"><option value="">— col —</option>${(rt ? rt.headers : []).map(h => `<option value="${escapeHTML(h)}" ${P.refCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`; }
+                case 'cond': {
+                    const opSel = (f, cur, dft) => `<select onchange="qrSet('${r.id}','p.${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white">${[['filled', 'est rempli'], ['empty', 'est vide'], ['val', 'vaut (valeur ou liste)']].map(([k, l]) => `<option value="${k}" ${(cur || dft) === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+                    const thenSel = `<select onchange="qrSet('${r.id}','p.thenCol',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[130px]"><option value="">— colonne —</option>${hs.filter(h => h !== r.col).map(h => `<option value="${escapeHTML(h)}" ${P.thenCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+                    return `<span class="font-bold text-slate-500">Si</span> ${colSel('col', r.col)} ${opSel('ifOp', P.ifOp, 'filled')}${(P.ifOp || 'filled') === 'val' ? ' ' + inp('ifVal', P.ifVal, 'valeur, ou liste séparée par ;', 'w-44') : ''}
+                        <span class="font-bold text-slate-500">alors</span> ${thenSel} ${opSel('thenOp', P.thenOp, 'empty')}${(P.thenOp || 'empty') === 'val' ? ' ' + inp('thenVal', P.thenVal, 'valeur, ou liste séparée par ;', 'w-44') : ''}`; }
                 case 'expr': return inp('formula', P.formula, 'ex : [DATE_FIN] >= [DATE_DEBUT]', 'w-64');
                 case 'fresh': return colSel('col', r.col) + ' âge max ' + inp('days', P.days, '365', 'w-14') + ' jours';
                 default: return '';
