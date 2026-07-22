@@ -252,7 +252,8 @@
                 </div>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-                <span id="persistStatusTop" class="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5"></span>
+                <button onclick="openBackupCenter()" id="persistStatusTop" title="Ouvrir le centre de sauvegarde" aria-label="Ouvrir le centre de sauvegarde" class="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-3 py-1.5 hover:bg-slate-200 transition-colors"></button>
+                <button onclick="openBackupCenter()" aria-label="Centre de sauvegarde" class="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl flex items-center gap-2 transition-colors">💾 Sauvegarde</button>
                 <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1">
                     <button onclick="document.getElementById('configUploader').click()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg flex items-center gap-2 transition-colors"><i data-lucide="upload" class="w-3.5 h-3.5"></i> Config</button>
                     <div class="w-px h-4 bg-slate-200"></div>
@@ -2183,7 +2184,7 @@
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
             else if (govState.tab === 'catalog') c.innerHTML = renderGovCatalog();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
-            else if (govState.tab === 'share') { c.innerHTML = renderGovShare(); fillStorageEstimate(); fillBackupsList(); }
+            else if (govState.tab === 'share') { govState.tab = 'catalog'; c.innerHTML = renderGovCatalog(); openBackupCenter(); }
             else if (govState.tab === 'lineage') { const _am = govState.lineageView === 'attr'; const _bos = state.governance.businessObjects || [];
                 c.innerHTML = '<div id="lineageFsWrap"><div class="flex items-center gap-2 mb-2 flex-wrap">'
                 + '<div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">'
@@ -4380,6 +4381,41 @@
         }
 
         // ---- Sauvegarde & partage (bundle fichier) ----
+        // ======================= V3 UX : CENTRE DE SAUVEGARDE (sorti du menu Gouvernance) =======================
+        // Accessible en permanence depuis l'en-tête — panneau latéral : l'écran courant reste visible.
+        function openBackupCenter() {
+            el('uxDrawer').classList.add('wide');
+            openUxDrawer({ sem: '', title: '💾 Sauvegarde & partage', sub: 'Persistance locale automatique · dossier de secours · bundles d\'échange — tout reste sur cette machine',
+                body: `<div id="bkStatusUx" class="dsect"></div>` + renderGovShare(), foot: `
+                <button onclick="uxSaveNow(this)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">💾 Sauvegarder maintenant</button>
+                <button onclick="closeBackupCenter()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Fermer (Échap)</button>` });
+            renderBkStatusUx();
+            try { fillStorageEstimate(); fillBackupsList(); } catch (e) {}
+            try { lucide.createIcons({ root: el('uxDrawerBody') }); } catch (e) {}
+        }
+        function closeBackupCenter() { el('uxDrawer').classList.remove('wide'); closeUxDrawer(); }
+        function renderBkStatusUx() {
+            const b = el('bkStatusUx'); if (!b) return;
+            const saved = (el('persistStatusTop') || { textContent: '' }).textContent.trim();
+            const chip = (okState, txt) => `<span class="qual ${okState}" style="font-size:11px">${txt}</span>`;
+            b.innerHTML = `<div class="flex items-center gap-2 flex-wrap">
+                ${state.noPersist ? chip('q-bad', '⛔ Persistance locale DÉSACTIVÉE — rien n\'est conservé') : chip('q-ok', '✓ Persistance locale active (IndexedDB)')}
+                ${saved ? chip('q-ok', escapeHTML(saved)) : ''}
+                <span id="bkDirChip">${chip('q-warn', '📂 Dossier de secours : vérification…')}</span>
+            </div>`;
+            (async () => { try { const h = await idbGet('meta', 'backupDir'); const c2 = el('bkDirChip');
+                if (c2) c2.innerHTML = h ? chip('q-ok', '📂 Dossier de secours configuré : ' + escapeHTML(h.name || '')) : chip('q-warn', '📂 Aucun dossier de secours — configurez-le ci-dessous (survit aux purges du navigateur)');
+            } catch (e) { const c2 = el('bkDirChip'); if (c2) c2.innerHTML = ''; } })();
+        }
+        async function uxSaveNow(btn) {
+            if (btn) btn.disabled = true;
+            try {
+                persistAppState();
+                try { await fsBackupWrite(true); } catch (e2) {}
+                showSuccess('💾 Configuration sauvegardée (IndexedDB' + ' + dossier de secours si configuré).');
+                renderBkStatusUx();
+            } finally { if (btn) btn.disabled = false; }
+        }
         function renderGovShare() {
             const perims = state.governance.perimeters;
             return `
@@ -4653,7 +4689,6 @@
                   { g: 'assets', icon: '🖥', label: 'Applis & processus', fam: 'Tracer' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Tracer' },
                   { g: 'usecases', icon: '🎯', label: 'Cas d\'usage', fam: 'Partager' },
-                  { g: 'share', icon: '💾', label: 'Sauvegarde', fam: 'Partager' },
               ] },
         ];
         const PHASE_COLORS = {
