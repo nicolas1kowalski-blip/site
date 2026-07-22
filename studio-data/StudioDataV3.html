@@ -870,8 +870,8 @@
         </div>
         <div id="step-13" class="animate-fade-in hidden">
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <h2 class="text-lg font-bold text-teal-800 mb-1 flex items-center gap-2">🧪 Recettes de transformation</h2>
-                <p class="text-xs text-slate-500 mb-4">Enchaînez des étapes de nettoyage/normalisation attachées à une source : le résultat est une table dérivée <strong>reproductible</strong>, relancée automatiquement quand la source est mise à jour, et journalisée dans le lineage.</p>
+                <h2 class="text-lg font-bold text-teal-800 mb-1 flex items-center gap-2">🧹 Préparation de données</h2>
+                <p class="text-xs text-slate-500 mb-4">Décrivez <strong>une seule fois</strong> le nettoyage d'une source (filtrer, standardiser, dédoublonner, enrichir…) : Studio Data produit une table propre, sans toucher à l'original, et <strong>refait le nettoyage automatiquement</strong> à chaque mise à jour de la source.</p>
                 <div id="rcContent"></div>
             </div>
         </div>
@@ -4938,7 +4938,7 @@
             { id: 'data', badge: '①', label: 'Données & Modèle', desc: 'Charger & modéliser', color: 'blue',
               tabs: [ { n: 11, icon: '🏠', label: 'Cockpit' }, { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' } ] },
             { id: 'etl', badge: '②', label: 'Exploitation', desc: 'ETL, croisements & analyse', color: 'indigo',
-              tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 13, icon: '🧪', label: 'Recettes' }, { n: 14, icon: '📋', label: 'Tableaux de bord' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
+              tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 13, icon: '🧹', label: 'Préparation' }, { n: 14, icon: '📋', label: 'Tableaux de bord' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
             { id: 'quality', badge: '③', label: 'Qualité & Audit', desc: 'Profiling, anomalies, doublons', color: 'amber',
               tabs: [ { n: 8, icon: '✅', label: 'Qualité & Audit' }, { n: 12, icon: '📏', label: 'Règles & score' }, { n: 15, icon: '🤝', label: 'Rapprochement' } ] },
             // La phase Gouvernance vit dans l'écran 9 : ses sous-onglets (g:...) sont rendus dans la
@@ -5168,7 +5168,7 @@
             const foot = `
                 <button onclick="closeUxDrawer(); govState.dictTable = ${JSON.stringify('%TN%')}.tn || null; openGovTab('dictionary')" data-tn="1" class="hidden"></button>
                 <button onclick="uxGoDictionary()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">📖 Voir dans le dictionnaire</button>
-                <button onclick="uxGoClean()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-bold">🧹 Nettoyer (recette)</button>`;
+                <button onclick="uxGoClean()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-bold">🧹 Nettoyer (préparation)</button>`;
             _uxDrawerCtx = { tName, cName };
             openUxDrawer({ sem: c.semanticType, title: cName, sub: `${uxTypeOf(c.semanticType)[2]} · table « ${tName} »${dict.owner ? ' · propriétaire : ' + dict.owner : ''}`, body, foot }, row);
         }
@@ -5768,7 +5768,7 @@
                         <div class="mb-3">${(d.sources || []).map(s => `<span class="inline-block text-[10px] bg-blue-50 border border-blue-200 text-blue-700 rounded px-1.5 py-0.5 mr-1 mb-1">${escapeHTML(s.src)}</span>`).join('')}</div>
                         <div class="grid grid-cols-2 gap-2">
                             <button onclick="tdEdit('${t.id}')" class="text-xs bg-white border border-slate-300 rounded px-2 py-1.5 font-bold text-slate-600 hover:bg-slate-50">✏️ Modifier</button>
-                            <button onclick="tdRebuild('${t.id}', this)" class="text-xs bg-white border border-blue-300 rounded px-2 py-1.5 font-bold text-blue-700 hover:bg-blue-50" title="Ré-exécute la recette sur l'état actuel des sources">🔄 Reconstruire</button>
+                            <button onclick="tdRebuild('${t.id}', this)" class="text-xs bg-white border border-blue-300 rounded px-2 py-1.5 font-bold text-blue-700 hover:bg-blue-50" title="Ré-exécute la définition de la table sur l'état actuel des sources">🔄 Reconstruire</button>
                             ${(d.key || []).length && (d.sources || []).length > 1 ? `<button onclick="tdDivergenceReport('${t.id}')" class="text-xs bg-amber-50 border border-amber-300 rounded px-2 py-1.5 font-bold text-amber-700 hover:bg-amber-100 col-span-2">🔍 Rapport d'écarts entre sources</button>` : ''}
                         </div>
                     </div>`;
@@ -6651,7 +6651,7 @@
         // colonnes) sont branchés sur les VRAIES données de l'application.
         let catState = { q: '', f: { type: [], dom: [], sens: [], qb: [], val: [], own: [] }, sort: 'pertinence', view: 'list' };
         let catRes = [];
-        const CAT_TYPES = { table: ['t-table', '▦', 'Table'], view: ['t-view', '◧', 'Vue dérivée'], column: ['t-attr', '◈', 'Attribut'], bo: ['t-obj', '🏛', 'Objet métier'], report: ['t-report', '📊', 'Rapport'], term: ['t-ref', '📖', 'Terme'], perimeter: ['t-ref', '🧩', 'Périmètre'], usecase: ['t-report', '🎯', 'Cas d\'usage'], asset: ['t-ref', '🖥', 'Appli / processus'], rule: ['t-ref', '📏', 'Règle qualité'], recipe: ['t-view', '🧪', 'Recette'], linkage: ['t-ref', '🤝', 'Rapprochement'] };
+        const CAT_TYPES = { table: ['t-table', '▦', 'Table'], view: ['t-view', '◧', 'Vue dérivée'], column: ['t-attr', '◈', 'Attribut'], bo: ['t-obj', '🏛', 'Objet métier'], report: ['t-report', '📊', 'Rapport'], term: ['t-ref', '📖', 'Terme'], perimeter: ['t-ref', '🧩', 'Périmètre'], usecase: ['t-report', '🎯', 'Cas d\'usage'], asset: ['t-ref', '🖥', 'Appli / processus'], rule: ['t-ref', '📏', 'Règle qualité'], recipe: ['t-view', '🧹', 'Préparation'], linkage: ['t-ref', '🤝', 'Rapprochement'] };
         const CAT_SENS = { perso: ['s-perso', '🛡 Personnelle'], conf: ['s-conf', '🔒 Confidentiel'], non: ['s-non', 'Non sensible'] };
         const CAT_VAL = { ok: ['v-ok', '✓ Validé'], todo: ['v-todo', '◷ À valider'], draft: ['v-draft', '◌ Brouillon'] };
         function catNorm(s2) { return String(s2 == null ? '' : s2).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
@@ -6693,7 +6693,7 @@
             (g.useCases || []).forEach(uc => push({ type: 'usecase', id: uc.id, title: uc.name, sub: uc.criticality || '', desc: uc.description || '', dom: '—', own: uc.owner || '', q: null, sens: null, val: null, fresh: null, tags: ['cas d\'usage'] }));
             (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' : 'Application', desc: a.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
             (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.table || '') + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
-            (state.recipes || []).forEach(r => push({ type: 'recipe', id: r.id, title: r.name, sub: (r.src || '?') + ' → ' + (r.out || '?'), desc: (r.steps || []).length + ' étape(s) de transformation reproductibles.', dom: '—', own: '', q: null, sens: null, val: null, fresh: r.lastAt || null, tags: ['recette'] }));
+            (state.recipes || []).forEach(r => push({ type: 'recipe', id: r.id, title: r.name, sub: (r.src || '?') + ' → ' + (r.out || '?'), desc: (r.steps || []).length + ' étape(s) de nettoyage, rejouées automatiquement à chaque mise à jour de la source.', dom: '—', own: '', q: null, sens: null, val: null, fresh: r.lastAt || null, tags: ['préparation'] }));
             (state.dashboards || []).forEach(d2 => push({ type: 'report', id: d2.id, title: d2.name, sub: (d2.tiles || []).length + ' tuile(s)', desc: 'Tableau de bord composable : ' + (d2.tiles || []).map(t2 => t2.title).filter(Boolean).slice(0, 4).join(', '), dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['dashboard'] }));
             (state.linkages || []).forEach(L => push({ type: 'linkage', id: L.id, title: L.name, sub: (L.a || '?') + ' ↔ ' + (L.b || '?'), desc: 'Rapprochement inter-sources (golden record).', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['fuzzy'] }));
             return ix;
@@ -7169,9 +7169,9 @@
             // Recettes
             (state.recipes || []).forEach(r => {
                 if (r.src !== tn) return;
-                if (!col) { out.push({ type: '🧪 Recette', name: r.name + ' → ' + r.out, how: 'source de la recette' }); return; }
+                if (!col) { out.push({ type: '🧹 Préparation', name: r.name + ' → ' + r.out, how: 'source de la préparation' }); return; }
                 const st = (r.steps || []).find(st2 => { const P = st2.p || {}; return P.col === col || String(P.keys || '').split(';').map(x => x.trim()).includes(col) || String(P.cols || '').split(';').map(x => x.trim()).includes(col) || txtHasCol(P.formula); });
-                if (st) out.push({ type: '🧪 Recette', name: r.name + ' → ' + r.out, how: 'étape ' + (RC_STEPS[st.type] || st.type) });
+                if (st) out.push({ type: '🧹 Préparation', name: r.name + ' → ' + r.out, how: 'étape ' + (RC_STEPS[st.type] || st.type) });
             });
             // Règles de qualité
             (state.governance.qualityRules || []).forEach(r => {
@@ -7437,7 +7437,7 @@
             const html2 = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Rapport Studio Data</title></head><body style="font-family:system-ui;background:#f8fafc;margin:0;padding:28px;color:#0f172a">
                 <h1 style="font-size:22px;margin:0">📄 Rapport de gouvernance & qualité</h1>
                 <p style="font-size:11px;color:#64748b">Généré le ${new Date().toLocaleString('fr-FR')} — produit localement par Studio Data, aucune donnée transmise.</p>
-                <p style="font-size:12px;color:#334155">${srcs.length} source(s) chargée(s) · ${(g.qualityRules || []).length} règle(s) qualité · ${(g.businessObjects || []).length} objet(s) métier · ${dbList().length} tableau(x) de bord · ${(state.recipes || []).length} recette(s)</p>
+                <p style="font-size:12px;color:#334155">${srcs.length} source(s) chargée(s) · ${(g.qualityRules || []).length} règle(s) qualité · ${(g.businessObjects || []).length} objet(s) métier · ${dbList().length} tableau(x) de bord · ${(state.recipes || []).length} préparation(s)</p>
                 <h2 style="font-size:15px;margin-top:22px">🔔 Indicateurs & seuils</h2>${secAlerts}
                 <h2 style="font-size:15px;margin-top:22px">📏 Qualité des données</h2>${secQual}
                 <h2 style="font-size:15px;margin-top:22px">📋 Tableaux de bord</h2>${secDash}
@@ -7464,9 +7464,9 @@
         const RC_CLEAN = { trim: 'espaces début/fin', upper: 'MAJUSCULES', lower: 'minuscules', noaccents: 'sans accents', squeeze: 'espaces multiples → un seul' };
         let rcState = { openId: null, preview: null };
         function rcList() { return state.recipes = state.recipes || []; }
-        function rcAdd() { const r = { id: 'rc_' + generateId(), name: 'Nouvelle recette', src: '', out: '', steps: [] }; rcList().push(r); rcState.openId = r.id; persistAppState(); renderRecipes(); }
+        function rcAdd() { const r = { id: 'rc_' + generateId(), name: 'Nouvelle préparation', src: '', out: '', steps: [] }; rcList().push(r); rcState.openId = r.id; persistAppState(); renderRecipes(); }
         function rcById(id) { return rcList().find(x => x.id === id); }
-        function rcSet(id, f, v) { const r = rcById(id); if (!r) return; r[f] = v; if (f === 'src' && !r.out) r.out = 'RECETTE_' + String(v).replace(/\.[^.]+$/, ''); persistAppState(); if (f === 'src') renderRecipes(); }
+        function rcSet(id, f, v) { const r = rcById(id); if (!r) return; r[f] = v; if (f === 'src' && !r.out) r.out = 'PROPRE_' + String(v).replace(/\.[^.]+$/, ''); persistAppState(); if (f === 'src') renderRecipes(); }
         function rcDel(id) { state.recipes = rcList().filter(x => x.id !== id); persistAppState(); renderRecipes(); }
         function rcAddStep(id, type) { const r = rcById(id); if (!r) return; r.steps.push({ id: 'st_' + generateId(), type, enabled: true, p: {} }); persistAppState(); renderRecipes(); }
         function rcSetStep(id, sid, f, v) { const r = rcById(id); const st = r && r.steps.find(x => x.id === sid); if (!st) return; if (f.startsWith('p.')) st.p[f.slice(2)] = v; else st[f] = v; persistAppState(); if (f === 'enabled' || f === 'type') renderRecipes(); }
@@ -7516,12 +7516,12 @@
         }
         async function rcRun(id, btn) {
             const r = rcById(id); if (!r) return;
-            if (!r.src) return showError('Choisissez la source de la recette.');
+            if (!r.src) return showError('Choisissez la source à préparer.');
             if (!String(r.out || '').trim()) return showError('Donnez un nom à la table produite.');
             const clash = Object.values(state.tables).find(t => t.name === r.out && t.id !== r.targetId);
             if (clash) return showError(`Le nom "${r.out}" est déjà utilisé par une autre source/table.`);
             if (btn) btn.disabled = true;
-            bgTaskStart(`Recette « ${r.name} » en cours`);
+            bgTaskStart(`Préparation « ${r.name} » en cours`);
             try {
                 const { conn } = await getDB();
                 const inner = rcBuildSql(r, null);
@@ -7546,12 +7546,12 @@
                 renderTables(); updateBaseTableSelect(); populateQualTables();
                 try { await persistTableData(tId); } catch (e2) {}
                 persistAppState(); renderRecipes();
-                bgTaskEnd(`🧪 Recette « ${r.name} » : table « ${r.out} » produite (${r.lastRows.toLocaleString('fr-FR')} lignes).`);
+                bgTaskEnd(`🧹 Préparation « ${r.name} » : table propre « ${r.out} » produite (${r.lastRows.toLocaleString('fr-FR')} lignes).`);
                 try { await qrAutoRun(r.out); } catch (e2) {}
-            } catch (e) { bgTaskEnd(); showError('Recette impossible : ' + e.message); }
+            } catch (e) { bgTaskEnd(); showError('Préparation impossible : ' + e.message); }
             finally { if (btn) btn.disabled = false; }
         }
-        async function rcAutoRun(srcName) { for (const r of rcList().filter(x => x.src === srcName && x.steps.length)) { try { await rcRun(r.id, null); } catch (e) { console.warn('Recette auto :', e); } } }
+        async function rcAutoRun(srcName) { for (const r of rcList().filter(x => x.src === srcName && x.steps.length)) { try { await rcRun(r.id, null); } catch (e) { console.warn('Préparation auto :', e); } } }
         async function rcPreview(id, uptoIdx) {
             const r = rcById(id); if (!r) return;
             try {
@@ -7568,7 +7568,7 @@
         }
         function rcExport() {
             const blob = new Blob([JSON.stringify({ kind: 'studio-data-recipes', recipes: rcList().map(r => { const c2 = { ...r }; delete c2.targetId; return c2; }) }, null, 2)], { type: 'application/json' });
-            const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `Recettes_${Date.now()}.json`; document.body.appendChild(a2); a2.click(); a2.remove();
+            const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `Preparations_${Date.now()}.json`; document.body.appendChild(a2); a2.click(); a2.remove();
         }
         function rcImport(inputEl) {
             const f = inputEl.files && inputEl.files[0]; if (!f) return;
@@ -7577,7 +7577,7 @@
                 const j = JSON.parse(rd.result); const list = j && j.kind === 'studio-data-recipes' ? j.recipes : (Array.isArray(j) ? j : null);
                 if (!list) throw new Error('fichier non reconnu.');
                 let n = 0; list.forEach(r => { if (r && r.id && r.steps) { r.id = 'rc_' + generateId(); delete r.targetId; rcList().push(r); n++; } });
-                persistAppState(); renderRecipes(); showSuccess(`🧪 ${n} recette(s) importée(s).`);
+                persistAppState(); renderRecipes(); showSuccess(`🧹 ${n} préparation(s) importée(s).`);
             } catch (e) { showError('Import impossible : ' + e.message); } };
             rd.readAsText(f); inputEl.value = '';
         }
@@ -7602,23 +7602,38 @@
         function renderRecipes() {
             const c = el('rcContent'); if (!c) return;
             const tables = Object.values(state.tables).filter(t => t.status === 'ready' && t.type !== 'designed');
-            let html = `<div class="flex items-center gap-2 mb-4 flex-wrap">
-                <button onclick="rcAdd()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Recette</button>
+            let html = `<details class="bg-teal-50/50 border border-teal-200 rounded-xl mb-4" ${rcList().length ? '' : 'open'}>
+                <summary class="px-4 py-2.5 cursor-pointer text-[12.5px] font-bold text-teal-800 list-none">💡 À quoi sert la préparation de données ? <span class="font-normal text-teal-600 text-[10.5px]">— cliquer pour ouvrir / fermer</span></summary>
+                <div class="px-4 pb-4 text-[12px] text-slate-600 space-y-2">
+                    <p><strong>Le problème.</strong> Vos fichiers arrivent souvent « sales » : doublons, majuscules/minuscules mélangées, espaces parasites, lignes de test… Et à chaque nouvelle version du fichier, il faut refaire le même nettoyage à la main.</p>
+                    <p><strong>La solution.</strong> Décrivez le nettoyage <strong>une seule fois</strong>, comme une liste d'étapes ordonnées. Studio Data fabrique une <strong>nouvelle table propre</strong> — votre source d'origine n'est jamais modifiée — et <strong>rejoue automatiquement ces étapes</strong> chaque fois que la source est mise à jour.</p>
+                    <div class="bg-white border border-teal-100 rounded-lg p-2.5 text-[11.5px] flex items-center gap-2 flex-wrap">
+                        <span class="font-bold">Exemple :</span> <span class="inline-flex items-center bg-teal-50 border border-teal-200 text-teal-800 rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">📥 CLIENTS.csv</span> <span class="text-slate-300">→</span> <span class="inline-flex items-center bg-teal-50 border border-teal-200 text-teal-800 rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">① Filtrer les lignes de test</span> <span class="text-slate-300">→</span> <span class="inline-flex items-center bg-teal-50 border border-teal-200 text-teal-800 rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">② E-mails en minuscules</span> <span class="text-slate-300">→</span> <span class="inline-flex items-center bg-teal-50 border border-teal-200 text-teal-800 rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">③ Dédoublonner sur ID</span> <span class="text-slate-300">→</span> <span class="inline-flex items-center bg-teal-50 border border-teal-200 text-teal-800 rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">🧹 PROPRE_CLIENTS</span>
+                    </div>
+                    <ul class="space-y-1">
+                        <li>• La table propre s'utilise <strong>partout</strong> (extraction, statistiques, objets métier, règles qualité…) comme n'importe quelle source.</li>
+                        <li>• <strong>Même entrée → même sortie</strong> : le résultat est reproductible, et le lien source → table propre est tracé dans le lineage.</li>
+                        <li>• Le bouton 👁 montre l'effet de chaque étape <strong>avant</strong> d'exécuter quoi que ce soit.</li>
+                    </ul>
+                </div>
+            </details>
+            <div class="flex items-center gap-2 mb-4 flex-wrap">
+                <button onclick="rcAdd()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Préparation</button>
                 <span class="flex-grow"></span>
                 <button onclick="rcExport()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬇ Exporter (JSON)</button>
                 <button onclick="el('rcImportFile').click()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600">⬆ Importer</button>
                 <input type="file" id="rcImportFile" accept=".json" class="hidden" onchange="rcImport(this)">
             </div>`;
-            if (!rcList().length) html += emptyStateHtml('🧪', 'Aucune recette pour le moment',
-                'Une recette enchaîne des étapes de nettoyage (filtrer, standardiser, dédoublonner, enrichir…) et produit une table propre, reproductible à chaque mise à jour de la source.',
-                '+ Créer ma première recette', 'rcAdd()');
+            if (!rcList().length) html += emptyStateHtml('🧹', 'Aucune préparation pour le moment',
+                'Une préparation enchaîne des étapes de nettoyage (filtrer, standardiser, dédoublonner, enrichir…) et produit une table propre, refaite automatiquement à chaque mise à jour de la source.',
+                '+ Créer ma première préparation', 'rcAdd()');
             rcList().forEach(r => {
                 const open = rcState.openId === r.id;
                 html += `<details class="border border-teal-200 rounded-xl bg-white mb-3 group" ${open ? 'open' : ''}>
                     <summary class="bg-teal-50/60 px-4 py-2.5 cursor-pointer flex items-center gap-2 flex-wrap list-none" onclick="rcState.openId='${r.id}'">
                         <span class="text-teal-400 group-open:rotate-90 transition-transform">▶</span>
                         <input type="text" value="${escapeHTML(r.name)}" onclick="event.stopPropagation()" onchange="rcSet('${r.id}','name',this.value)" class="font-bold text-sm border border-teal-200 p-1 rounded bg-white w-56">
-                        <span class="text-[11px] text-slate-500">📥 ${escapeHTML(r.src || '?')} → 🧪 <strong>${escapeHTML(r.out || '?')}</strong> · ${r.steps.length} étape(s)</span>
+                        <span class="text-[11px] text-slate-500">📥 ${escapeHTML(r.src || '?')} → 🧹 <strong>${escapeHTML(r.out || '?')}</strong> · ${r.steps.length} étape(s)</span>
                         ${r.lastAt ? `<span class="text-[10px] text-emerald-600 font-bold">✔ ${new Date(r.lastAt).toLocaleString('fr-FR')} · ${(r.lastRows || 0).toLocaleString('fr-FR')} lignes</span>` : ''}
                         <span class="ml-auto"></span>
                         <button onclick="event.preventDefault(); rcRun('${r.id}', this)" class="bg-teal-600 text-white text-xs font-bold px-3 py-1 rounded">▶ Exécuter</button>
@@ -7647,7 +7662,7 @@
                             ${Object.entries(RC_STEPS).map(([k, l]) => `<button onclick="rcAddStep('${r.id}','${k}')" class="text-[11px] bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-600 hover:bg-teal-50">${l}</button>`).join('')}
                         </div>
                         <div id="rcPreview-${r.id}" class="mt-3"></div>
-                        <p class="text-[10px] text-slate-400 mt-2">La recette est relancée automatiquement quand « ${escapeHTML(r.src || 'la source')} » est mise à jour · la table produite apparaît dans les Sources et le lineage · même entrée → même sortie.</p>
+                        <p class="text-[10px] text-slate-400 mt-2">La préparation est rejouée automatiquement quand « ${escapeHTML(r.src || 'la source')} » est mise à jour · la table propre apparaît dans les Sources et le lineage · même entrée → même sortie.</p>
                     </div>
                 </details>`;
             });
