@@ -210,6 +210,29 @@
         /* Familles de sous-onglets Gouvernance */
         .subfam{align-self:center;font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:0 6px 2px 12px;border-left:1px solid var(--border);white-space:nowrap}
         .subfam:first-child{border-left:none;padding-left:2px}
+        /* Catalogue « consommateur de données » */
+        .cat-hero{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;border-radius:var(--radius);padding:18px 20px;margin-bottom:16px}
+        .cat-bigsearch{display:flex;align-items:center;gap:10px;background:#fff;border-radius:11px;padding:11px 15px;box-shadow:var(--shadow-lg);max-width:720px}
+        .cat-bigsearch input{flex:1;border:none;outline:none;font-size:14px;color:var(--ink);background:none}
+        .cat-ex{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#e2e8f0;border-radius:20px;padding:3px 11px;font-size:11px;font-weight:600;cursor:pointer}
+        .cat-ex:hover{background:rgba(255,255,255,.22)}
+        .cat-hs{display:flex;flex-direction:column;font-size:10.5px;color:#93a4bd}
+        .cat-hs b{font-size:17px;color:#fff;font-weight:800}
+        .cat-fitem{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:4px 6px;border-radius:7px;font-size:12px;color:var(--ink);cursor:pointer}
+        .cat-fitem:hover{background:var(--panel-2)} .cat-fitem.on{background:#f0fdf4}
+        .cat-fitem .cnt{margin-left:auto;font-size:10.5px;color:var(--faint);background:var(--panel-2);border-radius:10px;padding:1px 7px}
+        .cat-fitem.on .cnt{background:#dcfce7;color:#166534}
+        .achip-ux{display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer}
+        .cat-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;box-shadow:var(--shadow);cursor:pointer;transition:.1s}
+        .cat-card:hover{border-color:#a7f3d0;box-shadow:0 4px 16px rgba(5,150,105,.12);transform:translateY(-1px)}
+        .cat-tico{width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:#fff}
+        .t-table{background:#0ea5e9}.t-attr{background:#8b5cf6}.t-obj{background:#059669}.t-report{background:#f59e0b}.t-view{background:#6366f1}.t-ref{background:#0f172a}
+        .cat-sens{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px}
+        .s-perso{background:#fdf2f8;color:#be185d;border:1px solid #fbcfe8}.s-conf{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}.s-non{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}
+        .cat-val{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700}
+        .v-ok{color:var(--ok)}.v-todo{color:var(--warn)}.v-draft{color:var(--faint)}
+        .cat-oav{width:20px;height:20px;border-radius:50%;color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+        .cat-tag{font-size:10px;color:var(--data);background:#eff6ff;border:1px solid #dbeafe;border-radius:6px;padding:2px 7px}
         /* Badges de format (écran Sources) */
         .fmt-ux{font-size:9px;font-weight:800;color:#fff;border-radius:5px;padding:2px 6px;letter-spacing:.3px}
         .fmt-csv{background:#0ea5e9}.fmt-xlsx{background:#16a34a}.fmt-api{background:#8b5cf6}.fmt-extr{background:#9333ea}.fmt-built{background:#2563eb}.fmt-txt{background:#64748b}.fmt-json{background:#d97706}
@@ -6622,100 +6645,267 @@
         }
 
         // ======================= E10 (V2) : CATALOGUE DE DONNÉES RECHERCHABLE =======================
-        // Index plein-texte 100 % local, construit sur les MÉTADONNÉES uniquement (noms, définitions,
-        // propriétaires, statuts) — jamais sur les valeurs des données. Recherche insensible aux accents.
-        let catState = { q: '', type: '', status: '', level: '', sel: null };
+        // Refonte « consommateur de données » (maquette catalogue.html) : recherche d'abord,
+        // facettes vivantes, cartes de confiance, fiche en panneau latéral. 100 % local,
+        // métadonnées uniquement — les signaux (qualité, sensibilité, validation, types de
+        // colonnes) sont branchés sur les VRAIES données de l'application.
+        let catState = { q: '', f: { type: [], dom: [], sens: [], qb: [], val: [], own: [] }, sort: 'pertinence', view: 'list' };
         let catRes = [];
-        const CAT_TYPES = { source: ['📥', 'Source'], column: ['🧬', 'Attribut'], bo: ['🏛️', 'Objet métier'], term: ['📖', 'Terme'], perimeter: ['🧩', 'Périmètre'], usecase: ['🎯', 'Cas d\'usage'], asset: ['🖥️', 'Appli / processus'], rule: ['📏', 'Règle qualité'], recipe: ['🧪', 'Recette'], dashboard: ['📋', 'Tableau de bord'], linkage: ['🤝', 'Rapprochement'] };
+        const CAT_TYPES = { table: ['t-table', '▦', 'Table'], view: ['t-view', '◧', 'Vue dérivée'], column: ['t-attr', '◈', 'Attribut'], bo: ['t-obj', '🏛', 'Objet métier'], report: ['t-report', '📊', 'Rapport'], term: ['t-ref', '📖', 'Terme'], perimeter: ['t-ref', '🧩', 'Périmètre'], usecase: ['t-report', '🎯', 'Cas d\'usage'], asset: ['t-ref', '🖥', 'Appli / processus'], rule: ['t-ref', '📏', 'Règle qualité'], recipe: ['t-view', '🧪', 'Recette'], linkage: ['t-ref', '🤝', 'Rapprochement'] };
+        const CAT_SENS = { perso: ['s-perso', '🛡 Personnelle'], conf: ['s-conf', '🔒 Confidentiel'], non: ['s-non', 'Non sensible'] };
+        const CAT_VAL = { ok: ['v-ok', '✓ Validé'], todo: ['v-todo', '◷ À valider'], draft: ['v-draft', '◌ Brouillon'] };
         function catNorm(s2) { return String(s2 == null ? '' : s2).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+        function catOwnColor(nm) { const P2 = ['#2563eb', '#059669', '#8b5cf6', '#f59e0b', '#0ea5e9', '#dc2626', '#0f172a']; let h = 0; for (const ch of String(nm)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return P2[h % P2.length]; }
+        function catSensOf(level) { return level === 'personnel' ? 'perso' : (level === 'confidentiel' ? 'conf' : (level ? 'non' : null)); }
+        function catValOf(st2) { return st2 === 'Validé' ? 'ok' : (st2 === 'Proposé' ? 'todo' : (st2 ? 'draft' : null)); }
+        function catQOf(tableName) {
+            // Score réel : dernier instantané des règles (E2), sinon complétude du dernier audit.
+            const sn = (typeof qrSnapshots !== 'undefined' && qrSnapshots.length) ? qrSnapshots[qrSnapshots.length - 1] : null;
+            if (sn && sn.tables && sn.tables[tableName] && sn.tables[tableName].score != null) return Math.round(sn.tables[tableName].score);
+            const lq = lastAuditFor(tableName);
+            return lq && lq.avgCompleteness != null ? Math.round(lq.avgCompleteness) : null;
+        }
         function catBuildIndex() {
             const g = state.governance; const ix = [];
-            const push = (type, id, title, sub, text, meta, extra) => ix.push(Object.assign({ type, id, title: String(title || ''), sub: String(sub || ''), blob: catNorm([title, sub, text].filter(Boolean).join(' ')), meta: meta || {} }, extra || {}));
+            const push = e2 => { e2.blob = catNorm([e2.title, e2.sub, e2.desc, e2.dom, e2.own, (e2.tags || []).join(' ')].join(' ')); ix.push(e2); };
             Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
                 const d = g.dictionary[t.name] || {};
-                push('source', t.name, t.name, d.description || '', (t.headers || []).join(' ') + ' ' + (d.owner || '') + ' ' + (d.sourceSystem || '') + ' ' + (t.type || ''), { 'Type': t.type || '—', 'Colonnes': String((t.headers || []).length), 'Propriétaire': d.owner || '—', 'Système source': d.sourceSystem || '—' }, { status: d.status || '', statusAt: d.statusAt, statusBy: d.statusBy });
+                let worst = null; (t.headers || []).forEach(h => { const lv = pvLevelOf(t.name, h); if (lv === 'personnel') worst = 'personnel'; else if (lv === 'confidentiel' && worst !== 'personnel') worst = 'confidentiel'; else if (!worst) worst = lv; });
+                push({ type: t.type === 'extraction' ? 'view' : 'table', id: t.id, title: t.name, sub: (t.headers || []).length + ' colonnes',
+                    desc: d.description || '', dom: String(t.theme || '').trim() || '—', own: d.owner || '', q: catQOf(t.name),
+                    sens: catSensOf(worst), val: catValOf(d.status), fresh: t.lastRefresh || null, rows: t.lastRows != null ? t.lastRows : null,
+                    tags: [t.type === 'extraction' ? 'dérivée' : (t.type || 'table'), String(t.theme || '').trim()].filter(Boolean), tbl: t.name });
+                const lq = lastAuditFor(t.name);
                 (t.headers || []).forEach(h => {
-                    const lvl = pvLevelOf(t.name, h);
-                    push('column', t.name, h, 'dans ' + t.name, t.name, { 'Table': t.name, 'Sensibilité': (PV_LEVELS[lvl] || ['', lvl]).join(' ') }, { level: lvl });
+                    const cm = ((d.columns || {})[h]) || {};
+                    const def = cm.definition || (colDefFor(t.name, h) || {}).def || '';
+                    const comp = lq && lq.columnsSummary && lq.columnsSummary[h] ? Math.round(lq.columnsSummary[h].comp) : null;
+                    push({ type: 'column', id: t.id + '\u0001' + h, title: h, sub: 'dans ' + t.name, desc: def, dom: String(t.theme || '').trim() || '—',
+                        own: d.owner || '', q: comp, sens: catSensOf(pvLevelOf(t.name, h)), val: cm.term || def ? 'ok' : null,
+                        fresh: t.lastRefresh || null, tags: [cm.term, cm.technicalType].filter(Boolean), tbl: t.name, col: h });
                 });
             });
-            (g.businessObjects || []).forEach(bo => push('bo', bo.id, bo.name, bo.definition || '', (bo.elements || []).map(e2 => e2.name).join(' ') + ' ' + (bo.globalOwner || ''), { 'Propriétaire': bo.globalOwner || '—', 'Attributs': String((bo.elements || []).length), 'Définition': bo.definition || '—' }, { status: bo.status || '', statusAt: bo.statusAt, statusBy: bo.statusBy }));
-            (g.glossary || []).forEach(t2 => push('term', t2.id, t2.term, t2.definition || '', (t2.links || []).map(l => l.table + ' ' + l.col).join(' '), { 'Définition': t2.definition || '—', 'Colonnes liées': String((t2.links || []).length) }));
-            (g.perimeters || []).forEach(p2 => push('perimeter', p2.id, p2.name, p2.description || '', (p2.tables || []).join(' '), { 'Description': p2.description || '—', 'Tables': (p2.tables || []).join(', ') || '—' }));
-            (g.useCases || []).forEach(uc => push('usecase', uc.id, uc.name, uc.description || '', (uc.owner || '') + ' ' + (uc.tables || []).join(' '), { 'Responsable': uc.owner || '—', 'Criticité': uc.criticality || '—', 'Tables': (uc.tables || []).join(', ') || '—' }));
-            (g.assets || []).forEach(a => push('asset', a.id, a.name, a.kind === 'app' ? 'Application' : 'Processus', a.description || '', { 'Nature': a.kind === 'app' ? 'Application' : 'Processus', 'Criticité': a.criticality || '—' }));
-            (g.qualityRules || []).forEach(r => push('rule', r.id, r.name, (r.table || '') + (r.col ? ' · ' + r.col : ''), (QR_TYPES[r.type] || r.type) + ' ' + (r.crit || ''), { 'Table': r.table || '—', 'Colonne': r.col || '—', 'Contrôle': QR_TYPES[r.type] || r.type, 'Criticité': r.crit || '—', 'Active': r.enabled === false ? 'non' : 'oui' }));
-            (state.recipes || []).forEach(r => push('recipe', r.id, r.name, (r.src || '?') + ' → ' + (r.out || '?'), (r.steps || []).map(s2 => s2.kind).join(' '), { 'Source': r.src || '—', 'Table produite': r.out || '—', 'Étapes': String((r.steps || []).length) }));
-            (state.dashboards || []).forEach(d2 => push('dashboard', d2.id, d2.name, (d2.tiles || []).length + ' tuile(s)', (d2.tiles || []).map(t2 => t2.title).join(' '), { 'Tuiles': (d2.tiles || []).map(t2 => t2.title).filter(Boolean).join(', ') || '—' }));
-            (state.linkages || []).forEach(L => push('linkage', L.id, L.name, (L.a || '?') + ' ↔ ' + (L.b || '?'), '', { 'Source A': L.a || '—', 'Source B': L.b || '—', 'Décisions humaines': String(Object.keys(L.decisions || {}).length) }));
+            (g.businessObjects || []).forEach(bo => push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
+                desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
+                tags: ['objet métier'], bo: bo.id }));
+            (g.glossary || []).forEach(t2 => push({ type: 'term', id: t2.id, title: t2.term, sub: (t2.links || []).length + ' colonne(s) liée(s)', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null, tags: ['glossaire'] }));
+            (g.perimeters || []).forEach(p2 => push({ type: 'perimeter', id: p2.id, title: p2.name, sub: (p2.tables || []).length + ' table(s)', desc: p2.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [] }));
+            (g.useCases || []).forEach(uc => push({ type: 'usecase', id: uc.id, title: uc.name, sub: uc.criticality || '', desc: uc.description || '', dom: '—', own: uc.owner || '', q: null, sens: null, val: null, fresh: null, tags: ['cas d\'usage'] }));
+            (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' : 'Application', desc: a.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
+            (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.table || '') + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
+            (state.recipes || []).forEach(r => push({ type: 'recipe', id: r.id, title: r.name, sub: (r.src || '?') + ' → ' + (r.out || '?'), desc: (r.steps || []).length + ' étape(s) de transformation reproductibles.', dom: '—', own: '', q: null, sens: null, val: null, fresh: r.lastAt || null, tags: ['recette'] }));
+            (state.dashboards || []).forEach(d2 => push({ type: 'report', id: d2.id, title: d2.name, sub: (d2.tiles || []).length + ' tuile(s)', desc: 'Tableau de bord composable : ' + (d2.tiles || []).map(t2 => t2.title).filter(Boolean).slice(0, 4).join(', '), dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['dashboard'] }));
+            (state.linkages || []).forEach(L => push({ type: 'linkage', id: L.id, title: L.name, sub: (L.a || '?') + ' ↔ ' + (L.b || '?'), desc: 'Rapprochement inter-sources (golden record).', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['fuzzy'] }));
             return ix;
         }
-        function catSearch(ix) {
-            const toks = catNorm(catState.q).split(/\s+/).filter(Boolean);
-            const res = ix.filter(e2 => (!catState.type || e2.type === catState.type)
-                && (!catState.status || (e2.status || '') === catState.status)
-                && (!catState.level || (e2.level || '') === catState.level)
-                && toks.every(tk => e2.blob.includes(tk)));
-            if (toks.length) {
-                const sc = e2 => { const t2 = catNorm(e2.title); return toks.reduce((a2, tk) => a2 + (t2 === tk ? 30 : (t2.startsWith(tk) ? 20 : (t2.includes(tk) ? 10 : 1))), 0); };
-                res.sort((a2, b2) => sc(b2) - sc(a2) || a2.title.localeCompare(b2.title));
-            } else res.sort((a2, b2) => a2.title.localeCompare(b2.title));
-            return res;
+        const CAT_FACETS = [
+            { key: 'type', title: 'Type d\'actif', of: e2 => e2.type, opts: () => Object.keys(CAT_TYPES), lab: v => CAT_TYPES[v] ? CAT_TYPES[v][2] : v },
+            { key: 'dom', title: 'Domaine métier', of: e2 => e2.dom, opts: ix => Array.from(new Set(ix.map(e2 => e2.dom))).sort(), lab: v => v },
+            { key: 'sens', title: 'Sensibilité', of: e2 => e2.sens, opts: () => ['perso', 'conf', 'non'], lab: v => CAT_SENS[v][1] },
+            { key: 'qb', title: 'Qualité', of: e2 => e2.q == null ? null : (e2.q >= 90 ? 'hi' : (e2.q >= 70 ? 'mid' : 'lo')), opts: () => ['hi', 'mid', 'lo'], lab: v => ({ hi: 'Bonne (≥ 90)', mid: 'Moyenne (70–90)', lo: 'À surveiller (< 70)' })[v] },
+            { key: 'val', title: 'Validation', of: e2 => e2.val, opts: () => ['ok', 'todo', 'draft'], lab: v => CAT_VAL[v][1] },
+            { key: 'own', title: 'Propriétaire', of: e2 => e2.own || null, opts: ix => Array.from(new Set(ix.map(e2 => e2.own).filter(Boolean))).sort(), lab: v => v },
+        ];
+        function catMatch(e2, skipKey) {
+            if (catState.q) { const toks = catNorm(catState.q).split(/\s+/).filter(Boolean); if (!toks.every(tk => e2.blob.includes(tk))) return false; }
+            for (const f of CAT_FACETS) { if (f.key === skipKey) continue; const sel2 = catState.f[f.key]; if (!sel2.length) continue; if (!sel2.includes(f.of(e2))) return false; }
+            return true;
         }
+        function catToggleFacet(key, v) { const a = catState.f[key]; const i = a.indexOf(v); if (i >= 0) a.splice(i, 1); else a.push(v); renderGovernance(); }
+        function catClearFacets() { CAT_FACETS.forEach(f => catState.f[f.key] = []); catState.q = ''; renderGovernance(); }
         function catSet(f, v) {
-            catState[f] = v; catState.sel = null; renderGovernance();
+            catState[f] = v; renderGovernance();
             if (f === 'q') { const inp = el('catQ'); if (inp) { inp.focus(); const n2 = inp.value.length; inp.setSelectionRange(n2, n2); } }
         }
-        function catSel(i) { catState.sel = i; renderGovernance(); }
-        function catOpenIdx(i) {
-            const e2 = catRes[i]; if (!e2) return;
-            if (e2.type === 'source') switchTab(1);
-            else if (e2.type === 'column') { govState.dictTable = e2.id; openGovTab('dictionary'); }
-            else if (e2.type === 'bo') openBoFiche(e2.id);
-            else if (e2.type === 'term') openGovTab('glossary');
-            else if (e2.type === 'perimeter') openGovTab('perimeters');
-            else if (e2.type === 'usecase') openGovTab('usecases');
-            else if (e2.type === 'asset') openGovTab('assets');
-            else if (e2.type === 'rule') switchTab(12);
-            else if (e2.type === 'recipe') switchTab(13);
-            else if (e2.type === 'dashboard') switchTab(14);
-            else if (e2.type === 'linkage') switchTab(15);
+        function catSort(list) {
+            const l2 = list.slice();
+            if (catState.sort === 'qualite') l2.sort((a, b) => (b.q == null ? -1 : b.q) - (a.q == null ? -1 : a.q));
+            else if (catState.sort === 'alpha') l2.sort((a, b) => a.title.localeCompare(b.title));
+            else if (catState.sort === 'fraicheur') l2.sort((a, b) => (b.fresh || 0) - (a.fresh || 0));
+            else if (catState.q) { const toks = catNorm(catState.q).split(/\s+/).filter(Boolean);
+                const sc = e2 => { const t2 = catNorm(e2.title); return toks.reduce((a2, tk) => a2 + (t2 === tk ? 30 : (t2.startsWith(tk) ? 20 : (t2.includes(tk) ? 10 : 1))), 0); };
+                l2.sort((a2, b2) => sc(b2) - sc(a2) || a2.title.localeCompare(b2.title));
+            } else l2.sort((a, b) => a.title.localeCompare(b.title));
+            return l2;
+        }
+        function catCardHtml(e2, i) {
+            const [tc, ti, tl] = CAT_TYPES[e2.type] || CAT_TYPES.table;
+            return `<div class="cat-card" onclick="catOpenFiche(${i})" tabindex="0" role="button" aria-label="Fiche de ${escapeHTML(e2.title)}" onkeydown="if(event.key==='Enter')catOpenFiche(${i})">
+                <div class="flex items-start gap-3">
+                    <span class="cat-tico ${tc}" aria-hidden="true">${ti}</span>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-[10px] font-black uppercase tracking-wide text-slate-400">${tl}${e2.dom !== '—' ? ' · ' + escapeHTML(e2.dom) : ''}</div>
+                        <div class="font-bold text-[14px] text-slate-800 truncate">${escapeHTML(e2.title)}</div>
+                        ${e2.sub ? `<div class="text-[11px] text-slate-400">${escapeHTML(e2.sub)}</div>` : ''}
+                    </div>
+                </div>
+                ${e2.desc ? `<div class="text-[12px] text-slate-500 mt-2 leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHTML(e2.desc)}</div>` : `<div class="text-[11px] text-slate-300 italic mt-2">Pas encore documenté — complétez le dictionnaire ou importez en masse.</div>`}
+                <div class="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                    ${e2.q != null ? `<span class="qual ${e2.q >= 90 ? 'q-ok' : (e2.q >= 70 ? 'q-warn' : 'q-bad')}">◆ ${e2.q}/100</span>` : ''}
+                    ${e2.sens ? `<span class="cat-sens ${CAT_SENS[e2.sens][0]}">${CAT_SENS[e2.sens][1]}</span>` : ''}
+                    ${e2.val ? `<span class="cat-val ${CAT_VAL[e2.val][0]}">${CAT_VAL[e2.val][1]}</span>` : ''}
+                    ${e2.own ? `<span class="inline-flex items-center gap-1.5 text-[11px] text-slate-500"><span class="cat-oav" style="background:${catOwnColor(e2.own)}">${escapeHTML(e2.own.split(/\s+/).map(x => x[0] || '').join('').toUpperCase().slice(0, 2))}</span>${escapeHTML(e2.own)}</span>` : ''}
+                    ${e2.fresh ? `<span class="text-[10.5px] text-slate-400">↻ ${new Date(e2.fresh).toLocaleDateString('fr-FR')}</span>` : ''}
+                    ${(e2.tags || []).slice(0, 3).map(t2 => `<span class="cat-tag">#${escapeHTML(t2)}</span>`).join('')}
+                </div>
+            </div>`;
         }
         function renderGovCatalog() {
             const ix = catBuildIndex();
-            const res = catRes = catSearch(ix);
-            const statuses = Array.from(new Set(ix.map(e2 => e2.status).filter(Boolean)));
-            const levels = Array.from(new Set(ix.map(e2 => e2.level).filter(Boolean)));
-            const counts = {}; ix.forEach(e2 => { counts[e2.type] = (counts[e2.type] || 0) + 1; });
-            let html = `<div class="flex items-center gap-3 mb-4 flex-wrap"><h2 class="text-lg font-bold text-slate-800">🗂️ Catalogue de données</h2>
-                <span class="text-xs text-slate-400">${ix.length} actif(s) référencé(s) — index 100 % local, métadonnées uniquement (jamais les valeurs)</span></div>
-            <div class="flex items-center gap-2 mb-3 flex-wrap">
-                <input id="catQ" type="text" value="${escapeHTML(catState.q)}" oninput="catSet('q', this.value)" placeholder="🔎 Rechercher un actif (table, attribut, objet métier, terme, règle…)" class="border border-emerald-300 rounded-lg px-3 py-2 text-sm w-full max-w-md bg-white">
-                ${statuses.length ? `<select onchange="catSet('status', this.value)" class="border border-slate-200 rounded px-2 py-1.5 text-xs bg-white"><option value="">Statut : tous</option>${statuses.map(s2 => `<option ${catState.status === s2 ? 'selected' : ''}>${escapeHTML(s2)}</option>`).join('')}</select>` : ''}
-                ${levels.length ? `<select onchange="catSet('level', this.value)" class="border border-slate-200 rounded px-2 py-1.5 text-xs bg-white"><option value="">Sensibilité : toutes</option>${levels.map(s2 => `<option value="${escapeHTML(s2)}" ${catState.level === s2 ? 'selected' : ''}>${escapeHTML((PV_LEVELS[s2] || ['', s2]).join(' '))}</option>`).join('')}</select>` : ''}</div>
-            <div class="flex gap-1.5 mb-4 flex-wrap">
-                <button onclick="catSet('type','')" class="text-[11px] px-2.5 py-1 rounded-full font-bold ${!catState.type ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}">Tous (${ix.length})</button>
-                ${Object.keys(CAT_TYPES).filter(k => counts[k]).map(k => `<button onclick="catSet('type','${k}')" class="text-[11px] px-2.5 py-1 rounded-full font-bold ${catState.type === k ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}">${CAT_TYPES[k][0]} ${CAT_TYPES[k][1]} (${counts[k]})</button>`).join('')}</div>`;
-            const selE = catState.sel != null ? res[catState.sel] : null;
-            html += `<div class="grid grid-cols-1 ${selE ? 'lg:grid-cols-[1fr_380px]' : ''} gap-4"><div id="catList">`;
-            if (!res.length) html += '<p class="text-sm text-slate-400 italic py-10 text-center">Aucun actif ne correspond à la recherche.</p>';
-            html += res.slice(0, 200).map((e2, i) => `<button onclick="catSel(${i})" class="w-full text-left flex items-center gap-2.5 border ${catState.sel === i ? 'border-emerald-400 bg-emerald-50/60' : 'border-slate-100 bg-white hover:bg-slate-50'} rounded-lg px-3 py-2 mb-1.5">
-                <span class="text-base shrink-0">${CAT_TYPES[e2.type][0]}</span>
-                <span class="min-w-0"><span class="block text-sm font-bold text-slate-700 truncate">${escapeHTML(e2.title)}</span><span class="block text-[11px] text-slate-400 truncate">${CAT_TYPES[e2.type][1]}${e2.sub ? ' · ' + escapeHTML(e2.sub) : ''}</span></span>
-                ${e2.level ? `<span class="ml-auto text-[10px] shrink-0" title="Sensibilité">${(PV_LEVELS[e2.level] || [''])[0]}</span>` : ''}
-                ${e2.status ? `<span class="${e2.level ? '' : 'ml-auto'} shrink-0">${wfBadge(e2)}</span>` : ''}</button>`).join('');
-            if (res.length > 200) html += `<p class="text-[11px] text-slate-400 italic mt-1">… ${res.length - 200} autre(s) résultat(s) — précisez la recherche.</p>`;
-            html += '</div>';
-            if (selE) {
-                html += `<div class="border border-emerald-200 rounded-xl bg-white p-4 h-fit lg:sticky lg:top-4">
-                    <div class="flex items-center gap-2 mb-1"><span class="text-xl">${CAT_TYPES[selE.type][0]}</span><span class="font-bold text-slate-800 text-sm break-all">${escapeHTML(selE.title)}</span><button onclick="catSel(null)" class="ml-auto text-slate-300 hover:text-slate-500 font-bold shrink-0">✕</button></div>
-                    <p class="text-[11px] text-slate-400 mb-3">${CAT_TYPES[selE.type][1]}${selE.sub ? ' · ' + escapeHTML(selE.sub) : ''}</p>
-                    <table class="w-full text-xs mb-3">${Object.entries(selE.meta).map(([k2, v2]) => `<tr><td class="py-1 pr-3 font-bold text-slate-500 align-top whitespace-nowrap">${escapeHTML(k2)}</td><td class="py-1 text-slate-700 break-words">${escapeHTML(String(v2))}</td></tr>`).join('')}</table>
-                    ${selE.status ? `<p class="text-xs mb-3 flex items-center gap-2"><span class="font-bold text-slate-500">Statut</span> ${wfBadge(selE)}</p>` : ''}
-                    <button onclick="catOpenIdx(${catState.sel})" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-lg">↗ Ouvrir dans l\'écran dédié</button></div>`;
-            }
-            html += '</div>';
+            const g = state.governance;
+            const tablesN = Object.values(state.tables).filter(t => t.status === 'ready');
+            const docd = tablesN.filter(t => (g.dictionary[t.name] || {}).description).length;
+            const wf = (typeof wfStats === 'function') ? wfStats() : { all: [], validated: [] };
+            const list = catSort(ix.filter(e2 => catMatch(e2)));
+            catRes = list;
+            const chip = [];
+            CAT_FACETS.forEach(f => catState.f[f.key].forEach(v => chip.push(`<button onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="achip-ux" aria-label="Retirer le filtre ${escapeHTML(f.lab(v))}">${escapeHTML(f.lab(v))} ✕</button>`)));
+            const facetsHtml = CAT_FACETS.map(f => {
+                const opts = f.opts(ix).filter(v => v != null && v !== '');
+                const rows = opts.map(v => {
+                    const on = catState.f[f.key].includes(v);
+                    const c2 = ix.filter(e2 => catMatch(e2, f.key) && f.of(e2) === v).length;
+                    if (!c2 && !on) return '';
+                    return `<button onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="cat-fitem ${on ? 'on' : ''}" role="checkbox" aria-checked="${on}">
+                        <span class="w-3.5 h-3.5 rounded border ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'} text-[9px] flex items-center justify-center">${on ? '✓' : ''}</span>
+                        <span class="truncate">${escapeHTML(f.lab(v))}</span><span class="cnt">${c2}</span></button>`;
+                }).join('');
+                return rows ? `<div class="border-b border-slate-100 pb-3 mb-3"><div class="text-[10px] uppercase font-black tracking-wide text-slate-400 mb-1.5">${f.title}</div>${rows}</div>` : '';
+            }).join('');
+            const exs = [tablesN[0] ? tablesN[0].name.replace(/\..*$/, '') : 'client', 'données personnelles', (g.businessObjects[0] || {}).name, Object.values(g.dictionary).map(d => d.owner).find(Boolean)].filter(Boolean).slice(0, 4);
+            let html = `
+            <div class="cat-hero">
+                <h2 class="text-lg font-black flex items-center gap-2 m-0">🔎 Catalogue de données</h2>
+                <p class="text-[12px] text-slate-300 mt-0.5 mb-3">Trouvez la donnée dont vous avez besoin, vérifiez si vous pouvez lui faire confiance, comprenez comment l'utiliser.</p>
+                <div class="cat-bigsearch"><span class="text-lg text-slate-400" aria-hidden="true">🔍</span>
+                    <input id="catQ" value="${escapeHTML(catState.q)}" oninput="catSet('q', this.value)" placeholder="Rechercher une table, une donnée, un domaine, un propriétaire…" aria-label="Rechercher dans le catalogue">
+                    <span class="text-[11px] text-slate-400 border-l border-slate-200 pl-3 whitespace-nowrap hidden sm:inline">dans tout le catalogue</span></div>
+                <div class="flex items-center gap-2 mt-2.5 flex-wrap"><span class="text-[11px] text-slate-400">Essayez :</span>
+                    ${exs.map(x => `<button onclick="catSet('q', ${JSON.stringify(String(x)).replace(/"/g, '&quot;')})" class="cat-ex">${escapeHTML(x)}</button>`).join('')}</div>
+                <div class="flex gap-7 mt-3.5 flex-wrap">
+                    <span class="cat-hs"><b>${ix.length.toLocaleString('fr-FR')}</b>actifs catalogués</span>
+                    <span class="cat-hs"><b>${themeList().length}</b>domaines métier</span>
+                    <span class="cat-hs"><b>${tablesN.length ? Math.round(100 * docd / tablesN.length) : 0} %</b>sources documentées</span>
+                    <span class="cat-hs"><b>${wf.all.length ? Math.round(100 * wf.validated.length / wf.all.length) : 0} %</b>validés par un responsable</span>
+                </div>
+            </div>
+            <div class="flex gap-4 items-start">
+                <div class="w-[220px] shrink-0 bg-white border border-slate-200 rounded-xl p-3 sticky top-4 max-h-[70vh] overflow-auto">
+                    <div class="flex items-center justify-between mb-2"><span class="text-[11px] font-black uppercase tracking-wide text-slate-400">Affiner</span>
+                    ${chip.length || catState.q ? `<button onclick="catClearFacets()" class="text-[11px] font-bold text-blue-600">Tout effacer</button>` : ''}</div>
+                    ${facetsHtml || '<p class="text-[11px] text-slate-300 italic">Chargez des sources pour peupler le catalogue.</p>'}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-2.5 flex-wrap">
+                        <span class="text-[13px] font-bold"><b class="text-emerald-600">${list.length}</b> résultat(s)</span>
+                        ${chip.join('')}
+                        <span class="flex-grow"></span>
+                        <label class="text-[11px] text-slate-400">Trier</label>
+                        <select onchange="catSet('sort', this.value)" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white" aria-label="Tri des résultats">
+                            ${[['pertinence', 'Pertinence'], ['qualite', 'Qualité'], ['fraicheur', 'Fraîcheur'], ['alpha', 'A → Z']].map(([v, l]) => `<option value="${v}" ${catState.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+                        <div class="seg-ux" role="group" aria-label="Affichage"><button class="${catState.view === 'list' ? 'on' : ''}" onclick="catSet('view','list')" aria-label="Vue liste">▤</button><button class="${catState.view === 'grid' ? 'on' : ''}" onclick="catSet('view','grid')" aria-label="Vue grille">▦</button></div>
+                    </div>
+                    ${list.length ? `<div class="grid gap-3 ${catState.view === 'grid' ? 'md:grid-cols-2' : 'grid-cols-1'}">${list.slice(0, 60).map((e2, i) => catCardHtml(e2, i)).join('')}</div>
+                        ${list.length > 60 ? `<p class="text-[11px] text-slate-400 italic mt-2">… ${list.length - 60} autre(s) — précisez la recherche.</p>` : ''}`
+                        : emptyStateHtml('🔍', 'Aucun actif ne correspond', 'Essayez d\'élargir vos filtres ou une autre recherche — ou chargez des sources et documentez-les pour peupler le catalogue.', chip.length || catState.q ? 'Tout effacer' : '', 'catClearFacets()')}
+                </div>
+            </div>`;
             return html;
+        }
+        // ---- Fiche détaillée en drawer : « À quoi ça sert », identité, structure (VRAIS types),
+        // traçabilité amont/aval réelle, actifs liés, actions. ----
+        const _catTypeCache = {};
+        function catRealTypeLabel(duckType, colName, dictType) {
+            if (dictType) return dictType;
+            const n = colName.toUpperCase();
+            if (/MAIL/.test(n)) return 'e-mail';
+            if (/^TEL|PHONE|TELEPHONE/.test(n)) return 'téléphone';
+            const t2 = String(duckType || '').toUpperCase();
+            if (/INT|DOUBLE|DECIMAL|FLOAT|HUGE/.test(t2)) return 'nombre';
+            if (/DATE|TIME/.test(t2)) return 'date';
+            return 'texte';
+        }
+        function catTypeChip(lbl) {
+            const m = { 'nombre': ['#0ea5e9', '123'], 'date': ['#8b5cf6', 'CAL'], 'e-mail': ['#ec4899', '@'], 'téléphone': ['#f59e0b', 'TEL'], 'clé': ['#0f172a', 'KEY'] };
+            const [bg, tag] = m[lbl] || ['#64748b', 'ABC'];
+            return `<span class="typ" style="background:${bg};width:26px" aria-hidden="true">${tag}</span>`;
+        }
+        async function catFillRealTypes(tId, tName) {
+            const box = el('catSchemaBox'); if (!box) return;
+            try {
+                let types = _catTypeCache[tId];
+                if (!types) {
+                    const { conn } = await getDB();
+                    const res = arrowResultToObjects(await conn.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ${sqlLiteral(duckTableName(tId))}`));
+                    types = {}; res.forEach(r => types[r.column_name] = r.data_type);
+                    _catTypeCache[tId] = types;
+                }
+                const d = state.governance.dictionary[tName] || {}; const dc2 = d.columns || {};
+                const t = state.tables[tId];
+                box.innerHTML = (t.headers || []).map(h => { const lbl = catRealTypeLabel(types[h], h, (dc2[h] || {}).technicalType);
+                    return `<div class="flex items-center gap-2.5 py-1.5 border-b border-slate-50 text-[12px]">${catTypeChip(lbl)}<span class="font-semibold flex-1 truncate">${escapeHTML(h)}</span><span class="text-[11px] text-slate-400">${escapeHTML(lbl)}</span>${(dc2[h] || {}).definition ? '<span class="text-emerald-500 text-[10px]" title="Documentée">📖</span>' : ''}</div>`; }).join('');
+            } catch (e) { box.innerHTML = '<p class="text-[11px] text-slate-300 italic">Types indisponibles (moteur non démarré).</p>'; }
+        }
+        function catLineageCounts(e2) {
+            const g = state.governance; let up = 0, down = 0;
+            if (e2.tbl && (e2.type === 'table' || e2.type === 'view')) {
+                up = ((g.lineage[e2.tbl] || {}).from || []).length;
+                Object.keys(g.lineage).forEach(k => { if (k !== e2.tbl && ((g.lineage[k] || {}).from || []).includes(e2.tbl)) down++; });
+                (g.businessObjects || []).forEach(bo => { if ((bo.sources || []).some(s2 => s2.table === e2.tbl)) down++; });
+                (g.useCases || []).forEach(uc => { if ((uc.tables || []).includes(e2.tbl)) down++; });
+            } else if (e2.type === 'column' && typeof modelImpact === 'function') down = modelImpact(e2.tbl, e2.col).length;
+            else if (e2.type === 'bo') { const bo = g.businessObjects.find(x => x.id === e2.bo); if (bo) { up = (bo.sources || []).length; down = new Set(boAllAttrRows(bo).flatMap(r => r.el.usedBy || [])).size; } }
+            return [up, down];
+        }
+        function catOpenFiche(i) {
+            const e2 = catRes[i]; if (!e2) return;
+            const [tc, ti, tl] = CAT_TYPES[e2.type] || CAT_TYPES.table;
+            const [up, down] = catLineageCounts(e2);
+            const rel = catRes.filter(x => x !== e2 && x.dom === e2.dom && e2.dom !== '—' && (x.type === 'table' || x.type === 'view' || x.type === 'bo')).slice(0, 3);
+            const relIdx = x => catRes.indexOf(x);
+            const t = e2.tbl ? tableByName(e2.tbl) : null;
+            const body = `
+                <div class="dsect"><div class="flex items-center gap-1.5 flex-wrap">
+                    ${e2.q != null ? `<span class="qual ${e2.q >= 90 ? 'q-ok' : (e2.q >= 70 ? 'q-warn' : 'q-bad')}">◆ Qualité ${e2.q}/100</span>` : ''}
+                    ${e2.sens ? `<span class="cat-sens ${CAT_SENS[e2.sens][0]}">${CAT_SENS[e2.sens][1]}</span>` : ''}
+                    ${e2.val ? `<span class="cat-val ${CAT_VAL[e2.val][0]}">${CAT_VAL[e2.val][1]}</span>` : ''}
+                </div></div>
+                <div class="dsect"><h4>À quoi ça sert</h4>
+                    <div class="text-[12.5px] bg-slate-50 border border-slate-200 rounded-lg p-3">${e2.desc ? escapeHTML(e2.desc) : '<span class="text-slate-400 italic">Pas encore documenté — ajoutez une description dans le dictionnaire (ou via ⬆ Import en masse) pour aider les consommateurs de cette donnée.</span>'}</div></div>
+                <div class="dsect"><h4>Fiche d'identité</h4><div class="kv-ux">
+                    ${e2.rows != null ? `<div class="cell"><div class="k">Lignes</div><div class="v">${Number(e2.rows).toLocaleString('fr-FR')}</div></div>` : ''}
+                    <div class="cell"><div class="k">Fraîcheur</div><div class="v" style="font-size:12.5px">↻ ${e2.fresh ? new Date(e2.fresh).toLocaleDateString('fr-FR') : '—'}</div></div>
+                    <div class="cell"><div class="k">Propriétaire</div><div class="v" style="font-size:12.5px">${e2.own ? `<span class="cat-oav" style="background:${catOwnColor(e2.own)}">${escapeHTML(e2.own.split(/\s+/).map(x => x[0] || '').join('').toUpperCase().slice(0, 2))}</span> ${escapeHTML(e2.own)}` : '<span class="text-amber-600">⚠ à désigner</span>'}</div></div>
+                    <div class="cell"><div class="k">Domaine</div><div class="v" style="font-size:12.5px">${escapeHTML(e2.dom)}</div></div>
+                </div></div>
+                ${t ? `<div class="dsect"><h4>Structure (${(t.headers || []).length} colonnes — types réels)</h4><div id="catSchemaBox"><p class="text-[11px] text-slate-300 italic">Lecture des types…</p></div></div>` : ''}
+                <div class="dsect"><h4>Traçabilité (lineage)</h4><div class="flex items-center gap-2 text-center text-[12px]">
+                    <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2"><div class="text-base font-black">${up}</div><div class="text-[10px] text-slate-400">source(s) amont</div></div>
+                    <span class="text-slate-300" aria-hidden="true">→</span>
+                    <div class="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg py-2"><div class="text-[12px] font-black text-emerald-700 truncate px-1">${escapeHTML(e2.title)}</div><div class="text-[10px] text-slate-400">cet actif</div></div>
+                    <span class="text-slate-300" aria-hidden="true">→</span>
+                    <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2"><div class="text-base font-black">${down}</div><div class="text-[10px] text-slate-400">usage(s) aval</div></div>
+                </div></div>
+                ${rel.length ? `<div class="dsect"><h4>Actifs liés (${escapeHTML(e2.dom)})</h4>${rel.map(x => { const [xc, xi, xl] = CAT_TYPES[x.type];
+                    return `<button onclick="catOpenFiche(${relIdx(x)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="cat-tico ${xc}" style="width:26px;height:26px;font-size:12px">${xi}</span><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${escapeHTML(x.title)}</span><span class="block text-[10px] text-slate-400">${xl}</span></span><span class="ml-auto text-slate-300">›</span></button>`; }).join('')}</div>` : ''}`;
+            _catFicheCtx = e2;
+            openUxDrawer({ sem: '', title: e2.title, sub: tl + (e2.dom !== '—' ? ' · Domaine ' + e2.dom : '') + (e2.own ? ' · propriétaire ' + e2.own : ''), body, foot: `
+                <button onclick="catGoLineage()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">🕸️ Voir le lineage</button>
+                <button onclick="catUseData()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">➜ Utiliser cette donnée</button>` });
+            el('uxDrawerTyp').className = 'cat-tico ' + tc; el('uxDrawerTyp').textContent = ti;
+            if (t) catFillRealTypes(t.id, t.name);
+        }
+        let _catFicheCtx = null;
+        function catGoLineage() {
+            const e2 = _catFicheCtx; closeUxDrawer(); if (!e2) return;
+            if (e2.type === 'bo') { govState.lineageView = 'attr'; govState.lineageAttrBo = e2.bo; }
+            openGovTab('lineage');
+        }
+        function catUseData() {
+            const e2 = _catFicheCtx; closeUxDrawer(); if (!e2) return;
+            const t = e2.tbl ? tableByName(e2.tbl) : null;
+            switchTab(3);
+            if (t) { const sel2 = el('baseTableSelect'); if (sel2) { sel2.value = t.id; try { handleBaseTableChange(); } catch (er) {} } }
         }
 
         // ======================= E5 (V2) : RAPPROCHEMENT INTER-SOURCES (RECORD LINKAGE) =======================
