@@ -4966,9 +4966,16 @@
         }
         // ======================= V3 UX : helpers visuels, barre de contexte, drawer =======================
         const meterColor = pct => pct >= 95 ? 'var(--ok)' : (pct >= 80 ? 'var(--warn)' : 'var(--bad)');
+        // Affichage d'un taux SANS arrondi trompeur : 15 valeurs sur 234 279 lignes ne doit
+        // jamais s'afficher « 0.0% » (qui se lit « aucune valeur ») mais « < 0,1 % ».
+        function fmtPctUx(pct) {
+            if (pct > 0 && pct < 0.05) return '< 0,1 %';
+            if (pct < 100 && pct > 99.95) return '> 99,9 %';
+            return (Math.round(pct * 10) / 10).toLocaleString('fr-FR') + ' %';
+        }
         function cellMeter(pct) {
-            const p2 = Math.max(0, Math.min(100, Math.round(pct * 10) / 10)); const c = meterColor(p2);
-            return `<div class="meter"><div class="bar"><i style="width:${p2}%;background:${c}"></i></div><span class="pct" style="color:${c}">${p2.toLocaleString('fr-FR')}%</span></div>`;
+            const p2 = Math.max(0, Math.min(100, pct)); const c = meterColor(p2);
+            return `<div class="meter"><div class="bar"><i style="width:${Math.max(p2 > 0 ? 1 : 0, Math.round(p2))}%;background:${c}"></i></div><span class="pct" style="color:${c};width:52px">${fmtPctUx(p2)}</span></div>`;
         }
         function cellQuality(st2, label) {
             const dot = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)' }[st2] || 'var(--faint)';
@@ -5068,7 +5075,8 @@
         function uxColQuality(c) {
             const pct = c.completeness;
             const hyg = (c.placeholders || 0) + (c.multiSpace || 0) + (c.caseDupGroups || 0) + (c.outliers || 0);
-            if (pct < 80) return ['bad', (100 - pct).toFixed(0) + ' % vides'];
+            if (pct > 0 && pct < 0.05) return ['bad', 'quasi vide (' + Number(c.distinctCount || 0).toLocaleString('fr-FR') + ' valeur(s))'];
+            if (pct < 80) return ['bad', fmtPctUx(100 - pct) + ' vides'];
             if (c.patterns && c.patterns[0] && c.patterns[0].pct < 60 && String(c.semanticType || '').toLowerCase().indexOf('num') < 0) return ['warn', 'Formats mixtes'];
             if (hyg > 0) return ['warn', hyg.toLocaleString('fr-FR') + ' à nettoyer'];
             if (pct < 95) return ['warn', (100 - pct).toFixed(0) + ' % vides'];
@@ -5098,7 +5106,7 @@
                 : '<p class="text-[11px] text-slate-400 italic">Aucune règle déclarée sur cette colonne — ajoutez-en dans « 📏 Règles & score ».</p>';
             const body = `
                 <div class="dsect"><div class="kv-ux">
-                    <div class="cell"><div class="k">Complétude</div><div class="v" style="color:${meterColor(c.completeness)}">${c.completeness.toFixed(1)}%</div></div>
+                    <div class="cell"><div class="k">Complétude</div><div class="v" style="color:${meterColor(c.completeness)}">${fmtPctUx(c.completeness)}</div></div>
                     <div class="cell"><div class="k">Valeurs distinctes</div><div class="v">${Number(c.distinctCount || 0).toLocaleString('fr-FR')}${c.hasMoreDistinct ? '+' : ''}</div></div>
                     <div class="cell"><div class="k">État qualité</div><div class="v" style="font-size:12.5px">${cellQuality(qs, ql)}</div></div>
                     <div class="cell"><div class="k">Sensibilité</div><div class="v" style="font-size:12.5px;color:${lvl === 'personnel' ? 'var(--bad)' : 'var(--muted)'}">${escapeHTML(lvl ? lvlLab : '—')}</div></div>
@@ -12008,7 +12016,7 @@
             panel.innerHTML = `
                 <div class="flex items-center gap-3 border-b pb-4 mb-5"><div class="p-3 bg-indigo-100 rounded-lg text-indigo-700"><i data-lucide="${typeIcon}"></i></div><div><h4 class="text-lg font-black text-slate-800">${escapeHTML(c.name)}</h4><span class="text-xs text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">${c.semanticType}</span></div></div>
                 <div class="grid grid-cols-2 gap-4 mb-6">
-                    <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Taux de remplissage</span><div class="flex items-center gap-2"><span class="text-xl font-black text-slate-800">${fillRate.toFixed(1)}%</span><span class="text-xs text-slate-400">(${c.nullCount} vide(s))</span></div></div>
+                    <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Taux de remplissage</span><div class="flex items-center gap-2"><span class="text-xl font-black" style="color:${meterColor(fillRate)}">${fmtPctUx(fillRate)}</span><span class="text-xs text-slate-400">${(currentProfilingStats && currentProfilingStats.totalRows ? Math.max(0, currentProfilingStats.totalRows - c.nullCount).toLocaleString('fr-FR') + ' renseignée(s) · ' : '')}${Number(c.nullCount).toLocaleString('fr-FR')} vide(s)</span></div></div>
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Cardinalité</span><div class="flex items-center gap-2"><span class="text-xl font-black text-slate-800">${c.distinctCount.toLocaleString('fr-FR')}${c.hasMoreDistinct ? '+' : ''}</span><span class="text-xs text-slate-400">valeur(s) distincte(s)</span></div></div>
                 </div>
                 <div class="mb-6"><h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Statistiques descriptives</h5>${statsGridHtml}</div>
