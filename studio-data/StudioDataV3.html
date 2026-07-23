@@ -64,7 +64,7 @@
             try { if (navigator.deviceMemory) memGB = Math.max(1.8, Math.min(3.4, navigator.deviceMemory * 0.65)); } catch (e) {}
             await bestEffort(`PRAGMA memory_limit='${Math.round(memGB * 1024)}MB'`);
             await bestEffort("PRAGMA threads=1");                     // chaque thread a ses propres tampons : 1 seul = pic mémoire minimal
-            if (!opfsBacked && navigator.storage && navigator.storage.getDirectory) await bestEffort("SET temp_directory='opfs://studio_tmp'");
+            if (!opfsBacked && navigator.storage && navigator.storage.getDirectory) { window.__duckTempDir = 'opfs://studio_tmp'; await bestEffort("SET temp_directory='opfs://studio_tmp'"); }
             // Purge des tables orphelines d'une session précédente (la base OPFS persiste entre visites,
             // mais nos noms de tables t_tb_* sont propres à chaque session : on repart net).
             if (opfsBacked) {
@@ -903,6 +903,20 @@
         const sqlIdent = name => '"' + String(name).replace(/"/g, '""') + '"';
         const sqlLiteral = val => "'" + String(val).replace(/'/g, "''") + "'";
         const duckTableName = tId => 't_' + tId;
+        // Détecte un échec d'écriture du répertoire temporaire (spill disque) — fréquent sur les gros
+        // fichiers lus à la demande quand le stockage temporaire du navigateur n'est pas inscriptible.
+        function isSpillWriteError(e) { return /do not support writing|temp_directory|temporary directory|temporary file|failed to write|No space left/i.test(String((e && e.message) || e)); }
+        // Exécute une requête ; si DuckDB échoue en voulant déborder sur disque, relance la MÊME
+        // requête en mémoire pure (spill désactivé), puis restaure le réglage d'origine.
+        async function queryResilient(conn, sql) {
+            try { return await conn.query(sql); }
+            catch (e) {
+                if (!isSpillWriteError(e)) throw e;
+                try { await conn.query("SET temp_directory=''"); } catch (e2) {}
+                try { return await conn.query(sql); }
+                finally { if (window.__duckTempDir) { try { await conn.query("SET temp_directory='" + window.__duckTempDir + "'"); } catch (e3) {} } }
+            }
+        }
 
         function arrowResultToObjects(res) {
             const fields = res.schema.fields.map(f => f.name).filter(n => n !== '__rn');
@@ -5729,11 +5743,11 @@
                 const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
                 const attrs = tdDivAttrs(t, d);
                 const rowHash = `md5(concat_ws(chr(1), ${attrs.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), chr(0))`).join(', ')}))`;
-                const sumRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM (SELECT ${keyE} AS k FROM ${T} GROUP BY 1 HAVING COUNT(DISTINCT ${rowHash}) > 1) s`);
+                const sumRes = await queryResilient(conn, `SELECT COUNT(*)::BIGINT AS n FROM (SELECT ${keyE} AS k FROM ${T} GROUP BY 1 HAVING COUNT(DISTINCT ${rowHash}) > 1) s`);
                 const nbKeys = Number(arrowResultToObjects(sumRes)[0].n);
                 if (!nbKeys) { body.innerHTML = '<p class="text-xs text-emerald-700 p-4 font-bold">✔ Aucun écart : toutes les clés partagées entre sources portent des données identiques.</p>'; return; }
                 const sql = tdDivSql(tId);
-                const res = await conn.query(`SELECT * FROM (${sql}) LIMIT 1500`);
+                const res = await queryResilient(conn, `SELECT * FROM (${sql}) LIMIT 1500`);
                 const rows = arrowResultToObjects(res);
                 head.innerHTML = `<strong class="text-amber-800">🔍 Écarts entre sources — ${escapeHTML(t.name)}</strong>
                     <span class="text-amber-700 font-bold">${nbKeys.toLocaleString('fr-FR')} clé(s) divergente(s)</span>
@@ -5762,7 +5776,10 @@
                 }
                 if (rows.length >= 1500 || shown >= 300) html += `<p class="text-[11px] text-slate-400 p-3">Affichage tronqué — l'export CSV contient la totalité des écarts.</p>`;
                 body.innerHTML = html;
-            } catch (e) { body.innerHTML = `<p class="text-xs text-red-600 p-4">Analyse impossible : ${escapeHTML(e.message)}</p>`; }
+            } catch (e) {
+                const heavy = isSpillWriteError(e) || /out of memory|allocation|memory_limit/i.test(String(e.message || ''));
+                body.innerHTML = `<p class="text-xs text-red-600 p-4">Analyse impossible : ${escapeHTML(e.message)}${heavy ? '<br><span class="text-slate-500">Table volumineuse lue à la demande : cliquez « 🗜️ Optimiser » (Parquet) sur la source, ou réduisez le nombre de colonnes comparées, pour fiabiliser l\'analyse.</span>' : ''}</p>`;
+            }
         }
         async function tdExportDivergences(tId, btn) {
             const sql = tdDivSql(tId); if (!sql) return;
@@ -5774,7 +5791,7 @@
                 const parts = ['cle,attribut,source,valeur\n'];
                 const batch = 20000; let off = 0;
                 while (true) {
-                    const res = await conn.query(`SELECT * FROM (${sql}) q LIMIT ${batch} OFFSET ${off}`);
+                    const res = await queryResilient(conn, `SELECT * FROM (${sql}) q LIMIT ${batch} OFFSET ${off}`);
                     const rows = arrowResultToObjects(res);
                     rows.forEach(r => parts.push([r.cle, r.attribut, r.source, r.valeur].map(cell).join(',') + '\n'));
                     if (rows.length < batch) break; off += batch;
@@ -7911,8 +7928,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.4.2';
+        const APP_VERSION = '4.4.3';
         const APP_CHANGELOG = [
+            { v: '4.4.3', d: '2026-07-23', t: 'Correctif : analyse d\'écarts sur grosses tables', items: [
+                'Correction du « Analyse impossible : HTML FileReaders do not support writing » sur le rapport d\'écarts entre sources d\'une grosse table lue à la demande : l\'analyse se relance automatiquement en mémoire pure quand le stockage temporaire du navigateur n\'est pas inscriptible, avec un message d\'aide clair si le volume reste trop élevé.'] },
             { v: '4.4.2', d: '2026-07-23', t: 'Import : diagnostic « objet introuvable »', items: [
                 'Import en masse : quand des lignes sont ignorées pour « objet métier introuvable », le rapport liste les objets métier réellement existants — pour repérer aussitôt un écart d\'orthographe (espace, pluriel, code…).'] },
             { v: '4.4.1', d: '2026-07-23', t: 'Import en masse : rapport d\'erreurs détaillé', items: [
