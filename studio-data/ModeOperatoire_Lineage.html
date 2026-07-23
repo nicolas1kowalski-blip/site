@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mode opératoire — Lineage & santé du flux (Studio Data V5)</title>
+<style>
+  :root{ --ink:#0f172a; --muted:#475569; --faint:#64748b; --line:#e2e8f0; --bg:#f8fafc; --panel:#fff;
+         --brand:#4f46e5; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --accent:#059669; }
+  *{box-sizing:border-box}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg);
+       margin:0;line-height:1.6;font-size:15px}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 22px 80px}
+  h1{font-size:26px;margin:0 0 4px}
+  .lead{color:var(--muted);margin:0 0 24px;font-size:15px}
+  h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:9px}
+  h3{font-size:15.5px;margin:20px 0 6px}
+  p{margin:8px 0}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+  .kbd{background:var(--panel);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-weight:600;font-size:13px;white-space:nowrap}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .step .num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
+             background:var(--brand);color:#fff;font-weight:800;font-size:14px;margin-right:8px}
+  ol,ul{margin:8px 0 8px 4px;padding-left:22px}
+  li{margin:5px 0}
+  .callout{border-left:4px solid var(--brand);background:#eef2ff;border-radius:0 9px 9px 0;padding:11px 15px;margin:14px 0;font-size:14px}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.ok{border-color:var(--ok);background:#f0fdf4}
+  .pill{display:inline-block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 9px;border-radius:20px}
+  .p-master{background:#fef3c7;color:#92400e}.p-ref{background:#dbeafe;color:#1e40af}.p-cons{background:#f1f5f9;color:#475569}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--bg);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint)}
+  .path{font-weight:700;color:var(--accent)}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:5px}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 20px;margin:18px 0}
+  .toc a{color:var(--brand);text-decoration:none}.toc a:hover{text-decoration:underline}
+  .toc ol{columns:2;column-gap:28px}
+  footer{margin-top:40px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+  @media print{body{background:#fff}.step,table{box-shadow:none}.toc{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔗 Mode opératoire — Lineage &amp; santé du flux</h1>
+  <p class="lead">Studio Data V5 · Tracer la circulation d'une donnée (maître → référentiel → consommateurs) et
+  contrôler, sur les <b>données réelles</b>, sa <b>fraîcheur</b> (retard) et sa <b>distorsion</b> (écart de valeur).</p>
+
+  <div class="toc">
+    <b>Sommaire</b>
+    <ol>
+      <li><a href="#quoi">Ce que fait l'écran</a></li>
+      <li><a href="#prereq">Prérequis</a></li>
+      <li><a href="#acces">Accéder à l'écran</a></li>
+      <li><a href="#e1">1. Construire le flux (nœuds)</a></li>
+      <li><a href="#e2">2. Relier les nœuds (liens)</a></li>
+      <li><a href="#e3">3. Lancer un contrôle</a></li>
+      <li><a href="#e4">4. Lire les résultats</a></li>
+      <li><a href="#e5">5. Journal &amp; alertes</a></li>
+      <li><a href="#auto">Amorçage automatique</a></li>
+      <li><a href="#depannage">Dépannage</a></li>
+      <li><a href="#recap">Récap express</a></li>
+    </ol>
+  </div>
+
+  <h2 id="quoi">🎯 Ce que fait l'écran</h2>
+  <p>Le <b>lineage</b> est la <i>carte</i> : d'où vient la donnée, ce qu'elle traverse, où elle va. La <b>réconciliation</b>
+  et la <b>fraîcheur</b> sont les <i>contrôles</i> posés sur cette carte : la donnée maître et ses copies en aval
+  sont-elles <b>cohérentes</b> et <b>à jour</b> ? Le lineage dit <i>où</i> regarder, la réconciliation dit <i>si c'est cohérent</i>.</p>
+  <div class="callout"><b>Point important.</b> La carte seule est déclarative. Pour mesurer un retard ou une distorsion,
+  il faut des <b>données chargées</b> : au minimum, pour chaque système comparé, la <b>clé d'entité</b>, l'<b>attribut mesuré</b>
+  et (pour la fraîcheur) une <b>fréquence attendue</b>. Sans données reliées → carte visuelle uniquement.</div>
+
+  <h2 id="prereq">✅ Prérequis</h2>
+  <ol>
+    <li><b>Charger les sources</b> à comparer dans l'onglet <span class="path">① Données &amp; Modèle ▸ Sources</span>
+        (ex. l'extrait du système maître et celui de l'aval : chacun avec la clé commune et l'attribut à comparer).</li>
+    <li><b>Pour la fraîcheur (SLA)</b> : renseigner le champ <b>« Fréquence de mise à jour »</b> de la source dans
+        <span class="path">Gouvernance ▸ Définir ▸ Dictionnaire</span> (ex. <code>Quotidien</code>, <code>Hebdomadaire</code>…).
+        C'est cette fréquence qui définit le retard toléré.</li>
+    <li><b>Connaître, pour chaque lien à contrôler</b> : le nom de la <b>colonne clé</b> commune (ex. <code>id_client</code>)
+        et de l'<b>attribut comparé</b> (ex. <code>ca_annuel</code>). Ils doivent exister <b>dans les deux</b> sources.</li>
+  </ol>
+
+  <h2 id="acces">🧭 Accéder à l'écran</h2>
+  <p><span class="path">Gouvernance</span> → onglet <span class="path">Tracer</span> → <span class="path">🔗 Lineage &amp; santé</span>.</p>
+
+  <h2 id="e1">Étape 1 — Construire le flux (les nœuds)</h2>
+  <div class="step">
+    <p>Ouvrez le panneau <b>« ⚙️ Construire le flux »</b> (en bas de l'écran). Pour chaque système, remplissez la
+    ligne d'ajout de nœud puis cliquez <span class="kbd">+ Nœud</span> :</p>
+    <table>
+      <tr><th>Champ</th><th>À saisir</th></tr>
+      <tr><td><b>Nom du système</b></td><td>Le nom lisible (ex. « CRM Salesforce », « Référentiel Client », « BI Ventes »).</td></tr>
+      <tr><td><b>Rôle</b></td><td><span class="pill p-master">Maître</span> source de vérité · <span class="pill p-ref">Référentiel</span> consolide/transforme · <span class="pill p-cons">Consommateur</span> lit la donnée.</td></tr>
+      <tr><td><b>Domaine</b></td><td>Domaine métier (ex. « Client »). Optionnel.</td></tr>
+      <tr><td><b>Source liée</b></td><td>La source chargée qui porte les données de ce nœud. <b>Indispensable</b> pour mesurer fraîcheur et distorsion. Optionnel si le nœud est purement documentaire.</td></tr>
+    </table>
+    <p class="callout ok">Les nœuds se rangent automatiquement en colonnes selon leur rôle et les liens :
+    <b>amont → intermédiaire → aval</b>.</p>
+  </div>
+
+  <h2 id="e2">Étape 2 — Relier les nœuds (les liens)</h2>
+  <div class="step">
+    <p>Une fois au moins deux nœuds créés, remplissez la ligne d'ajout de lien puis cliquez <span class="kbd">+ Lien</span> :</p>
+    <table>
+      <tr><th>Champ</th><th>À saisir</th></tr>
+      <tr><td><b>Source / Cible</b></td><td>Le sens du flux (la Source alimente la Cible).</td></tr>
+      <tr><td><b>Type</b></td><td>Alimente · Consolide · Transforme · Lecture.</td></tr>
+      <tr><td><b>Clé commune</b></td><td>La colonne d'entité présente des deux côtés (ex. <code>id_client</code>).</td></tr>
+      <tr><td><b>Attribut comparé</b></td><td>La colonne dont on vérifie la cohérence (ex. <code>ca_annuel</code>).</td></tr>
+      <tr><td><b>SLA (h)</b></td><td>Retard maximal toléré pour la copie aval, en heures (défaut 24).</td></tr>
+      <tr><td><b>Transformation rejouable</b></td><td>Voir l'encadré ci-dessous. Défaut : <b>Aucune</b> (comparaison directe).</td></tr>
+      <tr><td><b>Transformation déclarée</b></td><td>Texte libre <i>documentaire</i> (ex. « SOMME(montant) converti €, agrégé /mois »). Sert à distinguer un écart <b>attendu</b> d'une <b>anomalie</b>.</td></tr>
+    </table>
+    <div class="callout"><b>🧪 Transformation « rejouable » (essentiel).</b> Si l'aval n'est pas une copie brute du maître mais le
+    résultat d'un calcul, déclarez-le pour que la comparaison porte sur le <b>maître transformé</b>, pas sur le maître brut :
+      <ul>
+        <li><b>Agrégation</b> : <code>Somme</code>/<code>Moyenne</code>/<code>Min</code>/<code>Max</code>/<code>Nombre</code>
+            <b>par clé</b> — cas « maître fin, aval agrégé » (ex. plusieurs lignes de montant côté maître, un total côté aval).</li>
+        <li><b>Normalisation</b> : <code>Arrondi</code> (param = nb de décimales), <code>× facteur</code> (param = nombre),
+            <code>Valeur absolue</code>, <code>MAJUSCULES</code>, <code>minuscules</code>, <code>Espaces nettoyés</code>.</li>
+      </ul>
+      Ainsi un écart <i>attendu</i> (dû à la règle) ne ressort plus comme distorsion ; un écart <b>résiduel malgré la règle</b>
+      est signalé comme <b>anomalie</b>.</div>
+  </div>
+
+  <h2 id="e3">Étape 3 — Lancer un contrôle</h2>
+  <div class="step">
+    <ol>
+      <li>Dans le graphe, <b>cliquez l'étiquette du lien</b> (la pastille au milieu de la flèche). Un <b>volet</b> s'ouvre à droite.</li>
+      <li>En bas du volet, cliquez <span class="kbd">↻ Lancer le contrôle</span>
+          (ou <span class="kbd">↻ Relancer</span> s'il a déjà tourné).</li>
+      <li>Le calcul s'exécute en local (DuckDB) et remplit le volet : <b>taux de distorsion</b>, <b>lignes comparées</b>,
+          <b>clés du maître absentes en aval</b>, et <b>exemples d'écarts</b> (clé / valeur maître / valeur aval).</li>
+    </ol>
+    <p class="callout warn">Le bouton reste <b>grisé</b> tant que le lien n'a pas : une <b>source reliée</b> des deux côtés,
+    une <b>clé</b> et un <b>attribut</b>. Le volet vous indique précisément ce qui manque.</p>
+  </div>
+
+  <h2 id="e4">Étape 4 — Lire les résultats</h2>
+  <div class="step">
+    <h3>Le bandeau de synthèse (haut de l'écran)</h3>
+    <ul>
+      <li><b>🎯 SLA de fraîcheur respectés</b> — X flux à jour / Y flux mesurables.</li>
+      <li><b>⚠️ Distorsions au-dessus du seuil</b> — nombre de flux dont le taux dépasse le <b>Seuil de distorsion (%)</b> (réglable en haut à droite, défaut 1 %).</li>
+      <li><b>⏱ Flux le plus en retard</b> · <b>🔎 Dernier contrôle</b>.</li>
+    </ul>
+    <h3>Le graphe</h3>
+    <table>
+      <tr><td><span class="dot" style="background:var(--ok)"></span><b>Vert</b></td><td>Sain — frais &amp; cohérent</td></tr>
+      <tr><td><span class="dot" style="background:var(--warn)"></span><b>Orange</b></td><td>À surveiller — SLA ou seuil approché/dépassé</td></tr>
+      <tr><td><span class="dot" style="background:var(--bad)"></span><b>Rouge</b></td><td>Alerte — retard ou distorsion forte</td></tr>
+    </table>
+    <p>Les <b>arêtes</b> sont colorées par état et portent l'étiquette <code>⟳ retard · Δ distorsion</code>. Les
+    <b>nœuds</b> affichent leur rôle et des pastilles de santé.</p>
+    <h3>Les volets de détail (au clic)</h3>
+    <ul>
+      <li><b>Clic sur un nœud</b> → rôle dans le flux, fraîcheur, connexions amont/aval, analyse d'impact.</li>
+      <li><b>Clic sur une étiquette de lien</b> → transformation (déclarée + rejouée), fraîcheur + statut SLA,
+          distorsion (taux + barre + exemples), et actions <span class="kbd">⇩ Exporter les écarts</span> /
+          <span class="kbd">↻ Relancer le contrôle</span>.</li>
+    </ul>
+    <h3>Bascule « Vue systèmes / Vue attributs »</h3>
+    <p>En haut à droite. La <b>vue attributs</b> montre le même flux au niveau colonne : chaque nœud liste ses
+    attributs reliés (🔑 clé + attribut comparé) et les liens portent l'attribut concerné.</p>
+  </div>
+
+  <h2 id="e5">Étape 5 — Journal &amp; alertes</h2>
+  <div class="step">
+    <p>Le panneau <b>« 🗒️ Journal des contrôles »</b> (bas de l'écran) conserve chaque contrôle lancé : date, flux,
+    taux, écarts, clés manquantes, transformation rejouée et statut. Le titre indique le <b>nombre d'alertes</b>
+    (contrôles au-dessus du seuil). Bouton <span class="kbd">Vider le journal</span> pour repartir à zéro.</p>
+    <p class="callout ok">Tout (nœuds, liens, contrôles, journal) est <b>enregistré localement</b> avec la gouvernance :
+    vous le retrouvez au rechargement de la page.</p>
+  </div>
+
+  <h2 id="auto">✨ Amorçage automatique</h2>
+  <p>Si vous avez déjà des <b>objets métier</b> (onglet <span class="path">Objets métier</span>), le bouton
+  <span class="kbd">✨ Générer depuis les objets métier</span> crée automatiquement les nœuds et liens à partir des rôles
+  déclarés (source <b>maître</b> → objet <b>référentiel</b> → sources <b>destinataires</b> = consommateurs). Il ne reste
+  qu'à relier chaque nœud à une source chargée et à renseigner clé + attribut pour activer les contrôles.</p>
+
+  <h2 id="depannage">🛠 Dépannage</h2>
+  <table>
+    <tr><th>Symptôme</th><th>Cause &amp; solution</th></tr>
+    <tr><td>« Lancer le contrôle » reste grisé</td><td>Il manque une source reliée (source et/ou cible), la clé ou l'attribut. Complétez le lien dans « ⚙️ Construire le flux ».</td></tr>
+    <tr><td>« La colonne clé / l'attribut est absent(e) de … »</td><td>Le nom saisi ne correspond pas exactement à une colonne de la source (orthographe, casse, accents). Vérifiez l'en-tête de la source.</td></tr>
+    <tr><td>Pastille « non mesuré » sur un nœud</td><td>Aucune source reliée, ou pas de « Fréquence de mise à jour » dans le dictionnaire → pas de SLA calculable.</td></tr>
+    <tr><td>Un écart <i>attendu</i> ressort comme distorsion</td><td>Déclarez la <b>transformation rejouable</b> correspondante (agrégation ou normalisation) sur le lien, puis relancez.</td></tr>
+    <tr><td>« Analyse impossible » sur une très grosse source</td><td>Les calculs tournent sans débordement disque ; sur des volumes extrêmes en <code>file://</code>, ouvrez l'app via <code>http://localhost</code> (voir la note ci-dessous) ou optimisez la source en Parquet.</td></tr>
+  </table>
+  <div class="callout warn"><b>Contexte fichier local.</b> Ouverte par double-clic (<code>file://</code>), l'app fonctionne mais reste
+  bornée par la mémoire du navigateur. Pour de très gros extraits, servez le dossier en <code>http://localhost</code>
+  (ex. <code>python -m http.server</code>) : cela active le débordement disque et lève le plafond.</div>
+
+  <h2 id="recap">⚡ Récap express</h2>
+  <div class="step">
+    <ol>
+      <li>Charger les sources (maître + aval) ; renseigner la fréquence au dictionnaire pour le SLA.</li>
+      <li><span class="path">Gouvernance ▸ Tracer ▸ 🔗 Lineage &amp; santé</span>.</li>
+      <li>« ⚙️ Construire le flux » → <b>+ Nœud</b> (rôle + source liée) pour chaque système.</li>
+      <li><b>+ Lien</b> (source → cible, clé, attribut, SLA, transformation rejouable si besoin).</li>
+      <li>Cliquer l'étiquette du lien → <b>↻ Lancer le contrôle</b>.</li>
+      <li>Lire le graphe, les volets et le bandeau ; exporter les écarts ; suivre le <b>journal</b>.</li>
+    </ol>
+  </div>
+
+  <footer>Studio Data V5.1 — Mode opératoire « Lineage &amp; santé du flux ». Document généré pour usage interne.</footer>
+</div>
+</body>
+</html>
