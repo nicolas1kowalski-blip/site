@@ -5159,7 +5159,7 @@
             el('uxDrawer').classList.add('on'); el('uxScrim').classList.add('on');
         }
         function closeUxDrawer() {
-            el('uxDrawer').classList.remove('on'); el('uxScrim').classList.remove('on');
+            el('uxDrawer').classList.remove('on', 'wide'); el('uxScrim').classList.remove('on');
             document.querySelectorAll('tr.sel').forEach(r => r.classList.remove('sel'));
         }
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUxDrawer(); });
@@ -7022,15 +7022,30 @@
         function catShowAttrLineage(e2) {
             const box = el('catLineageBox'); if (!box) return;
             const data = buildColumnLineageGraph(e2.tbl, e2.col);
+            el('uxDrawer').classList.add('wide'); // plus de place horizontale pour le graphe
             box.classList.remove('hidden');
-            box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »</span><button onclick="el('catLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="catLineageWrap" class="h-[320px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            box.innerHTML = `<div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »</span>
+                <span class="flex items-center gap-1.5">
+                    <button onclick="catLineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Afficher en plein écran">⛶ Agrandir</button>
+                    <button onclick="catCloseLineage()" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
+                <div id="catLineageWrap" class="h-[460px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
             try {
                 if (catAttrLineageGraph) { try { catAttrLineageGraph.destroy(); } catch (e3) {} catAttrLineageGraph = null; }
                 catAttrLineageGraph = createSvgGraph(el('catLineageWrap'));
                 catAttrLineageGraph.data(data); catAttrLineageGraph.render(); catAttrLineageGraph.fitView(20);
+                catFitLineage(60); catFitLineage(340); // re-cadrage après la transition d'élargissement du drawer
             } catch (e3) { el('catLineageWrap').innerHTML = '<p class="text-[11px] text-slate-400 italic p-4">Lineage indisponible : ' + escapeHTML(e3.message || '') + '</p>'; }
             box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
+        function catFitLineage(delay) { setTimeout(() => { const w = el('catLineageWrap'); if (!w || !catAttrLineageGraph) return; try { catAttrLineageGraph.changeSize(w.clientWidth, w.clientHeight); catAttrLineageGraph.fitView(20); } catch (e) {} }, delay || 0); }
+        function catCloseLineage() { const box = el('catLineageBox'); if (box) box.classList.add('hidden'); el('uxDrawer').classList.remove('wide'); }
+        function catLineageFullscreen() {
+            const w = el('catLineageWrap'); if (!w) return;
+            if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
+            else { w.requestFullscreen().then(() => catFitLineage(200)).catch(er => showError('Plein écran refusé : ' + (er && er.message || ''))); }
+        }
+        document.addEventListener('fullscreenchange', () => { if (el('catLineageWrap') && catAttrLineageGraph) catFitLineage(160); });
         function catUseData() {
             const e2 = _catFicheCtx; closeUxDrawer(); if (!e2) return;
             const t = e2.tbl ? tableByName(e2.tbl) : null;
@@ -7843,8 +7858,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.3.1';
+        const APP_VERSION = '4.3.2';
         const APP_CHANGELOG = [
+            { v: '4.3.2', d: '2026-07-23', t: 'Lineage de la fiche agrandi', items: [
+                'Catalogue : le graphe de lineage affiché dans la fiche élargit le panneau et occupe une plus grande zone, avec un bouton « Agrandir » (plein écran) — il n\'est plus à l\'étroit.'] },
             { v: '4.3.1', d: '2026-07-23', t: 'Fiche d\'un attribut recentrée', items: [
                 'Catalogue : la fiche d\'un attribut affiche désormais le détail de CET attribut (type réel, type déclaré, complétude, terme, table) au lieu de la structure complète (toutes les colonnes) de sa table.'] },
             { v: '4.3.0', d: '2026-07-23', t: 'Lineage d\'un attribut depuis le catalogue', items: [
