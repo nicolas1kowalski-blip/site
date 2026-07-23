@@ -862,7 +862,7 @@
         let currentProfilingWhere = ''; let qualAuditWhereOverride = null;
         // Référentiel de gouvernance : indexé par NOM de table (et non id technique) pour survivre
         // aux rechargements et aux échanges de bundles entre collègues.
-        state.governance = { perimeters: [], dictionary: {}, glossary: [], useCases: [], businessObjects: [], rules: [], lineage: {}, qualityHistory: [], assets: [] };
+        state.governance = { perimeters: [], dictionary: {}, glossary: [], useCases: [], businessObjects: [], rules: [], lineage: {}, qualityHistory: [], assets: [], srcWatch: {} };
         let govState = { tab: 'dictionary', dictTable: null, resetArmed: false, selectedBoId: null, showMulti: false };
         let lineageGraph = null;
 
@@ -1862,6 +1862,7 @@
                 assets: Array.isArray(g.assets) ? g.assets : [],
                 qualityRules: Array.isArray(g.qualityRules) ? g.qualityRules : [],
                 privacy: g.privacy && typeof g.privacy === 'object' ? g.privacy : { levels: {}, actions: { personnel: 'pseudo', confidentiel: 'mask', interne: 'none', public: 'none' } },
+                srcWatch: g.srcWatch && typeof g.srcWatch === 'object' ? g.srcWatch : {},
             });
         }
 
@@ -2193,6 +2194,7 @@
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
             else if (govState.tab === 'catalog') c.innerHTML = renderGovCatalog();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
+            else if (govState.tab === 'srcwatch') c.innerHTML = renderSrcWatch();
             else if (govState.tab === 'share') { govState.tab = 'catalog'; c.innerHTML = renderGovCatalog(); openBackupCenter(); }
             else if (govState.tab === 'lineage') { const _am = govState.lineageView === 'attr'; const _bos = state.governance.businessObjects || [];
                 c.innerHTML = '<div id="lineageFsWrap"><div class="flex items-center gap-2 mb-2 flex-wrap">'
@@ -4463,6 +4465,255 @@
             persistQualityHistory();
             persistAppState();
         }
+        // ======================= SURVEILLANCE DES SOURCES (amont) =======================
+        // 4 outils autour d'une source rafraîchie depuis une application amont :
+        //  1) Moniteur : fraîcheur/SLA + dérive de schéma et de volumétrie entre instantanés.
+        //  2) Contrat de données : schéma attendu + vérification de conformité.
+        //  3) Suivi des changements (delta) : ajoutés / supprimés / modifiés vs un instantané figé.
+        //  4) Réconciliation amont/aval : volumétrie + orphelins entre deux sources.
+        let swState = { tool: 'monitor', deltaSrc: '', deltaKey: '', deltaRes: null, recA: '', recKeyA: '', recB: '', recKeyB: '', recRes: null, contractRes: {} };
+        let swDataSnaps = {}; // session : { [table] : { ts, snapId, rows } } (les tables DuckDB ne survivent pas au rechargement)
+        function swModel() { const g = state.governance; g.srcWatch = g.srcWatch || {}; return g.srcWatch; }
+        function swGet(tn) { const m = swModel(); m[tn] = m[tn] || { snaps: [], contract: null }; return m[tn]; }
+        function swReadyTables() { return Object.values(state.tables).filter(t => t.status === 'ready'); }
+        function swSimpleType(dt) { const t = String(dt || '').toUpperCase(); if (/INT|DECIMAL|DOUBLE|FLOAT|HUGE|NUMERIC|REAL/.test(t)) return 'nombre'; if (/DATE|TIME/.test(t)) return 'date'; if (/BOOL/.test(t)) return 'booléen'; return 'texte'; }
+        async function swRealSchema(tId) {
+            const { conn } = await getDB();
+            const res = arrowResultToObjects(await conn.query(`SELECT column_name AS n, data_type AS t FROM information_schema.columns WHERE table_name = ${sqlLiteral(duckTableName(tId))}`));
+            return res.filter(r => r.n !== '__rn').map(r => ({ name: r.n, type: swSimpleType(r.t) }));
+        }
+        // Fréquence de mise à jour (texte libre du dictionnaire) → âge maximal toléré, en jours.
+        function swFreqDays(freq) { const f = String(freq || '').toLowerCase();
+            if (/temps\s?r|réel|reel|continu/.test(f)) return 0.2;
+            if (/heure|hour|horaire/.test(f)) return 0.5;
+            if (/quotid|jour|daily|journ|nuit/.test(f)) return 1.5;
+            if (/hebdo|semain|week/.test(f)) return 8;
+            if (/mensuel|mois|month/.test(f)) return 33;
+            if (/trimestr|quarter/.test(f)) return 95;
+            if (/annuel|an\b|year/.test(f)) return 370;
+            return null; }
+        function swFreshness(t) {
+            const d = state.governance.dictionary[t.name] || {};
+            const maxDays = swFreqDays(d.updateFrequency);
+            if (!t.lastRefresh) return { status: t.file ? 'unknown' : 'na', maxDays, freq: d.updateFrequency };
+            const ageDays = (Date.now() - t.lastRefresh) / 864e5;
+            if (maxDays == null) return { status: 'nofreq', ageDays, freq: d.updateFrequency };
+            return { status: ageDays > maxDays ? 'late' : 'ok', ageDays, maxDays, freq: d.updateFrequency };
+        }
+        function swFreshBadge(t) {
+            const f = swFreshness(t);
+            const age = f.ageDays != null ? (f.ageDays < 1 ? Math.round(f.ageDays * 24) + ' h' : Math.round(f.ageDays) + ' j') : '—';
+            if (f.status === 'ok') return `<span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">✔ à jour (${age})</span>`;
+            if (f.status === 'late') return `<span class="text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5" title="Fréquence attendue : ${escapeHTML(f.freq || '')}">⚠ en retard (${age} > ${f.maxDays < 1 ? Math.round(f.maxDays * 24) + ' h' : Math.round(f.maxDays) + ' j'})</span>`;
+            if (f.status === 'nofreq') return `<span class="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5" title="Renseignez « Fréquence de mise à jour » dans le dictionnaire pour surveiller le SLA">↻ ${age} · fréquence non définie</span>`;
+            return `<span class="text-[11px] text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">fraîcheur inconnue</span>`;
+        }
+        // -- 1. Moniteur : instantané (volumétrie + schéma) et dérive --
+        async function swSnapshot(tn) {
+            const t = tableByName(tn); if (!t) return;
+            try {
+                const { conn } = await getDB();
+                const cRes = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))}`));
+                const rows = Number(cRes[0].n);
+                const schema = await swRealSchema(t.id);
+                const e = swGet(tn); e.snaps = e.snaps || [];
+                e.snaps.push({ ts: Date.now(), rows, schema });
+                if (e.snaps.length > 40) e.snaps = e.snaps.slice(-40);
+                persistAppState(); renderGovernance();
+                showSuccess(`🛰️ Instantané de « ${tn} » pris : ${rows.toLocaleString('fr-FR')} lignes, ${schema.length} colonnes.`);
+            } catch (e) { showError('Instantané impossible : ' + e.message); }
+        }
+        function swDrift(snaps) {
+            if (!snaps || snaps.length < 2) return null;
+            const a = snaps[snaps.length - 2], b = snaps[snaps.length - 1];
+            const na = new Map(a.schema.map(c => [c.name, c.type])), nb = new Map(b.schema.map(c => [c.name, c.type]));
+            const added = b.schema.filter(c => !na.has(c.name)).map(c => c.name);
+            const removed = a.schema.filter(c => !nb.has(c.name)).map(c => c.name);
+            const retyped = b.schema.filter(c => na.has(c.name) && na.get(c.name) !== c.type).map(c => `${c.name} (${na.get(c.name)}→${c.type})`);
+            const rowsDelta = b.rows - a.rows;
+            const rowsPct = a.rows ? (rowsDelta / a.rows) * 100 : null;
+            return { added, removed, retyped, rowsDelta, rowsPct, from: a.ts, to: b.ts, schemaChanged: added.length || removed.length || retyped.length };
+        }
+        // -- 2. Contrat de données --
+        async function swGenContract(tn) {
+            const t = tableByName(tn); if (!t) return;
+            try { const schema = await swRealSchema(t.id);
+                swGet(tn).contract = { cols: schema.map(c => ({ name: c.name, type: c.type, required: false })), at: Date.now() };
+                persistAppState(); renderGovernance();
+                showSuccess(`📜 Contrat de « ${tn} » généré depuis la structure actuelle (${schema.length} colonnes).`);
+            } catch (e) { showError('Génération du contrat impossible : ' + e.message); }
+        }
+        function swToggleRequired(tn, col, on) { const c = (swGet(tn).contract || {}); const f = (c.cols || []).find(x => x.name === col); if (f) { f.required = on; persistAppState(); } }
+        async function swCheckContract(tn) {
+            const t = tableByName(tn); const c = swGet(tn).contract; if (!t || !c) return;
+            try {
+                const { conn } = await getDB();
+                const schema = await swRealSchema(t.id);
+                const cur = new Map(schema.map(x => [x.name, x.type]));
+                const decl = new Map(c.cols.map(x => [x.name, x]));
+                const missing = c.cols.filter(x => !cur.has(x.name)).map(x => x.name);
+                const extra = schema.filter(x => !decl.has(x.name)).map(x => x.name);
+                const retyped = c.cols.filter(x => cur.has(x.name) && cur.get(x.name) !== x.type).map(x => `${x.name} (attendu ${x.type}, reçu ${cur.get(x.name)})`);
+                const emptyReq = [];
+                for (const col of c.cols.filter(x => x.required && cur.has(x.name))) {
+                    const r = arrowResultToObjects(await queryResilient(conn, `SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))} WHERE ${sqlIdent(col.name)} IS NULL OR TRIM(CAST(${sqlIdent(col.name)} AS VARCHAR)) = ''`))[0];
+                    const nn = Number(r.n); if (nn > 0) emptyReq.push(`${col.name} (${nn.toLocaleString('fr-FR')} vide(s))`);
+                }
+                const conform = !missing.length && !retyped.length && !emptyReq.length;
+                swState.contractRes[tn] = { conform, missing, extra, retyped, emptyReq, at: Date.now() };
+                persistAppState(); renderGovernance();
+            } catch (e) { showError('Vérification impossible : ' + e.message); }
+        }
+        // -- 3. Suivi des changements (delta vs instantané figé des données) --
+        async function swFreezeData(tn) {
+            const t = tableByName(tn); if (!t) return;
+            try { const { conn } = await getDB(); const snapId = 'wsnap_' + generateId();
+                await conn.query(`CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(snapId))} AS SELECT * EXCLUDE (__rn) FROM ${sqlIdent(duckTableName(t.id))}`);
+                const cRes = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(snapId))}`));
+                swDataSnaps[tn] = { ts: Date.now(), snapId, rows: Number(cRes[0].n) };
+                swState.deltaRes = null; renderGovernance();
+                showSuccess(`📸 Données de « ${tn} » figées (${Number(cRes[0].n).toLocaleString('fr-FR')} lignes) — rechargez la source puis comparez.`);
+            } catch (e) { showError('Figer les données impossible : ' + e.message); }
+        }
+        async function swComputeDelta(tn, key) {
+            const t = tableByName(tn); const snap = swDataSnaps[tn];
+            if (!t) return; if (!snap) return showError('Figez d\'abord un instantané des données.');
+            if (!key) return showError('Choisissez une colonne clé.');
+            try {
+                const { conn } = await getDB();
+                const C = sqlIdent(duckTableName(t.id)), S = sqlIdent(duckTableName(snap.snapId));
+                const curCols = t.headers || [];
+                const snapCols = (await swRealSchema(snap.snapId)).map(x => x.name);
+                const common = curCols.filter(h => snapCols.includes(h) && h !== key);
+                const K = x => `NULLIF(UPPER(TRIM(CAST(${x}.${sqlIdent(key)} AS VARCHAR))), '')`;
+                const hash = x => common.length ? `md5(concat_ws(chr(1), ${common.map(h => `COALESCE(CAST(${x}.${sqlIdent(h)} AS VARCHAR), chr(0))`).join(', ')}))` : `''`;
+                const sql = `WITH c AS (SELECT ${K('x')} AS k, ${hash('x')} AS h FROM ${C} x),
+ s AS (SELECT ${K('y')} AS k, ${hash('y')} AS h FROM ${S} y)
+ SELECT SUM(CASE WHEN s.k IS NULL THEN 1 ELSE 0 END)::BIGINT AS added,
+        SUM(CASE WHEN c.k IS NULL THEN 1 ELSE 0 END)::BIGINT AS removed,
+        SUM(CASE WHEN c.k IS NOT NULL AND s.k IS NOT NULL AND c.h <> s.h THEN 1 ELSE 0 END)::BIGINT AS changed,
+        SUM(CASE WHEN c.k IS NOT NULL AND s.k IS NOT NULL AND c.h = s.h THEN 1 ELSE 0 END)::BIGINT AS same
+ FROM c FULL OUTER JOIN s ON c.k = s.k`;
+                const r = arrowResultToObjects(await queryResilient(conn, sql))[0];
+                swState.deltaRes = { tn, key, at: Date.now(), snapTs: snap.ts,
+                    added: Number(r.added || 0), removed: Number(r.removed || 0), changed: Number(r.changed || 0), same: Number(r.same || 0), commonCols: common.length };
+                renderGovernance();
+            } catch (e) { showError('Comparaison impossible : ' + e.message); }
+        }
+        // -- 4. Réconciliation amont/aval --
+        async function swReconcile() {
+            const tA = tableByName(swState.recA), tB = tableByName(swState.recB);
+            const kA = swState.recKeyA, kB = swState.recKeyB;
+            if (!tA || !tB || !kA || !kB) return showError('Choisissez deux sources et leur colonne clé.');
+            try {
+                const { conn } = await getDB();
+                const A = sqlIdent(duckTableName(tA.id)), B = sqlIdent(duckTableName(tB.id));
+                const KA = `NULLIF(UPPER(TRIM(CAST(${sqlIdent(kA)} AS VARCHAR))), '')`, KB = `NULLIF(UPPER(TRIM(CAST(${sqlIdent(kB)} AS VARCHAR))), '')`;
+                const sql = `WITH a AS (SELECT DISTINCT ${KA} AS k FROM ${A} WHERE ${KA} IS NOT NULL),
+ b AS (SELECT DISTINCT ${KB} AS k FROM ${B} WHERE ${KB} IS NOT NULL)
+ SELECT (SELECT COUNT(*) FROM ${A})::BIGINT AS ta, (SELECT COUNT(*) FROM ${B})::BIGINT AS tb,
+        SUM(CASE WHEN b.k IS NULL THEN 1 ELSE 0 END)::BIGINT AS onlyA,
+        SUM(CASE WHEN a.k IS NULL THEN 1 ELSE 0 END)::BIGINT AS onlyB,
+        SUM(CASE WHEN a.k IS NOT NULL AND b.k IS NOT NULL THEN 1 ELSE 0 END)::BIGINT AS common
+ FROM a FULL OUTER JOIN b ON a.k = b.k`;
+                const r = arrowResultToObjects(await queryResilient(conn, sql))[0];
+                swState.recRes = { at: Date.now(), a: swState.recA, b: swState.recB,
+                    ta: Number(r.ta || 0), tb: Number(r.tb || 0), onlyA: Number(r.onlyA || 0), onlyB: Number(r.onlyB || 0), common: Number(r.common || 0) };
+                renderGovernance();
+            } catch (e) { showError('Réconciliation impossible : ' + e.message); }
+        }
+        function swSet(f, v) { swState[f] = v; if (f === 'recA' || f === 'recB' || f === 'deltaSrc') renderGovernance(); }
+
+        function renderSrcWatch() {
+            const tables = swReadyTables();
+            if (!tables.length) return emptyStateHtml('🛰️', 'Aucune source à surveiller', 'Chargez au moins une source (onglet Sources) pour suivre sa fraîcheur, sa dérive, son contrat et ses changements.', '', '');
+            const tabBtn = (k, lbl) => `<button onclick="swSet('tool','${k}')" class="px-3 py-1.5 text-xs font-bold rounded-lg border ${swState.tool === k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}">${lbl}</button>`;
+            let html = `<p class="text-sm text-slate-500 mb-3">Surveillez les sources reçues d'applications amont : fraîcheur, dérive, conformité au schéma attendu, changements entre chargements, cohérence entre sources.</p>
+                <div class="flex gap-2 mb-4 flex-wrap">${tabBtn('monitor', '📡 Moniteur & fraîcheur')}${tabBtn('contract', '📜 Contrat de données')}${tabBtn('delta', '🔁 Changements (delta)')}${tabBtn('recon', '🔗 Réconciliation')}</div>`;
+
+            if (swState.tool === 'monitor') {
+                html += `<div class="space-y-2">${tables.map(t => { const e = swGet(t.name); const drift = swDrift(e.snaps); const nSnap = (e.snaps || []).length;
+                    return `<div class="border border-slate-200 rounded-xl p-3 bg-white">
+                        <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                            <span class="font-bold text-sm text-slate-800">${escapeHTML(t.name)}</span>
+                            ${swFreshBadge(t)}
+                            <span class="text-[11px] text-slate-400">${t.lastRows != null ? Number(t.lastRows).toLocaleString('fr-FR') + ' lignes' : ''} · ${(t.headers || []).length} colonnes</span>
+                            <span class="ml-auto"></span>
+                            <span class="text-[11px] text-slate-400">${nSnap} instantané(s)</span>
+                            <button onclick="swSnapshot('${escapeHTML(t.name.replace(/'/g, "\\\\'"))}')" class="text-[11px] bg-white border border-indigo-300 text-indigo-700 font-bold px-2.5 py-1 rounded hover:bg-indigo-50">🛰️ Prendre un instantané</button>
+                        </div>
+                        ${drift ? `<div class="text-[11px] flex flex-wrap gap-2 items-center">
+                            <span class="text-slate-500">Depuis le dernier instantané :</span>
+                            <span class="${drift.rowsDelta === 0 ? 'text-slate-500' : (drift.rowsDelta > 0 ? 'text-emerald-700' : 'text-red-700')} font-bold">${drift.rowsDelta >= 0 ? '+' : ''}${drift.rowsDelta.toLocaleString('fr-FR')} ligne(s)${drift.rowsPct != null ? ` (${drift.rowsPct >= 0 ? '+' : ''}${drift.rowsPct.toFixed(1)} %)` : ''}</span>
+                            ${drift.schemaChanged ? `<span class="text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 font-bold">⚠ dérive de schéma</span>${drift.added.length ? `<span class="text-emerald-700">+ ${drift.added.map(escapeHTML).join(', ')}</span>` : ''}${drift.removed.length ? `<span class="text-red-700">− ${drift.removed.map(escapeHTML).join(', ')}</span>` : ''}${drift.retyped.length ? `<span class="text-purple-700">⟳ ${drift.retyped.map(escapeHTML).join(', ')}</span>` : ''}` : '<span class="text-emerald-600">schéma stable</span>'}
+                        </div>` : `<div class="text-[11px] text-slate-400 italic">Prenez deux instantanés (à deux chargements) pour mesurer la dérive.</div>`}
+                    </div>`; }).join('')}</div>`;
+            } else if (swState.tool === 'contract') {
+                html += `<div class="space-y-3">${tables.map(t => { const c = swGet(t.name).contract; const res = swState.contractRes[t.name];
+                    return `<div class="border border-slate-200 rounded-xl p-3 bg-white">
+                        <div class="flex items-center gap-2 flex-wrap mb-1.5"><span class="font-bold text-sm text-slate-800">${escapeHTML(t.name)}</span>
+                            ${c ? `<span class="text-[11px] text-slate-400">${c.cols.length} colonne(s) attendue(s) · ${c.cols.filter(x => x.required).length} obligatoire(s)</span>` : '<span class="text-[11px] text-slate-400 italic">aucun contrat défini</span>'}
+                            <span class="ml-auto"></span>
+                            <button onclick="swGenContract('${escapeHTML(t.name.replace(/'/g, "\\\\'"))}')" class="text-[11px] bg-white border border-slate-300 font-bold px-2.5 py-1 rounded hover:bg-slate-50">${c ? '↻ Régénérer' : '📜 Générer depuis la structure'}</button>
+                            ${c ? `<button onclick="swCheckContract('${escapeHTML(t.name.replace(/'/g, "\\\\'"))}')" class="text-[11px] bg-indigo-600 text-white font-bold px-2.5 py-1 rounded hover:bg-indigo-700">✔ Vérifier la conformité</button>` : ''}
+                        </div>
+                        ${c ? `<details class="mb-1.5"><summary class="text-[11px] font-bold text-slate-500 cursor-pointer">Colonnes attendues (cocher « obligatoire »)</summary>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-1 mt-1.5">${c.cols.map(col => `<label class="flex items-center gap-1.5 text-[11px] border border-slate-100 rounded px-1.5 py-1"><input type="checkbox" ${col.required ? 'checked' : ''} onchange="swToggleRequired('${escapeHTML(t.name.replace(/'/g, "\\\\'"))}','${escapeHTML(col.name.replace(/'/g, "\\\\'"))}',this.checked)"><span class="truncate" title="${escapeHTML(col.name)}">${escapeHTML(col.name)}</span><span class="text-slate-300 ml-auto">${col.type}</span></label>`).join('')}</div></details>` : ''}
+                        ${res ? `<div class="text-[11px] rounded-lg border px-2.5 py-2 ${res.conform ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}">
+                            <div class="font-bold">${res.conform ? '✔ Conforme au contrat' : '✗ Non conforme'}</div>
+                            ${res.missing.length ? `<div>Colonnes manquantes : <strong>${res.missing.map(escapeHTML).join(', ')}</strong></div>` : ''}
+                            ${res.retyped.length ? `<div>Types différents : ${res.retyped.map(escapeHTML).join(', ')}</div>` : ''}
+                            ${res.emptyReq.length ? `<div>Obligatoires avec des vides : ${res.emptyReq.map(escapeHTML).join(', ')}</div>` : ''}
+                            ${res.extra.length ? `<div class="text-slate-500">Colonnes en plus (non bloquant) : ${res.extra.map(escapeHTML).join(', ')}</div>` : ''}
+                        </div>` : ''}
+                    </div>`; }).join('')}</div>`;
+            } else if (swState.tool === 'delta') {
+                const src = swState.deltaSrc && tableByName(swState.deltaSrc) ? swState.deltaSrc : (tables[0] || {}).name;
+                const t = tableByName(src); const snap = swDataSnaps[src]; const res = swState.deltaRes;
+                html += `<div class="border border-slate-200 rounded-xl p-4 bg-white">
+                    <p class="text-[12px] text-slate-500 mb-3">Comparez l'état <strong>actuel</strong> d'une source à un <strong>instantané figé</strong> précédemment : lignes ajoutées, supprimées, modifiées (par clé). Figez avant le rechargement, comparez après.</p>
+                    <div class="flex items-end gap-2 flex-wrap mb-3">
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block">Source</label>
+                        <select onchange="swSet('deltaSrc', this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${tables.map(x => `<option value="${escapeHTML(x.name)}" ${x.name === src ? 'selected' : ''}>${escapeHTML(x.name)}</option>`).join('')}</select></div>
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block">Clé (identifiant de ligne)</label>
+                        <select onchange="swSet('deltaKey', this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="">— colonne clé —</option>${(t ? t.headers : []).map(h => `<option value="${escapeHTML(h)}" ${swState.deltaKey === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select></div>
+                        <button onclick="swFreezeData('${escapeHTML(src.replace(/'/g, "\\\\'"))}')" class="text-xs bg-white border border-slate-300 font-bold px-3 py-1.5 rounded hover:bg-slate-50">📸 Figer l'instantané${snap ? ' (remplacer)' : ''}</button>
+                        <button onclick="swComputeDelta('${escapeHTML(src.replace(/'/g, "\\\\'"))}', swState.deltaKey || el('__none').value)" ${snap ? '' : 'disabled'} class="text-xs ${snap ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-200 text-slate-400'} font-bold px-3 py-1.5 rounded">🔁 Comparer à l'instantané</button>
+                        <input type="hidden" id="__none" value="">
+                    </div>
+                    ${snap ? `<div class="text-[11px] text-slate-500 mb-2">📸 Instantané figé : ${snap.rows.toLocaleString('fr-FR')} lignes le ${new Date(snap.ts).toLocaleString('fr-FR')}.</div>` : `<div class="text-[11px] text-amber-600 mb-2">Aucun instantané figé pour cette source dans cette session.</div>`}
+                    ${res && res.tn === src ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div class="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-center"><div class="text-xl font-black text-emerald-700">${res.added.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">ligne(s) ajoutée(s)</div></div>
+                        <div class="p-3 rounded-lg bg-red-50 border border-red-200 text-center"><div class="text-xl font-black text-red-700">${res.removed.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">supprimée(s)</div></div>
+                        <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-center"><div class="text-xl font-black text-amber-700">${res.changed.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">modifiée(s)</div></div>
+                        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center"><div class="text-xl font-black text-slate-600">${res.same.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">inchangée(s)</div></div>
+                    </div><p class="text-[10px] text-slate-400 mt-1.5">Comparaison par clé « ${escapeHTML(res.key)} » sur ${res.commonCols} colonne(s) commune(s).</p>` : ''}
+                </div>`;
+            } else if (swState.tool === 'recon') {
+                const opt = (sel) => tables.map(x => `<option value="${escapeHTML(x.name)}" ${x.name === sel ? 'selected' : ''}>${escapeHTML(x.name)}</option>`).join('');
+                const tA = tableByName(swState.recA), tB = tableByName(swState.recB);
+                const r = swState.recRes;
+                html += `<div class="border border-slate-200 rounded-xl p-4 bg-white">
+                    <p class="text-[12px] text-slate-500 mb-3">Vérifiez la cohérence entre deux sources par une clé commune : volumétrie et <strong>orphelins</strong> (clés présentes d'un côté et absentes de l'autre). Idéal pour un contrôle de chargement amont/aval.</p>
+                    <div class="flex items-end gap-2 flex-wrap mb-3">
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block">Source A</label><select onchange="swSet('recA', this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="">—</option>${opt(swState.recA)}</select></div>
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block">Clé A</label><select onchange="swSet('recKeyA', this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="">—</option>${(tA ? tA.headers : []).map(h => `<option value="${escapeHTML(h)}" ${swState.recKeyA === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select></div>
+                        <span class="text-slate-300 self-center pb-1">↔</span>
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block">Source B</label><select onchange="swSet('recB', this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="">—</option>${opt(swState.recB)}</select></div>
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block">Clé B</label><select onchange="swSet('recKeyB', this.value)" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="">—</option>${(tB ? tB.headers : []).map(h => `<option value="${escapeHTML(h)}" ${swState.recKeyB === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select></div>
+                        <button onclick="swReconcile()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded">🔗 Réconcilier</button>
+                    </div>
+                    ${r ? `<div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center"><div class="text-lg font-black text-slate-700">${r.ta.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500 truncate" title="${escapeHTML(r.a)}">lignes ${escapeHTML(r.a)}</div></div>
+                        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center"><div class="text-lg font-black text-slate-700">${r.tb.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500 truncate" title="${escapeHTML(r.b)}">lignes ${escapeHTML(r.b)}</div></div>
+                        <div class="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-center"><div class="text-lg font-black text-emerald-700">${r.common.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">clés communes</div></div>
+                        <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-center"><div class="text-lg font-black text-amber-700">${r.onlyA.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">seulement dans A</div></div>
+                        <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-center"><div class="text-lg font-black text-amber-700">${r.onlyB.toLocaleString('fr-FR')}</div><div class="text-[10px] text-slate-500">seulement dans B</div></div>
+                    </div>${(r.onlyA || r.onlyB) ? `<p class="text-[11px] text-amber-700 mt-2 font-bold">⚠ ${(r.onlyA + r.onlyB).toLocaleString('fr-FR')} orphelin(s) : des clés ne se retrouvent pas des deux côtés.</p>` : '<p class="text-[11px] text-emerald-700 mt-2 font-bold">✔ Toutes les clés se recoupent des deux côtés.</p>'}` : ''}
+                </div>`;
+            }
+            return html;
+        }
         function renderGovHistory() {
             const h = state.governance.qualityHistory;
             if (!h.length) return '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun audit enregistré. Lancez un audit dans l\'onglet Qualité : chaque exécution est historisée ici.</p>';
@@ -5075,6 +5326,7 @@
                   { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Classer' },
                   { g: 'lineage', icon: '🕸️', label: 'Lineage', fam: 'Tracer' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Tracer' },
+                  { g: 'srcwatch', icon: '🛰️', label: 'Surveillance sources', fam: 'Tracer' },
               ] },
         ];
         const PHASE_COLORS = {
@@ -7928,8 +8180,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.4.3';
+        const APP_VERSION = '4.5.0';
         const APP_CHANGELOG = [
+            { v: '4.5.0', d: '2026-07-23', t: 'Surveillance des sources amont', items: [
+                'Nouvel écran Gouvernance ▸ Tracer ▸ « 🛰️ Surveillance sources » avec 4 outils autour d\'une source rafraîchie depuis une application amont :',
+                'Moniteur & fraîcheur : instantanés (volumétrie + schéma), dérive de schéma (colonnes ajoutées/supprimées/retypées) et de volumétrie, alerte de retard selon la fréquence de mise à jour du dictionnaire (SLA).',
+                'Contrat de données : schéma attendu (généré depuis la structure), colonnes obligatoires, et vérification de conformité (manquantes, types différents, obligatoires vides, colonnes en plus).',
+                'Suivi des changements (delta) : figer un instantané des données puis comparer l\'état actuel — lignes ajoutées / supprimées / modifiées / inchangées par clé.',
+                'Réconciliation amont/aval : volumétrie et orphelins (clés non recoupées) entre deux sources par leur clé.'] },
             { v: '4.4.3', d: '2026-07-23', t: 'Correctif : analyse d\'écarts sur grosses tables', items: [
                 'Correction du « Analyse impossible : HTML FileReaders do not support writing » sur le rapport d\'écarts entre sources d\'une grosse table lue à la demande : l\'analyse se relance automatiquement en mémoire pure quand le stockage temporaire du navigateur n\'est pas inscriptible, avec un message d\'aide clair si le volume reste trop élevé.'] },
             { v: '4.4.2', d: '2026-07-23', t: 'Import : diagnostic « objet introuvable »', items: [
@@ -13121,7 +13379,7 @@
     
         // ======================= V3 UX : préservation du scroll et du focus =======================
         (function () {
-            const KEEP = ['renderGovernance', 'renderTables', 'renderTablesDesign', 'renderQualityRules', 'renderRecipes',
+            const KEEP = ['renderGovernance', 'renderTables', 'renderTablesDesign', 'renderQualityRules', 'renderRecipes', 'renderSrcWatch',
                 'renderDashboards', 'renderLinkage', 'renderRelationsList', 'renderSourceUpdatePanel', 'renderNlAssistant'];
             const wrap = fn => function (...a) {
                 const win = { x: window.scrollX, y: window.scrollY };
