@@ -4679,6 +4679,8 @@
                           consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' } };
         const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture' };
         let lfView = 'systems';
+        let lfEditNodeId = null, lfEditEdgeId = null;
+        function lfEdgeKeys(e) { return { sK: e.srcKey || e.key || '', tK: e.tgtKey || e.key || '', sA: e.srcAttr || e.attr || '', tA: e.tgtAttr || e.attr || '' }; }
         const LF_XFORM_AGG = { sum: 'Somme', avg: 'Moyenne', min: 'Min', max: 'Max', count: 'Nombre' };
         const LF_XFORM_SCALAR = { round: 'Arrondi', factor: '× facteur', abs: 'Valeur absolue', upper: 'MAJUSCULES', lower: 'minuscules', trim: 'Espaces nettoyés' };
         function lfModel() {
@@ -4807,7 +4809,7 @@
         function lfBuilderHtml(nodes, edges, tables) {
             const tOpts = tables.map(t => `<option value="${escapeHTML(t.name)}">${escapeHTML(t.name)}</option>`).join('');
             const nOpts = nodes.map(n => `<option value="${n.id}">${escapeHTML(n.name)}</option>`).join('');
-            let h = `<details class="mt-4 bg-slate-50 border border-slate-200 rounded-xl" ${nodes.length ? '' : 'open'}>
+            let h = `<details class="mt-4 bg-slate-50 border border-slate-200 rounded-xl" ${(nodes.length && !lfEditNodeId && !lfEditEdgeId) ? '' : 'open'}>
                 <summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600">⚙️ Construire le flux — systèmes &amp; liens ${nodes.length ? `(${nodes.length} nœud(s), ${edges.length} lien(s))` : ''}</summary>
                 <div class="p-3 space-y-4">`;
             h += `<div class="flex flex-wrap items-center gap-2">
@@ -4821,43 +4823,64 @@
                     <td class="p-2">${(LF_ROLE[n.role] || {}).lbl || n.role}</td>
                     <td class="p-2 text-slate-500">${escapeHTML(n.domain || '—')}</td>
                     <td class="p-2 ${n.tableName && tableByName(n.tableName) ? 'text-emerald-700 font-semibold' : 'text-slate-400'}">${n.tableName ? escapeHTML(n.tableName) + (tableByName(n.tableName) ? '' : ' (absente)') : '—'}</td>
-                    <td class="p-2 text-right"><button onclick="lfDelNode('${n.id}')" class="text-red-400 hover:text-red-600">✕</button></td></tr>`).join('');
+                    <td class="p-2 text-right whitespace-nowrap"><button onclick="lfEditNodeStart('${n.id}')" class="text-indigo-500 hover:text-indigo-700 mr-2" title="Modifier">✎</button><button onclick="lfDelNode('${n.id}')" class="text-red-400 hover:text-red-600" title="Supprimer">✕</button></td></tr>`).join('');
                 h += `</tbody></table></div>`;
             }
-            // ajout de nœud
-            h += `<div class="flex items-end gap-2 flex-wrap bg-white border border-slate-100 rounded-lg p-2">
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom du système</label><input id="lf-n-name" placeholder="ex : CRM Salesforce" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Rôle</label><select id="lf-n-role" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="master">Maître</option><option value="reference">Référentiel</option><option value="consumer" selected>Consommateur</option></select></div>
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Domaine</label><input id="lf-n-dom" placeholder="ex : Client" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source liée (optionnel)</label><select id="lf-n-tbl" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="">— aucune —</option>${tOpts}</select></div>
-                <button onclick="lfAddNode()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">+ Nœud</button></div>`;
+            // ajout / édition de nœud
+            const _en = lfEditNodeId ? lfNode(lfEditNodeId) : null;
+            const _roleOpt = r => `<option value="${r}" ${(_en ? _en.role : 'consumer') === r ? 'selected' : ''}>${LF_ROLE[r].lbl}</option>`;
+            const _tblOptN = `<option value="">— aucune —</option>` + tables.map(t => `<option value="${escapeHTML(t.name)}" ${_en && _en.tableName === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('');
+            h += `<div class="flex items-end gap-2 flex-wrap bg-white border ${_en ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-100'} rounded-lg p-2">
+                ${_en ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du nœud</div>' : ''}
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom du système</label><input id="lf-n-name" value="${_en ? escapeHTML(_en.name) : ''}" placeholder="ex : CRM Salesforce" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Rôle</label><select id="lf-n-role" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_roleOpt('master')}${_roleOpt('reference')}${_roleOpt('consumer')}</select></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Domaine</label><input id="lf-n-dom" value="${_en ? escapeHTML(_en.domain || '') : ''}" placeholder="ex : Client" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source liée (optionnel)</label><select id="lf-n-tbl" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_tblOptN}</select></div>
+                <button onclick="lfSaveNodeForm()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">${_en ? '✓ Enregistrer' : '+ Nœud'}</button>
+                ${_en ? `<button onclick="lfEditCancel()" class="text-xs bg-white border border-slate-300 text-slate-500 px-3 py-1.5 rounded font-bold">Annuler</button>` : ''}</div>`;
             // liste des liens
             if (edges.length) {
-                h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Lien</th><th class="p-2">Type</th><th class="p-2">Clé / attribut</th><th class="p-2">Dernier contrôle</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
-                h += edges.map(e => { const s = lfNode(e.source), t = lfNode(e.target); const lr = e.lastRun;
+                h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Lien</th><th class="p-2">Type</th><th class="p-2">Clé (source → cible)</th><th class="p-2">Attribut (source → cible)</th><th class="p-2">Dernier contrôle</th><th class="p-2 w-14"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
+                h += edges.map(e => { const s = lfNode(e.source), t = lfNode(e.target); const lr = e.lastRun; const K = lfEdgeKeys(e);
+                    const pair = (x, y) => (x || y) ? (escapeHTML(x || '?') + (x !== y ? ' → ' + escapeHTML(y || '?') : '')) : '—';
                     return `<tr><td class="p-2 font-semibold text-slate-700">${escapeHTML((s || {}).name || '?')} → ${escapeHTML((t || {}).name || '?')}</td>
                     <td class="p-2 text-slate-500">${LF_EDGE_TYPES[e.type] || e.type}</td>
-                    <td class="p-2 text-slate-500">${e.key ? escapeHTML(e.key) : '—'}${e.attr ? ' / ' + escapeHTML(e.attr) : ''}</td>
+                    <td class="p-2 text-slate-500 mono">${pair(K.sK, K.tK)}</td>
+                    <td class="p-2 text-slate-500 mono">${pair(K.sA, K.tA)}</td>
                     <td class="p-2 ${lr && lr.rate > lfModel().threshold ? 'text-red-600 font-bold' : 'text-slate-500'}">${lr ? (lr.rate != null ? lr.rate.toFixed(2) + ' %' : '—') : 'jamais'}</td>
-                    <td class="p-2 text-right"><button onclick="lfDelEdge('${e.id}')" class="text-red-400 hover:text-red-600">✕</button></td></tr>`; }).join('');
+                    <td class="p-2 text-right whitespace-nowrap"><button onclick="lfEditEdgeStart('${e.id}')" class="text-indigo-500 hover:text-indigo-700 mr-2" title="Modifier">✎</button><button onclick="lfDelEdge('${e.id}')" class="text-red-400 hover:text-red-600" title="Supprimer">✕</button></td></tr>`; }).join('');
                 h += `</tbody></table></div>`;
             }
-            // ajout de lien
+            // ajout / édition de lien
             if (nodes.length >= 2) {
-                const _fs = nodes[0]; const _ic = _fs && _fs.tableName && tableByName(_fs.tableName) ? tableByName(_fs.tableName).headers : [];
-                const _dlInit = _ic.map(h2 => `<option value="${escapeHTML(h2)}">`).join('');
-                h += `<div class="flex items-end gap-2 flex-wrap bg-white border border-slate-100 rounded-lg p-2">
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source</label><select id="lf-e-src" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${nOpts}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Cible</label><select id="lf-e-tgt" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${nOpts}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label><select id="lf-e-type" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(LF_EDGE_TYPES).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé commune</label><input id="lf-e-key" list="lf-e-key-dl" placeholder="colonne clé…" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-key-dl">${_dlInit}</datalist></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut comparé</label><input id="lf-e-attr" list="lf-e-attr-dl" placeholder="colonne à comparer…" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-attr-dl">${_dlInit}</datalist></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">SLA (h)</label><input id="lf-e-sla" type="number" value="24" class="border border-slate-300 p-1.5 rounded text-xs w-16"></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Transformation rejouable</label><select id="lf-e-xk" onchange="lfXkChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="none">Aucune</option><option value="scalar">Normalisation</option><option value="agg">Agrégation</option></select></div>
-                    <div id="lf-e-xagg-w" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Fonction</label><select id="lf-e-xfn" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(LF_XFORM_AGG).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
-                    <div id="lf-e-xsc-w" class="hidden flex items-end gap-1"><div><label class="text-[9px] uppercase font-bold text-slate-400 block">Opération</label><select id="lf-e-xop" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(LF_XFORM_SCALAR).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div><input id="lf-e-xparam" placeholder="param" class="border border-slate-300 p-1.5 rounded text-xs w-16"></div>
-                    <div class="flex-1 min-w-[180px]"><label class="text-[9px] uppercase font-bold text-slate-400 block">Transformation déclarée (optionnel)</label><input id="lf-e-transf" placeholder="ex : SOMME(montant) converti €, agrégé /mois" class="border border-slate-300 p-1.5 rounded text-xs w-full"></div>
-                    <button onclick="lfAddEdge()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">+ Lien</button></div>`;
+                const _ee = lfEditEdgeId ? lfEdge(lfEditEdgeId) : null;
+                const _K = _ee ? lfEdgeKeys(_ee) : { sK: '', tK: '', sA: '', tA: '' };
+                const _defSrc = _ee ? _ee.source : nodes[0].id, _defTgt = _ee ? _ee.target : nodes[0].id;
+                const _nOptSel = sel => nodes.map(n => `<option value="${n.id}" ${n.id === sel ? 'selected' : ''}>${escapeHTML(n.name)}</option>`).join('');
+                const _colsOf = id => { const nn = lfNode(id); return nn && nn.tableName && tableByName(nn.tableName) ? tableByName(nn.tableName).headers : []; };
+                const _dlOf = arr => arr.map(h2 => `<option value="${escapeHTML(h2)}">`).join('');
+                const _dlS = _dlOf(_colsOf(_defSrc)), _dlT = _dlOf(_colsOf(_defTgt));
+                const _xf = _ee && _ee.xform ? _ee.xform : { kind: 'none' };
+                const _typeOpts = Object.entries(LF_EDGE_TYPES).map(([v, l]) => `<option value="${v}" ${_ee && _ee.type === v ? 'selected' : ''}>${l}</option>`).join('');
+                const _fnOpts = Object.entries(LF_XFORM_AGG).map(([v, l]) => `<option value="${v}" ${_xf.fn === v ? 'selected' : ''}>${l}</option>`).join('');
+                const _opOpts = Object.entries(LF_XFORM_SCALAR).map(([v, l]) => `<option value="${v}" ${_xf.op === v ? 'selected' : ''}>${l}</option>`).join('');
+                const _xkOpts = [['none', 'Aucune'], ['scalar', 'Normalisation'], ['agg', 'Agrégation']].map(([v, l]) => `<option value="${v}" ${_xf.kind === v ? 'selected' : ''}>${l}</option>`).join('');
+                h += `<div class="flex items-end gap-2 flex-wrap bg-white border ${_ee ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-100'} rounded-lg p-2">
+                    ${_ee ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du lien</div>' : ''}
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source</label><select id="lf-e-src" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_nOptSel(_defSrc)}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Cible</label><select id="lf-e-tgt" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_nOptSel(_defTgt)}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label><select id="lf-e-type" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_typeOpts}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (source)</label><input id="lf-e-sk" list="lf-e-sk-dl" value="${escapeHTML(_K.sK)}" placeholder="clé côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sk-dl">${_dlS}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (cible)</label><input id="lf-e-tk" list="lf-e-tk-dl" value="${escapeHTML(_K.tK)}" placeholder="clé côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-tk-dl">${_dlT}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (source)</label><input id="lf-e-sa" list="lf-e-sa-dl" value="${escapeHTML(_K.sA)}" placeholder="attribut côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sa-dl">${_dlS}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (cible)</label><input id="lf-e-ta" list="lf-e-ta-dl" value="${escapeHTML(_K.tA)}" placeholder="attribut côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-ta-dl">${_dlT}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">SLA (h)</label><input id="lf-e-sla" type="number" value="${_ee ? (_ee.slaHours || 24) : 24}" class="border border-slate-300 p-1.5 rounded text-xs w-16"></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Transformation rejouable</label><select id="lf-e-xk" onchange="lfXkChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_xkOpts}</select></div>
+                    <div id="lf-e-xagg-w" class="${_xf.kind === 'agg' ? '' : 'hidden'}"><label class="text-[9px] uppercase font-bold text-slate-400 block">Fonction</label><select id="lf-e-xfn" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_fnOpts}</select></div>
+                    <div id="lf-e-xsc-w" class="${_xf.kind === 'scalar' ? '' : 'hidden'} flex items-end gap-1"><div><label class="text-[9px] uppercase font-bold text-slate-400 block">Opération</label><select id="lf-e-xop" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_opOpts}</select></div><input id="lf-e-xparam" value="${escapeHTML((_xf.param) || '')}" placeholder="param" class="border border-slate-300 p-1.5 rounded text-xs w-16"></div>
+                    <div class="flex-1 min-w-[180px]"><label class="text-[9px] uppercase font-bold text-slate-400 block">Transformation déclarée (optionnel)</label><input id="lf-e-transf" value="${_ee ? escapeHTML(_ee.transformation || '') : ''}" placeholder="ex : SOMME(montant) converti €, agrégé /mois" class="border border-slate-300 p-1.5 rounded text-xs w-full"></div>
+                    <button onclick="lfSaveEdgeForm()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">${_ee ? '✓ Enregistrer' : '+ Lien'}</button>
+                    ${_ee ? `<button onclick="lfEditCancel()" class="text-xs bg-white border border-slate-300 text-slate-500 px-3 py-1.5 rounded font-bold">Annuler</button>` : ''}</div>`;
             }
             h += `</div></details>`;
             return h;
@@ -4894,7 +4917,7 @@
                 const dash = health === 'ok' ? '' : ' stroke-dasharray="7 5"';
                 paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${health})" opacity=".9"/>`;
                 const fr = lfFresh(lfNode(e.target)); const lr = e.lastRun;
-                const lbl = (attrView && e.attr ? '◧ ' + e.attr + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || (LF_EDGE_TYPES[e.type] || e.type));
+                const _K = lfEdgeKeys(e); const _ea = _K.sA || _K.tA; const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || (LF_EDGE_TYPES[e.type] || e.type));
                 chips.push(`<div class="lf-echip lf-e-${health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${escapeHTML(lbl)}</div>`);
             });
             const marker = h => `<marker id="lfA_${h}" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${LF_COLOR[h]}"/></marker>`;
@@ -4923,31 +4946,39 @@
         }
 
         // ---- Builder actions ----
-        function lfAddNode() {
+        function lfSaveNodeForm() {
             const name = (el('lf-n-name').value || '').trim(); if (!name) return showError('Donnez un nom au système.');
-            const m = lfModel();
-            if (m.nodes.some(n => n.name.toLowerCase() === name.toLowerCase())) return showError('Un nœud « ' + name + ' » existe déjà.');
-            m.nodes.push({ id: 'ln_' + generateId(), name, role: el('lf-n-role').value, domain: (el('lf-n-dom').value || '').trim(), tableName: el('lf-n-tbl').value || '' });
+            const m = lfModel(); const editing = lfEditNodeId ? lfNode(lfEditNodeId) : null;
+            if (m.nodes.some(n => n.name.toLowerCase() === name.toLowerCase() && (!editing || n.id !== editing.id))) return showError('Un nœud « ' + name + ' » existe déjà.');
+            const vals = { name, role: el('lf-n-role').value, domain: (el('lf-n-dom').value || '').trim(), tableName: el('lf-n-tbl').value || '' };
+            if (editing) { Object.assign(editing, vals); lfEditNodeId = null; }
+            else m.nodes.push({ id: 'ln_' + generateId(), ...vals });
             persistAppState(); renderGovernance();
         }
+        function lfEditNodeStart(id) { lfEditNodeId = id; lfEditEdgeId = null; renderGovernance(); }
+        function lfEditCancel() { lfEditNodeId = null; lfEditEdgeId = null; renderGovernance(); }
         function lfDelNode(id) {
             const m = lfModel(); const n = lfNode(id); if (!n) return;
             m.nodes = m.nodes.filter(x => x.id !== id);
             m.edges = m.edges.filter(e => e.source !== id && e.target !== id);
             persistAppState(); renderGovernance();
         }
-        function lfAddEdge() {
+        function lfSaveEdgeForm() {
             const src = el('lf-e-src').value, tgt = el('lf-e-tgt').value;
             if (!src || !tgt || src === tgt) return showError('Choisissez une source et une cible distinctes.');
-            const m = lfModel();
-            if (m.edges.some(e => e.source === src && e.target === tgt)) return showError('Ce lien existe déjà.');
+            const m = lfModel(); const editing = lfEditEdgeId ? lfEdge(lfEditEdgeId) : null;
+            if (m.edges.some(e => e.source === src && e.target === tgt && (!editing || e.id !== editing.id))) return showError('Ce lien existe déjà.');
             const xk = el('lf-e-xk') ? el('lf-e-xk').value : 'none';
             const xform = xk === 'agg' ? { kind: 'agg', fn: el('lf-e-xfn').value } : (xk === 'scalar' ? { kind: 'scalar', op: el('lf-e-xop').value, param: (el('lf-e-xparam').value || '').trim() } : { kind: 'none' });
-            m.edges.push({ id: 'le_' + generateId(), source: src, target: tgt, type: el('lf-e-type').value,
-                key: (el('lf-e-key').value || '').trim(), attr: (el('lf-e-attr').value || '').trim(),
-                slaHours: parseFloat(el('lf-e-sla').value) || 24, transformation: (el('lf-e-transf').value || '').trim(), xform, lastRun: null });
+            const vals = { source: src, target: tgt, type: el('lf-e-type').value,
+                srcKey: (el('lf-e-sk').value || '').trim(), tgtKey: (el('lf-e-tk').value || '').trim(),
+                srcAttr: (el('lf-e-sa').value || '').trim(), tgtAttr: (el('lf-e-ta').value || '').trim(),
+                slaHours: parseFloat(el('lf-e-sla').value) || 24, transformation: (el('lf-e-transf').value || '').trim(), xform };
+            if (editing) { delete editing.key; delete editing.attr; Object.assign(editing, vals); editing.lastRun = null; lfEditEdgeId = null; }
+            else m.edges.push({ id: 'le_' + generateId(), ...vals, lastRun: null });
             persistAppState(); renderGovernance();
         }
+        function lfEditEdgeStart(id) { lfEditEdgeId = id; lfEditNodeId = null; renderGovernance(); }
         function lfDelEdge(id) { const m = lfModel(); m.edges = m.edges.filter(e => e.id !== id); persistAppState(); renderGovernance(); }
         function lfSetThreshold(v) { const n = parseFloat(v); if (!isNaN(n) && n >= 0) { lfModel().threshold = n; persistAppState(); renderGovernance(); } }
         function lfClearAll() { if (!confirm('Effacer tout le flux (nœuds et liens) ?')) return; const m = lfModel(); m.nodes = []; m.edges = []; persistAppState(); renderGovernance(); }
@@ -4991,15 +5022,15 @@
         function lfOpenEdge(id) {
             const e = lfEdge(id); if (!e) return;
             const s = lfNode(e.source), t = lfNode(e.target); if (!s || !t) return;
-            const fr = lfFresh(t); const lr = e.lastRun; const th = lfModel().threshold;
+            const fr = lfFresh(t); const lr = e.lastRun; const th = lfModel().threshold; const K = lfEdgeKeys(e);
             const slaBad = fr.status === 'bad'; const distBad = lfDistStatus(e) === 'bad';
             const slaBadge = fr.status === 'none' ? '<span class="text-[11px] text-slate-400">fraîcheur non mesurée</span>' : (slaBad ? '<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px">✕ SLA dépassé</span>' : '<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px">✓ SLA respecté</span>');
             const distBadge = !lr ? '<span class="text-[11px] text-slate-400">non contrôlé</span>' : (distBad ? `<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px">⚠ Au-dessus du seuil (${th} %)</span>` : `<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px">✓ Sous le seuil (${th} %)</span>`);
-            const mismHTML = (lr && lr.samples && lr.samples.length) ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Exemples d'écarts (clé ${escapeHTML(e.key || '')})</h4>
+            const mismHTML = (lr && lr.samples && lr.samples.length) ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Exemples d'écarts (clé ${escapeHTML(K.sK || '')}${K.sK !== K.tK ? ' / ' + escapeHTML(K.tK || '') : ''})</h4>
                 <div class="text-[10px] text-slate-400 flex gap-2 pb-1"><span style="min-width:96px">Clé</span><span>Maître (${escapeHTML(s.name)})</span><span style="margin-left:auto">Aval (${escapeHTML(t.name)})</span></div>
                 ${lr.samples.map(x => `<div class="lf-mism"><span class="lf-k mono">${escapeHTML(String(x[0]))}</span><span class="lf-mv">${escapeHTML(String(x[1]))}</span><span class="lf-dv">${escapeHTML(String(x[2]))}</span></div>`).join('')}
                 <div class="text-[11px] text-slate-500 mt-2">${lr.dist.toLocaleString('fr-FR')} ligne(s) en écart sur ${lr.rows.toLocaleString('fr-FR')} comparées${lr.missing ? ` · ${lr.missing.toLocaleString('fr-FR')} clé(s) du maître absente(s) en aval` : ''}.</div></div>` : (lr ? `<div class="text-[11px] text-emerald-700 font-bold mb-3">✔ Aucun écart de valeur détecté sur ${lr.rows.toLocaleString('fr-FR')} lignes comparées.</div>` : '');
-            const canRun = s.tableName && tableByName(s.tableName) && t.tableName && tableByName(t.tableName) && e.key && e.attr;
+            const canRun = s.tableName && tableByName(s.tableName) && t.tableName && tableByName(t.tableName) && K.sK && K.tK && K.sA && K.tA;
             const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${LF_EDGE_TYPES[e.type] || e.type} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div></div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Transformation déclarée</h4>
                 <div class="lf-transf"><span style="color:#7dd3fc">règle :</span> ${e.transformation ? escapeHTML(e.transformation) : '<span style="color:#94a3b8">aucune — lecture directe présumée</span>'}${lfXformLabel(e) ? `<br><span style="color:#7dd3fc">rejouée :</span> ${escapeHTML(lfXformLabel(e))} <span style="color:#94a3b8">(le maître est comparé APRÈS cette règle)</span>` : ''}</div>
@@ -5013,7 +5044,7 @@
                 <div class="lf-cell"><div class="lf-ck">Lignes comparées</div><div class="lf-cv" style="font-size:14px">${lr ? lr.rows.toLocaleString('fr-FR') : '—'}</div></div></div>
                 <div class="lf-bar"><i style="width:${lr && lr.rate != null ? Math.min(100, Math.max(3, lr.rate * 8)) : 0}%;background:${distBad ? '#dc2626' : '#16a34a'}"></i></div>
                 <div class="mt-2.5">${distBadge}</div>
-                ${!canRun ? `<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Pour mesurer la distorsion : reliez <b>source</b> et <b>cible</b> à des sources chargées et renseignez une <b>clé commune</b> et un <b>attribut comparé</b> (dans « ⚙️ Construire le flux »).</div>` : ''}</div>
+                ${!canRun ? `<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Pour mesurer la distorsion : reliez <b>source</b> et <b>cible</b> à des sources chargées et renseignez la <b>clé</b> et l'<b>attribut</b> (source ET cible) dans « ⚙️ Construire le flux ».</div>` : ''}</div>
                 ${mismHTML}`;
             const foot = `<button onclick="lfExportEcarts('${e.id}', this)" ${lr && lr.dist ? '' : 'disabled'} class="flex-1 border border-slate-300 ${lr && lr.dist ? 'hover:bg-slate-50' : 'opacity-40'} font-bold py-2 rounded-lg text-sm">⇩ Exporter les écarts</button>
                 <button onclick="lfReconEdge('${e.id}', this)" ${canRun ? '' : 'disabled'} class="flex-1 ${canRun ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-200 text-slate-400'} font-bold py-2 rounded-lg text-sm">↻ ${lr ? 'Relancer' : 'Lancer'} le contrôle</button>`;
@@ -5028,16 +5059,17 @@
             const s = lfNode(e.source), t = lfNode(e.target);
             const sT = s && s.tableName ? tableByName(s.tableName) : null, tT = t && t.tableName ? tableByName(t.tableName) : null;
             if (!sT || !tT) return showError('Reliez la source et la cible à des sources chargées.');
-            if (!e.key || !e.attr) return showError('Renseignez une clé commune et un attribut comparé.');
-            for (const [tbl, lbl] of [[sT, s.name], [tT, t.name]]) {
-                if (!(tbl.headers || []).includes(e.key)) return showError(`La colonne clé « ${e.key} » est absente de « ${lbl} ».`);
-                if (!(tbl.headers || []).includes(e.attr)) return showError(`L'attribut « ${e.attr} » est absent de « ${lbl} ».`);
-            }
+            const K = lfEdgeKeys(e);
+            if (!K.sK || !K.tK || !K.sA || !K.tA) return showError('Renseignez la clé et l\'attribut pour la source ET la cible.');
+            if (!(sT.headers || []).includes(K.sK)) return showError(`La colonne clé source « ${K.sK} » est absente de « ${s.name} ».`);
+            if (!(tT.headers || []).includes(K.tK)) return showError(`La colonne clé cible « ${K.tK} » est absente de « ${t.name} ».`);
+            if (!(sT.headers || []).includes(K.sA)) return showError(`L'attribut source « ${K.sA} » est absent de « ${s.name} ».`);
+            if (!(tT.headers || []).includes(K.tA)) return showError(`L'attribut cible « ${K.tA} » est absent de « ${t.name} ».`);
             const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '…'; }
             try {
                 const { conn } = await getDB();
                 const A = sqlIdent(duckTableName(sT.id)), B = sqlIdent(duckTableName(tT.id));
-                const kA = lfKeyExpr('a', e.key), kB = lfKeyExpr('b', e.key);
+                const kA = lfKeyExpr('a', K.sK), kB = lfKeyExpr('b', K.tK);
                 const PR = lfReconParts(e, A, B);
                 const out = await runNoSpill(conn, async () => {
                     const agg = arrowResultToObjects(await queryResilient(conn,
@@ -5068,7 +5100,7 @@
                 const A = sqlIdent(duckTableName(sT.id)), B = sqlIdent(duckTableName(tT.id));
                 const PR = lfReconParts(e, A, B);
                 const cell = v => { if (v == null) return ''; const x = String(v); return /[",\n\r;]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
-                const parts = [`cle,maitre_${e.attr},aval_${e.attr}\n`];
+                const _K = lfEdgeKeys(e); const parts = [`cle,maitre_${_K.sA},aval_${_K.tA}\n`];
                 await runNoSpill(conn, async () => {
                     const res = await queryResilient(conn, `${PR.base} SELECT k, m.mv AS av, d.mv AS bv FROM ${PR.join} WHERE ${PR.mism} ORDER BY k`);
                     arrowResultToObjects(res).forEach(r => parts.push([r.k, r.av, r.bv].map(cell).join(',') + '\n'));
@@ -5084,14 +5116,15 @@
 
         // ---- Finitions V5.1 : vue attributs, transformation rejouable, journal ----
         function lfSetView(v) { lfView = (v === 'attrs') ? 'attrs' : 'systems'; renderGovernance(); }
-        function lfNodeAttrs(n) { const set = new Set(); lfModel().edges.forEach(e => { if (e.source === n.id || e.target === n.id) { if (e.key) set.add('\U0001F511 ' + e.key); if (e.attr) set.add(e.attr); } }); return Array.from(set); }
+        function lfNodeAttrs(n) { const set = new Set(); lfModel().edges.forEach(e => { const K = lfEdgeKeys(e); if (e.source === n.id) { if (K.sK) set.add('\U0001F511 ' + K.sK); if (K.sA) set.add(K.sA); } if (e.target === n.id) { if (K.tK) set.add('\U0001F511 ' + K.tK); if (K.tA) set.add(K.tA); } }); return Array.from(set); }
         function lfXkChanged() { const k = el('lf-e-xk') ? el('lf-e-xk').value : 'none'; const a = el('lf-e-xagg-w'), sc = el('lf-e-xsc-w'); if (a) a.classList.toggle('hidden', k !== 'agg'); if (sc) sc.classList.toggle('hidden', k !== 'scalar'); }
-        function lfXformLabel(e) { const x = e.xform; if (!x || x.kind === 'none') return ''; if (x.kind === 'agg') return (LF_XFORM_AGG[x.fn] || x.fn) + '(' + (e.attr || 'attribut') + ') par clé'; if (x.kind === 'scalar') return (LF_XFORM_SCALAR[x.op] || x.op) + (x.param ? ' ' + x.param : ''); return ''; }
+        function lfXformLabel(e) { const x = e.xform; if (!x || x.kind === 'none') return ''; if (x.kind === 'agg') return (LF_XFORM_AGG[x.fn] || x.fn) + '(' + (lfEdgeKeys(e).sA || 'attribut') + ') par clé'; if (x.kind === 'scalar') return (LF_XFORM_SCALAR[x.op] || x.op) + (x.param ? ' ' + x.param : ''); return ''; }
         // Construit la réconciliation en SQL en REJOUANT la transformation déclarée sur le maître :
         // le maître est agrégé/normalisé par la règle, puis comparé à l'aval, clé par clé.
         function lfReconParts(e, A, B) {
-            const kA = lfKeyExpr('a', e.key), kB = lfKeyExpr('b', e.key);
-            const aq = 'a.' + sqlIdent(e.attr), bq = 'b.' + sqlIdent(e.attr);
+            const KK = lfEdgeKeys(e);
+            const kA = lfKeyExpr('a', KK.sK), kB = lfKeyExpr('b', KK.tK);
+            const aq = 'a.' + sqlIdent(KK.sA), bq = 'b.' + sqlIdent(KK.tA);
             const x = e.xform || { kind: 'none' };
             let mSel, dSel;
             if (x.kind === 'agg') {
@@ -5139,16 +5172,14 @@
             return `<details class="mt-4 bg-slate-50 border border-slate-200 rounded-xl"><summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600">🗒️ Journal des contrôles${log.length ? ` (${log.length}${alerts ? ` · ${alerts} alerte(s)` : ''})` : ''}</summary><div class="p-3">${body}</div></details>`;
         }
 
-        // Propose les colonnes COMMUNES aux sources reliées à la Source et à la Cible du lien.
+        // Propose, pour CHAQUE côté, les colonnes de sa propre source reliée (les noms peuvent différer).
         function lfEdgeColsChanged() {
             const sn = lfNode(el('lf-e-src') ? el('lf-e-src').value : ''), tn = lfNode(el('lf-e-tgt') ? el('lf-e-tgt').value : '');
             const sh = (sn && sn.tableName && tableByName(sn.tableName)) ? tableByName(sn.tableName).headers : [];
             const th = (tn && tn.tableName && tableByName(tn.tableName)) ? tableByName(tn.tableName).headers : [];
-            let cols;
-            if (sh.length && th.length) cols = sh.filter(x => th.includes(x));
-            else cols = Array.from(new Set([...sh, ...th]));
-            const opts = cols.map(x => `<option value="${escapeHTML(x)}">`).join('');
-            ['lf-e-key-dl', 'lf-e-attr-dl'].forEach(id => { const dl = el(id); if (dl) dl.innerHTML = opts; });
+            const opt = arr => arr.map(x => `<option value="${escapeHTML(x)}">`).join('');
+            const sOpts = opt(sh), tOpts = opt(th);
+            [['lf-e-sk-dl', sOpts], ['lf-e-sa-dl', sOpts], ['lf-e-tk-dl', tOpts], ['lf-e-ta-dl', tOpts]].forEach(([id, o]) => { const dl = el(id); if (dl) dl.innerHTML = o; });
         }
         function renderSrcWatch() {
             const tables = swReadyTables();
@@ -8751,8 +8782,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.1.1';
+        const APP_VERSION = '5.1.2';
         const APP_CHANGELOG = [
+            { v: '5.1.2', d: '2026-07-23', t: 'Lineage : clé/attribut par côté + édition des liens et nœuds', items: [
+                'La clé et l\'attribut d\'un lien se déclarent désormais SÉPARÉMENT côté source et côté cible (leurs noms diffèrent souvent d\'une source à l\'autre, ex. « DK code » vs « DK_CODE_CTT ») ; la réconciliation joint et compare avec le bon nom de chaque côté.',
+                'Chaque champ propose les colonnes de SA propre source reliée (fini l\'intersection vide quand les noms diffèrent).',
+                'Édition : les nœuds ET les liens déjà créés se modifient (bouton ✎) — le formulaire se pré-remplit ; un lien modifié réinitialise son dernier contrôle. Compatibilité ascendante des liens créés avant (clé/attribut uniques repris des deux côtés).'] },
             { v: '5.1.1', d: '2026-07-23', t: 'Lineage : clé & attribut proposés', items: [
                 'Constructeur de flux : les champs « Clé commune » et « Attribut comparé » d\'un lien proposent désormais les colonnes des sources reliées (les colonnes COMMUNES à la Source et à la Cible), rafraîchies au changement de Source/Cible. La saisie manuelle reste possible en secours.'] },
             { v: '5.1.0', d: '2026-07-23', t: 'Lineage augmenté : vue attributs, transformation rejouable, journal', items: [

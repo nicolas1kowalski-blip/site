@@ -107,8 +107,8 @@
       <tr><th>Champ</th><th>À saisir</th></tr>
       <tr><td><b>Source / Cible</b></td><td>Le sens du flux (la Source alimente la Cible).</td></tr>
       <tr><td><b>Type</b></td><td>Alimente · Consolide · Transforme · Lecture.</td></tr>
-      <tr><td><b>Clé commune</b></td><td>La colonne d'entité présente des deux côtés (ex. <code>id_client</code>). <b>Les colonnes communes aux sources reliées sont proposées</b> dès que vous cliquez le champ (saisie libre possible en secours).</td></tr>
-      <tr><td><b>Attribut comparé</b></td><td>La colonne dont on vérifie la cohérence (ex. <code>ca_annuel</code>), également <b>proposée</b> parmi les colonnes communes.</td></tr>
+      <tr><td><b>Clé (source) / (cible)</b></td><td>La colonne d'entité de <b>chaque côté</b> — leurs noms peuvent différer (ex. <code>DK_CODE</code> côté source, <code>DK_CODE_CTT</code> côté cible). Chaque champ <b>propose les colonnes de sa propre source</b> reliée (saisie libre possible en secours).</td></tr>
+      <tr><td><b>Attribut (source) / (cible)</b></td><td>La colonne à comparer de chaque côté (ex. <code>VAL</code> vs <code>MONTANT</code>), également <b>proposée</b> par côté.</td></tr>
       <tr><td><b>SLA (h)</b></td><td>Retard maximal toléré pour la copie aval, en heures (défaut 24).</td></tr>
       <tr><td><b>Transformation rejouable</b></td><td>Voir l'encadré ci-dessous. Défaut : <b>Aucune</b> (comparaison directe).</td></tr>
       <tr><td><b>Transformation déclarée</b></td><td>Texte libre <i>documentaire</i> (ex. « SOMME(montant) converti €, agrégé /mois »). Sert à distinguer un écart <b>attendu</b> d'une <b>anomalie</b>.</td></tr>
@@ -123,6 +123,9 @@
       </ul>
       Ainsi un écart <i>attendu</i> (dû à la règle) ne ressort plus comme distorsion ; un écart <b>résiduel malgré la règle</b>
       est signalé comme <b>anomalie</b>.</div>
+    <p class="callout ok"><b>Modifier après coup.</b> Chaque nœud et chaque lien déjà créés se modifient : cliquez le bouton
+    <b>✎</b> dans les listes (Nœud / Lien). Le formulaire se pré-remplit ; « ✓ Enregistrer » applique les changements
+    (un lien modifié réinitialise son dernier contrôle, à relancer).</p>
   </div>
 
   <h2 id="e3">Étape 3 — Lancer un contrôle</h2>
