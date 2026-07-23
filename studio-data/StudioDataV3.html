@@ -926,6 +926,20 @@
                 finally { if (window.__duckTempDir) { try { await conn.query("SET temp_directory='" + window.__duckTempDir + "'"); } catch (e3) {} } }
             }
         }
+        // Exécute une analyse SANS débordement disque. En contexte fichier local (file://) ou sur un
+        // navigateur sans OPFS, DuckDB n'a AUCUN répertoire temporaire inscriptible : tout spill échoue
+        // (« HTML FileReaders do not support writing »). On relève donc la limite mémoire et on désactive
+        // le spill ; combiné à un jeu de travail réduit, l'opération tient en RAM et n'écrit jamais.
+        async function runNoSpill(conn, fn) {
+            let memSet = false;
+            for (const lim of ['4GB', '3GB', '2GB', '1GB']) { try { await conn.query("SET memory_limit='" + lim + "'"); memSet = true; break; } catch (e) {} }
+            try { await conn.query("SET temp_directory=''"); } catch (e) {}
+            try { return await fn(); }
+            finally {
+                if (window.__duckTempDir) { try { await conn.query("SET temp_directory='" + window.__duckTempDir + "'"); } catch (e) {} }
+                if (memSet) { try { await conn.query("RESET memory_limit"); } catch (e) {} }
+            }
+        }
 
         function arrowResultToObjects(res) {
             const fields = res.schema.fields.map(f => f.name).filter(n => n !== '__rn');
@@ -5993,6 +6007,26 @@
                 FROM ${T} WHERE ${keyE} IN (SELECT ${keyE} FROM ${T} GROUP BY 1 HAVING COUNT(DISTINCT COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), chr(2))) > 1)`);
             return `SELECT * FROM (\n${branches.join('\nUNION ALL\n')}\n) z ORDER BY cle, attribut, source`;
         }
+        // Collecte les écarts ATTRIBUT PAR ATTRIBUT sur la projection légère TMP : chaque requête ne
+        // manipule qu'une seule colonne → jeu de travail minimal, jamais de débordement disque, même
+        // sans répertoire temporaire inscriptible (file://). Retourne au plus `limit` lignes.
+        async function tdCollectDivergences(conn, t, d, TMP, limit) {
+            const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
+            const keyDisp = d.key.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '')`).join(" || ' | ' || ");
+            const attrs = tdDivAttrs(t, d);
+            const rows = [];
+            for (const a of attrs) {
+                if (rows.length >= limit) break;
+                const na = `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), chr(2))`;
+                const sub = `SELECT ${keyE} FROM ${TMP} GROUP BY 1 HAVING COUNT(DISTINCT ${na}) > 1`;
+                const q = `SELECT ${keyDisp} AS cle, ${sqlIdent('SOURCE_ORIGINE')} AS source, COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '') AS valeur
+                    FROM ${TMP} WHERE ${keyE} IN (${sub}) ORDER BY cle, source LIMIT ${limit - rows.length}`;
+                const res = await conn.query(q);
+                arrowResultToObjects(res).forEach(r => rows.push({ cle: String(r.cle), attribut: a, source: String(r.source), valeur: String(r.valeur == null ? '' : r.valeur) }));
+            }
+            rows.sort((x, y) => x.cle < y.cle ? -1 : x.cle > y.cle ? 1 : (x.attribut < y.attribut ? -1 : x.attribut > y.attribut ? 1 : 0));
+            return rows;
+        }
         async function tdDivergenceReport(tId) {
             const t = state.tables[tId]; const d = t && t.design;
             if (!d || !(d.key || []).length) return showError('Définissez d\'abord une clé primaire (🔑) sur la table.');
@@ -6004,20 +6038,23 @@
             try {
                 const { conn } = await getDB(); __divConn = conn;
                 const attrs = tdDivAttrs(t, d);
-                // Projection LÉGÈRE (clé + attributs comparés) matérialisée en mémoire : l'analyse
-                // multi-passes ne relit plus le fichier CSV à la demande — plus d'écriture FileReader,
-                // et c'est bien plus rapide.
-                const proj = Array.from(new Set([...d.key, ...attrs, 'SOURCE_ORIGINE'])).filter(h => (t.headers || []).includes(h));
-                __divTmp = 'tddiv_' + generateId(); const TMP = sqlIdent(duckTableName(__divTmp));
-                await queryResilient(conn, `CREATE OR REPLACE TABLE ${TMP} AS SELECT ${proj.map(sqlIdent).join(', ')} FROM ${sqlIdent(duckTableName(tId))}`);
-                const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
-                const rowHash = `md5(concat_ws(chr(1), ${attrs.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), chr(0))`).join(', ')}))`;
-                const sumRes = await queryResilient(conn, `SELECT COUNT(*)::BIGINT AS n FROM (SELECT ${keyE} AS k FROM ${TMP} GROUP BY 1 HAVING COUNT(DISTINCT ${rowHash}) > 1) s`);
-                const nbKeys = Number(arrowResultToObjects(sumRes)[0].n);
-                if (!nbKeys) { body.innerHTML = '<p class="text-xs text-emerald-700 p-4 font-bold">✔ Aucun écart : toutes les clés partagées entre sources portent des données identiques.</p>'; try { await conn.query(`DROP TABLE IF EXISTS ${TMP}`); } catch (e) {} return; }
-                const sql = tdDivSqlFor(t, d, TMP);
-                const res = await queryResilient(conn, `SELECT * FROM (${sql}) LIMIT 1500`);
-                const rows = arrowResultToObjects(res);
+                // Toute l'analyse s'exécute SANS débordement disque (mémoire relevée + spill coupé) et sur
+                // un jeu de travail réduit : projection légère matérialisée, puis collecte attribut par
+                // attribut. Plus jamais de « HTML FileReaders do not support writing », aucun clic requis.
+                const out = await runNoSpill(conn, async () => {
+                    const proj = Array.from(new Set([...d.key, ...attrs, 'SOURCE_ORIGINE'])).filter(h => (t.headers || []).includes(h));
+                    __divTmp = 'tddiv_' + generateId(); const TMP = sqlIdent(duckTableName(__divTmp));
+                    await conn.query(`CREATE OR REPLACE TABLE ${TMP} AS SELECT ${proj.map(sqlIdent).join(', ')} FROM ${sqlIdent(duckTableName(tId))}`);
+                    const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
+                    const rowHash = `md5(concat_ws(chr(1), ${attrs.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), chr(0))`).join(', ')}))`;
+                    const sumRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM (SELECT ${keyE} AS k FROM ${TMP} GROUP BY 1 HAVING COUNT(DISTINCT ${rowHash}) > 1) s`);
+                    const nbKeys = Number(arrowResultToObjects(sumRes)[0].n);
+                    if (!nbKeys) return { nbKeys: 0, rows: [] };
+                    const rows = await tdCollectDivergences(conn, t, d, TMP, 1500);
+                    return { nbKeys, rows };
+                });
+                const nbKeys = out.nbKeys, rows = out.rows;
+                if (!nbKeys) { body.innerHTML = '<p class="text-xs text-emerald-700 p-4 font-bold">✔ Aucun écart : toutes les clés partagées entre sources portent des données identiques.</p>'; return; }
                 head.innerHTML = `<strong class="text-amber-800">🔍 Écarts entre sources — ${escapeHTML(t.name)}</strong>
                     <span class="text-amber-700 font-bold">${nbKeys.toLocaleString('fr-FR')} clé(s) divergente(s)</span>
                     <span class="text-slate-400">clé : ${escapeHTML(d.key.join(' + '))}</span>
@@ -6046,34 +6083,48 @@
                 if (rows.length >= 1500 || shown >= 300) html += `<p class="text-[11px] text-slate-400 p-3">Affichage tronqué — l'export CSV contient la totalité des écarts.</p>`;
                 body.innerHTML = html;
             } catch (e) {
-                const heavy = isSpillWriteError(e) || /out of memory|allocation|memory_limit/i.test(String(e.message || ''));
-                body.innerHTML = `<p class="text-xs text-red-600 p-4">Analyse impossible : ${escapeHTML(e.message)}${heavy ? '<br><span class="text-slate-500">Table volumineuse lue à la demande : cliquez « 🗜️ Optimiser » (Parquet) sur la source, ou réduisez le nombre de colonnes comparées, pour fiabiliser l\'analyse.</span>' : ''}</p>`;
+                body.innerHTML = `<p class="text-xs text-red-600 p-4">Analyse impossible : ${escapeHTML(e.message)}</p>`;
             } finally {
                 if (__divTmp && __divConn) { try { await __divConn.query(`DROP TABLE IF EXISTS ${sqlIdent(duckTableName(__divTmp))}`); } catch (e) {} }
             }
         }
         async function tdExportDivergences(tId, btn) {
-            const sql = tdDivSql(tId); if (!sql) return;
-            const t = state.tables[tId];
+            const t = state.tables[tId]; const d = t && t.design;
+            if (!d || !(d.key || []).length) return;
             const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '…'; }
+            let __expTmp = null, __expConn = null;
             try {
-                const { conn } = await getDB();
+                const { conn } = await getDB(); __expConn = conn;
                 const cell = v => { if (v === null || v === undefined) return ''; const s = String(v); return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
                 const parts = ['cle,attribut,source,valeur\n'];
-                const batch = 20000; let off = 0;
-                while (true) {
-                    const res = await queryResilient(conn, `SELECT * FROM (${sql}) q LIMIT ${batch} OFFSET ${off}`);
-                    const rows = arrowResultToObjects(res);
-                    rows.forEach(r => parts.push([r.cle, r.attribut, r.source, r.valeur].map(cell).join(',') + '\n'));
-                    if (rows.length < batch) break; off += batch;
-                }
+                let total = 0;
+                await runNoSpill(conn, async () => {
+                    const attrs = tdDivAttrs(t, d);
+                    const proj = Array.from(new Set([...d.key, ...attrs, 'SOURCE_ORIGINE'])).filter(h => (t.headers || []).includes(h));
+                    __expTmp = 'tddiv_' + generateId(); const TMP = sqlIdent(duckTableName(__expTmp));
+                    await conn.query(`CREATE OR REPLACE TABLE ${TMP} AS SELECT ${proj.map(sqlIdent).join(', ')} FROM ${sqlIdent(duckTableName(tId))}`);
+                    const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
+                    const keyDisp = d.key.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '')`).join(" || ' | ' || ");
+                    // Export COMPLET, attribut par attribut (jeu de travail minimal, jamais de spill).
+                    for (const a of attrs) {
+                        const na = `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), chr(2))`;
+                        const sub = `SELECT ${keyE} FROM ${TMP} GROUP BY 1 HAVING COUNT(DISTINCT ${na}) > 1`;
+                        const q = `SELECT ${keyDisp} AS cle, ${sqlLiteral(a)} AS attribut, ${sqlIdent('SOURCE_ORIGINE')} AS source, COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '') AS valeur
+                            FROM ${TMP} WHERE ${keyE} IN (${sub}) ORDER BY cle, source`;
+                        const res = await conn.query(q);
+                        arrowResultToObjects(res).forEach(r => { parts.push([r.cle, r.attribut, r.source, r.valeur].map(cell).join(',') + '\n'); total++; });
+                    }
+                });
                 const blob = new Blob(['﻿', ...parts], { type: 'text/csv;charset=utf-8;' });
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
                 a.download = `Ecarts_sources_${t.name.replace(/[^a-zA-Z0-9]+/g, '_')}_${Date.now()}.csv`;
                 document.body.appendChild(a); a.click(); a.remove();
-                showSuccess(`Rapport d'écarts exporté (${(parts.length - 1).toLocaleString('fr-FR')} lignes).`);
+                showSuccess(`Rapport d'écarts exporté (${total.toLocaleString('fr-FR')} lignes).`);
             } catch (e) { showError('Export impossible : ' + e.message); }
-            finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
+            finally {
+                if (__expTmp && __expConn) { try { await __expConn.query(`DROP TABLE IF EXISTS ${sqlIdent(duckTableName(__expTmp))}`); } catch (e) {} }
+                if (btn) { btn.disabled = false; btn.textContent = old; }
+            }
         }
 
         // ---- Volet d'audit « contribution par source » (tables conçues uniquement) ----
@@ -8199,8 +8250,11 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.5.1';
+        const APP_VERSION = '4.5.2';
         const APP_CHANGELOG = [
+            { v: '4.5.2', d: '2026-07-23', t: 'Rapport d\'écarts : fin de « FileReaders do not support writing »', items: [
+                'Correctif DÉFINITIF de « Analyse impossible : HTML FileReaders do not support writing » sur le rapport d\'écarts entre sources. Cause : lancée depuis un fichier local (file://), l\'application n\'a aucun stockage temporaire inscriptible et la moindre agrégation qui débordait échouait.',
+                'L\'analyse ne déborde plus JAMAIS sur disque : limite mémoire relevée, débordement désactivé, et surtout jeu de travail réduit — projection légère matérialisée puis comparaison ATTRIBUT PAR ATTRIBUT. Chaque étape tient en mémoire ; aucune action « Optimiser » n\'est requise, tout est automatique. L\'export CSV suit la même stratégie.'] },
             { v: '4.5.1', d: '2026-07-23', t: 'Correctifs DuckDB : optimisation & rapport d\'écarts', items: [
                 'Optimisation Parquet : correction de « unique_lock::unlock: not locked » — les requêtes DuckDB sont désormais sérialisées (le moteur n\'est pas réentrant), avec un ré-essai sur verrou transitoire.',
                 'Rapport d\'écarts entre sources : l\'analyse matérialise d\'abord une projection légère (clé + attributs) en mémoire, ce qui supprime l\'erreur « HTML FileReaders do not support writing » sur les grosses tables lues à la demande et accélère fortement le calcul.'] },
