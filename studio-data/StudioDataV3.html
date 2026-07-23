@@ -4653,12 +4653,14 @@
         function giApply(btn) {
             if (btn) btn.disabled = true;
             const g = state.governance; let created = 0, updated = 0, skipped = 0;
+            const skips = {};
+            const skip = (reason, detail) => { skipped++; const s2 = (skips[reason] = skips[reason] || { n: 0, ex: [] }); s2.n++; const d = detail == null ? '' : String(detail).trim(); if (d && s2.ex.length < 5 && !s2.ex.includes(d)) s2.ex.push(d); };
             const setIf = (obj, k, v) => { if (v !== '') { if (String(obj[k] || '') !== v) { obj[k] = v; return true; } } return false; };
             try {
                 giState.rows.forEach(row => {
                     if (giState.target === 'dict') {
                         const tn = giVal(row, 'table'), col = giVal(row, 'col');
-                        if (!tn || !col) { skipped++; return; }
+                        if (!tn || !col) { skip('Table ou colonne vide dans le fichier'); return; }
                         const d = ensureDictEntry(tn); d.columns[col] = d.columns[col] || { definition: '', technicalType: '', sensitivity: '', term: '' };
                         const isNew = !d.columns[col].definition && !d.columns[col].term;
                         let ch = false;
@@ -4666,16 +4668,16 @@
                         ch = setIf(d.columns[col], 'technicalType', giVal(row, 'type')) || ch;
                         ch = setIf(d.columns[col], 'sensitivity', giVal(row, 'sensitivity')) || ch;
                         ch = setIf(d.columns[col], 'term', giVal(row, 'term')) || ch;
-                        ch ? (isNew ? created++ : updated++) : skipped++;
+                        ch ? (isNew ? created++ : updated++) : skip('Déjà identique — aucune valeur à changer', tn + '.' + col);
                     } else if (giState.target === 'gloss') {
-                        const term = giVal(row, 'term'); if (!term) { skipped++; return; }
+                        const term = giVal(row, 'term'); if (!term) { skip('Terme vide dans le fichier'); return; }
                         let e2 = g.glossary.find(x => giNorm(x.term) === giNorm(term));
                         if (!e2) { e2 = { id: 'gl_' + generateId(), term, definition: '', links: [] }; g.glossary.push(e2); created++; } else updated++;
                         setIf(e2, 'definition', giVal(row, 'definition'));
                         const tn = giVal(row, 'table'), col = giVal(row, 'col');
                         if (tn && col && !(e2.links || []).some(l => l.table === tn && l.col === col)) { e2.links = e2.links || []; e2.links.push({ table: tn, col }); }
                     } else if (giState.target === 'assets') {
-                        const name = giVal(row, 'name'); if (!name) { skipped++; return; }
+                        const name = giVal(row, 'name'); if (!name) { skip('Nom vide dans le fichier'); return; }
                         let a = (g.assets || []).find(x => giNorm(x.name) === giNorm(name));
                         const kind = /proc/i.test(giVal(row, 'kind')) ? 'process' : 'app';
                         if (!a) { a = { id: 'as_' + generateId(), kind, name, criticality: '', description: '' }; g.assets.push(a); created++; } else updated++;
@@ -4693,17 +4695,17 @@
                         }
                     } else if (giState.target === 'usage') {
                         const boN = giVal(row, 'bo'), attrN = giVal(row, 'attr'), appN = giVal(row, 'app');
-                        if (!boN || !attrN || !appN) { skipped++; return; }
+                        if (!boN || !attrN || !appN) { skip('Clé obligatoire vide (objet, attribut ou application)'); return; }
                         const bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(boN));
-                        if (!bo) { skipped++; return; }
+                        if (!bo) { skip('Objet métier introuvable — créez-le d\'abord (cible « 🏛 Objets métier »)', boN); return; }
                         let a = (g.assets || []).find(x => giNorm(x.name) === giNorm(appN));
                         if (!a) { a = { id: 'as_' + generateId(), kind: 'app', name: appN, criticality: '' }; g.assets.push(a); created++; }
                         const r2 = boAllAttrRows(bo).find(x => giNorm(x.el.name) === giNorm(attrN));
-                        if (!r2) { skipped++; return; }
+                        if (!r2) { skip('Attribut introuvable dans l\'objet métier', boN + ' · ' + attrN); return; }
                         r2.el.usedBy = r2.el.usedBy || [];
-                        if (!r2.el.usedBy.includes(a.id)) { r2.el.usedBy.push(a.id); updated++; } else skipped++;
+                        if (!r2.el.usedBy.includes(a.id)) { r2.el.usedBy.push(a.id); updated++; } else skip('Usage déjà enregistré (aucun changement)', boN + ' · ' + attrN + ' → ' + appN);
                     } else if (giState.target === 'bo') {
-                        const name = giVal(row, 'boname'); if (!name) { skipped++; return; }
+                        const name = giVal(row, 'boname'); if (!name) { skip('Nom d\'objet métier vide dans le fichier'); return; }
                         let bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(name));
                         if (!bo) { bo = { id: 'bo_' + generateId(), name, definition: '', globalOwner: '', contributors: [], sources: [], elements: [], contextRules: { elementId: '', rules: [] } }; g.businessObjects.push(bo); created++; } else updated++;
                         setIf(bo, 'definition', giVal(row, 'definition'));
@@ -4715,18 +4717,20 @@
                         const stn = giVal(row, 'srctable');
                         if (stn) { bo.sources = bo.sources || []; const real = tableByName(stn) ? tableByName(stn).name : stn; if (!bo.sources.some(s2 => giNorm(s2.table) === giNorm(real))) bo.sources.push({ table: real, role: 'maitre' }); }
                     } else if (giState.target === 'boapp') {
-                        const boN = giVal(row, 'bo'), appN = giVal(row, 'app'); if (!boN || !appN) { skipped++; return; }
-                        const bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(boN)); if (!bo) { skipped++; return; }
+                        const boN = giVal(row, 'bo'), appN = giVal(row, 'app'); if (!boN || !appN) { skip('Clé obligatoire vide (objet métier ou application)'); return; }
+                        const bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(boN)); if (!bo) { skip('Objet métier introuvable — créez-le d\'abord (cible « 🏛 Objets métier »)', boN); return; }
                         let a = (g.assets || []).find(x => giNorm(x.name) === giNorm(appN));
                         if (!a) { a = { id: 'as_' + generateId(), kind: 'app', name: appN, criticality: '' }; g.assets.push(a); created++; }
                         const field = /produ/i.test(giVal(row, 'role')) ? 'producedBy' : 'consumedBy';
                         bo[field] = bo[field] || [];
-                        if (!bo[field].includes(a.id)) { bo[field].push(a.id); updated++; } else skipped++;
+                        if (!bo[field].includes(a.id)) { bo[field].push(a.id); updated++; } else skip('Lien déjà enregistré (aucun changement)', boN + ' → ' + appN);
                     }
                 });
                 persistAppState(); renderGovernance();
                 const rp = el('giReport');
-                if (rp) rp.innerHTML = `<div class="text-xs font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 px-3 py-2">✔ Import terminé : ${created} créé(s) · ${updated} mis à jour · ${skipped} ignoré(s) (clé absente, introuvable ou déjà identique).</div>`;
+                const reasons = Object.entries(skips);
+                const detailHtml = reasons.length ? `<div class="mt-2 pt-2 border-t border-emerald-200/70"><div class="text-[11px] font-bold text-slate-600 mb-1">Détail des ${skipped} ligne(s) ignorée(s) :</div><ul class="space-y-1">${reasons.sort((a, b) => b[1].n - a[1].n).map(([r, s2]) => `<li class="text-[11px] text-slate-700 flex gap-1.5"><span class="shrink-0 font-black text-amber-600">${s2.n}</span><span><span class="font-semibold">${escapeHTML(r)}</span>${s2.ex.length ? ` <span class="text-slate-500">— ex : ${s2.ex.map(escapeHTML).join(', ')}${s2.n > s2.ex.length ? '…' : ''}</span>` : ''}</span></li>`).join('')}</ul></div>` : '';
+                if (rp) rp.innerHTML = `<div class="text-xs rounded-lg border ${skipped && !created && !updated ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-800'} px-3 py-2"><div class="font-bold">${skipped && !created && !updated ? '⚠️ Aucune ligne importée' : '✔ Import terminé'} : ${created} créé(s) · ${updated} mis à jour · ${skipped} ignoré(s).</div>${detailHtml}</div>`;
                 showSuccess(`⬆ Import gouvernance : ${created} créé(s), ${updated} mis à jour, ${skipped} ignoré(s).`);
             } catch (e) { showError('Import impossible : ' + e.message); }
             finally { if (btn) btn.disabled = false; }
@@ -7900,8 +7904,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.4.0';
+        const APP_VERSION = '4.4.1';
         const APP_CHANGELOG = [
+            { v: '4.4.1', d: '2026-07-23', t: 'Import en masse : rapport d\'erreurs détaillé', items: [
+                'Import en masse : le rapport ventile désormais les lignes ignorées PAR MOTIF, avec des exemples (ex : « objet métier introuvable — créez-le d\'abord », « lien déjà enregistré », « clé vide »…), pour comprendre d\'un coup d\'œil pourquoi une ligne n\'est pas passée.'] },
             { v: '4.4.0', d: '2026-07-23', t: 'Import en masse : objets métier & applications par objet', items: [
                 'Import en masse : nouvelle cible « 🏛 Objets métier » — créer/mettre à jour des objets métier (définition, propriétaire, attributs séparés par ;, table source maître).',
                 'Import en masse : nouvelle cible « Applications par objet métier » — rattacher au niveau objet quelle application utilise (ou produit) quel objet métier, en une seule ligne.',
