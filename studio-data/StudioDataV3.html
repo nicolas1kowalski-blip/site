@@ -470,79 +470,18 @@
         </div>
 
         <div id="step-3" class="animate-fade-in hidden">
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <h2 class="text-lg font-bold text-indigo-800 mb-4 flex items-center gap-2"><i data-lucide="database-zap" class="w-5 h-5"></i> 1. Table Principale</h2>
-                <select id="baseTableSelect" onchange="handleBaseTableChange()" class="w-full md:w-1/2 border border-slate-300 p-3 rounded-lg bg-slate-50"></select>
-            </div>
-
             <div class="bg-white rounded-xl border border-indigo-200 shadow-sm mb-6 overflow-hidden">
-                <button type="button" onclick="toggleAdvExtract()" class="w-full flex justify-between items-center px-6 py-4 bg-indigo-50/50 hover:bg-indigo-50 transition-colors">
-                    <span class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="sparkles" class="w-5 h-5"></i> Extraction avancée — SQL, gouvernance & transformations</span>
-                    <span class="text-[11px] text-indigo-400 font-medium flex items-center gap-2"><span class="hidden md:inline">Aperçu en direct · piloté par objet métier · colonnes calculées · dédoublonnage · agrégats</span><i data-lucide="chevron-down" id="advChevron" class="w-5 h-5"></i></span>
-                </button>
-                <div id="advExtractBody" class="hidden p-6 border-t border-indigo-100"></div>
-            </div>
-
-            <div id="filterSelectionArea_ext" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <h2 class="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2"><i data-lucide="filter" class="w-5 h-5"></i> 2. Filtres Intelligents</h2>
-                <div class="flex flex-col md:flex-row gap-4 mb-4">
-                    <select id="filterTableSelect_ext" onchange="populateFilterSelect('ext')" class="w-full md:w-1/3 border border-slate-300 p-2.5 rounded-lg bg-slate-50"></select>
-                    <select id="filterColSelect_ext" onchange="loadFilterValues('ext')" disabled class="w-full md:w-1/3 border border-slate-300 p-2.5 rounded-lg bg-slate-100 text-slate-400"></select>
-                    <div id="filterValuesLoading_ext" class="hidden items-center gap-2 text-blue-600 text-sm font-medium pt-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Profilage...</div>
-                </div>
-                <div id="filterValuesContainer_ext" class="hidden border border-slate-200 p-4 rounded-lg mb-4 bg-slate-50"></div>
-                <div class="flex justify-end"><button id="addFilterBtn_ext" onclick="addFilter('ext')" class="hidden bg-blue-600 text-white px-6 py-2 rounded-lg font-medium">Ajouter le filtre</button></div>
-                <div id="activeFiltersList_ext" class="mt-4 flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100 min-h-[50px]"></div>
-            </div>
-
-            <div id="columnSelectionArea" class="hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="check-square" class="w-5 h-5 text-indigo-600"></i> 3. Colonnes & Transpositions</h2>
-                    <div class="flex gap-2">
-                        <button onclick="toggleAllColumns(true)" class="border border-slate-300 bg-white px-3 py-1.5 rounded text-xs font-medium hover:bg-slate-50">Tout cocher</button>
-                        <button onclick="toggleAllColumns(false)" class="border border-slate-300 bg-white px-3 py-1.5 rounded text-xs font-medium hover:bg-slate-50">Tout décocher</button>
+                <div class="px-6 py-4 bg-indigo-50/50 flex flex-col md:flex-row md:items-end gap-3 justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="database-zap" class="w-5 h-5"></i> Extraction</h2>
+                        <p class="text-[11px] text-indigo-400 font-medium mt-0.5">Colonnes de tout le modèle · calculées · synthèses de tables liées · hiérarchies aplaties · filtres · dédoublonnage · agrégats — une seule configuration, un seul SQL, aperçu avant de lancer.</p>
+                    </div>
+                    <div class="min-w-[260px]">
+                        <label class="text-[10px] uppercase font-bold text-indigo-400 block mb-1">Table de départ</label>
+                        <select id="baseTableSelect" onchange="handleBaseTableChange()" class="w-full border border-slate-300 p-2.5 rounded-lg bg-white text-sm"></select>
                     </div>
                 </div>
-                <div id="extractionColumns" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"></div>
-
-                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
-                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="git-pull-request" class="w-5 h-5 text-indigo-600"></i> 4. Jointure & Sécurité</h2>
-                    <div class="flex flex-col md:flex-row gap-6 mb-6">
-                        <label class="flex items-start gap-3 border p-4 rounded-lg w-full cursor-pointer bg-indigo-50/50 border-indigo-200">
-                            <input type="radio" name="globalJoinType" value="left" checked class="w-4 h-4 text-indigo-600 mt-0.5">
-                            <div><span class="block font-bold">Conserver tout (Left Join)</span><span class="text-xs text-slate-500">Idéal pour les croisements multi-fichiers. Conserve la base A même si B est vide.</span></div>
-                        </label>
-                        <label class="flex items-start gap-3 border p-4 rounded-lg w-full cursor-pointer bg-slate-50 hover:bg-slate-100 border-slate-200">
-                            <input type="radio" name="globalJoinType" value="inner" class="w-4 h-4 text-indigo-600 mt-0.5">
-                            <div><span class="block font-bold">Intersection (Inner Join)</span><span class="text-xs text-slate-500">Supprime la ligne si la correspondance est vide.</span></div>
-                        </label>
-                    </div>
-                    <label class="flex items-center gap-2 cursor-pointer p-4 border border-amber-200 bg-amber-50 rounded-lg">
-                        <input type="checkbox" id="testModeCheck" class="w-5 h-5 text-amber-600 rounded">
-                        <span class="font-bold text-amber-900 text-sm">Mode "Aperçu Rapide" (Limite l'extraction à 500 lignes)</span>
-                    </label>
-                </div>
-
-                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
-                    <h2 class="text-lg font-bold text-purple-800 mb-4 flex items-center gap-2"><i data-lucide="combine" class="w-5 h-5"></i> 5. Réutiliser le résultat (optionnel)</h2>
-                    <label class="flex items-start gap-3 cursor-pointer p-4 border border-purple-200 bg-purple-50 rounded-lg">
-                        <input type="checkbox" id="addAsSourceCheck" onchange="toggleAddAsSourceName()" class="w-5 h-5 text-purple-600 rounded mt-0.5">
-                        <div>
-                            <span class="block font-bold text-purple-900 text-sm">Ajouter aussi ce résultat comme nouvelle source de données</span>
-                            <span class="text-xs text-slate-500">Ce n'est pas obligatoire : le fichier CSV sera de toute façon proposé au téléchargement. Si vous cochez cette case, le résultat croisé devient en plus disponible comme table dans les phases <strong>Exploitation</strong>, <strong>Qualité</strong> et <strong>Gouvernance</strong> — sans avoir à le recharger. À réserver aux extractions raisonnablement volumineuses : les données restent en mémoire du navigateur.</span>
-                        </div>
-                    </label>
-                    <div id="addAsSourceNameWrapper" class="hidden mt-3">
-                        <label class="block text-xs font-bold text-slate-500 mb-1">Nom de la nouvelle source</label>
-                        <input type="text" id="addAsSourceName" placeholder="Ex: Extraction_Clients_Sites" class="w-full md:w-1/2 border border-slate-300 p-2.5 rounded-lg bg-slate-50 text-sm">
-                    </div>
-                </div>
-
-                <div class="text-center">
-                    <button id="btnRun" onclick="startExtraction()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-md inline-flex items-center gap-3">
-                        <i data-lucide="play-circle" class="w-6 h-6"></i> Générer le fichier croisé
-                    </button>
-                </div>
+                <div id="advExtractBody" class="p-6 border-t border-indigo-100"></div>
             </div>
 
             <div id="progressArea" class="hidden bg-white p-8 rounded-xl border border-slate-200 shadow-lg mt-8 text-center">
@@ -915,7 +854,7 @@
 
     <script>
         const state = { tables: {}, relations: [], selectedCols: {}, pivotMode: {}, filters: {}, hierarchyConfig: {}, graphConfig: {} };
-        state.advExtract = { from: 'table', objectId: '', baseId: '', columns: [], filters: [], dedup: { on: false, keys: [], keep: 'first' }, group: { on: false, aggs: [] }, customSql: false };
+        state.advExtract = { from: 'table', objectId: '', baseId: '', columns: [], filters: [], dedup: { on: false, keys: [], keep: 'first' }, group: { on: false, aggs: [] }, customSql: false, joinType: 'left', limit500: false, migrated: false };
         let networkInstance = null; let currentChart = null; 
         let browserState = { tableId: null, filters: {}, sortCol: null, sortDir: 'asc', data: [], linkMap: {} };
         let browserFilterTimeout = null; let expNetInstance = null; let expDataStore = {};
@@ -5236,7 +5175,7 @@
             if(num===14) renderDashboards();
             if(num===15) renderLinkage();
             if(num===2){ renderRelationsList(); renderBizRules(); renderGraph(); requestAnimationFrame(() => reflowGraph('mcd')); }
-            if(num===3) { updateBaseTableSelect(); if (advExtractOpen()) renderAdvExtract(); comboifyTableSelect('baseTableSelect'); }
+            if(num===3) { updateBaseTableSelect(); advSyncBase(); advMigrateClassic(); renderAdvExtract(); comboifyTableSelect('baseTableSelect'); }
             if(num===4) { updateVizBaseTableSelect(); covPopulate(); ['covBase', 'covDimTable', 'covRel'].forEach(comboifyTableSelect); }
             if(num===5) { populateExpTableSelect(); ['expBaseTable', 'expConfigTable'].forEach(comboifyTableSelect); }
             if(num===6) { populateBrowserTableSelect(); comboifyTableSelect('browserTableSelect'); }
@@ -6382,7 +6321,7 @@
                 state.hierarchyConfig = {}; conf.hierarchyConfig && Object.keys(conf.hierarchyConfig).forEach(n=>{ const id=getId(n); if(id){ state.hierarchyConfig[id]={...conf.hierarchyConfig[n]}; if(conf.hierarchyConfig[n].linkTableName) state.hierarchyConfig[id].linkTable = getId(conf.hierarchyConfig[n].linkTableName)||''; } });
                 if(conf.graphConfig) state.graphConfig = conf.graphConfig;
                 if(!el('step-2').classList.contains('hidden')){ renderRelationsList(); renderGraph(); }
-                if(conf.baseTable){ const bid=getId(conf.baseTable); if(bid){ el('baseTableSelect').value=bid; el('vizBaseTable').value=bid; handleBaseTableChange(); handleVizBaseTableChange(); } }
+                if(conf.baseTable){ const bid=getId(conf.baseTable); if(bid){ el('baseTableSelect').value=bid; el('vizBaseTable').value=bid; state.advExtract = { from: 'table', objectId: '', baseId: bid, columns: [], filters: [], dedup: { on: false, keys: [], keep: 'first' }, group: { on: false, aggs: [] }, customSql: false }; advMigrateClassic(true); handleBaseTableChange(); handleVizBaseTableChange(); } }
                 showSuccess("Configuration chargée avec succès.");
             } catch(err){ showError("Fichier invalide."); }
             e.target.value = '';
@@ -7759,8 +7698,15 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '3.8.0';
+        const APP_VERSION = '4.0.0';
         const APP_CHANGELOG = [
+            { v: '4.0.0', d: '2026-07-23', t: 'Extraction unifiée', items: [
+                'Les deux parties de l\'écran Extraction (« Table principale » et « Extraction avancée ») fusionnent en UNE seule configuration déclarative, sans perte de fonctionnalités.',
+                'Nouveaux types de colonnes : « Synthèse d\'une table liée » (compter les lignes, compter les valeurs uniques, transposer en texte ou en colonnes) et « Hiérarchie aplatie » (même table ou table de liaison, période de validité, date de référence, profondeur) — désormais en SQL pur, cumulables avec alias, dédoublonnage et agrégats.',
+                'Ajout de colonnes en masse (« ➕ Plusieurs colonnes… ») depuis n\'importe quelle table du modèle, avec recherche.',
+                'Filtres enrichis : dans la liste (;), ≥/≤ numérique, à partir du / jusqu\'au (date).',
+                'Type de jointure (conserver tout / intersection) et mode aperçu 500 lignes conservés.',
+                'Les anciennes configurations (colonnes cochées, modes, hiérarchies, filtres) sont converties automatiquement.'] },
             { v: '3.8.0', d: '2026-07-23', t: 'Règles qualité sur objets métier & listes filtrables', items: [
                 'Règles de qualité : la cible peut être un OBJET MÉTIER — choisissez l\'objet puis l\'attribut ; la règle est contrôlée sur chaque source où l\'attribut est mappé, puis agrégée (tous les types : non vide, format, plage, liste, unicité, condition si… alors…, fraîcheur…).',
                 'Auto-complétion sur toutes les listes déroulantes d\'au moins 8 choix : tapez pour chercher (accents ignorés), Entrée valide, Échap annule.'] },
@@ -9284,8 +9230,7 @@
 
         function handleBaseTableChange() {
             const val = el('baseTableSelect').value;
-            if(val && state.tables[val]) { el('columnSelectionArea').classList.remove('hidden'); el('filterSelectionArea_ext').classList.remove('hidden'); renderExtractionColumns(); populateFilterTableSelect('ext'); }
-            else { el('columnSelectionArea').classList.add('hidden'); el('filterSelectionArea_ext').classList.add('hidden'); }
+            if (val && state.tables[val]) advSetBase(val); else renderAdvExtract();
         }
 
         function toggleColumn(t,c,k){ if(k){ if(!state.selectedCols[t].includes(c)) state.selectedCols[t].push(c); } else state.selectedCols[t]=state.selectedCols[t].filter(x=>x!==c); renderExtractionColumns(); persistAppState(); }
@@ -9294,7 +9239,8 @@
         function updateHierConfig(tId, f, v) { if (!state.hierarchyConfig[tId]) state.hierarchyConfig[tId] = { type:'simple', idCol:'', parentCol:'', linkTable:'', linkChildCol:'', linkParentCol:'', linkValidFromCol:'', linkValidToCol:'', refDate:'', maxDepth:5 }; state.hierarchyConfig[tId][f] = v; if (f === 'linkTable') { state.hierarchyConfig[tId].linkChildCol = ''; state.hierarchyConfig[tId].linkParentCol = ''; state.hierarchyConfig[tId].linkValidFromCol = ''; state.hierarchyConfig[tId].linkValidToCol = ''; } renderExtractionColumns(); persistAppState(); }
 
         function renderExtractionColumns() {
-            const baseId = el('baseTableSelect').value; const cont = el('extractionColumns'); cont.innerHTML=''; if (!baseId) return;
+            const cont = el('extractionColumns'); if (!cont) return;
+            const baseId = el('baseTableSelect').value; cont.innerHTML=''; if (!baseId) return;
             let _cardsHtml = '';
             const targetIdsForVisual = new Set(Object.keys(state.selectedCols).filter(id => state.selectedCols[id] && state.selectedCols[id].length > 0));
             Object.keys(state.filters).forEach(tId => { if (Object.keys(state.filters[tId]).length > 0) targetIdsForVisual.add(tId); });
@@ -9436,7 +9382,7 @@
         }
 
         function validateExtractionState() {
-            const btn = el('btnRun'); let hasCols = false;
+            const btn = el('btnRun'); if (!btn) return; let hasCols = false;
             Object.values(state.selectedCols).forEach(cols => { if (cols.length > 0) hasCols = true; });
             Object.keys(state.pivotMode).forEach(tId => { if(state.pivotMode[tId] === 'count') hasCols = true; });
             let relsValid = true; state.relations.forEach(r => { if (!r.sourceCol || !r.targetCol) relsValid = false; });
@@ -9892,12 +9838,8 @@
         // Fonctions calculées « façon Excel » disponibles dans les colonnes.
         const ADV_CALC_FNS = { concat: 'CONCATENER (2 colonnes + séparateur)', left: 'GAUCHE (n premiers caractères)', right: 'DROITE (n derniers)', mid: 'STXT (extraire du milieu)', len: 'NBCAR (longueur)', si: 'SI (condition → valeur A sinon B)' };
 
-        function advExtractOpen() { return !el('advExtractBody').classList.contains('hidden'); }
-        function toggleAdvExtract() {
-            const body = el('advExtractBody'); const open = body.classList.toggle('hidden') === false;
-            const chev = el('advChevron'); if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
-            if (open) { if (!state.advExtract.baseId && el('baseTableSelect').value) state.advExtract.baseId = el('baseTableSelect').value; renderAdvExtract(); }
-        }
+        function advExtractOpen() { return true; }
+        function toggleAdvExtract() { renderAdvExtract(); }
         function advReachableTables() {
             const s = state.advExtract; if (!s.baseId) return [];
             const ids = getReachableTables(s.baseId);
@@ -9933,12 +9875,14 @@
         }
         // Tables référencées par une colonne (simple ou calculée) — pour planifier les jointures.
         function advColTables(c) {
+            if (c.kind === 'link' || c.kind === 'hier') return []; // ancrées via la table parente, jamais jointes ligne à ligne
             if (c.kind !== 'calc') return [c.tableId];
             const ids = [];
             if (c.calc.a) ids.push(c.calc.a.tableId);
             if (c.calc.b) ids.push(c.calc.b.tableId);
             return ids;
         }
+        const ADV_OPS = { '=': '=', '!=': '≠', 'contains': 'contient', 'in': 'dans la liste (;)', '>=': '≥ (nombre)', '<=': '≤ (nombre)', 'dfrom': 'à partir du (date)', 'dto': 'jusqu\'au (date)', 'empty': 'est vide', 'notempty': "n'est pas vide" };
         function advCondSql(alias, c) {
             const raw = `CAST(${alias}.${sqlIdent(c.col)} AS VARCHAR)`;
             const norm = `UPPER(TRIM(${raw}))`;
@@ -9946,8 +9890,26 @@
             if (c.op === 'notempty') return `(${alias}.${sqlIdent(c.col)} IS NOT NULL AND TRIM(${raw}) <> '')`;
             if (c.op === 'contains') return `LOWER(COALESCE(${raw}, '')) LIKE '%' || ${sqlLiteral(String(c.val).toLowerCase())} || '%'`;
             if (c.op === '!=') return `COALESCE(${norm}, '') <> ${sqlLiteral(String(c.val).toUpperCase())}`;
+            if (c.op === 'in') { const vals = String(c.val || '').split(';').map(x => x.trim()).filter(Boolean); return vals.length ? `${norm} IN (${vals.map(v => sqlLiteral(v.toUpperCase())).join(', ')})` : 'TRUE'; }
+            if (c.op === '>=' || c.op === '<=') { const num = `TRY_CAST(REPLACE(${raw}, ',', '.') AS DOUBLE)`; return `${num} ${c.op} ${parseFloat(String(c.val).replace(',', '.')) || 0}`; }
+            if (c.op === 'dfrom' || c.op === 'dto') { const d = `COALESCE(TRY_CAST(${raw} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`; return `${d} ${c.op === 'dfrom' ? '>=' : '<='} DATE ${sqlLiteral(c.val)}`; }
             return `${norm} = ${sqlLiteral(String(c.val).toUpperCase())}`;
         }
+        // Ancrage d'une table « résumée » : la relation qui la relie au chemin de jointures.
+        function advLinkAnchor(baseId, tableId) {
+            if (tableId === baseId) return null;
+            const rels = state.relations.filter(r => r.sourceCol && r.targetCol && state.tables[r.sourceTable] && state.tables[r.targetTable] && state.tables[r.sourceTable].status === 'ready' && state.tables[r.targetTable].status === 'ready');
+            const adj = {};
+            rels.forEach(r => { (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable }); (adj[r.targetTable] = adj[r.targetTable] || []).push({ rel: r, other: r.sourceTable }); });
+            const prev = {}; const seen = new Set([baseId]); const queue = [baseId];
+            while (queue.length && !prev[tableId]) { const cur = queue.shift(); for (const e of (adj[cur] || [])) { if (!seen.has(e.other)) { seen.add(e.other); prev[e.other] = { from: cur, rel: e.rel }; queue.push(e.other); } } }
+            if (!prev[tableId]) return null;
+            const st = prev[tableId]; const rel = st.rel;
+            return { parentId: st.from,
+                childCol: rel.sourceTable === tableId ? rel.sourceCol : rel.targetCol,
+                parentCol: rel.sourceTable === tableId ? rel.targetCol : rel.sourceCol };
+        }
+        const advNk = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
         // Planifie les jointures (LEFT) reliant chaque table nécessaire à la base via les relations du
         // MCD. Les liens INDIRECTS sont gérés : si une table n'est pas reliée directement, on cherche
         // le plus court chemin (BFS) à travers les tables intermédiaires (tables de lien, plusieurs
@@ -9988,6 +9950,27 @@
             }
             return { map, joins, unreachable };
         }
+        // Développe une colonne de la spec en 1..N items { expr, alias } — les types « link »
+        // (synthèse de table liée) et « hier » (hiérarchie aplatie) produisent du SQL corrélé/CTE.
+        function advExpandCol(map, c, hierRef) {
+            if (c.kind === 'link') {
+                const a = c._anchor; const S = sqlIdent(duckTableName(c.tableId));
+                const key = `${advNk('s.' + sqlIdent(a.childCol))} = ${advNk(map[a.parentId] + '.' + sqlIdent(a.parentCol))}`;
+                const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : null;
+                const al = c.alias || c.col || 'synthese';
+                if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} s WHERE ${key})`, alias: al }];
+                if (c.mode === 'countd') return [{ expr: `(SELECT COUNT(DISTINCT ${advNk('s.' + sqlIdent(c.col))}) FROM ${S} s WHERE ${key})`, alias: al }];
+                if (c.mode === 'values') return [{ expr: `(SELECT STRING_AGG(DISTINCT NULLIF(${colRaw}, ''), ' | ') FROM ${S} s WHERE ${key})`, alias: al }];
+                const n = Math.max(1, Math.min(12, parseInt(c.n) || 3));
+                return Array.from({ length: n }, (_, k) => ({ expr: `(SELECT ${colRaw} FROM ${S} s WHERE ${key} ORDER BY s.${sqlIdent('__rn')} LIMIT 1 OFFSET ${k})`, alias: al + '_' + (k + 1) }));
+            }
+            if (c.kind === 'hier') {
+                const maxD = Math.max(1, Math.min(20, parseInt((c.conf || {}).maxDepth) || 5));
+                const al = c.alias || ((state.tables[c.tableId] || {}).name || 'hier');
+                return Array.from({ length: maxD }, (_, k) => ({ expr: `list_extract(${hierRef[c.id]}, ${k + 1})`, alias: al + '_niv' + (k + 1) }));
+            }
+            return [{ expr: advColExpr(map, c), alias: c.alias || c.col }];
+        }
         function buildAdvSql(spec) {
             const base = state.tables[spec.baseId]; if (!base) return { err: 'Choisissez une table de départ.' };
             const cols = spec.columns;
@@ -9997,13 +9980,54 @@
             cols.forEach(c => advColTables(c).forEach(id => needed.add(id)));
             spec.filters.forEach(f => needed.add(f.tableId));
             if (spec.group.on) spec.group.aggs.forEach(a => { if (a.tableId) needed.add(a.tableId); (a.conds || []).forEach(cc => needed.add(cc.tableId)); });
+            // ancrages des colonnes « synthèse » / « hiérarchie » : on joint la table PARENTE du lien,
+            // jamais la table résumée elle-même (pas de multiplication de lignes).
+            for (const c of cols.filter(c2 => c2.kind === 'link' || c2.kind === 'hier')) {
+                if (c.tableId === spec.baseId && c.kind === 'hier') { c._anchor = null; continue; }
+                const a = advLinkAnchor(spec.baseId, c.tableId);
+                if (!a) return { err: `« ${(state.tables[c.tableId] || {}).name || '?'} » n'est pas reliée à la table de départ dans le modèle de données (étape 2).` };
+                c._anchor = a; needed.add(a.parentId);
+            }
             const { map, joins, unreachable } = advPlanJoins(spec.baseId, Array.from(needed));
             if (unreachable.length) return { err: 'Tables non reliées dans le modèle de données : ' + unreachable.map(id => (state.tables[id] || {}).name).join(', ') + '. Ajoutez un lien à l\'étape 2 (modèle de données).' };
-            const fromSql = `${sqlIdent(duckTableName(spec.baseId))} x0` + (joins.length ? '\n  ' + joins.map(j => `LEFT JOIN ${sqlIdent(duckTableName(j.id))} ${j.alias} ON ${j.on}`).join('\n  ') : '');
+            // CTE récursives des hiérarchies + leur jointure dédiée
+            const ctes = [], hierJoins = [], hierRef = {}; let hn = 0;
+            for (const c of cols.filter(c2 => c2.kind === 'hier')) {
+                const conf = c.conf || {}; if (!conf.idCol) return { err: 'Hiérarchie : choisissez la colonne identifiant.' };
+                const T = sqlIdent(duckTableName(c.tableId)); const H = 'h' + (hn++);
+                const maxD = Math.max(1, Math.min(20, parseInt(conf.maxDepth) || 5));
+                const id2 = sqlIdent(conf.idCol); const lbl = a2 => `TRIM(CAST(${a2}.${id2} AS VARCHAR))`;
+                let baseWhere, stepJoin;
+                if (conf.type === 'link' && conf.linkTable) {
+                    if (!conf.linkChildCol || !conf.linkParentCol) return { err: 'Hiérarchie via liaison : colonnes enfant/parent requises.' };
+                    const L = sqlIdent(duckTableName(conf.linkTable));
+                    const refD = conf.refDate ? `DATE ${sqlLiteral(conf.refDate)}` : 'CURRENT_DATE';
+                    const dOf = cc => `COALESCE(TRY_CAST(CAST(l.${sqlIdent(cc)} AS VARCHAR) AS DATE), CAST(TRY_CAST(CAST(l.${sqlIdent(cc)} AS VARCHAR) AS TIMESTAMP) AS DATE))`;
+                    const va = [];
+                    if (conf.linkValidFromCol) va.push(`(l.${sqlIdent(conf.linkValidFromCol)} IS NULL OR ${dOf(conf.linkValidFromCol)} <= ${refD})`);
+                    if (conf.linkValidToCol) va.push(`(l.${sqlIdent(conf.linkValidToCol)} IS NULL OR ${dOf(conf.linkValidToCol)} >= ${refD})`);
+                    const vSql = va.length ? ' AND ' + va.join(' AND ') : '';
+                    baseWhere = `NOT EXISTS (SELECT 1 FROM ${L} l WHERE ${advNk('l.' + sqlIdent(conf.linkChildCol))} = ${advNk('t.' + id2)}${vSql})`;
+                    stepJoin = `JOIN ${L} l ON ${advNk('l.' + sqlIdent(conf.linkChildCol))} = ${advNk('c.' + id2)}${vSql} JOIN ${H} p ON ${advNk('l.' + sqlIdent(conf.linkParentCol))} = p.k`;
+                } else {
+                    if (!conf.parentCol) return { err: 'Hiérarchie : choisissez la colonne parent.' };
+                    const par = sqlIdent(conf.parentCol);
+                    baseWhere = `(t.${par} IS NULL OR TRIM(CAST(t.${par} AS VARCHAR)) = '')`;
+                    stepJoin = `JOIN ${H} p ON ${advNk('c.' + par)} = p.k`;
+                }
+                ctes.push(`${H}(k, chain) AS (\n  SELECT ${advNk('t.' + id2)}, [${lbl('t')}] FROM ${T} t WHERE ${baseWhere}\n  UNION ALL\n  SELECT ${advNk('c.' + id2)}, list_append(p.chain, ${lbl('c')}) FROM ${T} c ${stepJoin} WHERE len(p.chain) < ${maxD} AND NOT list_contains(p.chain, ${lbl('c')})\n)`);
+                const a = c._anchor;
+                if (!a) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk('x0.' + id2)}`); hierRef[c.id] = `${H}.chain`; }
+                else if (a.childCol === conf.idCol) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk(map[a.parentId] + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}.chain`; }
+                else { hierJoins.push(`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(a.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ON hh.k = ${advNk('t2.' + id2)}) ${H}x ON ${H}x.jk = ${advNk(map[a.parentId] + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}x.chain`; }
+            }
+            const JT = spec.joinType === 'inner' ? 'JOIN' : 'LEFT JOIN';
+            const fromSql = `${sqlIdent(duckTableName(spec.baseId))} x0` + (joins.length ? '\n  ' + joins.map(j => `${JT} ${sqlIdent(duckTableName(j.id))} ${j.alias} ON ${j.on}`).join('\n  ') : '') + (hierJoins.length ? '\n  ' + hierJoins.join('\n  ') : '');
+            const withSql = ctes.length ? 'WITH RECURSIVE ' + ctes.join(',\n') + '\n' : '';
             const whereSql = spec.filters.length ? '\nWHERE ' + spec.filters.map(f => advCondSql(map[f.tableId], f)).join('\n  AND ') : '';
             const outCols = []; let selectSql, tail = '';
             if (spec.group.on) {
-                const dims = cols.map(c => ({ expr: advColExpr(map, c), alias: c.alias || c.col }));
+                const dims = cols.flatMap(c => advExpandCol(map, c, hierRef));
                 const aggs = spec.group.aggs.map(a => {
                     const q = a.col && a.col !== '*' ? `${map[a.tableId]}.${sqlIdent(a.col)}` : null;
                     let e;
@@ -10018,20 +10042,23 @@
                     return { expr: e, alias: a.alias || (a.fn + '_' + (a.col || 'lignes')) };
                 });
                 const all = [...dims, ...aggs]; all.forEach(x => outCols.push({ alias: x.alias }));
+                // (les dimensions incluent synthèses et niveaux de hiérarchie développés)
                 selectSql = all.map(x => `${x.expr} AS ${sqlIdent(x.alias)}`).join(',\n  ');
                 tail = dims.length ? '\nGROUP BY ' + dims.map((_, i) => i + 1).join(', ') : '';
             } else {
-                cols.forEach(c => outCols.push({ alias: c.alias || c.col }));
-                selectSql = cols.map(c => `${advColExpr(map, c)} AS ${sqlIdent(c.alias || c.col)}`).join(',\n  ');
+                const items = cols.flatMap(c => advExpandCol(map, c, hierRef));
+                items.forEach(x => outCols.push({ alias: x.alias }));
+                selectSql = items.map(x => `${x.expr} AS ${sqlIdent(x.alias)}`).join(',\n  ');
                 if (spec.dedup.on && spec.dedup.keys.length) {
-                    const keyExprs = spec.dedup.keys.map(cid => { const c = cols.find(x => x.id === cid); return c ? advColExpr(map, c) : null; }).filter(Boolean);
+                    const keyExprs = spec.dedup.keys.map(cid => { const c = cols.find(x => x.id === cid); return c ? (advExpandCol(map, c, hierRef)[0] || {}).expr : null; }).filter(Boolean);
                     if (keyExprs.length) {
                         const dir = spec.dedup.keep === 'last' ? 'DESC' : 'ASC';
                         tail = `\nQUALIFY ROW_NUMBER() OVER (PARTITION BY ${keyExprs.join(', ')} ORDER BY x0.${sqlIdent('__rn')} ${dir}) = 1`;
                     }
                 }
             }
-            return { sql: `SELECT ${selectSql}\nFROM ${fromSql}${whereSql}${tail}`, outCols };
+            const limitSql = spec.limit500 ? '\nLIMIT 500' : '';
+            return { sql: `${withSql}SELECT ${selectSql}\nFROM ${fromSql}${whereSql}${tail}${limitSql}`, outCols };
         }
         function advCurrentSql() {
             if (state.advExtract.customSql) { const ta = el('adv-sql'); return { sql: (ta ? ta.value : '').trim(), outCols: null }; }
@@ -10149,7 +10176,7 @@
         }
 
         // ---------- Handlers de la spec ----------
-        function advSetBase(v) { state.advExtract.baseId = v; state.advExtract.columns = state.advExtract.columns.filter(c => c.tableId === v || getReachableTables(v).includes(c.tableId)); renderAdvExtract(); }
+        function advSetBase(v) { state.advExtract.baseId = v; state.advExtract.columns = state.advExtract.columns.filter(c => c.kind === 'calc' || c.tableId === v || getReachableTables(v).includes(c.tableId)); const bs = el('baseTableSelect'); if (bs && bs.value !== v) bs.value = v; renderAdvExtract(); }
         function advAddColumn() {
             const t = el('adv-col-tbl').value, col = el('adv-col-col').value; if (!t || !col) return;
             state.advExtract.columns.push({ id: 'ac_' + generateId(), tableId: t, col, alias: col, transform: 'none' });
@@ -10257,6 +10284,8 @@
                 if (cal.fn === 'si') return `ƒ SI(${rf(cal.a)} ${SCOPE_OPS[cal.op] || cal.op} "${cal.val}" → "${cal.then}" ; "${cal.else}")`;
                 return 'ƒ calculée';
             }
+            if (c.kind === 'link') { const t2 = state.tables[c.tableId]; return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${(t2 ? t2.name : '?')}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}`; }
+            if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux)`; }
             const t = state.tables[c.tableId]; return (t ? t.name : '?') + '.' + c.col;
         }
         function renderAdvExtract() {
@@ -10277,10 +10306,10 @@
                     <span class="text-[11px] text-slate-400">écrase la configuration ci-dessous</span>
                 </div>` : '<p class="text-xs text-slate-400 italic">Aucun objet métier défini (onglet Gouvernance). Vous pouvez construire l\'extraction manuellement ci-dessous.</p>'}
             </div>`;
-            // -- Table de départ --
-            html += `<div class="mb-4 flex items-end gap-2 flex-wrap">
-                <div><label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Table de départ</label>
-                <select id="adv-base" onchange="advSetBase(this.value)" class="border border-slate-300 p-2 rounded text-sm bg-white">${readyTables.map(t => `<option value="${t.id}" ${t.id === s.baseId ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select></div>
+            // -- Table de départ : choisie dans l'en-tête de l'écran (baseTableSelect) --
+            html += `<div class="mb-4 flex items-center gap-2 flex-wrap text-[12px]">
+                <span class="font-bold text-slate-500">Table de départ :</span>
+                <span class="bg-indigo-100 text-indigo-800 font-bold px-2.5 py-1 rounded-full">${escapeHTML((state.tables[s.baseId] || {}).name || '—')}</span>
                 ${s.objectId ? `<span class="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">objet : ${escapeHTML((bos.find(b => b.id === s.objectId) || {}).name || '')}</span>` : ''}
             </div>`;
             // -- Colonnes --
@@ -10302,7 +10331,52 @@
                 <select id="adv-col-col" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
                 <button onclick="advAddColumn()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">+ Colonne</button>
                 <button onclick="advAddAllColumns()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded font-medium">+ Toutes</button>
+                <button onclick="advBulkOpen()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded font-bold">➕ Plusieurs colonnes…</button>
             </div>
+            <details class="mt-2 bg-sky-50/50 border border-sky-100 rounded-lg">
+                <summary class="cursor-pointer px-2 py-1.5 text-[11px] font-bold text-sky-700">Σ Synthèse d'une table liée — compter les lignes, compter les valeurs uniques, transposer en texte ou en colonnes</summary>
+                <div class="p-2 flex items-end gap-1.5 flex-wrap">
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table liée</label>
+                    <select id="adv-link-tbl" onchange="advLinkTblChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${reach.filter(t => t.id !== s.baseId).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Mode</label>
+                    <select id="adv-link-mode" onchange="advLinkModeChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${Object.entries(ADV_LINK_MODES).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
+                    <div id="adv-link-col-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Colonne</label>
+                    <select id="adv-link-col" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${(reach.find(t => t.id !== s.baseId) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
+                    <div id="adv-link-n-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">N colonnes</label>
+                    <input type="number" id="adv-link-n" value="3" min="1" max="12" class="border border-slate-300 p-1.5 rounded text-[11px] w-14"></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom en sortie</label>
+                    <input type="text" id="adv-link-alias" placeholder="auto" class="border border-slate-300 p-1.5 rounded text-[11px] w-28"></div>
+                    <button onclick="advAddLinkColumn()" class="text-[11px] bg-sky-600 text-white px-3 py-1.5 rounded font-bold">+ Synthèse</button>
+                    <span class="text-[10px] text-slate-400">1 ligne par ligne de la table de départ — jamais de multiplication de lignes.</span>
+                </div>
+            </details>
+            <details class="mt-2 bg-purple-50/50 border border-purple-100 rounded-lg">
+                <summary class="cursor-pointer px-2 py-1.5 text-[11px] font-bold text-purple-700">🌳 Hiérarchie aplatie — colonnes niveau 1…N (dans la même table ou via table de liaison, avec période de validité)</summary>
+                <div class="p-2 flex items-end gap-1.5 flex-wrap">
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table hiérarchique</label>
+                    <select id="adv-hier-tbl" onchange="advHierTblChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${reach.map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label>
+                    <select id="adv-hier-type" onchange="advHierTypeChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="simple">Parent dans la même table</option><option value="link">Via table de liaison</option></select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Identifiant</label>
+                    <select id="adv-hier-id" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
+                    <div id="adv-hier-simple-wrap"><label class="text-[9px] uppercase font-bold text-slate-400 block">Parent</label>
+                    <select id="adv-hier-parent" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
+                    <div id="adv-hier-link-wrap" class="hidden flex items-end gap-1.5 flex-wrap">
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table de liaison</label>
+                        <select id="adv-hier-ltbl" onchange="advHierLinkTblChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${readyTables.map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select></div>
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Enfant</label><select id="adv-hier-lchild" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"></select></div>
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Parent</label><select id="adv-hier-lparent" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"></select></div>
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Valide du</label><select id="adv-hier-lfrom" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="">— non utilisé —</option></select></div>
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Valide au</label><select id="adv-hier-lto" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="">— non utilisé —</option></select></div>
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Date de réf.</label><input type="date" id="adv-hier-refdate" class="border border-slate-300 p-1.5 rounded text-[11px]"></div>
+                    </div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Profondeur</label>
+                    <input type="number" id="adv-hier-depth" value="5" min="1" max="20" class="border border-slate-300 p-1.5 rounded text-[11px] w-14"></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Préfixe en sortie</label>
+                    <input type="text" id="adv-hier-alias" placeholder="auto" class="border border-slate-300 p-1.5 rounded text-[11px] w-24"></div>
+                    <button onclick="advAddHierColumn()" class="text-[11px] bg-purple-600 text-white px-3 py-1.5 rounded font-bold">+ Hiérarchie</button>
+                </div>
+            </details>
             <details class="mt-2 bg-amber-50/50 border border-amber-100 rounded-lg">
                 <summary class="cursor-pointer px-2 py-1.5 text-[11px] font-bold text-amber-700">ƒx Colonne calculée — façon Excel (CONCATENER, GAUCHE, DROITE, STXT, NBCAR, SI)</summary>
                 <div class="p-2 flex items-end gap-1.5 flex-wrap">
@@ -10338,11 +10412,11 @@
             // -- Filtres --
             html += `<div class="mb-4">
                 <div class="text-[11px] font-bold text-slate-600 uppercase mb-2">2. Filtres</div>`;
-            if (s.filters.length) html += `<div class="flex flex-wrap gap-1.5 mb-2">${s.filters.map(f => `<span class="text-[11px] bg-blue-50 border border-blue-200 text-blue-800 rounded-full px-2.5 py-1 flex items-center gap-1"><strong>${escapeHTML((state.tables[f.tableId] || {}).name || '')}.${escapeHTML(f.col)}</strong> ${SCOPE_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` "${escapeHTML(f.val)}"`} <button onclick="advRemoveFilter('${f.id}')" class="text-blue-400 hover:text-red-500">✕</button></span>`).join('')}</div>`;
+            if (s.filters.length) html += `<div class="flex flex-wrap gap-1.5 mb-2">${s.filters.map(f => `<span class="text-[11px] bg-blue-50 border border-blue-200 text-blue-800 rounded-full px-2.5 py-1 flex items-center gap-1"><strong>${escapeHTML((state.tables[f.tableId] || {}).name || '')}.${escapeHTML(f.col)}</strong> ${ADV_OPS[f.op] || SCOPE_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` "${escapeHTML(f.val)}"`} <button onclick="advRemoveFilter('${f.id}')" class="text-blue-400 hover:text-red-500">✕</button></span>`).join('')}</div>`;
             html += `<div class="flex items-end gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
                 <select id="adv-flt-tbl" onchange="advFltTblChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
                 <select id="adv-flt-col" onchange="advFillFilterVals()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
-                <select id="adv-flt-op" onchange="el('adv-flt-val').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(SCOPE_OPS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+                <select id="adv-flt-op" onchange="el('adv-flt-val').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(ADV_OPS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
                 <input type="text" id="adv-flt-val" list="adv-flt-vals" onfocus="advFillFilterVals()" class="border border-slate-300 p-1.5 rounded text-xs w-36" placeholder="choisir ou saisir..."><datalist id="adv-flt-vals"></datalist>
                 <button onclick="advAddFilter()" class="text-xs bg-blue-600 text-white px-3 py-1.5 rounded font-bold">+ Filtre</button>
             </div></div>`;
@@ -10391,6 +10465,12 @@
                     <label class="flex items-center gap-2 text-[11px] font-bold text-slate-500 mb-1"><input type="checkbox" ${s.customSql ? 'checked' : ''} onchange="advToggleCustomSql(this.checked)"> SQL personnalisé (éditer librement la requête)</label>
                     <textarea id="adv-sql" ${s.customSql ? '' : 'readonly'} class="w-full border border-slate-300 rounded-lg p-2 font-mono text-[11px] bg-slate-900 text-emerald-300 h-40"></textarea>
                 </div>
+                <div class="flex items-center gap-3 flex-wrap mb-2 text-[11.5px]">
+                    <span class="font-bold text-slate-500">Jointures :</span>
+                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="advJoinType" value="left" ${s.joinType !== 'inner' ? 'checked' : ''} onchange="advSetJoinType('left')"> Conserver tout (left join)</label>
+                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="advJoinType" value="inner" ${s.joinType === 'inner' ? 'checked' : ''} onchange="advSetJoinType('inner')"> Intersection (inner join)</label>
+                    <label class="flex items-center gap-1.5 cursor-pointer text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1"><input type="checkbox" ${s.limit500 ? 'checked' : ''} onchange="advSetLimit500(this.checked); renderAdvExtract()"> Mode « aperçu rapide » — limiter à 500 lignes</label>
+                </div>
                 <div class="flex items-center gap-3 flex-wrap bg-indigo-50/40 border border-indigo-100 rounded-lg p-3">
                     <button id="adv-generate" onclick="advGenerate()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg">⬇️ Générer le CSV</button>
                     <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="adv-add-source" class="w-4 h-4"> Ajouter aussi comme nouvelle source</label>
@@ -10402,6 +10482,104 @@
             if (!s.customSql && el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql();
         }
         function advColColChanged() { const t = state.tables[el('adv-col-tbl').value]; const c = el('adv-col-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        // -- Synthèse d'une table liée (ex-modes Transposer / Compter de l'ancien écran) --
+        const ADV_LINK_MODES = { count: 'Compter les lignes liées', countd: 'Compter les valeurs uniques', values: 'Transposer en texte (valeurs concaténées)', indexed: 'Transposer en colonnes (n premières)' };
+        function advLinkTblChanged() { const t = state.tables[el('adv-link-tbl').value]; const c = el('adv-link-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function advLinkModeChanged() { const m = el('adv-link-mode').value; el('adv-link-col-wrap').classList.toggle('hidden', m === 'count'); el('adv-link-n-wrap').classList.toggle('hidden', m !== 'indexed'); }
+        function advAddLinkColumn() {
+            const t = el('adv-link-tbl').value, mode = el('adv-link-mode').value;
+            const col = mode === 'count' ? '' : el('adv-link-col').value;
+            if (!t) return; if (mode !== 'count' && !col) return showError('Choisissez la colonne à résumer.');
+            if (t === state.advExtract.baseId) return showError('Choisissez une table LIÉE (pas la table de départ).');
+            const tn = (state.tables[t] || {}).name || '';
+            const def = mode === 'count' ? 'nb_' + tn : (mode === 'countd' ? 'nbu_' + col : col);
+            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'link', tableId: t, mode, col, n: parseInt(el('adv-link-n').value) || 3, alias: (el('adv-link-alias').value || '').trim() || def, transform: 'none' });
+            renderAdvExtract();
+        }
+        // -- Hiérarchie aplatie (ex-mode « Aplatir Hiérarchie ») --
+        function advHierTblChanged() { const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); }
+        function advHierLinkTblChanged() { const t = state.tables[el('adv-hier-ltbl').value]; ['adv-hier-lchild', 'adv-hier-lparent', 'adv-hier-lfrom', 'adv-hier-lto'].forEach((x, i) => { const c = el(x); if (t && c) c.innerHTML = (i >= 2 ? '<option value="">— non utilisé —</option>' : '') + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); }
+        function advHierTypeChanged() { const link = el('adv-hier-type').value === 'link'; el('adv-hier-simple-wrap').classList.toggle('hidden', link); el('adv-hier-link-wrap').classList.toggle('hidden', !link); }
+        function advAddHierColumn() {
+            const t = el('adv-hier-tbl').value; if (!t) return;
+            const type = el('adv-hier-type').value;
+            const conf = { type, idCol: el('adv-hier-id').value, parentCol: type === 'link' ? '' : el('adv-hier-parent').value,
+                linkTable: type === 'link' ? el('adv-hier-ltbl').value : '', linkChildCol: type === 'link' ? el('adv-hier-lchild').value : '', linkParentCol: type === 'link' ? el('adv-hier-lparent').value : '',
+                linkValidFromCol: type === 'link' ? el('adv-hier-lfrom').value : '', linkValidToCol: type === 'link' ? el('adv-hier-lto').value : '', refDate: type === 'link' ? el('adv-hier-refdate').value : '',
+                maxDepth: parseInt(el('adv-hier-depth').value) || 5 };
+            if (!conf.idCol) return showError('Choisissez la colonne identifiant de la hiérarchie.');
+            if (type !== 'link' && !conf.parentCol) return showError('Choisissez la colonne parent.');
+            if (type === 'link' && (!conf.linkTable || !conf.linkChildCol || !conf.linkParentCol)) return showError('Complétez la table de liaison (enfant + parent).');
+            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'hier', tableId: t, conf, alias: (el('adv-hier-alias').value || '').trim() || ((state.tables[t] || {}).name || 'hier'), transform: 'none' });
+            renderAdvExtract();
+        }
+        // -- Ajout de colonnes en masse : un tir groupé qui remplit la liste déclarative --
+        function advBulkOpen() {
+            const s2 = state.advExtract; const reach = advReachableTables();
+            const body = reach.map(t => `<details class="border border-slate-200 rounded-lg mb-2" ${t.id === s2.baseId ? 'open' : ''}><summary class="px-3 py-2 cursor-pointer text-[12px] font-bold bg-slate-50">${t.id === s2.baseId ? '⭐ ' : ''}${escapeHTML(t.name)} <span class="font-normal text-slate-400">(${t.headers.length} colonnes)</span></summary>
+                <div class="p-2 grid grid-cols-2 gap-0.5">${t.headers.map(h => { const already = s2.columns.some(c => !c.kind && c.tableId === t.id && c.col === h);
+                    return `<label class="adv-bulk-row flex items-center gap-1.5 text-[11.5px] px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer ${already ? 'opacity-40' : ''}" data-lbl="${escapeHTML((t.name + ' ' + h).toLowerCase())}"><input type="checkbox" class="adv-bulk-cb" data-t="${t.id}" data-c="${escapeHTML(h)}" ${already ? 'checked disabled' : ''}><span class="truncate">${escapeHTML(h)}</span></label>`; }).join('')}</div></details>`).join('');
+            el('uxDrawer').classList.add('wide');
+            openUxDrawer({ sem: '', title: '➕ Plusieurs colonnes d\'un coup', sub: 'Cochez dans n\'importe quelle table du modèle — chaque colonne cochée devient une ligne de la liste (renommable, transformable).', body: `
+                <input type="search" oninput="advBulkFilter(this.value)" placeholder="🔍 filtrer les colonnes…" class="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3">
+                <div id="advBulkList">${body}</div>`, foot: `
+                <button onclick="advBulkApply()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 text-xs font-bold">Ajouter les colonnes cochées</button>
+                <button onclick="closeBackupCenter()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600">Annuler (Échap)</button>` });
+        }
+        function advBulkFilter(q) { const n = String(q).toLowerCase(); document.querySelectorAll('#advBulkList .adv-bulk-row').forEach(r => { r.style.display = !n || (r.dataset.lbl || '').includes(n) ? '' : 'none'; }); if (n) document.querySelectorAll('#advBulkList details').forEach(d => d.open = true); }
+        function advBulkApply() {
+            let n = 0;
+            document.querySelectorAll('#advBulkList .adv-bulk-cb:checked:not(:disabled)').forEach(cb => {
+                const t = cb.dataset.t, col = cb.dataset.c;
+                if (!state.advExtract.columns.some(c => !c.kind && c.tableId === t && c.col === col)) { state.advExtract.columns.push({ id: 'ac_' + generateId(), tableId: t, col, alias: col, transform: 'none' }); n++; }
+            });
+            closeBackupCenter(); renderAdvExtract();
+            if (n) showSuccess(`${n} colonne(s) ajoutée(s) à l'extraction.`);
+        }
+        // -- Migration de l'ancienne configuration (colonnes cochées, modes, hiérarchies, filtres) --
+        function advSyncBase() {
+            const s2 = state.advExtract; const bs = el('baseTableSelect');
+            if (bs && bs.value && state.tables[bs.value]) s2.baseId = bs.value;
+            else if (s2.baseId && bs && state.tables[s2.baseId]) bs.value = s2.baseId;
+        }
+        function advMigrateClassic(force) {
+            const s2 = state.advExtract;
+            if (!force && (s2.migrated || s2.columns.length || s2.filters.length)) return;
+            const bs = el('baseTableSelect');
+            const baseId = s2.baseId || (bs && bs.value) || '';
+            if (!baseId || !state.tables[baseId]) { s2.migrated = true; return; }
+            s2.baseId = baseId;
+            let moved = 0;
+            const reach = new Set(getReachableTables(baseId));
+            new Set([...Object.keys(state.selectedCols || {}), ...Object.keys(state.pivotMode || {})]).forEach(tId => {
+                if (!reach.has(tId) || !state.tables[tId] || state.tables[tId].status !== 'ready') return;
+                const mode = (state.pivotMode || {})[tId] || 'none';
+                if (tId === baseId || mode === 'none') {
+                    (state.selectedCols[tId] || []).forEach(col => { if (!s2.columns.some(c => !c.kind && c.tableId === tId && c.col === col)) { s2.columns.push({ id: 'ac_' + generateId(), tableId: tId, col, alias: col, transform: 'none' }); moved++; } });
+                } else if (mode === 'count' || mode === 'count_values' || mode === 'values' || mode === 'indexed') {
+                    const col = (state.selectedCols[tId] || [])[0] || (state.tables[tId].headers || [])[0] || '';
+                    const m2 = mode === 'count' ? 'count' : (mode === 'count_values' ? 'countd' : (mode === 'values' ? 'values' : 'indexed'));
+                    s2.columns.push({ id: 'ac_' + generateId(), kind: 'link', tableId: tId, mode: m2, col: m2 === 'count' ? '' : col, n: 3, alias: (m2 === 'count' ? 'nb_' : '') + (state.tables[tId].name || ''), transform: 'none' }); moved++;
+                } else if (mode === 'hierarchy' && (state.hierarchyConfig || {})[tId]) {
+                    s2.columns.push({ id: 'ac_' + generateId(), kind: 'hier', tableId: tId, conf: { ...state.hierarchyConfig[tId] }, alias: state.tables[tId].name || 'hier', transform: 'none' }); moved++;
+                }
+            });
+            Object.keys(state.filters || {}).forEach(tId => {
+                if (!state.tables[tId]) return;
+                Object.keys(state.filters[tId] || {}).forEach(col => {
+                    const f = state.filters[tId][col]; if (!f) return;
+                    if (f.type === 'list' && f.values) s2.filters.push({ id: 'af_' + generateId(), tableId: tId, col, op: 'in', val: Array.from(f.values).join(';') });
+                    else if (f.type === 'text' && f.contains) s2.filters.push({ id: 'af_' + generateId(), tableId: tId, col, op: 'contains', val: f.contains });
+                    else if (f.type === 'number') { if (f.min != null) s2.filters.push({ id: 'af_' + generateId(), tableId: tId, col, op: '>=', val: String(f.min) }); if (f.max != null) s2.filters.push({ id: 'af_' + generateId(), tableId: tId, col, op: '<=', val: String(f.max) }); }
+                    else if (f.type === 'date') { if (f.from) s2.filters.push({ id: 'af_' + generateId(), tableId: tId, col, op: 'dfrom', val: f.from }); if (f.to) s2.filters.push({ id: 'af_' + generateId(), tableId: tId, col, op: 'dto', val: f.to }); }
+                    moved++;
+                });
+            });
+            s2.migrated = true;
+            if (moved) showSuccess(`⤴ Ancienne configuration d'extraction reprise : ${moved} élément(s) converti(s) dans le nouvel écran.`);
+        }
+        function advSetJoinType(v) { state.advExtract.joinType = v; }
+        function advSetLimit500(v) { state.advExtract.limit500 = v; }
         function advFltTblChanged() { const t = state.tables[el('adv-flt-tbl').value]; const c = el('adv-flt-col'); if (t && c) { c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advFillFilterVals(); } }
         function advAggTblChanged() { const t = state.tables[el('adv-agg-tbl').value]; const c = el('adv-agg-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
 
