@@ -4729,7 +4729,14 @@
                 persistAppState(); renderGovernance();
                 const rp = el('giReport');
                 const reasons = Object.entries(skips);
-                const detailHtml = reasons.length ? `<div class="mt-2 pt-2 border-t border-emerald-200/70"><div class="text-[11px] font-bold text-slate-600 mb-1">Détail des ${skipped} ligne(s) ignorée(s) :</div><ul class="space-y-1">${reasons.sort((a, b) => b[1].n - a[1].n).map(([r, s2]) => `<li class="text-[11px] text-slate-700 flex gap-1.5"><span class="shrink-0 font-black text-amber-600">${s2.n}</span><span><span class="font-semibold">${escapeHTML(r)}</span>${s2.ex.length ? ` <span class="text-slate-500">— ex : ${s2.ex.map(escapeHTML).join(', ')}${s2.n > s2.ex.length ? '…' : ''}</span>` : ''}</span></li>`).join('')}</ul></div>` : '';
+                // Aide au diagnostic « introuvable » : on liste les noms réellement existants pour
+                // repérer un écart d'orthographe (espace, pluriel, code…) au premier coup d'œil.
+                let existHint = '';
+                if (reasons.some(([r]) => r.includes('Objet métier introuvable')) && (g.businessObjects || []).length) {
+                    const names = (g.businessObjects || []).map(b2 => b2.name);
+                    existHint += `<div class="mt-1.5 text-[10.5px] text-slate-500"><strong>Objets métier existants</strong> (comparez l'orthographe exacte) : ${names.slice(0, 20).map(escapeHTML).join(', ')}${names.length > 20 ? '…' : ''}</div>`;
+                }
+                const detailHtml = reasons.length ? `<div class="mt-2 pt-2 border-t border-emerald-200/70"><div class="text-[11px] font-bold text-slate-600 mb-1">Détail des ${skipped} ligne(s) ignorée(s) :</div><ul class="space-y-1">${reasons.sort((a, b) => b[1].n - a[1].n).map(([r, s2]) => `<li class="text-[11px] text-slate-700 flex gap-1.5"><span class="shrink-0 font-black text-amber-600">${s2.n}</span><span><span class="font-semibold">${escapeHTML(r)}</span>${s2.ex.length ? ` <span class="text-slate-500">— ex : ${s2.ex.map(escapeHTML).join(', ')}${s2.n > s2.ex.length ? '…' : ''}</span>` : ''}</span></li>`).join('')}</ul>${existHint}</div>` : '';
                 if (rp) rp.innerHTML = `<div class="text-xs rounded-lg border ${skipped && !created && !updated ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-800'} px-3 py-2"><div class="font-bold">${skipped && !created && !updated ? '⚠️ Aucune ligne importée' : '✔ Import terminé'} : ${created} créé(s) · ${updated} mis à jour · ${skipped} ignoré(s).</div>${detailHtml}</div>`;
                 showSuccess(`⬆ Import gouvernance : ${created} créé(s), ${updated} mis à jour, ${skipped} ignoré(s).`);
             } catch (e) { showError('Import impossible : ' + e.message); }
@@ -7904,8 +7911,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.4.1';
+        const APP_VERSION = '4.4.2';
         const APP_CHANGELOG = [
+            { v: '4.4.2', d: '2026-07-23', t: 'Import : diagnostic « objet introuvable »', items: [
+                'Import en masse : quand des lignes sont ignorées pour « objet métier introuvable », le rapport liste les objets métier réellement existants — pour repérer aussitôt un écart d\'orthographe (espace, pluriel, code…).'] },
             { v: '4.4.1', d: '2026-07-23', t: 'Import en masse : rapport d\'erreurs détaillé', items: [
                 'Import en masse : le rapport ventile désormais les lignes ignorées PAR MOTIF, avec des exemples (ex : « objet métier introuvable — créez-le d\'abord », « lien déjà enregistré », « clé vide »…), pour comprendre d\'un coup d\'œil pourquoi une ligne n\'est pas passée.'] },
             { v: '4.4.0', d: '2026-07-23', t: 'Import en masse : objets métier & applications par objet', items: [
