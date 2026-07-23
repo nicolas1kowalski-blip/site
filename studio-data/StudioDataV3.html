@@ -6968,7 +6968,16 @@
                     <div class="cell"><div class="k">Propriétaire</div><div class="v" style="font-size:12.5px">${e2.own ? `<span class="cat-oav" style="background:${catOwnColor(e2.own)}">${escapeHTML(e2.own.split(/\s+/).map(x => x[0] || '').join('').toUpperCase().slice(0, 2))}</span> ${escapeHTML(e2.own)}` : '<span class="text-amber-600">⚠ à désigner</span>'}</div></div>
                     <div class="cell"><div class="k">Domaine</div><div class="v" style="font-size:12.5px">${escapeHTML(e2.dom)}</div></div>
                 </div></div>
-                ${t ? `<div class="dsect"><h4>Structure (${(t.headers || []).length} colonnes — types réels)</h4><div id="catSchemaBox"><p class="text-[11px] text-slate-300 italic">Lecture des types…</p></div></div>` : ''}
+                ${t ? (e2.type === 'column'
+                    ? `<div class="dsect"><h4>Détail de l'attribut</h4><div class="kv-ux">
+                        <div class="cell"><div class="k">Type réel</div><div class="v" id="catColType" style="font-size:12.5px">…</div></div>
+                        ${(() => { const cm = (((state.governance.dictionary[e2.tbl] || {}).columns) || {})[e2.col] || {};
+                            return (cm.technicalType ? `<div class="cell"><div class="k">Type déclaré</div><div class="v" style="font-size:12.5px">${escapeHTML(cm.technicalType)}</div></div>` : '')
+                                + (e2.q != null ? `<div class="cell"><div class="k">Complétude</div><div class="v" style="font-size:12.5px">${e2.q} %</div></div>` : '')
+                                + (cm.term ? `<div class="cell"><div class="k">Terme de glossaire</div><div class="v" style="font-size:12.5px">📖 ${escapeHTML(cm.term)}</div></div>` : '')
+                                + `<div class="cell"><div class="k">Colonne dans</div><div class="v" style="font-size:12.5px">${escapeHTML(e2.tbl)}</div></div>`; })()}
+                        </div></div>`
+                    : `<div class="dsect"><h4>Structure (${(t.headers || []).length} colonnes — types réels)</h4><div id="catSchemaBox"><p class="text-[11px] text-slate-300 italic">Lecture des types…</p></div></div>`) : ''}
                 <div class="dsect"><h4>Traçabilité (lineage)</h4><div class="flex items-center gap-2 text-center text-[12px]">
                     <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2"><div class="text-base font-black">${up}</div><div class="text-[10px] text-slate-400">source(s) amont</div></div>
                     <span class="text-slate-300" aria-hidden="true">→</span>
@@ -6983,7 +6992,22 @@
                 <button onclick="catGoLineage()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">🕸️ Voir le lineage</button>
                 <button onclick="catUseData()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">➜ Utiliser cette donnée</button>` });
             el('uxDrawerTyp').className = 'cat-tico ' + tc; el('uxDrawerTyp').textContent = ti;
-            if (t) catFillRealTypes(t.id, t.name);
+            if (t && e2.type === 'column') catFillColType(t.id, t.name, e2.col);
+            else if (t) catFillRealTypes(t.id, t.name);
+        }
+        // Type réel physique d'UNE colonne (sans priorité au type déclaré : les deux sont affichés côte à côte).
+        async function catFillColType(tId, tName, col) {
+            const span = el('catColType'); if (!span) return;
+            try {
+                let types = _catTypeCache[tId];
+                if (!types) {
+                    const { conn } = await getDB();
+                    const res = arrowResultToObjects(await conn.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ${sqlLiteral(duckTableName(tId))}`));
+                    types = {}; res.forEach(r => types[r.column_name] = r.data_type); _catTypeCache[tId] = types;
+                }
+                const lbl = catRealTypeLabel(types[col], col, null);
+                span.innerHTML = catTypeChip(lbl) + ' ' + escapeHTML(lbl);
+            } catch (e) { span.textContent = '—'; }
         }
         let _catFicheCtx = null;
         let catAttrLineageGraph = null;
@@ -7819,8 +7843,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.3.0';
+        const APP_VERSION = '4.3.1';
         const APP_CHANGELOG = [
+            { v: '4.3.1', d: '2026-07-23', t: 'Fiche d\'un attribut recentrée', items: [
+                'Catalogue : la fiche d\'un attribut affiche désormais le détail de CET attribut (type réel, type déclaré, complétude, terme, table) au lieu de la structure complète (toutes les colonnes) de sa table.'] },
             { v: '4.3.0', d: '2026-07-23', t: 'Lineage d\'un attribut depuis le catalogue', items: [
                 'Catalogue : « Voir le lineage » sur un attribut affiche le graphe nœuds-liens de son lineage (système source → colonne → attribut → applications/processus qui l\'utilisent) directement dans la fiche, au lieu d\'ouvrir le lineage global.'] },
             { v: '4.2.0', d: '2026-07-23', t: 'Encodage des sources', items: [
