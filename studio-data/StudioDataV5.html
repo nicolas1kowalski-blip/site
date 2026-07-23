@@ -3493,12 +3493,32 @@
             el('bizRuleRel').innerHTML = validRels.map(r => `<option value="${r.id}">${escapeHTML(state.tables[r.sourceTable].name)}.${escapeHTML(r.sourceCol)} ↔ ${escapeHTML(state.tables[r.targetTable].name)}.${escapeHTML(r.targetCol)}</option>`).join('');
             bizRuleRelChanged();
             if (!rules.length) { cont.innerHTML = '<p class="text-xs text-slate-400 italic">Aucune règle définie.</p>'; return; }
-            cont.innerHTML = rules.map(r => `<div class="flex items-center gap-2 flex-wrap bg-white border border-slate-200 rounded-lg p-2 mb-1.5">
-                <span class="text-xs font-bold text-slate-700">⚖️ ${escapeHTML(bizRuleLabel(r))}</span>
-                <button onclick="testBizRule('${r.id}', this)" class="ml-auto text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded font-bold hover:bg-indigo-100">▶ Tester</button>
-                <button onclick="removeBizRule('${r.id}')" class="text-red-400 hover:text-red-600 text-xs">🗑</button>
-                <div id="bizrule-res-${r.id}" class="w-full"></div>
-            </div>`).join('');
+            cont.innerHTML = rules.map(r => {
+                const eo = (v, l) => `<option value="${v}" ${r.expect === v ? 'selected' : ''}>${l}</option>`;
+                return `<div class="bg-white border border-slate-200 rounded-lg p-2 mb-1.5">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-bold text-slate-700">⚖️ ${escapeHTML(bizRuleLabel(r))}</span>
+                    <button onclick="testBizRule('${r.id}', this)" class="ml-auto text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded font-bold hover:bg-indigo-100">▶ Tester</button>
+                    <button onclick="removeBizRule('${r.id}')" class="text-red-400 hover:text-red-600 text-xs" title="Supprimer">🗑</button>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded p-1.5">
+                    <span class="font-semibold text-slate-600">1 ${escapeHTML(r.parentTable)} doit avoir</span>
+                    <select onchange="updateBizRule('${r.id}','expect',this.value)" class="border border-slate-300 rounded px-1 py-0.5 bg-white text-[11px]">${eo('=', 'exactement')}${eo('<=', 'au plus')}${eo('>=', 'au moins')}</select>
+                    <input type="number" min="0" value="${r.n}" onchange="updateBizRule('${r.id}','n',this.value)" class="border border-slate-300 rounded px-1 py-0.5 w-14 text-[11px]">
+                    <span class="font-semibold text-slate-600">${escapeHTML(r.childTable)}</span>
+                    ${r.cond && r.cond.col ? `<span>quand <b>${escapeHTML(r.cond.col)}</b> =</span><input value="${escapeHTML(r.cond.val || '')}" onchange="updateBizRule('${r.id}','condVal',this.value)" class="border border-slate-300 rounded px-1 py-0.5 w-28 text-[11px]">` : ''}
+                    <span class="ml-1 text-slate-400">libellé</span><input value="${escapeHTML(r.label || '')}" placeholder="(auto)" onchange="updateBizRule('${r.id}','label',this.value)" class="border border-slate-300 rounded px-1 py-0.5 w-40 text-[11px]">
+                </div>
+                <div id="bizrule-res-${r.id}" class="mt-1"></div>
+            </div>`; }).join('');
+        }
+        function updateBizRule(id, field, value) {
+            const r = (state.governance.rules || []).find(x => x.id === id); if (!r) return;
+            if (field === 'expect') r.expect = value;
+            else if (field === 'n') r.n = Math.max(0, parseInt(value) || 0);
+            else if (field === 'label') r.label = (value || '').trim();
+            else if (field === 'condVal') { if (r.cond) r.cond.val = (value || '').trim(); }
+            persistAppState(); renderBizRules();
         }
         function bizRuleRelChanged() {
             const rel = state.relations.find(r => r.id === el('bizRuleRel').value);
@@ -8782,8 +8802,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.1.2';
+        const APP_VERSION = '5.1.3';
         const APP_CHANGELOG = [
+            { v: '5.1.3', d: '2026-07-23', t: 'Édition partout : règles métier & renommage des paramétrages', items: [
+                'Règles métier de cardinalité (« 1 X doit avoir exactement N Y quand … ») : désormais MODIFIABLES en ligne après création — opérateur (exactement / au plus / au moins), nombre N, valeur de la condition et libellé — au lieu d\'être en lecture seule (supprimer/recréer).',
+                'Paramétrages d\'extraction : ajout du renommage (bouton ✎) en plus de charger / enregistrer / supprimer.',
+                'Passe d\'édition sur toute l\'application : le reste des entités (dictionnaire, objets métier, glossaire, périmètres, applications & processus, règles qualité, préparations, connecteurs, rapprochements, tableaux de bord, sensibilité, tables conçues, lineage) était déjà modifiable en ligne — ces deux points fermaient les derniers écarts.'] },
             { v: '5.1.2', d: '2026-07-23', t: 'Lineage : clé/attribut par côté + édition des liens et nœuds', items: [
                 'La clé et l\'attribut d\'un lien se déclarent désormais SÉPARÉMENT côté source et côté cible (leurs noms diffèrent souvent d\'une source à l\'autre, ex. « DK code » vs « DK_CODE_CTT ») ; la réconciliation joint et compare avec le bon nom de chaque côté.',
                 'Chaque champ propose les colonnes de SA propre source reliée (fini l\'intersection vide quand les noms diffèrent).',
@@ -11496,6 +11520,14 @@
             if (missing.length) { msg += ` ⚠️ Source(s) absente(s), éléments correspondants ignorés : ${missing.join(', ')}.`; showError(msg); }
             else showSuccess(msg);
         }
+        function epRename(id) {
+            const p = epList().find(x => x.id === id); if (!p) return;
+            const name = (prompt('Nouveau nom du paramétrage :', p.name) || '').trim();
+            if (!name || name === p.name) return;
+            if (epList().some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return showError('Un paramétrage « ' + name + ' » existe déjà.');
+            p.name = name; p.at = Date.now(); persistAppState(); renderAdvExtract();
+            showSuccess('Paramétrage renommé « ' + name + ' ».');
+        }
         function epDelete(id) {
             const p = epList().find(x => x.id === id); if (!p) return;
             if (!confirm(`Supprimer le paramétrage « ${p.name} » ?`)) return;
@@ -11519,6 +11551,7 @@
                 <div class="flex items-end gap-2 flex-wrap">
                     ${eps.length ? `<select id="ep-sel" class="border border-slate-300 p-2 rounded text-sm bg-white max-w-[18rem]">${eps.map(p => `<option value="${p.id}">${escapeHTML(p.name)}${p.baseName ? ` — ${escapeHTML(p.baseName)}` : ''}</option>`).join('')}</select>
                     <button onclick="epLoad(el('ep-sel').value)" class="text-sm bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold">📂 Charger</button>
+                    <button onclick="epRename(el('ep-sel').value)" class="text-sm bg-white border border-slate-300 text-slate-600 px-2.5 py-2 rounded-lg hover:border-indigo-300 hover:text-indigo-700" title="Renommer le paramétrage sélectionné">✎</button>
                     <button onclick="epDelete(el('ep-sel').value)" class="text-sm bg-white border border-slate-300 text-slate-500 px-2.5 py-2 rounded-lg hover:text-red-600 hover:border-red-300" title="Supprimer le paramétrage sélectionné">🗑</button>
                     <span class="text-slate-300 mx-1">|</span>` : ''}
                     <button onclick="epSaveCurrent()" class="text-sm bg-white border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-50">💾 Enregistrer le paramétrage actuel</button>
