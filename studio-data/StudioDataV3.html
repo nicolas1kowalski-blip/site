@@ -62,7 +62,8 @@
             // (OPFS) + la lecture directe (vues) pour les très gros volumes.
             let memGB = 3.0;
             try { if (navigator.deviceMemory) memGB = Math.max(1.8, Math.min(3.4, navigator.deviceMemory * 0.65)); } catch (e) {}
-            await bestEffort(`PRAGMA memory_limit='${Math.round(memGB * 1024)}MB'`);
+            window.__duckMemLimit = Math.round(memGB * 1024) + 'MB';
+            await bestEffort(`PRAGMA memory_limit='${window.__duckMemLimit}'`);
             await bestEffort("PRAGMA threads=1");                     // chaque thread a ses propres tampons : 1 seul = pic mémoire minimal
             if (!opfsBacked && navigator.storage && navigator.storage.getDirectory) { window.__duckTempDir = 'opfs://studio_tmp'; await bestEffort("SET temp_directory='opfs://studio_tmp'"); }
             // Purge des tables orphelines d'une session précédente (la base OPFS persiste entre visites,
@@ -937,7 +938,7 @@
             try { return await fn(); }
             finally {
                 if (window.__duckTempDir) { try { await conn.query("SET temp_directory='" + window.__duckTempDir + "'"); } catch (e) {} }
-                if (memSet) { try { await conn.query("RESET memory_limit"); } catch (e) {} }
+                if (memSet) { try { if (window.__duckMemLimit) await conn.query("SET memory_limit='" + window.__duckMemLimit + "'"); else await conn.query("RESET memory_limit"); } catch (e) {} }
             }
         }
 
@@ -3413,7 +3414,11 @@
             }
             html += '</div>';
             out.innerHTML = html;
-            // Exécutions asynchrones
+            // Exécutions asynchrones — SOUS runNoSpill : mémoire relevée + débordement disque coupé, si
+            // bien que les agrégations d'audit sur de grosses sources (volumétrie, règles, facettes) ne
+            // tentent plus d'écrire un fichier temporaire (impossible en file://) et aboutissent toujours.
+            const { conn: __auditConn } = await getDB();
+            await runNoSpill(__auditConn, async () => {
             // Volumétrie du périmètre (fonction partagée avec la fiche objet).
             if (perimTables.length) await fillBoVolumetry(boId, 'bo-volume-' + boId, { note: true });
             for (const h of hiers) { try { await auditBoHierarchy(boId, h.id); } catch (e) {} }
@@ -3446,6 +3451,7 @@
                 }
                 fout.innerHTML = fparts.join('');
             }
+            });
         }
 
         // ---- Règles métier de cardinalité conditionnelle (définies dans le modèle de données) ----
@@ -4539,9 +4545,10 @@
             const t = tableByName(tn); if (!t) return;
             try {
                 const { conn } = await getDB();
-                const cRes = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))}`));
-                const rows = Number(cRes[0].n);
-                const schema = await swRealSchema(t.id);
+                const { rows, schema } = await runNoSpill(conn, async () => {
+                    const cRes = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))}`));
+                    return { rows: Number(cRes[0].n), schema: await swRealSchema(t.id) };
+                });
                 const e = swGet(tn); e.snaps = e.snaps || [];
                 e.snaps.push({ ts: Date.now(), rows, schema });
                 if (e.snaps.length > 40) e.snaps = e.snaps.slice(-40);
@@ -4581,10 +4588,12 @@
                 const extra = schema.filter(x => !decl.has(x.name)).map(x => x.name);
                 const retyped = c.cols.filter(x => cur.has(x.name) && cur.get(x.name) !== x.type).map(x => `${x.name} (attendu ${x.type}, reçu ${cur.get(x.name)})`);
                 const emptyReq = [];
+                await runNoSpill(conn, async () => {
                 for (const col of c.cols.filter(x => x.required && cur.has(x.name))) {
                     const r = arrowResultToObjects(await queryResilient(conn, `SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(t.id))} WHERE ${sqlIdent(col.name)} IS NULL OR TRIM(CAST(${sqlIdent(col.name)} AS VARCHAR)) = ''`))[0];
                     const nn = Number(r.n); if (nn > 0) emptyReq.push(`${col.name} (${nn.toLocaleString('fr-FR')} vide(s))`);
                 }
+                });
                 const conform = !missing.length && !retyped.length && !emptyReq.length;
                 swState.contractRes[tn] = { conform, missing, extra, retyped, emptyReq, at: Date.now() };
                 persistAppState(); renderGovernance();
@@ -4594,11 +4603,14 @@
         async function swFreezeData(tn) {
             const t = tableByName(tn); if (!t) return;
             try { const { conn } = await getDB(); const snapId = 'wsnap_' + generateId();
-                await conn.query(`CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(snapId))} AS SELECT * EXCLUDE (__rn) FROM ${sqlIdent(duckTableName(t.id))}`);
-                const cRes = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(snapId))}`));
-                swDataSnaps[tn] = { ts: Date.now(), snapId, rows: Number(cRes[0].n) };
+                const nRows = await runNoSpill(conn, async () => {
+                    await conn.query(`CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(snapId))} AS SELECT * EXCLUDE (__rn) FROM ${sqlIdent(duckTableName(t.id))}`);
+                    const cRes = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(snapId))}`));
+                    return Number(cRes[0].n);
+                });
+                swDataSnaps[tn] = { ts: Date.now(), snapId, rows: nRows };
                 swState.deltaRes = null; renderGovernance();
-                showSuccess(`📸 Données de « ${tn} » figées (${Number(cRes[0].n).toLocaleString('fr-FR')} lignes) — rechargez la source puis comparez.`);
+                showSuccess(`📸 Données de « ${tn} » figées (${nRows.toLocaleString('fr-FR')} lignes) — rechargez la source puis comparez.`);
             } catch (e) { showError('Figer les données impossible : ' + e.message); }
         }
         async function swComputeDelta(tn, key) {
@@ -4620,7 +4632,7 @@
         SUM(CASE WHEN c.k IS NOT NULL AND s.k IS NOT NULL AND c.h <> s.h THEN 1 ELSE 0 END)::BIGINT AS changed,
         SUM(CASE WHEN c.k IS NOT NULL AND s.k IS NOT NULL AND c.h = s.h THEN 1 ELSE 0 END)::BIGINT AS same
  FROM c FULL OUTER JOIN s ON c.k = s.k`;
-                const r = arrowResultToObjects(await queryResilient(conn, sql))[0];
+                const r = arrowResultToObjects(await runNoSpill(conn, () => queryResilient(conn, sql)))[0];
                 swState.deltaRes = { tn, key, at: Date.now(), snapTs: snap.ts,
                     added: Number(r.added || 0), removed: Number(r.removed || 0), changed: Number(r.changed || 0), same: Number(r.same || 0), commonCols: common.length };
                 renderGovernance();
@@ -4642,7 +4654,7 @@
         SUM(CASE WHEN a.k IS NULL THEN 1 ELSE 0 END)::BIGINT AS onlyB,
         SUM(CASE WHEN a.k IS NOT NULL AND b.k IS NOT NULL THEN 1 ELSE 0 END)::BIGINT AS common
  FROM a FULL OUTER JOIN b ON a.k = b.k`;
-                const r = arrowResultToObjects(await queryResilient(conn, sql))[0];
+                const r = arrowResultToObjects(await runNoSpill(conn, () => queryResilient(conn, sql)))[0];
                 swState.recRes = { at: Date.now(), a: swState.recA, b: swState.recB,
                     ta: Number(r.ta || 0), tb: Number(r.tb || 0), onlyA: Number(r.onlyA || 0), onlyB: Number(r.onlyB || 0), common: Number(r.common || 0) };
                 renderGovernance();
@@ -8250,8 +8262,11 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.5.2';
+        const APP_VERSION = '4.5.3';
         const APP_CHANGELOG = [
+            { v: '4.5.3', d: '2026-07-23', t: 'Audit d\'objet & Surveillance sources : fin des blocages sur grosses sources', items: [
+                'Correction de « l\'audit global de l\'objet » et des outils de « Surveillance des sources » (instantané, contrat, delta, réconciliation) qui restaient sans effet ou en erreur sur de très grosses sources lues à la demande, en contexte fichier local (file://).',
+                'Même correctif que le rapport d\'écarts : ces analyses (comptages, jointures, dédoublonnages) s\'exécutent désormais sans jamais déborder sur disque (mémoire relevée, débordement coupé), ce qui supprime l\'erreur « HTML FileReaders do not support writing » et fiabilise les résultats.'] },
             { v: '4.5.2', d: '2026-07-23', t: 'Rapport d\'écarts : fin de « FileReaders do not support writing »', items: [
                 'Correctif DÉFINITIF de « Analyse impossible : HTML FileReaders do not support writing » sur le rapport d\'écarts entre sources. Cause : lancée depuis un fichier local (file://), l\'application n\'a aucun stockage temporaire inscriptible et la moindre agrégation qui débordait échouait.',
                 'L\'analyse ne déborde plus JAMAIS sur disque : limite mémoire relevée, débordement désactivé, et surtout jeu de travail réduit — projection légère matérialisée puis comparaison ATTRIBUT PAR ATTRIBUT. Chaque étape tient en mémoire ; aucune action « Optimiser » n\'est requise, tout est automatique. L\'export CSV suit la même stratégie.'] },
