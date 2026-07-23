@@ -6738,7 +6738,7 @@
             (g.glossary || []).forEach(t2 => push({ type: 'term', id: t2.id, title: t2.term, sub: (t2.links || []).length + ' colonne(s) liée(s)', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null, tags: ['glossaire'] }));
             (g.perimeters || []).forEach(p2 => push({ type: 'perimeter', id: p2.id, title: p2.name, sub: (p2.tables || []).length + ' table(s)', desc: p2.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [] }));
             (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' + ((a.appIds || []).length ? ' · ' + (a.appIds || []).length + ' appli(s)' : '') : 'Application', desc: a.description || '', dom: assetDomainEff(a) || '—', own: a.owner || '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
-            (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.table || '') + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
+            (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.bo ? '🏛 ' + ((qrBoById(r.bo) || {}).name || '?') : (r.table || '')) + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
             (state.recipes || []).forEach(r => push({ type: 'recipe', id: r.id, title: r.name, sub: (r.src || '?') + ' → ' + (r.out || '?'), desc: (r.steps || []).length + ' étape(s) de nettoyage, rejouées automatiquement à chaque mise à jour de la source.', dom: '—', own: '', q: null, sens: null, val: null, fresh: r.lastAt || null, tags: ['préparation'] }));
             (state.dashboards || []).forEach(d2 => push({ type: 'report', id: d2.id, title: d2.name, sub: (d2.tiles || []).length + ' tuile(s)', desc: 'Tableau de bord composable : ' + (d2.tiles || []).map(t2 => t2.title).filter(Boolean).slice(0, 4).join(', '), dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['dashboard'] }));
             (state.linkages || []).forEach(L => push({ type: 'linkage', id: L.id, title: L.name, sub: (L.a || '?') + ' ↔ ' + (L.b || '?'), desc: 'Rapprochement inter-sources (golden record).', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['fuzzy'] }));
@@ -7716,11 +7716,54 @@
             c.innerHTML = html;
         }
 
+        // ---- v3.8 : auto-complétion sur les listes déroulantes longues ----
+        // Sur toute liste d'au moins 8 choix : tapez des lettres (accents ignorés, recherche
+        // « commence par » puis « contient ») — la sélection saute sur la correspondance, un badge
+        // montre la saisie. Entrée/Tab/clic ailleurs valide, Échap annule, Retour arrière corrige.
+        const COMBO_MIN_OPTS = 8;
+        let _cbSel = null, _cbQ = '', _cbOrig = null, _cbBadge = null;
+        const cbNorm = s2 => String(s2).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        function cbShowBadge(sel) {
+            if (!_cbBadge) { _cbBadge = document.createElement('div'); _cbBadge.id = 'comboBadge'; _cbBadge.setAttribute('role', 'status'); document.body.appendChild(_cbBadge); }
+            const rct = sel.getBoundingClientRect();
+            _cbBadge.style.cssText = 'position:fixed;left:' + Math.round(rct.left) + 'px;top:' + Math.round(Math.max(2, rct.top - 27)) + 'px;z-index:10000;background:#0f172a;color:#fff;font:bold 11px system-ui;padding:3px 9px;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+            return _cbBadge;
+        }
+        function cbReset(commit) {
+            const sel = _cbSel, orig = _cbOrig;
+            if (_cbBadge) { _cbBadge.remove(); _cbBadge = null; }
+            _cbSel = null; _cbQ = ''; _cbOrig = null;
+            if (commit && sel && orig !== null && sel.value !== orig) sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        function cbApply(sel) {
+            const q = cbNorm(_cbQ);
+            const opts = Array.from(sel.options).filter(o => o.value !== '' && !o.disabled);
+            const hit = opts.find(o => cbNorm(o.textContent).startsWith(q)) || opts.find(o => cbNorm(o.textContent).includes(q));
+            cbShowBadge(sel).textContent = '🔍 ' + _cbQ + (hit ? ' → ' + hit.textContent.trim() : ' — aucune correspondance');
+            if (hit) sel.value = hit.value;
+        }
+        document.addEventListener('keydown', e => {
+            const sel = document.activeElement;
+            if (!sel || sel.tagName !== 'SELECT' || (sel.options || []).length < COMBO_MIN_OPTS) return;
+            if (e.key === 'Enter' || e.key === 'Tab') { if (_cbSel === sel) cbReset(true); return; }
+            if (e.key === 'Escape') { if (_cbSel === sel) { if (_cbOrig !== null) sel.value = _cbOrig; cbReset(false); e.stopPropagation(); } return; }
+            if (e.key === 'Backspace') { if (_cbSel === sel && _cbQ) { e.preventDefault(); _cbQ = _cbQ.slice(0, -1); if (_cbQ) cbApply(sel); else cbShowBadge(sel).textContent = '🔍 tapez pour chercher…'; } return; }
+            if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+            e.preventDefault();
+            if (_cbSel !== sel) { _cbSel = sel; _cbQ = ''; _cbOrig = sel.value; }
+            _cbQ += e.key;
+            cbApply(sel);
+        }, true);
+        document.addEventListener('focusout', e => { if (e.target === _cbSel) cbReset(true); }, true);
+
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '3.7.0';
+        const APP_VERSION = '3.8.0';
         const APP_CHANGELOG = [
+            { v: '3.8.0', d: '2026-07-23', t: 'Règles qualité sur objets métier & listes filtrables', items: [
+                'Règles de qualité : la cible peut être un OBJET MÉTIER — choisissez l\'objet puis l\'attribut ; la règle est contrôlée sur chaque source où l\'attribut est mappé, puis agrégée (tous les types : non vide, format, plage, liste, unicité, condition si… alors…, fraîcheur…).',
+                'Auto-complétion sur toutes les listes déroulantes d\'au moins 8 choix : tapez pour chercher (accents ignorés), Entrée valide, Échap annule.'] },
             { v: '3.7.0', d: '2026-07-22', t: 'Fusion cas d\'usage → processus, domaines', items: [
                 'Les « cas d\'usage » fusionnent dans Applis & processus : vos cas d\'usage existants sont migrés automatiquement en processus, sans perte (nom, responsable, criticité, tables, colonnes critiques, objets métier, applications).',
                 'Un processus s\'appuie désormais sur une ou plusieurs applications, et déclare les tables et colonnes qu\'il utilise.',
@@ -7765,7 +7808,7 @@
         function qrSet(id, f, v) {
             const r = qrRules().find(x => x.id === id); if (!r) return;
             if (f.startsWith('p.')) { r.p = r.p || {}; r.p[f.slice(2)] = v; } else r[f] = v;
-            if (f === 'table') { r.col = ''; r.p = {}; }
+            if (f === 'table') { if (String(v).startsWith('bo:')) { r.bo = String(v).slice(3); r.table = ''; } else r.bo = null; r.col = ''; r.p = {}; }
             persistAppState();
             if (f === 'table' || f === 'type' || f === 'enabled' || f === 'p.refTable' || f === 'p.ifOp' || f === 'p.thenOp') renderQualityRules();
         }
@@ -7808,7 +7851,43 @@
             }
         }
         function qrUniqueKey(r) { const cols = (String((r.p || {}).cols || r.col || '')).split(';').map(x => x.trim()).filter(Boolean); return cols; }
+        // ---- v3.8 : règles sur OBJET MÉTIER — résolues vers les colonnes réelles via les correspondances ----
+        function qrBoById(id) { return (state.governance.businessObjects || []).find(x => x.id === id); }
+        function qrBoAttrNames(boId) { const bo = qrBoById(boId); return bo ? boAllAttrRows(bo).map(x => x.el.name) : []; }
+        function qrBoAttrMaps(bo, attrName) {
+            const row = boAllAttrRows(bo).find(x => x.el.name === attrName);
+            return ((row && row.el.mappings) || []).filter(m => { const t = tableByName(m.table); return t && t.status === 'ready'; });
+        }
+        // Une règle « objet » devient une ou plusieurs unités { table, col, thenCol?, cols? } :
+        // chaque correspondance de l'attribut est contrôlée sur SA table, puis les résultats sont agrégés.
+        function qrBoResolutions(r) {
+            const bo = qrBoById(r.bo); if (!bo) return [];
+            const P = r.p || {};
+            if (r.type === 'unique') {
+                const attrs = String(P.cols || r.col || '').split(';').map(x => x.trim()).filter(Boolean); if (!attrs.length) return [];
+                const byT = {};
+                attrs.forEach(a2 => qrBoAttrMaps(bo, a2).forEach(m => { (byT[m.table] = byT[m.table] || {})[a2] = m.col; }));
+                const tn = Object.keys(byT).find(t2 => attrs.every(a2 => byT[t2][a2]));
+                return tn ? [{ table: tn, cols: attrs.map(a2 => byT[tn][a2]) }] : [];
+            }
+            if (r.type === 'expr') { const src = (bo.sources || []).find(s2 => s2.role === 'maitre') || (bo.sources || [])[0]; const t = src && tableByName(src.table); return (t && t.status === 'ready') ? [{ table: src.table }] : []; }
+            if (!r.col) return [];
+            const maps = qrBoAttrMaps(bo, r.col);
+            if (r.type === 'cond') {
+                const out = [];
+                maps.forEach(m => { const m2 = qrBoAttrMaps(bo, P.thenCol || '').find(x => x.table === m.table); if (m2 && m2.col !== m.col) out.push({ table: m.table, col: m.col, thenCol: m2.col }); });
+                return out;
+            }
+            return maps.map(m => ({ table: m.table, col: m.col }));
+        }
+        function qrVirtual(r, res) {
+            const vr = JSON.parse(JSON.stringify(r)); vr.bo = null;
+            vr.table = res.table; if (res.col) vr.col = res.col;
+            vr.p = vr.p || {}; if (res.thenCol) vr.p.thenCol = res.thenCol; if (res.cols) vr.p.cols = res.cols.join(';');
+            return vr;
+        }
         function qrInspectSql(r) {
+            if (r.bo) { const rs = qrBoResolutions(r); return rs.length ? qrInspectSql(qrVirtual(r, rs[0])) : null; }
             const t = tableByName(r.table); if (!t) return null;
             const T = sqlIdent(duckTableName(t.id));
             if (r.type === 'unique') { const cols = qrUniqueKey(r); if (!cols.length) return null;
@@ -7820,32 +7899,42 @@
         // pour toutes les règles « par ligne », requêtes dédiées pour l'unicité.
         async function qrRun(btn) {
             const scope = el('qrScope') ? el('qrScope').value : '';
-            const rules = qrRules().filter(r => { if (!r.enabled || !r.table) return false; const t = tableByName(r.table); if (!t || t.status !== 'ready') return false;
-                if (!scope) return true; if (scope.startsWith('t:')) return r.table === scope.slice(2); if (scope.startsWith('d:')) return (t.theme || '').trim() === scope.slice(2); return true; });
+            const inScope = tn => { const t = tableByName(tn); if (!t || t.status !== 'ready') return false;
+                if (!scope) return true; if (scope.startsWith('t:')) return tn === scope.slice(2); if (scope.startsWith('d:')) return (t.theme || '').trim() === scope.slice(2); return true; };
+            const rules = qrRules().filter(r => { if (!r.enabled) return false;
+                if (r.bo) { const rs = qrBoResolutions(r); return rs.length > 0 && rs.some(x => inScope(x.table)); }
+                return !!r.table && inScope(r.table); });
             if (!rules.length) return showError('Aucune règle active dans ce périmètre — créez des règles ci-dessous.');
             if (btn) btn.disabled = true;
             bgTaskStart('Exécution des règles de qualité');
             try {
                 const { conn } = await getDB();
-                const byTable = {}; rules.forEach(r => (byTable[r.table] = byTable[r.table] || []).push(r));
+                // v3.8 : chaque règle devient une ou plusieurs UNITÉS (table, colonnes réelles) —
+                // les règles « objet métier » sont résolues via les correspondances, puis agrégées.
+                const units = [];
+                rules.forEach(r => {
+                    if (r.bo) qrBoResolutions(r).filter(x => inScope(x.table)).forEach(res => units.push({ r, vr: qrVirtual(r, res) }));
+                    else units.push({ r, vr: r });
+                });
+                const acc = new Map();
+                const bump = (r, tot, f) => { const a2 = acc.get(r.id) || { total: 0, fails: 0 }; a2.total += tot; a2.fails += f; acc.set(r.id, a2); };
+                const byTable = {}; units.forEach(u => (byTable[u.vr.table] = byTable[u.vr.table] || []).push(u));
                 for (const tn of Object.keys(byTable)) {
                     const t = tableByName(tn); const T = sqlIdent(duckTableName(t.id));
-                    const rowRules = byTable[tn].map(r => ({ r, fc: r.type === 'unique' ? null : qrFailCond(r) })).filter(x => x.fc);
-                    if (rowRules.length) {
-                        const sel = rowRules.map((x, i) => `SUM(CASE WHEN ${x.fc} THEN 1 ELSE 0 END)::BIGINT AS f${i}`).join(', ');
+                    const rowUnits = byTable[tn].map(u => ({ u, fc: u.vr.type === 'unique' ? null : qrFailCond(u.vr) })).filter(x => x.fc);
+                    if (rowUnits.length) {
+                        const sel = rowUnits.map((x, i) => `SUM(CASE WHEN ${x.fc} THEN 1 ELSE 0 END)::BIGINT AS f${i}`).join(', ');
                         const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, ${sel} FROM ${T}`))[0];
-                        rowRules.forEach((x, i) => { const tot = Number(res.total), f = Number(res['f' + i] || 0); x.r.last = { at: Date.now(), total: tot, fails: f, rate: tot ? (1 - f / tot) : 1 }; });
+                        rowUnits.forEach((x, i) => bump(x.u.r, Number(res.total), Number(res['f' + i] || 0)));
                     }
-                    for (const r of byTable[tn].filter(r2 => r2.type === 'unique')) {
-                        const cols = qrUniqueKey(r); if (!cols.length) { r.last = null; continue; }
+                    for (const u of byTable[tn].filter(u2 => u2.vr.type === 'unique')) {
+                        const cols = qrUniqueKey(u.vr); if (!cols.length) continue;
                         const k = `COALESCE(UPPER(TRIM(concat_ws(chr(1), ${cols.map(c2 => `CAST(${sqlIdent(c2)} AS VARCHAR)`).join(', ')}))), '')`;
                         const res = arrowResultToObjects(await conn.query(`SELECT (SELECT COUNT(*) FROM ${T})::BIGINT AS total, COALESCE(SUM(c), 0)::BIGINT AS fails FROM (SELECT COUNT(*)::BIGINT AS c FROM ${T} GROUP BY ${k} HAVING COUNT(*) > 1)`))[0];
-                        const tot = Number(res.total), f = Number(res.fails || 0);
-                        r.last = { at: Date.now(), total: tot, fails: f, rate: tot ? (1 - f / tot) : 1 };
+                        bump(u.r, Number(res.total), Number(res.fails || 0));
                     }
-                    const invalids = byTable[tn].filter(r2 => r2.type !== 'unique' && !qrFailCond(r2));
-                    invalids.forEach(r2 => r2.last = null);
                 }
+                rules.forEach(r => { const a2 = acc.get(r.id); r.last = a2 ? { at: Date.now(), total: a2.total, fails: a2.fails, rate: a2.total ? (1 - a2.fails / a2.total) : 1 } : null; });
                 persistAppState();
                 qrTakeSnapshot(rules);
                 renderQualityRules();
@@ -7855,7 +7944,7 @@
             finally { if (btn) btn.disabled = false; }
         }
         async function qrAutoRun(tableName) {
-            if (!qrRules().some(r => r.enabled && r.table === tableName)) return;
+            if (!qrRules().some(r => r.enabled && (r.table === tableName || (r.bo && qrBoResolutions(r).some(x => x.table === tableName))))) return;
             const sc = el('qrScope'); const prev = sc ? sc.value : null;
             if (sc) sc.value = 't:' + tableName;
             try { await qrRun(null); } finally { if (sc && prev !== null) sc.value = prev; }
@@ -7865,7 +7954,7 @@
         function qrTakeSnapshot(rules) {
             const byTable = {}, byDomain = {};
             const ran = rules.filter(r => r.last);
-            ran.forEach(r => { (byTable[r.table] = byTable[r.table] || []).push(r); const t = tableByName(r.table); const d = t && (t.theme || '').trim() || '(sans domaine)'; (byDomain[d] = byDomain[d] || []).push(r); });
+            ran.forEach(r => { if (r.table) (byTable[r.table] = byTable[r.table] || []).push(r); const t = tableByName(r.table); const d = r.bo ? '(objets métier)' : (t && (t.theme || '').trim() || '(sans domaine)'); (byDomain[d] = byDomain[d] || []).push(r); });
             const snap = { at: new Date().toISOString(), global: qrScore(ran),
                 tables: Object.fromEntries(Object.entries(byTable).map(([k, v]) => [k, { score: qrScore(v), rules: v.map(r => ({ id: r.id, name: r.name, crit: r.crit, rate: +r.last.rate.toFixed(4), fails: r.last.fails })) }])),
                 domains: Object.fromEntries(Object.entries(byDomain).map(([k, v]) => [k, qrScore(v)])) };
@@ -7875,7 +7964,7 @@
         function qrScoreColor(v) { return v == null ? 'text-slate-300' : (v >= 90 ? 'text-emerald-600' : (v >= 70 ? 'text-amber-600' : 'text-red-600')); }
         function qrExportCsv() {
             const rows = [['REGLE', 'TABLE', 'TYPE', 'CRITICITE', 'TAUX_CONFORMITE_PCT', 'LIGNES_EN_ECHEC', 'TOTAL', 'EXECUTEE_LE'].map(escapeCSV).join(';')];
-            qrRules().forEach(r => rows.push([r.name, r.table, QR_TYPES[r.type] || r.type, r.crit, r.last ? (100 * r.last.rate).toFixed(2) : '', r.last ? r.last.fails : '', r.last ? r.last.total : '', r.last ? new Date(r.last.at).toISOString() : ''].map(escapeCSV).join(';')));
+            qrRules().forEach(r => rows.push([r.name, r.bo ? 'Objet ' + ((qrBoById(r.bo) || {}).name || '?') : r.table, QR_TYPES[r.type] || r.type, r.crit, r.last ? (100 * r.last.rate).toFixed(2) : '', r.last ? r.last.fails : '', r.last ? r.last.total : '', r.last ? new Date(r.last.at).toISOString() : ''].map(escapeCSV).join(';')));
             downloadTextFile(`Regles_qualite_${Date.now()}.csv`, rows.join('\n'));
         }
         function qrExportJson() {
@@ -7883,7 +7972,7 @@
             const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `Scorecard_${Date.now()}.json`; document.body.appendChild(a2); a2.click(); a2.remove();
         }
         function qrParamsHtml(r) {
-            const t = tableByName(r.table); const hs = t ? t.headers : [];
+            const t = tableByName(r.table); const hs = r.bo ? qrBoAttrNames(r.bo) : (t ? t.headers : []);
             const colSel = (f, cur, ph) => `<select onchange="qrSet('${r.id}','${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[130px]"><option value="">${ph || '— colonne —'}</option>${hs.map(h => `<option value="${escapeHTML(h)}" ${cur === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
             const P = r.p || {};
             const inp = (f, cur, ph, w) => `<input type="text" value="${escapeHTML(cur == null ? '' : String(cur))}" onchange="qrSet('${r.id}','p.${f}',this.value)" placeholder="${ph}" class="border border-slate-200 rounded px-1.5 py-0.5 text-[11px] ${w || 'w-28'}">`;
@@ -7914,7 +8003,7 @@
             const globalScore = qrScore(ran);
             // dettes : impact = poids x lignes en échec
             const debts = ran.filter(r => r.last.fails > 0).sort((x, y) => (QR_W[y.crit] || 2) * y.last.fails - (QR_W[x.crit] || 2) * x.last.fails).slice(0, 10);
-            const byTable = {}; ran.forEach(r => (byTable[r.table] = byTable[r.table] || []).push(r));
+            const byTable = {}; ran.forEach(r => { if (r.table) (byTable[r.table] = byTable[r.table] || []).push(r); });
             qualInspectRegistry = qualInspectRegistry || [];
             let html = `<div class="flex items-center gap-3 flex-wrap mb-4">
                 <button onclick="qrRun(this)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-5 rounded-lg text-sm">▶ Exécuter</button>
@@ -7956,9 +8045,9 @@
                     return `<tr class="${r.enabled ? '' : 'opacity-40'} hover:bg-slate-50 align-top">
                     <td class="p-2"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="qrSet('${r.id}','enabled',this.checked)" class="w-4 h-4 rounded text-purple-600"></td>
                     <td class="p-2"><input type="text" value="${escapeHTML(r.name)}" onchange="qrSet('${r.id}','name',this.value)" class="font-bold border border-slate-200 p-1 rounded w-full"></td>
-                    <td class="p-2"><select onchange="qrSet('${r.id}','table',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white w-full"><option value="">— table —</option>${tables.map(t => `<option value="${escapeHTML(t.name)}" ${r.table === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select></td>
+                    <td class="p-2"><select onchange="qrSet('${r.id}','table',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white w-full"><option value="">— cible —</option><optgroup label="Tables">${tables.map(t => `<option value="${escapeHTML(t.name)}" ${!r.bo && r.table === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</optgroup>${(state.governance.businessObjects || []).length ? `<optgroup label="Objets métier">${(state.governance.businessObjects || []).map(b2 => `<option value="bo:${b2.id}" ${r.bo === b2.id ? 'selected' : ''}>🏛 ${escapeHTML(b2.name)}</option>`).join('')}</optgroup>` : ''}</select>${r.bo ? `<div class="text-[10px] text-emerald-700 mt-0.5" title="La règle est contrôlée sur chaque source où l\'attribut est mappé, puis agrégée">↳ contrôlée sur ${qrBoResolutions(r).length || '…'} correspondance(s)</div>` : ''}</td>
                     <td class="p-2"><select onchange="qrSet('${r.id}','type',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white w-full">${Object.entries(QR_TYPES).map(([k, l]) => `<option value="${k}" ${r.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-                    <td class="p-2">${r.table ? qrParamsHtml(r) : '<span class="text-slate-300 italic">choisissez une table</span>'}</td>
+                    <td class="p-2">${(r.table || r.bo) ? qrParamsHtml(r) : '<span class="text-slate-300 italic">choisissez une cible</span>'}</td>
                     <td class="p-2"><select onchange="qrSet('${r.id}','crit',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === r.crit ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
                     <td class="p-2">${r.last ? `<span class="font-black ${qrScoreColor(Math.round(100 * r.last.rate))}">${(100 * r.last.rate).toFixed(1)} %</span> <span class="text-slate-400">· ${r.last.fails.toLocaleString('fr-FR')} échec(s)</span>${idx != null ? '<br>' + qualInspectButtons(idx) : ''}` : '<span class="text-slate-300 italic">jamais exécutée</span>'}</td>
                     <td class="p-2 whitespace-nowrap"><button onclick="qrDup('${r.id}')" class="text-slate-300 hover:text-indigo-600" title="Dupliquer">⧉</button> <button onclick="qrDel('${r.id}')" class="text-slate-300 hover:text-red-500 font-bold" title="Supprimer">✕</button></td>
