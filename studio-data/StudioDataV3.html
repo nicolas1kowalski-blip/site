@@ -1824,6 +1824,7 @@
                 linkages: state.linkages || [],
                 qualityMinScore: state.qualityMinScore != null ? state.qualityMinScore : null,
                 connectors: (state.connectors || []).map(c => { const c2 = { ...c }; delete c2.targetId; return c2; }),
+                extractPresets: (state.extractPresets || []),
             };
         }
 
@@ -1853,6 +1854,7 @@
             if (Array.isArray(saved.linkages)) state.linkages = saved.linkages;
             if (saved.qualityMinScore != null) state.qualityMinScore = saved.qualityMinScore;
             if (Array.isArray(saved.connectors)) state.connectors = saved.connectors;
+            if (Array.isArray(saved.extractPresets)) state.extractPresets = saved.extractPresets;
         }
 
         // v3.7 : les « cas d'usage » fusionnent dans les processus (Applis & processus).
@@ -8262,8 +8264,11 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.5.3';
+        const APP_VERSION = '4.6.0';
         const APP_CHANGELOG = [
+            { v: '4.6.0', d: '2026-07-23', t: 'Paramétrages d\'extraction enregistrables', items: [
+                'Nouvel encart « 💾 Paramétrages d\'extraction » en haut de l\'extraction avancée : enregistrez sous un nom toute la configuration (table de départ, colonnes et alias métier, transformations, colonnes calculées, synthèses de tables liées, hiérarchies aplaties, filtres, dédoublonnage, regroupements et agrégats, type de jointure), puis rechargez-la ou supprimez-la en un clic.',
+                'Les paramétrages sont stockés par NOM de source (donc rejouables d\'une session à l\'autre) et conservés dans le stockage local avec le reste de votre travail. Au chargement, tout élément renvoyant à une source absente est signalé et ignoré proprement.'] },
             { v: '4.5.3', d: '2026-07-23', t: 'Audit d\'objet & Surveillance sources : fin des blocages sur grosses sources', items: [
                 'Correction de « l\'audit global de l\'objet » et des outils de « Surveillance des sources » (instantané, contrat, delta, réconciliation) qui restaient sans effet ou en erreur sur de très grosses sources lues à la demande, en contexte fichier local (file://).',
                 'Même correctif que le rapport d\'écarts : ces analyses (comptages, jointures, dédoublonnages) s\'exécutent désormais sans jamais déborder sur disque (mémoire relevée, débordement coupé), ce qui supprime l\'erreur « HTML FileReaders do not support writing » et fiabilise les résultats.'] },
@@ -10894,6 +10899,74 @@
             if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux)`; }
             const t = state.tables[c.tableId]; return (t ? t.name : '?') + '.' + c.col;
         }
+        // ===== Paramétrages d'extraction enregistrables =====
+        function epList() { return state.extractPresets = state.extractPresets || []; }
+        // Convertit récursivement les identifiants de TABLE (id ↔ nom) pour rendre un paramétrage
+        // portable : les id DuckDB changent à chaque session, mais les noms de source, non.
+        function epRemapTableRefs(node, fn) {
+            if (Array.isArray(node)) { node.forEach(x => epRemapTableRefs(x, fn)); return; }
+            if (node && typeof node === 'object') {
+                for (const k of Object.keys(node)) {
+                    if ((k === 'tableId' || k === 'baseId' || k === 'linkTable') && typeof node[k] === 'string' && node[k]) { const r = fn(node[k]); if (r != null) node[k] = r; }
+                    else epRemapTableRefs(node[k], fn);
+                }
+            }
+        }
+        function epSuggestName() { const s = state.advExtract; const bn = (state.tables[s.baseId] || {}).name || 'extraction'; return 'Extraction ' + bn; }
+        function epSaveCurrent() {
+            const s = state.advExtract;
+            if (!s || !s.baseId || !state.tables[s.baseId]) return showError('Configurez d\'abord une extraction (table de départ + colonnes).');
+            if (!(s.columns || []).length && !(s.group && s.group.on)) return showError('Ajoutez au moins une colonne (ou un regroupement) avant d\'enregistrer le paramétrage.');
+            const name = (prompt('Nom du paramétrage d\'extraction :', epSuggestName()) || '').trim();
+            if (!name) return;
+            const cfg = JSON.parse(JSON.stringify(s));
+            delete cfg.migrated;
+            epRemapTableRefs(cfg, id => (state.tables[id] ? state.tables[id].name : id)); // id → nom
+            const baseName = (state.tables[s.baseId] || {}).name || '';
+            const existing = epList().find(p => p.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                if (!confirm(`Un paramétrage « ${name} » existe déjà. Le remplacer ?`)) return;
+                existing.config = cfg; existing.at = Date.now(); existing.baseName = baseName;
+            } else {
+                epList().push({ id: 'ep_' + generateId(), name, at: Date.now(), baseName, config: cfg });
+            }
+            persistAppState(); renderAdvExtract();
+            showSuccess(`💾 Paramétrage « ${name} » enregistré.`);
+        }
+        function epLoad(id) {
+            const p = epList().find(x => x.id === id); if (!p) return;
+            const cfg = JSON.parse(JSON.stringify(p.config));
+            // 1. Recense les tables référencées (stockées par nom) et repère celles qui manquent.
+            const names = new Set();
+            epRemapTableRefs(cfg, n => { names.add(n); return null; });
+            if (cfg.baseId && !tableByName(cfg.baseId)) return showError(`Impossible de charger « ${p.name} » : la table de départ « ${cfg.baseId} » n'est pas chargée.`);
+            const missing = Array.from(names).filter(n => !tableByName(n));
+            // 2. Nom → id de la session courante (les tables absentes deviennent __MISSING__).
+            epRemapTableRefs(cfg, n => { const t = tableByName(n); return t ? t.id : '__MISSING__'; });
+            // 3. Retire les colonnes / filtres / agrégats qui pointent vers une table absente.
+            const bad = x => x && x.tableId === '__MISSING__';
+            if (Array.isArray(cfg.columns)) cfg.columns = cfg.columns.filter(c => !bad(c) && !(c.calc && (bad(c.calc.a) || bad(c.calc.b))) && !(c.conf && bad({ tableId: c.conf.linkTable })));
+            if (Array.isArray(cfg.filters)) cfg.filters = cfg.filters.filter(f => !bad(f));
+            if (cfg.group && Array.isArray(cfg.group.aggs)) cfg.group.aggs = cfg.group.aggs.filter(a => !bad(a) && !(a.conds || []).some(bad));
+            // 4. Défauts de forme + nettoyage des clés de dédoublonnage devenues orphelines.
+            cfg.from = cfg.from || 'table'; cfg.columns = cfg.columns || []; cfg.filters = cfg.filters || [];
+            cfg.dedup = cfg.dedup || { on: false, keys: [], keep: 'first' }; cfg.dedup.keys = (cfg.dedup.keys || []).filter(k => cfg.columns.some(c => c.id === k));
+            cfg.group = cfg.group || { on: false, aggs: [] }; cfg.joinType = cfg.joinType || 'left';
+            state.advExtract = cfg;
+            const bs = el('baseTableSelect'); if (bs && cfg.baseId) bs.value = cfg.baseId;
+            const vb = el('vizBaseTable'); if (vb && cfg.baseId) vb.value = cfg.baseId;
+            renderAdvExtract();
+            let msg = `📂 Paramétrage « ${p.name} » chargé.`;
+            if (missing.length) { msg += ` ⚠️ Source(s) absente(s), éléments correspondants ignorés : ${missing.join(', ')}.`; showError(msg); }
+            else showSuccess(msg);
+        }
+        function epDelete(id) {
+            const p = epList().find(x => x.id === id); if (!p) return;
+            if (!confirm(`Supprimer le paramétrage « ${p.name} » ?`)) return;
+            state.extractPresets = epList().filter(x => x.id !== id);
+            persistAppState(); renderAdvExtract();
+            showSuccess(`Paramétrage « ${p.name} » supprimé.`);
+        }
         function renderAdvExtract() {
             const body = el('advExtractBody'); if (!body) return;
             const s = state.advExtract;
@@ -10903,8 +10976,21 @@
             const reach = advReachableTables();
             const reachOpts = reach.map(t => `<option value="${t.id}" ${''}>${escapeHTML(t.name)}</option>`).join('');
             const bos = state.governance.businessObjects || [];
+            // -- Paramétrages d'extraction enregistrés --
+            const eps = epList().slice().sort((a, b) => (b.at || 0) - (a.at || 0));
+            let html = `<div class="mb-4 p-3 rounded-lg border border-indigo-200 bg-indigo-50/40">
+                <div class="text-[11px] font-bold text-indigo-700 uppercase mb-2 flex items-center gap-1.5">💾 Paramétrages d'extraction <span class="normal-case font-medium text-indigo-400">— enregistrez la configuration ci-dessous et rejouez-la plus tard</span></div>
+                <div class="flex items-end gap-2 flex-wrap">
+                    ${eps.length ? `<select id="ep-sel" class="border border-slate-300 p-2 rounded text-sm bg-white max-w-[18rem]">${eps.map(p => `<option value="${p.id}">${escapeHTML(p.name)}${p.baseName ? ` — ${escapeHTML(p.baseName)}` : ''}</option>`).join('')}</select>
+                    <button onclick="epLoad(el('ep-sel').value)" class="text-sm bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold">📂 Charger</button>
+                    <button onclick="epDelete(el('ep-sel').value)" class="text-sm bg-white border border-slate-300 text-slate-500 px-2.5 py-2 rounded-lg hover:text-red-600 hover:border-red-300" title="Supprimer le paramétrage sélectionné">🗑</button>
+                    <span class="text-slate-300 mx-1">|</span>` : ''}
+                    <button onclick="epSaveCurrent()" class="text-sm bg-white border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-50">💾 Enregistrer le paramétrage actuel</button>
+                    ${eps.length ? '' : '<span class="text-[11px] text-slate-400">Aucun paramétrage enregistré pour l\'instant.</span>'}
+                </div>
+            </div>`;
             // -- Bloc gouvernance --
-            let html = `<div class="mb-5 p-3 rounded-lg border border-emerald-200 bg-emerald-50/40">
+            html += `<div class="mb-5 p-3 rounded-lg border border-emerald-200 bg-emerald-50/40">
                 <div class="text-[11px] font-bold text-emerald-700 uppercase mb-2 flex items-center gap-1.5">🏛️ Partir d'un objet métier <span class="normal-case font-medium text-emerald-500">— jointures, filtres de facettes et noms métier pré-remplis</span></div>
                 ${bos.length ? `<div class="flex items-end gap-2 flex-wrap">
                     <select id="adv-obj" class="border border-slate-300 p-2 rounded text-sm bg-white">${bos.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select>
