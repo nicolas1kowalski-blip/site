@@ -4167,6 +4167,7 @@
                     ${noUse ? `<span class="bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5 font-bold">😴 ${noUse} sans usage</span>` : ''}
                     <span class="text-slate-300">·</span><span>💡 cliquez un élément pour isoler sa chaîne, re-cliquez pour tout revoir</span>
                 </div>
+                <div id="afCard" class="hidden"></div>
                 <div id="afBoard" class="relative flex gap-8 items-start">
                     <svg id="afSvg" class="absolute inset-0 w-full h-full z-0 pointer-events-none"></svg>
                     <div id="afHint" class="hidden absolute left-1/2 top-24 -translate-x-1/2 z-20 bg-white/95 border border-indigo-200 rounded-full px-4 py-2 text-[11px] font-bold text-indigo-700 shadow-sm pointer-events-none">👆 Cliquez un attribut, une colonne ou une application : sa chaîne s'affiche seule, le reste s'estompe</div>
@@ -4177,8 +4178,40 @@
                 </div>
                 ${prod.size || cons.size ? '' : '<p class="text-[11px] text-amber-600 mt-2">⚠️ Déclarez les sources et usages dans la fiche de l\'objet (onglet 🔌 Applis & usages) pour peupler cette vue.</p>'}
             </div>`;
-            _afData = { links, focus: null };
+            const attrMap = {};
+            attrs.forEach(a => { attrMap[a.id] = {
+                name: a.el.name, facet: a.facet, diff: a.diff,
+                app: a.srcApp ? a.srcApp.name : null,
+                cols: a.maps.map(m => ({ table: m.table, col: m.col })),
+                cons: (a.el.usedBy || []).map(id => assetById(id)).filter(Boolean).map(x => ({ name: x.name, kind: x.kind })) }; });
+            _afData = { links, focus: null, attrs: attrMap };
             requestAnimationFrame(attrFlowDraw);
+        }
+        // Mini-carte « parcours » d'un attribut : amont (application source + colonnes techniques)
+        // → cet attribut → aval (consommateurs). Affichée en plus du flux, refermable.
+        function attrFlowCard(fid) {
+            const box = el('afCard'); if (!box) return;
+            const a = _afData && _afData.attrs ? _afData.attrs[fid] : null;
+            if (!a) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            const chip = (txt, cls) => `<div class="text-[11px] ${cls} border rounded px-2 py-1 mb-1 truncate font-semibold">${txt}</div>`;
+            const zone = (title, items, empty) => `<div class="flex-1 min-w-[150px]"><div class="text-[9px] uppercase font-bold text-slate-400 mb-1">${title}</div>${items.length ? items.join('') : `<div class="text-[10px] text-slate-300 italic">${empty}</div>`}</div>`;
+            const amont = [];
+            if (a.app) amont.push(chip('🖥 ' + escapeHTML(a.app), 'bg-slate-100 border-slate-300 text-slate-700'));
+            a.cols.forEach(c => amont.push(chip('📄 ' + escapeHTML(c.col) + ' <span class="opacity-60">(' + escapeHTML(c.table) + ')</span>', 'bg-blue-50 border-blue-200 text-blue-800')));
+            const aval = a.cons.map(c => chip((c.kind === 'app' ? '🖥 ' : '⚙️ ') + escapeHTML(c.name), c.kind === 'app' ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-orange-50 border-orange-200 text-orange-800'));
+            box.className = 'mb-3 border border-emerald-200 bg-emerald-50/40 rounded-xl p-3';
+            box.innerHTML = `<div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-bold text-emerald-800">🔎 Parcours de « ${escapeHTML(a.name)} »</span>
+                    <button onclick="attrFlowClick('${escapeHTML(fid)}')" class="text-[10px] text-slate-400 hover:text-slate-600 font-bold">✕ fermer</button></div>
+                <div class="flex items-stretch gap-2">
+                    ${zone('D\'où vient la donnée (amont)', amont, 'source non déclarée')}
+                    <div class="flex items-center text-slate-300 font-black">→</div>
+                    <div class="flex-1 min-w-[130px]"><div class="text-[9px] uppercase font-bold text-slate-400 mb-1">Cet attribut</div>
+                        <div class="text-[12px] bg-emerald-100 border border-emerald-300 text-emerald-900 rounded px-2 py-2 font-bold">🏛️ ${escapeHTML(a.name)}${a.facet ? `<div class="text-[9px] font-medium opacity-70">◆ ${escapeHTML(a.facet)}</div>` : ''}${a.diff ? '<div class="text-[9px] text-amber-600 font-bold">≠ source différente du producteur</div>' : ''}</div></div>
+                    <div class="flex items-center text-slate-300 font-black">→</div>
+                    ${zone('Où elle est utilisée (aval)', aval, '😴 aucun usage déclaré')}
+                </div>`;
+            box.classList.remove('hidden');
         }
         function attrFlowDraw() {
             const board = el('afBoard'), svg = el('afSvg'); if (!board || !svg || !_afData) return;
@@ -4212,9 +4245,11 @@
         }
         function attrFlowClick(fid) {
             if (!_afData) return;
-            if (_afData.focus === fid) { _afData.focus = null; _afData.focusSet = null; attrFlowDraw(); return; }
+            if (_afData.focus === fid) { _afData.focus = null; _afData.focusSet = null; attrFlowCard(null); attrFlowDraw(); return; }
             _afData.focus = fid;
-            _afData.focusSet = attrFlowChain([fid]); attrFlowDraw();
+            _afData.focusSet = attrFlowChain([fid]);
+            attrFlowCard(fid.startsWith('a:') ? fid : null);
+            attrFlowDraw();
         }
         // Chaîne de bout en bout ORIENTÉE : on remonte l'amont et on descend l'aval du noeud
         // choisi, sans jamais « rebondir » latéralement par les applications-hubs — cliquer un
@@ -4241,7 +4276,7 @@
                 if (!fid.startsWith('a:')) return;
                 if (srcNorm(x.textContent).includes(q)) attrFlowChain([fid]).forEach(v => keep.add(v));
             });
-            _afData.focus = '__search__'; _afData.focusSet = keep; attrFlowDraw();
+            _afData.focus = '__search__'; _afData.focusSet = keep; attrFlowCard(null); attrFlowDraw();
         }
         function _renderLineageImpl(wrap) {
             const nodes = [], edges = [], seen = new Set();
@@ -7698,8 +7733,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.0.0';
+        const APP_VERSION = '4.1.0';
         const APP_CHANGELOG = [
+            { v: '4.1.0', d: '2026-07-23', t: 'Parcours d\'un attribut au clic', items: [
+                'Lineage « Par attribut » : cliquer un attribut affiche une mini-carte de parcours « d\'où vient la donnée (application source + colonnes) → cet attribut → où elle est utilisée (consommateurs) », en plus de l\'isolement de sa chaîne dans le flux.'] },
             { v: '4.0.0', d: '2026-07-23', t: 'Extraction unifiée', items: [
                 'Les deux parties de l\'écran Extraction (« Table principale » et « Extraction avancée ») fusionnent en UNE seule configuration déclarative, sans perte de fonctionnalités.',
                 'Nouveaux types de colonnes : « Synthèse d\'une table liée » (compter les lignes, compter les valeurs uniques, transposer en texte ou en colonnes) et « Hiérarchie aplatie » (même table ou table de liaison, période de validité, date de référence, profondeur) — désormais en SQL pur, cumulables avec alias, dédoublonnage et agrégats.',
