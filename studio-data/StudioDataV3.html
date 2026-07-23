@@ -2536,13 +2536,21 @@
             const box = el('attrLineageBox'); if (!box) return;
             box.classList.remove('hidden');
             box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'attribut « ${escapeHTML(e2.name)} »${st ? ' <span class="text-emerald-600">◆ ' + escapeHTML(st.name) + '</span>' : ''}</span><button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="attrLineageWrap" class="h-[300px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            const { nodes, edges } = buildAttrLineageGraph(bo, st, e2);
+            if (attrLineageGraph) { try { attrLineageGraph.destroy(); } catch (e3) {} attrLineageGraph = null; }
+            attrLineageGraph = createSvgGraph(el('attrLineageWrap'));
+            attrLineageGraph.data({ nodes, edges });
+            attrLineageGraph.render();
+            attrLineageGraph.fitView(20);
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        // Données du graphe de lineage d'un attribut d'objet métier (source appli → colonnes → attribut → usages).
+        function buildAttrLineageGraph(bo, st, e2) {
             const nodes = [], edges = [];
             const attrId = 'attr:' + e2.id;
             nodes.push({ id: attrId, type: 'studio-rich-node', title: '🔹 ' + e2.name, content: '🏛️ ' + bo.name + (st ? ' ◆ ' + st.name : ''), fill: '#dcfce7', stroke: '#16a34a' });
-            // Source applicative : celle de l'attribut, sinon celle de l'objet.
             const srcA = assetById(e2.sourceApp) || assetById((bo.producedBy || [])[0]);
             if (srcA) { nodes.push({ id: 'as:' + srcA.id, type: 'studio-rich-node', title: '🖥 ' + srcA.name, content: e2.sourceApp && e2.sourceApp !== ((bo.producedBy || [])[0] || '') ? '≠ source de l\'objet' : 'source de l\'objet', fill: '#e2e8f0', stroke: '#334155' }); }
-            // Colonnes techniques mappées.
             const maps = st ? (e2.col ? [{ table: st.table, col: e2.col }] : []) : (e2.mappings || []);
             maps.forEach((m, i) => {
                 nodes.push({ id: 'col:' + i, type: 'studio-rich-node', title: m.table, content: m.col, fill: '#dbeafe', stroke: '#2563eb' });
@@ -2550,17 +2558,30 @@
                 edges.push({ id: 'e2' + i, source: 'col:' + i, target: attrId, label: 'alimente', style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } });
             });
             if (!maps.length && srcA) edges.push({ id: 'e0', source: 'as:' + srcA.id, target: attrId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
-            // Utilisateurs déclarés.
             (e2.usedBy || []).forEach(id => { const a = assetById(id); if (!a) return;
                 nodes.push({ id: 'use:' + id, type: 'studio-rich-node', title: assetLabel(a), content: a.criticality || '', fill: a.kind === 'app' ? '#e2e8f0' : '#ffedd5', stroke: a.kind === 'app' ? '#334155' : '#ea580c' });
                 edges.push({ id: 'eu' + id, source: attrId, target: 'use:' + id, label: 'utilisé par', style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
             if (!(e2.usedBy || []).length) { nodes.push({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: 'candidat au nettoyage ?', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: attrId, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
-            if (attrLineageGraph) { try { attrLineageGraph.destroy(); } catch (e3) {} attrLineageGraph = null; }
-            attrLineageGraph = createSvgGraph(el('attrLineageWrap'));
-            attrLineageGraph.data({ nodes, edges });
-            attrLineageGraph.render();
-            attrLineageGraph.fitView(20);
-            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return { nodes, edges };
+        }
+        // Graphe de lineage pour une COLONNE du catalogue : réutilise le graphe d'attribut si la
+        // colonne est mappée à un attribut d'objet métier, sinon graphe générique (système source →
+        // colonne → objets métier & processus qui l'exploitent).
+        function buildColumnLineageGraph(tbl, col) {
+            const g = state.governance;
+            for (const bo of (g.businessObjects || [])) {
+                for (const e2 of (bo.elements || [])) { if ((e2.mappings || []).some(m => m.table === tbl && m.col === col)) return buildAttrLineageGraph(bo, null, e2); }
+                for (const st of getBoFacets(bo)) { for (const fe of (st.elements || [])) { if (st.table === tbl && fe.col === col) return buildAttrLineageGraph(bo, st, fe); } }
+            }
+            const nodes = [], edges = []; const cid = 'col:main';
+            nodes.push({ id: cid, type: 'studio-rich-node', title: '🔹 ' + col, content: 'Table ' + tbl, fill: '#dcfce7', stroke: '#16a34a' });
+            const sys = String((g.dictionary[tbl] || {}).sourceSystem || '').trim().toLowerCase();
+            const srcA = sys ? (g.assets || []).find(a => a.kind === 'app' && String(a.name).trim().toLowerCase() === sys) : null;
+            if (srcA) { nodes.push({ id: 'as:' + srcA.id, type: 'studio-rich-node', title: '🖥 ' + srcA.name, content: 'système source', fill: '#e2e8f0', stroke: '#334155' }); edges.push({ id: 'ep', source: 'as:' + srcA.id, target: cid, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } }); }
+            (g.businessObjects || []).filter(bo => (bo.sources || []).some(s2 => s2.table === tbl)).forEach(bo => { nodes.push({ id: 'bo:' + bo.id, type: 'studio-rich-node', title: '🏛️ ' + bo.name, content: 'objet métier', fill: '#dcfce7', stroke: '#16a34a' }); edges.push({ id: 'eb' + bo.id, source: cid, target: 'bo:' + bo.id, label: 'alimente', style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } }); });
+            (g.assets || []).filter(a => a.kind === 'process' && ((a.tables || []).includes(tbl) || (a.columns || []).some(c => c.table === tbl && c.col === col))).forEach(a => { nodes.push({ id: 'use:' + a.id, type: 'studio-rich-node', title: '⚙️ ' + a.name, content: a.criticality || '', fill: '#ffedd5', stroke: '#ea580c' }); edges.push({ id: 'eu' + a.id, source: cid, target: 'use:' + a.id, label: 'utilisé par', style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
+            if (nodes.length === 1) { nodes.push({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: '', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: cid, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
+            return { nodes, edges };
         }
         function boElUsageCellHtml(bo, elm, stId) {
             const assets = state.governance.assets || [];
@@ -6933,6 +6954,7 @@
             const relIdx = x => catRes.indexOf(x);
             const t = e2.tbl ? tableByName(e2.tbl) : null;
             const body = `
+                <div id="catLineageBox" class="hidden mb-3 border-2 border-indigo-200 rounded-xl bg-white p-3"></div>
                 <div class="dsect"><div class="flex items-center gap-1.5 flex-wrap">
                     ${e2.q != null ? `<span class="qual ${e2.q >= 90 ? 'q-ok' : (e2.q >= 70 ? 'q-warn' : 'q-bad')}">◆ Qualité ${e2.q}/100</span>` : ''}
                     ${e2.sens ? `<span class="cat-sens ${CAT_SENS[e2.sens][0]}">${CAT_SENS[e2.sens][1]}</span>` : ''}
@@ -6964,10 +6986,26 @@
             if (t) catFillRealTypes(t.id, t.name);
         }
         let _catFicheCtx = null;
+        let catAttrLineageGraph = null;
         function catGoLineage() {
-            const e2 = _catFicheCtx; closeUxDrawer(); if (!e2) return;
+            const e2 = _catFicheCtx; if (!e2) return;
+            // Attribut/colonne : le lineage nœuds-liens s'affiche DANS la fiche, sans la quitter.
+            if (e2.type === 'column' && e2.tbl && e2.col) { catShowAttrLineage(e2); return; }
+            closeUxDrawer();
             if (e2.type === 'bo') { govState.lineageView = 'attr'; govState.lineageAttrBo = e2.bo; }
             openGovTab('lineage');
+        }
+        function catShowAttrLineage(e2) {
+            const box = el('catLineageBox'); if (!box) return;
+            const data = buildColumnLineageGraph(e2.tbl, e2.col);
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »</span><button onclick="el('catLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="catLineageWrap" class="h-[320px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            try {
+                if (catAttrLineageGraph) { try { catAttrLineageGraph.destroy(); } catch (e3) {} catAttrLineageGraph = null; }
+                catAttrLineageGraph = createSvgGraph(el('catLineageWrap'));
+                catAttrLineageGraph.data(data); catAttrLineageGraph.render(); catAttrLineageGraph.fitView(20);
+            } catch (e3) { el('catLineageWrap').innerHTML = '<p class="text-[11px] text-slate-400 italic p-4">Lineage indisponible : ' + escapeHTML(e3.message || '') + '</p>'; }
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
         function catUseData() {
             const e2 = _catFicheCtx; closeUxDrawer(); if (!e2) return;
@@ -7781,8 +7819,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.2.0';
+        const APP_VERSION = '4.3.0';
         const APP_CHANGELOG = [
+            { v: '4.3.0', d: '2026-07-23', t: 'Lineage d\'un attribut depuis le catalogue', items: [
+                'Catalogue : « Voir le lineage » sur un attribut affiche le graphe nœuds-liens de son lineage (système source → colonne → attribut → applications/processus qui l\'utilisent) directement dans la fiche, au lieu d\'ouvrir le lineage global.'] },
             { v: '4.2.0', d: '2026-07-23', t: 'Encodage des sources', items: [
                 'Sources : choix de l\'encodage étendu (UTF-8, Windows/ANSI Latin-1, UTF-16).',
                 'Détection automatique des caractères illisibles (mojibake) avec correction en un clic, et ré-essai automatique de l\'encodage quand l\'import échoue sur une erreur unicode — un « faux problème de données » est souvent un simple souci d\'encodage.'] },
