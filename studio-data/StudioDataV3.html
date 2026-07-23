@@ -4508,6 +4508,11 @@
                 ['owner', 'Responsable', false], ['domain', 'Domaine métier', false], ['apps', 'Applications du processus (séparées par ;)', false]] },
             usage: { label: '🔌 Usages attribut ↔ application', fields: [
                 ['bo', 'Objet métier (clé)', true], ['attr', 'Attribut (clé)', true], ['app', 'Application / processus (clé)', true]] },
+            bo: { label: '🏛 Objets métier', fields: [
+                ['boname', 'Objet métier (clé)', true], ['definition', 'Définition', false], ['owner', 'Propriétaire', false],
+                ['attrs', 'Attributs (séparés par ;)', false], ['srctable', 'Table source maître', false]] },
+            boapp: { label: '🏛 ↔ 🖥 Applications par objet métier', fields: [
+                ['bo', 'Objet métier (clé)', true], ['app', 'Application / processus (clé)', true], ['role', 'Rôle (utilise / produit)', false]] },
         };
         let giState = { target: 'dict', cols: [], rows: [], map: {}, fileName: '' };
         function giOpen() {
@@ -4550,6 +4555,22 @@
                 }));
                 return out;
             }
+            if (target === 'bo') {
+                const out = [['Objet métier', 'Définition', 'Propriétaire', 'Attributs', 'Table source maître']];
+                (g.businessObjects || []).forEach(bo => out.push([bo.name, bo.definition || '', bo.globalOwner || '', (bo.elements || []).map(e => e.name).join(';'), (((bo.sources || []).find(s => s.role === 'maitre')) || (bo.sources || [])[0] || {}).table || '']));
+                if (out.length === 1) out.push(['Client', 'Personne ou société avec qui nous avons un contrat', 'Paul Otlet', 'Nom;Email;Téléphone', 'CLIENTS']);
+                return out;
+            }
+            if (target === 'boapp') {
+                const out = [['Objet métier', 'Application', 'Rôle']];
+                (g.businessObjects || []).forEach(bo => {
+                    const emit = (ids, role) => (ids || []).map(assetById).filter(Boolean).forEach(a => out.push([bo.name, a.name, role]));
+                    emit(bo.consumedBy, 'utilise'); emit(bo.producedBy, 'produit');
+                    if (!(bo.consumedBy || []).length && !(bo.producedBy || []).length) out.push([bo.name, '', 'utilise']);
+                });
+                if (out.length === 1) out.push(['Client', 'CRM', 'utilise']);
+                return out;
+            }
             return [[]];
         }
         function giDownloadTemplate() {
@@ -4568,7 +4589,8 @@
                 type: ['type', 'format'], sensitivity: ['sensibilite', 'sensitivity', 'rgpd'], term: ['terme', 'term', 'glossaire'],
                 name: ['nom', 'name', 'application', 'appli', 'processus'], kind: ['type', 'kind', 'nature'], criticality: ['criticite', 'criticality'],
                 description: ['description', 'commentaire'], bo: ['objet', 'objetmetier', 'bo', 'entite'], attr: ['attribut', 'attr', 'element', 'champ'], app: ['application', 'appli', 'app', 'processus', 'systeme'],
-                owner: ['responsable', 'proprietaire', 'owner'], domain: ['domaine', 'domain'], apps: ['applications', 'applis', 'apps'] };
+                owner: ['responsable', 'proprietaire', 'owner'], domain: ['domaine', 'domain'], apps: ['applications', 'applis', 'apps'],
+                boname: ['objetmetier', 'objet', 'bo', 'nomobjet', 'nom', 'entite'], attrs: ['attributs', 'attrs', 'elements', 'champs', 'attribut'], srctable: ['tablesourcemaitre', 'tablesource', 'tablemaitre', 'source', 'table'], role: ['role', 'sens', 'nature'] };
             T.fields.forEach(([f]) => {
                 const hs = hints[f] || [f];
                 const hit = giState.cols.find(c => { const n = giNorm(c); return hs.some(h => n === giNorm(h)); })
@@ -4680,6 +4702,26 @@
                         if (!r2) { skipped++; return; }
                         r2.el.usedBy = r2.el.usedBy || [];
                         if (!r2.el.usedBy.includes(a.id)) { r2.el.usedBy.push(a.id); updated++; } else skipped++;
+                    } else if (giState.target === 'bo') {
+                        const name = giVal(row, 'boname'); if (!name) { skipped++; return; }
+                        let bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(name));
+                        if (!bo) { bo = { id: 'bo_' + generateId(), name, definition: '', globalOwner: '', contributors: [], sources: [], elements: [], contextRules: { elementId: '', rules: [] } }; g.businessObjects.push(bo); created++; } else updated++;
+                        setIf(bo, 'definition', giVal(row, 'definition'));
+                        setIf(bo, 'globalOwner', giVal(row, 'owner'));
+                        giVal(row, 'attrs').split(';').map(x => x.trim()).filter(Boolean).forEach(an => {
+                            bo.elements = bo.elements || [];
+                            if (!bo.elements.some(e2 => giNorm(e2.name) === giNorm(an))) bo.elements.push({ id: 'be_' + generateId(), name: an, owner: '', mappings: [] });
+                        });
+                        const stn = giVal(row, 'srctable');
+                        if (stn) { bo.sources = bo.sources || []; const real = tableByName(stn) ? tableByName(stn).name : stn; if (!bo.sources.some(s2 => giNorm(s2.table) === giNorm(real))) bo.sources.push({ table: real, role: 'maitre' }); }
+                    } else if (giState.target === 'boapp') {
+                        const boN = giVal(row, 'bo'), appN = giVal(row, 'app'); if (!boN || !appN) { skipped++; return; }
+                        const bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(boN)); if (!bo) { skipped++; return; }
+                        let a = (g.assets || []).find(x => giNorm(x.name) === giNorm(appN));
+                        if (!a) { a = { id: 'as_' + generateId(), kind: 'app', name: appN, criticality: '' }; g.assets.push(a); created++; }
+                        const field = /produ/i.test(giVal(row, 'role')) ? 'producedBy' : 'consumedBy';
+                        bo[field] = bo[field] || [];
+                        if (!bo[field].includes(a.id)) { bo[field].push(a.id); updated++; } else skipped++;
                     }
                 });
                 persistAppState(); renderGovernance();
@@ -7858,8 +7900,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.3.2';
+        const APP_VERSION = '4.4.0';
         const APP_CHANGELOG = [
+            { v: '4.4.0', d: '2026-07-23', t: 'Import en masse : objets métier & applications par objet', items: [
+                'Import en masse : nouvelle cible « 🏛 Objets métier » — créer/mettre à jour des objets métier (définition, propriétaire, attributs séparés par ;, table source maître).',
+                'Import en masse : nouvelle cible « Applications par objet métier » — rattacher au niveau objet quelle application utilise (ou produit) quel objet métier, en une seule ligne.',
+                'Modèles d\'alimentation pré-remplis fournis pour les deux, avec vos objets et liens existants.'] },
             { v: '4.3.2', d: '2026-07-23', t: 'Lineage de la fiche agrandi', items: [
                 'Catalogue : le graphe de lineage affiché dans la fiche élargit le panneau et occupe une plus grande zone, avec un bouton « Agrandir » (plein écran) — il n\'est plus à l\'étroit.'] },
             { v: '4.3.1', d: '2026-07-23', t: 'Fiche d\'un attribut recentrée', items: [
