@@ -4685,7 +4685,7 @@
                 renderGovernance();
             } catch (e) { showError('Réconciliation impossible : ' + e.message); }
         }
-        function swSet(f, v) { swState[f] = v; if (f === 'recA' || f === 'recB' || f === 'deltaSrc') renderGovernance(); }
+        function swSet(f, v) { swState[f] = v; if (f === 'tool' || f === 'recA' || f === 'recB' || f === 'deltaSrc') renderGovernance(); }
 
         // ==========================================================================================
         //  LINEAGE AUGMENTÉ & RÉCONCILIATION (V5) — carte du flux A→B→C… + contrôles de fraîcheur et
@@ -8917,8 +8917,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.2.0';
+        const APP_VERSION = '5.2.1';
         const APP_CHANGELOG = [
+            { v: '5.2.1', d: '2026-07-23', t: 'Correctif : onglets de Surveillance des sources', items: [
+                'Correction d\'un bug o\u00f9 les sous-onglets de « Surveillance des sources » (Moniteur & fra\u00eecheur, Contrat de donn\u00e9es, Changements/delta, R\u00e9conciliation) ne r\u00e9agissaient pas au clic : le changement d\'outil est d\u00e9sormais bien appliqu\u00e9 et l\'\u00e9cran se met \u00e0 jour.'] },
             { v: '5.2.0', d: '2026-07-23', t: 'Lineage : santé d\'une alimentation ATTRIBUT PAR ATTRIBUT', items: [
                 'Un lien peut désormais contrôler PLUSIEURS attributs (et non plus un seul) : chaque attribut a sa paire colonne source → colonne cible et sa propre transformation rejouable.',
                 'La réconciliation renvoie la distorsion GLOBALE (lignes avec au moins un écart) ET le détail par attribut (taux, barre, exemples) : la santé complète d\'une alimentation se lit d\'un coup d\'œil.',
