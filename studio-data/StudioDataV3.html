@@ -947,6 +947,7 @@
             let c = '';
             if (config.delim) c += `, delim=${sqlLiteral(config.delim)}`;
             if (config.enc === 'ISO-8859-1') c += `, encoding='latin-1'`;
+            else if (config.enc === 'UTF-16') c += `, encoding='utf-16'`;
             if (config.quote === 'none') c += `, quote=''`;
             if (config.ignoreErrors) c += `, ignore_errors=true`;
             return c;
@@ -1096,16 +1097,25 @@
         // destructif : quote='' (les " deviennent du texte brut, AUCUNE perte), puis
         // ignore_errors=true (les lignes malformées sont sautées).
         function isCsvScanError(e) { return /CSV Error|unterminated quote|Value with unterminated|read_csv/i.test(String((e && e.message) || e)); }
+        // Erreur typique d'un fichier lu dans le mauvais encodage (octets non décodables en UTF-8).
+        function isEncodingError(e) { return /invalid unicode|byte sequence mismatch|not valid utf-?8|invalid utf-?8|codepoint|encoding/i.test(String((e && e.message) || e)); }
         async function autoFixCsvRead(tId, err) {
             const t = state.tables[tId];
-            if (!t || !isCsvScanError(err)) return false;
+            if (!t || (!isCsvScanError(err) && !isEncodingError(err))) return false;
             const isCsvSource = (t.type === 'csv' || t.type === 'txt') || (Array.isArray(t.files) && t.files.length && t.files.every(f => /\.(csv|txt)$/i.test(f.name)));
             if (!isCsvSource) return false;
             t.config = t.config || {};
             const attempts = [];
+            // D'abord l'encodage : une erreur unicode vient presque toujours d'un fichier Windows/ANSI.
+            if (isEncodingError(err)) {
+                if (t.config.enc !== 'ISO-8859-1') attempts.push({ patch: { enc: 'ISO-8859-1' }, label: 'encodage Windows/ANSI (Latin-1)' });
+                if (t.config.enc !== 'UTF-16') attempts.push({ patch: { enc: 'UTF-16' }, label: 'encodage UTF-16' });
+            }
+            if (isCsvScanError(err)) {
             if (t.config.quote !== 'none') attempts.push({ patch: { quote: 'none' }, label: 'guillemets traités comme du texte brut (aucune perte)' });
             if (!t.config.ignoreErrors) attempts.push({ patch: { ignoreErrors: true }, label: 'lignes malformées ignorées' });
             if (t.config.quote !== 'none' && !t.config.ignoreErrors) attempts.push({ patch: { quote: 'none', ignoreErrors: true }, label: 'guillemets bruts + lignes malformées ignorées' });
+            }
             const { conn } = await getDB();
             for (const a of attempts) {
                 const prev = { ...t.config };
@@ -6662,8 +6672,46 @@
                 autoDetectRelations(tId); updateBaseTableSelect(); populateQualTables();
                 await persistTableData(tId); persistAppState();
                 return tId;
-            } catch (err) { state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null; }
+            } catch (err) {
+                // Avant de marquer la source en échec : tente une réparation auto (encodage Windows/ANSI,
+                // puis guillemets/lignes malformées). Un « faux problème de données » est très souvent
+                // un simple souci d'encodage — on le corrige tout seul.
+                let fixed = false; try { fixed = await autoFixCsvRead(tId, err); } catch (e2) {}
+                if (fixed) {
+                    const t = state.tables[tId];
+                    try { t.sampleData = await duckSampleRows(tId, 6); } catch (e3) {}
+                    t.status = 'ready'; renderTables();
+                    autoDetectRelations(tId); updateBaseTableSelect(); populateQualTables();
+                    try { await persistTableData(tId); persistAppState(); } catch (e3) {}
+                    return tId;
+                }
+                state.tables[tId].status='error'; state.tables[tId].errorMsg=err.message; renderTables(); return null;
+            }
         }
+        // Détecte les caractères illisibles (mojibake) d'une source déjà chargée : signe d'un mauvais
+        // encodage. Renvoie l'encodage à essayer, ou null. 100 % local, sur l'échantillon en mémoire.
+        function encMojibakeInfo(t) {
+            if (!t || t.status !== 'ready' || t._encHide) return null;
+            const isCsv = (t.type === 'csv' || t.type === 'txt') || (Array.isArray(t.files) && t.files.length && t.files.every(f => /\.(csv|txt)$/i.test(f.name)));
+            if (!isCsv) return null;
+            const enc = (t.config && t.config.enc) || 'UTF-8';
+            let txt = (t.headers || []).join(' ');
+            (t.sampleData || []).slice(0, 6).forEach(r => { if (r) Object.values(r).forEach(v => { if (v != null) txt += ' ' + v; }); });
+            if (!txt.trim()) return null;
+            // Fichier Windows/ANSI lu en UTF-8 → caractère de remplacement « � ».
+            if (enc !== 'ISO-8859-1' && /\ufffd/.test(txt)) {
+                const ex = (txt.match(/\S{0,10}\ufffd\S{0,8}/) || [''])[0].trim();
+                return { suggest: 'ISO-8859-1', label: 'Windows / ANSI', ex };
+            }
+            // Fichier UTF-8 lu en Latin-1 → « Ã©, Ã¨, Ã§, Â°, â€™ »… (l'utilisateur a sur-corrigé).
+            if (enc === 'ISO-8859-1' && /Ã[\u0080-\u00bf©¨§´®°ªº«»¯]|Â[\u0080-\u00bf°±·]|â€/.test(txt)) {
+                const ex = (txt.match(/\S{0,4}Ã.\S{0,6}/) || txt.match(/\S{0,4}Â.\S{0,6}/) || [''])[0].trim();
+                return { suggest: 'UTF-8', label: 'UTF-8', ex };
+            }
+            return null;
+        }
+        function fixSourceEncoding(tId, enc) { updateTableConfig(tId, 'enc', enc); }
+        function dismissEncHint(tId) { if (state.tables[tId]) { state.tables[tId]._encHide = true; renderTables(); } }
 
         // ======================= E10 (V2) : CATALOGUE DE DONNÉES RECHERCHABLE =======================
         // Refonte « consommateur de données » (maquette catalogue.html) : recherche d'abord,
@@ -7733,8 +7781,11 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.1.0';
+        const APP_VERSION = '4.2.0';
         const APP_CHANGELOG = [
+            { v: '4.2.0', d: '2026-07-23', t: 'Encodage des sources', items: [
+                'Sources : choix de l\'encodage étendu (UTF-8, Windows/ANSI Latin-1, UTF-16).',
+                'Détection automatique des caractères illisibles (mojibake) avec correction en un clic, et ré-essai automatique de l\'encodage quand l\'import échoue sur une erreur unicode — un « faux problème de données » est souvent un simple souci d\'encodage.'] },
             { v: '4.1.0', d: '2026-07-23', t: 'Parcours d\'un attribut au clic', items: [
                 'Lineage « Par attribut » : cliquer un attribut affiche une mini-carte de parcours « d\'où vient la donnée (application source + colonnes) → cet attribut → où elle est utilisée (consommateurs) », en plus de l\'isolement de sa chaîne dans le flux.'] },
             { v: '4.0.0', d: '2026-07-23', t: 'Extraction unifiée', items: [
@@ -8578,9 +8629,15 @@
                 }
 
                 if(t.type==='csv' || t.type==='txt' || (Array.isArray(t.files) && t.files.length && t.files.every(f=>/\.(csv|txt)$/i.test(f.name)))) {
+                    const _mi = encMojibakeInfo(t);
+                    if (_mi) html += `<div class="mt-3 flex items-center gap-2 flex-wrap text-[11px] bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                        <span class="font-bold text-amber-800">⚠️ Caractères illisibles détectés${_mi.ex ? ` (ex : « ${escapeHTML(_mi.ex)} »)` : ''}</span>
+                        <span class="text-amber-700">— c'est presque toujours un problème d'encodage, pas une erreur de données.</span>
+                        <button onclick="fixSourceEncoding('${t.id}','${_mi.suggest}')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded">Corriger → ${escapeHTML(_mi.label)}</button>
+                        <button onclick="dismissEncHint('${t.id}')" class="text-amber-500 hover:text-amber-700 underline">ignorer</button></div>`;
                     html += `<div class="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                         <div><label class="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Séparateur</label><select onchange="updateTableConfig('${t.id}', 'delim', this.value)" class="w-full text-xs bg-slate-50 border border-slate-200 rounded p-1 text-slate-700 focus:border-indigo-500"><option value="" ${t.config.delim===''?'selected':''}>Auto</option><option value=";" ${t.config.delim===';'?'selected':''}>Point-virgule (;)</option><option value="," ${t.config.delim===','?'selected':''}>Virgule (,)</option><option value="|" ${t.config.delim==='|'?'selected':''}>Pipe (|)</option><option value="\t" ${t.config.delim==='\t'?'selected':''}>Tabulation</option></select></div>
-                        <div><label class="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Encodage</label><select onchange="updateTableConfig('${t.id}', 'enc', this.value)" class="w-full text-xs bg-slate-50 border border-slate-200 rounded p-1 text-slate-700 focus:border-indigo-500"><option value="UTF-8" ${t.config.enc==='UTF-8'?'selected':''}>UTF-8</option><option value="ISO-8859-1" ${t.config.enc==='ISO-8859-1'?'selected':''}>Windows/ANSI</option></select></div>
+                        <div><label class="text-[10px] uppercase font-bold text-slate-400 mb-1 block" title="À changer si les accents s'affichent mal (é → Ã© ou �)">Encodage</label><select onchange="updateTableConfig('${t.id}', 'enc', this.value)" class="w-full text-xs bg-slate-50 border border-slate-200 rounded p-1 text-slate-700 focus:border-indigo-500"><option value="UTF-8" ${(t.config.enc||'UTF-8')==='UTF-8'?'selected':''}>UTF-8 (recommandé)</option><option value="ISO-8859-1" ${t.config.enc==='ISO-8859-1'?'selected':''}>Windows / ANSI (Latin-1)</option><option value="UTF-16" ${t.config.enc==='UTF-16'?'selected':''}>UTF-16</option></select></div>
                         <div><label class="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Guillemets</label><select onchange="updateTableConfig('${t.id}', 'quote', this.value)" class="w-full text-xs bg-slate-50 border border-slate-200 rounded p-1 text-slate-700 focus:border-indigo-500" title="Choisir 'Aucun' si des \\" apparaissent au milieu des champs et cassent la lecture"><option value="" ${(t.config.quote||'')===''?'selected':''}>Auto (")</option><option value="none" ${t.config.quote==='none'?'selected':''}>Aucun</option></select></div>
                         <div class="flex items-end"><label class="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer pb-1"><input type="checkbox" ${t.config.ignoreErrors?'checked':''} onchange="updateTableConfig('${t.id}', 'ignoreErrors', this.checked)"> Ignorer lignes en erreur</label></div>
                     </div>`;
