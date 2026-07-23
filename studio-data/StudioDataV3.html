@@ -892,10 +892,19 @@
         // dans ce moteur colonnes au lieu de construire des Map JS contenant des tables entières.
         // Toutes les colonnes sont conservées en VARCHAR pour rester cohérentes avec le comportement
         // historique de l'appli, où toute valeur est manipulée comme du texte.
+        let __dbQueue = Promise.resolve();
+        function isTransientLockError(e) { return /unique_lock|not locked|Operation not permitted|being used by another|conflict|InvalidInputException.*lock/i.test(String((e && e.message) || e)); }
         async function getDB() {
             const result = await window.__duckdbPromise;
             if (!result || result.error) {
                 throw new Error("Moteur de données DuckDB indisponible : " + (result?.error?.message || "échec de chargement (vérifiez la connexion internet)."));
+            }
+            // DuckDB-Wasm n'est pas réentrant sur une connexion : deux requêtes qui se chevauchent
+            // déclenchent « unique_lock::unlock: not locked ». On enchaîne donc toutes les requêtes.
+            if (result.conn && !result.conn.__serialized) {
+                const raw = result.conn.query.bind(result.conn);
+                result.conn.query = (sql) => { const r = __dbQueue.then(() => raw(sql)); __dbQueue = r.then(() => {}, () => {}); return r; };
+                result.conn.__serialized = true;
             }
             return result;
         }
@@ -1731,6 +1740,9 @@
             };
             try { await run(); }
             catch (e) {
+                // Verrou WASM transitoire (« unique_lock::unlock: not locked ») : on laisse la file de
+                // requêtes se vider puis on retente UNE fois.
+                if (isTransientLockError(e)) { await new Promise(r => setTimeout(r, 500)); try { await run(); return; } catch (eL) { e = eL; } }
                 // Erreur de lecture CSV en plein scan (guillemet non fermé…) : on répare la source
                 // (quote='' puis ignore_errors) et on retente l'optimisation UNE fois.
                 let fixed = false;
@@ -5970,10 +5982,9 @@
 
         // ---- Rapport d'écarts entre sources (même clé, valeurs différentes) ----
         function tdDivAttrs(t, d) { return t.headers.filter(h => h !== 'SOURCE_ORIGINE' && !(d.key || []).includes(h)); }
-        function tdDivSql(tId) {
-            const t = state.tables[tId]; const d = t && t.design;
+        function tdDivSql(tId) { const t = state.tables[tId]; const d = t && t.design; if (!t || !d) return null; return tdDivSqlFor(t, d, sqlIdent(duckTableName(tId))); }
+        function tdDivSqlFor(t, d, T) {
             if (!d || !(d.key || []).length) return null;
-            const T = sqlIdent(duckTableName(tId));
             const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
             const keyDisp = d.key.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '')`).join(" || ' | ' || ");
             const attrs = tdDivAttrs(t, d);
@@ -5989,16 +6000,22 @@
             const head = el('qualInspectModalHead'), body = el('qualInspectModalBody');
             head.innerHTML = `<strong class="text-amber-800">🔍 Écarts entre sources — ${escapeHTML(t.name)}</strong><button onclick="closeQualInspectModal()" class="ml-auto text-amber-600 hover:text-red-600 font-black text-base leading-none px-1">✕</button>`;
             body.innerHTML = '<p class="text-xs text-slate-400 p-4">Analyse des écarts (clé : ' + escapeHTML(d.key.join(' + ')) + ')…</p>';
+            let __divTmp = null, __divConn = null;
             try {
-                const { conn } = await getDB();
-                const T = sqlIdent(duckTableName(tId));
-                const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
+                const { conn } = await getDB(); __divConn = conn;
                 const attrs = tdDivAttrs(t, d);
+                // Projection LÉGÈRE (clé + attributs comparés) matérialisée en mémoire : l'analyse
+                // multi-passes ne relit plus le fichier CSV à la demande — plus d'écriture FileReader,
+                // et c'est bien plus rapide.
+                const proj = Array.from(new Set([...d.key, ...attrs, 'SOURCE_ORIGINE'])).filter(h => (t.headers || []).includes(h));
+                __divTmp = 'tddiv_' + generateId(); const TMP = sqlIdent(duckTableName(__divTmp));
+                await queryResilient(conn, `CREATE OR REPLACE TABLE ${TMP} AS SELECT ${proj.map(sqlIdent).join(', ')} FROM ${sqlIdent(duckTableName(tId))}`);
+                const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
                 const rowHash = `md5(concat_ws(chr(1), ${attrs.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), chr(0))`).join(', ')}))`;
-                const sumRes = await queryResilient(conn, `SELECT COUNT(*)::BIGINT AS n FROM (SELECT ${keyE} AS k FROM ${T} GROUP BY 1 HAVING COUNT(DISTINCT ${rowHash}) > 1) s`);
+                const sumRes = await queryResilient(conn, `SELECT COUNT(*)::BIGINT AS n FROM (SELECT ${keyE} AS k FROM ${TMP} GROUP BY 1 HAVING COUNT(DISTINCT ${rowHash}) > 1) s`);
                 const nbKeys = Number(arrowResultToObjects(sumRes)[0].n);
-                if (!nbKeys) { body.innerHTML = '<p class="text-xs text-emerald-700 p-4 font-bold">✔ Aucun écart : toutes les clés partagées entre sources portent des données identiques.</p>'; return; }
-                const sql = tdDivSql(tId);
+                if (!nbKeys) { body.innerHTML = '<p class="text-xs text-emerald-700 p-4 font-bold">✔ Aucun écart : toutes les clés partagées entre sources portent des données identiques.</p>'; try { await conn.query(`DROP TABLE IF EXISTS ${TMP}`); } catch (e) {} return; }
+                const sql = tdDivSqlFor(t, d, TMP);
                 const res = await queryResilient(conn, `SELECT * FROM (${sql}) LIMIT 1500`);
                 const rows = arrowResultToObjects(res);
                 head.innerHTML = `<strong class="text-amber-800">🔍 Écarts entre sources — ${escapeHTML(t.name)}</strong>
@@ -6031,6 +6048,8 @@
             } catch (e) {
                 const heavy = isSpillWriteError(e) || /out of memory|allocation|memory_limit/i.test(String(e.message || ''));
                 body.innerHTML = `<p class="text-xs text-red-600 p-4">Analyse impossible : ${escapeHTML(e.message)}${heavy ? '<br><span class="text-slate-500">Table volumineuse lue à la demande : cliquez « 🗜️ Optimiser » (Parquet) sur la source, ou réduisez le nombre de colonnes comparées, pour fiabiliser l\'analyse.</span>' : ''}</p>`;
+            } finally {
+                if (__divTmp && __divConn) { try { await __divConn.query(`DROP TABLE IF EXISTS ${sqlIdent(duckTableName(__divTmp))}`); } catch (e) {} }
             }
         }
         async function tdExportDivergences(tId, btn) {
@@ -8180,8 +8199,11 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '4.5.0';
+        const APP_VERSION = '4.5.1';
         const APP_CHANGELOG = [
+            { v: '4.5.1', d: '2026-07-23', t: 'Correctifs DuckDB : optimisation & rapport d\'écarts', items: [
+                'Optimisation Parquet : correction de « unique_lock::unlock: not locked » — les requêtes DuckDB sont désormais sérialisées (le moteur n\'est pas réentrant), avec un ré-essai sur verrou transitoire.',
+                'Rapport d\'écarts entre sources : l\'analyse matérialise d\'abord une projection légère (clé + attributs) en mémoire, ce qui supprime l\'erreur « HTML FileReaders do not support writing » sur les grosses tables lues à la demande et accélère fortement le calcul.'] },
             { v: '4.5.0', d: '2026-07-23', t: 'Surveillance des sources amont', items: [
                 'Nouvel écran Gouvernance ▸ Tracer ▸ « 🛰️ Surveillance sources » avec 4 outils autour d\'une source rafraîchie depuis une application amont :',
                 'Moniteur & fraîcheur : instantanés (volumétrie + schéma), dérive de schéma (colonnes ajoutées/supprimées/retypées) et de volumétrie, alerte de retard selon la fréquence de mise à jour du dictionnaire (SLA).',
