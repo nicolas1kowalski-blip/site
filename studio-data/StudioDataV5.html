@@ -4844,12 +4844,14 @@
             }
             // ajout de lien
             if (nodes.length >= 2) {
+                const _fs = nodes[0]; const _ic = _fs && _fs.tableName && tableByName(_fs.tableName) ? tableByName(_fs.tableName).headers : [];
+                const _dlInit = _ic.map(h2 => `<option value="${escapeHTML(h2)}">`).join('');
                 h += `<div class="flex items-end gap-2 flex-wrap bg-white border border-slate-100 rounded-lg p-2">
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source</label><select id="lf-e-src" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${nOpts}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Cible</label><select id="lf-e-tgt" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${nOpts}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source</label><select id="lf-e-src" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${nOpts}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Cible</label><select id="lf-e-tgt" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${nOpts}</select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label><select id="lf-e-type" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(LF_EDGE_TYPES).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé commune</label><input id="lf-e-key" placeholder="ex : id_client" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut comparé</label><input id="lf-e-attr" placeholder="ex : ca_annuel" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé commune</label><input id="lf-e-key" list="lf-e-key-dl" placeholder="colonne clé…" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-key-dl">${_dlInit}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut comparé</label><input id="lf-e-attr" list="lf-e-attr-dl" placeholder="colonne à comparer…" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-attr-dl">${_dlInit}</datalist></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">SLA (h)</label><input id="lf-e-sla" type="number" value="24" class="border border-slate-300 p-1.5 rounded text-xs w-16"></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Transformation rejouable</label><select id="lf-e-xk" onchange="lfXkChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="none">Aucune</option><option value="scalar">Normalisation</option><option value="agg">Agrégation</option></select></div>
                     <div id="lf-e-xagg-w" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Fonction</label><select id="lf-e-xfn" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(LF_XFORM_AGG).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
@@ -5137,6 +5139,17 @@
             return `<details class="mt-4 bg-slate-50 border border-slate-200 rounded-xl"><summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600">🗒️ Journal des contrôles${log.length ? ` (${log.length}${alerts ? ` · ${alerts} alerte(s)` : ''})` : ''}</summary><div class="p-3">${body}</div></details>`;
         }
 
+        // Propose les colonnes COMMUNES aux sources reliées à la Source et à la Cible du lien.
+        function lfEdgeColsChanged() {
+            const sn = lfNode(el('lf-e-src') ? el('lf-e-src').value : ''), tn = lfNode(el('lf-e-tgt') ? el('lf-e-tgt').value : '');
+            const sh = (sn && sn.tableName && tableByName(sn.tableName)) ? tableByName(sn.tableName).headers : [];
+            const th = (tn && tn.tableName && tableByName(tn.tableName)) ? tableByName(tn.tableName).headers : [];
+            let cols;
+            if (sh.length && th.length) cols = sh.filter(x => th.includes(x));
+            else cols = Array.from(new Set([...sh, ...th]));
+            const opts = cols.map(x => `<option value="${escapeHTML(x)}">`).join('');
+            ['lf-e-key-dl', 'lf-e-attr-dl'].forEach(id => { const dl = el(id); if (dl) dl.innerHTML = opts; });
+        }
         function renderSrcWatch() {
             const tables = swReadyTables();
             if (!tables.length) return emptyStateHtml('🛰️', 'Aucune source à surveiller', 'Chargez au moins une source (onglet Sources) pour suivre sa fraîcheur, sa dérive, son contrat et ses changements.', '', '');
@@ -8738,8 +8751,10 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.1.0';
+        const APP_VERSION = '5.1.1';
         const APP_CHANGELOG = [
+            { v: '5.1.1', d: '2026-07-23', t: 'Lineage : clé & attribut proposés', items: [
+                'Constructeur de flux : les champs « Clé commune » et « Attribut comparé » d\'un lien proposent désormais les colonnes des sources reliées (les colonnes COMMUNES à la Source et à la Cible), rafraîchies au changement de Source/Cible. La saisie manuelle reste possible en secours.'] },
             { v: '5.1.0', d: '2026-07-23', t: 'Lineage augmenté : vue attributs, transformation rejouable, journal', items: [
                 'Bascule « Vue systèmes / Vue attributs » : le même flux au niveau colonne — chaque nœud liste ses attributs reliés (clé + attribut comparé) et les liens portent l\'attribut concerné.',
                 'Transformation REJOUABLE sur un lien (agrégation SOMME/MOYENNE/MIN/MAX/NOMBRE par clé, ou normalisation scalaire : arrondi, × facteur, valeur absolue, casse, espaces) : la réconciliation compare l\'aval au maître TRANSFORMÉ par la règle, plus au maître brut — un écart attendu ne ressort plus comme distorsion, et un écart résiduel malgré la règle est signalé comme anomalie.',
