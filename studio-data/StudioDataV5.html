@@ -4703,6 +4703,7 @@
         function lfEdgeKeys(e) { return { sK: e.srcKey || e.key || '', tK: e.tgtKey || e.key || '', sA: e.srcAttr || e.attr || '', tA: e.tgtAttr || e.attr || '' }; }
         const LF_XFORM_AGG = { sum: 'Somme', avg: 'Moyenne', min: 'Min', max: 'Max', count: 'Nombre' };
         const LF_XFORM_SCALAR = { round: 'Arrondi', factor: '× facteur', abs: 'Valeur absolue', upper: 'MAJUSCULES', lower: 'minuscules', trim: 'Espaces nettoyés' };
+        const LF_QUICK_XF = [['none', 'Comparaison directe', { kind: 'none' }], ['sum', 'Somme par clé', { kind: 'agg', fn: 'sum' }], ['avg', 'Moyenne par clé', { kind: 'agg', fn: 'avg' }], ['count', 'Nombre par clé', { kind: 'agg', fn: 'count' }], ['round2', 'Arrondi (2 déc.)', { kind: 'scalar', op: 'round', param: '2' }], ['upper', 'MAJUSCULES', { kind: 'scalar', op: 'upper', param: '' }], ['lower', 'minuscules', { kind: 'scalar', op: 'lower', param: '' }], ['trim', 'Espaces nettoyés', { kind: 'scalar', op: 'trim', param: '' }]];
         function lfModel() {
             const g = state.governance; g.flow = g.flow || {};
             if (!Array.isArray(g.flow.nodes)) g.flow.nodes = [];
@@ -4875,12 +4876,13 @@
             if (nodes.length >= 2) {
                 const _ee = lfEditEdgeId ? lfEdge(lfEditEdgeId) : null;
                 const _K = _ee ? lfEdgeKeys(_ee) : { sK: '', tK: '', sA: '', tA: '' };
+                const _pairs0 = _ee ? lfEdgePairs(_ee) : []; const _p0 = _pairs0[0] || { src: '', tgt: '', xform: { kind: 'none' } };
                 const _defSrc = _ee ? _ee.source : nodes[0].id, _defTgt = _ee ? _ee.target : nodes[0].id;
                 const _nOptSel = sel => nodes.map(n => `<option value="${n.id}" ${n.id === sel ? 'selected' : ''}>${escapeHTML(n.name)}</option>`).join('');
                 const _colsOf = id => { const nn = lfNode(id); return nn && nn.tableName && tableByName(nn.tableName) ? tableByName(nn.tableName).headers : []; };
                 const _dlOf = arr => arr.map(h2 => `<option value="${escapeHTML(h2)}">`).join('');
                 const _dlS = _dlOf(_colsOf(_defSrc)), _dlT = _dlOf(_colsOf(_defTgt));
-                const _xf = _ee && _ee.xform ? _ee.xform : { kind: 'none' };
+                const _xf = _p0.xform || { kind: 'none' };
                 const _typeOpts = Object.entries(LF_EDGE_TYPES).map(([v, l]) => `<option value="${v}" ${_ee && _ee.type === v ? 'selected' : ''}>${l}</option>`).join('');
                 const _fnOpts = Object.entries(LF_XFORM_AGG).map(([v, l]) => `<option value="${v}" ${_xf.fn === v ? 'selected' : ''}>${l}</option>`).join('');
                 const _opOpts = Object.entries(LF_XFORM_SCALAR).map(([v, l]) => `<option value="${v}" ${_xf.op === v ? 'selected' : ''}>${l}</option>`).join('');
@@ -4892,8 +4894,9 @@
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label><select id="lf-e-type" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_typeOpts}</select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (source)</label><input id="lf-e-sk" list="lf-e-sk-dl" value="${escapeHTML(_K.sK)}" placeholder="clé côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sk-dl">${_dlS}</datalist></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (cible)</label><input id="lf-e-tk" list="lf-e-tk-dl" value="${escapeHTML(_K.tK)}" placeholder="clé côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-tk-dl">${_dlT}</datalist></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (source)</label><input id="lf-e-sa" list="lf-e-sa-dl" value="${escapeHTML(_K.sA)}" placeholder="attribut côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sa-dl">${_dlS}</datalist></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (cible)</label><input id="lf-e-ta" list="lf-e-ta-dl" value="${escapeHTML(_K.tA)}" placeholder="attribut côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-ta-dl">${_dlT}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (source)</label><input id="lf-e-sa" list="lf-e-sa-dl" value="${escapeHTML(_p0.src)}" placeholder="attribut côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sa-dl">${_dlS}</datalist></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (cible)</label><input id="lf-e-ta" list="lf-e-ta-dl" value="${escapeHTML(_p0.tgt)}" placeholder="attribut côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-ta-dl">${_dlT}</datalist></div>
+                    ${_pairs0.length > 1 ? `<div class="w-full text-[10px] text-indigo-600">ℹ️ ${_pairs0.length} attributs contrôlés sur ce lien — gérez-les tous (ajout/retrait) dans la fiche du lien (clic sur son étiquette dans le graphe).</div>` : ''}
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">SLA (h)</label><input id="lf-e-sla" type="number" value="${_ee ? (_ee.slaHours || 24) : 24}" class="border border-slate-300 p-1.5 rounded text-xs w-16"></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Transformation rejouable</label><select id="lf-e-xk" onchange="lfXkChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_xkOpts}</select></div>
                     <div id="lf-e-xagg-w" class="${_xf.kind === 'agg' ? '' : 'hidden'}"><label class="text-[9px] uppercase font-bold text-slate-400 block">Fonction</label><select id="lf-e-xfn" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_fnOpts}</select></div>
@@ -4937,7 +4940,7 @@
                 const dash = health === 'ok' ? '' : ' stroke-dasharray="7 5"';
                 paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${health})" opacity=".9"/>`;
                 const fr = lfFresh(lfNode(e.target)); const lr = e.lastRun;
-                const _K = lfEdgeKeys(e); const _ea = _K.sA || _K.tA; const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || (LF_EDGE_TYPES[e.type] || e.type));
+                const _pairs = lfEdgePairs(e); const _ea = _pairs.length > 1 ? (_pairs.length + ' attributs') : ((_pairs[0] || {}).tgt || (_pairs[0] || {}).src || ''); const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || (LF_EDGE_TYPES[e.type] || e.type));
                 chips.push(`<div class="lf-echip lf-e-${health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${escapeHTML(lbl)}</div>`);
             });
             const marker = h => `<marker id="lfA_${h}" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${LF_COLOR[h]}"/></marker>`;
@@ -4989,12 +4992,17 @@
             const m = lfModel(); const editing = lfEditEdgeId ? lfEdge(lfEditEdgeId) : null;
             if (m.edges.some(e => e.source === src && e.target === tgt && (!editing || e.id !== editing.id))) return showError('Ce lien existe déjà.');
             const xk = el('lf-e-xk') ? el('lf-e-xk').value : 'none';
-            const xform = xk === 'agg' ? { kind: 'agg', fn: el('lf-e-xfn').value } : (xk === 'scalar' ? { kind: 'scalar', op: el('lf-e-xop').value, param: (el('lf-e-xparam').value || '').trim() } : { kind: 'none' });
+            const _xform = xk === 'agg' ? { kind: 'agg', fn: el('lf-e-xfn').value } : (xk === 'scalar' ? { kind: 'scalar', op: el('lf-e-xop').value, param: (el('lf-e-xparam').value || '').trim() } : { kind: 'none' });
+            const sA = (el('lf-e-sa').value || '').trim(), tA = (el('lf-e-ta').value || '').trim();
+            let pairs;
+            if (editing) { const ex = lfEdgePairs(editing); const first = { id: (ex[0] && !String(ex[0].id).startsWith('ap_legacy')) ? ex[0].id : 'ap_' + generateId(), src: sA, tgt: tA, xform: _xform };
+                pairs = ex.length ? [first, ...ex.slice(1).map(pp => ({ id: pp.id, src: pp.src, tgt: pp.tgt, xform: pp.xform }))] : [first]; }
+            else pairs = [{ id: 'ap_' + generateId(), src: sA, tgt: tA, xform: _xform }];
+            pairs = pairs.filter(pp => pp.src || pp.tgt);
             const vals = { source: src, target: tgt, type: el('lf-e-type').value,
                 srcKey: (el('lf-e-sk').value || '').trim(), tgtKey: (el('lf-e-tk').value || '').trim(),
-                srcAttr: (el('lf-e-sa').value || '').trim(), tgtAttr: (el('lf-e-ta').value || '').trim(),
-                slaHours: parseFloat(el('lf-e-sla').value) || 24, transformation: (el('lf-e-transf').value || '').trim(), xform };
-            if (editing) { delete editing.key; delete editing.attr; Object.assign(editing, vals); editing.lastRun = null; lfEditEdgeId = null; }
+                slaHours: parseFloat(el('lf-e-sla').value) || 24, transformation: (el('lf-e-transf').value || '').trim(), attrPairs: pairs };
+            if (editing) { delete editing.key; delete editing.attr; delete editing.srcAttr; delete editing.tgtAttr; delete editing.xform; Object.assign(editing, vals); editing.lastRun = null; lfEditEdgeId = null; }
             else m.edges.push({ id: 'le_' + generateId(), ...vals, lastRun: null });
             persistAppState(); renderGovernance();
         }
@@ -5044,86 +5052,193 @@
             const s = lfNode(e.source), t = lfNode(e.target); if (!s || !t) return;
             const fr = lfFresh(t); const lr = e.lastRun; const th = lfModel().threshold; const K = lfEdgeKeys(e);
             const slaBad = fr.status === 'bad'; const distBad = lfDistStatus(e) === 'bad';
+            const sT = s.tableName ? tableByName(s.tableName) : null, tT = t.tableName ? tableByName(t.tableName) : null;
+            const pairs = lfEdgePairs(e);
+            const canRun = sT && tT && K.sK && K.tK && pairs.some(pp => pp.src && pp.tgt);
             const slaBadge = fr.status === 'none' ? '<span class="text-[11px] text-slate-400">fraîcheur non mesurée</span>' : (slaBad ? '<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px">✕ SLA dépassé</span>' : '<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px">✓ SLA respecté</span>');
             const distBadge = !lr ? '<span class="text-[11px] text-slate-400">non contrôlé</span>' : (distBad ? `<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px">⚠ Au-dessus du seuil (${th} %)</span>` : `<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px">✓ Sous le seuil (${th} %)</span>`);
-            const mismHTML = (lr && lr.samples && lr.samples.length) ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Exemples d'écarts (clé ${escapeHTML(K.sK || '')}${K.sK !== K.tK ? ' / ' + escapeHTML(K.tK || '') : ''})</h4>
-                <div class="text-[10px] text-slate-400 flex gap-2 pb-1"><span style="min-width:96px">Clé</span><span>Maître (${escapeHTML(s.name)})</span><span style="margin-left:auto">Aval (${escapeHTML(t.name)})</span></div>
-                ${lr.samples.map(x => `<div class="lf-mism"><span class="lf-k mono">${escapeHTML(String(x[0]))}</span><span class="lf-mv">${escapeHTML(String(x[1]))}</span><span class="lf-dv">${escapeHTML(String(x[2]))}</span></div>`).join('')}
-                <div class="text-[11px] text-slate-500 mt-2">${lr.dist.toLocaleString('fr-FR')} ligne(s) en écart sur ${lr.rows.toLocaleString('fr-FR')} comparées${lr.missing ? ` · ${lr.missing.toLocaleString('fr-FR')} clé(s) du maître absente(s) en aval` : ''}.</div></div>` : (lr ? `<div class="text-[11px] text-emerald-700 font-bold mb-3">✔ Aucun écart de valeur détecté sur ${lr.rows.toLocaleString('fr-FR')} lignes comparées.</div>` : '');
-            const canRun = s.tableName && tableByName(s.tableName) && t.tableName && tableByName(t.tableName) && K.sK && K.tK && K.sA && K.tA;
-            const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${LF_EDGE_TYPES[e.type] || e.type} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div></div>
-                <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Transformation déclarée</h4>
-                <div class="lf-transf"><span style="color:#7dd3fc">règle :</span> ${e.transformation ? escapeHTML(e.transformation) : '<span style="color:#94a3b8">aucune — lecture directe présumée</span>'}${lfXformLabel(e) ? `<br><span style="color:#7dd3fc">rejouée :</span> ${escapeHTML(lfXformLabel(e))} <span style="color:#94a3b8">(le maître est comparé APRÈS cette règle)</span>` : ''}</div>
-                <div class="text-[11px] text-slate-500 mt-1.5">Sert à distinguer un écart <b>attendu</b> (dû à la transformation) d'une <b>anomalie</b>.${(distBad && lr) ? ((!e.transformation && (!e.xform || e.xform.kind === 'none')) ? ' <span style="color:#b45309">⚠ Distorsion sans transformation déclarée → anomalie probable ou transformation non documentée.</span>' : ' <span style="color:#b45309">⚠ Écart résiduel malgré la transformation rejouée → anomalie à investiguer.</span>') : ''}</div></div>
+            // Statut d'un attribut d'après son taux vs seuil.
+            const pst = rate => rate > th ? 'bad' : (rate > 0.8 * th ? 'warn' : 'ok');
+            const lrPair = pp => lr && (lr.pairs || []).find(x => x.src === pp.src && x.tgt === pp.tgt);
+            // Gestionnaire des attributs contrôlés.
+            const scols = sT ? sT.headers : [], tcols = tT ? tT.headers : [];
+            const managerRows = pairs.length ? pairs.map(pp => { const p2 = lrPair(pp); const st = p2 ? pst(p2.rate) : 'none';
+                return `<div class="flex items-center gap-2 text-[11px] py-1 border-b border-slate-100">
+                    <span class="mono font-semibold text-slate-700">${escapeHTML(pp.src)}${pp.src !== pp.tgt ? ' → ' + escapeHTML(pp.tgt) : ''}</span>
+                    ${pp.xform && pp.xform.kind !== 'none' ? `<span class="text-slate-400">(${escapeHTML(lfXfLabel(pp.xform, pp.src))})</span>` : ''}
+                    ${p2 ? `<span class="lf-hchip lf-h-${st}" style="margin-left:auto">${p2.rate.toFixed(2).replace('.', ',')} %</span>` : '<span class="text-slate-300" style="margin-left:auto">non contrôlé</span>'}
+                    <button onclick="lfPairDel('${e.id}','${pp.id}')" class="text-red-400 hover:text-red-600" title="Retirer cet attribut">✕</button>
+                </div>`; }).join('') : '<div class="text-[11px] text-slate-400 italic py-1">Aucun attribut contrôlé — ajoutez-en ci-dessous.</div>';
+            const addRow = (sT && tT) ? `<div class="flex items-end gap-1.5 flex-wrap mt-2">
+                    <select id="lf-pair-src" class="border border-slate-300 rounded px-1 py-1 text-[11px] bg-white">${scols.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                    <span class="text-slate-400">→</span>
+                    <select id="lf-pair-tgt" class="border border-slate-300 rounded px-1 py-1 text-[11px] bg-white">${tcols.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                    <select id="lf-pair-xf" class="border border-slate-300 rounded px-1 py-1 text-[11px] bg-white" title="Transformation rejouée sur le maître avant comparaison">${LF_QUICK_XF.map(q => `<option value="${q[0]}">${q[1]}</option>`).join('')}</select>
+                    <button onclick="lfPairAdd('${e.id}')" class="text-[11px] bg-indigo-600 text-white px-2 py-1 rounded font-bold">+ Attribut</button>
+                    <button onclick="lfPairAddCommon('${e.id}')" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold hover:bg-slate-50" title="Ajoute toutes les colonnes de même nom présentes des deux côtés">✚ Même nom</button>
+                </div>` : '<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Reliez la <b>source</b> et la <b>cible</b> à des sources chargées (dans « ⚙️ Construire le flux ») pour gérer et contrôler les attributs.</div>';
+            // Résultats détaillés par attribut.
+            const resultsHTML = (lr && (lr.pairs || []).length) ? `<div class="mt-3"><div class="text-[10px] uppercase text-slate-400 font-bold mb-1">Résultat par attribut</div>
+                ${lr.pairs.map(pp => { const st = pst(pp.rate);
+                    return `<div class="mb-1.5">
+                        <div class="flex items-center gap-2 text-[11px]"><span class="mono font-semibold text-slate-700">${escapeHTML(pp.src)}${pp.src !== pp.tgt ? ' → ' + escapeHTML(pp.tgt) : ''}</span><span class="lf-hchip lf-h-${st}" style="margin-left:auto">${pp.rate.toFixed(2).replace('.', ',')} % · ${pp.dist.toLocaleString('fr-FR')} écart(s)</span></div>
+                        <div class="lf-bar"><i style="width:${Math.min(100, Math.max(2, pp.rate * 8))}%;background:${st === 'bad' ? '#dc2626' : (st === 'warn' ? '#d97706' : '#16a34a')}"></i></div>
+                        ${pp.samples && pp.samples.length ? `<details class="mt-1"><summary class="text-[10px] text-slate-400 cursor-pointer">${pp.samples.length} exemple(s) — clé / maître / aval</summary>${pp.samples.map(x => `<div class="lf-mism"><span class="lf-k mono">${escapeHTML(String(x[0]))}</span><span class="lf-mv">${escapeHTML(String(x[1]))}</span><span class="lf-dv">${escapeHTML(String(x[2]))}</span></div>`).join('')}</details>` : (pp.dist === 0 ? '<div class="text-[10px] text-emerald-600">✔ aucun écart</div>' : '')}
+                    </div>`; }).join('')}</div>` : '';
+            const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${LF_EDGE_TYPES[e.type] || e.type} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div>
+                <div class="text-[11px] text-slate-400 mt-1">Clé : <b class="mono">${escapeHTML(K.sK || '?')}</b>${K.sK !== K.tK ? ' → <b class="mono">' + escapeHTML(K.tK || '?') + '</b>' : ''}</div></div>
+                ${e.transformation ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Transformation déclarée</h4><div class="lf-transf"><span style="color:#7dd3fc">règle :</span> ${escapeHTML(e.transformation)}</div></div>` : ''}
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
                 <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Retard actuel (copie aval)</div><div class="lf-cv" style="color:${slaBad ? '#dc2626' : '#16a34a'}">${fr.status === 'none' ? '—' : lfAge(fr.ageDays)}</div></div>
                 <div class="lf-cell"><div class="lf-ck">SLA de fraîcheur</div><div class="lf-cv" style="font-size:14px">≤ ${e.slaHours} h</div></div></div>
                 <div class="mt-2.5">${slaBadge}</div></div>
-                <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Réconciliation (distorsion)</h4>
-                <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Taux de distorsion</div><div class="lf-cv" style="color:${distBad ? '#dc2626' : (lr ? '#16a34a' : '#94a3b8')}">${lr && lr.rate != null ? lr.rate.toFixed(2).replace('.', ',') + ' %' : '—'}</div></div>
+                <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Attributs contrôlés (${pairs.length})</h4>
+                <div class="bg-slate-50 border border-slate-100 rounded-lg p-2">${managerRows}${addRow}</div></div>
+                <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Réconciliation — santé globale</h4>
+                <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Lignes avec ≥ 1 écart</div><div class="lf-cv" style="color:${distBad ? '#dc2626' : (lr ? '#16a34a' : '#94a3b8')}">${lr ? lr.distAny.toLocaleString('fr-FR') + ' (' + lr.rate.toFixed(1).replace('.', ',') + ' %)' : '—'}</div></div>
                 <div class="lf-cell"><div class="lf-ck">Lignes comparées</div><div class="lf-cv" style="font-size:14px">${lr ? lr.rows.toLocaleString('fr-FR') : '—'}</div></div></div>
                 <div class="lf-bar"><i style="width:${lr && lr.rate != null ? Math.min(100, Math.max(3, lr.rate * 8)) : 0}%;background:${distBad ? '#dc2626' : '#16a34a'}"></i></div>
-                <div class="mt-2.5">${distBadge}</div>
-                ${!canRun ? `<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Pour mesurer la distorsion : reliez <b>source</b> et <b>cible</b> à des sources chargées et renseignez la <b>clé</b> et l'<b>attribut</b> (source ET cible) dans « ⚙️ Construire le flux ».</div>` : ''}</div>
-                ${mismHTML}`;
-            const foot = `<button onclick="lfExportEcarts('${e.id}', this)" ${lr && lr.dist ? '' : 'disabled'} class="flex-1 border border-slate-300 ${lr && lr.dist ? 'hover:bg-slate-50' : 'opacity-40'} font-bold py-2 rounded-lg text-sm">⇩ Exporter les écarts</button>
-                <button onclick="lfReconEdge('${e.id}', this)" ${canRun ? '' : 'disabled'} class="flex-1 ${canRun ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-200 text-slate-400'} font-bold py-2 rounded-lg text-sm">↻ ${lr ? 'Relancer' : 'Lancer'} le contrôle</button>`;
+                <div class="mt-2.5">${distBadge}${lr && lr.missing ? ` <span class="text-[11px] text-slate-500">· ${lr.missing.toLocaleString('fr-FR')} clé(s) du maître absente(s) en aval</span>` : ''}</div>
+                ${resultsHTML}
+                ${!canRun ? `<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Pour mesurer : sources reliées des deux côtés, une <b>clé</b> (source et cible) et au moins un <b>attribut contrôlé</b>.</div>` : ''}</div>`;
+            const foot = `<button onclick="lfExportEcarts('${e.id}', this)" ${lr && lr.distAny ? '' : 'disabled'} class="flex-1 border border-slate-300 ${lr && lr.distAny ? 'hover:bg-slate-50' : 'opacity-40'} font-bold py-2 rounded-lg text-sm">⇩ Exporter les écarts</button>
+                <button onclick="lfReconEdge('${e.id}', this)" ${canRun ? '' : 'disabled'} class="flex-1 ${canRun ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-200 text-slate-400'} font-bold py-2 rounded-lg text-sm">↻ Contrôler ${pairs.length || ''} attribut${pairs.length > 1 ? 's' : ''}</button>`;
             openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: (LF_EDGE_TYPES[e.type] || e.type), body, foot });
         }
 
         // ---- Moteur de réconciliation DuckDB (distorsion + volumétrie + exemples) ----
         function lfKeyExpr(al, col) { return `NULLIF(UPPER(TRIM(CAST(${al}.${sqlIdent(col)} AS VARCHAR))), '')`; }
         function lfValExpr(al, col) { return `NULLIF(TRIM(CAST(${al}.${sqlIdent(col)} AS VARCHAR)), '')`; }
+        // Liste normalisée des attributs contrôlés par un lien (compat : ancien srcAttr/tgtAttr unique).
+        function lfEdgePairs(e) {
+            if (Array.isArray(e.attrPairs) && e.attrPairs.length) return e.attrPairs.map(pp => ({ id: pp.id || ('ap_' + generateId()), src: pp.src || '', tgt: pp.tgt || '', xform: pp.xform || { kind: 'none' } }));
+            const K = lfEdgeKeys(e);
+            if (K.sA || K.tA) return [{ id: 'ap_legacy', src: K.sA, tgt: K.tA, xform: e.xform || { kind: 'none' } }];
+            return [];
+        }
+        function lfEnsurePairs(e) {
+            e.attrPairs = lfEdgePairs(e).map(pp => ({ id: String(pp.id).startsWith('ap_legacy') ? 'ap_' + generateId() : pp.id, src: pp.src, tgt: pp.tgt, xform: pp.xform }));
+            delete e.srcAttr; delete e.tgtAttr; delete e.attr; delete e.xform;
+            return e.attrPairs;
+        }
+        function lfXfLabel(x, attr) { if (!x || x.kind === 'none') return ''; if (x.kind === 'agg') return (LF_XFORM_AGG[x.fn] || x.fn) + '(' + (attr || '') + ')'; if (x.kind === 'scalar') return (LF_XFORM_SCALAR[x.op] || x.op) + (x.param ? ' ' + x.param : ''); return ''; }
+        // Expressions de valeur (maître / aval) d'une paire, prêtes à être placées dans un GROUP BY par clé.
+        function lfPairExprs(pair) {
+            const aq = 'a.' + sqlIdent(pair.src), bq = 'b.' + sqlIdent(pair.tgt);
+            const x = pair.xform || { kind: 'none' };
+            if (x.kind === 'agg') {
+                const fn = ({ sum: 'SUM', avg: 'AVG', min: 'MIN', max: 'MAX', count: 'COUNT' })[x.fn] || 'SUM';
+                const mv = x.fn === 'count' ? 'ROUND(COUNT(*)::DOUBLE, 4)' : `ROUND(${fn}(TRY_CAST(${aq} AS DOUBLE)), 4)`;
+                return { mv, dv: `ROUND(MIN(TRY_CAST(${bq} AS DOUBLE)), 4)` };
+            }
+            let numeric = false, digits = 4, mexpr;
+            if (x.kind === 'scalar') {
+                if (x.op === 'round') { digits = parseInt(x.param) || 0; numeric = true; mexpr = `ROUND(TRY_CAST(${aq} AS DOUBLE), ${digits})`; }
+                else if (x.op === 'factor') { numeric = true; mexpr = `ROUND(TRY_CAST(${aq} AS DOUBLE) * ${parseFloat(x.param) || 1}, 4)`; }
+                else if (x.op === 'abs') { numeric = true; mexpr = `ROUND(ABS(TRY_CAST(${aq} AS DOUBLE)), 4)`; }
+                else if (x.op === 'upper') { mexpr = `UPPER(TRIM(CAST(${aq} AS VARCHAR)))`; }
+                else if (x.op === 'lower') { mexpr = `LOWER(TRIM(CAST(${aq} AS VARCHAR)))`; }
+                else { mexpr = `NULLIF(TRIM(CAST(${aq} AS VARCHAR)), '')`; }
+            } else { mexpr = `NULLIF(TRIM(CAST(${aq} AS VARCHAR)), '')`; }
+            const dexpr = numeric ? `ROUND(TRY_CAST(${bq} AS DOUBLE), ${digits})` : `NULLIF(TRIM(CAST(${bq} AS VARCHAR)), '')`;
+            return { mv: `MIN(${mexpr})`, dv: `MIN(${dexpr})` };
+        }
+        // Gestion des attributs contrôlés (fiche du lien).
+        function lfPairAdd(id) {
+            const e = lfEdge(id); if (!e) return;
+            const src = el('lf-pair-src') ? el('lf-pair-src').value : '', tgt = el('lf-pair-tgt') ? el('lf-pair-tgt').value : '';
+            if (!src || !tgt) return showError('Choisissez une colonne source et une colonne cible.');
+            const qx = el('lf-pair-xf') ? el('lf-pair-xf').value : 'none';
+            const xform = JSON.parse(JSON.stringify((LF_QUICK_XF.find(q => q[0] === qx) || [0, 0, { kind: 'none' }])[2]));
+            lfEnsurePairs(e);
+            if (e.attrPairs.some(pp => pp.src === src && pp.tgt === tgt)) return showError('Cet attribut est déjà contrôlé.');
+            e.attrPairs.push({ id: 'ap_' + generateId(), src, tgt, xform });
+            e.lastRun = null; persistAppState(); renderGovernance(); setTimeout(() => lfOpenEdge(id), 20);
+        }
+        function lfPairDel(id, pid) {
+            const e = lfEdge(id); if (!e) return; lfEnsurePairs(e);
+            e.attrPairs = e.attrPairs.filter(pp => pp.id !== pid); e.lastRun = null;
+            persistAppState(); renderGovernance(); setTimeout(() => lfOpenEdge(id), 20);
+        }
+        function lfPairAddCommon(id) {
+            const e = lfEdge(id); if (!e) return;
+            const s = lfNode(e.source), t = lfNode(e.target); const K = lfEdgeKeys(e);
+            const sT = s && tableByName(s.tableName), tT = t && tableByName(t.tableName);
+            if (!sT || !tT) return showError('Reliez la source et la cible à des sources chargées.');
+            lfEnsurePairs(e);
+            const common = (sT.headers || []).filter(h => (tT.headers || []).includes(h) && h !== K.sK && h !== K.tK);
+            let added = 0;
+            common.forEach(h => { if (!e.attrPairs.some(pp => pp.src === h && pp.tgt === h)) { e.attrPairs.push({ id: 'ap_' + generateId(), src: h, tgt: h, xform: { kind: 'none' } }); added++; } });
+            e.lastRun = null; persistAppState(); renderGovernance(); setTimeout(() => lfOpenEdge(id), 20);
+            if (!added) showError('Aucun nouvel attribut de même nom à ajouter.');
+        }
         async function lfReconEdge(id, btn) {
             const e = lfEdge(id); if (!e) return;
             const s = lfNode(e.source), t = lfNode(e.target);
             const sT = s && s.tableName ? tableByName(s.tableName) : null, tT = t && t.tableName ? tableByName(t.tableName) : null;
             if (!sT || !tT) return showError('Reliez la source et la cible à des sources chargées.');
             const K = lfEdgeKeys(e);
-            if (!K.sK || !K.tK || !K.sA || !K.tA) return showError('Renseignez la clé et l\'attribut pour la source ET la cible.');
+            if (!K.sK || !K.tK) return showError('Renseignez la clé (source et cible).');
             if (!(sT.headers || []).includes(K.sK)) return showError(`La colonne clé source « ${K.sK} » est absente de « ${s.name} ».`);
             if (!(tT.headers || []).includes(K.tK)) return showError(`La colonne clé cible « ${K.tK} » est absente de « ${t.name} ».`);
-            if (!(sT.headers || []).includes(K.sA)) return showError(`L'attribut source « ${K.sA} » est absent de « ${s.name} ».`);
-            if (!(tT.headers || []).includes(K.tA)) return showError(`L'attribut cible « ${K.tA} » est absent de « ${t.name} ».`);
+            let pairs = lfEdgePairs(e).filter(pp => pp.src && pp.tgt);
+            const skipped = pairs.filter(pp => !(sT.headers || []).includes(pp.src) || !(tT.headers || []).includes(pp.tgt));
+            pairs = pairs.filter(pp => (sT.headers || []).includes(pp.src) && (tT.headers || []).includes(pp.tgt));
+            if (!pairs.length) return showError('Ajoutez au moins un attribut contrôlé (colonnes présentes des deux côtés) dans la fiche du lien.');
             const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '…'; }
             try {
                 const { conn } = await getDB();
                 const A = sqlIdent(duckTableName(sT.id)), B = sqlIdent(duckTableName(tT.id));
                 const kA = lfKeyExpr('a', K.sK), kB = lfKeyExpr('b', K.tK);
-                const PR = lfReconParts(e, A, B);
+                const mCols = pairs.map((pp, i) => `${lfPairExprs(pp).mv} AS mv${i}`).join(', ');
+                const dCols = pairs.map((pp, i) => `${lfPairExprs(pp).dv} AS dv${i}`).join(', ');
+                const base = `WITH m AS (SELECT ${kA} AS k, ${mCols} FROM ${A} a WHERE ${kA} IS NOT NULL GROUP BY 1), d AS (SELECT ${kB} AS k, ${dCols} FROM ${B} b WHERE ${kB} IS NOT NULL GROUP BY 1)`;
+                const filters = pairs.map((_, i) => `COUNT(*) FILTER (WHERE m.mv${i} IS DISTINCT FROM d.dv${i})::BIGINT AS d${i}`).join(', ');
+                const anyE = pairs.map((_, i) => `m.mv${i} IS DISTINCT FROM d.dv${i}`).join(' OR ');
                 const out = await runNoSpill(conn, async () => {
-                    const agg = arrowResultToObjects(await queryResilient(conn,
-                        `${PR.base} SELECT COUNT(*)::BIGINT AS rows, COUNT(*) FILTER (WHERE ${PR.mism})::BIGINT AS dist FROM ${PR.join}`))[0];
+                    const agg = arrowResultToObjects(await queryResilient(conn, `${base} SELECT COUNT(*)::BIGINT AS rows, ${filters}, COUNT(*) FILTER (WHERE ${anyE})::BIGINT AS dany FROM m JOIN d USING (k)`))[0];
                     const miss = arrowResultToObjects(await queryResilient(conn,
-                        `SELECT COUNT(*)::BIGINT AS n FROM (SELECT DISTINCT ${kA} AS k FROM ${A} a WHERE ${kA} IS NOT NULL) s
-                         WHERE k NOT IN (SELECT ${kB} FROM ${B} b WHERE ${kB} IS NOT NULL)`))[0];
-                    const samples = arrowResultToObjects(await queryResilient(conn,
-                        `${PR.base} SELECT k, m.mv AS av, d.mv AS bv FROM ${PR.join} WHERE ${PR.mism} ORDER BY k LIMIT 12`));
+                        `SELECT COUNT(*)::BIGINT AS n FROM (SELECT DISTINCT ${kA} AS k FROM ${A} a WHERE ${kA} IS NOT NULL) s WHERE k NOT IN (SELECT ${kB} FROM ${B} b WHERE ${kB} IS NOT NULL)`))[0];
+                    const samples = {};
+                    for (let i = 0; i < pairs.length; i++) {
+                        if (Number(agg['d' + i] || 0) > 0) {
+                            const sm = arrowResultToObjects(await queryResilient(conn, `${base} SELECT k, m.mv${i} AS av, d.dv${i} AS bv FROM m JOIN d USING (k) WHERE m.mv${i} IS DISTINCT FROM d.dv${i} ORDER BY k LIMIT 8`));
+                            samples[i] = sm.map(r => [r.k == null ? '' : r.k, r.av == null ? '(vide)' : r.av, r.bv == null ? '(vide)' : r.bv]);
+                        }
+                    }
                     return { agg, miss, samples };
                 });
-                const rows = Number(out.agg.rows || 0), dist = Number(out.agg.dist || 0);
-                e.lastRun = { at: Date.now(), rows, dist, rate: rows ? (100 * dist / rows) : 0, missing: Number(out.miss.n || 0),
-                    samples: out.samples.map(r => [r.k == null ? '' : r.k, r.av == null ? '(vide)' : r.av, r.bv == null ? '(vide)' : r.bv]) };
+                const rows = Number(out.agg.rows || 0), dany = Number(out.agg.dany || 0);
+                const pr = pairs.map((pp, i) => { const di = Number(out.agg['d' + i] || 0); return { src: pp.src, tgt: pp.tgt, xform: pp.xform, dist: di, rate: rows ? (100 * di / rows) : 0, samples: out.samples[i] || [] }; });
+                e.lastRun = { at: Date.now(), rows, missing: Number(out.miss.n || 0), distAny: dany, rate: rows ? (100 * dany / rows) : 0, worstRate: pr.reduce((mx, x) => Math.max(mx, x.rate), 0), pairs: pr };
                 lfLogPush(e, s, t);
                 persistAppState(); renderGovernance();
                 setTimeout(() => lfOpenEdge(id), 30);
-                showSuccess(`↻ Contrôle « ${s.name} → ${t.name} » : ${dist.toLocaleString('fr-FR')} écart(s) sur ${rows.toLocaleString('fr-FR')} lignes (${e.lastRun.rate.toFixed(2)} %).`);
+                showSuccess(`↻ Contrôle « ${s.name} → ${t.name} » : ${dany.toLocaleString('fr-FR')} ligne(s) avec écart sur ${rows.toLocaleString('fr-FR')} (${pairs.length} attribut(s)).` + (skipped.length ? ` ${skipped.length} attribut(s) ignoré(s) (colonne absente).` : ''));
             } catch (err) { showError('Contrôle impossible : ' + err.message); if (btn) { btn.disabled = false; btn.textContent = old; } }
         }
         async function lfExportEcarts(id, btn) {
             const e = lfEdge(id); if (!e) return;
             const s = lfNode(e.source), t = lfNode(e.target);
             const sT = tableByName(s.tableName), tT = tableByName(t.tableName); if (!sT || !tT) return;
+            const K = lfEdgeKeys(e);
+            const pairs = lfEdgePairs(e).filter(pp => pp.src && pp.tgt && (sT.headers || []).includes(pp.src) && (tT.headers || []).includes(pp.tgt));
+            if (!pairs.length) return;
             const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '…'; }
             try {
                 const { conn } = await getDB();
                 const A = sqlIdent(duckTableName(sT.id)), B = sqlIdent(duckTableName(tT.id));
-                const PR = lfReconParts(e, A, B);
+                const kA = lfKeyExpr('a', K.sK), kB = lfKeyExpr('b', K.tK);
                 const cell = v => { if (v == null) return ''; const x = String(v); return /[",\n\r;]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
-                const _K = lfEdgeKeys(e); const parts = [`cle,maitre_${_K.sA},aval_${_K.tA}\n`];
+                const parts = [`cle,attribut,maitre,aval\n`];
                 await runNoSpill(conn, async () => {
-                    const res = await queryResilient(conn, `${PR.base} SELECT k, m.mv AS av, d.mv AS bv FROM ${PR.join} WHERE ${PR.mism} ORDER BY k`);
-                    arrowResultToObjects(res).forEach(r => parts.push([r.k, r.av, r.bv].map(cell).join(',') + '\n'));
+                    for (const pp of pairs) {
+                        const PE = lfPairExprs(pp);
+                        const base = `WITH m AS (SELECT ${kA} AS k, ${PE.mv} AS mv FROM ${A} a WHERE ${kA} IS NOT NULL GROUP BY 1), d AS (SELECT ${kB} AS k, ${PE.dv} AS mv FROM ${B} b WHERE ${kB} IS NOT NULL GROUP BY 1)`;
+                        const lbl = pp.src + (pp.src !== pp.tgt ? ' → ' + pp.tgt : '');
+                        const res = await queryResilient(conn, `${base} SELECT k, m.mv AS av, d.mv AS bv FROM m JOIN d USING (k) WHERE m.mv IS DISTINCT FROM d.mv ORDER BY k`);
+                        arrowResultToObjects(res).forEach(r => parts.push([r.k, lbl, r.av, r.bv].map(cell).join(',') + '\n'));
+                    }
                 });
                 const blob = new Blob(['﻿', ...parts], { type: 'text/csv;charset=utf-8;' });
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -5136,7 +5251,7 @@
 
         // ---- Finitions V5.1 : vue attributs, transformation rejouable, journal ----
         function lfSetView(v) { lfView = (v === 'attrs') ? 'attrs' : 'systems'; renderGovernance(); }
-        function lfNodeAttrs(n) { const set = new Set(); lfModel().edges.forEach(e => { const K = lfEdgeKeys(e); if (e.source === n.id) { if (K.sK) set.add('\U0001F511 ' + K.sK); if (K.sA) set.add(K.sA); } if (e.target === n.id) { if (K.tK) set.add('\U0001F511 ' + K.tK); if (K.tA) set.add(K.tA); } }); return Array.from(set); }
+        function lfNodeAttrs(n) { const set = new Set(); lfModel().edges.forEach(e => { const K = lfEdgeKeys(e); const pairs = lfEdgePairs(e); if (e.source === n.id) { if (K.sK) set.add('\U0001F511 ' + K.sK); pairs.forEach(pp => { if (pp.src) set.add(pp.src); }); } if (e.target === n.id) { if (K.tK) set.add('\U0001F511 ' + K.tK); pairs.forEach(pp => { if (pp.tgt) set.add(pp.tgt); }); } }); return Array.from(set); }
         function lfXkChanged() { const k = el('lf-e-xk') ? el('lf-e-xk').value : 'none'; const a = el('lf-e-xagg-w'), sc = el('lf-e-xsc-w'); if (a) a.classList.toggle('hidden', k !== 'agg'); if (sc) sc.classList.toggle('hidden', k !== 'scalar'); }
         function lfXformLabel(e) { const x = e.xform; if (!x || x.kind === 'none') return ''; if (x.kind === 'agg') return (LF_XFORM_AGG[x.fn] || x.fn) + '(' + (lfEdgeKeys(e).sA || 'attribut') + ') par clé'; if (x.kind === 'scalar') return (LF_XFORM_SCALAR[x.op] || x.op) + (x.param ? ' ' + x.param : ''); return ''; }
         // Construit la réconciliation en SQL en REJOUANT la transformation déclarée sur le maître :
@@ -5173,7 +5288,7 @@
         function lfLogPush(e, s, t) {
             const th = lfModel().threshold, rate = e.lastRun.rate;
             const status = rate > th ? 'bad' : (rate > 0.8 * th ? 'warn' : 'ok');
-            lfLog().unshift({ at: Date.now(), label: ((s || {}).name || '?') + ' → ' + ((t || {}).name || '?'), rows: e.lastRun.rows, dist: e.lastRun.dist, rate, missing: e.lastRun.missing || 0, status, transf: lfXformLabel(e) || '' });
+            lfLog().unshift({ at: Date.now(), label: ((s || {}).name || '?') + ' → ' + ((t || {}).name || '?'), rows: e.lastRun.rows, dist: e.lastRun.dist, rate, missing: e.lastRun.missing || 0, status, transf: ((e.lastRun && e.lastRun.pairs) ? e.lastRun.pairs.length + ' attribut(s)' : '') });
             if (lfLog().length > 200) state.governance.flowLog = lfLog().slice(0, 200);
         }
         function lfClearLog() { if (!confirm('Vider le journal des contrôles ?')) return; state.governance.flowLog = []; persistAppState(); renderGovernance(); }
@@ -8802,8 +8917,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.1.3';
+        const APP_VERSION = '5.2.0';
         const APP_CHANGELOG = [
+            { v: '5.2.0', d: '2026-07-23', t: 'Lineage : santé d\'une alimentation ATTRIBUT PAR ATTRIBUT', items: [
+                'Un lien peut désormais contrôler PLUSIEURS attributs (et non plus un seul) : chaque attribut a sa paire colonne source → colonne cible et sa propre transformation rejouable.',
+                'La réconciliation renvoie la distorsion GLOBALE (lignes avec au moins un écart) ET le détail par attribut (taux, barre, exemples) : la santé complète d\'une alimentation se lit d\'un coup d\'œil.',
+                'Fiche du lien (clic sur son étiquette) : gestionnaire des attributs contrôlés — ajout (colonne source → colonne cible + transformation), retrait, et « ✚ Même nom » pour ajouter d\'un coup toutes les colonnes de même nom présentes des deux côtés. Le bouton « Contrôler N attribut(s) » lance la vérification complète ; l\'export CSV couvre tous les attributs.'] },
             { v: '5.1.3', d: '2026-07-23', t: 'Édition partout : règles métier & renommage des paramétrages', items: [
                 'Règles métier de cardinalité (« 1 X doit avoir exactement N Y quand … ») : désormais MODIFIABLES en ligne après création — opérateur (exactement / au plus / au moins), nombre N, valeur de la condition et libellé — au lieu d\'être en lecture seule (supprimer/recréer).',
                 'Paramétrages d\'extraction : ajout du renommage (bouton ✎) en plus de charger / enregistrer / supprimer.',

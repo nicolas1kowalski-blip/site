@@ -126,19 +126,27 @@
     <p class="callout ok"><b>Modifier après coup.</b> Chaque nœud et chaque lien déjà créés se modifient : cliquez le bouton
     <b>✎</b> dans les listes (Nœud / Lien). Le formulaire se pré-remplit ; « ✓ Enregistrer » applique les changements
     (un lien modifié réinitialise son dernier contrôle, à relancer).</p>
+    <p class="callout"><b>Plusieurs attributs par lien (santé attribut par attribut).</b> L'attribut saisi ici est le
+    <b>premier</b> attribut contrôlé. Pour vérifier la santé <b>complète</b> d'une alimentation, ajoutez-en d'autres dans
+    la <b>fiche du lien</b> (clic sur son étiquette dans le graphe) : voir l'étape 3.</p>
   </div>
 
   <h2 id="e3">Étape 3 — Lancer un contrôle</h2>
   <div class="step">
     <ol>
-      <li>Dans le graphe, <b>cliquez l'étiquette du lien</b> (la pastille au milieu de la flèche). Un <b>volet</b> s'ouvre à droite.</li>
-      <li>En bas du volet, cliquez <span class="kbd">↻ Lancer le contrôle</span>
-          (ou <span class="kbd">↻ Relancer</span> s'il a déjà tourné).</li>
-      <li>Le calcul s'exécute en local (DuckDB) et remplit le volet : <b>taux de distorsion</b>, <b>lignes comparées</b>,
-          <b>clés du maître absentes en aval</b>, et <b>exemples d'écarts</b> (clé / valeur maître / valeur aval).</li>
+      <li>Dans le graphe, <b>cliquez l'étiquette du lien</b> (la pastille au milieu de la flèche). La <b>fiche du lien</b> s'ouvre à droite.</li>
+      <li>Section <b>« Attributs contrôlés »</b> : gérez tous les attributs de l'alimentation.
+        <ul>
+          <li><b>Ajouter</b> : choisissez la colonne <b>source →</b> la colonne <b>cible</b> (les noms peuvent différer) et, si besoin, une <b>transformation</b> rejouée (somme/moyenne/nombre par clé, arrondi, casse…), puis <span class="kbd">+ Attribut</span>.</li>
+          <li><span class="kbd">✚ Même nom</span> : ajoute d'un coup <b>toutes les colonnes de même nom</b> présentes des deux côtés (hors clé).</li>
+          <li><b>✕</b> en bout de ligne pour retirer un attribut.</li>
+        </ul>
+      </li>
+      <li>En bas de la fiche, cliquez <span class="kbd">↻ Contrôler N attribut(s)</span>.</li>
+      <li>Le calcul s'exécute en local (DuckDB) et remplit la fiche : <b>santé globale</b> (lignes avec au moins un écart, lignes comparées, clés absentes en aval) <b>et le détail attribut par attribut</b> (taux, barre, exemples clé/maître/aval).</li>
     </ol>
     <p class="callout warn">Le bouton reste <b>grisé</b> tant que le lien n'a pas : une <b>source reliée</b> des deux côtés,
-    une <b>clé</b> et un <b>attribut</b>. Le volet vous indique précisément ce qui manque.</p>
+    une <b>clé</b> (source et cible) et <b>au moins un attribut contrôlé</b>. La fiche vous indique précisément ce qui manque.</p>
   </div>
 
   <h2 id="e4">Étape 4 — Lire les résultats</h2>
