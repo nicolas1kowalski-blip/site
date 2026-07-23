@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; worker-src blob:; child-src blob:; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Studio Data — Banc d'essai DuckDB (16 M lignes)</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; line-height: 1.5; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 18px 80px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin: 26px 0 8px; }
+  p { color: #cbd5e1; font-size: 14px; }
+  .env { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 12px 14px; font-size: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 6px 18px; }
+  .env b { color: #f8fafc; }
+  .env .warn { color: #fca5a5; }
+  .env .ok { color: #6ee7b7; }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+  button { font: inherit; font-weight: 700; border-radius: 9px; border: 1px solid #4f46e5; background: #4f46e5; color: #fff; padding: 9px 16px; cursor: pointer; }
+  button.sec { background: #1e293b; color: #c7d2fe; border-color: #475569; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  label { font-size: 13px; color: #cbd5e1; }
+  select, input[type=file] { font: inherit; background: #1e293b; color: #e2e8f0; border: 1px solid #475569; border-radius: 8px; padding: 7px 9px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid #1e293b; }
+  th { color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok2 { color: #6ee7b7; font-weight: 700; }
+  .fail { color: #fca5a5; font-weight: 700; }
+  .size-h { background: #172033; }
+  .size-h td { font-weight: 800; color: #e0e7ff; font-size: 13px; }
+  #log { background: #0b1220; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; max-height: 200px; overflow: auto; color: #93c5fd; margin-top: 8px; }
+  .verdict { margin-top: 18px; padding: 14px 16px; border-radius: 12px; font-size: 14px; border: 1px solid #334155; background: #1e293b; }
+  .muted { color: #94a3b8; font-size: 12px; }
+  a { color: #a5b4fc; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧪 Banc d'essai DuckDB — jusqu'à 16 M lignes × 40 colonnes</h1>
+  <p>Ce test utilise <b>exactement le même moteur et la même configuration</b> que Studio Data. Il génère des jeux de 40 colonnes à volume croissant et lance les opérations les plus lourdes (matérialisation, regroupement, dé-doublonnage, delta/réconciliation, optimisation Parquet) jusqu'au point de rupture. Rien n'est envoyé nulle part : tout se passe dans votre navigateur.</p>
+
+  <h2>Votre environnement</h2>
+  <div class="env" id="env">Détection du moteur…</div>
+
+  <h2>Réglages</h2>
+  <div class="controls">
+    <label>Volume maximal : <select id="maxN">
+      <option value="1">1 million</option>
+      <option value="2">2 millions</option>
+      <option value="4">4 millions</option>
+      <option value="8">8 millions</option>
+      <option value="16" selected>16 millions</option>
+      <option value="24">24 millions</option>
+    </select></label>
+    <button id="run" disabled>▶ Lancer le test progressif</button>
+    <button id="stop" class="sec" disabled>■ Arrêter</button>
+  </div>
+  <p class="muted">Le test s'arrête tout seul dès qu'une étape échoue (mémoire insuffisante) — c'est ça, votre plafond. Les résultats s'affichent au fur et à mesure ; même si l'onglet sature, la dernière ligne réussie reste visible. Comptez de quelques secondes à plusieurs minutes selon la machine (la génération avec empreintes md5 est volontairement exigeante).</p>
+
+  <div class="controls" style="margin-top:6px">
+    <label>… ou testez <b>votre vrai fichier</b> CSV : <input type="file" id="realFile" accept=".csv,.txt" disabled></label>
+  </div>
+
+  <h2>Résultats</h2>
+  <table id="tbl"><thead><tr>
+    <th>Opération</th><th class="n">Lignes</th><th class="n">Temps</th><th class="n">Mémoire DuckDB</th><th>Résultat</th>
+  </tr></thead><tbody id="tb"></tbody></table>
+
+  <div class="verdict" id="verdict" style="display:none"></div>
+
+  <h2>Journal</h2>
+  <div id="log"></div>
+
+  <p class="muted" style="margin-top:20px">Rappel : depuis un fichier local (<code>file://</code>) le moteur n'a pas de débordement disque et plafonne vers ~4 Go (WebAssembly 32 bits). Ouvrir cette page via <code>http://localhost</code> active l'OPFS et le débordement sur disque — relancez alors le test pour comparer.</p>
+</div>
+
+<script type="module">
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm';
+window.duckdb = duckdb;
+
+// ---- Init DuckDB : COPIE CONFORME de la configuration de Studio Data ----
+async function initDuckDB() {
+  const bundles = duckdb.getJsDelivrBundles();
+  const bundle = await duckdb.selectBundle(bundles);
+  const workerUrl = URL.createObjectURL(new Blob([`importScripts(${JSON.stringify(bundle.mainWorker)});`], { type: 'text/javascript' }));
+  const worker = new Worker(workerUrl);
+  const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
+  await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+  URL.revokeObjectURL(workerUrl);
+  let opfsBacked = false;
+  try {
+    if (navigator.storage && navigator.storage.getDirectory && duckdb.DuckDBAccessMode) {
+      await db.open({ path: 'opfs://bench_data.db', accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+      opfsBacked = true;
+    }
+  } catch (e) { console.warn('OPFS indisponible :', e); }
+  const conn = await db.connect();
+  const be = async (sql) => { try { await conn.query(sql); } catch (e) {} };
+  await be("SET preserve_insertion_order=false");
+  let memGB = 3.0;
+  try { if (navigator.deviceMemory) memGB = Math.max(1.8, Math.min(3.4, navigator.deviceMemory * 0.65)); } catch (e) {}
+  window.__duckMemLimit = Math.round(memGB * 1024) + 'MB';
+  await be(`PRAGMA memory_limit='${window.__duckMemLimit}'`);
+  await be("PRAGMA threads=1");
+  if (!opfsBacked && navigator.storage && navigator.storage.getDirectory) { window.__duckTempDir = 'opfs://bench_tmp'; await be("SET temp_directory='opfs://bench_tmp'"); }
+  window.__duckdbOpfs = opfsBacked;
+  return { db, conn };
+}
+
+// runNoSpill : identique à Studio Data (mémoire relevée + débordement coupé pour les analyses lourdes).
+async function runNoSpill(conn, fn) {
+  let memSet = false;
+  for (const lim of ['4GB','3GB','2GB','1GB']) { try { await conn.query("SET memory_limit='" + lim + "'"); memSet = true; break; } catch (e) {} }
+  try { await conn.query("SET temp_directory=''"); } catch (e) {}
+  try { return await fn(); }
+  finally {
+    if (window.__duckTempDir) { try { await conn.query("SET temp_directory='" + window.__duckTempDir + "'"); } catch (e) {} }
+    if (memSet) { try { if (window.__duckMemLimit) await conn.query("SET memory_limit='" + window.__duckMemLimit + "'"); else await conn.query("RESET memory_limit"); } catch (e) {} }
+  }
+}
+
+const $ = id => document.getElementById(id);
+const log = m => { const l = $('log'); l.textContent += (l.textContent ? '\n' : '') + m; l.scrollTop = l.scrollHeight; };
+let stopFlag = false;
+
+// ---- Génération : 40 colonnes réalistes (codes de cardinalité variée, textes md5, libellés, dates, nombres) ----
+function gen40cols() {
+  const e = ['i AS id'];
+  const cards = [4000000, 900000, 250000, 50000, 1200, 22];
+  const mult = [2654435761, 40503, 15485863, 92821, 7919, 131];
+  cards.forEach((c, k) => e.push(`'C${k}_' || ((i * ${mult[k]}) % ${c}) AS code_${k}`));
+  for (let k = 0; k < 8; k++) e.push(`substr(md5(CAST(i * ${k + 3} + ${k} AS VARCHAR)), 1, ${6 + k}) AS hash_${k}`);
+  const lc = [900000, 300000, 60000, 1500];
+  for (let k = 0; k < 4; k++) e.push(`'Libellé ${k} ligne ' || (i % ${lc[k]}) AS libelle_${k}`);
+  const dc = [2500, 3600, 900];
+  for (let k = 0; k < 3; k++) e.push(`CAST(DATE '2016-01-01' + CAST((i % ${dc[k]}) AS INTEGER) AS VARCHAR) AS date_${k}`);
+  const nm = [7, 11, 13, 17, 19, 23], nmod = [1000000, 500000, 5000, 999, 100, 12];
+  for (let k = 0; k < 6; k++) e.push(`((i * ${nm[k]}) % ${nmod[k]}) AS num_${k}`);
+  const fm = [2, 3, 5, 7, 9, 4, 6, 8]; let k = 0;
+  while (e.length < 40) { e.push(`(i % ${fm[k % 8]}) AS flag_${k}`); k++; }
+  return e;
+}
+
+async function memMB(conn) {
+  for (const q of ["SELECT round(sum(memory_usage_bytes)/1048576.0) AS mb FROM duckdb_memory()",
+                   "SELECT round(memory_usage/1048576.0) AS mb FROM pragma_database_size()"]) {
+    try { const a = (await conn.query(q)).toArray(); if (a.length && a[0].mb != null) return Math.round(Number(a[0].mb)); } catch (e) {}
+  }
+  return null;
+}
+
+function row(op, n, ms, mb, ok, msg) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${op}</td><td class="n">${n == null ? '' : Number(n).toLocaleString('fr-FR')}</td>`
+    + `<td class="n">${ms == null ? '' : (ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s')}</td>`
+    + `<td class="n">${mb == null ? '—' : mb.toLocaleString('fr-FR') + ' Mo'}</td>`
+    + `<td class="${ok ? 'ok2' : 'fail'}">${ok ? '✔ OK' : '✗ ' + (msg || 'échec')}</td>`;
+  $('tb').appendChild(tr);
+  return tr;
+}
+function sizeHeader(n) {
+  const tr = document.createElement('tr'); tr.className = 'size-h';
+  tr.innerHTML = `<td colspan="5">▸ ${Number(n).toLocaleString('fr-FR')} lignes × 40 colonnes</td>`;
+  $('tb').appendChild(tr);
+}
+const yield_ = () => new Promise(r => setTimeout(r, 30));
+
+async function timed(fn) {
+  const t0 = performance.now();
+  try { const r = await fn(); return { ok: true, ms: performance.now() - t0, extra: r }; }
+  catch (e) { return { ok: false, ms: performance.now() - t0, err: String((e && e.message) || e) }; }
+}
+function shortErr(e) {
+  if (/FileReaders do not support writing|temp_directory|No space/i.test(e)) return 'débordement disque impossible (file://)';
+  if (/out of memory|allocat|memory|Maximum|RangeError|std::bad_alloc/i.test(e)) return 'mémoire insuffisante';
+  return e.slice(0, 60);
+}
+
+async function runSuite() {
+  stopFlag = false;
+  $('run').disabled = true; $('stop').disabled = false; $('maxN').disabled = true; $('realFile').disabled = true;
+  $('tb').innerHTML = ''; $('log').textContent = ''; $('verdict').style.display = 'none';
+  const { db, conn } = await window.__benchDB;
+  const maxN = parseInt($('maxN').value) * 1000000;
+  const sizes = [1, 2, 4, 8, 16, 24].map(m => m * 1000000).filter(n => n <= maxN);
+  const cols = gen40cols();
+  const results = {};
+  let hardStop = false;
+
+  for (const N of sizes) {
+    if (stopFlag || hardStop) break;
+    sizeHeader(N); await yield_();
+    // nettoyage
+    for (const t of ['big', 'big2']) { try { await conn.query('DROP TABLE IF EXISTS ' + t); } catch (e) {} }
+
+    // 1) GÉNÉRATION / MATÉRIALISATION
+    log(`Génération de ${N.toLocaleString('fr-FR')} lignes…`);
+    let r = await timed(() => conn.query(`CREATE TABLE big AS SELECT ${cols.join(', ')} FROM range(0, ${N}) t(i)`));
+    let mb = await memMB(conn);
+    row('Génération / matérialisation', N, r.ms, mb, r.ok, r.ok ? null : shortErr(r.err));
+    if (!r.ok) { log('✗ Génération impossible à ' + N.toLocaleString('fr-FR') + ' : ' + r.err); results[N] = 'gen'; hardStop = true; break; }
+    await yield_(); if (stopFlag) break;
+
+    // noms de colonnes réels (pour le hash de ligne du delta)
+    let colNames = [];
+    try { colNames = (await conn.query("SELECT column_name FROM information_schema.columns WHERE table_name='big' ORDER BY ordinal_position")).toArray().map(x => x.column_name); } catch (e) {}
+    const q = n => '"' + n + '"';
+    const rowHash = `md5(concat_ws(chr(1), ${colNames.map(n => `COALESCE(CAST(${q(n)} AS VARCHAR),'')`).join(', ')}))`;
+
+    // 2) BALAYAGE (COUNT)
+    r = await timed(() => conn.query('SELECT COUNT(*) c FROM big'));
+    row('Balayage complet (COUNT)', N, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    await yield_(); if (stopFlag) break;
+
+    // 3) REGROUPEMENT forte cardinalité
+    r = await timed(() => runNoSpill(conn, () => conn.query('SELECT COUNT(*) FROM (SELECT code_0 FROM big GROUP BY code_0) q')));
+    row('Regroupement (GROUP BY ~4 M clés)', N, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    await yield_(); if (stopFlag) break;
+
+    // 4) DÉ-DOUBLONNAGE (DISTINCT multi-colonnes)
+    r = await timed(() => runNoSpill(conn, () => conn.query('SELECT COUNT(*) FROM (SELECT DISTINCT code_1, hash_0, libelle_0 FROM big) q')));
+    row('Dé-doublonnage (DISTINCT 3 colonnes)', N, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    await yield_(); if (stopFlag) break;
+
+    // 5) OPTIMISATION PARQUET (conversion + rapatriement du tampon)
+    r = await timed(() => runNoSpill(conn, async () => {
+      try { if (db.dropFile) await db.dropFile('bench.parquet'); } catch (e) {}
+      await conn.query("COPY (SELECT * FROM big) TO 'bench.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)");
+      const buf = (await db.copyFileToBuffer('bench.parquet')).slice();
+      try { if (db.dropFile) await db.dropFile('bench.parquet'); } catch (e) {}
+      return buf.byteLength;
+    }));
+    row('Optimisation Parquet' + (r.ok ? ` (${(r.extra / 1048576).toFixed(0)} Mo)` : ''), N, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    await yield_(); if (stopFlag) break;
+
+    // 6) DELTA / RÉCONCILIATION : copie (2× mémoire) + FULL OUTER JOIN + hash de ligne
+    r = await timed(() => runNoSpill(conn, async () => {
+      await conn.query('CREATE TABLE big2 AS SELECT * FROM big');
+      await conn.query('UPDATE big2 SET num_0 = num_0 + 1 WHERE id % 100 = 0');
+      const sql = `WITH c AS (SELECT id AS k, ${rowHash} AS h FROM big),
+                        s AS (SELECT id AS k, ${rowHash} AS h FROM big2)
+                   SELECT SUM(CASE WHEN s.k IS NULL THEN 1 ELSE 0 END) added,
+                          SUM(CASE WHEN c.k IS NULL THEN 1 ELSE 0 END) removed,
+                          SUM(CASE WHEN c.k IS NOT NULL AND s.k IS NOT NULL AND c.h<>s.h THEN 1 ELSE 0 END) changed
+                   FROM c FULL OUTER JOIN s ON c.k = s.k`;
+      const out = await conn.query(sql);
+      return out;
+    }));
+    row('Delta / réconciliation (jointure complète, 2× mémoire)', N, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    try { await conn.query('DROP TABLE IF EXISTS big2'); } catch (e) {}
+    if (!r.ok) { results[N] = 'delta'; log('✗ Delta impossible à ' + N.toLocaleString('fr-FR') + ' : ' + r.err); }
+    if (window.__duckdbOpfs) { try { await conn.query('CHECKPOINT'); } catch (e) {} }
+    await yield_();
+  }
+
+  // nettoyage final
+  for (const t of ['big', 'big2']) { try { await conn.query('DROP TABLE IF EXISTS ' + t); } catch (e) {} }
+  try { if (db.dropFile) await db.dropFile('bench.parquet'); } catch (e) {}
+
+  verdict(sizes, results);
+  $('run').disabled = false; $('stop').disabled = true; $('maxN').disabled = false; $('realFile').disabled = false;
+}
+
+function verdict(sizes, results) {
+  const failN = Object.keys(results).map(Number).sort((a, b) => a - b)[0];
+  const opfs = window.__duckdbOpfs;
+  let v = '';
+  if (!failN) {
+    const top = sizes[sizes.length - 1];
+    v = `<b class="ok2">✔ Toutes les opérations ont abouti jusqu'à ${top.toLocaleString('fr-FR')} lignes × 40 colonnes.</b> `
+      + `Votre machine ${opfs ? '(mode OPFS, débordement disque actif) ' : '(mode mémoire, file://) '}encaisse ce volume. `
+      + (opfs ? 'Le débordement disque vous donne de la marge au-delà.' : 'Pour aller plus loin encore, passez en http://localhost (OPFS).');
+  } else {
+    const kind = { gen: 'la génération / matérialisation', delta: 'le delta / réconciliation (jointure complète)' }[results[failN]] || 'une opération lourde';
+    const lastOk = sizes.filter(n => n < failN).pop();
+    v = `<b class="fail">Point de rupture : ${kind} échoue à ${failN.toLocaleString('fr-FR')} lignes.</b><br>`
+      + (lastOk ? `✔ Jusqu'à <b>${lastOk.toLocaleString('fr-FR')} lignes × 40 colonnes</b>, tout passe sur votre machine. ` : '')
+      + (opfs
+          ? 'Vous êtes déjà en mode OPFS ; ce plafond est celui de la mémoire de travail du navigateur (~4 Go, WASM 32 bits) que le débordement ne couvre pas pour cette opération. La version bureau (DuckDB natif) le lèverait.'
+          : 'Vous êtes en mode fichier local (file://), sans débordement disque. <b>Ouvrez cette page via http://localhost</b> et relancez : l\'OPFS devrait repousser nettement ce plafond.');
+  }
+  const el = $('verdict'); el.innerHTML = v; el.style.display = 'block';
+}
+
+// ---- Test du vrai fichier de l'utilisateur (vue lue à la demande, comme dans l'app) ----
+async function runRealFile(file) {
+  $('run').disabled = true; $('realFile').disabled = true;
+  sizeHeader('Fichier : ' + file.name + ' (' + (file.size / 1048576).toFixed(0) + ' Mo)');
+  const { db, conn } = await window.__benchDB;
+  const vn = 'realsrc'; const tn = 'real';
+  try { if (db.dropFile) await db.dropFile(vn); } catch (e) {}
+  try { await conn.query('DROP TABLE IF EXISTS ' + tn); await conn.query('DROP VIEW IF EXISTS ' + tn); } catch (e) {}
+  await db.registerFileHandle(vn, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+  const threshold = window.__duckdbOpfs ? 400 * 1024 * 1024 : 40 * 1024 * 1024;
+  const asView = file.size > threshold;
+  const readExpr = `SELECT row_number() OVER () AS __rn, * FROM read_csv_auto('${vn}', header=true, all_varchar=true)`;
+  let r = await timed(() => conn.query(`CREATE ${asView ? 'VIEW' : 'TABLE'} ${tn} AS ${readExpr}`));
+  row(`Chargement (${asView ? 'vue à la demande' : 'matérialisé'})`, null, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+  if (!r.ok) { log('✗ Chargement impossible : ' + r.err); $('run').disabled = false; $('realFile').disabled = false; return; }
+  let n = null, cols = [];
+  try { n = Number((await conn.query('SELECT COUNT(*) c FROM ' + tn)).toArray()[0].c); } catch (e) {}
+  try { cols = (await conn.query(`SELECT column_name FROM information_schema.columns WHERE table_name='${tn}' AND column_name<>'__rn' ORDER BY ordinal_position`)).toArray().map(x => x.column_name); } catch (e) {}
+  row('Balayage complet (COUNT)', n, r.ms, null, true, `${n != null ? n.toLocaleString('fr-FR') + ' lignes, ' + cols.length + ' colonnes' : ''}`);
+  await yield_();
+  if (cols.length) {
+    const c0 = '"' + cols[0] + '"';
+    r = await timed(() => runNoSpill(conn, () => conn.query(`SELECT COUNT(*) FROM (SELECT ${c0} FROM ${tn} GROUP BY ${c0}) q`)));
+    row('Regroupement sur ' + cols[0], n, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    await yield_();
+    const c3 = cols.slice(0, 3).map(x => '"' + x + '"').join(', ');
+    r = await timed(() => runNoSpill(conn, () => conn.query(`SELECT COUNT(*) FROM (SELECT DISTINCT ${c3} FROM ${tn}) q`)));
+    row('Dé-doublonnage (3 premières colonnes)', n, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+    await yield_();
+  }
+  r = await timed(() => runNoSpill(conn, async () => {
+    try { if (db.dropFile) await db.dropFile('real.parquet'); } catch (e) {}
+    await conn.query(`COPY (SELECT * FROM ${tn}) TO 'real.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)`);
+    const buf = (await db.copyFileToBuffer('real.parquet')).slice();
+    try { if (db.dropFile) await db.dropFile('real.parquet'); } catch (e) {}
+    return buf.byteLength;
+  }));
+  row('Optimisation Parquet' + (r.ok ? ` (${(r.extra / 1048576).toFixed(0)} Mo)` : ''), n, r.ms, await memMB(conn), r.ok, r.ok ? null : shortErr(r.err));
+  const el = $('verdict');
+  el.innerHTML = r.ok
+    ? `<b class="ok2">✔ Votre fichier « ${file.name} » se charge et s'analyse.</b> Une fois optimisé en Parquet, les analyses seront plus rapides et plus légères.`
+    : `<b class="fail">Une opération a échoué sur votre fichier.</b> ${window.__duckdbOpfs ? 'Plafond mémoire du navigateur.' : 'Passez en http://localhost (OPFS) et réessayez.'}`;
+  el.style.display = 'block';
+  try { await conn.query('DROP TABLE IF EXISTS ' + tn); await conn.query('DROP VIEW IF EXISTS ' + tn); } catch (e) {}
+  $('run').disabled = false; $('realFile').disabled = false;
+}
+
+// ---- Démarrage ----
+window.__benchDB = initDuckDB();
+(async () => {
+  let env;
+  try { env = await window.__benchDB; } catch (e) {}
+  const opfs = window.__duckdbOpfs;
+  const proto = location.protocol;
+  const dm = navigator.deviceMemory ? navigator.deviceMemory + ' Go' : 'inconnue';
+  const cores = navigator.hardwareConcurrency || '?';
+  $('env').innerHTML = [
+    `Contexte : <b class="${proto === 'file:' ? 'warn' : 'ok'}">${proto === 'file:' ? 'fichier local (file://)' : proto.replace(':', '')}</b>`,
+    `Stockage disque (OPFS) : <b class="${opfs ? 'ok' : 'warn'}">${opfs ? 'ACTIF (débordement possible)' : 'inactif (tout en mémoire)'}</b>`,
+    `Limite mémoire moteur : <b>${window.__duckMemLimit || '?'}</b>`,
+    `RAM déclarée par le navigateur : <b>${dm}</b>`,
+    `Cœurs logiques : <b>${cores}</b>`,
+    `Moteur : <b>DuckDB-Wasm 1.29.0</b> (mono-thread)`
+  ].join('');
+  if (!env || env.error) { $('env').innerHTML += '<div class="warn">⚠ Échec du chargement du moteur (vérifiez la connexion internet).</div>'; return; }
+  $('run').disabled = false; $('realFile').disabled = false;
+  log('Moteur prêt. ' + (opfs ? 'Mode OPFS (disque).' : 'Mode mémoire (file://).'));
+})();
+
+$('run').addEventListener('click', () => runSuite().catch(e => log('Erreur : ' + e.message)));
+$('stop').addEventListener('click', () => { stopFlag = true; log('Arrêt demandé…'); });
+$('realFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) runRealFile(f).catch(er => log('Erreur : ' + er.message)); });
+</script>
+</body>
+</html>
