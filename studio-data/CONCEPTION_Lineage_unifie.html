@@ -3,186 +3,158 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Studio Data — Conception : Lineage & santé unifié (proposition)</title>
+<title>Studio Data — Conception FINALE : Lineage & santé (modèle table-centré)</title>
 <style>
   :root{--ink:#0f172a;--muted:#475569;--faint:#64748b;--line:#e2e8f0;--bg:#f8fafc;--panel:#fff;--brand:#4f46e5;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;}
   *{box-sizing:border-box}
   body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg);margin:0;line-height:1.6;font-size:15px}
   .wrap{max-width:900px;margin:0 auto;padding:32px 22px 90px}
-  h1{font-size:25px;margin:0 0 4px}.lead{color:var(--muted);margin:0 0 22px}
+  h1{font-size:25px;margin:0 0 4px}.lead{color:var(--muted);margin:0 0 18px}
+  .status{display:inline-block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;background:#dcfce7;color:#166534;border:1px solid #a7f3d0;border-radius:20px;padding:3px 12px;margin-bottom:16px}
   h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
   h3{font-size:15.5px;margin:18px 0 6px}
   p{margin:8px 0}
   code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
   .callout{border-left:4px solid var(--brand);background:#eef2ff;border-radius:0 9px 9px 0;padding:11px 15px;margin:14px 0;font-size:14px}
-  .callout.warn{border-color:var(--warn);background:#fffbeb}
   .callout.ok{border-color:var(--ok);background:#f0fdf4}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
   table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
   th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
   th{background:var(--bg);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint)}
   ol,ul{padding-left:22px}li{margin:5px 0}
   b{color:var(--ink)}
-  .pill{display:inline-block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:20px}
-  .p-sys{background:#fef3c7;color:#92400e}.p-ds{background:#e0e7ff;color:#3730a3}.p-obj{background:#dbeafe;color:#1e40af}.p-cons{background:#dcfce7;color:#166534}.p-app{background:#f1f5f9;color:#475569}
-  .q{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:0 9px 9px 0;padding:10px 14px;margin:10px 0;font-size:14px}
-  .mono{font-family:ui-monospace,Menlo,monospace}
+  .diag{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;white-space:pre;overflow-x:auto;line-height:1.45}
+  .done{color:var(--ok);font-weight:700}
   .toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 20px;margin:18px 0}
   .toc a{color:var(--brand);text-decoration:none}.toc ol{columns:2;column-gap:26px}
-  .diag{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;white-space:pre;overflow-x:auto;line-height:1.4}
   footer{margin-top:40px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
   @media print{body{background:#fff}.toc{display:none}table{box-shadow:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>🧭 Conception — « Lineage &amp; santé » unifié</h1>
-  <p class="lead">Proposition de remaniement pour lever les incohérences : <b>dériver</b> le graphe de la gouvernance
-  existante plutôt que le re-saisir, et distinguer clairement <b>système</b>, <b>jeu de données</b> et <b>objet métier</b>.
-  Document de cadrage — à valider avant tout développement.</p>
+  <h1>🧭 Conception FINALE — « Lineage &amp; santé » (modèle table‑centré)</h1>
+  <div class="status">✔ Modèle validé — prêt pour le lot 1</div>
+  <p class="lead">Version issue de la discussion de conception. Objectif : <b>moins de concepts</b>, une carte
+  <b>dérivée</b> des données réelles, et une santé (fraîcheur + distorsion) mesurée là où elle a un sens.</p>
 
   <div class="toc"><b>Sommaire</b>
     <ol>
-      <li><a href="#constat">Le constat</a></li>
-      <li><a href="#principes">Principes directeurs</a></li>
-      <li><a href="#modele">Modèle de données cible</a></li>
-      <li><a href="#derivation">Dérivation depuis la gouvernance</a></li>
-      <li><a href="#sante">Couche santé (mesure)</a></li>
-      <li><a href="#ecrans">Écrans &amp; UX</a></li>
+      <li><a href="#dec">Décisions verrouillées</a></li>
+      <li><a href="#modele">Le modèle (2 entités, 3 liens)</a></li>
+      <li><a href="#maitrise">Maîtrise &amp; écriture (dont conflits)</a></li>
+      <li><a href="#derivation">Dérivation depuis les données</a></li>
+      <li><a href="#sante">Ce qu'on mesure</a></li>
       <li><a href="#migration">Migration de l'existant</a></li>
       <li><a href="#lots">Lots de mise en œuvre</a></li>
-      <li><a href="#questions">Questions à trancher</a></li>
+      <li><a href="#reste">Le seul point encore ouvert</a></li>
     </ol>
   </div>
 
-  <h2 id="constat">1. Le constat</h2>
-  <p>Trois défauts de conception, identifiés à juste titre :</p>
-  <ol>
-    <li><b>Deux lineages qui s'ignorent.</b> L'onglet « Lineage » (dérivé : attributs, objets, usage) et le nouvel écran
-      « Lineage &amp; santé » (saisi à la main) coexistent sans se parler.</li>
-    <li><b>Re-saisie inutile.</b> L'app connaît déjà les flux (rôles des sources d'un objet, usage des applications,
-      consolidation des tables conçues, relations du modèle) — les redéclarer manuellement est redondant et source d'erreurs.</li>
-    <li><b>Confusion système / source / objet.</b> Un « nœud » = un système <i>avec une source chargée collée dessus</i>,
-      ce qui laisse croire que le nœud <b>est</b> la source. Or la source chargée n'est qu'un <b>point de mesure</b> ; la
-      vraie origine d'un flux est le <b>système</b> amont, et un objet <b>alimenté</b> est une <b>cible</b>, pas une source.</li>
-  </ol>
+  <h2 id="dec">1. Décisions verrouillées</h2>
+  <table>
+    <tr><th>Sujet</th><th>Décision</th></tr>
+    <tr><td>Entité de première classe</td><td><b>La table</b> (source chargée ou table conçue) — seule chose concrète, chargeable et mesurable.</td></tr>
+    <tr><td>Système amont</td><td>Simple <b>métadonnée <code>origine</code></b> sur la table (étiquette), <b>pas un nœud</b> à gérer.</td></tr>
+    <tr><td>Application / processus</td><td>Reste un <b>concept</b> qui <b>utilise</b> des tables/attributs (mécanisme d'usage existant), <b>pas</b> une table.</td></tr>
+    <tr><td>Objet métier</td><td>Une <b>vue</b> (regroupement de colonnes de tables), pas un nœud du flux.</td></tr>
+    <tr><td>Type de lien (alimente/consolide)</td><td><b>Déduit</b> : « alimente » par défaut ; « consolidation » = table à <b>≥ 2 entrants</b> (calculé). Fini le choix manuel.</td></tr>
+    <tr><td>Rôle (maître/référentiel/…)</td><td><b>Déduit</b> de la position (pas d'entrant = source ; ≥ 2 entrants = référentiel ; pas de sortant = terminal).</td></tr>
+    <tr><td>Table de réception d'une appli</td><td>Uniquement si copie <b>susceptible de diverger</b> → on la charge comme <b>table</b>. Sinon, simple <b>usage</b> (lecture).</td></tr>
+    <tr><td>Deux applis écrivant le même attribut</td><td>Par périmètre → <b>maîtrise contextuelle</b> (existe déjà). Chevauchement → <b>on laisse faire + ALERTE de conflit</b> (choix par défaut retenu).</td></tr>
+    <tr><td>Synchronisation</td><td><b>Bouton manuel</b> « Synchroniser depuis les données » (prévisible).</td></tr>
+    <tr><td>Nommage des nœuds</td><td>Nom de la <b>table</b>, avec <code>origine</code> en sous‑titre.</td></tr>
+  </table>
 
-  <h2 id="principes">2. Principes directeurs</h2>
+  <h2 id="modele">2. Le modèle — 2 entités, 3 liens</h2>
+  <h3>Entités</h3>
+  <table>
+    <tr><th>Entité</th><th>Ce que c'est</th><th>Champs clés</th></tr>
+    <tr><td><b>Table</b></td><td>Donnée concrète (source chargée ou table conçue). Le seul objet <b>mesurable</b>.</td><td><code>origine</code> (système amont, texte) · <code>domaine</code> · fréquence (dictionnaire)</td></tr>
+    <tr><td><b>Application / Processus</b></td><td>Concept qui <b>lit</b> et/ou <b>écrit</b> des tables/attributs (usage existant).</td><td>nom · domaine · criticité · liens d'usage</td></tr>
+  </table>
+  <p><b>Objet métier</b> = vue (groupement de colonnes de tables). <b>Système</b> = étiquette <code>origine</code>.</p>
+  <h3>Liens</h3>
+  <table>
+    <tr><th>Lien</th><th>Entre</th><th>Ce qu'on mesure</th></tr>
+    <tr><td><b>alimente</b></td><td>table → table</td><td>fraîcheur <b>+ distorsion</b> (réconciliation, attribut par attribut)</td></tr>
+    <tr><td><b>lit</b></td><td>application → table / attribut</td><td>fraîcheur <b>héritée</b> + analyse d'impact (pas de distorsion : la donnée EST celle de la table)</td></tr>
+    <tr><td><b>écrit</b></td><td>application → attribut de table</td><td>maîtrise ; si &gt;1 écrivain : partage par condition, ou <b>conflit</b> (voir §3)</td></tr>
+  </table>
+  <div class="diag">Exemple (tout est table ; l'appli n'est pas une table) :
+
+   [CRM]                 [KADOR]
+     │origine              │origine
+     ▼                     ▼
+  ctC360.csv ─alimente─▶ Contrat (conçue) ─lit─▶ (Appli) BI Ventes
+  AVENANT.csv ─alimente─▶   (≥2 entrants        └─lit─▶ (Appli) Facturation
+  ADRESSE.csv ─alimente─▶    = consolidation)
+
+   • Santé/distorsion : sur les arêtes « alimente » (table→table).
+   • « lit » : les applis consomment — fraîcheur héritée + impact, pas de distorsion.</div>
+
+  <h2 id="maitrise">3. Maîtrise &amp; écriture (le cas « deux applis modifient le même attribut »)</h2>
+  <p>Principe : <b>un attribut = un maître pour une ligne donnée</b>. « Deux applis écrivent le même attribut » se
+  résout ainsi :</p>
+  <table>
+    <tr><th>Situation sur l'attribut</th><th>Modélisation</th><th>Santé / signal</th></tr>
+    <tr><td>1 seul « écrit »</td><td>maître unique</td><td>référence de la réconciliation</td></tr>
+    <tr><td>≥2 « écrit », <b>conditions disjointes</b> (ex. type=ASSURANCE / type=MAINTENANCE)</td><td><b>maîtrise contextuelle</b> (déjà dans l'app) : 1 maître par ligne</td><td>pas de conflit</td></tr>
+    <tr><td>≥2 « écrit », <b>chevauchement / sans condition</b></td><td>autorisé, mais <b>ALERTE « conflit de maîtrise »</b> ; arbitrage optionnel (priorité / dernière écriture / par champ)</td><td><b>divergence entre écrivains</b> mesurée (« les 2 maîtres divergent sur X % »)</td></tr>
+  </table>
+  <div class="callout warn"><b>Comportement par défaut retenu :</b> on <b>ne bloque pas</b> la déclaration d'un 2ᵉ écrivain ;
+  on lève une <b>alerte</b> de conflit et on propose de la lever soit par une <b>condition</b> (partage de périmètre),
+  soit par une <b>règle d'arbitrage</b>. Le conflit devient un <b>indicateur de santé</b>, pas un blocage.</div>
+
+  <h2 id="derivation">4. Dérivation depuis les données (bouton « Synchroniser »)</h2>
+  <p>La carte se reconstruit à partir de ce que l'app connaît déjà :</p>
+  <table>
+    <tr><th>Source de vérité</th><th>Ce qui est dérivé</th></tr>
+    <tr><td><b>Tables conçues</b> (design.sources, <code>SOURCE_ORIGINE</code>)</td><td>arêtes <b>source → table conçue</b> (« alimente » ; ≥2 sources ⇒ badge consolidation)</td></tr>
+    <tr><td><b>Relations du modèle (MCD)</b> / clés étrangères</td><td>(option) arêtes table ↔ table</td></tr>
+    <tr><td><b>Applications &amp; processus</b> (usage : tables, colonnes, objets)</td><td>liens <b>« lit »</b> application → table/attribut</td></tr>
+    <tr><td><b>Objets métier</b> + rôles des sources</td><td>alimente la <b>vue objet</b> et les liens <b>« écrit »</b> (maître/contributeur) + maîtrise contextuelle</td></tr>
+    <tr><td><b>Champ <code>origine</code></b> des tables</td><td>étiquette « alimentée par &lt;système&gt; » (regroupement visuel, pas un nœud)</td></tr>
+  </table>
+  <p>À chaque synchro : le <b>dérivé</b> est recalculé ; les <b>réglages manuels</b> (points de mesure, clés, attributs
+  contrôlés, SLA, transformations, arbitrages, flux ajoutés) sont <b>préservés</b> (ré‑appariés par identité).</p>
+
+  <h2 id="sante">5. Ce qu'on mesure</h2>
   <ul>
-    <li><b>La carte se dérive, elle ne se saisit pas.</b> Le graphe est reconstruit depuis la gouvernance ; le manuel ne
-      sert qu'aux <b>ajustements</b> et aux flux non déclarés.</li>
-    <li><b>Identité ≠ mesure.</b> Un nœud a une <b>nature</b> et une <b>identité</b> (issue d'un objet, d'une application,
-      d'une table…). La <b>source chargée</b> est un <b>point de mesure</b> qu'on <b>rattache</b> à un nœud pour calculer
-      fraîcheur et distorsion — jamais l'identité du nœud.</li>
-    <li><b>Le manuel survit à la resynchronisation.</b> Les ajustements humains (points de mesure, clés, attributs
-      contrôlés, SLA, transformations, flux ajoutés) sont <b>préservés</b> quand on régénère la carte.</li>
-    <li><b>100 % local, sans perte.</b> Aucune régression ; migration transparente de l'existant.</li>
+    <li><b>Fraîcheur</b> : sur une table (retard vs fréquence du dictionnaire). Une application <b>hérite</b> de la
+      fraîcheur des tables qu'elle lit.</li>
+    <li><b>Distorsion (réconciliation)</b> : uniquement sur les arêtes <b>« alimente » table → table</b> dont les deux
+      bouts sont des tables réelles, <b>clé par clé</b> et <b>attribut par attribut</b> (déjà en place en v5.2).</li>
+    <li><b>Conflit de maîtrise</b> : divergence entre deux écrivains d'un même attribut (nouveau, §3).</li>
+    <li><b>Impact</b> : si une table change, quelles applications (via « lit ») et quelles tables aval sont touchées.</li>
   </ul>
 
-  <h2 id="modele">3. Modèle de données cible</h2>
-  <h3>3.1 Nœuds — natures explicites</h3>
-  <table>
-    <tr><th>Nature</th><th>Exemple</th><th>Vient de</th><th>Peut porter un point de mesure ?</th></tr>
-    <tr><td><span class="pill p-sys">Système</span> / <span class="pill p-app">Application</span></td><td>CRM, KADOR, BI Ventes</td><td>Applications &amp; processus (assets), ou saisi</td><td>Oui (le jeu de données qu'il produit/consomme)</td></tr>
-    <tr><td><span class="pill p-ds">Jeu de données</span></td><td><span class="mono">ctC360.csv</span></td><td>Source chargée</td><td>Oui (c'est lui-même le point de mesure)</td></tr>
-    <tr><td><span class="pill p-obj">Objet métier</span></td><td>Client, Contrat</td><td>Objets métier</td><td>Via sa source maître</td></tr>
-    <tr><td><span class="pill p-cons">Table consolidée</span></td><td>Contrat (table conçue)</td><td>Tables conçues</td><td>Oui (la table conçue matérialisée)</td></tr>
-  </table>
-  <p class="diag">node = {
-  id, kind: 'system'|'dataset'|'object'|'consolidated',
-  name, domain,
-  ref: { type:'asset'|'table'|'bo'|'designed', id },   // d'où il est dérivé (null si manuel)
-  measure: { tableName } | null,                        // POINT DE MESURE rattaché (source chargée)
-  origin: 'derived' | 'manual',
-  x?, y?                                                // position mémorisée (facultatif)
-}</p>
-
-  <h3>3.2 Arêtes — flux orientés</h3>
-  <table>
-    <tr><th>Champ</th><th>Rôle</th></tr>
-    <tr><td><span class="mono">source / target</span></td><td>nœuds reliés (orientés amont → aval)</td></tr>
-    <tr><td><span class="mono">type</span></td><td>alimente · consolide · transforme · lit</td></tr>
-    <tr><td><span class="mono">origin</span></td><td><b>derived</b> (recalculée à chaque synchro) ou <b>manual</b> (conservée)</td></tr>
-    <tr><td><span class="mono">key</span> / <span class="mono">attrPairs</span></td><td>clé (par côté) + attributs contrôlés (par côté, avec transformation) — <b>couche santé</b>, saisie humaine, préservée</td></tr>
-    <tr><td><span class="mono">slaHours, transformation</span></td><td>SLA de fraîcheur, règle documentaire — préservés</td></tr>
-    <tr><td><span class="mono">lastRun</span></td><td>dernier contrôle (distorsion par attribut + globale)</td></tr>
-  </table>
-  <div class="callout"><b>Clé de voûte :</b> une arête <b>dérivée</b> décrit le flux (structure) ; ses <b>réglages de santé</b>
-  (clé, attributs, SLA…) sont une <b>surcouche manuelle</b> rattachée par identité <span class="mono">(source, target)</span>.
-  Ainsi « Synchroniser » recalcule la structure <b>sans effacer</b> les réglages de contrôle.</div>
-
-  <h2 id="derivation">4. Dérivation depuis la gouvernance</h2>
-  <p>Un moteur <b>« Synchroniser depuis la gouvernance »</b> (re)construit nœuds &amp; arêtes dérivés à partir de :</p>
-  <table>
-    <tr><th>Source de vérité</th><th>Nœuds créés</th><th>Arêtes créées</th></tr>
-    <tr><td><b>Objets métier</b> + rôles des sources</td><td>l'objet (<span class="pill p-obj">objet</span>) ; chaque source (<span class="pill p-ds">jeu de données</span>)</td><td>maître → objet (<i>consolide</i>) · contributeur → objet (<i>alimente</i>) · objet → destinataire (<i>lit</i>)</td></tr>
-    <tr><td><b>Tables conçues</b> (design.sources, <span class="mono">SOURCE_ORIGINE</span>)</td><td>la table conçue (<span class="pill p-cons">consolidée</span>) ; ses sources</td><td>chaque source → table conçue (<i>consolide</i>)</td></tr>
-    <tr><td><b>Applications &amp; processus</b> (usage : tables, colonnes, objets)</td><td>l'application (<span class="pill p-app">application</span>)</td><td>table/objet → application (<i>lit</i>)</td></tr>
-    <tr><td><b>Relations du modèle (MCD)</b>, clés étrangères</td><td>—</td><td>(option) table ↔ table (<i>lit / jointure</i>)</td></tr>
-  </table>
-  <p>À chaque synchro : les arêtes/nœuds <span class="mono">origin:'derived'</span> sont <b>remplacés</b> ; les
-  <span class="mono">origin:'manual'</span> et tous les <b>réglages de santé</b> rattachés sont <b>conservés</b> (ré-appariés
-  par identité). Rien de ce que tu as réglé à la main n'est perdu.</p>
-  <div class="diag">Exemple dérivé automatiquement :
-
-  ctC360.csv ──consolide──▶  ⟦ Contrat ⟧ ──lit──▶  BI Ventes
-  AVENANT.csv ─alimente──▶      (objet)   ──lit──▶  Facturation
-  ADRESSE.csv ─alimente──▶                ──lit──▶  Data Lake
-
-  (les « points de mesure » = les .csv chargés ; la fraîcheur/distorsion se
-   calcule là où deux jeux de données réels encadrent une arête)</div>
-
-  <h2 id="sante">5. Couche santé (mesure)</h2>
+  <h2 id="migration">6. Migration de l'existant (sans perte)</h2>
   <ul>
-    <li><b>Fraîcheur</b> : rattachée à un nœud portant un point de mesure (jeu de données chargé) → retard vs fréquence
-      attendue du dictionnaire (SLA). Rien de neuf, mais clairement « au niveau du point de mesure ».</li>
-    <li><b>Réconciliation (distorsion)</b> : sur une arête <b>dont les deux extrémités ont un point de mesure</b> — on
-      compare le jeu de données amont (transformé par la règle rejouable) au jeu aval, <b>clé par clé</b> et
-      <b>attribut par attribut</b> (déjà en place en v5.2).</li>
-    <li><b>Contrainte assumée :</b> la <i>carte</i> est 100 % dérivable ; les <i>contrôles</i> exigent des données réelles
-      chargées aux deux bouts. Là où il manque un point de mesure, on affiche « non mesurable » (mais le flux reste visible).</li>
+    <li>Nœuds actuels (avec <code>tableName</code>) → deviennent des nœuds <b>table</b> ; l'ancien champ « rôle » saisi
+      devient un simple point de départ, désormais <b>déduit</b>.</li>
+    <li>Arêtes actuelles (clé par côté, <code>attrPairs</code>, SLA, transformation, <code>lastRun</code>) → conservées
+      en tant qu'arêtes <b>« alimente » manuelles</b>.</li>
+    <li>Le champ <code>flow</code> évolue de façon <b>rétro‑compatible</b> (comme on l'a fait pour <code>attrPairs</code>).</li>
+    <li>1ʳᵉ « Synchronisation » : le dérivé <b>complète</b> (n'écrase pas) ; doublons fusionnés par identité.</li>
   </ul>
 
-  <h2 id="ecrans">6. Écrans &amp; UX</h2>
-  <p>Deux options — à trancher (voir §9) :</p>
+  <h2 id="lots">7. Lots de mise en œuvre</h2>
   <table>
-    <tr><th>Option</th><th>Description</th><th>Avantage / coût</th></tr>
-    <tr><td><b>A. Fusion</b></td><td>Un seul écran « Lineage » : couche <b>structure</b> (carte dérivée) + couche <b>santé</b> (fraîcheur/distorsion) activable ; l'ancien onglet attribut reste une vue.</td><td>+ cohérent, une seule vérité · − plus gros chantier</td></tr>
-    <tr><td><b>B. Deux écrans, mais reliés</b></td><td>On garde « Lineage » et « Lineage &amp; santé », mais ce dernier <b>dérive</b> désormais du même modèle (bouton Synchroniser).</td><td>+ rapide, peu de risque · − deux entrées dans le menu</td></tr>
+    <tr><th>Lot</th><th>Contenu</th><th>Résultat</th></tr>
+    <tr><td><b>1</b></td><td>Modèle table‑centré : nœud = table + <code>origine</code> ; type de lien &amp; rôle <b>déduits</b> ; migration rétro‑compatible. (La santé table→table existante continue de marcher.)</td><td>Base saine, moins de champs à saisir</td></tr>
+    <tr><td><b>2</b></td><td>Bouton <b>« Synchroniser depuis les données »</b> : tables conçues (<code>SOURCE_ORIGINE</code>) + relations. Préservation du manuel.</td><td>Fin de la re‑saisie de la carte</td></tr>
+    <tr><td><b>3</b></td><td>Couche <b>application</b> : liens « lit » (usage existant) + fraîcheur héritée + impact ; liens <b>« écrit »</b> + maîtrise contextuelle + <b>détection de conflits</b> (§3).</td><td>Applications &amp; maîtrise cohérentes</td></tr>
+    <tr><td><b>4</b> (option)</td><td>Fusion avec l'onglet « Lineage » existant (un seul écran).</td><td>Une seule vérité</td></tr>
   </table>
-  <p>Dans les deux cas, l'écran propose : <b>Synchroniser depuis la gouvernance</b>, bascule <b>Systèmes / Jeux de données /
-  Objets</b> (granularité), fiche nœud (nature, provenance, point de mesure, fraîcheur, impact), fiche arête (flux,
-  transformation, santé attribut par attribut, export), et le <b>bandeau de synthèse</b> + <b>journal</b> déjà en place.</p>
+  <p>Chaque lot : implémenté → testé (Playwright + DuckDB réel) → livré, sans régression.</p>
 
-  <h2 id="migration">7. Migration de l'existant (sans perte)</h2>
-  <ul>
-    <li>Les nœuds actuels (avec <span class="mono">tableName</span>) → deviennent des nœuds <span class="pill p-ds">jeu de données</span>
-      (ou <span class="pill p-sys">système</span> avec point de mesure), <span class="mono">origin:'manual'</span>.</li>
-    <li>Les arêtes actuelles (clé par côté, <span class="mono">attrPairs</span>, SLA, transformation, <span class="mono">lastRun</span>)
-      → conservées telles quelles en <span class="mono">origin:'manual'</span>.</li>
-    <li>À la 1<sup>re</sup> « Synchronisation », les flux dérivés viennent <b>compléter</b> (pas écraser) ce qui existe ;
-      les doublons évidents sont fusionnés par identité.</li>
-    <li>Le modèle <span class="mono">state.governance.flow</span> évolue de façon <b>rétro-compatible</b> (comme on l'a déjà fait pour
-      <span class="mono">attrPairs</span>).</li>
-  </ul>
+  <h2 id="reste">8. Le seul point encore ouvert</h2>
+  <div class="callout"><b>Écrans (Q1).</b> Un <b>seul</b> onglet « Lineage » (structure + santé en couches) — le plus cohérent — ou
+  on <b>garde deux onglets</b> mais reliés au même modèle (plus rapide, moins de risque) ? Non bloquant pour le lot 1 :
+  on peut le trancher au lot 4. Tout le reste est verrouillé.</div>
 
-  <h2 id="lots">8. Lots de mise en œuvre (proposés)</h2>
-  <table>
-    <tr><th>Lot</th><th>Contenu</th><th>Valeur</th></tr>
-    <tr><td><b>1</b></td><td>Natures de nœud explicites + point de mesure séparé + migration rétro-compatible (aucun changement de comportement, juste la clarté du modèle).</td><td>Base saine</td></tr>
-    <tr><td><b>2</b></td><td>Moteur « Synchroniser depuis la gouvernance » : objets métier (rôles) + tables conçues (SOURCE_ORIGINE). Préservation du manuel.</td><td>Fin de la re-saisie</td></tr>
-    <tr><td><b>3</b></td><td>Applications &amp; usages (consommateurs aval) + relations MCD (option). Bascule de granularité.</td><td>Carte complète</td></tr>
-    <tr><td><b>4</b></td><td>Fusion éventuelle avec l'onglet « Lineage » (si option A retenue).</td><td>Une seule vérité</td></tr>
-  </table>
-  <p>Chaque lot : implémenté → testé (Playwright + DuckDB réel) → livré, comme d'habitude, sans régression.</p>
-
-  <h2 id="questions">9. Questions à trancher</h2>
-  <div class="q"><b>Q1 — Écrans.</b> Fusion en un seul onglet « Lineage » (option A) ou deux écrans reliés (option B) ?</div>
-  <div class="q"><b>Q2 — Granularité par défaut.</b> Afficher d'abord au niveau <b>système/application</b>, <b>jeu de données</b>, ou <b>objet métier</b> ?</div>
-  <div class="q"><b>Q3 — Consommateurs.</b> Représenter les applications aval dès le lot 2, ou plus tard (lot 3) ?</div>
-  <div class="q"><b>Q4 — Nommage des nœuds dérivés.</b> Nom de l'objet, du système, ou du fichier source ? (proposition : nom métier de l'entité dérivée, avec le fichier comme sous-titre.)</div>
-  <div class="q"><b>Q5 — Synchro.</b> Manuelle (bouton) uniquement, ou aussi automatique à chaque changement de gouvernance ? (proposition : bouton, pour rester prévisible.)</div>
-
-  <footer>Studio Data — document de conception « Lineage &amp; santé unifié ». Rien n'est encore implémenté ; en attente de tes arbitrages (§9) pour démarrer le lot 1.</footer>
+  <footer>Studio Data — conception « Lineage &amp; santé » (modèle table‑centré, validé). Prêt à démarrer le lot 1 sur cette base.</footer>
 </div>
 </body>
 </html>
