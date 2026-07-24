@@ -4832,7 +4832,7 @@
 
             let html = `<div class="flex items-center gap-3 mb-1 flex-wrap">
                 <h3 class="text-base font-black text-slate-800">🕸️ Lineage &amp; santé du flux</h3>
-                <span class="text-xs text-slate-500">La carte du flux (maître → référentiel → consommateurs), enrichie de la fraîcheur et de la distorsion mesurées sur les données réelles.</span>
+                <span class="text-xs text-slate-500">La carte du flux (maître → référentiel → consommateurs), enrichie de la fraîcheur et de la distorsion mesurées. Elle lit <b>les mêmes données</b> que « Bout en bout » (resynchronisée à l'ouverture) ; ici, centrée sur les <b>tables &amp; applications mesurables</b>.</span>
                 <div class="ml-auto flex items-center gap-2">
                     <div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">
                         <button onclick="lfSetView('systems')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-slate-800 text-white'}">Vue systèmes</button>
@@ -6303,6 +6303,10 @@
         // Ouvre un sous-onglet Gouvernance depuis la barre de navigation commune.
         function openGovTab(g) {
             govState.tab = g;
+            // À l'ouverture du Lineage, la carte « Vue systèmes » est resynchronisée en silence avec les
+            // données (tables conçues + applications) — comme la vue « Bout en bout » l'est en direct —
+            // pour que les deux vues reflètent toujours les mêmes faits. Réglages manuels préservés.
+            if (g === 'flow' || g === 'lineage') { try { lfSyncFromData({ silent: true }); } catch (e) { } }
             if (currentTab !== 9) switchTab(9); // switchTab rend la gouvernance + la nav
             else { renderGovernance(); renderNav(); }
         }
@@ -9186,8 +9190,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.9.0';
+        const APP_VERSION = '5.9.1';
         const APP_CHANGELOG = [
+            { v: '5.9.1', d: '2026-07-24', t: 'Lineage : la « Vue systèmes » est resynchronisée à l\'ouverture (cohérence avec « Bout en bout »)', items: [
+                'La carte « Vue systèmes/attributs » et le graphe « Bout en bout » lisaient deux sources différentes : le premier n\'était à jour qu\'après un clic sur « Synchroniser », le second se dérive en direct — d\'où une impression de désynchronisation.',
+                'Désormais, ouvrir l\'onglet Lineage RESYNCHRONISE automatiquement la « Vue systèmes » avec vos données (tables conçues + applications), en silence et en préservant vos réglages manuels : les deux vues reflètent toujours les mêmes faits.',
+                'Rappel des rôles : « Vue systèmes » = carte centrée sur les tables & applications MESURABLES (fraîcheur, distorsion, conflits) ; « Bout en bout » = graphe complet incluant en plus les objets métier et les relations du modèle.'] },
             { v: '5.9.0', d: '2026-07-24', t: 'Lineage : la déclaration d\'usage pilote la carte (ajout ET retrait, mise à jour auto)', items: [
                 'La synchronisation RÉCONCILIE désormais les liens d\'usage dérivés : elle ajoute les nouveaux « lit »/« écrit » ET RETIRE ceux devenus obsolètes (table décochée sur l\'application). Une application dérivée qui n\'utilise plus rien est retirée. Vos liens ajoutés à la main et vos réglages (clés, attributs, contrôles) restent préservés.',
                 'MISE À JOUR AUTOMATIQUE : dans « Applis & processus », cocher/décocher une table ou lier/délier une colonne d\'une application DÉJÀ présente sur le lineage met la carte à jour immédiatement — plus besoin de repasser par le bouton « Synchroniser ».',
