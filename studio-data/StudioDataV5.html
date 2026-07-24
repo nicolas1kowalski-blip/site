@@ -4903,13 +4903,14 @@
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.usage};display:inline-block;background-image:linear-gradient(90deg,${LF_COLOR.usage} 60%,transparent 0);background-size:8px 3px"></span> <b class="text-slate-700">Usage</b> — 🖥 application lit / écrit</span>
                 <span class="ml-auto">💡 <b>Glissez</b> les nœuds pour les repositionner · <b>cliquez</b> un nœud ou une étiquette de lien pour le détail.</span>
             </div>`;
-            // -- bandeau conflits de maîtrise (lot 3) --
-            const _conf = lfMasteryConflicts();
-            if (_conf.length) {
-                html += `<div class="bg-red-50 border border-red-200 rounded-xl p-3 mb-2 text-xs">
-                    <div class="font-bold text-red-700 mb-1">⚠️ ${_conf.length} conflit(s) de maîtrise détecté(s)</div>
-                    <div class="text-red-600/90">Plusieurs sources « maître » écrivent le même objet <b>sans conditions disjointes</b>. Séparez leurs périmètres par une <b>règle de maîtrise contextuelle</b> (onglet Objets métier) ou désignez un maître unique.</div>
-                    <ul class="mt-1.5 space-y-0.5">${_conf.map(c => `<li class="text-red-700">• <b>${escapeHTML(c.bo)}</b> : ${c.count} maîtres — ${c.tables.map(escapeHTML).join(', ')}</li>`).join('')}</ul>
+            // -- panneau « Cohérence du modèle » (R3) : maîtrise unifiée + contradictions --
+            const _chk = lfModelChecks();
+            if (_chk.length) {
+                const _err = _chk.filter(c => c.sev === 'error'), _wrn = _chk.filter(c => c.sev === 'warn');
+                const hasErr = _err.length > 0;
+                html += `<div class="rounded-xl p-3 mb-2 text-xs border ${hasErr ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}">
+                    <div class="font-bold ${hasErr ? 'text-red-700' : 'text-amber-700'} mb-1">🧩 Cohérence du modèle — ${_err.length} contradiction(s)${_wrn.length ? `, ${_wrn.length} point(s) à surveiller` : ''}</div>
+                    <ul class="space-y-0.5">${_err.map(c => `<li class="text-red-700">⛔ ${c.msg}</li>`).join('')}${_wrn.map(c => `<li class="text-amber-700">⚠ ${c.msg}</li>`).join('')}</ul>
                 </div>`;
             }
             // -- graphe --
@@ -5339,6 +5340,33 @@
                 const masters = (bo.sources || []).filter(s => s.role === 'maitre');
                 const hasCtx = ((bo.contextRules || {}).rules || []).length > 0;
                 if (masters.length >= 2 && !hasCtx) out.push({ bo: bo.name, tables: masters.map(s => s.table), count: masters.length });
+            });
+            return out;
+        }
+        // Cohérence du modèle (R3) : la MAÎTRISE est calculée d'UNE seule façon (l'application
+        // propriétaire d'une table) et on signale les contradictions entre déclarations.
+        function lfModelChecks() {
+            const m = lfModel(); const g = state.governance; const out = [];
+            const push = (sev, cat, msg) => out.push({ sev, cat, msg });
+            // 1. Une table avec ≥ 2 applications propriétaires (deux « maîtres » d'appartenance).
+            m.nodes.filter(n => lfNodeKind(n) === 'table').forEach(t => {
+                const owners = [...new Set(m.edges.filter(e => e.target === t.id && lfEdgeRel(e) === 'writes').map(e => e.source))].map(id => lfNode(id)).filter(a => a && lfNodeKind(a) === 'app');
+                if (owners.length >= 2) push('error', 'proprio', `<b>${escapeHTML(t.name)}</b> a ${owners.length} applications propriétaires (${owners.map(a => escapeHTML(a.name)).join(', ')}) — une table appartient à UNE application.`);
+            });
+            // 2. Objet métier à ≥ 2 sources « maître » sans conditions disjointes.
+            lfMasteryConflicts().forEach(c => push('error', 'maitrise', `Objet <b>${escapeHTML(c.bo)}</b> : ${c.count} sources « maître » sans conditions disjointes (${c.tables.map(escapeHTML).join(', ')}).`));
+            // 3. Correction sans périmètre vers une table qui a un propriétaire → risque de conflit.
+            m.edges.filter(e => lfEdgeRel(e) === 'feeds' && lfEdgeNature(e) === 'correction' && !String(e.scope || '').trim()).forEach(e => {
+                const t = lfNode(e.target); if (t && lfProducerOf(t.id)) push('warn', 'correction', `Correction sans périmètre vers <b>${escapeHTML(t.name)}</b> — précisez un périmètre pour éviter un conflit avec son propriétaire.`);
+            });
+            // 4. Objet métier sans aucune source « maître » désignée.
+            (g.businessObjects || []).forEach(bo => {
+                const masters = (bo.sources || []).filter(s => s.role === 'maitre'); const hasCtx = ((bo.contextRules || {}).rules || []).length > 0;
+                if ((bo.sources || []).length && !masters.length && !hasCtx) push('warn', 'objet', `Objet <b>${escapeHTML(bo.name)}</b> : aucune source « maître » désignée.`);
+            });
+            // 5. Table qui alimente en aval mais sans application propriétaire (origine) renseignée.
+            m.nodes.filter(n => lfNodeKind(n) === 'table' && n.tableName && !lfProducerOf(n.id) && m.edges.some(e => e.source === n.id && lfEdgeRel(e) === 'feeds')).forEach(t => {
+                push('warn', 'proprio', `<b>${escapeHTML(t.name)}</b> alimente d'autres tables mais n'a pas d'application propriétaire — renseignez son « Système source » (dictionnaire) ou son origine.`);
             });
             return out;
         }
@@ -9303,8 +9331,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.13.0';
+        const APP_VERSION = '5.14.0';
         const APP_CHANGELOG = [
+            { v: '5.14.0', d: '2026-07-24', t: 'Modèle clair (R3) : maîtrise unifiée + panneau « Cohérence du modèle »', items: [
+                'La maîtrise est désormais calculée d\'UNE seule façon (l\'application propriétaire d\'une table) et le lineage signale les CONTRADICTIONS entre déclarations dans un panneau « 🧩 Cohérence du modèle ».',
+                'Contradictions détectées (⛔) : une table avec deux applications propriétaires ; un objet métier à ≥ 2 sources « maître » sans conditions disjointes.',
+                'Points à surveiller (⚠) : une correction sans périmètre vers une table qui a un propriétaire ; un objet métier sans source « maître » désignée ; une table qui alimente en aval sans application propriétaire (origine) renseignée.',
+                'Ce panneau remplace l\'ancien bandeau de conflit de maîtrise et centralise toutes les incohérences structurelles à corriger.'] },
             { v: '5.13.0', d: '2026-07-24', t: 'Modèle clair (2/2) : le lien « alimente » enrichi (nature · périmètre · maîtrise)', items: [
                 'Chaque alimentation table→table porte désormais une NATURE : « Recopie » (copie à l\'identique), « Complément » (ajoute des colonnes) ou « Correction » (modifie des valeurs poussées par une autre source). La « Consolidation » reste déduite (cible à ≥ 2 sources).',
                 'Nouveau champ « Périmètre » sur un lien : le sous-ensemble alimenté (ex. « type = ASSURANCE ») — pour représenter les données qui viennent de sources différentes selon le périmètre. Affiché sur l\'étiquette (⛊) et la fiche du lien.',
