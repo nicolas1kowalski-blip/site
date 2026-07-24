@@ -4698,8 +4698,9 @@
         // ==========================================================================================
         const LF_ROLE = { master: { lbl: 'Maître', ic: '🗄', col: 0, badge: 'lf-r-master' },
                           reference: { lbl: 'Référentiel', ic: '🏛', col: 1, badge: 'lf-r-ref' },
-                          consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' } };
-        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture' };
+                          consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' },
+                          app: { lbl: 'Application', ic: '🖥', col: 2, badge: 'lf-r-app' } };
+        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit' };
         let lfView = 'systems';
         let lfEditNodeId = null, lfEditEdgeId = null;
         function lfEdgeKeys(e) { return { sK: e.srcKey || e.key || '', tK: e.tgtKey || e.key || '', sA: e.srcAttr || e.attr || '', tA: e.tgtAttr || e.attr || '' }; }
@@ -4718,16 +4719,29 @@
         // Modèle table-centré (v5.3.0) : le rôle et le type de lien ne sont plus saisis à la main,
         // ils sont DÉDUITS de la topologie. Un nœud sans alimentation entrante est « maître » ;
         // deux alimentations entrantes ou plus = « référentiel » (consolidation) ; sinon « consommateur ».
-        function lfIncomingCount(id) { return lfModel().edges.filter(e => e.target === id && e.source !== id).length; }
+        // Lot 3 : nature d'un lien (feeds = alimente table→table ; reads = lecture table→appli ;
+        // writes = écriture appli→table) et nature d'un nœud (table ou application).
+        function lfEdgeRel(e) { return e.rel || 'feeds'; }
+        function lfNodeKind(n) { return (n && n.kind) || 'table'; }
+        // Le rôle & la consolidation ne se déduisent que des ALIMENTATIONS (feeds) : les lectures
+        // et écritures d'applications ne comptent pas comme des sources d'une table.
+        function lfIncomingCount(id) { return lfModel().edges.filter(e => e.target === id && e.source !== id && lfEdgeRel(e) === 'feeds').length; }
         function lfDeduceRole(id) { const inc = lfIncomingCount(id); if (inc === 0) return 'master'; if (inc >= 2) return 'reference'; return 'consumer'; }
-        function lfNodeRole(n) { return n && n.id ? lfDeduceRole(n.id) : 'consumer'; }
-        function lfConsolidates(id) { return lfIncomingCount(id) >= 2; }
-        function lfDeduceEdgeType(e) { return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
+        function lfNodeRole(n) { if (!n) return 'consumer'; if (lfNodeKind(n) === 'app') return 'app'; return n.id ? lfDeduceRole(n.id) : 'consumer'; }
+        function lfConsolidates(id) { const n = lfNode(id); if (n && lfNodeKind(n) === 'app') return false; return lfIncomingCount(id) >= 2; }
+        function lfDeduceEdgeType(e) { const r = lfEdgeRel(e); if (r === 'reads') return 'reads'; if (r === 'writes') return 'writes'; return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
         function lfEdgeTypeLabel(e) { return LF_EDGE_TYPES[lfDeduceEdgeType(e)]; }
         function lfIcon(n) { return n.icon || (LF_ROLE[lfNodeRole(n)] || LF_ROLE.consumer).ic; }
         function lfAge(days) { if (days == null) return '—'; return days < 1 ? Math.round(days * 24) + ' h' : (days < 60 ? Math.round(days) + ' j' : Math.round(days / 30) + ' mois'); }
         // Fraîcheur d'un nœud à partir de sa source liée (réutilise swFreshness/dictionnaire).
         function lfFresh(n) {
+            // Application : fraîcheur HÉRITÉE = la pire des tables qu'elle lit (« lit » = reads).
+            if (n && lfNodeKind(n) === 'app') {
+                const ins = lfModel().edges.filter(e => e.target === n.id && lfEdgeRel(e) === 'reads');
+                let worst = { status: 'none' };
+                ins.forEach(e => { const f = lfFresh(lfNode(e.source)); if (LF_RANK[f.status] > LF_RANK[worst.status]) worst = f; });
+                return worst.status === 'none' ? { status: 'none' } : { status: worst.status, ageDays: worst.ageDays, maxDays: worst.maxDays, freq: worst.freq, inherited: true, label: '⟳ ' + lfAge(worst.ageDays) + ' (hérité)' };
+            }
             const t = n && n.tableName ? tableByName(n.tableName) : null;
             if (!t) return { status: 'none' };
             const f = swFreshness(t);
@@ -4752,7 +4766,7 @@
             const w = lfWorst(fresh === 'none' ? 'none' : fresh, dist === 'none' ? 'none' : dist);
             return w === 'none' ? 'ok' : w; // sans mesure → présumé sain (neutre visuel)
         }
-        const LF_COLOR = { ok: '#16a34a', warn: '#d97706', bad: '#dc2626', none: '#94a3b8' };
+        const LF_COLOR = { ok: '#16a34a', warn: '#d97706', bad: '#dc2626', none: '#94a3b8', usage: '#7c3aed' };
 
         function lfInjectCss() {
             if (el('lfStyles')) return;
@@ -4765,11 +4779,12 @@
             .lf-node:hover{border-color:#059669;box-shadow:0 6px 18px rgba(5,150,105,.15)}
             .lf-node .lf-nh{display:flex;align-items:center;gap:9px}
             .lf-node .lf-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex-shrink:0}
-            .lf-i-master .lf-ic{background:#d97706}.lf-i-reference .lf-ic{background:#2563eb}.lf-i-consumer .lf-ic{background:#334155}
+            .lf-i-master .lf-ic{background:#d97706}.lf-i-reference .lf-ic{background:#2563eb}.lf-i-consumer .lf-ic{background:#334155}.lf-i-app .lf-ic{background:#7c3aed}
+            .lf-node.lf-kind-app{border-style:dashed;border-color:#c4b5fd;background:#faf5ff}.lf-node.lf-kind-app:hover{border-color:#7c3aed}
             .lf-node .lf-nm{font-weight:800;font-size:13px;line-height:1.15;color:#0f172a}
             .lf-node .lf-sc{font-size:10px;color:#94a3b8}
             .lf-role{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-top:6px}
-            .lf-r-master{background:#fef3c7;color:#92400e}.lf-r-ref{background:#dbeafe;color:#1e40af}.lf-r-cons{background:#f1f5f9;color:#475569}
+            .lf-r-master{background:#fef3c7;color:#92400e}.lf-r-ref{background:#dbeafe;color:#1e40af}.lf-r-cons{background:#f1f5f9;color:#475569}.lf-r-app{background:#ede9fe;color:#5b21b6}
             .lf-health{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
             .lf-hchip{font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
             .lf-h-ok{background:#dcfce7;color:#166534}.lf-h-warn{background:#fef3c7;color:#92400e}.lf-h-bad{background:#fee2e2;color:#991b1b}.lf-h-none{background:#f1f5f9;color:#64748b}
@@ -4779,6 +4794,7 @@
             .lf-echip.lf-e-ok{border-color:#a7f3d0;color:#166534;background:#f0fdf4}
             .lf-echip.lf-e-warn{border-color:#fde68a;color:#92400e;background:#fffbeb}
             .lf-echip.lf-e-bad{border-color:#fecaca;color:#991b1b;background:#fef2f2}
+            .lf-echip.lf-e-usage{border-color:#ddd6fe;color:#5b21b6;background:#faf5ff}
             .lf-echip .lf-dot{width:6px;height:6px;border-radius:50%}
             .lf-mism{display:flex;align-items:center;gap:9px;font-size:11.5px;padding:6px 0;border-bottom:1px solid #eef2f7}
             .lf-mism .lf-k{font-weight:700;min-width:96px}.lf-mism .lf-mv{color:#64748b}.lf-mism .lf-dv{color:#dc2626;font-weight:700;margin-left:auto}
@@ -4795,11 +4811,12 @@
             lfInjectCss();
             const m = lfModel(); const nodes = m.nodes, edges = m.edges;
             const tables = Object.values(state.tables).filter(t => t.status === 'ready');
-            // -- synthèse --
-            const measurableEdges = edges.filter(e => lfNode(e.target) && lfNode(e.target).tableName);
+            // -- synthèse (seules les ALIMENTATIONS table→table sont des « flux » mesurables) --
+            const feedEdges = edges.filter(e => lfEdgeRel(e) === 'feeds');
+            const measurableEdges = feedEdges.filter(e => lfNode(e.target) && lfNode(e.target).tableName);
             const slaOk = measurableEdges.filter(e => lfFresh(lfNode(e.target)).status === 'ok').length;
-            const distOver = edges.filter(e => lfDistStatus(e) === 'bad').length;
-            let worst = null; edges.forEach(e => { const f = lfFresh(lfNode(e.target)); if (f.status !== 'none' && f.ageDays != null && (!worst || f.ageDays > worst.age)) worst = { name: (lfNode(e.target) || {}).name, age: f.ageDays }; });
+            const distOver = feedEdges.filter(e => lfDistStatus(e) === 'bad').length;
+            let worst = null; feedEdges.forEach(e => { const f = lfFresh(lfNode(e.target)); if (f.status !== 'none' && f.ageDays != null && (!worst || f.ageDays > worst.age)) worst = { name: (lfNode(e.target) || {}).name, age: f.ageDays }; });
             const lastRunAt = edges.reduce((mx, e) => e.lastRun && e.lastRun.at && e.lastRun.at > mx ? e.lastRun.at : mx, 0);
             const tile = (cls, lbl, val) => `<div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm"><div class="text-[11px] text-slate-500 font-semibold">${lbl}</div><div class="text-xl font-black mt-0.5 ${cls}">${val}</div></div>`;
 
@@ -4826,8 +4843,18 @@
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.ok};display:inline-block"></span> <b class="text-slate-700">Sain</b> — frais &amp; cohérent</span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.warn};display:inline-block"></span> <b class="text-slate-700">À surveiller</b></span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.bad};display:inline-block"></span> <b class="text-slate-700">Alerte</b> — retard ou distorsion forte</span>
+                <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.usage};display:inline-block;background-image:linear-gradient(90deg,${LF_COLOR.usage} 60%,transparent 0);background-size:8px 3px"></span> <b class="text-slate-700">Usage</b> — 🖥 application lit / écrit</span>
                 <span class="ml-auto">💡 Cliquez un <b>nœud</b> ou une <b>étiquette de lien</b> pour le détail.</span>
             </div>`;
+            // -- bandeau conflits de maîtrise (lot 3) --
+            const _conf = lfMasteryConflicts();
+            if (_conf.length) {
+                html += `<div class="bg-red-50 border border-red-200 rounded-xl p-3 mb-2 text-xs">
+                    <div class="font-bold text-red-700 mb-1">⚠️ ${_conf.length} conflit(s) de maîtrise détecté(s)</div>
+                    <div class="text-red-600/90">Plusieurs sources « maître » écrivent le même objet <b>sans conditions disjointes</b>. Séparez leurs périmètres par une <b>règle de maîtrise contextuelle</b> (onglet Objets métier) ou désignez un maître unique.</div>
+                    <ul class="mt-1.5 space-y-0.5">${_conf.map(c => `<li class="text-red-700">• <b>${escapeHTML(c.bo)}</b> : ${c.count} maîtres — ${c.tables.map(escapeHTML).join(', ')}</li>`).join('')}</ul>
+                </div>`;
+            }
             // -- graphe --
             html += `<div id="lfCanvas"></div>`;
             // -- constructeur du flux --
@@ -4947,15 +4974,17 @@
             let paths = ''; const chips = [];
             edges.forEach(e => { const a = pos[e.source], b = pos[e.target]; if (!a || !b) return;
                 const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, mx = (x1 + x2) / 2;
-                const health = lfEdgeHealth(e), col = LF_COLOR[health];
-                const dash = health === 'ok' ? '' : ' stroke-dasharray="7 5"';
-                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${health})" opacity=".9"/>`;
+                const rel = lfEdgeRel(e); const isUsage = rel !== 'feeds';
+                const health = lfEdgeHealth(e); const col = isUsage ? LF_COLOR.usage : LF_COLOR[health];
+                const dash = (isUsage || health !== 'ok') ? ' stroke-dasharray="7 5"' : '';
+                const mk = isUsage ? 'usage' : health;
+                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${mk})" opacity=".9"/>`;
                 const fr = lfFresh(lfNode(e.target)); const lr = e.lastRun;
                 const _pairs = lfEdgePairs(e); const _ea = _pairs.length > 1 ? (_pairs.length + ' attributs') : ((_pairs[0] || {}).tgt || (_pairs[0] || {}).src || ''); const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || lfEdgeTypeLabel(e));
-                chips.push(`<div class="lf-echip lf-e-${health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${escapeHTML(lbl)}</div>`);
+                chips.push(`<div class="lf-echip lf-e-${isUsage ? 'usage' : health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${isUsage ? escapeHTML(lfEdgeTypeLabel(e)) + (fr.status !== 'none' ? ' · ⟳ ' + lfAge(fr.ageDays) : '') : escapeHTML(lbl)}</div>`);
             });
             const marker = h => `<marker id="lfA_${h}" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${LF_COLOR[h]}"/></marker>`;
-            let hh = `<svg class="lf-edges" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs>${['ok', 'warn', 'bad', 'none'].map(marker).join('')}</defs>${paths}</svg>`;
+            let hh = `<svg class="lf-edges" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs>${['ok', 'warn', 'bad', 'none', 'usage'].map(marker).join('')}</defs>${paths}</svg>`;
             // en-têtes de colonnes
             [...Array(maxCol + 1)].forEach((_, d) => { const arr = cols[d] || []; if (!arr.length) return; const x = maxCol ? (d / maxCol) * (W - NW - 20) + 10 : 10;
                 const lbl = d === 0 ? '① Amont' : (d === maxCol ? '③ Aval' : '② Intermédiaire');
@@ -4966,9 +4995,10 @@
                 const roleCls = (LF_ROLE[role] || LF_ROLE.consumer).badge;
                 const incoming = edges.filter(e => e.target === n.id && e.lastRun);
                 let distChip = ''; if (incoming.length) { const worstE = incoming.reduce((mx, e) => (e.lastRun.rate || 0) > (mx.lastRun.rate || 0) ? e : mx); const ds = lfDistStatus(worstE); distChip = `<span class="lf-hchip lf-h-${ds}">Δ ${(worstE.lastRun.rate || 0).toFixed(1).replace('.', ',')} %</span>`; }
-                const freshChip = fr.status !== 'none' ? `<span class="lf-hchip lf-h-${fr.status}">${fr.label}</span>` : (n.tableName ? '' : '<span class="lf-hchip lf-h-none">non mesuré</span>');
+                const isApp = lfNodeKind(n) === 'app';
+                const freshChip = fr.status !== 'none' ? `<span class="lf-hchip lf-h-${fr.status}">${fr.label}</span>` : ((n.tableName || isApp) ? '' : '<span class="lf-hchip lf-h-none">non mesuré</span>');
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
-                hh += `<div class="lf-node lf-i-${role}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
+                hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
                     <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}
                     ${attrsBlock}
@@ -5059,12 +5089,30 @@
                 if (!n.origine) { const ss = (dict[tblName] || {}).sourceSystem; if (ss) { n.origine = ss; filledO++; } } // origine complétée, jamais remplacée
                 return n;
             };
-            const ensureEdge = (srcName, tgtName) => {
+            const ensureEdge = (srcName, tgtName, rel) => {
                 if (!tableByName(srcName)) return;
                 const sN = nodeForTable(srcName), tN = nodeForTable(tgtName);
                 if (sN.id === tN.id) return;
                 if (m.edges.some(e => e.source === sN.id && e.target === tN.id)) return; // lien déjà présent → préservé tel quel
-                m.edges.push({ id: 'le_' + generateId(), source: sN.id, target: tN.id, type: 'feeds', srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true });
+                m.edges.push({ id: 'le_' + generateId(), source: sN.id, target: tN.id, type: 'feeds', rel: rel || 'feeds', srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true });
+                addedE++;
+            };
+            // Réutilise/crée un nœud APPLICATION (kind:'app'), apparié par identifiant d'actif.
+            let addedApp = 0;
+            const nodeForApp = (asset) => {
+                let n = m.nodes.find(x => x.assetId === asset.id)
+                     || m.nodes.find(x => lfNodeKind(x) === 'app' && x.name && x.name.toLowerCase() === String(asset.name).toLowerCase());
+                if (!n) { n = { id: 'ln_' + generateId(), name: asset.name, kind: 'app', assetId: asset.id, domain: asset.domain || '', derived: true }; m.nodes.push(n); addedN++; addedApp++; }
+                n.kind = 'app'; if (!n.assetId) n.assetId = asset.id;
+                return n;
+            };
+            const ensureUsageEdge = (tblName, appNode, rel) => {
+                if (!tableByName(tblName)) return;
+                const tN = nodeForTable(tblName);
+                const [src, tgt] = rel === 'writes' ? [appNode, tN] : [tN, appNode]; // lit : table→appli ; écrit : appli→table
+                if (src.id === tgt.id) return;
+                if (m.edges.some(e => e.source === src.id && e.target === tgt.id)) return;
+                m.edges.push({ id: 'le_' + generateId(), source: src.id, target: tgt.id, type: 'feeds', rel, srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true });
                 addedE++;
             };
             let designedCount = 0;
@@ -5074,35 +5122,75 @@
                 const feeders = new Set();
                 (t.design.sources || []).forEach(s => { if (s && s.src) feeders.add(s.src); });
                 (t.design.joins || []).forEach(j => { if (j && j.src) feeders.add(j.src); if (j && j.viaSrc) feeders.add(j.viaSrc); });
-                feeders.forEach(srcName => ensureEdge(srcName, t.name));
+                feeders.forEach(srcName => ensureEdge(srcName, t.name, 'feeds'));
             });
-            if (!designedCount) return showError('Aucune table conçue disponible : concevez au moins une table (onglet « Tables conçues ») pour dériver ses alimentations, ou construisez le flux à la main.');
+            // Couche application (lot 3) : « lit » = tables/colonnes utilisées par un actif ; « écrit »
+            // = actif dont le NOM est le système source d'une table (producteur déclaré au dictionnaire).
+            const assets = (g.assets || []);
+            assets.forEach(a => {
+                const reads = new Set([...(a.tables || []), ...((a.columns || []).map(c => c && c.table).filter(Boolean))]);
+                const writesTables = Object.keys(dict).filter(tn => String((dict[tn] || {}).sourceSystem || '').toLowerCase() === String(a.name || '').toLowerCase() && tableByName(tn));
+                if (!reads.size && !writesTables.length) return;
+                const appN = nodeForApp(a);
+                reads.forEach(tn => ensureUsageEdge(tn, appN, 'reads'));
+                writesTables.forEach(tn => ensureUsageEdge(tn, appN, 'writes'));
+            });
+            if (!designedCount && !assets.length) return showError('Rien à dériver : concevez au moins une table (onglet « Tables conçues ») et/ou déclarez des applications & processus (onglet « Applis & processus »), ou construisez le flux à la main.');
             persistAppState(); renderGovernance();
-            if (!addedN && !addedE && !filledO) return showSuccess('La carte est déjà à jour par rapport aux tables conçues (aucun nouvel élément à dériver).');
-            showSuccess(`🔄 Synchronisé depuis les données : ${addedN} table(s) ajoutée(s), ${addedE} alimentation(s) dérivée(s)${filledO ? `, ${filledO} origine(s) renseignée(s)` : ''}. Vos réglages manuels sont préservés — reliez clé + attribut sur les nouveaux liens pour activer les contrôles.`);
+            const conflicts = lfMasteryConflicts();
+            if (!addedN && !addedE && !filledO) return showSuccess('La carte est déjà à jour par rapport aux données (aucun nouvel élément à dériver).' + (conflicts.length ? ` ⚠️ ${conflicts.length} conflit(s) de maîtrise détecté(s).` : ''));
+            showSuccess(`🔄 Synchronisé depuis les données : ${addedN} nœud(s) ajouté(s)${addedApp ? ` (dont ${addedApp} application(s))` : ''}, ${addedE} lien(s) dérivé(s)${filledO ? `, ${filledO} origine(s) renseignée(s)` : ''}.${conflicts.length ? ` ⚠️ ${conflicts.length} conflit(s) de maîtrise détecté(s) — voir le bandeau.` : ''} Vos réglages manuels sont préservés.`);
+        }
+
+        // Conflit de maîtrise (lot 3) : ≥ 2 sources « maître » sur un objet métier SANS règle de
+        // maîtrise contextuelle (conditions disjointes) => deux maîtres qui se chevauchent => alerte.
+        function lfMasteryConflicts() {
+            const bos = (state.governance.businessObjects) || [];
+            const out = [];
+            bos.forEach(bo => {
+                const masters = (bo.sources || []).filter(s => s.role === 'maitre');
+                const hasCtx = ((bo.contextRules || {}).rules || []).length > 0;
+                if (masters.length >= 2 && !hasCtx) out.push({ bo: bo.name, tables: masters.map(s => s.table), count: masters.length });
+            });
+            return out;
         }
 
         // ---- Drawers ----
         function lfOpenNode(id) {
             const n = lfNode(id); if (!n) return;
             const m = lfModel(); const down = m.edges.filter(e => e.source === id), up = m.edges.filter(e => e.target === id);
-            const fr = lfFresh(n); const roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.' }[lfNodeRole(n)] || '';
+            const isApp = lfNodeKind(n) === 'app';
+            const fr = lfFresh(n); const roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.', app: '<b>Application / processus</b> : consomme (lit) des tables. Sa fraîcheur est <b>héritée</b> de la pire des tables qu\'elle lit ; pas de distorsion propre (la donnée EST celle des tables).' }[lfNodeRole(n)] || '';
             const body = `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Rôle dans le flux</h4>
                 <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">${roleTxt}</div></div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
-                <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Source liée</div><div class="lf-cv" style="font-size:13px">${n.tableName ? escapeHTML(n.tableName) + (tableByName(n.tableName) ? '' : ' <span style="color:#dc2626">(absente)</span>') : '<span style="color:#94a3b8">aucune</span>'}</div></div>
-                <div class="lf-cell"><div class="lf-ck">Âge / SLA</div><div class="lf-cv" style="font-size:13px;color:${fr.status === 'bad' ? '#dc2626' : (fr.status === 'warn' ? '#d97706' : '#16a34a')}">${fr.status === 'none' ? '<span style="color:#94a3b8">non mesuré</span>' : lfAge(fr.ageDays) + (fr.maxDays ? ' / ≤ ' + lfAge(fr.maxDays) : '')}</div></div></div>
+                <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">${isApp ? 'Fraîcheur' : 'Source liée'}</div><div class="lf-cv" style="font-size:13px">${isApp ? (fr.inherited ? '<span style="color:#5b21b6">héritée des tables lues</span>' : '<span style="color:#94a3b8">aucune table lue</span>') : (n.tableName ? escapeHTML(n.tableName) + (tableByName(n.tableName) ? '' : ' <span style="color:#dc2626">(absente)</span>') : '<span style="color:#94a3b8">aucune</span>')}</div></div>
+                <div class="lf-cell"><div class="lf-ck">Âge / SLA</div><div class="lf-cv" style="font-size:13px;color:${fr.status === 'bad' ? '#dc2626' : (fr.status === 'warn' ? '#d97706' : '#16a34a')}">${fr.status === 'none' ? '<span style="color:#94a3b8">non mesuré</span>' : lfAge(fr.ageDays) + (fr.maxDays ? ' / ≤ ' + lfAge(fr.maxDays) : '') + (fr.inherited ? ' (hérité)' : '')}</div></div></div>
                 ${fr.freq ? `<div class="text-[11px] text-slate-400 mt-2">Fréquence attendue (dictionnaire) : ${escapeHTML(fr.freq)}</div>` : (n.tableName ? '<div class="text-[11px] text-slate-400 mt-2">Renseignez « Fréquence de mise à jour » dans le dictionnaire de la source pour activer le SLA de fraîcheur.</div>' : '')}</div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Connexions</h4>
                 <div class="text-xs text-slate-500 mb-1">↑ ${up.length} flux entrant(s) · ↓ ${down.length} flux sortant(s)</div>
                 ${down.map(e => `<div class="lf-mism"><span class="lf-k">→ ${escapeHTML((lfNode(e.target) || {}).name || '?')}</span><span class="lf-mv">${lfEdgeTypeLabel(e)}</span></div>`).join('')}</div>
                 <div class="mb-2"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Analyse d'impact</h4>
-                <div class="text-xs text-slate-500">Si cet actif change, <b>${down.length}</b> consommateur(s) direct(s) sont affectés.</div></div>`;
+                <div class="text-xs text-slate-500">${isApp ? `Cette application <b>dépend de ${up.length}</b> table(s) lue(s) : un problème sur l'une d'elles la touche directement.` : `Si cet actif change, <b>${down.length}</b> consommateur(s) direct(s) sont affectés${down.some(e => lfEdgeRel(e) === 'reads') ? ` (dont ${down.filter(e => lfEdgeRel(e) === 'reads').length} application(s))` : ''}.`}</div></div>`;
             openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (LF_ROLE[lfNodeRole(n)] || {}).lbl + (n.origine ? ' · ' + n.origine : (n.domain ? ' · ' + n.domain : '')), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
         }
         function lfOpenEdge(id) {
             const e = lfEdge(id); if (!e) return;
             const s = lfNode(e.source), t = lfNode(e.target); if (!s || !t) return;
+            // Liens d'usage (lecture / écriture d'une application) : pas de distorsion à mesurer —
+            // la donnée EST celle de la table. On montre la nature, la fraîcheur héritée et l'impact.
+            const rel = lfEdgeRel(e);
+            if (rel !== 'feeds') {
+                const isRead = rel === 'reads';
+                const tbl = isRead ? s : t; const app = isRead ? t : s;
+                const frT = lfFresh(tbl);
+                const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${lfEdgeTypeLabel(e)} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div></div>
+                    <div class="text-xs bg-violet-50 border border-violet-200 rounded-lg p-3 mb-4">${isRead ? `L'application <b>${escapeHTML(app.name)}</b> <b>lit</b> la table <b>${escapeHTML(tbl.name)}</b>. Aucune distorsion propre : la donnée consommée est exactement celle de la table. La fraîcheur de l'application est <b>héritée</b> de cette table.` : `L'application <b>${escapeHTML(app.name)}</b> <b>écrit</b> dans <b>${escapeHTML(tbl.name)}</b> (elle en est productrice / maître). À surveiller : les conflits de maîtrise si une autre application écrit le même attribut.`}</div>
+                    <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur ${isRead ? 'de la table lue' : 'de la table écrite'}</h4>
+                    <div class="lf-cell"><div class="lf-ck">${escapeHTML(tbl.name)}</div><div class="lf-cv" style="font-size:13px;color:${frT.status === 'bad' ? '#dc2626' : (frT.status === 'warn' ? '#d97706' : (frT.status === 'ok' ? '#16a34a' : '#94a3b8'))}">${frT.status === 'none' ? 'non mesurée' : lfAge(frT.ageDays) + (frT.maxDays ? ' / ≤ ' + lfAge(frT.maxDays) : '')}</div></div></div>`;
+                openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: lfEdgeTypeLabel(e), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
+                return;
+            }
             const fr = lfFresh(t); const lr = e.lastRun; const th = lfModel().threshold; const K = lfEdgeKeys(e);
             const slaBad = fr.status === 'bad'; const distBad = lfDistStatus(e) === 'bad';
             const sT = s.tableName ? tableByName(s.tableName) : null, tT = t.tableName ? tableByName(t.tableName) : null;
@@ -8970,8 +9058,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.4.0';
+        const APP_VERSION = '5.5.0';
         const APP_CHANGELOG = [
+            { v: '5.5.0', d: '2026-07-24', t: 'Lineage : couche application — lit / écrit & conflits de maîtrise (lot 3)', items: [
+                'La synchronisation dérive désormais la COUCHE APPLICATION : chaque application/processus devient un nœud 🖥 relié aux tables qu\'il utilise par un lien « lit » (table → application), et, s\'il est déclaré « Système source » d\'une table au dictionnaire, par un lien « écrit » (application → table).',
+                'Fraîcheur HÉRITÉE : une application prend la pire fraîcheur des tables qu\'elle lit ; pas de distorsion propre (la donnée consommée EST celle de la table). L\'analyse d\'impact indique combien d\'applications sont touchées par un problème sur une table.',
+                'Détection des CONFLITS DE MAÎTRISE : un bandeau d\'alerte signale les objets métier ayant ≥ 2 sources « maître » sans conditions disjointes (deux maîtres qui se chevauchent) ; il invite à séparer les périmètres par une règle de maîtrise contextuelle ou à désigner un maître unique.',
+                'Le rôle et la consolidation restent déduits des seules alimentations : les liens d\'usage (lit/écrit) ne faussent pas la topologie. Nœuds application en violet pointillé, liens d\'usage distincts dans le graphe et les fiches.'] },
             { v: '5.4.0', d: '2026-07-24', t: 'Lineage : « Synchroniser depuis les données » (lot 2)', items: [
                 'Nouveau bouton « 🔄 Synchroniser depuis les données » dans le constructeur de flux : les alimentations sont DÉRIVÉES automatiquement de vos TABLES CONÇUES — chaque table conçue devient une cible alimentée par ses sources contributrices (colonne SOURCE_ORIGINE) et ses sources d\'enrichissement.',
                 'Fusion additive par identité : les nœuds sont rapprochés par nom de table, les liens par couple source → cible. Rien n\'est écrasé ni supprimé — vos réglages manuels (clés, attributs contrôlés, SLA, transformations, derniers contrôles) sont intégralement préservés.',
