@@ -6418,18 +6418,20 @@
             // MÊME barre que ceux des autres phases, et pilotent govState.tab au lieu d'un numéro d'écran.
             { id: 'gov', badge: '④', label: 'Gouvernance', desc: 'Objets, dictionnaire, lineage', color: 'emerald', step: 9,
               tabs: [
-                  { g: 'catalog', icon: '🗂️', label: 'Catalogue', fam: 'Explorer' },
-                  { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Définir' },
-                  { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Définir' },
-                  { g: 'model', icon: '🧬', label: 'Modèle objet', fam: 'Définir' },
-                  { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Définir' },
-                  { g: 'assets', icon: '🖥', label: 'Applis & processus', fam: 'Définir' },
-                  { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Classer' },
-                  { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Classer' },
-                  { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Tracer' },
-                  { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Tracer', hidden: true },
-                  { g: 'history', icon: '📈', label: 'Historique', fam: 'Tracer' },
-                  { g: 'srcwatch', icon: '🛰️', label: 'Surveillance sources', fam: 'Tracer' },
+                  // Modèle clair (R4) : 6 familles alignées sur les 3 plans (physique / acteurs / sens
+                  // métier) + Lineage, Contrôle, Diffusion. Vocabulaire unifié : Table / Application / Objet.
+                  { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Patrimoine' },
+                  { g: 'model', icon: '🧬', label: 'Modèle de données', fam: 'Patrimoine' },
+                  { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
+                  { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
+                  { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
+                  { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Sens métier' },
+                  { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Sens métier' },
+                  { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
+                  { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Lineage', hidden: true },
+                  { g: 'srcwatch', icon: '🛰️', label: 'Surveillance des sources', fam: 'Contrôle' },
+                  { g: 'history', icon: '📈', label: 'Historique', fam: 'Contrôle' },
+                  { g: 'catalog', icon: '🗂️', label: 'Catalogue', fam: 'Diffusion' },
               ] },
         ];
         const PHASE_COLORS = {
@@ -9331,8 +9333,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.14.0';
+        const APP_VERSION = '5.15.0';
         const APP_CHANGELOG = [
+            { v: '5.15.0', d: '2026-07-24', t: 'Modèle clair (R4) : navigation Gouvernance regroupée + vocabulaire unifié', items: [
+                'Les sous-onglets de Gouvernance sont regroupés en 6 familles cohérentes avec le modèle : 🗃️ Patrimoine (Dictionnaire, Modèle de données), 🖥️ Acteurs (Applications & processus), 🧭 Sens métier (Objets métier, Glossaire, Périmètres, Sensibilité), 🕸️ Lineage, 🩺 Contrôle (Surveillance des sources, Historique), 🗂️ Diffusion (Catalogue).',
+                'Fini le fourre-tout « Définir » qui mélangeait le physique (dictionnaire), les acteurs (applications) et le sens métier (objets, glossaire) : chaque écran est désormais rangé selon ce qu\'il décrit.',
+                'Vocabulaire harmonisé : Table / Application / Objet métier partout (« Modèle de données », « Applications & processus », « Surveillance des sources »).'] },
             { v: '5.14.0', d: '2026-07-24', t: 'Modèle clair (R3) : maîtrise unifiée + panneau « Cohérence du modèle »', items: [
                 'La maîtrise est désormais calculée d\'UNE seule façon (l\'application propriétaire d\'une table) et le lineage signale les CONTRADICTIONS entre déclarations dans un panneau « 🧩 Cohérence du modèle ».',
                 'Contradictions détectées (⛔) : une table avec deux applications propriétaires ; un objet métier à ≥ 2 sources « maître » sans conditions disjointes.',
