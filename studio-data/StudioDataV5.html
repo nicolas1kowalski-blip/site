@@ -2998,7 +2998,13 @@
             else if (cur === 'hierarchies') html += renderBoHierarchy(bo);
             else if (cur === 'mastery') html += renderBoContextRules(bo, names);
             else if (cur === 'usage') html += renderBoUsageMatrix(bo);
-            else if (cur === 'audit') html += `<div class="text-center mb-3"><button onclick="auditBusinessObject('${bo.id}')" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold shadow-sm">🔎 Lancer l'audit global de l'objet</button><p class="text-[11px] text-slate-400 mt-1.5">Gouvernance (score), règles métier du périmètre, hiérarchies et facettes 1–1.</p></div><div id="bo-global-audit-${bo.id}"></div>`;
+            else if (cur === 'audit') { const _qr = boQualityRules(bo);
+                html += `<div class="text-center mb-3"><button onclick="auditBusinessObject('${bo.id}')" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold shadow-sm">🔎 Lancer l'audit global de l'objet</button><p class="text-[11px] text-slate-400 mt-1.5">Gouvernance (score), règles métier, <b>règles de qualité 📏</b>, hiérarchies et facettes 1–1.</p></div>`;
+                html += `<div class="mb-3 border border-slate-200 rounded-lg p-2.5 bg-slate-50/60">
+                    <div class="flex items-center gap-2 mb-1"><span class="text-[10px] uppercase font-bold text-slate-400">📏 Règles de qualité rattachées (${_qr.length})</span>
+                    <button onclick="switchTab(12)" class="ml-auto text-[11px] text-indigo-600 font-bold hover:underline">Gérer dans « Règles &amp; score » →</button></div>
+                    ${_qr.length ? '<div class="space-y-1">' + _qr.map(r => `<div class="text-xs flex items-center gap-2"><span class="font-bold text-slate-700">${escapeHTML(r.name)}</span><span class="text-[10px] text-slate-400">${QR_TYPES[r.type] || r.type}${r.bo === bo.id ? ' · sur l\'objet' : (r.table ? ' · ' + escapeHTML(r.table) : '')}${r.enabled === false ? ' · désactivée' : ''}</span>${r.last ? `<span class="ml-auto font-bold ${r.last.fails === 0 ? 'text-emerald-600' : 'text-amber-600'}">${Math.round(100 * r.last.rate)} %</span>` : '<span class="ml-auto text-[10px] text-slate-300">non exécutée</span>'}</div>`).join('') + '</div>' : '<p class="text-[11px] text-slate-400 italic">Aucune règle de qualité rattachée. Créez-en dans <b>📏 Règles &amp; score</b> en choisissant <b>cet objet métier</b> (ou une de ses tables) comme cible — elle apparaîtra ici et sera évaluée par l\'audit.</p>'}
+                </div><div id="bo-global-audit-${bo.id}"></div>`; }
 
             html += '</div></div>';
             return html;
@@ -3416,6 +3422,11 @@
             if (rules.length) {
                 html += `<div class="text-[10px] uppercase font-bold text-slate-400 mb-1 mt-2">⚖️ Règles métier du périmètre (${rules.length}) <span class="normal-case font-medium text-slate-300">— ${Array.from(objTables).map(escapeHTML).join(', ')}</span></div><div id="bo-rules-results-${boId}" class="space-y-1"><p class="text-xs text-slate-400">Exécution...</p></div>`;
             }
+            // 3bis. Règles de QUALITÉ (📏 Règles & score) rattachées à l'objet ou à ses tables.
+            const qRules = boQualityRules(bo).filter(r => r.enabled !== false);
+            if (qRules.length) {
+                html += `<div class="text-[10px] uppercase font-bold text-slate-400 mb-1 mt-2">📏 Règles de qualité (${qRules.length})</div><div id="bo-qr-results-${boId}" class="space-y-1"><p class="text-xs text-slate-400">Exécution...</p></div>`;
+            }
             // 4. Cardinalité des facettes 1–1 (ex : exactement UNE adresse principale)
             const facets11 = getBoFacets(bo).filter(st => st.cardinality === '1–1');
             if (facets11.length) {
@@ -3443,6 +3454,22 @@
                     } catch (e) { parts.push(`<div class="text-xs text-red-600">⚠️ Règle inexécutable : ${escapeHTML(e.message)}</div>`); }
                 }
                 if (rout) rout.innerHTML = parts.join('');
+            }
+            // Règles de qualité (📏) : chacune est exécutée sur ses tables/colonnes réelles (résolues
+            // via les correspondances pour une règle « objet ») et son taux de conformité est stocké.
+            if (qRules.length) {
+                const qout = el('bo-qr-results-' + boId); const qparts = [];
+                for (const r of qRules) {
+                    try {
+                        const ev = await qrEvalRule(r, __auditConn);
+                        if (!ev.ran) { qparts.push(`<div class="text-xs text-slate-400">➖ ${escapeHTML(r.name)} — non applicable (colonne/table non résolue)</div>`); continue; }
+                        const rate = Math.round(100 * ev.rate); const bad = ev.fails > 0;
+                        let insp = ''; if (bad) { const vs = qrInspectSql(r); if (vs) insp = qualInspectButtons(registerQualInspect(`Règle qualité : ${r.name}`, vs)); }
+                        qparts.push(`<div class="text-xs ${bad ? 'text-red-600' : 'text-emerald-700'}">${bad ? '❌' : '✅'} ${escapeHTML(r.name)} <span class="text-slate-400">(${QR_TYPES[r.type] || r.type}${r.bo === bo.id ? ' · sur l\'objet' : (r.table ? ' · ' + escapeHTML(r.table) : '')})</span> — ${bad ? `${ev.fails.toLocaleString('fr-FR')} échec(s) sur ${ev.total.toLocaleString('fr-FR')} (${rate} %)` : `conforme (${ev.total.toLocaleString('fr-FR')} lignes)`}${insp}</div>`);
+                    } catch (e) { qparts.push(`<div class="text-xs text-red-600">⚠️ ${escapeHTML(r.name)} : ${escapeHTML(e.message)}</div>`); }
+                }
+                if (qout) qout.innerHTML = qparts.join('') || '<p class="text-xs text-slate-400">Aucune règle applicable.</p>';
+                persistAppState();
             }
             // Facettes 1–1 : contrôle réel + consultation/export des lignes maîtres en défaut
             const fout = el('bo-facets-results-' + boId);
@@ -9248,8 +9275,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.11.0';
+        const APP_VERSION = '5.11.1';
         const APP_CHANGELOG = [
+            { v: '5.11.1', d: '2026-07-24', t: 'Correctif : les règles de « Règles & score » sont prises en compte dans l\'audit de l\'objet métier', items: [
+                'Bug corrigé : les règles de qualité déclarées dans « 📏 Règles & score » n\'étaient pas exécutées par « Lancer l\'audit global de l\'objet » (seules les règles métier de cardinalité l\'étaient).',
+                'L\'audit d\'un objet métier exécute désormais aussi les RÈGLES DE QUALITÉ qui le concernent : celles déclarées SUR l\'objet, et celles portant sur une table de son périmètre (maître + sources + composants). Chaque règle affiche son taux de conformité, ses lignes en échec et un accès aux lignes fautives.',
+                'Visibilité : l\'onglet Audit de l\'objet liste désormais les règles de qualité rattachées (avec leur dernier résultat) et un raccourci « Gérer dans Règles & score ». Une règle créée sur l\'objet apparaît donc directement dans l\'objet.'] },
             { v: '5.11.0', d: '2026-07-24', t: 'Lineage : objets métier sur la « Vue systèmes » + bouton « Réorganiser »', items: [
                 'La « Vue systèmes » affiche désormais les OBJETS MÉTIER (cases vertes 🏛️). Chaque objet est relié à ses tables : ses sources maître/contributeur le « composent » (table → objet), ses destinataires le « diffusent » (objet → table). Ces liens n\'affectent pas les rôles des tables.',
                 'Interrupteur « 🏛️ Objets métier » (en haut) pour les afficher/masquer — affichés par défaut. Dérivés et resynchronisés automatiquement avec la gouvernance ; masquer les retire proprement de la carte.',
@@ -9412,6 +9443,38 @@
         let qrSnapshots = [];   // instantanés E2 (persistés à part, comme l'historique qualité)
         let qrChartInst = null;
         function qrRules() { return state.governance.qualityRules = state.governance.qualityRules || []; }
+        // Règles de qualité rattachées à un objet métier : soit déclarées SUR l'objet (r.bo),
+        // soit portant sur une table de son périmètre (maître + sources + composants).
+        function boQualityRules(bo) {
+            if (!bo) return [];
+            const objTables = new Set(); const t = boMasterTable(bo); if (t) objTables.add(t.name);
+            (bo.sources || []).forEach(s => objTables.add(s.table));
+            (bo.structure || []).forEach(s => objTables.add(s.table));
+            return qrRules().filter(r => r.bo === bo.id || (r.table && objTables.has(r.table)));
+        }
+        // Évalue UNE règle de qualité (résout les règles « objet » vers leurs tables réelles) et
+        // met à jour r.last. Renvoie { ran, total, fails, rate }.
+        async function qrEvalRule(r, conn) {
+            conn = conn || (await getDB()).conn;
+            const units = r.bo ? qrBoResolutions(r).map(res => qrVirtual(r, res)) : (r.table ? [r] : []);
+            let total = 0, fails = 0, ran = false;
+            for (const vr of units) {
+                const t = tableByName(vr.table); if (!t || t.status !== 'ready') continue;
+                const T = sqlIdent(duckTableName(t.id));
+                if (vr.type === 'unique') {
+                    const cols = qrUniqueKey(vr); if (!cols.length) continue;
+                    const k = `COALESCE(UPPER(TRIM(concat_ws(chr(1), ${cols.map(c2 => `CAST(${sqlIdent(c2)} AS VARCHAR)`).join(', ')}))), '')`;
+                    const res = arrowResultToObjects(await conn.query(`SELECT (SELECT COUNT(*) FROM ${T})::BIGINT AS total, COALESCE(SUM(c), 0)::BIGINT AS fails FROM (SELECT COUNT(*)::BIGINT AS c FROM ${T} GROUP BY ${k} HAVING COUNT(*) > 1)`))[0];
+                    total += Number(res.total); fails += Number(res.fails || 0); ran = true;
+                } else {
+                    const fc = qrFailCond(vr); if (!fc) continue;
+                    const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${fc} THEN 1 ELSE 0 END)::BIGINT AS fails FROM ${T}`))[0];
+                    total += Number(res.total); fails += Number(res.fails || 0); ran = true;
+                }
+            }
+            if (ran) r.last = { at: Date.now(), total, fails, rate: total ? (1 - fails / total) : 1 };
+            return { ran, total, fails, rate: total ? (1 - fails / total) : 1 };
+        }
         function qrAdd() { qrRules().push({ id: 'qr_' + generateId(), name: 'Nouvelle règle', table: '', col: '', type: 'notnull', p: {}, crit: 'Moyenne', enabled: true }); persistAppState(); renderQualityRules(); }
         function qrSet(id, f, v) {
             const r = qrRules().find(x => x.id === id); if (!r) return;
