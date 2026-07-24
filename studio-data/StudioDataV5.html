@@ -4725,8 +4725,14 @@
         // deux alimentations entrantes ou plus = « référentiel » (consolidation) ; sinon « consommateur ».
         // Lot 3 : nature d'un lien (feeds = alimente table→table ; reads = lecture table→appli ;
         // writes = écriture appli→table) et nature d'un nœud (table ou application).
-        function lfEdgeRel(e) { return e.rel || 'feeds'; }
         function lfNodeKind(n) { return (n && n.kind) || 'table'; }
+        // Nature d'un lien : explicite (rel stocké, ex. issu de la synchro) sinon DÉDUITE des types de
+        // nœuds — une application en source = « écrit », en cible = « lit », sinon table→table = « alimente ».
+        function lfEdgeRel(e) { if (e.rel) return e.rel; const s = lfNode(e.source), t = lfNode(e.target); const sa = s && lfNodeKind(s) === 'app', ta = t && lfNodeKind(t) === 'app'; if (sa && !ta) return 'writes'; if (ta && !sa) return 'reads'; return 'feeds'; }
+        // Tables qu'une application LIT ET ÉCRIT à la fois (« écriture en retour » / write-back).
+        function lfWritebackTables(appId) { const m = lfModel(); const reads = new Set(m.edges.filter(e => e.target === appId && lfEdgeRel(e) === 'reads').map(e => e.source)); const out = []; m.edges.forEach(e => { if (e.source === appId && lfEdgeRel(e) === 'writes' && reads.has(e.target)) out.push(e.target); }); return out; }
+        // Attributs effectivement consommés par un lien de lecture (sous-ensemble) ; [] = toutes les colonnes.
+        function lfConsumedAttrs(e) { return lfEdgePairs(e).map(p => p.src || p.tgt).filter(Boolean); }
         // Le rôle & la consolidation ne se déduisent que des ALIMENTATIONS (feeds) : les lectures
         // et écritures d'applications ne comptent pas comme des sources d'une table.
         function lfIncomingCount(id) { return lfModel().edges.filter(e => e.target === id && e.source !== id && lfEdgeRel(e) === 'feeds').length; }
@@ -4779,7 +4785,7 @@
             #lfCanvas{position:relative;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.06);overflow:hidden;min-height:360px}
             #lfCanvas .lf-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;text-align:center;padding:24px}
             .lf-edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-            .lf-node{position:absolute;width:208px;background:#fff;border:1.5px solid #d4dbe6;border-radius:12px;padding:10px 12px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.05);cursor:pointer;transition:.12s;z-index:2}
+            .lf-node{position:absolute;width:208px;background:#fff;border:1.5px solid #d4dbe6;border-radius:12px;padding:10px 12px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.05);cursor:grab;transition:box-shadow .12s,border-color .12s;z-index:2;touch-action:none;user-select:none}
             .lf-node:hover{border-color:#059669;box-shadow:0 6px 18px rgba(5,150,105,.15)}
             .lf-node .lf-nh{display:flex;align-items:center;gap:9px}
             .lf-node .lf-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex-shrink:0}
@@ -4833,6 +4839,7 @@
                         <button onclick="lfSetView('attrs')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">Vue attributs</button>
                         <button onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
                     </div>
+                    ${nodes.some(n => n.x != null || n.y != null) ? `<button onclick="lfResetLayout()" title="Rétablir la disposition automatique" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">↺ Disposition auto</button>` : ''}
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
                 </div>
@@ -4849,7 +4856,7 @@
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.warn};display:inline-block"></span> <b class="text-slate-700">À surveiller</b></span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.bad};display:inline-block"></span> <b class="text-slate-700">Alerte</b> — retard ou distorsion forte</span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.usage};display:inline-block;background-image:linear-gradient(90deg,${LF_COLOR.usage} 60%,transparent 0);background-size:8px 3px"></span> <b class="text-slate-700">Usage</b> — 🖥 application lit / écrit</span>
-                <span class="ml-auto">💡 Cliquez un <b>nœud</b> ou une <b>étiquette de lien</b> pour le détail.</span>
+                <span class="ml-auto">💡 <b>Glissez</b> les nœuds pour les repositionner · <b>cliquez</b> un nœud ou une étiquette de lien pour le détail.</span>
             </div>`;
             // -- bandeau conflits de maîtrise (lot 3) --
             const _conf = lfMasteryConflicts();
@@ -4896,9 +4903,11 @@
             const _en = lfEditNodeId ? lfNode(lfEditNodeId) : null;
             const _origOpts = [...new Set(nodes.map(n => n.origine).filter(Boolean))].map(o => `<option value="${escapeHTML(o)}">`).join('');
             const _tblOptN = `<option value="">— aucune —</option>` + tables.map(t => `<option value="${escapeHTML(t.name)}" ${_en && _en.tableName === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('');
+            const _enApp = _en && lfNodeKind(_en) === 'app';
             h += `<div class="flex items-end gap-2 flex-wrap bg-white border ${_en ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-100'} rounded-lg p-2">
                 ${_en ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du nœud</div>' : ''}
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom (table)</label><input id="lf-n-name" value="${_en ? escapeHTML(_en.name) : ''}" placeholder="ex : CLIENTS_CRM" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nature</label><select id="lf-n-kind" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="table" ${_enApp ? '' : 'selected'}>🗄 Table</option><option value="app" ${_enApp ? 'selected' : ''}>🖥 Application</option></select></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom (table / application)</label><input id="lf-n-name" value="${_en ? escapeHTML(_en.name) : ''}" placeholder="ex : CLIENTS_CRM ou BI Ventes" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Origine (système amont)</label><input id="lf-n-orig" list="lf-n-orig-dl" value="${_en ? escapeHTML(_en.origine || '') : ''}" placeholder="ex : SAP, saisie manuelle…" class="border border-slate-300 p-1.5 rounded text-xs w-40"><datalist id="lf-n-orig-dl">${_origOpts}</datalist></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Domaine</label><input id="lf-n-dom" value="${_en ? escapeHTML(_en.domain || '') : ''}" placeholder="ex : Client" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source liée (optionnel)</label><select id="lf-n-tbl" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_tblOptN}</select></div>
@@ -4969,12 +4978,15 @@
             const attrView = lfView === 'attrs';
             const W = Math.max(560, c.clientWidth || 900), NW = 208, NH = attrView ? 152 : 96, rowGap = NH + 22, topPad = 40;
             const maxRows = Math.max(...Object.values(cols).map(a => a.length));
-            const H = Math.max(360, topPad + maxRows * rowGap + 16);
-            c.style.height = H + 'px';
+            let H = Math.max(360, topPad + maxRows * rowGap + 16);
             const pos = {};
             Object.keys(cols).forEach(d => { const arr = cols[d]; const x = maxCol ? (d / maxCol) * (W - NW - 20) + 10 : 10;
                 const colH = arr.length * rowGap; const y0 = Math.max(topPad, (H - colH) / 2);
                 arr.forEach((n, i) => { pos[n.id] = { x, y: y0 + i * rowGap }; }); });
+            // Positions manuelles (glisser-déposer) : prioritaires sur la disposition automatique.
+            nodes.forEach(n => { if (typeof n.x === 'number' && typeof n.y === 'number') pos[n.id] = { x: n.x, y: n.y }; });
+            H = Math.max(H, ...nodes.map(n => (pos[n.id] ? pos[n.id].y + NH + 20 : 0)));
+            c.style.height = H + 'px';
             // arêtes SVG
             let paths = ''; const chips = [];
             edges.forEach(e => { const a = pos[e.source], b = pos[e.target]; if (!a || !b) return;
@@ -5005,24 +5017,56 @@
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
                 hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}
+                    <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
             hh += chips.join('');
             c.innerHTML = hh;
-            c.querySelectorAll('.lf-node').forEach(nd => nd.addEventListener('click', () => lfOpenNode(nd.dataset.node)));
+            // Glisser-déposer des nœuds (souris + tactile) : la position est mémorisée sur le nœud.
+            c.querySelectorAll('.lf-node').forEach(nd => {
+                let sx = 0, sy = 0, ox = 0, oy = 0, moved = false, dragging = false;
+                const pt = ev => ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+                const onMove = ev => {
+                    if (!dragging) return; const q = pt(ev); const dx = q.clientX - sx, dy = q.clientY - sy;
+                    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+                    nd.style.left = Math.max(0, Math.min((c.clientWidth || 900) - 40, ox + dx)) + 'px';
+                    nd.style.top = Math.max(0, oy + dy) + 'px';
+                    if (ev.cancelable) ev.preventDefault();
+                };
+                const onUp = () => {
+                    if (!dragging) return; dragging = false; nd.style.zIndex = ''; nd.style.cursor = '';
+                    document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+                    document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onUp);
+                    if (moved) { const nn = lfNode(nd.dataset.node); if (nn) { nn.x = Math.round(parseFloat(nd.style.left)); nn.y = Math.round(parseFloat(nd.style.top)); persistAppState(); } lfDrawGraph(); }
+                };
+                const onDown = ev => {
+                    if (ev.button !== undefined && ev.button !== 0) return;
+                    dragging = true; moved = false; const q = pt(ev);
+                    sx = q.clientX; sy = q.clientY; ox = parseFloat(nd.style.left) || 0; oy = parseFloat(nd.style.top) || 0;
+                    nd.style.zIndex = 50; nd.style.cursor = 'grabbing';
+                    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                    document.addEventListener('touchmove', onMove, { passive: false }); document.addEventListener('touchend', onUp);
+                    if (ev.cancelable) ev.preventDefault();
+                };
+                nd.addEventListener('mousedown', onDown);
+                nd.addEventListener('touchstart', onDown, { passive: false });
+                nd.addEventListener('click', ev => { if (moved) { ev.preventDefault(); ev.stopPropagation(); moved = false; return; } lfOpenNode(nd.dataset.node); });
+            });
             c.querySelectorAll('.lf-echip').forEach(ch => ch.addEventListener('click', () => lfOpenEdge(ch.dataset.edge)));
         }
+        // Rétablit la disposition automatique (efface les positions manuelles des nœuds).
+        function lfResetLayout() { const m = lfModel(); let n0 = 0; m.nodes.forEach(n => { if (n.x != null || n.y != null) { delete n.x; delete n.y; n0++; } }); if (!n0) return showSuccess('La disposition est déjà automatique.'); persistAppState(); renderGovernance(); showSuccess('↺ Disposition automatique rétablie.'); }
 
         // ---- Builder actions ----
         function lfSaveNodeForm() {
             const name = (el('lf-n-name').value || '').trim(); if (!name) return showError('Donnez un nom au système.');
             const m = lfModel(); const editing = lfEditNodeId ? lfNode(lfEditNodeId) : null;
             if (m.nodes.some(n => n.name.toLowerCase() === name.toLowerCase() && (!editing || n.id !== editing.id))) return showError('Un nœud « ' + name + ' » existe déjà.');
+            const kind = (el('lf-n-kind') && el('lf-n-kind').value === 'app') ? 'app' : 'table';
             const vals = { name, origine: (el('lf-n-orig').value || '').trim(), domain: (el('lf-n-dom').value || '').trim(), tableName: el('lf-n-tbl').value || '' };
-            if (editing) { Object.assign(editing, vals); lfEditNodeId = null; }
-            else m.nodes.push({ id: 'ln_' + generateId(), ...vals });
+            if (editing) { Object.assign(editing, vals); if (kind === 'app') editing.kind = 'app'; else delete editing.kind; lfEditNodeId = null; }
+            else m.nodes.push({ id: 'ln_' + generateId(), ...vals, ...(kind === 'app' ? { kind: 'app' } : {}) });
             persistAppState(); renderGovernance();
         }
         function lfEditNodeStart(id) { lfEditNodeId = id; lfEditEdgeId = null; renderGovernance(); }
@@ -5189,11 +5233,20 @@
                 const isRead = rel === 'reads';
                 const tbl = isRead ? s : t; const app = isRead ? t : s;
                 const frT = lfFresh(tbl);
+                // Consommation partielle : sous-ensemble d'attributs déclarés sur le lien de lecture.
+                const consumed = lfConsumedAttrs(e);
+                const consumeBlock = isRead ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Périmètre consommé</h4>
+                    <div class="text-xs">${consumed.length ? `<span class="lf-hchip lf-h-warn" style="font-size:11px;padding:3px 9px">consommation partielle</span> — ${consumed.length} attribut(s) : ${consumed.map(a => `<code>${escapeHTML(a)}</code>`).join(', ')}` : `<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:3px 9px">toutes les colonnes</span> <span class="text-slate-400">— renseignez des attributs sur le lien (bouton ✎) pour déclarer un sous-ensemble</span>`}</div></div>` : '';
+                // Écriture en retour (write-back) : l'appli lit ET écrit cette même table.
+                const isWb = (isRead && lfModel().edges.some(x => x.source === app.id && x.target === tbl.id && lfEdgeRel(x) === 'writes'))
+                          || (!isRead && lfModel().edges.some(x => x.target === app.id && x.source === tbl.id && lfEdgeRel(x) === 'reads'));
+                const wbBlock = isWb ? `<div class="text-xs bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">↺ <b>Écriture en retour (write-back).</b> <b>${escapeHTML(app.name)}</b> lit ET écrit <b>${escapeHTML(tbl.name)}</b> : ses modifications <b>resynchronisent</b> la table, et donc — en cascade — les copies aval qu'elle alimente et ses consommateurs. Contrôlez la cohérence sur les alimentations partant de <b>${escapeHTML(tbl.name)}</b>.</div>` : '';
                 const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${lfEdgeTypeLabel(e)} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div></div>
                     <div class="text-xs bg-violet-50 border border-violet-200 rounded-lg p-3 mb-4">${isRead ? `L'application <b>${escapeHTML(app.name)}</b> <b>lit</b> la table <b>${escapeHTML(tbl.name)}</b>. Aucune distorsion propre : la donnée consommée est exactement celle de la table. La fraîcheur de l'application est <b>héritée</b> de cette table.` : `L'application <b>${escapeHTML(app.name)}</b> <b>écrit</b> dans <b>${escapeHTML(tbl.name)}</b> (elle en est productrice / maître). À surveiller : les conflits de maîtrise si une autre application écrit le même attribut.`}</div>
+                    ${wbBlock}${consumeBlock}
                     <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur ${isRead ? 'de la table lue' : 'de la table écrite'}</h4>
                     <div class="lf-cell"><div class="lf-ck">${escapeHTML(tbl.name)}</div><div class="lf-cv" style="font-size:13px;color:${frT.status === 'bad' ? '#dc2626' : (frT.status === 'warn' ? '#d97706' : (frT.status === 'ok' ? '#16a34a' : '#94a3b8'))}">${frT.status === 'none' ? 'non mesurée' : lfAge(frT.ageDays) + (frT.maxDays ? ' / ≤ ' + lfAge(frT.maxDays) : '')}</div></div></div>`;
-                openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: lfEdgeTypeLabel(e), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
+                openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: lfEdgeTypeLabel(e) + (isWb ? ' · ↺ retour' : ''), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
                 return;
             }
             const fr = lfFresh(t); const lr = e.lastRun; const th = lfModel().threshold; const K = lfEdgeKeys(e);
@@ -9063,8 +9116,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.6.0';
+        const APP_VERSION = '5.7.0';
         const APP_CHANGELOG = [
+            { v: '5.7.0', d: '2026-07-24', t: 'Lineage : nœuds déplaçables + applications, écriture en retour & consommation partielle', items: [
+                'Les nœuds sont désormais DÉPLAÇABLES : glissez-les (souris ou tactile) pour composer votre carte ; la position est mémorisée. Bouton « ↺ Disposition auto » pour revenir à l\'agencement automatique.',
+                'On peut créer un nœud « 🖥 Application » à la main (champ « Nature » du formulaire). La nature d\'un lien est alors DÉDUITE des types reliés : application en source = « écrit », en cible = « lit », sinon table→table = « alimente ». Plus besoin de choisir.',
+                'ÉCRITURE EN RETOUR (write-back) : une application qui LIT et ÉCRIT la même table est repérée (badge « ↺ écriture en retour »). Sa fiche explique que ses modifications resynchronisent le référentiel et, en cascade, les copies aval et les consommateurs — avec un rappel de contrôler les alimentations qui en partent.',
+                'CONSOMMATION PARTIELLE : un lien de lecture peut déclarer un SOUS-ENSEMBLE d\'attributs consommés (via le champ « Attribut » du lien). La fiche affiche « consommation partielle — N attribut(s) » ou « toutes les colonnes ».'] },
             { v: '5.6.0', d: '2026-07-24', t: 'Lineage : un seul onglet — structure, santé & graphe de bout en bout (lot 4)', items: [
                 'Fin des deux onglets « Lineage » et « Lineage & santé » : un SEUL onglet « 🕸️ Lineage » regroupe tout. La vue par défaut est la carte table-centrée avec la santé (fraîcheur, distorsion, conflits) ; un bouton « 🕸️ Bout en bout » bascule vers le graphe complet sources ↔ tables ↔ objets métier ↔ applications, et « ◀ Structure & santé » y ramène.',
                 'Aucune perte : toutes les capacités de l\'ancien onglet Lineage (vue globale, par attribut, filtres, plein écran, export image, mise en évidence de chaîne) restent disponibles dans la vue « Bout en bout ». Les liens « voir le lineage » du catalogue et de l\'analyse d\'impact ouvrent directement cette vue.',

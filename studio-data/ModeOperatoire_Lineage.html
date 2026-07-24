@@ -208,6 +208,9 @@ Facturation 🖥 ─écrit─▶ KADOR_CONTRATS
   </table>
   <div class="why"><b>💡 Ça sert à :</b> vous voyez d'un coup d'œil <b>où naît</b> la donnée, <b>où elle est consolidée</b> (badge <b>⑃ consolide</b>) et <b>qui la consomme</b> — sans avoir eu à le déclarer.</div>
   <div class="callout"><b>Astuce.</b> <span class="kbd">Vue attributs</span> affiche, sur chaque nœud, les colonnes clé/attribut reliées. Cliquez un <b>nœud</b> pour sa fiche (rôle, fraîcheur, connexions, impact).</div>
+  <div class="callout ok"><b>🖐️ Déplacer les nœuds.</b> <b>Glissez</b> une case (souris ou tactile) pour composer votre carte à votre main ;
+  sa position est <b>mémorisée</b>. Le bouton <span class="kbd">↺ Disposition auto</span> (en haut) rétablit l'agencement automatique.
+  Un déplacement n'ouvre pas la fiche — c'est le <b>clic</b> simple qui l'ouvre.</div>
 
   <h2 id="sante">6. Contrôler une alimentation — attribut par attribut</h2>
   <p>C'est le cœur : <b>la donnée de l'aval concorde‑t‑elle avec le maître ?</b> On le mesure sur un lien
@@ -267,6 +270,44 @@ Facturation 🖥 ─écrit─▶ KADOR_CONTRATS
   </div>
   <div class="why"><b>💡 Ça sert à :</b> l'<b>analyse d'impact</b> — si CLIENT_360 se dégrade, vous savez immédiatement <b>quelles applications</b> sont touchées ; cliquez une table pour voir « N application(s) affectée(s) ».</div>
   <div class="callout violet"><b>À noter.</b> Les liens lit/écrit <b>ne comptent pas</b> comme des alimentations : ils ne changent <b>ni le rôle</b> des tables ni la synthèse SLA/distorsion. La topologie reste pilotée par les seules alimentations table→table.</div>
+
+  <h3>Ajouter une application à la main</h3>
+  <div class="step">
+    <p>Pas besoin d'attendre la synchro : dans <span class="kbd">⚙️ Construire le flux</span>, choisissez la <b>Nature</b>
+    <b>🖥 Application</b> avant <span class="kbd">+ Nœud</span>. Ensuite, reliez‑la par un lien —
+    <b>la nature du lien est déduite du sens</b> : une <b>table → application</b> devient « lit », une
+    <b>application → table</b> devient « écrit ». Rien d'autre à choisir.</p>
+  </div>
+
+  <h3>Consommation partielle (un consommateur ne prend qu'une partie)</h3>
+  <div class="step">
+    <p>Sur un lien <b>« lit »</b>, renseignez le(s) <b>attribut(s) consommé(s)</b> (champ <b>Attribut</b> du lien, via ✎).
+    La fiche du lien affiche alors <b>« consommation partielle — N attribut(s) »</b> (au lieu de « toutes les colonnes »).</p>
+  </div>
+  <div class="ex">
+    <div class="exh">Exemple — consommation partielle</div>
+    <b>Reporting Direction</b> ne lit de CLIENT_360 que <code>ca_annuel</code> et <code>ville</code> (pas les données de contact).<br>
+    → fiche du lien : « <b>consommation partielle</b> — 2 attributs : <code>ca_annuel</code>, <code>ville</code> ».
+    <span style="color:#94a3b8">Un changement sur une colonne NON consommée n'impacte pas ce consommateur.</span>
+  </div>
+
+  <h3>Écriture en retour (un consommateur qui modifie et resynchronise)</h3>
+  <div class="step">
+    <p>Cas fréquent : une application <b>lit</b> le référentiel <b>et</b> y <b>réécrit</b> des corrections, qui se
+    <b>propagent</b> ensuite à toutes les copies aval. Modélisez‑le avec <b>deux liens</b> entre l'appli et la table :
+    un <b>« lit »</b> (table → appli) et un <b>« écrit »</b> (appli → table).</p>
+    <p>L'appli porte alors le badge <b>« ↺ écriture en retour »</b> et sa fiche rappelle que ses modifications
+    <b>resynchronisent</b> le référentiel — donc, en cascade, les tables qu'il alimente et leurs consommateurs.</p>
+  </div>
+  <div class="ex">
+    <div class="exh">Exemple — écriture en retour</div>
+    <b>Portail Gestionnaire</b> lit CLIENT_360 (pour afficher les clients) et y <b>écrit</b> les corrections d'adresse.<br>
+    → badge <b>↺ écriture en retour</b> ; fiche : « ses modifications resynchronisent CLIENT_360, et donc les copies
+    aval qu'il alimente et ses consommateurs ». <span style="color:#94a3b8">Pensez à contrôler (§6) les alimentations
+    partant de CLIENT_360 après une réécriture massive.</span>
+  </div>
+  <div class="callout"><b>🖐️ Rappel :</b> vous pouvez <b>glisser</b> ces nœuds où vous voulez (la position est mémorisée) et
+  revenir à l'agencement auto avec <span class="kbd">↺ Disposition auto</span>.</div>
 
   <h2 id="conflit">9. Conflits de maîtrise</h2>
   <p>« Deux applications/sources modifient le même attribut » est un vrai risque. La règle : <b>un attribut = un maître
