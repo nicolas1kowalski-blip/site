@@ -4804,6 +4804,25 @@
             else if (f.status === 'nofreq' || f.status === 'unknown' || f.status === 'na') status = 'none';
             return { status, ageDays: f.ageDays, maxDays: f.maxDays, freq: f.freq, label: '⟳ ' + lfAge(f.ageDays) };
         }
+        // Fraîcheur d'une ALIMENTATION : retard de la copie aval, jugé D'ABORD contre le SLA
+        // déclaré sur le lien (en heures) puis, à défaut, contre la fréquence attendue au
+        // dictionnaire. C'est ce qui rend « exécutable » la règle de fraîcheur d'un lien : dès
+        // qu'un SLA est saisi, le verdict se calcule même sans fréquence au dictionnaire.
+        function lfEdgeFresh(e) {
+            const t = e && lfNode(e.target);
+            const tbl = t && t.tableName ? tableByName(t.tableName) : null;
+            const slaH = (e && e.slaHours != null && e.slaHours !== '' && isFinite(+e.slaHours) && +e.slaHours > 0) ? +e.slaHours : null;
+            // Si un SLA est déclaré ET que l'aval a un chargement daté → on juge contre le SLA du lien.
+            if (slaH != null && tbl && tbl.lastRefresh) {
+                const ageDays = (Date.now() - tbl.lastRefresh) / 864e5;
+                const slaDays = slaH / 24;
+                const status = ageDays > slaDays ? 'bad' : (ageDays > 0.8 * slaDays ? 'warn' : 'ok');
+                return { status, ageDays, maxDays: slaDays, source: 'link', slaHours: slaH };
+            }
+            // Sinon : fraîcheur classique (fréquence du dictionnaire), inchangée.
+            const f = t ? lfFresh(t) : { status: 'none' };
+            return { status: f.status, ageDays: f.ageDays, maxDays: f.maxDays, freq: f.freq, inherited: f.inherited, source: 'dict' };
+        }
         function lfDistStatus(edge) {
             if (!edge.lastRun || edge.lastRun.rate == null) return 'none';
             const th = lfModel().threshold;
@@ -4814,7 +4833,7 @@
         const LF_RANK = { none: 0, ok: 1, warn: 2, bad: 3 };
         function lfWorst(a, b) { return LF_RANK[a] >= LF_RANK[b] ? a : b; }
         function lfEdgeHealth(edge) {
-            const fresh = lfFresh(lfNode(edge.target)).status;
+            const fresh = lfEdgeFresh(edge).status;
             const dist = lfDistStatus(edge);
             const w = lfWorst(fresh === 'none' ? 'none' : fresh, dist === 'none' ? 'none' : dist);
             return w === 'none' ? 'ok' : w; // sans mesure → présumé sain (neutre visuel)
@@ -5047,7 +5066,7 @@
                 const dash = (isUsage || health !== 'ok') ? ' stroke-dasharray="7 5"' : '';
                 const mk = isUsage ? 'usage' : health;
                 paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${mk})" opacity=".9"/>`;
-                const fr = lfFresh(lfNode(e.target)); const lr = e.lastRun;
+                const fr = isUsage ? lfFresh(lfNode(e.target)) : lfEdgeFresh(e); const lr = e.lastRun;
                 const _pairs = lfEdgePairs(e); const _ea = _pairs.length > 1 ? (_pairs.length + ' attributs') : ((_pairs[0] || {}).tgt || (_pairs[0] || {}).src || ''); const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || lfEdgeTypeLabel(e));
                 chips.push(`<div class="lf-echip lf-e-${isUsage ? 'usage' : health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${isUsage ? escapeHTML(lfEdgeTypeLabel(e)) + (fr.status !== 'none' ? ' · ⟳ ' + lfAge(fr.ageDays) : '') : escapeHTML(lbl)}${!isUsage && e.scope ? ' <span style="opacity:.6">⛊ ' + escapeHTML(e.scope) + '</span>' : ''}</div>`);
             });
@@ -5456,12 +5475,17 @@
                 openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: lfEdgeTypeLabel(e) + (isWb ? ' · ↺ retour' : ''), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
                 return;
             }
-            const fr = lfFresh(t); const lr = e.lastRun; const th = lfModel().threshold; const K = lfEdgeKeys(e);
-            const slaBad = fr.status === 'bad'; const distBad = lfDistStatus(e) === 'bad';
+            const fr = lfEdgeFresh(e); const lr = e.lastRun; const th = lfModel().threshold; const K = lfEdgeKeys(e);
+            const slaBad = fr.status === 'bad'; const slaWarn = fr.status === 'warn'; const distBad = lfDistStatus(e) === 'bad';
             const sT = s.tableName ? tableByName(s.tableName) : null, tT = t.tableName ? tableByName(t.tableName) : null;
             const pairs = lfEdgePairs(e);
             const canRun = sT && tT && K.sK && K.tK && pairs.some(pp => pp.src && pp.tgt);
-            const slaBadge = fr.status === 'none' ? '<span class="text-[11px] text-slate-400">fraîcheur non mesurée</span>' : (slaBad ? '<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px">✕ SLA dépassé</span>' : '<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px">✓ SLA respecté</span>');
+            const _slaBasis = fr.source === 'link' ? `SLA du lien (≤ ${e.slaHours} h)` : (fr.freq ? `fréquence « ${escapeHTML(fr.freq)} » (dictionnaire)` : 'fréquence du dictionnaire');
+            const slaBadge = fr.status === 'none'
+                ? `<span class="text-[11px] text-slate-400" title="Saisissez un SLA (h) sur ce lien ou une « Fréquence de mise à jour » au dictionnaire de l'aval">fraîcheur non mesurée</span>`
+                : (slaBad ? `<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px" title="Jugé sur ${_slaBasis}">✕ SLA dépassé — ${lfAge(fr.ageDays)} > ${lfAge(fr.maxDays)}</span>`
+                : (slaWarn ? `<span class="lf-hchip lf-h-warn" style="font-size:11px;padding:4px 10px" title="Jugé sur ${_slaBasis}">⚠ Proche du SLA — ${lfAge(fr.ageDays)} / ≤ ${lfAge(fr.maxDays)}</span>`
+                : `<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px" title="Jugé sur ${_slaBasis}">✓ SLA respecté</span>`));
             const distBadge = !lr ? '<span class="text-[11px] text-slate-400">non contrôlé</span>' : (distBad ? `<span class="lf-hchip lf-h-bad" style="font-size:11px;padding:4px 10px">⚠ Au-dessus du seuil (${th} %)</span>` : `<span class="lf-hchip lf-h-ok" style="font-size:11px;padding:4px 10px">✓ Sous le seuil (${th} %)</span>`);
             // Statut d'un attribut d'après son taux vs seuil.
             const pst = rate => rate > th ? 'bad' : (rate > 0.8 * th ? 'warn' : 'ok');
@@ -5501,8 +5525,9 @@
                 ${_corrWarn ? `<div class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5">⚠ <b>Correction</b> : ce flux modifie des valeurs de <b>${escapeHTML(t.name)}</b> (produite par une autre application). Vérifiez la <b>maîtrise</b> — si le périmètre n'est pas disjoint d'un autre écrivain, c'est un <b>conflit</b>.</div>` : ''}</div>
                 ${e.transformation ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Transformation déclarée</h4><div class="lf-transf"><span style="color:#7dd3fc">règle :</span> ${escapeHTML(e.transformation)}</div></div>` : ''}
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
-                <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Retard actuel (copie aval)</div><div class="lf-cv" style="color:${slaBad ? '#dc2626' : '#16a34a'}">${fr.status === 'none' ? '—' : lfAge(fr.ageDays)}</div></div>
+                <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Retard actuel (copie aval)</div><div class="lf-cv" style="color:${slaBad ? '#dc2626' : (slaWarn ? '#d97706' : '#16a34a')}">${fr.status === 'none' ? '—' : lfAge(fr.ageDays)}</div></div>
                 <div class="lf-cell"><div class="lf-ck">SLA de fraîcheur</div><div class="lf-cv" style="font-size:14px">≤ ${e.slaHours} h</div></div></div>
+                <div class="text-[10.5px] text-slate-400 mt-1">Jugé sur ${fr.source === 'link' ? '<b>le SLA du lien</b>' : (fr.freq ? 'la <b>fréquence du dictionnaire</b>' : 'le SLA du lien ou la fréquence du dictionnaire')} — l\'aval doit avoir un <b>chargement daté</b> pour être mesuré.</div>
                 <div class="mt-2.5">${slaBadge}</div></div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Attributs contrôlés (${pairs.length})</h4>
                 <div class="bg-slate-50 border border-slate-100 rounded-lg p-2">${managerRows}${addRow}</div></div>
@@ -9363,8 +9388,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.16.0';
+        const APP_VERSION = '5.16.1';
         const APP_CHANGELOG = [
+            { v: '5.16.1', d: '2026-07-24', t: 'Correctif Lineage : la règle de fraîcheur d\'un lien est enfin évaluée (SLA du lien)', items: [
+                'Le SLA de fraîcheur saisi sur une alimentation (ex. « ≤ 168 h ») était affiché mais JAMAIS pris en compte : le verdict ne dépendait que de la « Fréquence de mise à jour » du dictionnaire de l\'aval. Sans fréquence au dictionnaire, la fraîcheur restait « non mesurée » quel que soit le SLA saisi.',
+                'Désormais, dès qu\'un SLA (h) est renseigné sur le lien et que l\'aval a un chargement daté, la fraîcheur est jugée contre CE SLA : ✕ dépassé / ⚠ proche / ✓ respecté, avec le retard réel affiché.',
+                'À défaut de SLA sur le lien, on retombe sur la fréquence du dictionnaire (comportement d\'avant). La fiche du lien indique clairement sur quelle base le verdict est calculé.',
+                'La couleur du lien sur la carte et l\'étiquette « ⟳ retard » suivent la même règle : le SLA du lien pilote enfin la santé de fraîcheur de l\'alimentation.'] },
             { v: '5.16.0', d: '2026-07-24', t: 'Modèle clair (R2) : la carte est une projection des données — « Tout redériver »', items: [
                 'La carte Lineage est officiellement une PROJECTION de vos données : elle se met déjà à jour à chaque ouverture (synchro auto) et à chaque (dé)clic dans les applications.',
                 'Nouveau bouton « ♻️ Tout redériver (carte propre) » : reconstruit la carte à neuf à partir des sources de vérité (tables conçues, propriétaire/origine, applications, objets métier) et RETIRE les nœuds/liens ajoutés à la main qui ne correspondent plus à une donnée.',
