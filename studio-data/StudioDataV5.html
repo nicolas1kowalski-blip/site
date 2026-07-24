@@ -2202,10 +2202,13 @@
             const famBar = el('govFamTabs');
             if (famBar) {
                 const govTabs = (NAV_PHASES.find(p => p.id === 'gov') || { tabs: [] }).tabs;
+                // Le graphe « bout en bout » (legacy) est une VUE de l'onglet Lineage (g:'flow'),
+                // pas un onglet séparé : quand on y est, on garde la puce « Lineage » active.
+                const activeG = govState.tab === 'lineage' ? 'flow' : govState.tab;
                 const cur = govTabs.find(t => t.g === govState.tab) || govTabs[0];
-                const sibl = govTabs.filter(t => t.fam === cur.fam);
+                const sibl = govTabs.filter(t => t.fam === cur.fam && !t.hidden);
                 famBar.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">${escapeHTML(cur.fam || '')}</span>` + sibl.map(t =>
-                    `<button onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === govState.tab ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('')
+                    `<button onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === activeG ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('')
                     + `<span class="flex-grow"></span><button onclick="giOpen()" aria-label="Import en masse de la gouvernance" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">⬆ Import en masse</button>`;
             }
             const c = el('govContent');
@@ -2230,6 +2233,7 @@
             else if (govState.tab === 'share') { govState.tab = 'catalog'; c.innerHTML = renderGovCatalog(); openBackupCenter(); }
             else if (govState.tab === 'lineage') { const _am = govState.lineageView === 'attr'; const _bos = state.governance.businessObjects || [];
                 c.innerHTML = '<div id="lineageFsWrap"><div class="flex items-center gap-2 mb-2 flex-wrap">'
+                + '<button onclick="openGovTab(\'flow\')" title="Revenir à la structure table-centrée et à la santé" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50">◀ 🔗 Structure &amp; santé</button>'
                 + '<div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">'
                 + '<button onclick="govState.lineageView=\'global\'; renderGovernance()" class="px-3 py-1.5 ' + (_am ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-indigo-600 text-white') + '">🌐 Vue globale</button>'
                 + '<button onclick="govState.lineageView=\'attr\'; renderGovernance()" class="px-3 py-1.5 ' + (_am ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50') + '">🔬 Par attribut</button></div>'
@@ -4827,6 +4831,7 @@
                     <div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">
                         <button onclick="lfSetView('systems')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-slate-800 text-white'}">Vue systèmes</button>
                         <button onclick="lfSetView('attrs')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">Vue attributs</button>
+                        <button onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
                     </div>
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
@@ -6157,8 +6162,8 @@
                   { g: 'assets', icon: '🖥', label: 'Applis & processus', fam: 'Définir' },
                   { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Classer' },
                   { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Classer' },
-                  { g: 'lineage', icon: '🕸️', label: 'Lineage', fam: 'Tracer' },
-                  { g: 'flow', icon: '🔗', label: 'Lineage & santé', fam: 'Tracer' },
+                  { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Tracer' },
+                  { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Tracer', hidden: true },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Tracer' },
                   { g: 'srcwatch', icon: '🛰️', label: 'Surveillance sources', fam: 'Tracer' },
               ] },
@@ -9058,8 +9063,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.5.0';
+        const APP_VERSION = '5.6.0';
         const APP_CHANGELOG = [
+            { v: '5.6.0', d: '2026-07-24', t: 'Lineage : un seul onglet — structure, santé & graphe de bout en bout (lot 4)', items: [
+                'Fin des deux onglets « Lineage » et « Lineage & santé » : un SEUL onglet « 🕸️ Lineage » regroupe tout. La vue par défaut est la carte table-centrée avec la santé (fraîcheur, distorsion, conflits) ; un bouton « 🕸️ Bout en bout » bascule vers le graphe complet sources ↔ tables ↔ objets métier ↔ applications, et « ◀ Structure & santé » y ramène.',
+                'Aucune perte : toutes les capacités de l\'ancien onglet Lineage (vue globale, par attribut, filtres, plein écran, export image, mise en évidence de chaîne) restent disponibles dans la vue « Bout en bout ». Les liens « voir le lineage » du catalogue et de l\'analyse d\'impact ouvrent directement cette vue.',
+                'Aboutissement du redesign table-centré : moins de concepts, une carte dérivée des données réelles (Synchroniser), et une santé mesurée là où elle a un sens — le tout sur un écran unique.'] },
             { v: '5.5.0', d: '2026-07-24', t: 'Lineage : couche application — lit / écrit & conflits de maîtrise (lot 3)', items: [
                 'La synchronisation dérive désormais la COUCHE APPLICATION : chaque application/processus devient un nœud 🖥 relié aux tables qu\'il utilise par un lien « lit » (table → application), et, s\'il est déclaré « Système source » d\'une table au dictionnaire, par un lien « écrit » (application → table).',
                 'Fraîcheur HÉRITÉE : une application prend la pire fraîcheur des tables qu\'elle lit ; pas de distorsion propre (la donnée consommée EST celle de la table). L\'analyse d\'impact indique combien d\'applications sont touchées par un problème sur une table.',
