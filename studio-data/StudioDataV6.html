@@ -5570,6 +5570,7 @@
                     <select id="lf-pair-xf" class="border border-slate-300 rounded px-1 py-1 text-[11px] bg-white" title="Transformation rejouée sur le maître avant comparaison">${LF_QUICK_XF.map(q => `<option value="${q[0]}">${q[1]}</option>`).join('')}</select>
                     <button onclick="lfPairAdd('${e.id}')" class="text-[11px] bg-indigo-600 text-white px-2 py-1 rounded font-bold">+ Attribut</button>
                     <button onclick="lfPairAddCommon('${e.id}')" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold hover:bg-slate-50" title="Ajoute toutes les colonnes de même nom présentes des deux côtés">✚ Même nom</button>
+                    ${lfBoPairsForEdge(e).length ? `<button onclick="lfApplyBoPairs('${e.id}')" class="text-[11px] bg-emerald-50 border border-emerald-300 text-emerald-700 px-2 py-1 rounded font-bold hover:bg-emerald-100" title="Reprend les attributs déjà mappés dans l'objet métier commun aux deux tables — évite de re-paramétrer">🏛️ Mapping objet métier (${lfBoPairsForEdge(e).length})</button>` : ''}
                 </div>` : '<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Reliez la <b>source</b> et la <b>cible</b> à des sources chargées (dans « ⚙️ Construire le flux ») pour gérer et contrôler les attributs.</div>';
             // Résultats détaillés par attribut.
             const resultsHTML = (lr && (lr.pairs || []).length) ? `<div class="mt-3"><div class="text-[10px] uppercase text-slate-400 font-bold mb-1">Résultat par attribut</div>
@@ -5672,6 +5673,33 @@
             common.forEach(h => { if (!e.attrPairs.some(pp => pp.src === h && pp.tgt === h)) { e.attrPairs.push({ id: 'ap_' + generateId(), src: h, tgt: h, xform: { kind: 'none' } }); added++; } });
             e.lastRun = null; persistAppState(); renderGovernance(); setTimeout(() => lfOpenEdge(id), 20);
             if (!added) showError('Aucun nouvel attribut de même nom à ajouter.');
+        }
+        // V6 Lot 3 : réutilise le MAPPING de l'objet métier pour la réconciliation (image par valeur),
+        // au lieu de re-paramétrer les mêmes attributs. Pour chaque attribut d'un objet métier mappé
+        // À LA FOIS sur la table source et sur la table cible du lien, on déduit la paire (col src → col cible).
+        function lfBoPairsForEdge(e) {
+            const s = e && lfNode(e.source), t = e && lfNode(e.target);
+            if (!s || !t || !s.tableName || !t.tableName) return [];
+            const seen = new Set(); const out = [];
+            (state.governance.businessObjects || []).forEach(bo => {
+                (boAllAttrRows(bo) || []).forEach(r => {
+                    const maps = (r.el && r.el.mappings) || [];
+                    const ms = maps.find(m => m.table === s.tableName && m.col), mt = maps.find(m => m.table === t.tableName && m.col);
+                    if (!ms || !mt) return;
+                    const k = ms.col + '¦' + mt.col; if (seen.has(k)) return; seen.add(k);
+                    out.push({ attr: r.el.name, src: ms.col, tgt: mt.col, bo: bo.name });
+                });
+            });
+            return out;
+        }
+        function lfApplyBoPairs(id) {
+            const e = lfEdge(id); if (!e) return;
+            const pairs = lfBoPairsForEdge(e); if (!pairs.length) return showError('Aucun attribut d\'objet métier n\'est mappé des deux côtés de ce lien.');
+            lfEnsurePairs(e); const K = lfEdgeKeys(e); let added = 0;
+            pairs.forEach(pp => { if (pp.src === K.sK && pp.tgt === K.tK) return; if (e.attrPairs.some(x => x.src === pp.src && x.tgt === pp.tgt)) return; e.attrPairs.push({ id: 'ap_' + generateId(), src: pp.src, tgt: pp.tgt, xform: { kind: 'none' } }); added++; });
+            e.lastRun = null; persistAppState(); renderGovernance(); setTimeout(() => lfOpenEdge(id), 20);
+            if (!added) showError('Le mapping de l\'objet métier est déjà repris sur ce lien.');
+            else showSuccess(`🏛️ ${added} attribut(s) repris du mapping de l'objet métier.`);
         }
         async function lfReconEdge(id, btn, opts) {
             opts = opts || {}; const _f = msg => opts.silent ? { ok: false, reason: msg } : showError(msg);
@@ -9452,8 +9480,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.1.0';
+        const APP_VERSION = '6.2.0';
         const APP_CHANGELOG = [
+            { v: '6.2.0', d: '2026-07-24', t: 'V6 Lot 3 — la réconciliation (image par valeur) réutilise le mapping de l\'objet métier', items: [
+                'Fini le double paramétrage : sur la fiche d\'une alimentation, un bouton « 🏛️ Mapping objet métier (N) » reprend d\'un clic les attributs déjà mappés dans l\'objet métier commun aux deux tables du lien — au lieu de re-saisir les mêmes colonnes.',
+                'Pour chaque attribut d\'objet métier mappé À LA FOIS sur la table source et sur la table cible, la paire (colonne source → colonne cible) est déduite automatiquement, même quand les noms de colonnes diffèrent entre les deux tables.',
+                'Le bouton n\'apparaît que si un mapping commun existe ; les attributs déjà présents et la clé ne sont pas re-ajoutés. Le paramétrage de l\'objet métier devient la source de vérité unique, réutilisée par la mesure de distorsion.'] },
             { v: '6.1.0', d: '2026-07-24', t: 'V6 Lot 2 — l\'objet métier est alimenté PAR les applications (et peut être représenté par un référentiel)', items: [
                 'Chaque source d\'un objet métier affiche désormais l\'APPLICATION qui la produit (« via 🖥 … »), matérialisant le principe : la donnée entre dans l\'objet métier via une application, jamais directement depuis un fichier.',
                 'Nouveau — « 🏛️ Référentiel : représenté par l\'application » : on peut désigner l\'application qui matérialise/porte l\'objet métier (un MDM, un référentiel client). Le badge apparaît sur le nœud de l\'objet dans le lineage.',
