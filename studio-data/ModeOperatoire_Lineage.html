@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mode opératoire pas à pas — Lineage & santé (Studio Data V5.6)</title>
+<title>Mode opératoire pas à pas — Lineage & santé (Studio Data V5.16)</title>
 <style>
   :root{ --ink:#0f172a; --muted:#475569; --faint:#64748b; --line:#e2e8f0; --bg:#f8fafc; --panel:#fff;
          --brand:#4f46e5; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --accent:#059669; --violet:#7c3aed; }
@@ -53,9 +53,14 @@
 <body>
 <div class="wrap">
   <h1>🕸️ Lineage &amp; santé — mode opératoire pas à pas</h1>
-  <p class="lead">Studio Data V5.6 · Construire la <b>carte</b> de circulation de vos données, puis contrôler sur les
-  <b>données réelles</b> leur <b>fraîcheur</b> (retard), leur <b>distorsion</b> (écarts de valeur) et les <b>conflits de
-  maîtrise</b> — le tout dans <b>un seul onglet</b>. Ce guide suit un <b>exemple fil rouge</b> du début à la fin.</p>
+  <p class="lead">Studio Data V5.16 · Construire la <b>carte</b> de circulation de vos données, puis contrôler sur les
+  <b>données réelles</b> leur <b>fraîcheur</b> (retard), leur <b>distorsion</b> (écarts de valeur) et la <b>cohérence du
+  modèle</b> (maîtrise) — le tout dans <b>un seul onglet</b>. Ce guide suit un <b>exemple fil rouge</b> du début à la fin.</p>
+
+  <div class="callout ok"><b>🆕 Nouveauté — la carte est une projection de vos données.</b> Vous ne dessinez plus la carte à la
+  main : elle est <b>dérivée</b> de vos tables conçues, de vos applications et de vos objets métier. « Synchroniser » la
+  met à jour (ajout/retrait) ; « ♻️ Tout redériver » la reconstruit à neuf en <b>préservant vos points de mesure</b> et
+  vos positions. Voir §3.</div>
 
   <div class="callout"><b>Comment lire ce guide.</b> Chaque étape indique
   <span class="tag">👉 Ce que vous faites</span> (les clics/saisies) et <span class="tag">💡 À quoi ça sert</span>
@@ -74,7 +79,7 @@
       <li><a href="#sante">6. Contrôler une alimentation (attribut par attribut)</a></li>
       <li><a href="#fraicheur">7. Fraîcheur &amp; SLA</a></li>
       <li><a href="#appli">8. Couche application (lit / écrit)</a></li>
-      <li><a href="#conflit">9. Conflits de maîtrise</a></li>
+      <li><a href="#conflit">9. Cohérence du modèle &amp; maîtrise</a></li>
       <li><a href="#boutenbout">10. Vue « Bout en bout »</a></li>
       <li><a href="#journal">11. Journal, seuil &amp; export</a></li>
       <li><a href="#depannage">12. Dépannage</a></li>
@@ -89,10 +94,17 @@
     <tr><th>Élément</th><th>Ce que c'est</th><th>Comment il apparaît</th></tr>
     <tr><td><b>Nœud table</b></td><td>Une <b>table</b> (source chargée ou table conçue). Le seul objet <b>mesurable</b>.</td><td>📄 / 🏛 / 📊 selon le rôle</td></tr>
     <tr><td><b>Nœud application</b></td><td>Un logiciel/système qui <b>produit</b>, <b>lit</b> et/ou <b>écrit</b> des tables. <b>C'est lui le maître de la donnée</b>, pas le fichier.</td><td>🖥 (violet, pointillé)</td></tr>
-    <tr><td><b>Lien « écrit / produit »</b></td><td>application → fichier : l'appli <b>produit</b> le fichier (son origine). Le fichier lui <b>appartient</b>.</td><td>flèche violette</td></tr>
-    <tr><td><b>Lien « alimente »</b></td><td>table → table (une copie/consolidation en aval).</td><td>flèche pleine — <b>on y mesure la distorsion</b></td></tr>
+    <tr><td><b>Nœud rapport</b></td><td>Une application <b>terminale</b> (bout de chaîne) qui ne fait que <b>consommer</b> : un tableau de bord, un état.</td><td>📑 (application « terminale »)</td></tr>
+    <tr><td><b>Nœud objet métier</b></td><td>Un concept métier (Client, Contrat…) <b>composé</b> par des tables et <b>diffusé</b> vers d'autres. Documentaire.</td><td>🏛️ (case verte)</td></tr>
+    <tr><td><b>Lien « écrit / produit »</b></td><td>application → table : l'appli <b>produit</b> la table (son origine). La table lui <b>appartient</b>.</td><td>flèche violette</td></tr>
+    <tr><td><b>Lien « alimente »</b></td><td>table → table (une copie/consolidation en aval). Porte une <b>nature</b> (recopie · complément · correction) et un <b>périmètre</b> optionnel.</td><td>flèche pleine — <b>on y mesure la distorsion</b></td></tr>
     <tr><td><b>Lien « lit »</b></td><td>table → application (l'appli consomme la donnée).</td><td>flèche violette — fraîcheur héritée, pas de distorsion</td></tr>
   </table>
+  <p class="callout"><b>Trois entités, une carte.</b> Tout se ramène à trois objets : des <b>applications</b> (qui possèdent
+  et produisent des tables), des <b>tables</b> (le seul objet mesurable, dont une source directe du référentiel, une
+  consolidation, ou une copie aval), et des <b>objets métier</b> (le sens). La donnée peut venir <b>directement du
+  référentiel</b>, mais aussi d'<b>autres applications</b> — sur un <b>périmètre différent</b> ou pour <b>compléter /
+  corriger</b> une donnée poussée ailleurs — et alimenter en cascade d'autres applications jusqu'à un <b>rapport</b> final.</p>
   <p class="callout ok"><b>Rien à classer à la main.</b> Les rôles sont <b>déduits</b> de la forme du flux :
   <span class="pill p-app">Application maître 🗄</span> celle qui produit les fichiers (source de vérité) ·
   <span class="pill p-cons" style="background:#cffafe;color:#155e75">Source 📄</span> un fichier produit par une application (son extrait) ·
@@ -120,9 +132,9 @@
     <p><span class="num">2</span><b>Concevoir la table consolidée</b> (facultatif mais recommandé).
     <span class="path">Tables conçues</span> → créez <code>CLIENT_360</code> alimentée par les deux sources
     (clé = client). C'est elle qui, à l'étape 3, générera automatiquement les alimentations.</p>
-    <p><span class="num">3</span><b>Renseigner l'origine &amp; la fréquence.</b> <span class="path">Gouvernance ▸ Définir ▸ Dictionnaire</span> :
+    <p><span class="num">3</span><b>Renseigner l'origine &amp; la fréquence.</b> <span class="path">Gouvernance ▸ Patrimoine ▸ Dictionnaire</span> :
     pour chaque table, remplissez <b>« Système source »</b> (= l'origine) et <b>« Fréquence de mise à jour »</b>.</p>
-    <p><span class="num">4</span><b>Déclarer les applications.</b> <span class="path">Gouvernance ▸ Définir ▸ Applis &amp; processus</span> :
+    <p><span class="num">4</span><b>Déclarer les applications.</b> <span class="path">Gouvernance ▸ Acteurs ▸ Applications &amp; processus</span> :
     créez <code>BI Ventes</code> (et cochez les tables/colonnes qu'elle utilise, ex. CLIENT_360) et <code>Facturation</code>.</p>
   </div>
   <div class="do"><b>👉 Vous faites :</b> importer 2 CSV, concevoir CLIENT_360, remplir « Système source » + « Fréquence », déclarer 2 applis.</div>
@@ -136,7 +148,10 @@
 
   <h2 id="acces">2. Ouvrir l'onglet Lineage</h2>
   <div class="step">
-    <p><span class="path">Gouvernance</span> → famille <span class="path">Tracer</span> → <span class="path">🕸️ Lineage</span>.</p>
+    <p><span class="path">Gouvernance</span> → famille <span class="path">Lineage</span> → <span class="path">🕸️ Lineage</span>.</p>
+    <p class="callout"><b>Navigation par familles.</b> Les onglets de gouvernance sont regroupés : <b>Patrimoine</b> (Dictionnaire,
+    Modèle de données), <b>Acteurs</b> (Applications &amp; processus), <b>Sens métier</b> (Objets métier, Glossaire,
+    Périmètres, Sensibilité), <b>Lineage</b>, <b>Contrôle</b> (Surveillance des sources, Historique) et <b>Diffusion</b> (Catalogue).</p>
     <p>Un seul onglet, deux vues accessibles en haut à droite : <span class="kbd">Vue systèmes</span> /
     <span class="kbd">Vue attributs</span> (la carte table‑centrée + santé, par défaut) et
     <span class="kbd">🕸️ Bout en bout</span> (le grand graphe complet — voir §10).</p>
@@ -157,8 +172,14 @@
   <div class="do"><b>👉 Vous faites :</b> un seul clic sur <span class="kbd">🔄 Synchroniser depuis les données</span>.</div>
   <div class="why"><b>💡 Ça sert à :</b> ne <b>jamais re‑saisir</b> la carte. Une re‑synchro plus tard <b>réconcilie</b> : elle <b>ajoute</b> les nouveaux liens dérivés et <b>retire</b> ceux devenus obsolètes (table décochée sur une application), tout en conservant à l'identique vos <b>réglages manuels</b> et vos <b>liens ajoutés à la main</b>.</div>
   <div class="callout ok"><b>🔁 Mise à jour automatique.</b> Une fois qu'une application figure sur la carte, il n'est plus nécessaire de recliquer « Synchroniser » :
-  <b>cocher/décocher une table</b> (ou lier/délier une colonne) dans <span class="path">Applis &amp; processus</span> met le lineage à jour <b>immédiatement</b> —
+  <b>cocher/décocher une table</b> (ou lier/délier une colonne) dans <span class="path">Applications &amp; processus</span> met le lineage à jour <b>immédiatement</b> —
   le lien « lit » apparaît ou disparaît en conséquence.</div>
+  <div class="callout violet"><b>♻️ « Tout redériver (carte propre) ».</b> À côté de « Synchroniser », ce bouton <b>reconstruit toute la carte
+  depuis zéro</b> à partir de vos données. Utile quand la carte a accumulé des nœuds/liens manuels devenus obsolètes et
+  que vous voulez repartir propre. <b>Vos points de mesure sont préservés</b> : clés, paires d'attributs, SLA, nature,
+  périmètre, dernier contrôle et positions des cases sont ré‑attachés automatiquement, par identité, sur les liens
+  reconstruits. La différence avec « Synchroniser » : celui‑ci met à jour (ajoute/retire) ; « Tout redériver » repart de
+  la feuille blanche.</div>
   <div class="ex">
     <div class="exh">Exemple — ce qui apparaît après le clic</div>
 🖥 CRM 🗄 ──écrit──▶ 📄 CRM_CLIENTS ──alimente──▶ 🏛 CLIENT_360 ◀──alimente── 📄 KADOR_CONTRATS ◀──écrit── 🖥 KADOR 🗄
@@ -192,12 +213,18 @@
       <tr><td><b>Source</b> / <b>Cible</b></td><td>le sens du flux (Source alimente Cible)</td><td><code>KADOR_CONTRATS</code> → <code>CLIENT_360</code></td></tr>
       <tr><td><b>Clé (source)</b> / <b>(cible)</b></td><td>la colonne d'entité <b>de chaque côté</b> (les noms diffèrent souvent)</td><td><code>code_client</code> → <code>id_client</code></td></tr>
       <tr><td><b>Attribut (source)</b> / <b>(cible)</b></td><td>la colonne à comparer de chaque côté</td><td><code>montant_ca</code> → <code>ca_annuel</code></td></tr>
+      <tr><td><b>Nature</b></td><td><b>Recopie</b> (copie à l'identique) · <b>Complément</b> (ajoute des données) · <b>Correction</b> (modifie une donnée poussée ailleurs)</td><td><code>Correction</code></td></tr>
+      <tr><td><b>Périmètre</b></td><td>filtre optionnel : sur quelle <b>partie</b> des données porte l'alimentation</td><td><code>type = ASSURANCE</code></td></tr>
       <tr><td><b>SLA (h)</b></td><td>retard maximal toléré pour la copie aval</td><td><code>168</code> (7 j)</td></tr>
       <tr><td><b>Transformation rejouable</b></td><td>si l'aval n'est pas une copie brute (§6)</td><td><code>Aucune</code></td></tr>
     </table>
     <p class="callout"><b>Le type du lien (Alimente / Consolide) n'est pas demandé</b> non plus : « Consolide » s'affiche
-    automatiquement quand la cible reçoit ≥ 2 sources.</p>
+    automatiquement quand la cible reçoit ≥ 2 sources — et prime alors sur la nature saisie.</p>
   </div>
+  <div class="why"><b>💡 La nature &amp; le périmètre servent à :</b> décrire fidèlement les cas réels — une application
+  qui <b>complète</b> ou <b>corrige</b> sur un <b>périmètre précis</b> une donnée qu'une autre a poussée. Une
+  <b>correction sans périmètre</b> vers une table déjà possédée déclenche un avertissement dans le panneau « Cohérence du
+  modèle » (§9), car elle risque de créer un conflit de maîtrise.</div>
   <div class="why"><b>💡 Ça sert à :</b> le couple <b>clé + attribut par côté</b> permet à la réconciliation de <b>joindre les bonnes colonnes</b> même quand elles n'ont pas le même nom entre CRM et KADOR.</div>
 
   <h2 id="deduit">5. Lire la carte — les rôles déduits</h2>
@@ -209,6 +236,7 @@
     <tr><td>KADOR_CONTRATS</td><td>fichier</td><td><span class="pill p-cons" style="background:#cffafe;color:#155e75">Source 📄</span></td><td>produit par l'application KADOR</td></tr>
     <tr><td>CLIENT_360</td><td>table conçue</td><td><span class="pill p-ref">Référentiel 🏛 ⑃</span></td><td>≥ 2 alimentations → <b>consolidation</b></td></tr>
     <tr><td>BI Ventes</td><td>application</td><td><span class="pill p-app">Application 🖥</span></td><td>logiciel qui <b>lit</b> le référentiel</td></tr>
+    <tr><td>Tableau de bord Direction</td><td>application terminale</td><td><span class="pill p-app" style="background:#e0e7ff;color:#3730a3">Rapport 📑</span></td><td>bout de chaîne : <b>ne fait que consommer</b>, ne produit rien en aval</td></tr>
   </table>
   <div class="callout"><b>Le maître, c'est l'application.</b> Un fichier source (CRM_CLIENTS, KADOR_CONTRATS) n'est <b>jamais</b> le maître :
   il <b>appartient</b> à l'application qui le produit (son <b>origine</b>, ex. KADOR), et c'est cette application qui porte le rôle
@@ -318,29 +346,37 @@
     partant de CLIENT_360 après une réécriture massive.</span>
   </div>
   <div class="callout"><b>🖐️ Rappel :</b> vous pouvez <b>glisser</b> ces nœuds où vous voulez (la position est mémorisée) et
-  revenir à l'agencement auto avec <span class="kbd">↺ Disposition auto</span>.</div>
+  revenir à l'agencement auto avec <span class="kbd">⇄ Réorganiser</span>.</div>
 
-  <h2 id="conflit">9. Conflits de maîtrise</h2>
-  <p>« Deux applications/sources modifient le même attribut » est un vrai risque. La règle : <b>un attribut = un maître
-  pour une ligne donnée</b>.</p>
+  <h2 id="conflit">9. Cohérence du modèle &amp; maîtrise</h2>
+  <p>En haut de la carte, le panneau <b>🧩 Cohérence du modèle</b> passe en revue votre lineage et liste les
+  <b>contradictions</b> (⛔ erreurs) et les <b>points d'attention</b> (⚠️ avertissements). Tant que la liste est vide, le
+  modèle est sain. Les contrôles couverts :</p>
   <table>
-    <tr><th>Situation</th><th>Ce qui se passe</th></tr>
-    <tr><td>1 seul maître</td><td>OK — c'est la référence de la réconciliation.</td></tr>
-    <tr><td>≥ 2 maîtres, <b>conditions disjointes</b> (ex. type=ASSURANCE / type=MAINTENANCE)</td><td>OK — <b>maîtrise contextuelle</b> : 1 maître par ligne, pas de conflit.</td></tr>
-    <tr><td>≥ 2 maîtres <b>sans condition</b></td><td><b>⚠️ Bandeau d'alerte « conflit de maîtrise »</b> en haut de l'écran.</td></tr>
+    <tr><th>Contrôle</th><th>Sévérité</th><th>Ce qu'il signale</th></tr>
+    <tr><td><b>Table à ≥ 2 propriétaires</b></td><td>⛔ erreur</td><td>deux applications <b>écrivent/produisent</b> la même table : un seul maître est possible.</td></tr>
+    <tr><td><b>Objet métier à ≥ 2 maîtres sans règle</b></td><td>⛔ erreur</td><td>l'ancien « conflit de maîtrise » : deux sources maîtres du même objet <b>sans</b> maîtrise contextuelle.</td></tr>
+    <tr><td><b>Correction sans périmètre</b></td><td>⚠️ warn</td><td>une alimentation de nature <b>correction</b> vers une table déjà possédée, <b>sans périmètre</b> pour la borner.</td></tr>
+    <tr><td><b>Objet métier sans maître</b></td><td>⚠️ warn</td><td>aucune source n'est désignée maître de l'objet.</td></tr>
+    <tr><td><b>Table qui alimente sans propriétaire</b></td><td>⚠️ warn</td><td>une table diffuse en aval mais aucune application ne la produit (origine manquante).</td></tr>
   </table>
+  <div class="callout"><b>La règle de maîtrise :</b> <b>un attribut = un maître pour une ligne donnée</b>. Deux maîtres sont
+  admis s'ils portent sur des <b>périmètres disjoints</b> (ex. <code>type=ASSURANCE</code> / <code>type=MAINTENANCE</code>) :
+  c'est la <b>maîtrise contextuelle</b>, 1 maître par ligne, pas de conflit.</div>
   <div class="step">
-    <p><b>Lever un conflit :</b> <span class="path">Gouvernance ▸ Objets métier</span> → l'objet concerné →
-    soit désignez un <b>maître unique</b>, soit ajoutez une <b>Règle de maîtrise contextuelle</b> (ex. « CRM maître si
-    <code>type = PARTICULIER</code>, KADOR maître si <code>type = PRO</code> »). Le bandeau disparaît.</p>
+    <p><b>Lever une contradiction de maîtrise :</b> <span class="path">Gouvernance ▸ Sens métier ▸ Objets métier</span> →
+    l'objet concerné → soit désignez un <b>maître unique</b>, soit ajoutez une <b>Règle de maîtrise contextuelle</b>
+    (ex. « CRM maître si <code>type = PARTICULIER</code>, KADOR maître si <code>type = PRO</code> »). La ligne disparaît du panneau.</p>
+    <p><b>Lever un « propriétaire manquant » :</b> renseignez le <b>« Système source »</b> de la table au dictionnaire — son
+    application productrice apparaît et en devient le maître.</p>
   </div>
   <div class="ex">
-    <div class="exh">Exemple — conflit détecté</div>
+    <div class="exh">Exemple — contradiction détectée</div>
     Objet <b>Client 360</b> déclare <b>CRM_CLIENTS</b> ET <b>KADOR_CONTRATS</b> comme <b>maîtres</b> du CA, sans règle.<br>
-    <span style="color:#fca5a5">⚠️ « 1 conflit de maîtrise détecté — Client 360 : 2 maîtres — CRM_CLIENTS, KADOR_CONTRATS ».</span><br>
-    <b>Correctif :</b> règle « CRM maître si <code>segment = B2C</code>, KADOR maître si <code>segment = B2B</code> » → plus de conflit.
+    <span style="color:#fca5a5">⛔ « Objet Client 360 : 2 applications/sources maîtres sans règle de partage ».</span><br>
+    <b>Correctif :</b> règle « CRM maître si <code>segment = B2C</code>, KADOR maître si <code>segment = B2B</code> » → la ligne disparaît.
   </div>
-  <div class="why"><b>💡 Ça sert à :</b> transformer un désaccord silencieux (« qui a raison sur le CA ? ») en <b>signal explicite</b> et outillé, sans bloquer votre organisation.</div>
+  <div class="why"><b>💡 Ça sert à :</b> transformer un désaccord silencieux (« qui a raison sur le CA ? ») en <b>signal explicite</b> et outillé, sans bloquer votre organisation — et à vérifier d'un coup d'œil que le modèle « tient debout ».</div>
 
   <h2 id="boutenbout">10. Vue « Bout en bout »</h2>
   <div class="step">
@@ -372,24 +408,25 @@
     <tr><td><span class="kbd">↻ Contrôler</span> reste grisé</td><td>Il manque une <b>source reliée</b> (côté source et/ou cible), la <b>clé</b> ou l'<b>attribut</b>. Complétez le lien.</td></tr>
     <tr><td>« aucun attribut » proposé pour une source</td><td>Le nœud n'a pas de <b>Source liée</b> chargée : reliez‑le à une source dans <span class="kbd">⚙️ Construire le flux</span>.</td></tr>
     <tr><td>Fraîcheur « non mesuré »</td><td>Renseignez <b>« Fréquence de mise à jour »</b> au dictionnaire ; assurez‑vous que la source a un <b>chargement daté</b>.</td></tr>
-    <tr><td>Une application n'apparaît pas après synchro</td><td>Elle n'utilise aucune table ni colonne : cochez ses tables/colonnes dans <span class="path">Applis &amp; processus</span>, puis re‑synchronisez.</td></tr>
+    <tr><td>Une application n'apparaît pas après synchro</td><td>Elle n'utilise aucune table ni colonne : cochez ses tables/colonnes dans <span class="path">Applications &amp; processus</span>, puis re‑synchronisez.</td></tr>
     <tr><td>Un lien dérivé en double après modif manuelle</td><td>Impossible : la synchro apparie par <b>identité</b> (nom de table, couple source→cible) et ne recrée jamais un lien existant.</td></tr>
+    <tr><td>La carte est encombrée de nœuds/liens obsolètes</td><td>Cliquez <span class="kbd">♻️ Tout redériver</span> : la carte est reconstruite depuis vos données, vos points de mesure et positions sont préservés.</td></tr>
   </table>
 
   <h2 id="recap">⚡ Récap express</h2>
   <div class="step">
     <ol>
       <li>Charger les sources ; renseigner <b>Système source</b> + <b>Fréquence</b> (dictionnaire) ; déclarer les applis.</li>
-      <li><span class="path">Gouvernance ▸ Tracer ▸ 🕸️ Lineage</span>.</li>
-      <li><span class="kbd">⚙️ Construire le flux</span> → <span class="kbd">🔄 Synchroniser depuis les données</span> (la carte se dessine seule).</li>
-      <li>Corriger si besoin (<span class="kbd">+ Nœud</span> / <span class="kbd">+ Lien</span>) — le rôle et le type sont déduits.</li>
+      <li><span class="path">Gouvernance ▸ Lineage ▸ 🕸️ Lineage</span>.</li>
+      <li><span class="kbd">⚙️ Construire le flux</span> → <span class="kbd">🔄 Synchroniser</span> (la carte se dessine seule) ; <span class="kbd">♻️ Tout redériver</span> pour repartir propre.</li>
+      <li>Corriger si besoin (<span class="kbd">+ Nœud</span> / <span class="kbd">+ Lien</span>) — le rôle et le type sont déduits ; précisez <b>nature</b> &amp; <b>périmètre</b> de l'alimentation.</li>
       <li>Cliquer l'étiquette d'une <b>alimentation</b> → déclarer clé + attribut(s) → <span class="kbd">↻ Contrôler</span>.</li>
-      <li>Lire la santé (distorsion, fraîcheur), traiter les <b>conflits de maîtrise</b>, exporter les écarts, suivre le <b>journal</b>.</li>
+      <li>Lire la santé (distorsion, fraîcheur), traiter le panneau <b>🧩 Cohérence du modèle</b>, exporter les écarts, suivre le <b>journal</b>.</li>
       <li>Basculer en <span class="kbd">🕸️ Bout en bout</span> pour la vue d'ensemble.</li>
     </ol>
   </div>
 
-  <footer>Studio Data V5.6 — Mode opératoire « Lineage &amp; santé », modèle table‑centré. Exemple fil rouge à but pédagogique.</footer>
+  <footer>Studio Data V5.16 — Mode opératoire « Lineage &amp; santé ». Modèle clair à trois entités (applications · tables · objets métier) ; la carte est une projection de vos données. Exemple fil rouge à but pédagogique.</footer>
 </div>
 </body>
 </html>
