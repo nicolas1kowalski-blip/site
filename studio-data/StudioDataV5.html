@@ -4007,10 +4007,10 @@
             if (on) { if (!a.appIds.includes(appId)) a.appIds.push(appId); } else a.appIds = a.appIds.filter(x => x !== appId);
             persistAppState(); renderGovernance();
         }
-        function toggleAssetTable(id, name, checked) { const a = assetById(id); if (!a) return; a.tables = a.tables || []; if (checked) { if (!a.tables.includes(name)) a.tables.push(name); } else a.tables = a.tables.filter(t => t !== name); persistAppState(); renderGovernance(); }
+        function toggleAssetTable(id, name, checked) { const a = assetById(id); if (!a) return; a.tables = a.tables || []; if (checked) { if (!a.tables.includes(name)) a.tables.push(name); } else a.tables = a.tables.filter(t => t !== name); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); }
         function populateAssetCols(id, tableName) { const t = tableByName(tableName); const s2 = el('as-col-' + id); if (s2) s2.innerHTML = (t ? t.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
-        function addAssetCol(id) { const a = assetById(id); if (!a) return; const tbl = el('as-tbl-' + id).value, col = el('as-col-' + id).value; if (!tbl || !col) return; a.columns = a.columns || []; if (!a.columns.some(l => l.table === tbl && l.col === col)) a.columns.push({ table: tbl, col }); persistAppState(); renderGovernance(); }
-        function removeAssetCol(id, idx) { const a = assetById(id); if (a && a.columns) { a.columns.splice(idx, 1); persistAppState(); renderGovernance(); } }
+        function addAssetCol(id) { const a = assetById(id); if (!a) return; const tbl = el('as-tbl-' + id).value, col = el('as-col-' + id).value; if (!tbl || !col) return; a.columns = a.columns || []; if (!a.columns.some(l => l.table === tbl && l.col === col)) a.columns.push({ table: tbl, col }); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); }
+        function removeAssetCol(id, idx) { const a = assetById(id); if (a && a.columns) { a.columns.splice(idx, 1); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); } }
         function renderGovAssets() {
             const assets = state.governance.assets || [];
             const names = readyTableNames();
@@ -5126,9 +5126,14 @@
         // d'enrichissement (design.joins). Fusion ADDITIVE par identité (nom de table pour les
         // nœuds, couple source→cible pour les liens) : rien n'est écrasé ni supprimé, les réglages
         // manuels (clés, attributs contrôlés, SLA, transformations, derniers contrôles) sont préservés.
-        function lfSyncFromData() {
+        function lfSyncFromData(opts) {
+            opts = opts || {}; const only = opts.onlyAssetId || null; const silent = !!opts.silent;
+            const say = msg => { if (!silent) showSuccess(msg); };
             const m = lfModel(); const g = state.governance; const dict = g.dictionary || {};
-            let addedN = 0, addedE = 0, filledO = 0;
+            let addedN = 0, addedE = 0, filledO = 0, removedE = 0, removedN = 0;
+            // Usages DÉRIVÉS souhaités après cette synchro (clé rel:appId:tableId) : sert à retirer
+            // les liens « lit »/« écrit » devenus obsolètes (table qui n'est plus déclarée).
+            const desired = new Set();
             // Réutilise un nœud existant portant cette table (manuel ou dérivé), sinon en crée un dérivé.
             const nodeForTable = (tblName) => {
                 let n = m.nodes.find(x => x.tableName === tblName)
@@ -5160,12 +5165,14 @@
                 const tN = nodeForTable(tblName);
                 const [src, tgt] = rel === 'writes' ? [appNode, tN] : [tN, appNode]; // lit : table→appli ; écrit : appli→table
                 if (src.id === tgt.id) return;
+                desired.add(rel + ':' + appNode.id + ':' + tN.id); // usage souhaité (même si le lien existe déjà)
                 if (m.edges.some(e => e.source === src.id && e.target === tgt.id)) return;
                 m.edges.push({ id: 'le_' + generateId(), source: src.id, target: tgt.id, type: 'feeds', rel, srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true });
                 addedE++;
             };
             let designedCount = 0;
-            Object.values(state.tables).forEach(t => {
+            // Les alimentations table→table ne sont recalculées que lors d'une synchro GLOBALE.
+            if (!only) Object.values(state.tables).forEach(t => {
                 if (t.type !== 'designed' || !t.design || t.status !== 'ready') return;
                 designedCount++;
                 const feeders = new Set();
@@ -5175,20 +5182,53 @@
             });
             // Couche application (lot 3) : « lit » = tables/colonnes utilisées par un actif ; « écrit »
             // = actif dont le NOM est le système source d'une table (producteur déclaré au dictionnaire).
-            const assets = (g.assets || []);
+            const allAssets = (g.assets || []);
+            const assets = only ? allAssets.filter(a => a.id === only) : allAssets;
             assets.forEach(a => {
                 const reads = new Set([...(a.tables || []), ...((a.columns || []).map(c => c && c.table).filter(Boolean))]);
                 const writesTables = Object.keys(dict).filter(tn => String((dict[tn] || {}).sourceSystem || '').toLowerCase() === String(a.name || '').toLowerCase() && tableByName(tn));
-                if (!reads.size && !writesTables.length) return;
+                if (!reads.size && !writesTables.length) return; // rien de déclaré → aucun usage souhaité (les liens dérivés seront purgés)
                 const appN = nodeForApp(a);
                 reads.forEach(tn => ensureUsageEdge(tn, appN, 'reads'));
                 writesTables.forEach(tn => ensureUsageEdge(tn, appN, 'writes'));
             });
-            if (!designedCount && !assets.length) return showError('Rien à dériver : concevez au moins une table (onglet « Tables conçues ») et/ou déclarez des applications & processus (onglet « Applis & processus »), ou construisez le flux à la main.');
-            persistAppState(); renderGovernance();
+            // -- Purge des liens d'usage DÉRIVÉS obsolètes (déclaration retirée). Les liens MANUELS
+            //    (derived non vrai) et les usages d'applis non concernées sont laissés intacts. --
+            const inScope = appNode => appNode && lfNodeKind(appNode) === 'app' && appNode.assetId && (!only || appNode.assetId === only);
+            m.edges = m.edges.filter(e => {
+                if (!e.derived) return true;
+                const rel = lfEdgeRel(e); if (rel !== 'reads' && rel !== 'writes') return true;
+                const appNode = rel === 'writes' ? lfNode(e.source) : lfNode(e.target);
+                const tblNode = rel === 'writes' ? lfNode(e.target) : lfNode(e.source);
+                if (!inScope(appNode) || !tblNode) return true;
+                if (desired.has(rel + ':' + appNode.id + ':' + tblNode.id)) return true;
+                removedE++; return false;
+            });
+            // -- Purge des nœuds APPLICATION dérivés devenus orphelins (plus aucun lien). --
+            m.nodes = m.nodes.filter(n => {
+                if (!n.derived || lfNodeKind(n) !== 'app') return true;
+                if (only && n.assetId !== only) return true;
+                if (m.edges.some(e => e.source === n.id || e.target === n.id)) return true;
+                removedN++; return false;
+            });
+            if (!only && !designedCount && !allAssets.length) { if (!silent) showError('Rien à dériver : concevez au moins une table (onglet « Tables conçues ») et/ou déclarez des applications & processus (onglet « Applis & processus »), ou construisez le flux à la main.'); return; }
+            persistAppState(); if (!silent) renderGovernance();
             const conflicts = lfMasteryConflicts();
-            if (!addedN && !addedE && !filledO) return showSuccess('La carte est déjà à jour par rapport aux données (aucun nouvel élément à dériver).' + (conflicts.length ? ` ⚠️ ${conflicts.length} conflit(s) de maîtrise détecté(s).` : ''));
-            showSuccess(`🔄 Synchronisé depuis les données : ${addedN} nœud(s) ajouté(s)${addedApp ? ` (dont ${addedApp} application(s))` : ''}, ${addedE} lien(s) dérivé(s)${filledO ? `, ${filledO} origine(s) renseignée(s)` : ''}.${conflicts.length ? ` ⚠️ ${conflicts.length} conflit(s) de maîtrise détecté(s) — voir le bandeau.` : ''} Vos réglages manuels sont préservés.`);
+            if (!addedN && !addedE && !filledO && !removedE && !removedN) { say('La carte est déjà à jour par rapport aux données (aucun changement).' + (conflicts.length ? ` ⚠️ ${conflicts.length} conflit(s) de maîtrise détecté(s).` : '')); return; }
+            const parts = [];
+            if (addedN) parts.push(`${addedN} nœud(s) ajouté(s)${addedApp ? ` (dont ${addedApp} application(s))` : ''}`);
+            if (addedE) parts.push(`${addedE} lien(s) ajouté(s)`);
+            if (removedE) parts.push(`${removedE} lien(s) obsolète(s) retiré(s)`);
+            if (removedN) parts.push(`${removedN} application(s) orpheline(s) retirée(s)`);
+            if (filledO) parts.push(`${filledO} origine(s) renseignée(s)`);
+            say(`🔄 Synchronisé depuis les données : ${parts.join(', ')}.${conflicts.length ? ` ⚠️ ${conflicts.length} conflit(s) de maîtrise détecté(s) — voir le bandeau.` : ''} Vos réglages manuels et liens ajoutés à la main sont préservés.`);
+        }
+        // Resynchronise la carte pour UNE application dès qu'on (dé)coche ses tables/colonnes —
+        // uniquement si elle figure déjà sur le lineage. Renvoie true si une resynchro a eu lieu.
+        function lfAutoSyncAsset(assetId) {
+            if (!lfModel().nodes.some(n => n.assetId === assetId)) return false;
+            lfSyncFromData({ onlyAssetId: assetId, silent: true });
+            return true;
         }
 
         // Conflit de maîtrise (lot 3) : ≥ 2 sources « maître » sur un objet métier SANS règle de
@@ -9146,8 +9186,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.8.0';
+        const APP_VERSION = '5.9.0';
         const APP_CHANGELOG = [
+            { v: '5.9.0', d: '2026-07-24', t: 'Lineage : la déclaration d\'usage pilote la carte (ajout ET retrait, mise à jour auto)', items: [
+                'La synchronisation RÉCONCILIE désormais les liens d\'usage dérivés : elle ajoute les nouveaux « lit »/« écrit » ET RETIRE ceux devenus obsolètes (table décochée sur l\'application). Une application dérivée qui n\'utilise plus rien est retirée. Vos liens ajoutés à la main et vos réglages (clés, attributs, contrôles) restent préservés.',
+                'MISE À JOUR AUTOMATIQUE : dans « Applis & processus », cocher/décocher une table ou lier/délier une colonne d\'une application DÉJÀ présente sur le lineage met la carte à jour immédiatement — plus besoin de repasser par le bouton « Synchroniser ».',
+                'Le récapitulatif de synchro détaille désormais les ajouts ET les retraits (liens obsolètes, applications orphelines).'] },
             { v: '5.8.0', d: '2026-07-24', t: 'Lineage : « Contrôler toute la chaîne aval » depuis un nœud', items: [
                 'Nouveau bouton « ↻ Contrôler toute la chaîne aval (N) » dans la fiche d\'un nœud : relance en une fois la réconciliation de TOUTES les alimentations situées en aval (parcours récursif des liens « alimente »).',
                 'Idéal après une écriture en retour (write-back) : quand une application resynchronise un référentiel, un seul clic revérifie la cohérence de toutes les copies aval et le compte total de lignes en écart.',
