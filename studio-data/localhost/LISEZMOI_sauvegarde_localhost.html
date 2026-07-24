@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Data — Sauvegarde automatique via localhost (mode d'emploi)</title>
+<style>
+  :root{--ink:#0f172a;--muted:#475569;--faint:#64748b;--line:#e2e8f0;--bg:#f8fafc;--panel:#fff;--brand:#4f46e5;--ok:#16a34a;--warn:#d97706;}
+  *{box-sizing:border-box}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg);margin:0;line-height:1.6;font-size:15px}
+  .wrap{max-width:820px;margin:0 auto;padding:30px 22px 80px}
+  h1{font-size:24px;margin:0 0 4px}.lead{color:var(--muted);margin:0 0 22px}
+  h2{font-size:18px;margin:30px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:8px}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:12px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .step .num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:14px;margin-right:8px}
+  .callout{border-left:4px solid var(--brand);background:#eef2ff;border-radius:0 9px 9px 0;padding:11px 15px;margin:14px 0;font-size:14px}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.ok{border-color:var(--ok);background:#f0fdf4}
+  ol,ul{padding-left:22px}li{margin:5px 0}
+  b{color:var(--ink)}
+  .kbd{background:var(--panel);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-weight:600;font-size:13px;white-space:nowrap}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--bg);font-size:12px;text-transform:uppercase;color:var(--faint)}
+  @media print{body{background:#fff}.step{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>💾 Sauvegarde automatique — ouvrir Studio Data en <code>http://localhost</code></h1>
+  <p class="lead">Ouvrir l'application via un petit serveur local (au lieu d'un double-clic <code>file://</code>) débloque
+  la <b>sauvegarde automatique sur un dossier</b> de ton choix (indépendante de ton profil Chrome) et lève au passage
+  le plafond mémoire sur les gros fichiers. <b>Aucune installation requise.</b></p>
+
+  <h2>🎯 Pourquoi</h2>
+  <p>En <code>file://</code>, le navigateur interdit à l'app d'écrire dans un dossier : la seule sauvegarde possible est
+  le stockage interne de Chrome, <b>lié à ton profil</b>. En <code>http://localhost</code>, l'app peut écrire sa
+  configuration dans un dossier que tu désignes (idéalement <b>synchronisé</b> — OneDrive/Drive — ou <b>réseau</b>) :
+  ta sauvegarde te suit alors d'un poste à l'autre.</p>
+
+  <h2>🚀 Mise en route (une fois)</h2>
+  <div class="step"><span class="num">1</span> Mets, <b>dans le même dossier</b>, ces trois fichiers :
+    <ul>
+      <li><code>StudioDataV5.html</code> (l'application)</li>
+      <li><code>Lancer_StudioData_localhost.bat</code> (le lanceur)</li>
+      <li><code>serve.ps1</code> (utilisé seulement si Python n'est pas installé)</li>
+    </ul>
+    <div class="callout">Astuce : renomme ton fichier en <code>StudioDataV5.html</code> (le lanceur détecte aussi tout
+    fichier <code>StudioData*.html</code>, mais un nom propre évite les surprises).</div>
+  </div>
+  <div class="step"><span class="num">2</span> <b>Double-clique</b> <code>Lancer_StudioData_localhost.bat</code>.
+    Une fenêtre « serveur local » s'ouvre et ton navigateur affiche l'app sur
+    <code>http://localhost:8765/StudioDataV5.html</code>.
+    <div class="callout warn">Windows peut afficher « Windows a protégé votre PC » (SmartScreen) au 1<sup>er</sup> lancement :
+    <b>Informations complémentaires → Exécuter quand même</b>. Le fichier ne fait que lancer un serveur local, rien ne sort du poste.</div>
+  </div>
+  <div class="step"><span class="num">3</span> <b>Laisse la fenêtre « serveur local » ouverte</b> tant que tu utilises l'app.
+    Ferme-la pour arrêter le serveur.</div>
+
+  <h2>🔄 Reprendre ta configuration existante (une fois)</h2>
+  <p>La version <code>localhost</code> est une « adresse » différente du <code>file://</code> : elle démarre donc <b>vierge</b>.
+  Pour récupérer ton travail actuel :</p>
+  <div class="step">
+    <ol>
+      <li><b>Dans ta version actuelle</b> (<code>file://</code>) : bouton <span class="kbd">💾 Sauvegarde &amp; partage</span> →
+        <span class="kbd">Exporter un bundle de partage</span> → enregistre le fichier.</li>
+      <li><b>Dans la version localhost</b> : <span class="kbd">💾 Sauvegarde &amp; partage</span> →
+        <span class="kbd">Importer un bundle reçu</span> → choisis ce fichier. Puis <b>recharge tes sources</b> (CSV).</li>
+    </ol>
+  </div>
+
+  <h2>📁 Activer la sauvegarde automatique sur dossier</h2>
+  <div class="step">
+    <ol>
+      <li><span class="kbd">💾 Sauvegarde &amp; partage</span> → <span class="kbd">📁 Choisir un dossier de sauvegarde</span>.</li>
+      <li>Choisis un dossier <b>synchronisé</b> (OneDrive/Google Drive) ou <b>réseau</b>, et autorise l'écriture.</li>
+      <li>C'est tout : l'app y réécrit ta configuration automatiquement au fil du travail. Sur un autre poste, ouvre le
+        même dossier synchronisé et <b>importe</b> le fichier <code>StudioData_secours.json</code> qui s'y trouve.</li>
+    </ol>
+    <div class="callout ok">Bonus : en localhost, les très gros fichiers passent mieux (débordement disque activé) —
+    fini le plafond mémoire du mode <code>file://</code>.</div>
+  </div>
+
+  <h2>🛟 Variantes &amp; dépannage</h2>
+  <table>
+    <tr><th>Situation</th><th>Solution</th></tr>
+    <tr><td>Le port 8765 est déjà utilisé</td><td>Ouvre le <code>.bat</code> avec le Bloc-notes, change <code>set "PORT=8765"</code> en un autre nombre (ex. 8790), enregistre, relance.</td></tr>
+    <tr><td>Tu préfères une commande manuelle (Python installé)</td><td>Dans le dossier : <code>py -3 -m http.server 8765</code> (ou <code>python -m http.server 8765</code>), puis ouvre <code>http://localhost:8765/StudioDataV5.html</code>.</td></tr>
+    <tr><td>Mac / Linux</td><td>Dans le dossier : <code>python3 -m http.server 8765</code>, puis <code>http://localhost:8765/StudioDataV5.html</code>.</td></tr>
+    <tr><td>« Choisir un dossier » reste grisé</td><td>Utilise Chrome ou Edge sur ordinateur (l'API d'écriture dossier n'existe pas partout). À défaut, l'export/import de bundle reste disponible et suffit.</td></tr>
+    <tr><td>Le navigateur affiche une page vide au 1<sup>er</sup> instant</td><td>Le serveur met ~1–2 s à démarrer : rafraîchis (<span class="kbd">F5</span>).</td></tr>
+  </table>
+
+  <div class="callout"><b>À savoir.</b> Cette sauvegarde reste <b>100 % locale</b> (rien n'est envoyé sur internet — hormis le
+  téléchargement du moteur, comme aujourd'hui). Le dossier de sauvegarde contient ta <b>configuration</b> (modèle, tables
+  conçues, domaines, gouvernance, lineage, paramétrages…) ; les <b>données sources</b>, elles, se rechargent depuis tes fichiers.</div>
+</div>
+</body>
+</html>
