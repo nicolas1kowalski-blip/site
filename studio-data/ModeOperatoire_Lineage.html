@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mode opératoire — Lineage & santé du flux (Studio Data V5)</title>
+<title>Mode opératoire pas à pas — Lineage & santé (Studio Data V5.6)</title>
 <style>
   :root{ --ink:#0f172a; --muted:#475569; --faint:#64748b; --line:#e2e8f0; --bg:#f8fafc; --panel:#fff;
-         --brand:#4f46e5; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --accent:#059669; }
+         --brand:#4f46e5; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --accent:#059669; --violet:#7c3aed; }
   *{box-sizing:border-box}
   body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg);
-       margin:0;line-height:1.6;font-size:15px}
-  .wrap{max-width:860px;margin:0 auto;padding:32px 22px 80px}
+       margin:0;line-height:1.62;font-size:15px}
+  .wrap{max-width:880px;margin:0 auto;padding:32px 22px 90px}
   h1{font-size:26px;margin:0 0 4px}
-  .lead{color:var(--muted);margin:0 0 24px;font-size:15px}
-  h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:9px}
-  h3{font-size:15.5px;margin:20px 0 6px}
+  .lead{color:var(--muted);margin:0 0 20px;font-size:15px}
+  h2{font-size:19px;margin:38px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:9px}
+  h3{font-size:15.5px;margin:22px 0 6px;color:#1e293b}
   p{margin:8px 0}
   code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
   .kbd{background:var(--panel);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-weight:600;font-size:13px;white-space:nowrap}
@@ -22,203 +22,318 @@
   .step .num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
              background:var(--brand);color:#fff;font-weight:800;font-size:14px;margin-right:8px}
   ol,ul{margin:8px 0 8px 4px;padding-left:22px}
-  li{margin:5px 0}
+  li{margin:6px 0}
   .callout{border-left:4px solid var(--brand);background:#eef2ff;border-radius:0 9px 9px 0;padding:11px 15px;margin:14px 0;font-size:14px}
   .callout.warn{border-color:var(--warn);background:#fffbeb}
   .callout.ok{border-color:var(--ok);background:#f0fdf4}
+  .callout.violet{border-color:var(--violet);background:#faf5ff}
   .pill{display:inline-block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 9px;border-radius:20px}
-  .p-master{background:#fef3c7;color:#92400e}.p-ref{background:#dbeafe;color:#1e40af}.p-cons{background:#f1f5f9;color:#475569}
+  .p-master{background:#fef3c7;color:#92400e}.p-ref{background:#dbeafe;color:#1e40af}.p-cons{background:#f1f5f9;color:#475569}.p-app{background:#ede9fe;color:#5b21b6}
   table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
   th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
   th{background:var(--bg);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint)}
   .path{font-weight:700;color:var(--accent)}
-  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:5px}
   .toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 20px;margin:18px 0}
   .toc a{color:var(--brand);text-decoration:none}.toc a:hover{text-decoration:underline}
   .toc ol{columns:2;column-gap:28px}
-  footer{margin-top:40px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
-  @media print{body{background:#fff}.step,table{box-shadow:none}.toc{display:none}}
+  .ex{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:14px 16px;margin:12px 0;font-size:13.5px}
+  .ex b{color:#fff}
+  .ex .exh{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#7dd3fc;font-weight:800;margin-bottom:6px}
+  .ex code{background:#1e293b;color:#bae6fd}
+  .do,.why{border-radius:9px;padding:9px 13px;margin:8px 0;font-size:14px}
+  .do{background:#eef6ff;border:1px solid #cfe0fb}
+  .why{background:#f0fdf4;border:1px solid #bbf7d0}
+  .do b,.why b{display:inline-block;min-width:118px}
+  .diag{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;white-space:pre;overflow-x:auto;line-height:1.5}
+  .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569}
+  footer{margin-top:44px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+  @media print{body{background:#fff}.step,table{box-shadow:none}.toc{display:none}.ex{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>🔗 Mode opératoire — Lineage &amp; santé du flux</h1>
-  <p class="lead">Studio Data V5 · Tracer la circulation d'une donnée (maître → référentiel → consommateurs) et
-  contrôler, sur les <b>données réelles</b>, sa <b>fraîcheur</b> (retard) et sa <b>distorsion</b> (écart de valeur).</p>
+  <h1>🕸️ Lineage &amp; santé — mode opératoire pas à pas</h1>
+  <p class="lead">Studio Data V5.6 · Construire la <b>carte</b> de circulation de vos données, puis contrôler sur les
+  <b>données réelles</b> leur <b>fraîcheur</b> (retard), leur <b>distorsion</b> (écarts de valeur) et les <b>conflits de
+  maîtrise</b> — le tout dans <b>un seul onglet</b>. Ce guide suit un <b>exemple fil rouge</b> du début à la fin.</p>
+
+  <div class="callout"><b>Comment lire ce guide.</b> Chaque étape indique
+  <span class="tag">👉 Ce que vous faites</span> (les clics/saisies) et <span class="tag">💡 À quoi ça sert</span>
+  (pourquoi). Les encadrés sombres <b>« Exemple »</b> reprennent le même cas concret d'un bout à l'autre.</div>
 
   <div class="toc">
     <b>Sommaire</b>
     <ol>
-      <li><a href="#quoi">Ce que fait l'écran</a></li>
-      <li><a href="#prereq">Prérequis</a></li>
-      <li><a href="#acces">Accéder à l'écran</a></li>
-      <li><a href="#e1">1. Construire le flux (nœuds)</a></li>
-      <li><a href="#e2">2. Relier les nœuds (liens)</a></li>
-      <li><a href="#e3">3. Lancer un contrôle</a></li>
-      <li><a href="#e4">4. Lire les résultats</a></li>
-      <li><a href="#e5">5. Journal &amp; alertes</a></li>
-      <li><a href="#auto">Amorçage automatique</a></li>
-      <li><a href="#depannage">Dépannage</a></li>
+      <li><a href="#modele">0. Le modèle en 1 minute</a></li>
+      <li><a href="#exemple">L'exemple fil rouge</a></li>
+      <li><a href="#prereq">1. Prérequis (charger &amp; documenter)</a></li>
+      <li><a href="#acces">2. Ouvrir l'onglet Lineage</a></li>
+      <li><a href="#sync">3. Construire la carte en 1 clic</a></li>
+      <li><a href="#manuel">4. Construire / corriger à la main</a></li>
+      <li><a href="#deduit">5. Lire la carte (rôles déduits)</a></li>
+      <li><a href="#sante">6. Contrôler une alimentation (attribut par attribut)</a></li>
+      <li><a href="#fraicheur">7. Fraîcheur &amp; SLA</a></li>
+      <li><a href="#appli">8. Couche application (lit / écrit)</a></li>
+      <li><a href="#conflit">9. Conflits de maîtrise</a></li>
+      <li><a href="#boutenbout">10. Vue « Bout en bout »</a></li>
+      <li><a href="#journal">11. Journal, seuil &amp; export</a></li>
+      <li><a href="#depannage">12. Dépannage</a></li>
       <li><a href="#recap">Récap express</a></li>
     </ol>
   </div>
 
-  <h2 id="quoi">🎯 Ce que fait l'écran</h2>
-  <p>Le <b>lineage</b> est la <i>carte</i> : d'où vient la donnée, ce qu'elle traverse, où elle va. La <b>réconciliation</b>
-  et la <b>fraîcheur</b> sont les <i>contrôles</i> posés sur cette carte : la donnée maître et ses copies en aval
-  sont-elles <b>cohérentes</b> et <b>à jour</b> ? Le lineage dit <i>où</i> regarder, la réconciliation dit <i>si c'est cohérent</i>.</p>
-  <div class="callout"><b>Point important.</b> La carte seule est déclarative. Pour mesurer un retard ou une distorsion,
-  il faut des <b>données chargées</b> : au minimum, pour chaque système comparé, la <b>clé d'entité</b>, l'<b>attribut mesuré</b>
-  et (pour la fraîcheur) une <b>fréquence attendue</b>. Sans données reliées → carte visuelle uniquement.</div>
+  <h2 id="modele">0. Le modèle en 1 minute</h2>
+  <p>Tout tourne autour d'<b>une seule chose concrète : la table</b>. Une table est soit une <b>source chargée</b> (CSV,
+  Excel…), soit une <b>table conçue</b> dans Studio Data. Sur la carte :</p>
+  <table>
+    <tr><th>Élément</th><th>Ce que c'est</th><th>Comment il apparaît</th></tr>
+    <tr><td><b>Nœud</b></td><td>Une <b>table</b>. Son <b>origine</b> (système amont : SAP, CRM…) est une simple étiquette.</td><td>🗄 / 🏛 / 📊 selon le rôle</td></tr>
+    <tr><td><b>Application / processus</b></td><td>Un logiciel qui <b>lit</b> et/ou <b>écrit</b> des tables. Pas une table.</td><td>🖥 (violet, pointillé)</td></tr>
+    <tr><td><b>Lien « alimente »</b></td><td>table → table (une copie/consolidation en aval).</td><td>flèche pleine — <b>on y mesure la distorsion</b></td></tr>
+    <tr><td><b>Lien « lit »</b></td><td>table → application (l'appli consomme la donnée).</td><td>flèche violette — fraîcheur héritée, pas de distorsion</td></tr>
+    <tr><td><b>Lien « écrit »</b></td><td>application → table (l'appli produit/maîtrise la donnée).</td><td>flèche violette — surveille les conflits</td></tr>
+  </table>
+  <p class="callout ok"><b>Rien à classer à la main.</b> Le <b>rôle</b> d'une table et le <b>type</b> d'un lien sont
+  <b>déduits</b> de la forme du flux :
+  <span class="pill p-master">Maître</span> aucune alimentation entrante ·
+  <span class="pill p-ref">Référentiel</span> ≥ 2 alimentations entrantes (= <b>consolidation</b>) ·
+  <span class="pill p-cons">Consommateur</span> sinon ·
+  <span class="pill p-app">Application</span> pour un logiciel. Vous décrivez <b>qui alimente qui</b>, l'outil déduit le reste.</p>
 
-  <h2 id="prereq">✅ Prérequis</h2>
-  <ol>
-    <li><b>Charger les sources</b> à comparer dans l'onglet <span class="path">① Données &amp; Modèle ▸ Sources</span>
-        (ex. l'extrait du système maître et celui de l'aval : chacun avec la clé commune et l'attribut à comparer).</li>
-    <li><b>Pour la fraîcheur (SLA)</b> : renseigner le champ <b>« Fréquence de mise à jour »</b> de la source dans
-        <span class="path">Gouvernance ▸ Définir ▸ Dictionnaire</span> (ex. <code>Quotidien</code>, <code>Hebdomadaire</code>…).
-        C'est cette fréquence qui définit le retard toléré.</li>
-    <li><b>Connaître, pour chaque lien à contrôler</b> : le nom de la <b>colonne clé</b> commune (ex. <code>id_client</code>)
-        et de l'<b>attribut comparé</b> (ex. <code>ca_annuel</code>). Ils doivent exister <b>dans les deux</b> sources.</li>
-  </ol>
+  <h2 id="exemple">🧵 L'exemple fil rouge</h2>
+  <p>Une compagnie d'assurance veut fiabiliser son <b>chiffre d'affaires client</b>. Elle possède :</p>
+  <div class="ex">
+    <div class="exh">Le décor</div>
+    • <b>CRM_CLIENTS.csv</b> (origine <code>CRM</code>) — colonnes <code>id_client</code>, <code>ca_annuel</code>, <code>ville</code>. Mise à jour <b>quotidienne</b>.<br>
+    • <b>KADOR_CONTRATS.csv</b> (origine <code>KADOR</code>, l'outil de gestion des contrats) — colonnes <code>code_client</code>, <code>montant_ca</code>. Mise à jour <b>hebdomadaire</b>.<br>
+    • <b>CLIENT_360</b> — une <b>table conçue</b> qui consolide CRM + KADOR sur la clé client.<br>
+    • Une application <b>BI Ventes</b> qui <b>lit</b> CLIENT_360 pour ses tableaux de bord.<br>
+    • Une application <b>Facturation</b> qui <b>produit</b> KADOR_CONTRATS (elle en est la source).
+  </div>
+  <p>Objectif : voir cette chaîne sur une carte, vérifier que le CA de KADOR concorde avec le CRM, et être alerté si
+  la donnée arrive en retard ou si deux systèmes se disputent la maîtrise du CA.</p>
 
-  <h2 id="acces">🧭 Accéder à l'écran</h2>
-  <p><span class="path">Gouvernance</span> → onglet <span class="path">Tracer</span> → <span class="path">🕸️ Lineage</span> (vue par défaut : structure &amp; santé).</p>
-
-  <h2 id="e1">Étape 1 — Construire le flux (les nœuds)</h2>
+  <h2 id="prereq">1. Prérequis — charger &amp; documenter</h2>
   <div class="step">
-    <p>Ouvrez le panneau <b>« ⚙️ Construire le flux »</b> (en bas de l'écran). Pour chaque système, remplissez la
-    ligne d'ajout de nœud puis cliquez <span class="kbd">+ Nœud</span> :</p>
-    <table>
-      <tr><th>Champ</th><th>À saisir</th></tr>
-      <tr><td><b>Nom (table)</b></td><td>Le nom de la table (ex. « CLIENTS_CRM », « REF_CLIENT », « BI_VENTES »). Chaque nœud représente une table.</td></tr>
-      <tr><td><b>Origine (système amont)</b></td><td>Le système d'où provient cette table (ex. « SAP », « saisie manuelle »), distinct de la table elle-même. Optionnel.</td></tr>
-      <tr><td><b>Domaine</b></td><td>Domaine métier (ex. « Client »). Optionnel.</td></tr>
-      <tr><td><b>Source liée</b></td><td>La source chargée qui porte les données de ce nœud. <b>Indispensable</b> pour mesurer fraîcheur et distorsion. Optionnel si le nœud est purement documentaire.</td></tr>
-    </table>
-    <p class="callout ok"><b>Le rôle n'est plus à saisir.</b> Il est <b>déduit automatiquement</b> de la topologie :
-    <span class="pill p-master">Maître</span> aucune alimentation entrante (source de vérité) ·
-    <span class="pill p-ref">Référentiel</span> deux alimentations entrantes ou plus (consolidation, badge « ⑃ consolide ») ·
-    <span class="pill p-cons">Consommateur</span> sinon. Les nœuds se rangent en colonnes <b>amont → intermédiaire → aval</b>.</p>
+    <p><span class="num">1</span><b>Charger les sources.</b> <span class="path">① Données &amp; Modèle ▸ Sources</span> →
+    importez <code>CRM_CLIENTS.csv</code> et <code>KADOR_CONTRATS.csv</code>.</p>
+    <p><span class="num">2</span><b>Concevoir la table consolidée</b> (facultatif mais recommandé).
+    <span class="path">Tables conçues</span> → créez <code>CLIENT_360</code> alimentée par les deux sources
+    (clé = client). C'est elle qui, à l'étape 3, générera automatiquement les alimentations.</p>
+    <p><span class="num">3</span><b>Renseigner l'origine &amp; la fréquence.</b> <span class="path">Gouvernance ▸ Définir ▸ Dictionnaire</span> :
+    pour chaque table, remplissez <b>« Système source »</b> (= l'origine) et <b>« Fréquence de mise à jour »</b>.</p>
+    <p><span class="num">4</span><b>Déclarer les applications.</b> <span class="path">Gouvernance ▸ Définir ▸ Applis &amp; processus</span> :
+    créez <code>BI Ventes</code> (et cochez les tables/colonnes qu'elle utilise, ex. CLIENT_360) et <code>Facturation</code>.</p>
+  </div>
+  <div class="do"><b>👉 Vous faites :</b> importer 2 CSV, concevoir CLIENT_360, remplir « Système source » + « Fréquence », déclarer 2 applis.</div>
+  <div class="why"><b>💡 Ça sert à :</b> donner à l'outil de quoi <b>dériver la carte tout seul</b> et <b>mesurer</b> la fraîcheur (fréquence) et la distorsion (données chargées).</div>
+  <div class="ex">
+    <div class="exh">Exemple — dictionnaire</div>
+    CRM_CLIENTS → Système source <code>CRM</code>, Fréquence <code>Quotidien</code><br>
+    KADOR_CONTRATS → Système source <code>Facturation</code>, Fréquence <code>Hebdomadaire</code>
+    <span style="color:#94a3b8">(le nom de l'appli « Facturation » = système source ⇒ un lien « écrit » sera déduit)</span>
   </div>
 
-  <h2 id="e2">Étape 2 — Relier les nœuds (les liens)</h2>
+  <h2 id="acces">2. Ouvrir l'onglet Lineage</h2>
   <div class="step">
-    <p>Une fois au moins deux nœuds créés, remplissez la ligne d'ajout de lien puis cliquez <span class="kbd">+ Lien</span> :</p>
-    <table>
-      <tr><th>Champ</th><th>À saisir</th></tr>
-      <tr><td><b>Source / Cible</b></td><td>Le sens du flux (la Source alimente la Cible). <b>Le type de lien n'est plus à saisir</b> : il est déduit (« Consolide » quand la cible reçoit ≥ 2 sources, sinon « Alimente »).</td></tr>
-      <tr><td><b>Clé (source) / (cible)</b></td><td>La colonne d'entité de <b>chaque côté</b> — leurs noms peuvent différer (ex. <code>DK_CODE</code> côté source, <code>DK_CODE_CTT</code> côté cible). Chaque champ <b>propose les colonnes de sa propre source</b> reliée (saisie libre possible en secours).</td></tr>
-      <tr><td><b>Attribut (source) / (cible)</b></td><td>La colonne à comparer de chaque côté (ex. <code>VAL</code> vs <code>MONTANT</code>), également <b>proposée</b> par côté.</td></tr>
-      <tr><td><b>SLA (h)</b></td><td>Retard maximal toléré pour la copie aval, en heures (défaut 24).</td></tr>
-      <tr><td><b>Transformation rejouable</b></td><td>Voir l'encadré ci-dessous. Défaut : <b>Aucune</b> (comparaison directe).</td></tr>
-      <tr><td><b>Transformation déclarée</b></td><td>Texte libre <i>documentaire</i> (ex. « SOMME(montant) converti €, agrégé /mois »). Sert à distinguer un écart <b>attendu</b> d'une <b>anomalie</b>.</td></tr>
-    </table>
-    <div class="callout"><b>🧪 Transformation « rejouable » (essentiel).</b> Si l'aval n'est pas une copie brute du maître mais le
-    résultat d'un calcul, déclarez-le pour que la comparaison porte sur le <b>maître transformé</b>, pas sur le maître brut :
-      <ul>
-        <li><b>Agrégation</b> : <code>Somme</code>/<code>Moyenne</code>/<code>Min</code>/<code>Max</code>/<code>Nombre</code>
-            <b>par clé</b> — cas « maître fin, aval agrégé » (ex. plusieurs lignes de montant côté maître, un total côté aval).</li>
-        <li><b>Normalisation</b> : <code>Arrondi</code> (param = nb de décimales), <code>× facteur</code> (param = nombre),
-            <code>Valeur absolue</code>, <code>MAJUSCULES</code>, <code>minuscules</code>, <code>Espaces nettoyés</code>.</li>
-      </ul>
-      Ainsi un écart <i>attendu</i> (dû à la règle) ne ressort plus comme distorsion ; un écart <b>résiduel malgré la règle</b>
-      est signalé comme <b>anomalie</b>.</div>
-    <p class="callout ok"><b>Modifier après coup.</b> Chaque nœud et chaque lien déjà créés se modifient : cliquez le bouton
-    <b>✎</b> dans les listes (Nœud / Lien). Le formulaire se pré-remplit ; « ✓ Enregistrer » applique les changements
-    (un lien modifié réinitialise son dernier contrôle, à relancer).</p>
-    <p class="callout"><b>Plusieurs attributs par lien (santé attribut par attribut).</b> L'attribut saisi ici est le
-    <b>premier</b> attribut contrôlé. Pour vérifier la santé <b>complète</b> d'une alimentation, ajoutez-en d'autres dans
-    la <b>fiche du lien</b> (clic sur son étiquette dans le graphe) : voir l'étape 3.</p>
+    <p><span class="path">Gouvernance</span> → famille <span class="path">Tracer</span> → <span class="path">🕸️ Lineage</span>.</p>
+    <p>Un seul onglet, deux vues accessibles en haut à droite : <span class="kbd">Vue systèmes</span> /
+    <span class="kbd">Vue attributs</span> (la carte table‑centrée + santé, par défaut) et
+    <span class="kbd">🕸️ Bout en bout</span> (le grand graphe complet — voir §10).</p>
   </div>
+  <div class="why"><b>💡 Ça sert à :</b> tout est au même endroit — la structure, la santé et le graphe détaillé — plus besoin de jongler entre deux écrans.</div>
 
-  <h2 id="e3">Étape 3 — Lancer un contrôle</h2>
+  <h2 id="sync">3. Construire la carte en 1 clic — « Synchroniser depuis les données »</h2>
   <div class="step">
-    <ol>
-      <li>Dans le graphe, <b>cliquez l'étiquette du lien</b> (la pastille au milieu de la flèche). La <b>fiche du lien</b> s'ouvre à droite.</li>
-      <li>Section <b>« Attributs contrôlés »</b> : gérez tous les attributs de l'alimentation.
-        <ul>
-          <li><b>Ajouter</b> : choisissez la colonne <b>source →</b> la colonne <b>cible</b> (les noms peuvent différer) et, si besoin, une <b>transformation</b> rejouée (somme/moyenne/nombre par clé, arrondi, casse…), puis <span class="kbd">+ Attribut</span>.</li>
-          <li><span class="kbd">✚ Même nom</span> : ajoute d'un coup <b>toutes les colonnes de même nom</b> présentes des deux côtés (hors clé).</li>
-          <li><b>✕</b> en bout de ligne pour retirer un attribut.</li>
-        </ul>
-      </li>
-      <li>En bas de la fiche, cliquez <span class="kbd">↻ Contrôler N attribut(s)</span>.</li>
-      <li>Le calcul s'exécute en local (DuckDB) et remplit la fiche : <b>santé globale</b> (lignes avec au moins un écart, lignes comparées, clés absentes en aval) <b>et le détail attribut par attribut</b> (taux, barre, exemples clé/maître/aval).</li>
-    </ol>
-    <p class="callout warn">Le bouton reste <b>grisé</b> tant que le lien n'a pas : une <b>source reliée</b> des deux côtés,
-    une <b>clé</b> (source et cible) et <b>au moins un attribut contrôlé</b>. La fiche vous indique précisément ce qui manque.</p>
-  </div>
-
-  <h2 id="e4">Étape 4 — Lire les résultats</h2>
-  <div class="step">
-    <h3>Le bandeau de synthèse (haut de l'écran)</h3>
+    <p>Ouvrez le panneau <span class="kbd">⚙️ Construire le flux — systèmes &amp; liens</span> (bas de l'écran) et cliquez
+    <span class="kbd">🔄 Synchroniser depuis les données</span>.</p>
+    <p>L'outil parcourt vos <b>tables conçues</b> et vos <b>applications</b> et crée automatiquement :</p>
     <ul>
-      <li><b>🎯 SLA de fraîcheur respectés</b> — X flux à jour / Y flux mesurables.</li>
-      <li><b>⚠️ Distorsions au-dessus du seuil</b> — nombre de flux dont le taux dépasse le <b>Seuil de distorsion (%)</b> (réglable en haut à droite, défaut 1 %).</li>
-      <li><b>⏱ Flux le plus en retard</b> · <b>🔎 Dernier contrôle</b>.</li>
+      <li>un <b>nœud par table</b> impliquée (avec l'origine reprise du dictionnaire) ;</li>
+      <li>une <b>alimentation</b> de chaque source vers la table conçue qu'elle alimente ;</li>
+      <li>un <b>nœud par application</b> 🖥 et ses liens <b>« lit »</b> / <b>« écrit »</b>.</li>
     </ul>
-    <h3>Le graphe</h3>
-    <table>
-      <tr><td><span class="dot" style="background:var(--ok)"></span><b>Vert</b></td><td>Sain — frais &amp; cohérent</td></tr>
-      <tr><td><span class="dot" style="background:var(--warn)"></span><b>Orange</b></td><td>À surveiller — SLA ou seuil approché/dépassé</td></tr>
-      <tr><td><span class="dot" style="background:var(--bad)"></span><b>Rouge</b></td><td>Alerte — retard ou distorsion forte</td></tr>
-    </table>
-    <p>Les <b>arêtes</b> sont colorées par état et portent l'étiquette <code>⟳ retard · Δ distorsion</code>. Les
-    <b>nœuds</b> affichent leur rôle et des pastilles de santé.</p>
-    <h3>Les volets de détail (au clic)</h3>
-    <ul>
-      <li><b>Clic sur un nœud</b> → rôle dans le flux, fraîcheur, connexions amont/aval, analyse d'impact.</li>
-      <li><b>Clic sur une étiquette de lien</b> → transformation (déclarée + rejouée), fraîcheur + statut SLA,
-          distorsion (taux + barre + exemples), et actions <span class="kbd">⇩ Exporter les écarts</span> /
-          <span class="kbd">↻ Relancer le contrôle</span>.</li>
-    </ul>
-    <h3>Bascule « Vue systèmes / Vue attributs »</h3>
-    <p>En haut à droite. La <b>vue attributs</b> montre le même flux au niveau colonne : chaque nœud liste ses
-    attributs reliés (🔑 clé + attribut comparé) et les liens portent l'attribut concerné.</p>
   </div>
+  <div class="do"><b>👉 Vous faites :</b> un seul clic sur <span class="kbd">🔄 Synchroniser depuis les données</span>.</div>
+  <div class="why"><b>💡 Ça sert à :</b> ne <b>jamais re‑saisir</b> la carte. Une re‑synchro plus tard <b>complète</b> sans rien écraser : vos réglages manuels (clés, attributs contrôlés, SLA, transformations, contrôles déjà lancés) sont conservés à l'identique.</div>
+  <div class="ex">
+    <div class="exh">Exemple — ce qui apparaît après le clic</div>
+CRM_CLIENTS ─alimente─▶ CLIENT_360 ◀─alimente─ KADOR_CONTRATS
+                          │
+                          └─lit─▶ 🖥 BI Ventes
+Facturation 🖥 ─écrit─▶ KADOR_CONTRATS
 
-  <h2 id="e5">Étape 5 — Journal &amp; alertes</h2>
+<span style="color:#7dd3fc">Message :</span> « 🔄 Synchronisé : 4 nœud(s) ajouté(s) (dont 2 applications), 4 lien(s) dérivé(s), 2 origine(s) renseignée(s). »</div>
+  <div class="callout"><b>Pas de table conçue ?</b> Vous pouvez aussi partir des objets métier avec
+  <span class="kbd">✨ Générer depuis les objets métier</span>, ou tout construire à la main (§4).</div>
+
+  <h2 id="manuel">4. Construire / corriger à la main</h2>
+  <p>Utile pour ajouter un système non chargé, ou ajuster un lien dérivé.</p>
+  <h3>Ajouter un nœud (une table)</h3>
   <div class="step">
-    <p>Le panneau <b>« 🗒️ Journal des contrôles »</b> (bas de l'écran) conserve chaque contrôle lancé : date, flux,
-    taux, écarts, clés manquantes, transformation rejouée et statut. Le titre indique le <b>nombre d'alertes</b>
-    (contrôles au-dessus du seuil). Bouton <span class="kbd">Vider le journal</span> pour repartir à zéro.</p>
-    <p class="callout ok">Tout (nœuds, liens, contrôles, journal) est <b>enregistré localement</b> avec la gouvernance :
-    vous le retrouvez au rechargement de la page.</p>
+    <p>Dans <span class="kbd">⚙️ Construire le flux</span>, remplissez la ligne d'ajout puis <span class="kbd">+ Nœud</span> :</p>
+    <table>
+      <tr><th>Champ</th><th>À saisir</th><th>Exemple</th></tr>
+      <tr><td><b>Nom (table)</b></td><td>le nom de la table</td><td><code>KADOR_CONTRATS</code></td></tr>
+      <tr><td><b>Origine (système amont)</b></td><td>le système d'où vient la table</td><td><code>KADOR</code></td></tr>
+      <tr><td><b>Domaine</b></td><td>domaine métier (optionnel)</td><td><code>Client</code></td></tr>
+      <tr><td><b>Source liée</b></td><td>la source chargée qui porte les données <b>(indispensable pour mesurer)</b></td><td><code>KADOR_CONTRATS</code></td></tr>
+    </table>
   </div>
+  <div class="callout ok"><b>Le rôle n'est pas demandé</b> : il est déduit (§5). Renseignez juste <b>qui alimente qui</b>.</div>
+  <h3>Ajouter un lien d'alimentation</h3>
+  <div class="step">
+    <p>Dès qu'il y a 2 nœuds, remplissez la ligne d'ajout de lien puis <span class="kbd">+ Lien</span> :</p>
+    <table>
+      <tr><th>Champ</th><th>À saisir</th><th>Exemple</th></tr>
+      <tr><td><b>Source</b> / <b>Cible</b></td><td>le sens du flux (Source alimente Cible)</td><td><code>KADOR_CONTRATS</code> → <code>CLIENT_360</code></td></tr>
+      <tr><td><b>Clé (source)</b> / <b>(cible)</b></td><td>la colonne d'entité <b>de chaque côté</b> (les noms diffèrent souvent)</td><td><code>code_client</code> → <code>id_client</code></td></tr>
+      <tr><td><b>Attribut (source)</b> / <b>(cible)</b></td><td>la colonne à comparer de chaque côté</td><td><code>montant_ca</code> → <code>ca_annuel</code></td></tr>
+      <tr><td><b>SLA (h)</b></td><td>retard maximal toléré pour la copie aval</td><td><code>168</code> (7 j)</td></tr>
+      <tr><td><b>Transformation rejouable</b></td><td>si l'aval n'est pas une copie brute (§6)</td><td><code>Aucune</code></td></tr>
+    </table>
+    <p class="callout"><b>Le type du lien (Alimente / Consolide) n'est pas demandé</b> non plus : « Consolide » s'affiche
+    automatiquement quand la cible reçoit ≥ 2 sources.</p>
+  </div>
+  <div class="why"><b>💡 Ça sert à :</b> le couple <b>clé + attribut par côté</b> permet à la réconciliation de <b>joindre les bonnes colonnes</b> même quand elles n'ont pas le même nom entre CRM et KADOR.</div>
 
-  <h2 id="auto">✨ Amorçage automatique</h2>
-  <p>Si vous avez déjà des <b>objets métier</b> (onglet <span class="path">Objets métier</span>), le bouton
-  <span class="kbd">✨ Générer depuis les objets métier</span> crée automatiquement les nœuds et liens à partir des rôles
-  déclarés (source <b>maître</b> → objet <b>référentiel</b> → sources <b>destinataires</b> = consommateurs). Il ne reste
-  qu'à relier chaque nœud à une source chargée et à renseigner clé + attribut pour activer les contrôles.</p>
+  <h2 id="deduit">5. Lire la carte — les rôles déduits</h2>
+  <p>Regardez la liste des nœuds (colonne <b>Rôle (déduit)</b>) et le graphe. Sur l'exemple :</p>
+  <table>
+    <tr><th>Table</th><th>Alim. entrantes</th><th>Rôle déduit</th><th>Pourquoi</th></tr>
+    <tr><td>CRM_CLIENTS</td><td>0</td><td><span class="pill p-master">Maître 🗄</span></td><td>rien ne l'alimente → source de vérité</td></tr>
+    <tr><td>KADOR_CONTRATS</td><td>0</td><td><span class="pill p-master">Maître 🗄</span></td><td>rien ne l'alimente</td></tr>
+    <tr><td>CLIENT_360</td><td>2 (CRM + KADOR)</td><td><span class="pill p-ref">Référentiel 🏛 ⑃</span></td><td>≥ 2 entrants → <b>consolidation</b></td></tr>
+    <tr><td>BI Ventes</td><td>—</td><td><span class="pill p-app">Application 🖥</span></td><td>logiciel qui lit</td></tr>
+  </table>
+  <div class="why"><b>💡 Ça sert à :</b> vous voyez d'un coup d'œil <b>où naît</b> la donnée, <b>où elle est consolidée</b> (badge <b>⑃ consolide</b>) et <b>qui la consomme</b> — sans avoir eu à le déclarer.</div>
+  <div class="callout"><b>Astuce.</b> <span class="kbd">Vue attributs</span> affiche, sur chaque nœud, les colonnes clé/attribut reliées. Cliquez un <b>nœud</b> pour sa fiche (rôle, fraîcheur, connexions, impact).</div>
 
-  <h2 id="depannage">🛠 Dépannage</h2>
+  <h2 id="sante">6. Contrôler une alimentation — attribut par attribut</h2>
+  <p>C'est le cœur : <b>la donnée de l'aval concorde‑t‑elle avec le maître ?</b> On le mesure sur un lien
+  <b>« alimente »</b> dont les deux bouts sont des tables chargées.</p>
+  <div class="step">
+    <p><span class="num">1</span>Sur le graphe, <b>cliquez l'étiquette</b> du lien <code>KADOR_CONTRATS → CLIENT_360</code> : sa fiche s'ouvre.</p>
+    <p><span class="num">2</span>Vérifiez la <b>clé</b> de chaque côté (<code>code_client</code> / <code>id_client</code>).</p>
+    <p><span class="num">3</span>Dans <b>« attributs contrôlés »</b>, ajoutez les colonnes à comparer :
+    choisissez <code>montant_ca</code> (source) → <code>ca_annuel</code> (cible) puis <span class="kbd">+ Attribut</span>.
+    Le bouton <span class="kbd">✚ Même nom</span> ajoute d'un coup toutes les colonnes de nom identique des deux côtés.</p>
+    <p><span class="num">4</span>Cliquez <span class="kbd">↻ Contrôler N attribut(s)</span>. Le calcul tourne en local (DuckDB).</p>
+  </div>
+  <div class="do"><b>👉 Vous faites :</b> ouvrir la fiche du lien → déclarer clé + attribut(s) → <span class="kbd">↻ Contrôler</span>.</div>
+  <div class="why"><b>💡 Ça sert à :</b> obtenir la <b>santé complète</b> de l'alimentation : combien de clés divergent, sur quels attributs, avec des <b>exemples clé / maître / aval</b> pour investiguer.</div>
+  <div class="ex">
+    <div class="exh">Exemple — résultat du contrôle</div>
+    <b>Santé globale :</b> 1 240 clés comparées · <b>149 en écart</b> (12,0 %) · 8 clés du maître absentes en aval.<br>
+    <b>Détail par attribut :</b><br>
+    &nbsp;&nbsp;• <code>montant_ca → ca_annuel</code> : <b>12,0 %</b> d'écart ▓▓▓░░░░░<br>
+    <b>Exemples (clé / CRM / KADOR) :</b> <code>C0271 / 4 200 / 4 250</code> · <code>C0388 / 990 / 1 090</code>
+    <span style="color:#94a3b8">→ KADOR arrondit ou inclut des frais : écart réel à investiguer.</span>
+  </div>
+  <h3>Transformation « rejouable » (quand l'aval n'est pas une copie brute)</h3>
+  <p>Si l'aval est le <b>résultat d'un calcul</b>, déclarez‑le pour comparer le <b>maître transformé</b>, pas le maître brut :</p>
+  <table>
+    <tr><th>Cas</th><th>Transformation</th><th>Exemple</th></tr>
+    <tr><td>Aval = total par client (maître détaillé en lignes)</td><td><b>Agrégation</b> Somme / Moyenne / Nombre… <b>par clé</b></td><td>plusieurs lignes de montant côté CRM → un total côté aval : <code>Somme par clé</code></td></tr>
+    <tr><td>Format différent</td><td><b>Normalisation</b> arrondi, × facteur, MAJUSCULES, espaces…</td><td>k€ vs € : <code>× 1000</code> ; casse : <code>MAJUSCULES</code></td></tr>
+  </table>
+  <div class="callout warn"><b>Écart attendu ≠ anomalie.</b> Renseignez aussi la <b>« Transformation déclarée »</b> (texte libre, ex. « SOMME(montant), converti €, agrégé /mois ») : la fiche distingue alors un écart <b>normal</b> d'une vraie <b>anomalie</b>.</div>
+
+  <h2 id="fraicheur">7. Fraîcheur &amp; SLA</h2>
+  <div class="step">
+    <p>La fraîcheur se lit toute seule dès que la table a une <b>« Fréquence de mise à jour »</b> au dictionnaire et un
+    <b>chargement daté</b>. Une pastille apparaît sur le nœud et sur les étiquettes de lien.</p>
+  </div>
+  <div class="ex">
+    <div class="exh">Exemple — fraîcheur</div>
+    KADOR_CONTRATS : fréquence <code>Hebdomadaire</code>, dernier chargement il y a <b>9 j</b> → <span style="color:#fca5a5"><b>retard (alerte)</b></span>.<br>
+    CRM_CLIENTS : <code>Quotidien</code>, chargé il y a <b>3 h</b> → <span style="color:#86efac"><b>frais</b></span>.
+  </div>
+  <div class="why"><b>💡 Ça sert à :</b> repérer une <b>source qui n'arrive plus</b> avant qu'elle ne pollue toute la chaîne aval. La tuile <b>« ⏱ Flux le plus en retard »</b> en haut résume le pire cas.</div>
+
+  <h2 id="appli">8. Couche application — « lit » &amp; « écrit »</h2>
+  <p>Les applications 🖥 (violet, pointillé) sont reliées aux tables par des liens d'<b>usage</b> :</p>
+  <ul>
+    <li><b>« lit »</b> (table → appli) : dérivé des tables/colonnes cochées sur l'application. L'appli <b>hérite</b> de la
+      <b>pire fraîcheur</b> des tables qu'elle lit ; <b>pas de distorsion</b> (la donnée EST celle de la table).</li>
+    <li><b>« écrit »</b> (appli → table) : dérivé quand le <b>nom de l'appli = « Système source »</b> d'une table au dictionnaire.
+      L'appli en est la <b>productrice / maître</b>.</li>
+  </ul>
+  <div class="ex">
+    <div class="exh">Exemple — fiche de « BI Ventes »</div>
+    BI Ventes <b>lit</b> CLIENT_360. CLIENT_360 hérite du retard de KADOR (9 j) →
+    <b>fraîcheur héritée : retard</b>.<br>
+    <b>Impact :</b> « BI Ventes dépend de 1 table lue : un problème dessus la touche directement. »
+  </div>
+  <div class="why"><b>💡 Ça sert à :</b> l'<b>analyse d'impact</b> — si CLIENT_360 se dégrade, vous savez immédiatement <b>quelles applications</b> sont touchées ; cliquez une table pour voir « N application(s) affectée(s) ».</div>
+  <div class="callout violet"><b>À noter.</b> Les liens lit/écrit <b>ne comptent pas</b> comme des alimentations : ils ne changent <b>ni le rôle</b> des tables ni la synthèse SLA/distorsion. La topologie reste pilotée par les seules alimentations table→table.</div>
+
+  <h2 id="conflit">9. Conflits de maîtrise</h2>
+  <p>« Deux applications/sources modifient le même attribut » est un vrai risque. La règle : <b>un attribut = un maître
+  pour une ligne donnée</b>.</p>
+  <table>
+    <tr><th>Situation</th><th>Ce qui se passe</th></tr>
+    <tr><td>1 seul maître</td><td>OK — c'est la référence de la réconciliation.</td></tr>
+    <tr><td>≥ 2 maîtres, <b>conditions disjointes</b> (ex. type=ASSURANCE / type=MAINTENANCE)</td><td>OK — <b>maîtrise contextuelle</b> : 1 maître par ligne, pas de conflit.</td></tr>
+    <tr><td>≥ 2 maîtres <b>sans condition</b></td><td><b>⚠️ Bandeau d'alerte « conflit de maîtrise »</b> en haut de l'écran.</td></tr>
+  </table>
+  <div class="step">
+    <p><b>Lever un conflit :</b> <span class="path">Gouvernance ▸ Objets métier</span> → l'objet concerné →
+    soit désignez un <b>maître unique</b>, soit ajoutez une <b>Règle de maîtrise contextuelle</b> (ex. « CRM maître si
+    <code>type = PARTICULIER</code>, KADOR maître si <code>type = PRO</code> »). Le bandeau disparaît.</p>
+  </div>
+  <div class="ex">
+    <div class="exh">Exemple — conflit détecté</div>
+    Objet <b>Client 360</b> déclare <b>CRM_CLIENTS</b> ET <b>KADOR_CONTRATS</b> comme <b>maîtres</b> du CA, sans règle.<br>
+    <span style="color:#fca5a5">⚠️ « 1 conflit de maîtrise détecté — Client 360 : 2 maîtres — CRM_CLIENTS, KADOR_CONTRATS ».</span><br>
+    <b>Correctif :</b> règle « CRM maître si <code>segment = B2C</code>, KADOR maître si <code>segment = B2B</code> » → plus de conflit.
+  </div>
+  <div class="why"><b>💡 Ça sert à :</b> transformer un désaccord silencieux (« qui a raison sur le CA ? ») en <b>signal explicite</b> et outillé, sans bloquer votre organisation.</div>
+
+  <h2 id="boutenbout">10. Vue « Bout en bout »</h2>
+  <div class="step">
+    <p>En haut à droite, <span class="kbd">🕸️ Bout en bout</span> ouvre le <b>grand graphe complet</b> : fichiers sources,
+    tables dérivées, objets métier, applications et processus, avec toutes les relations (alimentation, modèle de données,
+    usage, maîtrise/diffusion). <span class="kbd">◀ 🔗 Structure &amp; santé</span> vous ramène à la carte + santé.</p>
+    <p>Vous y retrouvez : <b>Vue globale / Par attribut</b>, les <b>filtres</b> (sources, objets, applis, processus),
+    <b>⛶ Plein écran</b>, <b>📷 export image</b>, et le <b>clic sur un nœud</b> pour isoler toute sa chaîne.</p>
+  </div>
+  <div class="why"><b>💡 Ça sert à :</b> la <b>vue d'ensemble</b> (présentation, audit) quand la carte table‑centrée se concentre, elle, sur la <b>santé</b>. Un seul onglet, deux focales.</div>
+
+  <h2 id="journal">11. Journal, seuil &amp; export</h2>
+  <ul>
+    <li><b>Seuil de distorsion (%)</b> (en haut) : au‑delà, un flux passe en <b>alerte</b> (rouge). Ex. <code>1</code> % pour
+      un CA qui doit être identique, <code>5</code> % pour une donnée tolérante.</li>
+    <li><b>🗒️ Journal des contrôles</b> (bas de l'écran) : historise chaque contrôle (date, flux, taux). <span class="kbd">Vider le journal</span> pour repartir à zéro.</li>
+    <li><b>Export CSV des écarts</b> depuis la fiche d'un lien : la liste complète des clés en écart, tous attributs, pour correction.</li>
+    <li>Tout (nœuds, liens, contrôles, journal) est <b>enregistré en local</b> avec la gouvernance et suit vos exports de bundle.</li>
+  </ul>
+
+  <h2 id="depannage">12. Dépannage</h2>
   <table>
     <tr><th>Symptôme</th><th>Cause &amp; solution</th></tr>
-    <tr><td>« Lancer le contrôle » reste grisé</td><td>Il manque une source reliée (source et/ou cible), la clé ou l'attribut. Complétez le lien dans « ⚙️ Construire le flux ».</td></tr>
-    <tr><td>« La colonne clé / l'attribut est absent(e) de … »</td><td>Le nom saisi ne correspond pas exactement à une colonne de la source (orthographe, casse, accents). Vérifiez l'en-tête de la source.</td></tr>
-    <tr><td>Pastille « non mesuré » sur un nœud</td><td>Aucune source reliée, ou pas de « Fréquence de mise à jour » dans le dictionnaire → pas de SLA calculable.</td></tr>
-    <tr><td>Un écart <i>attendu</i> ressort comme distorsion</td><td>Déclarez la <b>transformation rejouable</b> correspondante (agrégation ou normalisation) sur le lien, puis relancez.</td></tr>
-    <tr><td>« Analyse impossible » sur une très grosse source</td><td>Les calculs tournent sans débordement disque ; sur des volumes extrêmes en <code>file://</code>, ouvrez l'app via <code>http://localhost</code> (voir la note ci-dessous) ou optimisez la source en Parquet.</td></tr>
+    <tr><td>« Rien à dériver » au clic Synchroniser</td><td>Aucune table conçue ni application déclarée. Concevez une table (<span class="path">Tables conçues</span>) et/ou déclarez des applis, ou construisez à la main.</td></tr>
+    <tr><td><span class="kbd">↻ Contrôler</span> reste grisé</td><td>Il manque une <b>source reliée</b> (côté source et/ou cible), la <b>clé</b> ou l'<b>attribut</b>. Complétez le lien.</td></tr>
+    <tr><td>« aucun attribut » proposé pour une source</td><td>Le nœud n'a pas de <b>Source liée</b> chargée : reliez‑le à une source dans <span class="kbd">⚙️ Construire le flux</span>.</td></tr>
+    <tr><td>Fraîcheur « non mesuré »</td><td>Renseignez <b>« Fréquence de mise à jour »</b> au dictionnaire ; assurez‑vous que la source a un <b>chargement daté</b>.</td></tr>
+    <tr><td>Une application n'apparaît pas après synchro</td><td>Elle n'utilise aucune table ni colonne : cochez ses tables/colonnes dans <span class="path">Applis &amp; processus</span>, puis re‑synchronisez.</td></tr>
+    <tr><td>Un lien dérivé en double après modif manuelle</td><td>Impossible : la synchro apparie par <b>identité</b> (nom de table, couple source→cible) et ne recrée jamais un lien existant.</td></tr>
   </table>
-  <div class="callout warn"><b>Contexte fichier local.</b> Ouverte par double-clic (<code>file://</code>), l'app fonctionne mais reste
-  bornée par la mémoire du navigateur. Pour de très gros extraits, servez le dossier en <code>http://localhost</code>
-  (ex. <code>python -m http.server</code>) : cela active le débordement disque et lève le plafond.</div>
 
   <h2 id="recap">⚡ Récap express</h2>
   <div class="step">
     <ol>
-      <li>Charger les sources (maître + aval) ; renseigner la fréquence au dictionnaire pour le SLA.</li>
+      <li>Charger les sources ; renseigner <b>Système source</b> + <b>Fréquence</b> (dictionnaire) ; déclarer les applis.</li>
       <li><span class="path">Gouvernance ▸ Tracer ▸ 🕸️ Lineage</span>.</li>
-      <li>« ⚙️ Construire le flux » → <b>+ Nœud</b> (table + origine + source liée) pour chaque système ; le rôle est déduit.</li>
-      <li><b>+ Lien</b> (source → cible, clé, attribut, SLA, transformation rejouable si besoin).</li>
-      <li>Cliquer l'étiquette du lien → <b>↻ Lancer le contrôle</b>.</li>
-      <li>Lire le graphe, les volets et le bandeau ; exporter les écarts ; suivre le <b>journal</b>.</li>
+      <li><span class="kbd">⚙️ Construire le flux</span> → <span class="kbd">🔄 Synchroniser depuis les données</span> (la carte se dessine seule).</li>
+      <li>Corriger si besoin (<span class="kbd">+ Nœud</span> / <span class="kbd">+ Lien</span>) — le rôle et le type sont déduits.</li>
+      <li>Cliquer l'étiquette d'une <b>alimentation</b> → déclarer clé + attribut(s) → <span class="kbd">↻ Contrôler</span>.</li>
+      <li>Lire la santé (distorsion, fraîcheur), traiter les <b>conflits de maîtrise</b>, exporter les écarts, suivre le <b>journal</b>.</li>
+      <li>Basculer en <span class="kbd">🕸️ Bout en bout</span> pour la vue d'ensemble.</li>
     </ol>
   </div>
 
-  <footer>Studio Data V5.1 — Mode opératoire « Lineage &amp; santé du flux ». Document généré pour usage interne.</footer>
+  <footer>Studio Data V5.6 — Mode opératoire « Lineage &amp; santé », modèle table‑centré. Exemple fil rouge à but pédagogique.</footer>
 </div>
 </body>
 </html>
