@@ -4704,8 +4704,9 @@
                           source: { lbl: 'Source', ic: '📄', col: 0, badge: 'lf-r-src' },
                           reference: { lbl: 'Référentiel', ic: '🏛', col: 1, badge: 'lf-r-ref' },
                           consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' },
-                          app: { lbl: 'Application', ic: '🖥', col: 0, badge: 'lf-r-app' } };
-        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit' };
+                          app: { lbl: 'Application', ic: '🖥', col: 0, badge: 'lf-r-app' },
+                          object: { lbl: 'Objet métier', ic: '🏛️', col: 1, badge: 'lf-r-obj' } };
+        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit', composes: 'Compose', diffuses: 'Diffuse' };
         let lfView = 'systems';
         let lfEditNodeId = null, lfEditEdgeId = null;
         function lfEdgeKeys(e) { return { sK: e.srcKey || e.key || '', tK: e.tgtKey || e.key || '', sA: e.srcAttr || e.attr || '', tA: e.tgtAttr || e.attr || '' }; }
@@ -4717,6 +4718,7 @@
             if (!Array.isArray(g.flow.nodes)) g.flow.nodes = [];
             if (!Array.isArray(g.flow.edges)) g.flow.edges = [];
             if (typeof g.flow.threshold !== 'number') g.flow.threshold = 1.0;
+            if (typeof g.flow.showObjects !== 'boolean') g.flow.showObjects = true; // objets métier affichés par défaut
             return g.flow;
         }
         function lfNode(id) { return lfModel().nodes.find(n => n.id === id); }
@@ -4742,9 +4744,9 @@
         function lfProducerOf(tableId) { return lfModel().edges.filter(e => e.target === tableId && lfEdgeRel(e) === 'writes').map(e => lfNode(e.source)).find(n => n && lfNodeKind(n) === 'app') || null; }
         function lfAppProduces(appId) { return lfModel().edges.some(e => e.source === appId && lfEdgeRel(e) === 'writes'); }
         function lfDeduceRole(id) { const inc = lfIncomingCount(id); if (inc >= 2) return 'reference'; if (inc === 1) return 'consumer'; return lfProducerOf(id) ? 'source' : 'master'; }
-        function lfNodeRole(n) { if (!n) return 'consumer'; if (lfNodeKind(n) === 'app') return 'app'; return n.id ? lfDeduceRole(n.id) : 'consumer'; }
-        function lfConsolidates(id) { const n = lfNode(id); if (n && lfNodeKind(n) === 'app') return false; return lfIncomingCount(id) >= 2; }
-        function lfDeduceEdgeType(e) { const r = lfEdgeRel(e); if (r === 'reads') return 'reads'; if (r === 'writes') return 'writes'; return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
+        function lfNodeRole(n) { if (!n) return 'consumer'; const k = lfNodeKind(n); if (k === 'app') return 'app'; if (k === 'object') return 'object'; return n.id ? lfDeduceRole(n.id) : 'consumer'; }
+        function lfConsolidates(id) { const n = lfNode(id); if (n && lfNodeKind(n) !== 'table') return false; return lfIncomingCount(id) >= 2; }
+        function lfDeduceEdgeType(e) { const r = lfEdgeRel(e); if (LF_EDGE_TYPES[r] && r !== 'feeds' && r !== 'consolidates') return r; return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
         function lfEdgeTypeLabel(e) { return LF_EDGE_TYPES[lfDeduceEdgeType(e)]; }
         function lfIcon(n) { return n.icon || (LF_ROLE[lfNodeRole(n)] || LF_ROLE.consumer).ic; }
         function lfAge(days) { if (days == null) return '—'; return days < 1 ? Math.round(days * 24) + ' h' : (days < 60 ? Math.round(days) + ' j' : Math.round(days / 30) + ' mois'); }
@@ -4794,12 +4796,13 @@
             .lf-node:hover{border-color:#059669;box-shadow:0 6px 18px rgba(5,150,105,.15)}
             .lf-node .lf-nh{display:flex;align-items:center;gap:9px}
             .lf-node .lf-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex-shrink:0}
-            .lf-i-master .lf-ic{background:#d97706}.lf-i-reference .lf-ic{background:#2563eb}.lf-i-consumer .lf-ic{background:#334155}.lf-i-app .lf-ic{background:#7c3aed}.lf-i-source .lf-ic{background:#0891b2}
+            .lf-i-master .lf-ic{background:#d97706}.lf-i-reference .lf-ic{background:#2563eb}.lf-i-consumer .lf-ic{background:#334155}.lf-i-app .lf-ic{background:#7c3aed}.lf-i-source .lf-ic{background:#0891b2}.lf-i-object .lf-ic{background:#059669}
             .lf-node.lf-kind-app{border-style:dashed;border-color:#c4b5fd;background:#faf5ff}.lf-node.lf-kind-app:hover{border-color:#7c3aed}
+            .lf-node.lf-kind-obj{border-color:#6ee7b7;background:#f0fdf4}.lf-node.lf-kind-obj:hover{border-color:#059669}
             .lf-node .lf-nm{font-weight:800;font-size:13px;line-height:1.15;color:#0f172a}
             .lf-node .lf-sc{font-size:10px;color:#94a3b8}
             .lf-role{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-top:6px}
-            .lf-r-master{background:#fef3c7;color:#92400e}.lf-r-ref{background:#dbeafe;color:#1e40af}.lf-r-cons{background:#f1f5f9;color:#475569}.lf-r-app{background:#ede9fe;color:#5b21b6}.lf-r-src{background:#cffafe;color:#155e75}
+            .lf-r-master{background:#fef3c7;color:#92400e}.lf-r-ref{background:#dbeafe;color:#1e40af}.lf-r-cons{background:#f1f5f9;color:#475569}.lf-r-app{background:#ede9fe;color:#5b21b6}.lf-r-src{background:#cffafe;color:#155e75}.lf-r-obj{background:#d1fae5;color:#065f46}
             .lf-health{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
             .lf-hchip{font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
             .lf-h-ok{background:#dcfce7;color:#166534}.lf-h-warn{background:#fef3c7;color:#92400e}.lf-h-bad{background:#fee2e2;color:#991b1b}.lf-h-none{background:#f1f5f9;color:#64748b}
@@ -4844,7 +4847,8 @@
                         <button onclick="lfSetView('attrs')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">Vue attributs</button>
                         <button onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
                     </div>
-                    ${nodes.some(n => n.x != null || n.y != null) ? `<button onclick="lfResetLayout()" title="Rétablir la disposition automatique" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">↺ Disposition auto</button>` : ''}
+                    <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Afficher les objets métier (vues) et leurs sources sur la carte"><input type="checkbox" ${m.showObjects ? 'checked' : ''} onchange="lfToggleObjects(this.checked)"> 🏛️ Objets métier</label>
+                    <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
                 </div>
@@ -5017,10 +5021,10 @@
                 const roleCls = (LF_ROLE[role] || LF_ROLE.consumer).badge;
                 const incoming = edges.filter(e => e.target === n.id && e.lastRun);
                 let distChip = ''; if (incoming.length) { const worstE = incoming.reduce((mx, e) => (e.lastRun.rate || 0) > (mx.lastRun.rate || 0) ? e : mx); const ds = lfDistStatus(worstE); distChip = `<span class="lf-hchip lf-h-${ds}">Δ ${(worstE.lastRun.rate || 0).toFixed(1).replace('.', ',')} %</span>`; }
-                const isApp = lfNodeKind(n) === 'app';
-                const freshChip = fr.status !== 'none' ? `<span class="lf-hchip lf-h-${fr.status}">${fr.label}</span>` : ((n.tableName || isApp) ? '' : '<span class="lf-hchip lf-h-none">non mesuré</span>');
+                const isApp = lfNodeKind(n) === 'app'; const isObj = lfNodeKind(n) === 'object';
+                const freshChip = fr.status !== 'none' ? `<span class="lf-hchip lf-h-${fr.status}">${fr.label}</span>` : ((n.tableName || isApp || isObj) ? '' : '<span class="lf-hchip lf-h-none">non mesuré</span>');
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
-                hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
+                hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}${isObj ? ' lf-kind-obj' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
                     <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
@@ -5061,7 +5065,9 @@
             c.querySelectorAll('.lf-echip').forEach(ch => ch.addEventListener('click', () => lfOpenEdge(ch.dataset.edge)));
         }
         // Rétablit la disposition automatique (efface les positions manuelles des nœuds).
-        function lfResetLayout() { const m = lfModel(); let n0 = 0; m.nodes.forEach(n => { if (n.x != null || n.y != null) { delete n.x; delete n.y; n0++; } }); if (!n0) return showSuccess('La disposition est déjà automatique.'); persistAppState(); renderGovernance(); showSuccess('↺ Disposition automatique rétablie.'); }
+        function lfResetLayout() { const m = lfModel(); m.nodes.forEach(n => { delete n.x; delete n.y; }); persistAppState(); renderGovernance(); showSuccess('⇄ Carte réorganisée automatiquement.'); }
+        // Affiche/masque les objets métier sur la carte (dérive ou purge leurs nœuds/liens).
+        function lfToggleObjects(on) { lfModel().showObjects = !!on; lfSyncFromData({ silent: true }); renderGovernance(); showSuccess(on ? '🏛️ Objets métier affichés sur la carte.' : 'Objets métier masqués.'); }
 
         // ---- Builder actions ----
         function lfSaveNodeForm() {
@@ -5214,22 +5220,50 @@
                 desired.add('writes:' + producer.id + ':' + fileNode.id);
                 if (!m.edges.some(e => e.source === producer.id && e.target === fileNode.id)) { m.edges.push({ id: 'le_' + generateId(), source: producer.id, target: fileNode.id, type: 'feeds', rel: 'writes', srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true, produced: true }); addedE++; }
             });
+            // -- OBJETS MÉTIER (v5.11) : affichés si m.showObjects. Un objet = une vue ; ses sources
+            //    « maître »/« contributeur » le COMPOSENT (table→objet), ses « destinataires » le
+            //    DIFFUSENT (objet→table). Ces liens n'affectent pas les rôles de tables (rel ≠ feeds). --
+            const desiredBo = new Set();
+            if (!only && m.showObjects) (g.businessObjects || []).forEach(bo => {
+                let boN = m.nodes.find(x => x.boId === bo.id) || m.nodes.find(x => lfNodeKind(x) === 'object' && x.name && x.name.toLowerCase() === String(bo.name || '').toLowerCase());
+                if (!boN) { boN = { id: 'ln_' + generateId(), name: bo.name || 'Objet', kind: 'object', boId: bo.id, domain: bo.domain || '', derived: true }; m.nodes.push(boN); addedN++; }
+                else { boN.kind = 'object'; if (!boN.boId) boN.boId = bo.id; }
+                (bo.sources || []).forEach(s => {
+                    if (!s || !s.table || !tableByName(s.table)) return;
+                    const tN2 = nodeForTable(s.table);
+                    if (s.role === 'destinataire') { desiredBo.add('diffuses:' + boN.id + ':' + tN2.id); if (!m.edges.some(e => e.source === boN.id && e.target === tN2.id)) { m.edges.push({ id: 'le_' + generateId(), source: boN.id, target: tN2.id, type: 'feeds', rel: 'diffuses', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++; } }
+                    else { desiredBo.add('composes:' + tN2.id + ':' + boN.id); if (!m.edges.some(e => e.source === tN2.id && e.target === boN.id)) { m.edges.push({ id: 'le_' + generateId(), source: tN2.id, target: boN.id, type: 'feeds', rel: 'composes', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++; } }
+                });
+            });
             // -- Purge des liens d'usage DÉRIVÉS obsolètes (déclaration retirée). Les liens MANUELS
             //    (derived non vrai) et les usages d'applis non concernées sont laissés intacts. --
             const inScope = appNode => appNode && lfNodeKind(appNode) === 'app' && (appNode.assetId || appNode.producer) && (!only || appNode.assetId === only);
             m.edges = m.edges.filter(e => {
                 if (!e.derived) return true;
-                const rel = lfEdgeRel(e); if (rel !== 'reads' && rel !== 'writes') return true;
+                const rel = lfEdgeRel(e);
+                if (rel === 'composes' || rel === 'diffuses') { // liens d'objet métier
+                    if (only) return true; // synchro ciblée d'une appli : on ne touche pas les objets
+                    const key = rel === 'composes' ? (rel + ':' + e.source + ':' + e.target) : (rel + ':' + e.source + ':' + e.target);
+                    if (m.showObjects && desiredBo.has(key)) return true;
+                    removedE++; return false; // objets masqués OU lien obsolète → retiré
+                }
+                if (rel !== 'reads' && rel !== 'writes') return true;
                 const appNode = rel === 'writes' ? lfNode(e.source) : lfNode(e.target);
                 const tblNode = rel === 'writes' ? lfNode(e.target) : lfNode(e.source);
                 if (!inScope(appNode) || !tblNode) return true;
                 if (desired.has(rel + ':' + appNode.id + ':' + tblNode.id)) return true;
                 removedE++; return false;
             });
-            // -- Purge des nœuds APPLICATION dérivés devenus orphelins (plus aucun lien). --
+            // -- Purge des nœuds APPLICATION / OBJET dérivés devenus orphelins (plus aucun lien). --
             m.nodes = m.nodes.filter(n => {
-                if (!n.derived || lfNodeKind(n) !== 'app') return true;
-                if (only && n.assetId !== only) return true;
+                const k = lfNodeKind(n);
+                if (!n.derived || (k !== 'app' && k !== 'object')) return true;
+                if (only) { // synchro ciblée : ne considère que l'appli de cet actif
+                    if (k !== 'app' || n.assetId !== only) return true;
+                    if (m.edges.some(e => e.source === n.id || e.target === n.id)) return true;
+                    removedN++; return false;
+                }
+                if (k === 'object' && !m.showObjects) { removedN++; return false; } // objets masqués → retirés
                 if (m.edges.some(e => e.source === n.id || e.target === n.id)) return true;
                 removedN++; return false;
             });
@@ -5272,7 +5306,7 @@
             const m = lfModel(); const down = m.edges.filter(e => e.source === id), up = m.edges.filter(e => e.target === id);
             const isApp = lfNodeKind(n) === 'app';
             const _produces = isApp && lfAppProduces(n.id);
-            const fr = lfFresh(n); let roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', source: '<b>Source</b> (extrait/fichier) : ce fichier n\'est pas le maître — il APPARTIENT à l\'application qui le produit (son origine). Le maître de la donnée est cette application.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.', app: '<b>Application / processus</b> : consomme (lit) des tables. Sa fraîcheur est <b>héritée</b> de la pire des tables qu\'elle lit ; pas de distorsion propre (la donnée EST celle des tables).' }[lfNodeRole(n)] || '';
+            const fr = lfFresh(n); let roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', source: '<b>Source</b> (extrait/fichier) : ce fichier n\'est pas le maître — il APPARTIENT à l\'application qui le produit (son origine). Le maître de la donnée est cette application.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.', app: '<b>Application / processus</b> : consomme (lit) des tables. Sa fraîcheur est <b>héritée</b> de la pire des tables qu\'elle lit ; pas de distorsion propre (la donnée EST celle des tables).', object: '<b>Objet métier</b> (une vue) : regroupement de colonnes de tables. Ses sources maître/contributeur le <b>composent</b> ; ses destinataires le <b>diffusent</b>. Il ne porte pas de mesure propre — la santé se lit sur les tables qui le composent.' }[lfNodeRole(n)] || '';
             if (_produces) roleTxt = '<b>Application MAÎTRE de la donnée</b> : elle <b>produit</b> (écrit) ' + lfModel().edges.filter(e => e.source === n.id && lfEdgeRel(e) === 'writes').length + ' fichier(s)/table(s) — c\'est la source de vérité. Les fichiers ne sont que ses extraits ; ils sont consommés en aval.';
             const body = `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Rôle dans le flux</h4>
                 <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">${roleTxt}</div></div>
@@ -9214,8 +9248,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.10.0';
+        const APP_VERSION = '5.11.0';
         const APP_CHANGELOG = [
+            { v: '5.11.0', d: '2026-07-24', t: 'Lineage : objets métier sur la « Vue systèmes » + bouton « Réorganiser »', items: [
+                'La « Vue systèmes » affiche désormais les OBJETS MÉTIER (cases vertes 🏛️). Chaque objet est relié à ses tables : ses sources maître/contributeur le « composent » (table → objet), ses destinataires le « diffusent » (objet → table). Ces liens n\'affectent pas les rôles des tables.',
+                'Interrupteur « 🏛️ Objets métier » (en haut) pour les afficher/masquer — affichés par défaut. Dérivés et resynchronisés automatiquement avec la gouvernance ; masquer les retire proprement de la carte.',
+                'Nouveau bouton « ⇄ Réorganiser » (toujours disponible) : réorganise la carte automatiquement (efface les déplacements manuels et recalcule la disposition amont → aval).'] },
             { v: '5.10.0', d: '2026-07-24', t: 'Lineage : le MAÎTRE est l\'application, pas le fichier (l\'origine devient une application productrice)', items: [
                 'Correction de fond : un fichier source ne peut pas être « maître ». Le maître de la donnée est l\'APPLICATION amont (ex. KADOR). Désormais, l\'ORIGINE (système amont) d\'un fichier est matérialisée en nœud 🖥 Application qui PRODUIT (écrit) ce fichier.',
                 'Le fichier produit prend le rôle « 📄 Source » (extrait) et n\'est plus étiqueté « Maître » ; le rôle maître est porté par l\'application productrice (badge « 🗄 maître »), placée en amont. Les fichiers appartiennent ainsi à une application.',
