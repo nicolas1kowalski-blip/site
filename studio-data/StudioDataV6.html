@@ -4030,6 +4030,21 @@
             const procs = a.kind === 'app' ? (state.governance.assets || []).filter(x => x.kind === 'process' && (x.appIds || []).includes(a.id)) : [];
             return { srcs, bos, procs };
         }
+        // V6 Lot 4 : la chaîne AVAL d'une application, reconstruite depuis le paramétrage amont
+        // (ses sources → les objets métier qu'elles alimentent → les consommateurs de ces objets).
+        // Rien à ressaisir : tout est déduit des rattachements déjà déclarés.
+        function appDownstream(app) {
+            if (!app || app.kind !== 'app') return { srcs: [], bos: [], consumers: [] };
+            const srcs = assetUsage(app).srcs;
+            const bos = (state.governance.businessObjects || []).filter(bo => (bo.sources || []).some(s => srcs.includes(s.table) && s.role !== 'destinataire'));
+            const consumers = new Set();
+            bos.forEach(bo => {
+                (bo.sources || []).filter(s => s.role === 'destinataire' && tableByName(s.table)).forEach(s => consumers.add('📄 ' + s.table));
+                (bo.consumedBy || []).forEach(id => { const a2 = assetById(id); if (a2) consumers.add((a2.kind === 'process' ? '⚙️ ' : '🖥 ') + a2.name); });
+                if (bo.appId) { const a2 = assetById(bo.appId); if (a2 && a2.id !== app.id) consumers.add('🖥 ' + a2.name); }
+            });
+            return { srcs, bos, consumers: [...consumers] };
+        }
         // Domaine effectif : celui saisi, sinon (processus) hérité des applications liées.
         function assetDomainEff(a) {
             if (a.domain && String(a.domain).trim()) return String(a.domain).trim();
@@ -4053,7 +4068,15 @@
             const srcNames = sourceTableNames();
             const apps = assets.filter(a => a.kind === 'app');
             const doms = Array.from(new Set([...themeList(), ...assets.map(a => String(a.domain || '').trim()).filter(Boolean)])).sort();
-            let html = `<div class="bg-indigo-50/60 border border-indigo-200 rounded-xl p-4 mb-6">
+            let html = `<div class="bg-white border border-slate-200 rounded-xl px-4 py-3 mb-4 text-sm text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span class="text-[10px] uppercase font-bold text-slate-400 mr-1">Modèle</span>
+                <span class="font-bold text-slate-700">🖥 Application</span><span class="text-slate-300">contient →</span>
+                <span class="font-bold text-emerald-700">📄 Sources</span><span class="text-slate-300">alimentent →</span>
+                <span class="font-bold text-emerald-700">🏛️ Objet métier</span><span class="text-slate-300">alimente →</span>
+                <span class="font-bold text-slate-700">📥 Consommateurs</span>
+                <span class="text-[11px] text-slate-400 basis-full">C'est l'application qui est maître, jamais le fichier ; on ne remplit un objet métier que via une application.</span>
+            </div>
+            <div class="bg-indigo-50/60 border border-indigo-200 rounded-xl p-4 mb-6">
                 <h3 class="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Analyse d'impact — "si cette donnée a un problème, qui est touché ?"</h3>
                 <div class="flex flex-wrap gap-3 items-end">
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Table</label><select id="impactTable" onchange="populateImpactCols()" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Choisir...</option>${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select></div>
@@ -4088,7 +4111,8 @@
                         ${kind === 'app' ? `
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">📄 Sources produites <span class="text-slate-300 normal-case font-normal">— fichiers dont cette application est maître</span></div>
                         <div class="flex flex-wrap gap-1.5 mb-2">${srcNames.length ? srcNames.map(n => { const owner = appOwnerOfSource(n); const mine = owner && owner.id === a.id; const other = owner && owner.id !== a.id;
-                            return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>` : ''}
+                            return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>
+                        ${(() => { const d = appDownstream(a); return (d.srcs.length && (d.bos.length || d.consumers.length)) ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>` : ''; })()}` : ''}
                         ${kind === 'process' ? `
                         <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                             <span class="text-[10px] uppercase font-bold text-slate-400">🖥 Applications</span>
@@ -9480,8 +9504,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.2.0';
+        const APP_VERSION = '6.3.0';
         const APP_CHANGELOG = [
+            { v: '6.3.0', d: '2026-07-24', t: 'V6 Lot 4 — le squelette rendu visible : chaîne aval de l\'application, rien à ressaisir', items: [
+                'Bandeau « Modèle » en tête des Applications : 🖥 Application ▸ 📄 Sources ▸ 🏛️ Objet métier ▸ 📥 Consommateurs — le squelette est rappelé partout.',
+                'Chaque application affiche sa CHAÎNE AVAL, reconstruite depuis le paramétrage déjà déclaré : ses sources → les objets métier qu\'elles alimentent → les consommateurs de ces objets. On récupère le paramétrage amont au lieu de tout refaire.',
+                'Aboutissement du squelette V6 (Lots 1→4) : l\'application possède ses sources, l\'objet métier est alimenté par les applications et peut être porté par un référentiel, et la réconciliation réutilise son mapping. Un seul modèle, décrit une fois.'] },
             { v: '6.2.0', d: '2026-07-24', t: 'V6 Lot 3 — la réconciliation (image par valeur) réutilise le mapping de l\'objet métier', items: [
                 'Fini le double paramétrage : sur la fiche d\'une alimentation, un bouton « 🏛️ Mapping objet métier (N) » reprend d\'un clic les attributs déjà mappés dans l\'objet métier commun aux deux tables du lien — au lieu de re-saisir les mêmes colonnes.',
                 'Pour chaque attribut d\'objet métier mappé À LA FOIS sur la table source et sur la table cible, la paire (colonne source → colonne cible) est déduite automatiquement, même quand les noms de colonnes diffèrent entre les deux tables.',
