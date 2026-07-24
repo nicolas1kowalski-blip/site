@@ -4701,9 +4701,10 @@
         //           → le type (alimente/consolide) est DÉDUIT : cible à ≥ 2 entrants = consolidation.
         // ==========================================================================================
         const LF_ROLE = { master: { lbl: 'Maître', ic: '🗄', col: 0, badge: 'lf-r-master' },
+                          source: { lbl: 'Source', ic: '📄', col: 0, badge: 'lf-r-src' },
                           reference: { lbl: 'Référentiel', ic: '🏛', col: 1, badge: 'lf-r-ref' },
                           consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' },
-                          app: { lbl: 'Application', ic: '🖥', col: 2, badge: 'lf-r-app' } };
+                          app: { lbl: 'Application', ic: '🖥', col: 0, badge: 'lf-r-app' } };
         const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit' };
         let lfView = 'systems';
         let lfEditNodeId = null, lfEditEdgeId = null;
@@ -4736,7 +4737,11 @@
         // Le rôle & la consolidation ne se déduisent que des ALIMENTATIONS (feeds) : les lectures
         // et écritures d'applications ne comptent pas comme des sources d'une table.
         function lfIncomingCount(id) { return lfModel().edges.filter(e => e.target === id && e.source !== id && lfEdgeRel(e) === 'feeds').length; }
-        function lfDeduceRole(id) { const inc = lfIncomingCount(id); if (inc === 0) return 'master'; if (inc >= 2) return 'reference'; return 'consumer'; }
+        // Application PRODUCTRICE d'une table (lien « écrit » app→table) : c'est elle le vrai maître de
+        // la donnée ; le fichier n'en est qu'un extrait. Un fichier avec producteur → rôle « Source ».
+        function lfProducerOf(tableId) { return lfModel().edges.filter(e => e.target === tableId && lfEdgeRel(e) === 'writes').map(e => lfNode(e.source)).find(n => n && lfNodeKind(n) === 'app') || null; }
+        function lfAppProduces(appId) { return lfModel().edges.some(e => e.source === appId && lfEdgeRel(e) === 'writes'); }
+        function lfDeduceRole(id) { const inc = lfIncomingCount(id); if (inc >= 2) return 'reference'; if (inc === 1) return 'consumer'; return lfProducerOf(id) ? 'source' : 'master'; }
         function lfNodeRole(n) { if (!n) return 'consumer'; if (lfNodeKind(n) === 'app') return 'app'; return n.id ? lfDeduceRole(n.id) : 'consumer'; }
         function lfConsolidates(id) { const n = lfNode(id); if (n && lfNodeKind(n) === 'app') return false; return lfIncomingCount(id) >= 2; }
         function lfDeduceEdgeType(e) { const r = lfEdgeRel(e); if (r === 'reads') return 'reads'; if (r === 'writes') return 'writes'; return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
@@ -4789,12 +4794,12 @@
             .lf-node:hover{border-color:#059669;box-shadow:0 6px 18px rgba(5,150,105,.15)}
             .lf-node .lf-nh{display:flex;align-items:center;gap:9px}
             .lf-node .lf-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex-shrink:0}
-            .lf-i-master .lf-ic{background:#d97706}.lf-i-reference .lf-ic{background:#2563eb}.lf-i-consumer .lf-ic{background:#334155}.lf-i-app .lf-ic{background:#7c3aed}
+            .lf-i-master .lf-ic{background:#d97706}.lf-i-reference .lf-ic{background:#2563eb}.lf-i-consumer .lf-ic{background:#334155}.lf-i-app .lf-ic{background:#7c3aed}.lf-i-source .lf-ic{background:#0891b2}
             .lf-node.lf-kind-app{border-style:dashed;border-color:#c4b5fd;background:#faf5ff}.lf-node.lf-kind-app:hover{border-color:#7c3aed}
             .lf-node .lf-nm{font-weight:800;font-size:13px;line-height:1.15;color:#0f172a}
             .lf-node .lf-sc{font-size:10px;color:#94a3b8}
             .lf-role{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-top:6px}
-            .lf-r-master{background:#fef3c7;color:#92400e}.lf-r-ref{background:#dbeafe;color:#1e40af}.lf-r-cons{background:#f1f5f9;color:#475569}.lf-r-app{background:#ede9fe;color:#5b21b6}
+            .lf-r-master{background:#fef3c7;color:#92400e}.lf-r-ref{background:#dbeafe;color:#1e40af}.lf-r-cons{background:#f1f5f9;color:#475569}.lf-r-app{background:#ede9fe;color:#5b21b6}.lf-r-src{background:#cffafe;color:#155e75}
             .lf-health{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
             .lf-hchip{font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
             .lf-h-ok{background:#dcfce7;color:#166534}.lf-h-warn{background:#fef3c7;color:#92400e}.lf-h-bad{background:#fee2e2;color:#991b1b}.lf-h-none{background:#f1f5f9;color:#64748b}
@@ -5017,7 +5022,7 @@
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
                 hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
+                    <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
@@ -5192,9 +5197,26 @@
                 reads.forEach(tn => ensureUsageEdge(tn, appN, 'reads'));
                 writesTables.forEach(tn => ensureUsageEdge(tn, appN, 'writes'));
             });
+            // Producteur = MAÎTRE (v5.10) : l'ORIGINE (système amont) d'un fichier est l'application qui
+            // le produit. On la matérialise en nœud application « écrit → fichier » ; le fichier devient
+            // une « Source » (extrait) et n'est plus étiqueté maître. Reliée à l'actif homonyme s'il existe.
+            const nodeForOrigin = (origin) => {
+                const asset = (g.assets || []).find(a => String(a.name || '').toLowerCase() === String(origin).toLowerCase());
+                let n = (asset && m.nodes.find(x => x.assetId === asset.id))
+                     || m.nodes.find(x => lfNodeKind(x) === 'app' && x.name && x.name.toLowerCase() === String(origin).toLowerCase());
+                if (!n) { n = { id: 'ln_' + generateId(), name: String(origin), kind: 'app', assetId: asset ? asset.id : undefined, producer: true, derived: true }; m.nodes.push(n); addedN++; addedApp++; }
+                else { n.kind = 'app'; n.producer = true; if (asset && !n.assetId) n.assetId = asset.id; }
+                return n;
+            };
+            if (!only) m.nodes.filter(n => lfNodeKind(n) !== 'app' && n.origine && n.tableName).slice().forEach(fileNode => {
+                const producer = nodeForOrigin(fileNode.origine);
+                if (producer.id === fileNode.id) return;
+                desired.add('writes:' + producer.id + ':' + fileNode.id);
+                if (!m.edges.some(e => e.source === producer.id && e.target === fileNode.id)) { m.edges.push({ id: 'le_' + generateId(), source: producer.id, target: fileNode.id, type: 'feeds', rel: 'writes', srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true, produced: true }); addedE++; }
+            });
             // -- Purge des liens d'usage DÉRIVÉS obsolètes (déclaration retirée). Les liens MANUELS
             //    (derived non vrai) et les usages d'applis non concernées sont laissés intacts. --
-            const inScope = appNode => appNode && lfNodeKind(appNode) === 'app' && appNode.assetId && (!only || appNode.assetId === only);
+            const inScope = appNode => appNode && lfNodeKind(appNode) === 'app' && (appNode.assetId || appNode.producer) && (!only || appNode.assetId === only);
             m.edges = m.edges.filter(e => {
                 if (!e.derived) return true;
                 const rel = lfEdgeRel(e); if (rel !== 'reads' && rel !== 'writes') return true;
@@ -5249,7 +5271,9 @@
             const n = lfNode(id); if (!n) return;
             const m = lfModel(); const down = m.edges.filter(e => e.source === id), up = m.edges.filter(e => e.target === id);
             const isApp = lfNodeKind(n) === 'app';
-            const fr = lfFresh(n); const roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.', app: '<b>Application / processus</b> : consomme (lit) des tables. Sa fraîcheur est <b>héritée</b> de la pire des tables qu\'elle lit ; pas de distorsion propre (la donnée EST celle des tables).' }[lfNodeRole(n)] || '';
+            const _produces = isApp && lfAppProduces(n.id);
+            const fr = lfFresh(n); let roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', source: '<b>Source</b> (extrait/fichier) : ce fichier n\'est pas le maître — il APPARTIENT à l\'application qui le produit (son origine). Le maître de la donnée est cette application.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.', app: '<b>Application / processus</b> : consomme (lit) des tables. Sa fraîcheur est <b>héritée</b> de la pire des tables qu\'elle lit ; pas de distorsion propre (la donnée EST celle des tables).' }[lfNodeRole(n)] || '';
+            if (_produces) roleTxt = '<b>Application MAÎTRE de la donnée</b> : elle <b>produit</b> (écrit) ' + lfModel().edges.filter(e => e.source === n.id && lfEdgeRel(e) === 'writes').length + ' fichier(s)/table(s) — c\'est la source de vérité. Les fichiers ne sont que ses extraits ; ils sont consommés en aval.';
             const body = `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Rôle dans le flux</h4>
                 <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">${roleTxt}</div></div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
@@ -9190,8 +9214,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.9.1';
+        const APP_VERSION = '5.10.0';
         const APP_CHANGELOG = [
+            { v: '5.10.0', d: '2026-07-24', t: 'Lineage : le MAÎTRE est l\'application, pas le fichier (l\'origine devient une application productrice)', items: [
+                'Correction de fond : un fichier source ne peut pas être « maître ». Le maître de la donnée est l\'APPLICATION amont (ex. KADOR). Désormais, l\'ORIGINE (système amont) d\'un fichier est matérialisée en nœud 🖥 Application qui PRODUIT (écrit) ce fichier.',
+                'Le fichier produit prend le rôle « 📄 Source » (extrait) et n\'est plus étiqueté « Maître » ; le rôle maître est porté par l\'application productrice (badge « 🗄 maître »), placée en amont. Les fichiers appartiennent ainsi à une application.',
+                'La production est reliée à l\'application déclarée dans « Applis & processus » quand le nom correspond (même nœud pour produire ET consommer, cas de l\'écriture en retour). Dérivé et resynchronisé automatiquement ; réglages manuels préservés.',
+                'Un fichier redevient « Maître » uniquement s\'il n\'a AUCUNE origine renseignée (renseignez le « Système source » au dictionnaire pour rétablir la chaîne application → fichier).'] },
             { v: '5.9.1', d: '2026-07-24', t: 'Lineage : la « Vue systèmes » est resynchronisée à l\'ouverture (cohérence avec « Bout en bout »)', items: [
                 'La carte « Vue systèmes/attributs » et le graphe « Bout en bout » lisaient deux sources différentes : le premier n\'était à jour qu\'après un clic sur « Synchroniser », le second se dérive en direct — d\'où une impression de désynchronisation.',
                 'Désormais, ouvrir l\'onglet Lineage RESYNCHRONISE automatiquement la « Vue systèmes » avec vos données (tables conçues + applications), en silence et en préservant vos réglages manuels : les deux vues reflètent toujours les mêmes faits.',

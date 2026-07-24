@@ -55,7 +55,7 @@
   <table>
     <tr><th>Sujet</th><th>Décision</th></tr>
     <tr><td>Entité de première classe</td><td><b>La table</b> (source chargée ou table conçue) — seule chose concrète, chargeable et mesurable.</td></tr>
-    <tr><td>Système amont</td><td>Simple <b>métadonnée <code>origine</code></b> sur la table (étiquette), <b>pas un nœud</b> à gérer.</td></tr>
+    <tr><td>Système amont</td><td><b>Révisé en v5.10 :</b> l'<code>origine</code> reste une métadonnée sur la table, mais elle est <b>matérialisée en nœud Application PRODUCTRICE</b> (elle « écrit » le fichier). C'est l'<b>application qui est maître</b>, pas le fichier — qui devient une « Source » (extrait). La saisie reste au niveau de la table (champ Origine / Système source), la dérivation crée le nœud.</td></tr>
     <tr><td>Application / processus</td><td>Reste un <b>concept</b> qui <b>utilise</b> des tables/attributs (mécanisme d'usage existant), <b>pas</b> une table.</td></tr>
     <tr><td>Objet métier</td><td>Une <b>vue</b> (regroupement de colonnes de tables), pas un nœud du flux.</td></tr>
     <tr><td>Type de lien (alimente/consolide)</td><td><b>Déduit</b> : « alimente » par défaut ; « consolidation » = table à <b>≥ 2 entrants</b> (calculé). Fini le choix manuel.</td></tr>

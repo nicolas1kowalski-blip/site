@@ -87,18 +87,18 @@
   Excel…), soit une <b>table conçue</b> dans Studio Data. Sur la carte :</p>
   <table>
     <tr><th>Élément</th><th>Ce que c'est</th><th>Comment il apparaît</th></tr>
-    <tr><td><b>Nœud</b></td><td>Une <b>table</b>. Son <b>origine</b> (système amont : SAP, CRM…) est une simple étiquette.</td><td>🗄 / 🏛 / 📊 selon le rôle</td></tr>
-    <tr><td><b>Application / processus</b></td><td>Un logiciel qui <b>lit</b> et/ou <b>écrit</b> des tables. Pas une table.</td><td>🖥 (violet, pointillé)</td></tr>
+    <tr><td><b>Nœud table</b></td><td>Une <b>table</b> (source chargée ou table conçue). Le seul objet <b>mesurable</b>.</td><td>📄 / 🏛 / 📊 selon le rôle</td></tr>
+    <tr><td><b>Nœud application</b></td><td>Un logiciel/système qui <b>produit</b>, <b>lit</b> et/ou <b>écrit</b> des tables. <b>C'est lui le maître de la donnée</b>, pas le fichier.</td><td>🖥 (violet, pointillé)</td></tr>
+    <tr><td><b>Lien « écrit / produit »</b></td><td>application → fichier : l'appli <b>produit</b> le fichier (son origine). Le fichier lui <b>appartient</b>.</td><td>flèche violette</td></tr>
     <tr><td><b>Lien « alimente »</b></td><td>table → table (une copie/consolidation en aval).</td><td>flèche pleine — <b>on y mesure la distorsion</b></td></tr>
     <tr><td><b>Lien « lit »</b></td><td>table → application (l'appli consomme la donnée).</td><td>flèche violette — fraîcheur héritée, pas de distorsion</td></tr>
-    <tr><td><b>Lien « écrit »</b></td><td>application → table (l'appli produit/maîtrise la donnée).</td><td>flèche violette — surveille les conflits</td></tr>
   </table>
-  <p class="callout ok"><b>Rien à classer à la main.</b> Le <b>rôle</b> d'une table et le <b>type</b> d'un lien sont
-  <b>déduits</b> de la forme du flux :
-  <span class="pill p-master">Maître</span> aucune alimentation entrante ·
+  <p class="callout ok"><b>Rien à classer à la main.</b> Les rôles sont <b>déduits</b> de la forme du flux :
+  <span class="pill p-app">Application maître 🗄</span> celle qui produit les fichiers (source de vérité) ·
+  <span class="pill p-cons" style="background:#cffafe;color:#155e75">Source 📄</span> un fichier produit par une application (son extrait) ·
   <span class="pill p-ref">Référentiel</span> ≥ 2 alimentations entrantes (= <b>consolidation</b>) ·
-  <span class="pill p-cons">Consommateur</span> sinon ·
-  <span class="pill p-app">Application</span> pour un logiciel. Vous décrivez <b>qui alimente qui</b>, l'outil déduit le reste.</p>
+  <span class="pill p-cons">Consommateur</span> une table/appli en aval.
+  <b>Un fichier n'est jamais « maître »</b> tant qu'il a une <b>origine</b> : le maître est l'application amont. (Un fichier sans origine renseignée retombe en « Maître » par défaut — renseignez son « Système source » au dictionnaire.)</p>
 
   <h2 id="exemple">🧵 L'exemple fil rouge</h2>
   <p>Une compagnie d'assurance veut fiabiliser son <b>chiffre d'affaires client</b>. Elle possède :</p>
@@ -161,12 +161,12 @@
   le lien « lit » apparaît ou disparaît en conséquence.</div>
   <div class="ex">
     <div class="exh">Exemple — ce qui apparaît après le clic</div>
-CRM_CLIENTS ─alimente─▶ CLIENT_360 ◀─alimente─ KADOR_CONTRATS
-                          │
-                          └─lit─▶ 🖥 BI Ventes
-Facturation 🖥 ─écrit─▶ KADOR_CONTRATS
+🖥 CRM 🗄 ──écrit──▶ 📄 CRM_CLIENTS ──alimente──▶ 🏛 CLIENT_360 ◀──alimente── 📄 KADOR_CONTRATS ◀──écrit── 🖥 KADOR 🗄
+                                                       │
+                                                       └──lit──▶ 🖥 BI Ventes
 
-<span style="color:#7dd3fc">Message :</span> « 🔄 Synchronisé : 4 nœud(s) ajouté(s) (dont 2 applications), 4 lien(s) dérivé(s), 2 origine(s) renseignée(s). »</div>
+<span style="color:#7dd3fc">Message :</span> « 🔄 Synchronisé : ajouts de nœuds (dont applications productrices), alimentations et liens d'usage. »
+<span style="color:#94a3b8">CRM et KADOR (applications) sont MAÎTRES ; les fichiers sont leurs Sources ; CLIENT_360 consolide ; BI Ventes lit.</span></div>
   <div class="callout"><b>Pas de table conçue ?</b> Vous pouvez aussi partir des objets métier avec
   <span class="kbd">✨ Générer depuis les objets métier</span>, ou tout construire à la main (§4).</div>
 
@@ -203,12 +203,17 @@ Facturation 🖥 ─écrit─▶ KADOR_CONTRATS
   <h2 id="deduit">5. Lire la carte — les rôles déduits</h2>
   <p>Regardez la liste des nœuds (colonne <b>Rôle (déduit)</b>) et le graphe. Sur l'exemple :</p>
   <table>
-    <tr><th>Table</th><th>Alim. entrantes</th><th>Rôle déduit</th><th>Pourquoi</th></tr>
-    <tr><td>CRM_CLIENTS</td><td>0</td><td><span class="pill p-master">Maître 🗄</span></td><td>rien ne l'alimente → source de vérité</td></tr>
-    <tr><td>KADOR_CONTRATS</td><td>0</td><td><span class="pill p-master">Maître 🗄</span></td><td>rien ne l'alimente</td></tr>
-    <tr><td>CLIENT_360</td><td>2 (CRM + KADOR)</td><td><span class="pill p-ref">Référentiel 🏛 ⑃</span></td><td>≥ 2 entrants → <b>consolidation</b></td></tr>
-    <tr><td>BI Ventes</td><td>—</td><td><span class="pill p-app">Application 🖥</span></td><td>logiciel qui lit</td></tr>
+    <tr><th>Nœud</th><th>Type</th><th>Rôle déduit</th><th>Pourquoi</th></tr>
+    <tr><td><b>CRM</b> / <b>KADOR</b></td><td>application</td><td><span class="pill p-app">Application maître 🗄</span></td><td>elles <b>produisent</b> leurs fichiers → maîtres de la donnée</td></tr>
+    <tr><td>CRM_CLIENTS</td><td>fichier</td><td><span class="pill p-cons" style="background:#cffafe;color:#155e75">Source 📄</span></td><td>produit par l'application CRM (son extrait) — <b>pas maître</b></td></tr>
+    <tr><td>KADOR_CONTRATS</td><td>fichier</td><td><span class="pill p-cons" style="background:#cffafe;color:#155e75">Source 📄</span></td><td>produit par l'application KADOR</td></tr>
+    <tr><td>CLIENT_360</td><td>table conçue</td><td><span class="pill p-ref">Référentiel 🏛 ⑃</span></td><td>≥ 2 alimentations → <b>consolidation</b></td></tr>
+    <tr><td>BI Ventes</td><td>application</td><td><span class="pill p-app">Application 🖥</span></td><td>logiciel qui <b>lit</b> le référentiel</td></tr>
   </table>
+  <div class="callout"><b>Le maître, c'est l'application.</b> Un fichier source (CRM_CLIENTS, KADOR_CONTRATS) n'est <b>jamais</b> le maître :
+  il <b>appartient</b> à l'application qui le produit (son <b>origine</b>, ex. KADOR), et c'est cette application qui porte le rôle
+  <b>maître</b> (badge « 🗄 maître »), en amont. Renseignez le <b>« Système source »</b> de chaque fichier au dictionnaire pour
+  que sa chaîne <b>application → fichier</b> apparaisse.</div>
   <div class="why"><b>💡 Ça sert à :</b> vous voyez d'un coup d'œil <b>où naît</b> la donnée, <b>où elle est consolidée</b> (badge <b>⑃ consolide</b>) et <b>qui la consomme</b> — sans avoir eu à le déclarer.</div>
   <div class="callout"><b>Astuce.</b> <span class="kbd">Vue attributs</span> affiche, sur chaque nœud, les colonnes clé/attribut reliées. Cliquez un <b>nœud</b> pour sa fiche (rôle, fraîcheur, connexions, impact).</div>
   <div class="callout ok"><b>🖐️ Déplacer les nœuds.</b> <b>Glissez</b> une case (souris ou tactile) pour composer votre carte à votre main ;
