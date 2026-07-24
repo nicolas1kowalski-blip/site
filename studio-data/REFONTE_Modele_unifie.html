@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Data — Proposition : remettre le modèle au propre (entités unifiées)</title>
+<style>
+  :root{--ink:#0f172a;--muted:#475569;--faint:#64748b;--line:#e2e8f0;--bg:#f8fafc;--panel:#fff;--brand:#4f46e5;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;}
+  *{box-sizing:border-box}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--ink);background:var(--bg);margin:0;line-height:1.62;font-size:15px}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 22px 90px}
+  h1{font-size:25px;margin:0 0 4px}.lead{color:var(--muted);margin:0 0 18px}
+  .status{display:inline-block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;background:#fef9c3;color:#854d0e;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;margin-bottom:16px}
+  h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+  h3{font-size:15.5px;margin:20px 0 6px}
+  p{margin:8px 0}
+  code{background:#eef2ff;color:#3730a3;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+  .callout{border-left:4px solid var(--brand);background:#eef2ff;border-radius:0 9px 9px 0;padding:11px 15px;margin:14px 0;font-size:14px}
+  .callout.ok{border-color:var(--ok);background:#f0fdf4}
+  .callout.warn{border-color:var(--warn);background:#fffbeb}
+  .callout.bad{border-color:var(--bad);background:#fef2f2}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--bg);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint)}
+  ol,ul{padding-left:22px}li{margin:6px 0}
+  b{color:var(--ink)}
+  .diag{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;white-space:pre;overflow-x:auto;line-height:1.5}
+  .pill{display:inline-block;font-size:11px;font-weight:800;border-radius:20px;padding:2px 9px}
+  .p-tbl{background:#cffafe;color:#155e75}.p-app{background:#ede9fe;color:#5b21b6}.p-obj{background:#d1fae5;color:#065f46}
+  .bad-x{color:var(--bad);font-weight:700}.ok-v{color:var(--ok);font-weight:700}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 20px;margin:18px 0}
+  .toc a{color:var(--brand);text-decoration:none}.toc ol{columns:2;column-gap:26px}
+  footer{margin-top:40px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+  @media print{body{background:#fff}.toc{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧹 Remettre le modèle au propre — proposition</h1>
+  <div class="status">⏳ À valider avant toute refonte</div>
+  <p class="lead">Constat partagé : entre <b>sources, tables, origine, applications, objets métier</b> et le <b>lineage</b>,
+  les mêmes faits se déclarent à plusieurs endroits et plus rien n'a de <b>source de vérité unique</b>. Voici un modèle
+  simple à 3 entités, où <b>chaque relation se déclare une seule fois</b>, et un plan de refonte sans perte.</p>
+
+  <div class="toc"><b>Sommaire</b><ol>
+    <li><a href="#diag">1. Le diagnostic (pourquoi c'est le bazar)</a></li>
+    <li><a href="#principe">2. Le principe</a></li>
+    <li><a href="#entites">3. Trois entités, point</a></li>
+    <li><a href="#verite">4. Une seule source de vérité par relation</a></li>
+    <li><a href="#lineage">5. Le lineage devient une projection</a></li>
+    <li><a href="#nav">6. Navigation regroupée</a></li>
+    <li><a href="#plan">7. Le plan de refonte (sans perte)</a></li>
+    <li><a href="#decision">8. Ce que je te demande de trancher</a></li>
+  </ol></div>
+
+  <h2 id="diag">1. Le diagnostic — pourquoi c'est le bazar</h2>
+  <p>Le vrai problème n'est pas d'avoir beaucoup d'écrans, c'est que <b>la même information se saisit à plusieurs
+  endroits</b>, sans qu'aucun ne fasse autorité :</p>
+  <table>
+    <tr><th>L'information</th><th>Se déclare aujourd'hui dans…</th><th>Conséquence</th></tr>
+    <tr><td>« Qui est le <b>maître</b> de la donnée »</td><td>rôle de source d'un <b>objet métier</b> · rôle <b>déduit</b> du lineage · <b>« Système source »</b> du dictionnaire</td><td class="bad-x">3 endroits qui peuvent se contredire</td></tr>
+    <tr><td>« Quelle <b>application</b> utilise/produit quoi »</td><td><b>Applis &amp; processus</b> (tables/colonnes) · <b>dictionnaire</b> (système source) · nœuds <b>app</b> du lineage</td><td class="bad-x">saisie en double, dérive</td></tr>
+    <tr><td>« D'où vient une <b>table</b> »</td><td>champ <b>origine</b> · <b>tables conçues</b> (design.sources) · arêtes <b>alimente</b> du lineage</td><td class="bad-x">3 représentations</td></tr>
+    <tr><td>La <b>carte</b> (lineage)</td><td>possède son <b>PROPRE modèle</b> (<code>flow.nodes/edges</code>) qu'il faut <b>synchroniser</b></td><td class="bad-x">un 2ᵉ modèle qui « décroche » du reste</td></tr>
+    <tr><td>« Objet métier »</td><td>une <b>vue</b> (mappings) · mais aussi un <b>nœud</b> du lineage · et une cible de <b>règles</b></td><td class="bad-x">mi‑concept, mi‑nœud</td></tr>
+  </table>
+  <div class="callout bad"><b>La racine du mal :</b> le <b>lineage a son propre modèle</b> (des nœuds et des liens à lui), au lieu
+  d'être une simple <b>lecture</b> de ce que tu as déjà déclaré. Tout le reste (les rôles, les origines, les usages) est donc
+  dupliqué pour « nourrir » ce modèle parallèle — et c'est ce qui « décroche ».</p></div>
+
+  <h2 id="principe">2. Le principe</h2>
+  <ol>
+    <li><b>On sépare 3 plans</b> : le <b>physique</b> (les tables), les <b>acteurs</b> (les applications), le <b>sens métier</b> (les objets).</li>
+    <li><b>Chaque relation se déclare UNE fois</b>, à un seul endroit qui fait autorité.</li>
+    <li><b>Le lineage ne stocke plus rien</b> : c'est une <b>projection</b> (une lecture) de ces déclarations. Il ne peut donc plus être « désynchronisé ».</li>
+    <li><b>Tout le reste est déduit</b> (maître, consolidation, source vs référentiel…), jamais ressaisi.</li>
+  </ol>
+
+  <h2 id="entites">3. Trois entités, point</h2>
+  <table>
+    <tr><th>Entité</th><th>Ce que c'est</th><th>Ce qu'on y attache</th></tr>
+    <tr><td><span class="pill p-app">Application</span> (ou processus)</td><td>Un système/logiciel. <b>Le seul « acteur ».</b> C'est lui le maître.</td><td>domaine, criticité, propriétaire · <b>produit</b> / <b>lit</b> / <b>écrit</b> des tables</td></tr>
+    <tr><td><span class="pill p-tbl">Table</span></td><td>La seule chose <b>concrète et mesurable</b>. Une <b>Source</b> = une table produite par une application. Une <b>Table conçue</b> = construite à partir d'autres tables.</td><td>colonnes, fréquence, sensibilité · <b>produite par</b> 1 application · <b>alimentée par</b> d'autres tables</td></tr>
+    <tr><td><span class="pill p-obj">Objet métier</span></td><td>Une <b>vue</b> métier : un ensemble d'attributs <b>rattachés à des colonnes</b> de tables. Pas un objet physique.</td><td>propriétaire, définition, <b>attributs → colonnes</b>, règles, hiérarchies, maîtrise contextuelle</td></tr>
+  </table>
+  <p>Le <b>« système amont »</b> n'est plus une notion à part : c'est <b>l'application qui produit</b> la table.
+  Le <b>« périmètre »</b> et le <b>glossaire</b> restent, mais comme <b>étiquettes</b> posées sur ces 3 entités (pas des entités de plus).</p>
+  <div class="diag">Le modèle en une image :
+
+  [Application "KADOR"] ──produit──▶ [Source: KADOR_CONTRATS] ─┐
+  [Application "CRM"]   ──produit──▶ [Source: CRM_CLIENTS]     ├─alimente─▶ [Table conçue: CLIENT_360]
+                                                               ┘                      │
+  [Objet métier "Client 360"] ──regroupe des colonnes de──────────────────────────────┤ (vue)
+  [Application "BI"] ──lit──▶ CLIENT_360        [Application "Portail"] ──écrit──▶ CLIENT_360 (maîtrise)</div>
+
+  <h2 id="verite">4. Une seule source de vérité par relation</h2>
+  <table>
+    <tr><th>Relation</th><th>Déclarée UNE fois dans…</th><th>Déduit automatiquement</th></tr>
+    <tr><td><b>Application → produit → Table</b></td><td>fiche de la <b>Table</b> (ou du Dictionnaire) : « Produite par » = choisir une <b>application</b> (liste, plus de texte libre)</td><td>l'appli est <b>maître</b> ; la table est une <b>Source</b></td></tr>
+    <tr><td><b>Table → alimente → Table</b></td><td><b>Tables conçues</b> (les sources contributrices) — et rien d'autre</td><td>« consolidation » si ≥ 2 ; sens amont→aval</td></tr>
+    <tr><td><b>Application → lit / écrit → Table</b></td><td><b>Applis &amp; processus</b> (tables/colonnes utilisées, avec un drapeau lit/écrit)</td><td>fraîcheur héritée, impact ; conflit si 2 écrivains</td></tr>
+    <tr><td><b>Objet métier → regroupe → colonnes</b></td><td><b>Objets métier</b> (attribut → correspondances)</td><td>tables du périmètre, règles applicables</td></tr>
+    <tr><td><b>Maîtrise</b></td><td><b>déduite</b> (appli productrice/écrivaine ; sur un objet : maître contextuel)</td><td>alerte si ambiguë</td></tr>
+  </table>
+  <div class="callout ok"><b>Effet immédiat :</b> tu ne saisis plus jamais deux fois la même chose. Renseigner « produite par »
+  suffit à faire apparaître le maître partout ; cocher une table dans une appli suffit à tracer l'usage partout.</div>
+
+  <h2 id="lineage">5. Le lineage devient une PROJECTION (le gros changement)</h2>
+  <p>On <b>supprime le modèle propre du lineage</b> (<code>flow.nodes/edges</code>). La carte se <b>calcule</b> à 100 % à partir
+  des 3 entités et de leurs relations ci‑dessus. Résultat : <b>impossible d'être désynchronisé</b>, et <b>« Vue systèmes »
+  et « Bout en bout » deviennent la même carte</b>, avec juste des <b>filtres</b> (afficher/masquer applis, objets, colonnes).</p>
+  <p><b>Une seule chose a besoin d'être stockée</b> : les <b>points de mesure de santé</b> (quelle clé, quels attributs
+  comparer, quelle transformation, seuils, derniers contrôles). Ils deviennent des <b>annotations sur la relation
+  « alimente »</b> concernée — pas un graphe parallèle. On garde donc toute la richesse actuelle (réconciliation attribut par
+  attribut, journal…), mais accrochée au bon endroit.</p>
+  <div class="callout warn"><b>Ce que ça implique concrètement :</b> les nœuds/liens que tu as éventuellement ajoutés « à la main »
+  dans le lineage seront <b>reconvertis</b> en déclarations réelles (une table, une appli, une alimentation) lors de la migration,
+  puis la carte les redessine toute seule. Rien n'est perdu, mais la carte n'est plus « éditable » comme un dessin : on édite
+  les <b>faits</b>, la carte suit.</div>
+
+  <h2 id="nav">6. Navigation regroupée</h2>
+  <p>On garde tous les écrans, mais rangés selon les 3 plans + 2 usages :</p>
+  <table>
+    <tr><th>Famille</th><th>Écrans</th></tr>
+    <tr><td><b>🗃️ Patrimoine</b> (physique)</td><td>Sources &amp; tables · Dictionnaire · Tables conçues</td></tr>
+    <tr><td><b>🖥️ Acteurs</b></td><td>Applications &amp; processus</td></tr>
+    <tr><td><b>🧭 Sens métier</b></td><td>Objets métier · Glossaire · Périmètres · Sensibilité</td></tr>
+    <tr><td><b>🩺 Qualité &amp; contrôle</b></td><td>Règles &amp; score · Surveillance des sources · Rapprochement</td></tr>
+    <tr><td><b>🕸️ Lineage</b> (la carte, projection unique)</td><td>Lineage &amp; santé (un seul écran, avec filtres)</td></tr>
+    <tr><td><b>📣 Diffusion</b></td><td>Catalogue · Tableaux de bord · Historique</td></tr>
+  </table>
+
+  <h2 id="plan">7. Le plan de refonte (sans perte, par étapes testées)</h2>
+  <table>
+    <tr><th>Étape</th><th>Contenu</th><th>Risque</th></tr>
+    <tr><td><b>R1</b></td><td><b>« Produite par une application »</b> sur la table/dictionnaire (liste d'applis, fin du texte libre d'origine). Migration : origine texte → application.</td><td>faible</td></tr>
+    <tr><td><b>R2</b></td><td><b>Lineage = projection</b> : la carte se calcule des 3 entités ; suppression du modèle <code>flow</code> ; les points de mesure migrent en annotations sur « alimente ». Fusion « Vue systèmes » = « Bout en bout » (filtres).</td><td><b>élevé</b> (cœur)</td></tr>
+    <tr><td><b>R3</b></td><td><b>Maîtrise déduite unique</b> : un seul calcul du maître (appli productrice/écrivaine + maître contextuel d'objet) ; les 3 déclarations actuelles convergent ; alertes de conflit conservées.</td><td>moyen</td></tr>
+    <tr><td><b>R4</b></td><td><b>Navigation regroupée</b> (6 familles) + vocabulaire unifié (Source/Table/Application/Objet) partout.</td><td>faible</td></tr>
+    <tr><td><b>R5</b></td><td>Nettoyages : un <b>écran « Modèle »</b> qui montre les 3 entités et leurs relations d'un coup (santé de la cohérence : doublons, orphelins, contradictions).</td><td>faible</td></tr>
+  </table>
+  <p>Chaque étape : implémentée → testée (Playwright + DuckDB réel) → livrée, <b>sans perte de fonctionnalité</b>, avec migration automatique de tes données existantes.</p>
+
+  <h2 id="decision">8. Ce que je te demande de trancher</h2>
+  <div class="callout"><b>La seule vraie décision :</b> jusqu'où on va. Le reste (vocabulaire, navigation) découle.
+  Trois niveaux d'ambition — voir la question qui accompagne ce document.</div>
+  <ul>
+    <li><b>Refonte complète</b> (R1→R5) : le lineage devient une projection, plus aucune double saisie. Le plus propre, le plus de travail.</li>
+    <li><b>Consolidation ciblée</b> (R1, R3, R4) : on garde le modèle actuel mais on <b>supprime les doubles saisies</b> et on unifie le vocabulaire + un écran « Modèle » qui réconcilie. Moins risqué, presque aussi propre à l'usage.</li>
+    <li><b>Couche de clarté</b> (R4, R5 seulement) : on ne touche pas au fond, on <b>range</b> (navigation, vocabulaire) et on ajoute l'écran « Modèle » qui montre les liens et signale les incohérences. Rapide, réversible.</li>
+  </ul>
+
+  <footer>Studio Data — proposition de remise au propre du modèle. À valider avant implémentation. Rien n'est codé tant que tu n'as pas choisi le niveau d'ambition.</footer>
+</div>
+</body>
+</html>
