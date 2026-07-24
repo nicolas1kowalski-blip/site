@@ -91,13 +91,15 @@
     ligne d'ajout de nœud puis cliquez <span class="kbd">+ Nœud</span> :</p>
     <table>
       <tr><th>Champ</th><th>À saisir</th></tr>
-      <tr><td><b>Nom du système</b></td><td>Le nom lisible (ex. « CRM Salesforce », « Référentiel Client », « BI Ventes »).</td></tr>
-      <tr><td><b>Rôle</b></td><td><span class="pill p-master">Maître</span> source de vérité · <span class="pill p-ref">Référentiel</span> consolide/transforme · <span class="pill p-cons">Consommateur</span> lit la donnée.</td></tr>
+      <tr><td><b>Nom (table)</b></td><td>Le nom de la table (ex. « CLIENTS_CRM », « REF_CLIENT », « BI_VENTES »). Chaque nœud représente une table.</td></tr>
+      <tr><td><b>Origine (système amont)</b></td><td>Le système d'où provient cette table (ex. « SAP », « saisie manuelle »), distinct de la table elle-même. Optionnel.</td></tr>
       <tr><td><b>Domaine</b></td><td>Domaine métier (ex. « Client »). Optionnel.</td></tr>
       <tr><td><b>Source liée</b></td><td>La source chargée qui porte les données de ce nœud. <b>Indispensable</b> pour mesurer fraîcheur et distorsion. Optionnel si le nœud est purement documentaire.</td></tr>
     </table>
-    <p class="callout ok">Les nœuds se rangent automatiquement en colonnes selon leur rôle et les liens :
-    <b>amont → intermédiaire → aval</b>.</p>
+    <p class="callout ok"><b>Le rôle n'est plus à saisir.</b> Il est <b>déduit automatiquement</b> de la topologie :
+    <span class="pill p-master">Maître</span> aucune alimentation entrante (source de vérité) ·
+    <span class="pill p-ref">Référentiel</span> deux alimentations entrantes ou plus (consolidation, badge « ⑃ consolide ») ·
+    <span class="pill p-cons">Consommateur</span> sinon. Les nœuds se rangent en colonnes <b>amont → intermédiaire → aval</b>.</p>
   </div>
 
   <h2 id="e2">Étape 2 — Relier les nœuds (les liens)</h2>
@@ -105,8 +107,7 @@
     <p>Une fois au moins deux nœuds créés, remplissez la ligne d'ajout de lien puis cliquez <span class="kbd">+ Lien</span> :</p>
     <table>
       <tr><th>Champ</th><th>À saisir</th></tr>
-      <tr><td><b>Source / Cible</b></td><td>Le sens du flux (la Source alimente la Cible).</td></tr>
-      <tr><td><b>Type</b></td><td>Alimente · Consolide · Transforme · Lecture.</td></tr>
+      <tr><td><b>Source / Cible</b></td><td>Le sens du flux (la Source alimente la Cible). <b>Le type de lien n'est plus à saisir</b> : il est déduit (« Consolide » quand la cible reçoit ≥ 2 sources, sinon « Alimente »).</td></tr>
       <tr><td><b>Clé (source) / (cible)</b></td><td>La colonne d'entité de <b>chaque côté</b> — leurs noms peuvent différer (ex. <code>DK_CODE</code> côté source, <code>DK_CODE_CTT</code> côté cible). Chaque champ <b>propose les colonnes de sa propre source</b> reliée (saisie libre possible en secours).</td></tr>
       <tr><td><b>Attribut (source) / (cible)</b></td><td>La colonne à comparer de chaque côté (ex. <code>VAL</code> vs <code>MONTANT</code>), également <b>proposée</b> par côté.</td></tr>
       <tr><td><b>SLA (h)</b></td><td>Retard maximal toléré pour la copie aval, en heures (défaut 24).</td></tr>
@@ -210,7 +211,7 @@
     <ol>
       <li>Charger les sources (maître + aval) ; renseigner la fréquence au dictionnaire pour le SLA.</li>
       <li><span class="path">Gouvernance ▸ Tracer ▸ 🔗 Lineage &amp; santé</span>.</li>
-      <li>« ⚙️ Construire le flux » → <b>+ Nœud</b> (rôle + source liée) pour chaque système.</li>
+      <li>« ⚙️ Construire le flux » → <b>+ Nœud</b> (table + origine + source liée) pour chaque système ; le rôle est déduit.</li>
       <li><b>+ Lien</b> (source → cible, clé, attribut, SLA, transformation rejouable si besoin).</li>
       <li>Cliquer l'étiquette du lien → <b>↻ Lancer le contrôle</b>.</li>
       <li>Lire le graphe, les volets et le bandeau ; exporter les écarts ; suivre le <b>journal</b>.</li>

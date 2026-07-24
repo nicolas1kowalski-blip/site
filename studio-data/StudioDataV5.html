@@ -4690,9 +4690,11 @@
         // ==========================================================================================
         //  LINEAGE AUGMENTÉ & RÉCONCILIATION (V5) — carte du flux A→B→C… + contrôles de fraîcheur et
         //  de distorsion. Le lineage dit OÙ regarder ; la réconciliation dit SI c'est cohérent.
-        //  Modèle : state.governance.flow = { nodes:[], edges:[], threshold:1.0 }
-        //    node = { id, name, role:'master'|'reference'|'consumer', domain, tableName?, icon? }
-        //    edge = { id, source, target, type, transformation, key, attr, slaHours, lastRun? }
+        //  Modèle table-centré (v5.3.0) : state.governance.flow = { nodes:[], edges:[], threshold:1.0 }
+        //    node = { id, name(=table), origine?(système amont), domain, tableName?, icon? }
+        //           → le rôle (maître/référentiel/consommateur) et la consolidation sont DÉDUITS de la topologie.
+        //    edge = { id, source, target, srcKey/tgtKey, attrPairs[], transformation, slaHours, lastRun? }
+        //           → le type (alimente/consolide) est DÉDUIT : cible à ≥ 2 entrants = consolidation.
         // ==========================================================================================
         const LF_ROLE = { master: { lbl: 'Maître', ic: '🗄', col: 0, badge: 'lf-r-master' },
                           reference: { lbl: 'Référentiel', ic: '🏛', col: 1, badge: 'lf-r-ref' },
@@ -4713,7 +4715,16 @@
         }
         function lfNode(id) { return lfModel().nodes.find(n => n.id === id); }
         function lfEdge(id) { return lfModel().edges.find(e => e.id === id); }
-        function lfIcon(n) { return n.icon || (LF_ROLE[n.role] || LF_ROLE.consumer).ic; }
+        // Modèle table-centré (v5.3.0) : le rôle et le type de lien ne sont plus saisis à la main,
+        // ils sont DÉDUITS de la topologie. Un nœud sans alimentation entrante est « maître » ;
+        // deux alimentations entrantes ou plus = « référentiel » (consolidation) ; sinon « consommateur ».
+        function lfIncomingCount(id) { return lfModel().edges.filter(e => e.target === id && e.source !== id).length; }
+        function lfDeduceRole(id) { const inc = lfIncomingCount(id); if (inc === 0) return 'master'; if (inc >= 2) return 'reference'; return 'consumer'; }
+        function lfNodeRole(n) { return n && n.id ? lfDeduceRole(n.id) : 'consumer'; }
+        function lfConsolidates(id) { return lfIncomingCount(id) >= 2; }
+        function lfDeduceEdgeType(e) { return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
+        function lfEdgeTypeLabel(e) { return LF_EDGE_TYPES[lfDeduceEdgeType(e)]; }
+        function lfIcon(n) { return n.icon || (LF_ROLE[lfNodeRole(n)] || LF_ROLE.consumer).ic; }
         function lfAge(days) { if (days == null) return '—'; return days < 1 ? Math.round(days * 24) + ' h' : (days < 60 ? Math.round(days) + ' j' : Math.round(days / 30) + ' mois'); }
         // Fraîcheur d'un nœud à partir de sa source liée (réutilise swFreshness/dictionnaire).
         function lfFresh(n) {
@@ -4839,9 +4850,10 @@
                 <span class="text-[10px] text-slate-400">La réconciliation et la fraîcheur exigent une <b>source chargée</b> reliée au nœud (clé + attribut + date).</span></div>`;
             // liste des nœuds
             if (nodes.length) {
-                h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Nœud</th><th class="p-2">Rôle</th><th class="p-2">Domaine</th><th class="p-2">Source liée</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
+                h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Nœud (table)</th><th class="p-2">Rôle (déduit)</th><th class="p-2">Origine</th><th class="p-2">Domaine</th><th class="p-2">Source liée</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
                 h += nodes.map(n => `<tr><td class="p-2 font-bold text-slate-700">${lfIcon(n)} ${escapeHTML(n.name)}</td>
-                    <td class="p-2">${(LF_ROLE[n.role] || {}).lbl || n.role}</td>
+                    <td class="p-2">${(LF_ROLE[lfNodeRole(n)] || {}).lbl}${lfConsolidates(n.id) ? ' <span class="text-[9px] font-bold text-blue-600" title="Deux alimentations entrantes ou plus">⑃ consolide</span>' : ''}</td>
+                    <td class="p-2 text-slate-500">${escapeHTML(n.origine || '—')}</td>
                     <td class="p-2 text-slate-500">${escapeHTML(n.domain || '—')}</td>
                     <td class="p-2 ${n.tableName && tableByName(n.tableName) ? 'text-emerald-700 font-semibold' : 'text-slate-400'}">${n.tableName ? escapeHTML(n.tableName) + (tableByName(n.tableName) ? '' : ' (absente)') : '—'}</td>
                     <td class="p-2 text-right whitespace-nowrap"><button onclick="lfEditNodeStart('${n.id}')" class="text-indigo-500 hover:text-indigo-700 mr-2" title="Modifier">✎</button><button onclick="lfDelNode('${n.id}')" class="text-red-400 hover:text-red-600" title="Supprimer">✕</button></td></tr>`).join('');
@@ -4849,23 +4861,23 @@
             }
             // ajout / édition de nœud
             const _en = lfEditNodeId ? lfNode(lfEditNodeId) : null;
-            const _roleOpt = r => `<option value="${r}" ${(_en ? _en.role : 'consumer') === r ? 'selected' : ''}>${LF_ROLE[r].lbl}</option>`;
+            const _origOpts = [...new Set(nodes.map(n => n.origine).filter(Boolean))].map(o => `<option value="${escapeHTML(o)}">`).join('');
             const _tblOptN = `<option value="">— aucune —</option>` + tables.map(t => `<option value="${escapeHTML(t.name)}" ${_en && _en.tableName === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('');
             h += `<div class="flex items-end gap-2 flex-wrap bg-white border ${_en ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-100'} rounded-lg p-2">
                 ${_en ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du nœud</div>' : ''}
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom du système</label><input id="lf-n-name" value="${_en ? escapeHTML(_en.name) : ''}" placeholder="ex : CRM Salesforce" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Rôle</label><select id="lf-n-role" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_roleOpt('master')}${_roleOpt('reference')}${_roleOpt('consumer')}</select></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom (table)</label><input id="lf-n-name" value="${_en ? escapeHTML(_en.name) : ''}" placeholder="ex : CLIENTS_CRM" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Origine (système amont)</label><input id="lf-n-orig" list="lf-n-orig-dl" value="${_en ? escapeHTML(_en.origine || '') : ''}" placeholder="ex : SAP, saisie manuelle…" class="border border-slate-300 p-1.5 rounded text-xs w-40"><datalist id="lf-n-orig-dl">${_origOpts}</datalist></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Domaine</label><input id="lf-n-dom" value="${_en ? escapeHTML(_en.domain || '') : ''}" placeholder="ex : Client" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source liée (optionnel)</label><select id="lf-n-tbl" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_tblOptN}</select></div>
                 <button onclick="lfSaveNodeForm()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">${_en ? '✓ Enregistrer' : '+ Nœud'}</button>
                 ${_en ? `<button onclick="lfEditCancel()" class="text-xs bg-white border border-slate-300 text-slate-500 px-3 py-1.5 rounded font-bold">Annuler</button>` : ''}</div>`;
             // liste des liens
             if (edges.length) {
-                h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Lien</th><th class="p-2">Type</th><th class="p-2">Clé (source → cible)</th><th class="p-2">Attribut (source → cible)</th><th class="p-2">Dernier contrôle</th><th class="p-2 w-14"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
+                h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Lien</th><th class="p-2">Type (déduit)</th><th class="p-2">Clé (source → cible)</th><th class="p-2">Attribut (source → cible)</th><th class="p-2">Dernier contrôle</th><th class="p-2 w-14"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
                 h += edges.map(e => { const s = lfNode(e.source), t = lfNode(e.target); const lr = e.lastRun; const K = lfEdgeKeys(e);
                     const pair = (x, y) => (x || y) ? (escapeHTML(x || '?') + (x !== y ? ' → ' + escapeHTML(y || '?') : '')) : '—';
                     return `<tr><td class="p-2 font-semibold text-slate-700">${escapeHTML((s || {}).name || '?')} → ${escapeHTML((t || {}).name || '?')}</td>
-                    <td class="p-2 text-slate-500">${LF_EDGE_TYPES[e.type] || e.type}</td>
+                    <td class="p-2 text-slate-500">${lfEdgeTypeLabel(e)}${lfConsolidates(e.target) ? ' <span class="text-[9px] font-bold text-blue-600" title="Cible alimentée par ≥ 2 sources">⑃</span>' : ''}</td>
                     <td class="p-2 text-slate-500 mono">${pair(K.sK, K.tK)}</td>
                     <td class="p-2 text-slate-500 mono">${pair(K.sA, K.tA)}</td>
                     <td class="p-2 ${lr && lr.rate > lfModel().threshold ? 'text-red-600 font-bold' : 'text-slate-500'}">${lr ? (lr.rate != null ? lr.rate.toFixed(2) + ' %' : '—') : 'jamais'}</td>
@@ -4883,7 +4895,6 @@
                 const _dlOf = arr => arr.map(h2 => `<option value="${escapeHTML(h2)}">`).join('');
                 const _dlS = _dlOf(_colsOf(_defSrc)), _dlT = _dlOf(_colsOf(_defTgt));
                 const _xf = _p0.xform || { kind: 'none' };
-                const _typeOpts = Object.entries(LF_EDGE_TYPES).map(([v, l]) => `<option value="${v}" ${_ee && _ee.type === v ? 'selected' : ''}>${l}</option>`).join('');
                 const _fnOpts = Object.entries(LF_XFORM_AGG).map(([v, l]) => `<option value="${v}" ${_xf.fn === v ? 'selected' : ''}>${l}</option>`).join('');
                 const _opOpts = Object.entries(LF_XFORM_SCALAR).map(([v, l]) => `<option value="${v}" ${_xf.op === v ? 'selected' : ''}>${l}</option>`).join('');
                 const _xkOpts = [['none', 'Aucune'], ['scalar', 'Normalisation'], ['agg', 'Agrégation']].map(([v, l]) => `<option value="${v}" ${_xf.kind === v ? 'selected' : ''}>${l}</option>`).join('');
@@ -4891,7 +4902,6 @@
                     ${_ee ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du lien</div>' : ''}
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source</label><select id="lf-e-src" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_nOptSel(_defSrc)}</select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Cible</label><select id="lf-e-tgt" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_nOptSel(_defTgt)}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label><select id="lf-e-type" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_typeOpts}</select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (source)</label><input id="lf-e-sk" list="lf-e-sk-dl" value="${escapeHTML(_K.sK)}" placeholder="clé côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sk-dl">${_dlS}</datalist></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (cible)</label><input id="lf-e-tk" list="lf-e-tk-dl" value="${escapeHTML(_K.tK)}" placeholder="clé côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-tk-dl">${_dlT}</datalist></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (source)</label><input id="lf-e-sa" list="lf-e-sa-dl" value="${escapeHTML(_p0.src)}" placeholder="attribut côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sa-dl">${_dlS}</datalist></div>
@@ -4920,7 +4930,7 @@
             let starts = nodes.filter(n => !indeg[n.id]).map(n => n.id); if (!starts.length) starts = nodes.map(n => n.id);
             const queue = [...starts]; let guard = 0, cap = nodes.length * nodes.length + 20;
             while (queue.length && guard++ < cap) { const u = queue.shift(); adj[u].forEach(v => { if (depth[v] < depth[u] + 1) { depth[v] = depth[u] + 1; queue.push(v); } }); }
-            const colOf = {}; nodes.forEach(n => colOf[n.id] = Math.max(depth[n.id], (LF_ROLE[n.role] || {}).col || 0));
+            const colOf = {}; nodes.forEach(n => colOf[n.id] = Math.max(depth[n.id], (LF_ROLE[lfNodeRole(n)] || {}).col || 0));
             const maxCol = Math.max(0, ...nodes.map(n => colOf[n.id]));
             const cols = {}; nodes.forEach(n => { (cols[colOf[n.id]] = cols[colOf[n.id]] || []).push(n); });
             const attrView = lfView === 'attrs';
@@ -4940,7 +4950,7 @@
                 const dash = health === 'ok' ? '' : ' stroke-dasharray="7 5"';
                 paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${health})" opacity=".9"/>`;
                 const fr = lfFresh(lfNode(e.target)); const lr = e.lastRun;
-                const _pairs = lfEdgePairs(e); const _ea = _pairs.length > 1 ? (_pairs.length + ' attributs') : ((_pairs[0] || {}).tgt || (_pairs[0] || {}).src || ''); const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || (LF_EDGE_TYPES[e.type] || e.type));
+                const _pairs = lfEdgePairs(e); const _ea = _pairs.length > 1 ? (_pairs.length + ' attributs') : ((_pairs[0] || {}).tgt || (_pairs[0] || {}).src || ''); const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || lfEdgeTypeLabel(e));
                 chips.push(`<div class="lf-echip lf-e-${health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${escapeHTML(lbl)}</div>`);
             });
             const marker = h => `<marker id="lfA_${h}" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${LF_COLOR[h]}"/></marker>`;
@@ -4951,14 +4961,15 @@
                 hh += `<div class="lf-colhdr" style="left:${x}px">${lbl}</div>`; });
             // nœuds
             nodes.forEach(n => { const p = pos[n.id]; const fr = lfFresh(n);
-                const roleCls = (LF_ROLE[n.role] || LF_ROLE.consumer).badge;
+                const role = lfNodeRole(n); const consolidates = lfConsolidates(n.id);
+                const roleCls = (LF_ROLE[role] || LF_ROLE.consumer).badge;
                 const incoming = edges.filter(e => e.target === n.id && e.lastRun);
                 let distChip = ''; if (incoming.length) { const worstE = incoming.reduce((mx, e) => (e.lastRun.rate || 0) > (mx.lastRun.rate || 0) ? e : mx); const ds = lfDistStatus(worstE); distChip = `<span class="lf-hchip lf-h-${ds}">Δ ${(worstE.lastRun.rate || 0).toFixed(1).replace('.', ',')} %</span>`; }
                 const freshChip = fr.status !== 'none' ? `<span class="lf-hchip lf-h-${fr.status}">${fr.label}</span>` : (n.tableName ? '' : '<span class="lf-hchip lf-h-none">non mesuré</span>');
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
-                hh += `<div class="lf-node lf-i-${n.role}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
-                    <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.domain || (LF_ROLE[n.role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${(LF_ROLE[n.role] || {}).lbl || n.role}</span>
+                hh += `<div class="lf-node lf-i-${role}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
+                    <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
+                    <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
@@ -4973,7 +4984,7 @@
             const name = (el('lf-n-name').value || '').trim(); if (!name) return showError('Donnez un nom au système.');
             const m = lfModel(); const editing = lfEditNodeId ? lfNode(lfEditNodeId) : null;
             if (m.nodes.some(n => n.name.toLowerCase() === name.toLowerCase() && (!editing || n.id !== editing.id))) return showError('Un nœud « ' + name + ' » existe déjà.');
-            const vals = { name, role: el('lf-n-role').value, domain: (el('lf-n-dom').value || '').trim(), tableName: el('lf-n-tbl').value || '' };
+            const vals = { name, origine: (el('lf-n-orig').value || '').trim(), domain: (el('lf-n-dom').value || '').trim(), tableName: el('lf-n-tbl').value || '' };
             if (editing) { Object.assign(editing, vals); lfEditNodeId = null; }
             else m.nodes.push({ id: 'ln_' + generateId(), ...vals });
             persistAppState(); renderGovernance();
@@ -4999,7 +5010,7 @@
                 pairs = ex.length ? [first, ...ex.slice(1).map(pp => ({ id: pp.id, src: pp.src, tgt: pp.tgt, xform: pp.xform }))] : [first]; }
             else pairs = [{ id: 'ap_' + generateId(), src: sA, tgt: tA, xform: _xform }];
             pairs = pairs.filter(pp => pp.src || pp.tgt);
-            const vals = { source: src, target: tgt, type: el('lf-e-type').value,
+            const vals = { source: src, target: tgt, type: 'feeds',
                 srcKey: (el('lf-e-sk').value || '').trim(), tgtKey: (el('lf-e-tk').value || '').trim(),
                 slaHours: parseFloat(el('lf-e-sla').value) || 24, transformation: (el('lf-e-transf').value || '').trim(), attrPairs: pairs };
             if (editing) { delete editing.key; delete editing.attr; delete editing.srcAttr; delete editing.tgtAttr; delete editing.xform; Object.assign(editing, vals); editing.lastRun = null; lfEditEdgeId = null; }
@@ -5033,7 +5044,7 @@
         function lfOpenNode(id) {
             const n = lfNode(id); if (!n) return;
             const m = lfModel(); const down = m.edges.filter(e => e.source === id), up = m.edges.filter(e => e.target === id);
-            const fr = lfFresh(n); const roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', reference: '<b>Référentiel</b> : consolide la donnée maître, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.' }[n.role] || '';
+            const fr = lfFresh(n); const roleTxt = { master: '<b>Système maître</b> de l\'objet : source de vérité. Les copies en aval ne devraient jamais diverger.', reference: '<b>Référentiel</b> (déduit : ≥ 2 alimentations entrantes) : consolide la donnée de plusieurs sources, la transforme et la redistribue aux consommateurs.', consumer: '<b>Consommateur</b> : lit la donnée du référentiel. À surveiller : fraîcheur de sa copie et cohérence avec le maître.' }[lfNodeRole(n)] || '';
             const body = `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Rôle dans le flux</h4>
                 <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">${roleTxt}</div></div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
@@ -5042,10 +5053,10 @@
                 ${fr.freq ? `<div class="text-[11px] text-slate-400 mt-2">Fréquence attendue (dictionnaire) : ${escapeHTML(fr.freq)}</div>` : (n.tableName ? '<div class="text-[11px] text-slate-400 mt-2">Renseignez « Fréquence de mise à jour » dans le dictionnaire de la source pour activer le SLA de fraîcheur.</div>' : '')}</div>
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Connexions</h4>
                 <div class="text-xs text-slate-500 mb-1">↑ ${up.length} flux entrant(s) · ↓ ${down.length} flux sortant(s)</div>
-                ${down.map(e => `<div class="lf-mism"><span class="lf-k">→ ${escapeHTML((lfNode(e.target) || {}).name || '?')}</span><span class="lf-mv">${LF_EDGE_TYPES[e.type] || e.type}</span></div>`).join('')}</div>
+                ${down.map(e => `<div class="lf-mism"><span class="lf-k">→ ${escapeHTML((lfNode(e.target) || {}).name || '?')}</span><span class="lf-mv">${lfEdgeTypeLabel(e)}</span></div>`).join('')}</div>
                 <div class="mb-2"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Analyse d'impact</h4>
                 <div class="text-xs text-slate-500">Si cet actif change, <b>${down.length}</b> consommateur(s) direct(s) sont affectés.</div></div>`;
-            openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (LF_ROLE[n.role] || {}).lbl + (n.domain ? ' · ' + n.domain : ''), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
+            openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (LF_ROLE[lfNodeRole(n)] || {}).lbl + (n.origine ? ' · ' + n.origine : (n.domain ? ' · ' + n.domain : '')), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
         }
         function lfOpenEdge(id) {
             const e = lfEdge(id); if (!e) return;
@@ -5085,7 +5096,7 @@
                         <div class="lf-bar"><i style="width:${Math.min(100, Math.max(2, pp.rate * 8))}%;background:${st === 'bad' ? '#dc2626' : (st === 'warn' ? '#d97706' : '#16a34a')}"></i></div>
                         ${pp.samples && pp.samples.length ? `<details class="mt-1"><summary class="text-[10px] text-slate-400 cursor-pointer">${pp.samples.length} exemple(s) — clé / maître / aval</summary>${pp.samples.map(x => `<div class="lf-mism"><span class="lf-k mono">${escapeHTML(String(x[0]))}</span><span class="lf-mv">${escapeHTML(String(x[1]))}</span><span class="lf-dv">${escapeHTML(String(x[2]))}</span></div>`).join('')}</details>` : (pp.dist === 0 ? '<div class="text-[10px] text-emerald-600">✔ aucun écart</div>' : '')}
                     </div>`; }).join('')}</div>` : '';
-            const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${LF_EDGE_TYPES[e.type] || e.type} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div>
+            const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${lfEdgeTypeLabel(e)} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div>
                 <div class="text-[11px] text-slate-400 mt-1">Clé : <b class="mono">${escapeHTML(K.sK || '?')}</b>${K.sK !== K.tK ? ' → <b class="mono">' + escapeHTML(K.tK || '?') + '</b>' : ''}</div></div>
                 ${e.transformation ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Transformation déclarée</h4><div class="lf-transf"><span style="color:#7dd3fc">règle :</span> ${escapeHTML(e.transformation)}</div></div>` : ''}
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
@@ -5103,7 +5114,7 @@
                 ${!canRun ? `<div class="text-[11px] text-slate-500 mt-2 bg-blue-50 border border-blue-100 rounded p-2">Pour mesurer : sources reliées des deux côtés, une <b>clé</b> (source et cible) et au moins un <b>attribut contrôlé</b>.</div>` : ''}</div>`;
             const foot = `<button onclick="lfExportEcarts('${e.id}', this)" ${lr && lr.distAny ? '' : 'disabled'} class="flex-1 border border-slate-300 ${lr && lr.distAny ? 'hover:bg-slate-50' : 'opacity-40'} font-bold py-2 rounded-lg text-sm">⇩ Exporter les écarts</button>
                 <button onclick="lfReconEdge('${e.id}', this)" ${canRun ? '' : 'disabled'} class="flex-1 ${canRun ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-200 text-slate-400'} font-bold py-2 rounded-lg text-sm">↻ Contrôler ${pairs.length || ''} attribut${pairs.length > 1 ? 's' : ''}</button>`;
-            openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: (LF_EDGE_TYPES[e.type] || e.type), body, foot });
+            openUxDrawer({ sem: '', title: s.name + ' → ' + t.name, sub: lfEdgeTypeLabel(e), body, foot });
         }
 
         // ---- Moteur de réconciliation DuckDB (distorsion + volumétrie + exemples) ----
@@ -8917,8 +8928,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.2.1';
+        const APP_VERSION = '5.3.0';
         const APP_CHANGELOG = [
+            { v: '5.3.0', d: '2026-07-24', t: 'Lineage : modèle table-centré — rôle & consolidation déduits (lot 1)', items: [
+                'Chaque nœud du flux représente désormais une TABLE ; on ne saisit plus son rôle à la main. Le rôle (Maître / Référentiel / Consommateur) est DÉDUIT automatiquement de la topologie : aucune alimentation entrante = Maître (source de vérité), deux alimentations entrantes ou plus = Référentiel (consolidation), sinon Consommateur.',
+                'Nouvelle information « Origine (système amont) » sur chaque nœud : le système d\'où provient la table (SAP, saisie manuelle…), distinct de la table elle-même. Elle s\'affiche sous le nom du nœud, dans la liste et dans la fiche.',
+                'Le type de lien n\'est plus saisi non plus : il est DÉDUIT (« Consolide » quand la cible reçoit ≥ 2 sources, sinon « Alimente »). Un badge « ⑃ consolide » signale les tables consolidées dans le graphe et les listes.',
+                'Rétro-compatible : les flux existants s\'affichent avec les rôles et types recalculés d\'après leurs liens, sans perte ni ressaisie. La réconciliation, la fraîcheur et la santé attribut par attribut restent identiques.'] },
             { v: '5.2.1', d: '2026-07-23', t: 'Correctif : onglets de Surveillance des sources', items: [
                 'Correction d\'un bug o\u00f9 les sous-onglets de « Surveillance des sources » (Moniteur & fra\u00eecheur, Contrat de donn\u00e9es, Changements/delta, R\u00e9conciliation) ne r\u00e9agissaient pas au clic : le changement d\'outil est d\u00e9sormais bien appliqu\u00e9 et l\'\u00e9cran se met \u00e0 jour.'] },
             { v: '5.2.0', d: '2026-07-23', t: 'Lineage : santé d\'une alimentation ATTRIBUT PAR ATTRIBUT', items: [
