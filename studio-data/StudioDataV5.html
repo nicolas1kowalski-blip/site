@@ -4931,9 +4931,10 @@
                 <div class="p-3 space-y-4">`;
             h += `<div class="flex flex-wrap items-center gap-2">
                 <button onclick="lfSyncFromData()" class="text-[11px] bg-indigo-600 text-white font-bold px-3 py-1.5 rounded hover:bg-indigo-700">🔄 Synchroniser depuis les données</button>
+                <button onclick="lfRederiveAll()" title="Reconstruit une carte 100 % dérivée de vos données : retire les nœuds/liens ajoutés à la main qui ne sont plus adossés à une donnée, tout en réattachant vos points de mesure (clés, attributs, contrôles) et positions." class="text-[11px] bg-white border border-indigo-300 text-indigo-700 font-bold px-3 py-1.5 rounded hover:bg-indigo-50">♻️ Tout redériver (carte propre)</button>
                 <button onclick="lfSeedFromObjects()" class="text-[11px] bg-white border border-emerald-300 text-emerald-700 font-bold px-3 py-1.5 rounded hover:bg-emerald-50">✨ Générer depuis les objets métier</button>
                 ${nodes.length ? '<button onclick="lfClearAll()" class="text-[11px] bg-white border border-slate-300 text-slate-500 font-bold px-3 py-1.5 rounded hover:text-red-600">🗑 Tout effacer</button>' : ''}
-                <span class="text-[10px] text-slate-400">« Synchroniser » dérive les alimentations depuis vos <b>tables conçues</b> (colonne <code>SOURCE_ORIGINE</code>) sans écraser vos réglages manuels.</span></div>`;
+                <span class="text-[10px] text-slate-400">La carte est une <b>projection de vos données</b> : « Synchroniser » la met à jour (ajout/retrait), « Tout redériver » la reconstruit à neuf. Vos points de mesure sont préservés.</span></div>`;
             // liste des nœuds
             if (nodes.length) {
                 h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Nœud (table)</th><th class="p-2">Rôle (déduit)</th><th class="p-2">Origine</th><th class="p-2">Domaine</th><th class="p-2">Source liée</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
@@ -5156,6 +5157,35 @@
         function lfDelEdge(id) { const m = lfModel(); m.edges = m.edges.filter(e => e.id !== id); persistAppState(); renderGovernance(); }
         function lfSetThreshold(v) { const n = parseFloat(v); if (!isNaN(n) && n >= 0) { lfModel().threshold = n; persistAppState(); renderGovernance(); } }
         function lfClearAll() { if (!confirm('Effacer tout le flux (nœuds et liens) ?')) return; const m = lfModel(); m.nodes = []; m.edges = []; persistAppState(); renderGovernance(); }
+        // R2 : la carte est une PROJECTION des données. « Tout redériver » la reconstruit intégralement
+        // depuis les sources de vérité (tables conçues, origine/propriétaire, applications, objets métier),
+        // en RÉATTACHANT par identité vos points de mesure (clés, attributs, transformations, contrôles,
+        // nature, périmètre) et les positions manuelles. Ce qui a été ajouté à la main et n'est plus
+        // adossé à une donnée disparaît → carte propre.
+        function lfRederiveAll() {
+            if (!confirm('Redériver toute la carte depuis vos données ?\n\nLes nœuds/liens ajoutés à la main qui ne correspondent plus à une donnée seront retirés. Vos points de mesure (clés, attributs, contrôles) et vos positions sont réattachés automatiquement.')) return;
+            const m = lfModel();
+            const idOf = n => n ? (n.tableName || n.name || '') : '';
+            // 1. Mémorise les annotations de mesure par identité (source→cible + nature du lien).
+            const ann = {};
+            m.edges.forEach(e => { const s = lfNode(e.source), t = lfNode(e.target); if (!s || !t) return;
+                ann[idOf(s) + '¦' + idOf(t) + '¦' + lfEdgeRel(e)] = { srcKey: e.srcKey, tgtKey: e.tgtKey, attrPairs: e.attrPairs, slaHours: e.slaHours, transformation: e.transformation, nature: e.nature, scope: e.scope, lastRun: e.lastRun }; });
+            const pos = {}; m.nodes.forEach(n => { if (n.x != null || n.y != null) pos[idOf(n)] = { x: n.x, y: n.y }; });
+            // 2. Reset complet puis redérivation depuis les données.
+            m.nodes = []; m.edges = [];
+            lfSyncFromData({ silent: true });
+            // 3. Réattache annotations + positions par identité.
+            let reAnn = 0;
+            m.edges.forEach(e => { const s = lfNode(e.source), t = lfNode(e.target); if (!s || !t) return;
+                const a = ann[idOf(s) + '¦' + idOf(t) + '¦' + lfEdgeRel(e)]; if (!a) return; reAnn++;
+                if (a.srcKey) e.srcKey = a.srcKey; if (a.tgtKey) e.tgtKey = a.tgtKey;
+                if (a.attrPairs && a.attrPairs.length) e.attrPairs = a.attrPairs;
+                if (a.slaHours) e.slaHours = a.slaHours; if (a.transformation) e.transformation = a.transformation;
+                if (a.nature) e.nature = a.nature; if (a.scope) e.scope = a.scope; if (a.lastRun) e.lastRun = a.lastRun; });
+            m.nodes.forEach(n => { const pp = pos[idOf(n)]; if (pp) { n.x = pp.x; n.y = pp.y; } });
+            persistAppState(); renderGovernance();
+            showSuccess(`♻️ Carte redérivée depuis vos données (${m.nodes.length} nœud(s), ${m.edges.length} lien(s))${reAnn ? ` — ${reAnn} point(s) de mesure réattaché(s)` : ''}.`);
+        }
         // Amorçage depuis les objets métier : maître → objet (référentiel) → destinataires (consommateurs).
         function lfSeedFromObjects() {
             const g = state.governance; const bos = g.businessObjects || [];
@@ -9333,8 +9363,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.15.0';
+        const APP_VERSION = '5.16.0';
         const APP_CHANGELOG = [
+            { v: '5.16.0', d: '2026-07-24', t: 'Modèle clair (R2) : la carte est une projection des données — « Tout redériver »', items: [
+                'La carte Lineage est officiellement une PROJECTION de vos données : elle se met déjà à jour à chaque ouverture (synchro auto) et à chaque (dé)clic dans les applications.',
+                'Nouveau bouton « ♻️ Tout redériver (carte propre) » : reconstruit la carte à neuf à partir des sources de vérité (tables conçues, propriétaire/origine, applications, objets métier) et RETIRE les nœuds/liens ajoutés à la main qui ne correspondent plus à une donnée.',
+                'Vos POINTS DE MESURE (clés, attributs contrôlés, transformations, contrôles, nature, périmètre) et vos POSITIONS manuelles sont réattachés automatiquement par identité — rien de votre travail de contrôle n\'est perdu.',
+                'C\'est l\'aboutissement de la remise au propre : on déclare les faits (qui contient quoi, qui alimente qui), la carte suit ; un clic suffit à repartir d\'une carte 100 % fidèle aux données.'] },
             { v: '5.15.0', d: '2026-07-24', t: 'Modèle clair (R4) : navigation Gouvernance regroupée + vocabulaire unifié', items: [
                 'Les sous-onglets de Gouvernance sont regroupés en 6 familles cohérentes avec le modèle : 🗃️ Patrimoine (Dictionnaire, Modèle de données), 🖥️ Acteurs (Applications & processus), 🧭 Sens métier (Objets métier, Glossaire, Périmètres, Sensibilité), 🕸️ Lineage, 🩺 Contrôle (Surveillance des sources, Historique), 🗂️ Diffusion (Catalogue).',
                 'Fini le fourre-tout « Définir » qui mélangeait le physique (dictionnaire), les acteurs (applications) et le sens métier (objets, glossaire) : chaque écran est désormais rangé selon ce qu\'il décrit.',
