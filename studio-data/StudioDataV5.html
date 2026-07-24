@@ -4775,7 +4775,11 @@
         function lfConsolidates(id) { const n = lfNode(id); if (n && lfNodeKind(n) !== 'table') return false; return lfIncomingCount(id) >= 2; }
         function lfDeduceEdgeType(e) { const r = lfEdgeRel(e); if (LF_EDGE_TYPES[r] && r !== 'feeds' && r !== 'consolidates') return r; return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
         function lfEdgeTypeLabel(e) { return LF_EDGE_TYPES[lfDeduceEdgeType(e)]; }
-        function lfIcon(n) { return n.icon || (LF_ROLE[lfNodeRole(n)] || LF_ROLE.consumer).ic; }
+        // Une application CONTIENT (produit/possède) les tables qu'elle écrit. Un RAPPORT est une
+        // application terminale (elle consomme, ne repousse rien plus loin).
+        function lfOwnedTables(appId) { return lfModel().edges.filter(e => e.source === appId && lfEdgeRel(e) === 'writes').map(e => lfNode(e.target)).filter(n => n && lfNodeKind(n) === 'table'); }
+        function lfIsReport(n) { return !!(n && lfNodeKind(n) === 'app' && n.terminal); }
+        function lfIcon(n) { if (n.icon) return n.icon; if (lfIsReport(n)) return '📑'; return (LF_ROLE[lfNodeRole(n)] || LF_ROLE.consumer).ic; }
         function lfAge(days) { if (days == null) return '—'; return days < 1 ? Math.round(days * 24) + ' h' : (days < 60 ? Math.round(days) + ' j' : Math.round(days / 30) + ' mois'); }
         // Fraîcheur d'un nœud à partir de sa source liée (réutilise swFreshness/dictionnaire).
         function lfFresh(n) {
@@ -4937,16 +4941,18 @@
             }
             // ajout / édition de nœud
             const _en = lfEditNodeId ? lfNode(lfEditNodeId) : null;
-            const _origOpts = [...new Set(nodes.map(n => n.origine).filter(Boolean))].map(o => `<option value="${escapeHTML(o)}">`).join('');
+            const _appNames = [...new Set(nodes.filter(n => lfNodeKind(n) === 'app').map(n => n.name).filter(Boolean))];
+            const _origOpts = [...new Set([..._appNames, ...nodes.map(n => n.origine).filter(Boolean)])].map(o => `<option value="${escapeHTML(o)}">`).join('');
             const _tblOptN = `<option value="">— aucune —</option>` + tables.map(t => `<option value="${escapeHTML(t.name)}" ${_en && _en.tableName === t.name ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('');
             const _enApp = _en && lfNodeKind(_en) === 'app';
             h += `<div class="flex items-end gap-2 flex-wrap bg-white border ${_en ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-100'} rounded-lg p-2">
                 ${_en ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du nœud</div>' : ''}
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nature</label><select id="lf-n-kind" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="table" ${_enApp ? '' : 'selected'}>🗄 Table</option><option value="app" ${_enApp ? 'selected' : ''}>🖥 Application</option></select></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nature</label><select id="lf-n-kind" class="border border-slate-300 p-1.5 rounded text-xs bg-white"><option value="table" ${_enApp ? '' : 'selected'}>📄 Table</option><option value="app" ${_enApp ? 'selected' : ''}>🖥 Application</option></select></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom (table / application)</label><input id="lf-n-name" value="${_en ? escapeHTML(_en.name) : ''}" placeholder="ex : CLIENTS_CRM ou BI Ventes" class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
-                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Origine (système amont)</label><input id="lf-n-orig" list="lf-n-orig-dl" value="${_en ? escapeHTML(_en.origine || '') : ''}" placeholder="ex : SAP, saisie manuelle…" class="border border-slate-300 p-1.5 rounded text-xs w-40"><datalist id="lf-n-orig-dl">${_origOpts}</datalist></div>
+                <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Application propriétaire (origine)</label><input id="lf-n-orig" list="lf-n-orig-dl" value="${_en ? escapeHTML(_en.origine || '') : ''}" placeholder="ex : KADOR, SAP…" title="Pour une TABLE : l'application qui la produit / la contient (elle en est le maître)." class="border border-slate-300 p-1.5 rounded text-xs w-40"><datalist id="lf-n-orig-dl">${_origOpts}</datalist></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Domaine</label><input id="lf-n-dom" value="${_en ? escapeHTML(_en.domain || '') : ''}" placeholder="ex : Client" class="border border-slate-300 p-1.5 rounded text-xs w-28"></div>
                 <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source liée (optionnel)</label><select id="lf-n-tbl" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_tblOptN}</select></div>
+                <label class="flex items-center gap-1 text-[10px] font-bold text-slate-500 pb-1.5" title="Application terminale : elle consomme la donnée pour la restituer (rapport, tableau de bord) et ne l'alimente pas plus loin."><input type="checkbox" id="lf-n-terminal" ${_en && _en.terminal ? 'checked' : ''}> 📑 Rapport (terminal)</label>
                 <button onclick="lfSaveNodeForm()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">${_en ? '✓ Enregistrer' : '+ Nœud'}</button>
                 ${_en ? `<button onclick="lfEditCancel()" class="text-xs bg-white border border-slate-300 text-slate-500 px-3 py-1.5 rounded font-bold">Annuler</button>` : ''}</div>`;
             // liste des liens
@@ -5053,7 +5059,7 @@
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
                 hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}${isObj ? ' lf-kind-obj' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${(LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
+                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="Tables contenues / produites par cette application">📦 contient ${lfOwnedTables(n.id).length}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
@@ -5102,9 +5108,10 @@
             const m = lfModel(); const editing = lfEditNodeId ? lfNode(lfEditNodeId) : null;
             if (m.nodes.some(n => n.name.toLowerCase() === name.toLowerCase() && (!editing || n.id !== editing.id))) return showError('Un nœud « ' + name + ' » existe déjà.');
             const kind = (el('lf-n-kind') && el('lf-n-kind').value === 'app') ? 'app' : 'table';
+            const terminal = kind === 'app' && el('lf-n-terminal') && el('lf-n-terminal').checked;
             const vals = { name, origine: (el('lf-n-orig').value || '').trim(), domain: (el('lf-n-dom').value || '').trim(), tableName: el('lf-n-tbl').value || '' };
-            if (editing) { Object.assign(editing, vals); if (kind === 'app') editing.kind = 'app'; else delete editing.kind; lfEditNodeId = null; }
-            else m.nodes.push({ id: 'ln_' + generateId(), ...vals, ...(kind === 'app' ? { kind: 'app' } : {}) });
+            if (editing) { Object.assign(editing, vals); if (kind === 'app') { editing.kind = 'app'; if (terminal) editing.terminal = true; else delete editing.terminal; } else { delete editing.kind; delete editing.terminal; } lfEditNodeId = null; }
+            else m.nodes.push({ id: 'ln_' + generateId(), ...vals, ...(kind === 'app' ? { kind: 'app', ...(terminal ? { terminal: true } : {}) } : {}) });
             persistAppState(); renderGovernance();
         }
         function lfEditNodeStart(id) { lfEditNodeId = id; lfEditEdgeId = null; renderGovernance(); }
@@ -5341,6 +5348,12 @@
                 <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">${isApp ? 'Fraîcheur' : 'Source liée'}</div><div class="lf-cv" style="font-size:13px">${isApp ? (fr.inherited ? '<span style="color:#5b21b6">héritée des tables lues</span>' : '<span style="color:#94a3b8">aucune table lue</span>') : (n.tableName ? escapeHTML(n.tableName) + (tableByName(n.tableName) ? '' : ' <span style="color:#dc2626">(absente)</span>') : '<span style="color:#94a3b8">aucune</span>')}</div></div>
                 <div class="lf-cell"><div class="lf-ck">Âge / SLA</div><div class="lf-cv" style="font-size:13px;color:${fr.status === 'bad' ? '#dc2626' : (fr.status === 'warn' ? '#d97706' : '#16a34a')}">${fr.status === 'none' ? '<span style="color:#94a3b8">non mesuré</span>' : lfAge(fr.ageDays) + (fr.maxDays ? ' / ≤ ' + lfAge(fr.maxDays) : '') + (fr.inherited ? ' (hérité)' : '')}</div></div></div>
                 ${fr.freq ? `<div class="text-[11px] text-slate-400 mt-2">Fréquence attendue (dictionnaire) : ${escapeHTML(fr.freq)}</div>` : (n.tableName ? '<div class="text-[11px] text-slate-400 mt-2">Renseignez « Fréquence de mise à jour » dans le dictionnaire de la source pour activer le SLA de fraîcheur.</div>' : '')}</div>
+                ${isApp ? (() => { const owned = lfOwnedTables(id); const reads = m.edges.filter(e => e.target === id && lfEdgeRel(e) === 'reads').map(e => lfNode(e.source)).filter(Boolean);
+                    const lst = a => a.length ? a.map(x => `<code style="font-size:11px">${escapeHTML(x.name)}</code>`).join(', ') : '<span style="color:#cbd5e1">aucune</span>';
+                    return `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Contenu de l'application</h4>
+                    <div class="text-xs text-slate-600 mb-1">📦 <b>Contient / produit</b> : ${lst(owned)}</div>
+                    <div class="text-xs text-slate-600">👁 <b>Lit</b> : ${lst(reads)}</div>
+                    ${lfIsReport(n) ? '<div class="text-[11px] text-emerald-700 mt-1.5 bg-emerald-50 border border-emerald-100 rounded px-2 py-1">📑 Application <b>terminale</b> (rapport) : elle restitue la donnée et ne l\'alimente pas plus loin.</div>' : ''}</div>`; })() : ''}
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Connexions</h4>
                 <div class="text-xs text-slate-500 mb-1">↑ ${up.length} flux entrant(s) · ↓ ${down.length} flux sortant(s)</div>
                 ${down.map(e => `<div class="lf-mism"><span class="lf-k">→ ${escapeHTML((lfNode(e.target) || {}).name || '?')}</span><span class="lf-mv">${lfEdgeTypeLabel(e)}</span></div>`).join('')}</div>
@@ -5348,7 +5361,7 @@
                 <div class="text-xs text-slate-500">${isApp ? `Cette application <b>dépend de ${up.length}</b> table(s) lue(s) : un problème sur l'une d'elles la touche directement.` : `Si cet actif change, <b>${down.length}</b> consommateur(s) direct(s) sont affectés${down.some(e => lfEdgeRel(e) === 'reads') ? ` (dont ${down.filter(e => lfEdgeRel(e) === 'reads').length} application(s))` : ''}.`}</div></div>`;
             const _runDown = lfDownstreamFeeds(id).filter(lfRunnableEdge).length;
             const _chainBtn = _runDown ? `<button onclick="lfReconDownstream('${id}', this)" title="Relance la réconciliation de toutes les alimentations situées en aval de ce nœud" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-sm mb-2">↻ Contrôler toute la chaîne aval (${_runDown})</button>` : '';
-            openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (LF_ROLE[lfNodeRole(n)] || {}).lbl + (n.origine ? ' · ' + n.origine : (n.domain ? ' · ' + n.domain : '')), body, foot: _chainBtn + '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
+            openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (lfIsReport(n) ? 'Rapport' : (LF_ROLE[lfNodeRole(n)] || {}).lbl) + (n.origine ? ' · ' + n.origine : (n.domain ? ' · ' + n.domain : '')), body, foot: _chainBtn + '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
         }
         function lfOpenEdge(id) {
             const e = lfEdge(id); if (!e) return;
@@ -9275,8 +9288,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.11.1';
+        const APP_VERSION = '5.12.0';
         const APP_CHANGELOG = [
+            { v: '5.12.0', d: '2026-07-24', t: 'Modèle clair (1/2) : l\'application CONTIENT ses tables + le Rapport terminal', items: [
+                'Première étape de la remise au propre du modèle. Une APPLICATION « contient » (produit / possède) les tables qu\'elle écrit : badge « 📦 contient N » sur le nœud, et sa fiche liste ses tables contenues et lues.',
+                'Le champ d\'un nœud table est clarifié : « Application propriétaire (origine) » — l\'application qui produit et possède la table (elle en est le maître). La saisie propose les applications déjà déclarées.',
+                'Nouveau type « 📑 Rapport (terminal) » : une application qui restitue la donnée (rapport, tableau de bord) et ne l\'alimente pas plus loin — case à cocher dans le formulaire de nœud, icône et badge dédiés.',
+                'Aucune perte : rien n\'est retiré, ce sont des clarifications de vocabulaire et d\'affichage. Étape suivante (2/2) : le lien « alimente » enrichi (nature : recopie / consolidation / complément / correction · périmètre · maîtrise).'] },
             { v: '5.11.1', d: '2026-07-24', t: 'Correctif : les règles de « Règles & score » sont prises en compte dans l\'audit de l\'objet métier', items: [
                 'Bug corrigé : les règles de qualité déclarées dans « 📏 Règles & score » n\'étaient pas exécutées par « Lancer l\'audit global de l\'objet » (seules les règles métier de cardinalité l\'étaient).',
                 'L\'audit d\'un objet métier exécute désormais aussi les RÈGLES DE QUALITÉ qui le concernent : celles déclarées SUR l\'objet, et celles portant sur une table de son périmètre (maître + sources + composants). Chaque règle affiche son taux de conformité, ses lignes en échec et un accès aux lignes fautives.',
