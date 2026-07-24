@@ -4734,6 +4734,9 @@
                           app: { lbl: 'Application', ic: '🖥', col: 0, badge: 'lf-r-app' },
                           object: { lbl: 'Objet métier', ic: '🏛️', col: 1, badge: 'lf-r-obj' } };
         const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit', composes: 'Compose', diffuses: 'Diffuse' };
+        // Nature d'une alimentation table→table (v5.13) : comment la cible reçoit la donnée.
+        const LF_NATURE = { recopie: 'Recopie', complement: 'Complément', correction: 'Correction' };
+        function lfEdgeNature(e) { return e && LF_NATURE[e.nature] ? e.nature : 'recopie'; }
         let lfView = 'systems';
         let lfEditNodeId = null, lfEditEdgeId = null;
         function lfEdgeKeys(e) { return { sK: e.srcKey || e.key || '', tK: e.tgtKey || e.key || '', sA: e.srcAttr || e.attr || '', tA: e.tgtAttr || e.attr || '' }; }
@@ -4774,7 +4777,9 @@
         function lfNodeRole(n) { if (!n) return 'consumer'; const k = lfNodeKind(n); if (k === 'app') return 'app'; if (k === 'object') return 'object'; return n.id ? lfDeduceRole(n.id) : 'consumer'; }
         function lfConsolidates(id) { const n = lfNode(id); if (n && lfNodeKind(n) !== 'table') return false; return lfIncomingCount(id) >= 2; }
         function lfDeduceEdgeType(e) { const r = lfEdgeRel(e); if (LF_EDGE_TYPES[r] && r !== 'feeds' && r !== 'consolidates') return r; return lfConsolidates(e.target) ? 'consolidates' : 'feeds'; }
-        function lfEdgeTypeLabel(e) { return LF_EDGE_TYPES[lfDeduceEdgeType(e)]; }
+        // Libellé affiché : pour une alimentation simple, on montre sa NATURE (Recopie/Complément/
+        // Correction) ; une consolidation (≥2 entrants) reste « Consolide » ; lecture/écriture/objet inchangés.
+        function lfEdgeTypeLabel(e) { const t = lfDeduceEdgeType(e); if (t === 'feeds' && lfEdgeRel(e) === 'feeds') return LF_NATURE[lfEdgeNature(e)]; return LF_EDGE_TYPES[t]; }
         // Une application CONTIENT (produit/possède) les tables qu'elle écrit. Un RAPPORT est une
         // application terminale (elle consomme, ne repousse rien plus loin).
         function lfOwnedTables(appId) { return lfModel().edges.filter(e => e.source === appId && lfEdgeRel(e) === 'writes').map(e => lfNode(e.target)).filter(n => n && lfNodeKind(n) === 'table'); }
@@ -4986,6 +4991,8 @@
                     ${_ee ? '<div class="w-full text-[11px] font-bold text-indigo-700">✎ Modification du lien</div>' : ''}
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Source</label><select id="lf-e-src" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_nOptSel(_defSrc)}</select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Cible</label><select id="lf-e-tgt" onchange="lfEdgeColsChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${_nOptSel(_defTgt)}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nature</label><select id="lf-e-nat" class="border border-slate-300 p-1.5 rounded text-xs bg-white" title="Recopie : copie à l'identique · Complément : ajoute des colonnes · Correction : modifie des valeurs poussées par une autre source (surveiller la maîtrise). « Consolidation » est déduite quand la cible a ≥ 2 sources.">${Object.entries(LF_NATURE).map(([v, l]) => `<option value="${v}" ${lfEdgeNature(_ee || {}) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Périmètre (optionnel)</label><input id="lf-e-scope" value="${_ee ? escapeHTML(_ee.scope || '') : ''}" placeholder="ex : type = ASSURANCE" title="Sous-ensemble alimenté par ce flux (filtre / condition)." class="border border-slate-300 p-1.5 rounded text-xs w-40"></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (source)</label><input id="lf-e-sk" list="lf-e-sk-dl" value="${escapeHTML(_K.sK)}" placeholder="clé côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sk-dl">${_dlS}</datalist></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Clé (cible)</label><input id="lf-e-tk" list="lf-e-tk-dl" value="${escapeHTML(_K.tK)}" placeholder="clé côté cible" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-tk-dl">${_dlT}</datalist></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Attribut (source)</label><input id="lf-e-sa" list="lf-e-sa-dl" value="${escapeHTML(_p0.src)}" placeholder="attribut côté source" class="border border-slate-300 p-1.5 rounded text-xs w-32"><datalist id="lf-e-sa-dl">${_dlS}</datalist></div>
@@ -5040,7 +5047,7 @@
                 paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${mk})" opacity=".9"/>`;
                 const fr = lfFresh(lfNode(e.target)); const lr = e.lastRun;
                 const _pairs = lfEdgePairs(e); const _ea = _pairs.length > 1 ? (_pairs.length + ' attributs') : ((_pairs[0] || {}).tgt || (_pairs[0] || {}).src || ''); const lbl = (attrView && _ea ? '◧ ' + _ea + ' · ' : '') + ([fr.status !== 'none' ? '⟳ ' + lfAge(fr.ageDays) : '', lr && lr.rate != null ? 'Δ ' + lr.rate.toFixed(1).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ') || lfEdgeTypeLabel(e));
-                chips.push(`<div class="lf-echip lf-e-${isUsage ? 'usage' : health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${isUsage ? escapeHTML(lfEdgeTypeLabel(e)) + (fr.status !== 'none' ? ' · ⟳ ' + lfAge(fr.ageDays) : '') : escapeHTML(lbl)}</div>`);
+                chips.push(`<div class="lf-echip lf-e-${isUsage ? 'usage' : health}" data-edge="${e.id}" style="left:${mx}px;top:${(y1 + y2) / 2}px"><span class="lf-dot" style="background:${col}"></span>${isUsage ? escapeHTML(lfEdgeTypeLabel(e)) + (fr.status !== 'none' ? ' · ⟳ ' + lfAge(fr.ageDays) : '') : escapeHTML(lbl)}${!isUsage && e.scope ? ' <span style="opacity:.6">⛊ ' + escapeHTML(e.scope) + '</span>' : ''}</div>`);
             });
             const marker = h => `<marker id="lfA_${h}" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${LF_COLOR[h]}"/></marker>`;
             let hh = `<svg class="lf-edges" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs>${['ok', 'warn', 'bad', 'none', 'usage'].map(marker).join('')}</defs>${paths}</svg>`;
@@ -5136,6 +5143,8 @@
             else pairs = [{ id: 'ap_' + generateId(), src: sA, tgt: tA, xform: _xform }];
             pairs = pairs.filter(pp => pp.src || pp.tgt);
             const vals = { source: src, target: tgt, type: 'feeds',
+                nature: (el('lf-e-nat') && LF_NATURE[el('lf-e-nat').value]) ? el('lf-e-nat').value : 'recopie',
+                scope: (el('lf-e-scope') ? el('lf-e-scope').value : '' || '').trim(),
                 srcKey: (el('lf-e-sk').value || '').trim(), tgtKey: (el('lf-e-tk').value || '').trim(),
                 slaHours: parseFloat(el('lf-e-sla').value) || 24, transformation: (el('lf-e-transf').value || '').trim(), attrPairs: pairs };
             if (editing) { delete editing.key; delete editing.attr; delete editing.srcAttr; delete editing.tgtAttr; delete editing.xform; Object.assign(editing, vals); editing.lastRun = null; lfEditEdgeId = null; }
@@ -5424,8 +5433,14 @@
                         <div class="lf-bar"><i style="width:${Math.min(100, Math.max(2, pp.rate * 8))}%;background:${st === 'bad' ? '#dc2626' : (st === 'warn' ? '#d97706' : '#16a34a')}"></i></div>
                         ${pp.samples && pp.samples.length ? `<details class="mt-1"><summary class="text-[10px] text-slate-400 cursor-pointer">${pp.samples.length} exemple(s) — clé / maître / aval</summary>${pp.samples.map(x => `<div class="lf-mism"><span class="lf-k mono">${escapeHTML(String(x[0]))}</span><span class="lf-mv">${escapeHTML(String(x[1]))}</span><span class="lf-dv">${escapeHTML(String(x[2]))}</span></div>`).join('')}</details>` : (pp.dist === 0 ? '<div class="text-[10px] text-emerald-600">✔ aucun écart</div>' : '')}
                     </div>`; }).join('')}</div>` : '';
+            const _isConso = lfConsolidates(e.target); const _nat = lfEdgeNature(e);
+            const _corrWarn = (_nat === 'correction' && lfProducerOf(e.target) && lfProducerOf(e.target).id !== (lfProducerOf(e.source) || {}).id);
             const body = `<div class="mb-4"><div class="flex items-center gap-2 text-xs mb-1"><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(s.name)}</span><span class="text-slate-400">─ ${lfEdgeTypeLabel(e)} →</span><span class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold">${escapeHTML(t.name)}</span></div>
-                <div class="text-[11px] text-slate-400 mt-1">Clé : <b class="mono">${escapeHTML(K.sK || '?')}</b>${K.sK !== K.tK ? ' → <b class="mono">' + escapeHTML(K.tK || '?') + '</b>' : ''}</div></div>
+                <div class="text-[11px] text-slate-500 mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span>Nature : <b>${_isConso ? 'Consolidation (déduite, ≥ 2 sources)' : LF_NATURE[_nat]}</b></span>
+                    ${e.scope ? `<span>Périmètre : <b class="mono">${escapeHTML(e.scope)}</b></span>` : ''}
+                    <span>Clé : <b class="mono">${escapeHTML(K.sK || '?')}</b>${K.sK !== K.tK ? ' → <b class="mono">' + escapeHTML(K.tK || '?') + '</b>' : ''}</span></div>
+                ${_corrWarn ? `<div class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5">⚠ <b>Correction</b> : ce flux modifie des valeurs de <b>${escapeHTML(t.name)}</b> (produite par une autre application). Vérifiez la <b>maîtrise</b> — si le périmètre n'est pas disjoint d'un autre écrivain, c'est un <b>conflit</b>.</div>` : ''}</div>
                 ${e.transformation ? `<div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Transformation déclarée</h4><div class="lf-transf"><span style="color:#7dd3fc">règle :</span> ${escapeHTML(e.transformation)}</div></div>` : ''}
                 <div class="mb-4"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Fraîcheur</h4>
                 <div class="lf-kv"><div class="lf-cell"><div class="lf-ck">Retard actuel (copie aval)</div><div class="lf-cv" style="color:${slaBad ? '#dc2626' : '#16a34a'}">${fr.status === 'none' ? '—' : lfAge(fr.ageDays)}</div></div>
@@ -9288,8 +9303,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.12.0';
+        const APP_VERSION = '5.13.0';
         const APP_CHANGELOG = [
+            { v: '5.13.0', d: '2026-07-24', t: 'Modèle clair (2/2) : le lien « alimente » enrichi (nature · périmètre · maîtrise)', items: [
+                'Chaque alimentation table→table porte désormais une NATURE : « Recopie » (copie à l\'identique), « Complément » (ajoute des colonnes) ou « Correction » (modifie des valeurs poussées par une autre source). La « Consolidation » reste déduite (cible à ≥ 2 sources).',
+                'Nouveau champ « Périmètre » sur un lien : le sous-ensemble alimenté (ex. « type = ASSURANCE ») — pour représenter les données qui viennent de sources différentes selon le périmètre. Affiché sur l\'étiquette (⛊) et la fiche du lien.',
+                'MAÎTRISE : un lien de nature « Correction » vers une table produite par une AUTRE application déclenche un rappel dans la fiche — si le périmètre n\'est pas disjoint d\'un autre écrivain, c\'est un conflit de maîtrise à arbitrer.',
+                'Ferme la fondation du modèle clair : Applications (qui contiennent des tables, dont Référentiel et Rapport) reliées par des flux « alimente » qualifiés — tout le reste (maître, consolidation, santé) reste déduit.'] },
             { v: '5.12.0', d: '2026-07-24', t: 'Modèle clair (1/2) : l\'application CONTIENT ses tables + le Rapport terminal', items: [
                 'Première étape de la remise au propre du modèle. Une APPLICATION « contient » (produit / possède) les tables qu\'elle écrit : badge « 📦 contient N » sur le nœud, et sa fiche liste ses tables contenues et lues.',
                 'Le champ d\'un nœud table est clarifié : « Application propriétaire (origine) » — l\'application qui produit et possède la table (elle en est le maître). La saisie propose les applications déjà déclarées.',
