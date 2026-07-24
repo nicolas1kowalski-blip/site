@@ -3024,10 +3024,16 @@
             else if (hasCtxRules) alert = `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">⚖️ Maîtrise contextuelle active (${(bo.contextRules.rules || []).length} règle(s))</span>`;
             const chips = sources.map(s => {
                 const roleColor = s.role === 'maitre' ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : (s.role === 'contributeur' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-100 border-slate-300 text-slate-600');
+                const ow = appOwnerOfSource(s.table);
                 return `<span class="text-xs border rounded-full px-2.5 py-1 flex items-center gap-1.5 ${roleColor}"><strong>${escapeHTML(s.table)}</strong>
+                    ${ow ? `<span class="text-[9px] opacity-70" title="Source produite par cette application (elle en est maître)">via 🖥 ${escapeHTML(ow.name)}</span>` : `<span class="text-[9px] text-amber-600" title="Cette source n'est rattachée à aucune application. Rattachez-la dans Applications & processus.">⚠ sans application</span>`}
                     <select onchange="updateBoSourceRole('${bo.id}','${escapeHTML(s.table.replace(/'/g, "\\'"))}',this.value)" class="bg-transparent text-xs font-bold border-0 cursor-pointer">${Object.keys(BO_ROLES).map(r => `<option value="${r}" ${r === s.role ? 'selected' : ''}>${BO_ROLES[r]}</option>`).join('')}</select>
                     <button onclick="removeBoSource('${bo.id}','${escapeHTML(s.table.replace(/'/g, "\\'"))}')" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`;
             }).join('');
+            const _apps = (state.governance.assets || []).filter(a => a.kind === 'app');
+            const reprSel = `<div class="flex items-center gap-1.5 mt-2 flex-wrap"><span class="text-[10px] uppercase font-bold text-slate-400">🏛️ Référentiel — représenté par l'application</span>
+                <select onchange="updateBoApp('${bo.id}',this.value)" class="border border-slate-200 p-1 rounded text-xs bg-white"><option value="">— aucune (référentiel logique) —</option>${_apps.map(a => `<option value="${a.id}" ${bo.appId === a.id ? 'selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
+                <span class="text-[10px] text-slate-300">l'application qui matérialise/porte cet objet métier (ex. un MDM, un référentiel client)</span></div>`;
             const flow = masters.length && sources.some(s => s.role === 'destinataire')
                 ? `<div class="text-xs text-slate-500 mt-2">Circulation : <strong class="text-emerald-700">${masters.map(m => escapeHTML(m.table)).join(', ')}</strong> → <strong>🏛️ ${escapeHTML(bo.name)}</strong> → <strong class="text-slate-600">${sources.filter(s => s.role === 'destinataire').map(s => escapeHTML(s.table)).join(', ')}</strong></div>` : '';
             return `<div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
@@ -3054,7 +3060,7 @@
                         </div>`; }).join('')}
                     </div>`; }).join('')}
                     ${sources.some(s => (s.filters || []).length) ? '<p class="text-[10px] text-slate-400">▼ L\'objet est un SOUS-ENSEMBLE filtré : la volumétrie, l\'audit de l\'objet et les contrôles de facettes appliquent ces conditions.</p>' : ''}
-                </div>${flow}
+                </div>${flow}${reprSel}
                 ${assetAttachHtml('bo', bo.id, 'producedBy', bo.producedBy, '🖥 Produite par')}
                 ${assetAttachHtml('bo', bo.id, 'consumedBy', bo.consumedBy, '⚙️ Consommée par')}
                 ${(() => { const att = [];
@@ -3988,6 +3994,8 @@
             persistAppState(); renderGovernance();
         }
         function updateBoSourceRole(boId, tableName, role) { const bo = state.governance.businessObjects.find(x => x.id === boId); const s = bo && (bo.sources || []).find(x => x.table === tableName); if (s) { s.role = role; persistAppState(); renderGovernance(); } }
+        // V6 Lot 2 : l'application « référentiel » qui matérialise/porte l'objet métier.
+        function updateBoApp(boId, appId) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return; bo.appId = appId || ''; persistAppState(); lfSyncFromData({ silent: true }); renderGovernance(); }
         function removeBoSource(boId, tableName) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (bo) { bo.sources = (bo.sources || []).filter(s => s.table !== tableName); persistAppState(); renderGovernance(); } }
 
         // ---- Périmètres métier ----
@@ -5135,7 +5143,7 @@
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
                 hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}${isObj ? ' lf-kind-obj' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="Tables contenues / produites par cette application">📦 contient ${lfOwnedTables(n.id).length}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
+                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="Tables contenues / produites par cette application">📦 contient ${lfOwnedTables(n.id).length}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isObj && n.reprAppName ? `<span class="lf-role lf-r-app" title="Objet métier matérialisé/porté par cette application (référentiel)">🖥 ${escapeHTML(n.reprAppName)}</span>` : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
@@ -5369,6 +5377,7 @@
                 let boN = m.nodes.find(x => x.boId === bo.id) || m.nodes.find(x => lfNodeKind(x) === 'object' && x.name && x.name.toLowerCase() === String(bo.name || '').toLowerCase());
                 if (!boN) { boN = { id: 'ln_' + generateId(), name: bo.name || 'Objet', kind: 'object', boId: bo.id, domain: bo.domain || '', derived: true }; m.nodes.push(boN); addedN++; }
                 else { boN.kind = 'object'; if (!boN.boId) boN.boId = bo.id; }
+                const _reprApp = bo.appId ? assetById(bo.appId) : null; boN.reprAppName = _reprApp ? _reprApp.name : '';
                 (bo.sources || []).forEach(s => {
                     if (!s || !s.table || !tableByName(s.table)) return;
                     const tN2 = nodeForTable(s.table);
@@ -5464,6 +5473,13 @@
             // 5. Table qui alimente en aval mais sans application propriétaire (origine) renseignée.
             m.nodes.filter(n => lfNodeKind(n) === 'table' && n.tableName && !lfProducerOf(n.id) && m.edges.some(e => e.source === n.id && lfEdgeRel(e) === 'feeds')).forEach(t => {
                 push('warn', 'proprio', `<b>${escapeHTML(t.name)}</b> alimente d'autres tables mais n'a pas d'application propriétaire — renseignez son « Système source » (dictionnaire) ou son origine.`);
+            });
+            // 6. (V6) Source d'un objet métier qui n'est rattachée à aucune application — on ne remplit
+            //    jamais un objet directement depuis un fichier : la donnée passe par une application.
+            (g.businessObjects || []).forEach(bo => {
+                (bo.sources || []).filter(s => s && s.table && tableByName(s.table) && !appOwnerOfSource(s.table)).forEach(s => {
+                    push('warn', 'appli', `Objet <b>${escapeHTML(bo.name)}</b> : la source <b>${escapeHTML(s.table)}</b> n'appartient à aucune application — rattachez-la à son application (c'est elle le maître, pas le fichier).`);
+                });
             });
             return out;
         }
@@ -9436,8 +9452,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.0.0';
+        const APP_VERSION = '6.1.0';
         const APP_CHANGELOG = [
+            { v: '6.1.0', d: '2026-07-24', t: 'V6 Lot 2 — l\'objet métier est alimenté PAR les applications (et peut être représenté par un référentiel)', items: [
+                'Chaque source d\'un objet métier affiche désormais l\'APPLICATION qui la produit (« via 🖥 … »), matérialisant le principe : la donnée entre dans l\'objet métier via une application, jamais directement depuis un fichier.',
+                'Nouveau — « 🏛️ Référentiel : représenté par l\'application » : on peut désigner l\'application qui matérialise/porte l\'objet métier (un MDM, un référentiel client). Le badge apparaît sur le nœud de l\'objet dans le lineage.',
+                'Cohérence du modèle : une source d\'objet métier non rattachée à une application est signalée (⚠ sans application) — on rattache la source à son application (Lot 1) pour lever l\'alerte.',
+                'Aucune régression : les rôles maître/contributeur/destinataire, les règles de maîtrise contextuelle (ventilation/périmètre) et « Produite/Consommée par » restent inchangés.'] },
             { v: '6.0.0', d: '2026-07-24', t: 'Studio Data V6 — squelette simplifié : Application ▸ Sources ▸ Objet métier ▸ Consommateurs (Lot 1)', items: [
                 'NOUVEAU FICHIER StudioDataV6.html : reprend 100 % de V5 (aucune perte) et engage la simplification du modèle de gouvernance autour d\'un squelette unique : une Application possède ses Sources, qui alimentent des Objets métier, qui alimentent des Consommateurs.',
                 'Lot 1 — « L\'application possède ses sources » : dans l\'onglet Applications & processus, chaque application déclare désormais les SOURCES (fichiers chargés) dont elle est maître, par simple case à cocher. C\'est l\'application qui est maître, jamais le fichier.',
