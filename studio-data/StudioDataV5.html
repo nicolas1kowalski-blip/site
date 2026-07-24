@@ -4845,13 +4845,14 @@
                 <summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600">⚙️ Construire le flux — systèmes &amp; liens ${nodes.length ? `(${nodes.length} nœud(s), ${edges.length} lien(s))` : ''}</summary>
                 <div class="p-3 space-y-4">`;
             h += `<div class="flex flex-wrap items-center gap-2">
+                <button onclick="lfSyncFromData()" class="text-[11px] bg-indigo-600 text-white font-bold px-3 py-1.5 rounded hover:bg-indigo-700">🔄 Synchroniser depuis les données</button>
                 <button onclick="lfSeedFromObjects()" class="text-[11px] bg-white border border-emerald-300 text-emerald-700 font-bold px-3 py-1.5 rounded hover:bg-emerald-50">✨ Générer depuis les objets métier</button>
                 ${nodes.length ? '<button onclick="lfClearAll()" class="text-[11px] bg-white border border-slate-300 text-slate-500 font-bold px-3 py-1.5 rounded hover:text-red-600">🗑 Tout effacer</button>' : ''}
-                <span class="text-[10px] text-slate-400">La réconciliation et la fraîcheur exigent une <b>source chargée</b> reliée au nœud (clé + attribut + date).</span></div>`;
+                <span class="text-[10px] text-slate-400">« Synchroniser » dérive les alimentations depuis vos <b>tables conçues</b> (colonne <code>SOURCE_ORIGINE</code>) sans écraser vos réglages manuels.</span></div>`;
             // liste des nœuds
             if (nodes.length) {
                 h += `<div class="border border-slate-200 rounded-lg overflow-x-auto bg-white"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Nœud (table)</th><th class="p-2">Rôle (déduit)</th><th class="p-2">Origine</th><th class="p-2">Domaine</th><th class="p-2">Source liée</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">`;
-                h += nodes.map(n => `<tr><td class="p-2 font-bold text-slate-700">${lfIcon(n)} ${escapeHTML(n.name)}</td>
+                h += nodes.map(n => `<tr><td class="p-2 font-bold text-slate-700">${lfIcon(n)} ${escapeHTML(n.name)}${n.derived ? ' <span class="text-[8.5px] font-bold text-indigo-500 align-middle" title="Nœud dérivé automatiquement des données (Synchroniser)">🔄 auto</span>' : ''}</td>
                     <td class="p-2">${(LF_ROLE[lfNodeRole(n)] || {}).lbl}${lfConsolidates(n.id) ? ' <span class="text-[9px] font-bold text-blue-600" title="Deux alimentations entrantes ou plus">⑃ consolide</span>' : ''}</td>
                     <td class="p-2 text-slate-500">${escapeHTML(n.origine || '—')}</td>
                     <td class="p-2 text-slate-500">${escapeHTML(n.domain || '—')}</td>
@@ -5038,6 +5039,47 @@
             });
             persistAppState(); renderGovernance();
             showSuccess(added ? `✨ Flux amorcé : ${added} nœud(s) créé(s) depuis les objets métier. Reliez chaque nœud à une source chargée et renseignez clé + attribut pour activer les contrôles.` : 'Le flux est déjà à jour par rapport aux objets métier.');
+        }
+
+        // ---- Lot 2 : Synchroniser depuis les données (dérivation table-centrée) ----
+        // Reconstruit les alimentations à partir des TABLES CONÇUES : chaque table conçue est
+        // « alimentée » par ses sources contributrices (design.sources) et par ses sources
+        // d'enrichissement (design.joins). Fusion ADDITIVE par identité (nom de table pour les
+        // nœuds, couple source→cible pour les liens) : rien n'est écrasé ni supprimé, les réglages
+        // manuels (clés, attributs contrôlés, SLA, transformations, derniers contrôles) sont préservés.
+        function lfSyncFromData() {
+            const m = lfModel(); const g = state.governance; const dict = g.dictionary || {};
+            let addedN = 0, addedE = 0, filledO = 0;
+            // Réutilise un nœud existant portant cette table (manuel ou dérivé), sinon en crée un dérivé.
+            const nodeForTable = (tblName) => {
+                let n = m.nodes.find(x => x.tableName === tblName)
+                     || m.nodes.find(x => !x.tableName && x.name && x.name.toLowerCase() === String(tblName).toLowerCase());
+                if (!n) { n = { id: 'ln_' + generateId(), name: tblName, origine: '', domain: '', tableName: tblName, derived: true }; m.nodes.push(n); addedN++; }
+                if (!n.tableName) n.tableName = tblName;
+                if (!n.origine) { const ss = (dict[tblName] || {}).sourceSystem; if (ss) { n.origine = ss; filledO++; } } // origine complétée, jamais remplacée
+                return n;
+            };
+            const ensureEdge = (srcName, tgtName) => {
+                if (!tableByName(srcName)) return;
+                const sN = nodeForTable(srcName), tN = nodeForTable(tgtName);
+                if (sN.id === tN.id) return;
+                if (m.edges.some(e => e.source === sN.id && e.target === tN.id)) return; // lien déjà présent → préservé tel quel
+                m.edges.push({ id: 'le_' + generateId(), source: sN.id, target: tN.id, type: 'feeds', srcKey: '', tgtKey: '', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true });
+                addedE++;
+            };
+            let designedCount = 0;
+            Object.values(state.tables).forEach(t => {
+                if (t.type !== 'designed' || !t.design || t.status !== 'ready') return;
+                designedCount++;
+                const feeders = new Set();
+                (t.design.sources || []).forEach(s => { if (s && s.src) feeders.add(s.src); });
+                (t.design.joins || []).forEach(j => { if (j && j.src) feeders.add(j.src); if (j && j.viaSrc) feeders.add(j.viaSrc); });
+                feeders.forEach(srcName => ensureEdge(srcName, t.name));
+            });
+            if (!designedCount) return showError('Aucune table conçue disponible : concevez au moins une table (onglet « Tables conçues ») pour dériver ses alimentations, ou construisez le flux à la main.');
+            persistAppState(); renderGovernance();
+            if (!addedN && !addedE && !filledO) return showSuccess('La carte est déjà à jour par rapport aux tables conçues (aucun nouvel élément à dériver).');
+            showSuccess(`🔄 Synchronisé depuis les données : ${addedN} table(s) ajoutée(s), ${addedE} alimentation(s) dérivée(s)${filledO ? `, ${filledO} origine(s) renseignée(s)` : ''}. Vos réglages manuels sont préservés — reliez clé + attribut sur les nouveaux liens pour activer les contrôles.`);
         }
 
         // ---- Drawers ----
@@ -8928,8 +8970,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.3.0';
+        const APP_VERSION = '5.4.0';
         const APP_CHANGELOG = [
+            { v: '5.4.0', d: '2026-07-24', t: 'Lineage : « Synchroniser depuis les données » (lot 2)', items: [
+                'Nouveau bouton « 🔄 Synchroniser depuis les données » dans le constructeur de flux : les alimentations sont DÉRIVÉES automatiquement de vos TABLES CONÇUES — chaque table conçue devient une cible alimentée par ses sources contributrices (colonne SOURCE_ORIGINE) et ses sources d\'enrichissement.',
+                'Fusion additive par identité : les nœuds sont rapprochés par nom de table, les liens par couple source → cible. Rien n\'est écrasé ni supprimé — vos réglages manuels (clés, attributs contrôlés, SLA, transformations, derniers contrôles) sont intégralement préservés.',
+                'L\'origine (système amont) des nouveaux nœuds est renseignée automatiquement depuis le « Système source » du dictionnaire quand il est vide. Les éléments issus de la synchro portent un discret badge « 🔄 auto ».',
+                'Fini la re-saisie de la carte : une table conçue à ≥ 2 sources apparaît directement comme consolidation (badge déduit).'] },
             { v: '5.3.0', d: '2026-07-24', t: 'Lineage : modèle table-centré — rôle & consolidation déduits (lot 1)', items: [
                 'Chaque nœud du flux représente désormais une TABLE ; on ne saisit plus son rôle à la main. Le rôle (Maître / Référentiel / Consommateur) est DÉDUIT automatiquement de la topologie : aucune alimentation entrante = Maître (source de vérité), deux alimentations entrantes ou plus = Référentiel (consolidation), sinon Consommateur.',
                 'Nouvelle information « Origine (système amont) » sur chaque nœud : le système d\'où provient la table (SAP, saisie manuelle…), distinct de la table elle-même. Elle s\'affiche sous le nom du nœud, dans la liste et dans la fiche.',
