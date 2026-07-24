@@ -5221,7 +5221,9 @@
                 ${down.map(e => `<div class="lf-mism"><span class="lf-k">→ ${escapeHTML((lfNode(e.target) || {}).name || '?')}</span><span class="lf-mv">${lfEdgeTypeLabel(e)}</span></div>`).join('')}</div>
                 <div class="mb-2"><h4 class="text-[10.5px] uppercase tracking-wide text-slate-400 font-bold mb-2">Analyse d'impact</h4>
                 <div class="text-xs text-slate-500">${isApp ? `Cette application <b>dépend de ${up.length}</b> table(s) lue(s) : un problème sur l'une d'elles la touche directement.` : `Si cet actif change, <b>${down.length}</b> consommateur(s) direct(s) sont affectés${down.some(e => lfEdgeRel(e) === 'reads') ? ` (dont ${down.filter(e => lfEdgeRel(e) === 'reads').length} application(s))` : ''}.`}</div></div>`;
-            openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (LF_ROLE[lfNodeRole(n)] || {}).lbl + (n.origine ? ' · ' + n.origine : (n.domain ? ' · ' + n.domain : '')), body, foot: '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
+            const _runDown = lfDownstreamFeeds(id).filter(lfRunnableEdge).length;
+            const _chainBtn = _runDown ? `<button onclick="lfReconDownstream('${id}', this)" title="Relance la réconciliation de toutes les alimentations situées en aval de ce nœud" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-sm mb-2">↻ Contrôler toute la chaîne aval (${_runDown})</button>` : '';
+            openUxDrawer({ sem: '', title: lfIcon(n) + ' ' + n.name, sub: (LF_ROLE[lfNodeRole(n)] || {}).lbl + (n.origine ? ' · ' + n.origine : (n.domain ? ' · ' + n.domain : '')), body, foot: _chainBtn + '<button onclick="closeUxDrawer()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm">Fermer</button>' });
         }
         function lfOpenEdge(id) {
             const e = lfEdge(id); if (!e) return;
@@ -5371,19 +5373,20 @@
             e.lastRun = null; persistAppState(); renderGovernance(); setTimeout(() => lfOpenEdge(id), 20);
             if (!added) showError('Aucun nouvel attribut de même nom à ajouter.');
         }
-        async function lfReconEdge(id, btn) {
-            const e = lfEdge(id); if (!e) return;
+        async function lfReconEdge(id, btn, opts) {
+            opts = opts || {}; const _f = msg => opts.silent ? { ok: false, reason: msg } : showError(msg);
+            const e = lfEdge(id); if (!e) return _f('Lien introuvable.');
             const s = lfNode(e.source), t = lfNode(e.target);
             const sT = s && s.tableName ? tableByName(s.tableName) : null, tT = t && t.tableName ? tableByName(t.tableName) : null;
-            if (!sT || !tT) return showError('Reliez la source et la cible à des sources chargées.');
+            if (!sT || !tT) return _f('Reliez la source et la cible à des sources chargées.');
             const K = lfEdgeKeys(e);
-            if (!K.sK || !K.tK) return showError('Renseignez la clé (source et cible).');
-            if (!(sT.headers || []).includes(K.sK)) return showError(`La colonne clé source « ${K.sK} » est absente de « ${s.name} ».`);
-            if (!(tT.headers || []).includes(K.tK)) return showError(`La colonne clé cible « ${K.tK} » est absente de « ${t.name} ».`);
+            if (!K.sK || !K.tK) return _f('Renseignez la clé (source et cible).');
+            if (!(sT.headers || []).includes(K.sK)) return _f(`La colonne clé source « ${K.sK} » est absente de « ${s.name} ».`);
+            if (!(tT.headers || []).includes(K.tK)) return _f(`La colonne clé cible « ${K.tK} » est absente de « ${t.name} ».`);
             let pairs = lfEdgePairs(e).filter(pp => pp.src && pp.tgt);
             const skipped = pairs.filter(pp => !(sT.headers || []).includes(pp.src) || !(tT.headers || []).includes(pp.tgt));
             pairs = pairs.filter(pp => (sT.headers || []).includes(pp.src) && (tT.headers || []).includes(pp.tgt));
-            if (!pairs.length) return showError('Ajoutez au moins un attribut contrôlé (colonnes présentes des deux côtés) dans la fiche du lien.');
+            if (!pairs.length) return _f('Ajoutez au moins un attribut contrôlé (colonnes présentes des deux côtés) dans la fiche du lien.');
             const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '…'; }
             try {
                 const { conn } = await getDB();
@@ -5411,10 +5414,37 @@
                 const pr = pairs.map((pp, i) => { const di = Number(out.agg['d' + i] || 0); return { src: pp.src, tgt: pp.tgt, xform: pp.xform, dist: di, rate: rows ? (100 * di / rows) : 0, samples: out.samples[i] || [] }; });
                 e.lastRun = { at: Date.now(), rows, missing: Number(out.miss.n || 0), distAny: dany, rate: rows ? (100 * dany / rows) : 0, worstRate: pr.reduce((mx, x) => Math.max(mx, x.rate), 0), pairs: pr };
                 lfLogPush(e, s, t);
-                persistAppState(); renderGovernance();
+                persistAppState();
+                if (opts.silent) return { ok: true, name: s.name + ' → ' + t.name, rows, dany };
+                renderGovernance();
                 setTimeout(() => lfOpenEdge(id), 30);
                 showSuccess(`↻ Contrôle « ${s.name} → ${t.name} » : ${dany.toLocaleString('fr-FR')} ligne(s) avec écart sur ${rows.toLocaleString('fr-FR')} (${pairs.length} attribut(s)).` + (skipped.length ? ` ${skipped.length} attribut(s) ignoré(s) (colonne absente).` : ''));
-            } catch (err) { showError('Contrôle impossible : ' + err.message); if (btn) { btn.disabled = false; btn.textContent = old; } }
+            } catch (err) { if (opts.silent) return { ok: false, reason: err.message, name: s.name + ' → ' + t.name }; showError('Contrôle impossible : ' + err.message); if (btn) { btn.disabled = false; btn.textContent = old; } }
+        }
+        // Contrôle de TOUTE la chaîne aval d'un nœud : parcourt les alimentations (feeds) en aval et
+        // relance leur réconciliation. Utile après une réécriture (write-back) qui resynchronise l'amont.
+        function lfRunnableEdge(e) {
+            if (lfEdgeRel(e) !== 'feeds') return false;
+            const s = lfNode(e.source), t = lfNode(e.target);
+            const sT = s && s.tableName ? tableByName(s.tableName) : null, tT = t && t.tableName ? tableByName(t.tableName) : null;
+            if (!sT || !tT) return false;
+            const K = lfEdgeKeys(e); if (!K.sK || !K.tK || !(sT.headers || []).includes(K.sK) || !(tT.headers || []).includes(K.tK)) return false;
+            return lfEdgePairs(e).some(pp => pp.src && pp.tgt && (sT.headers || []).includes(pp.src) && (tT.headers || []).includes(pp.tgt));
+        }
+        function lfDownstreamFeeds(nodeId) {
+            const m = lfModel(); const seenNodes = new Set(), seenEdges = new Set(), queue = [nodeId], out = [];
+            while (queue.length) { const u = queue.shift(); if (seenNodes.has(u)) continue; seenNodes.add(u);
+                m.edges.filter(e => e.source === u && lfEdgeRel(e) === 'feeds').forEach(e => { if (!seenEdges.has(e.id)) { seenEdges.add(e.id); out.push(e); } if (!seenNodes.has(e.target)) queue.push(e.target); }); }
+            return out;
+        }
+        async function lfReconDownstream(nodeId, btn) {
+            const runnable = lfDownstreamFeeds(nodeId).filter(lfRunnableEdge);
+            if (!runnable.length) return showError('Aucune alimentation contrôlable en aval de ce nœud (chaque lien doit avoir source + cible chargées, une clé et au moins un attribut).');
+            const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '… contrôle en cours'; }
+            let okN = 0, koN = 0, totalDany = 0; const fails = [];
+            for (const e of runnable) { const r = await lfReconEdge(e.id, null, { silent: true }); if (r && r.ok) { okN++; totalDany += r.dany; } else { koN++; fails.push((r && r.name) || e.id); } }
+            renderGovernance();
+            showSuccess(`↻ Chaîne aval contrôlée : ${okN} alimentation(s) vérifiée(s)${totalDany ? `, ${totalDany.toLocaleString('fr-FR')} ligne(s) en écart au total` : ''}.${koN ? ` ${koN} non contrôlée(s).` : ''}`);
         }
         async function lfExportEcarts(id, btn) {
             const e = lfEdge(id); if (!e) return;
@@ -9116,8 +9146,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '5.7.0';
+        const APP_VERSION = '5.8.0';
         const APP_CHANGELOG = [
+            { v: '5.8.0', d: '2026-07-24', t: 'Lineage : « Contrôler toute la chaîne aval » depuis un nœud', items: [
+                'Nouveau bouton « ↻ Contrôler toute la chaîne aval (N) » dans la fiche d\'un nœud : relance en une fois la réconciliation de TOUTES les alimentations situées en aval (parcours récursif des liens « alimente »).',
+                'Idéal après une écriture en retour (write-back) : quand une application resynchronise un référentiel, un seul clic revérifie la cohérence de toutes les copies aval et le compte total de lignes en écart.',
+                'Seules les alimentations réellement contrôlables (source + cible chargées, clé et attribut renseignés) sont exécutées ; le récapitulatif indique le nombre vérifié et le total d\'écarts.'] },
             { v: '5.7.0', d: '2026-07-24', t: 'Lineage : nœuds déplaçables + applications, écriture en retour & consommation partielle', items: [
                 'Les nœuds sont désormais DÉPLAÇABLES : glissez-les (souris ou tactile) pour composer votre carte ; la position est mémorisée. Bouton « ↺ Disposition auto » pour revenir à l\'agencement automatique.',
                 'On peut créer un nœud « 🖥 Application » à la main (champ « Nature » du formulaire). La nature d\'un lien est alors DÉDUITE des types reliés : application en source = « écrit », en cible = « lit », sinon table→table = « alimente ». Plus besoin de choisir.',
