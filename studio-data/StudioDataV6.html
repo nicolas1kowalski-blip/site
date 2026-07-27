@@ -9689,8 +9689,15 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.15.0';
+        const APP_VERSION = '6.16.0';
         const APP_CHANGELOG = [
+            { v: '6.16.0', d: '2026-07-27', t: 'Extraction : le choix du chemin s\'applique à TOUTES les fonctionnalités', items: [
+                'Le sélecteur « via » n\'existait que sur l\'ajout d\'une colonne simple. Il est maintenant le même composant partout : colonnes calculées (chaque morceau d\'une concaténation, et la colonne source de GAUCHE/DROITE/STXT/NBCAR/SI), filtres, agrégats et leurs critères, synthèses de table liée (Σ) et hiérarchies aplaties.',
+                'On peut donc concaténer une même colonne ramenée par DEUX chemins différents (nom du souscripteur « → » nom du bénéficiaire), filtrer sur un chemin et compter sur l\'autre, ou résumer une table liée en précisant par où passer.',
+                'Les synthèses et les hiérarchies s\'ancrent désormais sur le chemin choisi : la table parente et son alias suivent ce chemin au lieu de retomber systématiquement sur le chemin par défaut.',
+                'Le chemin retenu est rappelé en clair partout où l\'élément est listé : colonnes, pastilles de filtre, agrégats, critères, morceaux de concaténation.',
+                'Correction : le rappel « via … » de la liste des colonnes s\'affichait sous forme de balises HTML brutes (régression 6.14). Le libellé est redevenu du texte simple.',
+                'Inchangé : rien ne s\'affiche quand il n\'y a qu\'un seul chemin possible, et tout élément sans « via » emprunte le chemin par défaut.'] },
             { v: '6.15.0', d: '2026-07-24', t: 'Extraction : les chemins indirects (tables de liaison) sont aussi proposés au choix', items: [
                 'Le choix « via » ne se limitait qu\'aux liens DIRECTS. Il porte désormais un CHEMIN complet : direct, ou passant par une ou plusieurs tables intermédiaires (tables de liaison).',
                 'Quand une table est atteignable par PLUSIEURS chemins, la liste déroulante les propose tous, écrits en clair : la suite des tables traversées (⇢ LIEN → CLIENT) puis le détail des jointures (colonne = colonne) de chaque saut.',
@@ -12289,7 +12296,7 @@
             (spec.columns || []).forEach(c => advColNeeds(c).forEach(x => needs.push(x)));
             (spec.filters || []).forEach(f => needs.push({ tableId: f.tableId, via: f.via || '' }));
             if (spec.group && spec.group.on) (spec.group.aggs || []).forEach(a => { if (a.tableId) needs.push({ tableId: a.tableId, via: a.via || '' }); (a.conds || []).forEach(cc => needs.push({ tableId: cc.tableId, via: cc.via || '' })); });
-            (spec.columns || []).filter(c => c.kind === 'link' || c.kind === 'hier').forEach(c => { const a = advLinkAnchor(spec.baseId, c.tableId); if (a) needs.push({ tableId: a.parentId, via: '' }); });
+            (spec.columns || []).filter(c => c.kind === 'link' || c.kind === 'hier').forEach(c => { const a = advLinkAnchor(spec.baseId, c.tableId, c.via); if (a) needs.push({ tableId: a.parentId, via: a.parentVia || '' }); });
             let joins = []; try { joins = advPlanJoins(spec.baseId, needs).joins || []; } catch (e) { return []; }
             const byPair = advRelsByPair(); const out = []; const seen = new Set();
             joins.forEach(j => {
@@ -12302,8 +12309,30 @@
             return out;
         }
         // Ancrage d'une table « résumée » : la relation qui la relie au chemin de jointures.
-        function advLinkAnchor(baseId, tableId) {
+        // V6.16 : si un chemin explicite est fourni, l'ancrage suit CE chemin — la table parente est
+        // alors la dernière étape avant l'arrivée, avec sa propre route (parentVia) pour l'alias SQL.
+        function advLinkAnchor(baseId, tableId, via) {
             if (tableId === baseId) return null;
+            if (via) {
+                const ids = String(via).split('>').filter(Boolean);
+                const path = ids.map(id => (state.relations || []).find(r => r.id === id)).filter(advRelValid);
+                if (path.length === ids.length && path.length) {
+                    let cur = baseId; const prefix = [];
+                    for (let i = 0; i < path.length; i++) {
+                        const r = path[i];
+                        const nxt = r.sourceTable === cur ? r.targetTable : (r.targetTable === cur ? r.sourceTable : null);
+                        if (nxt == null) break;
+                        if (i === path.length - 1) {
+                            if (nxt !== tableId) break;
+                            return { parentId: cur, parentVia: prefix.join('>'),
+                                childCol: r.sourceTable === tableId ? r.sourceCol : r.targetCol,
+                                parentCol: r.sourceTable === tableId ? r.targetCol : r.sourceCol };
+                        }
+                        prefix.push(r.id); cur = nxt;
+                    }
+                }
+                // chemin invalide → on retombe sur le chemin par défaut plutôt que de tout casser
+            }
             const rels = Object.keys(advRelsByPair()).map(k => advChosenRel(k)).filter(Boolean);
             const adj = {};
             rels.forEach(r => { (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable }); (adj[r.targetTable] = adj[r.targetTable] || []).push({ rel: r, other: r.sourceTable }); });
@@ -12311,7 +12340,7 @@
             while (queue.length && !prev[tableId]) { const cur = queue.shift(); for (const e of (adj[cur] || [])) { if (!seen.has(e.other)) { seen.add(e.other); prev[e.other] = { from: cur, rel: e.rel }; queue.push(e.other); } } }
             if (!prev[tableId]) return null;
             const st = prev[tableId]; const rel = st.rel;
-            return { parentId: st.from,
+            return { parentId: st.from, parentVia: '',
                 childCol: rel.sourceTable === tableId ? rel.sourceCol : rel.targetCol,
                 parentCol: rel.sourceTable === tableId ? rel.targetCol : rel.sourceCol };
         }
@@ -12376,6 +12405,27 @@
             const path = ids.map(id => (state.relations || []).find(x => x.id === id)).filter(Boolean);
             return path.length === ids.length ? advPathLabel(path) : '';
         }
+        // V6.16 : le choix du chemin est le MÊME composant partout (colonnes, calculs/concaténation,
+        // filtres, agrégats et leurs critères, synthèses, hiérarchies). Un seul trio de fonctions :
+        // le gabarit HTML, la synchronisation à chaque changement de table, la lecture de la valeur.
+        function advViaSelectHtml(id) {
+            return `<span id="${id}-wrap" class="hidden items-center gap-1"><span class="text-[10px] font-bold text-amber-700" title="Ces deux tables sont reliées par plusieurs chemins : choisissez celui à emprunter.">via</span>` +
+                `<select id="${id}" class="border border-amber-300 p-1.5 rounded text-[11px] bg-white max-w-[280px]"></select></span>`;
+        }
+        function advViaSync(id, tableId) {
+            const w = el(id + '-wrap'), sel = el(id); if (!w || !sel) return;
+            const cur = sel.value; const opts = advViaOptions(tableId);
+            w.classList.toggle('hidden', opts.length === 0); w.classList.toggle('inline-flex', opts.length > 0);
+            sel.innerHTML = '<option value="">— chemin par défaut —</option>' + opts.map(o => `<option value="${escapeHTML(o.key)}">${escapeHTML(o.label)}</option>`).join('');
+            if (opts.some(o => o.key === cur)) sel.value = cur; // on garde le choix si la table n'a pas changé
+        }
+        // Valeur du sélecteur, ou '' s'il est masqué (aucune ambiguïté) — jamais de « via » fantôme.
+        function advViaVal(id) {
+            const w = el(id + '-wrap'), sel = el(id);
+            return (w && sel && !w.classList.contains('hidden')) ? (sel.value || '') : '';
+        }
+        // Suffixe lisible « via … » pour les libellés (colonnes, filtres, agrégats).
+        function advViaTxt(via) { const l = via ? advViaLabel(via) : ''; return l ? ` via ${l}` : ''; }
         function advPlanJoins(baseId, needs) {
             needs = (needs || []).map(x => (typeof x === 'string' ? { tableId: x, via: '' } : x)).filter(x => x && x.tableId);
             const map = {}; map[advRouteKey(baseId, '')] = 'x0';
@@ -12443,7 +12493,7 @@
         function advExpandCol(map, c, hierRef) {
             if (c.kind === 'link') {
                 const a = c._anchor; const S = sqlIdent(duckTableName(c.tableId));
-                const key = `${advNk('s.' + sqlIdent(a.childCol))} = ${advNk(advAlias(map, { tableId: a.parentId }) + '.' + sqlIdent(a.parentCol))}`;
+                const key = `${advNk('s.' + sqlIdent(a.childCol))} = ${advNk(advAlias(map, { tableId: a.parentId, via: a.parentVia }) + '.' + sqlIdent(a.parentCol))}`;
                 const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : null;
                 const al = c.alias || c.col || 'synthese';
                 if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} s WHERE ${key})`, alias: al }];
@@ -12479,9 +12529,9 @@
             // jamais la table résumée elle-même (pas de multiplication de lignes).
             for (const c of cols.filter(c2 => c2.kind === 'link' || c2.kind === 'hier')) {
                 if (c.tableId === spec.baseId && c.kind === 'hier') { c._anchor = null; continue; }
-                const a = advLinkAnchor(spec.baseId, c.tableId);
+                const a = advLinkAnchor(spec.baseId, c.tableId, c.via);
                 if (!a) return { err: `« ${(state.tables[c.tableId] || {}).name || '?'} » n'est pas reliée à la table de départ dans le modèle de données (étape 2).` };
-                c._anchor = a; needs.push({ tableId: a.parentId, via: '' });
+                c._anchor = a; needs.push({ tableId: a.parentId, via: a.parentVia || '' });
             }
             const { map, joins, unreachable } = advPlanJoins(spec.baseId, needs);
             if (unreachable.length) return { err: 'Tables non reliées dans le modèle de données : ' + unreachable.map(id => (state.tables[id] || {}).name).join(', ') + '. Ajoutez un lien à l\'étape 2 (modèle de données).' };
@@ -12520,8 +12570,8 @@
                 ctes.push(`${H}(k, chain) AS (\n  SELECT ${advNk('t.' + id2)}, [${lbl('t')}] FROM ${T} t WHERE ${baseWhere}\n  UNION ALL\n  SELECT ${advNk('c.' + id2)}, list_append(p.chain, ${lbl('c')}) FROM ${T} c ${stepJoin} WHERE len(p.chain) < ${maxD} AND NOT list_contains(p.chain, ${lbl('c')})\n)`);
                 const a = c._anchor;
                 if (!a) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk('x0.' + id2)}`); hierRef[c.id] = `${H}.chain`; }
-                else if (a.childCol === conf.idCol) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk(advAlias(map, { tableId: a.parentId }) + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}.chain`; }
-                else { hierJoins.push(`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(a.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ON hh.k = ${advNk('t2.' + id2)}) ${H}x ON ${H}x.jk = ${advNk(advAlias(map, { tableId: a.parentId }) + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}x.chain`; }
+                else if (a.childCol === conf.idCol) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk(advAlias(map, { tableId: a.parentId, via: a.parentVia }) + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}.chain`; }
+                else { hierJoins.push(`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(a.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ON hh.k = ${advNk('t2.' + id2)}) ${H}x ON ${H}x.jk = ${advNk(advAlias(map, { tableId: a.parentId, via: a.parentVia }) + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}x.chain`; }
             }
             const JT = spec.joinType === 'inner' ? 'JOIN' : 'LEFT JOIN';
             const fromSql = `${sqlIdent(duckTableName(spec.baseId))} x0` + (joins.length ? '\n  ' + joins.map(j => `${JT} ${sqlIdent(duckTableName(j.id))} ${j.alias} ON ${j.on}`).join('\n  ') : '') + (hierJoins.length ? '\n  ' + hierJoins.join('\n  ') : '');
@@ -12706,7 +12756,7 @@
             const val = (op === 'empty' || op === 'notempty') ? '' : el('adv-flt-val').value.trim();
             if (!t || !col) return;
             if ((op !== 'empty' && op !== 'notempty') && !val) return showError('Indiquez une valeur de filtre.');
-            state.advExtract.filters.push({ id: 'af_' + generateId(), tableId: t, col, op, val });
+            state.advExtract.filters.push({ id: 'af_' + generateId(), tableId: t, col, op, val, via: advViaVal('adv-flt-via') });
             renderAdvExtract();
         }
         function advRemoveFilter(id) { state.advExtract.filters = state.advExtract.filters.filter(f => f.id !== id); renderAdvExtract(); }
@@ -12729,7 +12779,7 @@
             const val = (op === 'empty' || op === 'notempty') ? '' : el('adv-aggc-val').value.trim();
             if (!t || !col) return;
             if ((op !== 'empty' && op !== 'notempty') && !val) return showError('Indiquez la valeur du critère.');
-            advPendingAggConds.push({ tableId: t, col, op, val });
+            advPendingAggConds.push({ tableId: t, col, op, val, via: advViaVal('adv-aggc-via') });
             renderAdvExtract();
         }
         function advRemovePendingCond(i) { advPendingAggConds.splice(i, 1); renderAdvExtract(); }
@@ -12738,7 +12788,7 @@
             if (!t || (fn !== 'count' && !col)) return;
             const conds = advPendingAggConds.slice(); advPendingAggConds = [];
             const suffix = conds.length ? '_si_' + conds.map(c => c.val || c.op).join('_') : '';
-            state.advExtract.group.aggs.push({ id: 'ag_' + generateId(), tableId: t, col: col || '*', fn, conds, alias: ((fn === 'count' ? 'nombre' : fn + '_' + col) + suffix).slice(0, 40) });
+            state.advExtract.group.aggs.push({ id: 'ag_' + generateId(), tableId: t, col: col || '*', fn, conds, via: advViaVal('adv-agg-via'), alias: ((fn === 'count' ? 'nombre' : fn + '_' + col) + suffix).slice(0, 40) });
             renderAdvExtract();
         }
         async function advFillAggCondVals() {
@@ -12749,7 +12799,7 @@
                 list.innerHTML = arrowResultToObjects(res).map(r => `<option value="${escapeHTML(r.v)}">`).join('');
             } catch (e) {}
         }
-        function advAggCondTblChanged() { const t = state.tables[el('adv-aggc-tbl').value]; const c = el('adv-aggc-col'); if (t && c) { c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advFillAggCondVals(); } }
+        function advAggCondTblChanged() { const id = el('adv-aggc-tbl').value; const t = state.tables[id]; const c = el('adv-aggc-col'); if (t && c) { c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advFillAggCondVals(); } advViaSync('adv-aggc-via', id); }
         // -- Colonnes calculées « façon Excel » --
         function advCalcFnChanged() {
             const fn = el('adv-calc-fn').value;
@@ -12761,17 +12811,19 @@
             el('adv-calc-start-wrap').classList.toggle('hidden', fn !== 'mid');
             el('adv-calc-si-wrap').classList.toggle('hidden', fn !== 'si');
         }
-        function advCalcTblChanged(which) { const t = state.tables[el('adv-calc-' + which + '-tbl').value]; const c = el('adv-calc-' + which + '-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function advCalcTblChanged(which) { const id = el('adv-calc-' + which + '-tbl').value; const t = state.tables[id]; const c = el('adv-calc-' + which + '-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advViaSync('adv-calc-' + which + '-via', id); }
         // Concaténation N colonnes : pile de colonnes empilées via la « Colonne source » ci-dessus.
         function advConcatAddPart() {
             const tableId = el('adv-calc-a-tbl').value, col = el('adv-calc-a-col').value;
             if (!tableId || !col) return showError('Choisissez une colonne source à ajouter.');
-            const s = state.advExtract; s._ccParts = s._ccParts || []; s._ccParts.push({ tableId, col }); advRenderConcatParts();
+            // V6.16 : chaque morceau concaténé garde SON chemin — on peut concaténer la même colonne
+            // ramenée par deux chemins différents (ex. nom du souscripteur + nom du bénéficiaire).
+            const s = state.advExtract; s._ccParts = s._ccParts || []; s._ccParts.push({ tableId, col, via: advViaVal('adv-calc-a-via') }); advRenderConcatParts();
         }
         function advConcatDelPart(i) { const s = state.advExtract; (s._ccParts || []).splice(i, 1); advRenderConcatParts(); }
         function advRenderConcatParts() {
             const box = el('adv-calc-parts'); if (!box) return; const parts = state.advExtract._ccParts || [];
-            box.innerHTML = parts.length ? parts.map((p, i) => `<span class="text-[10px] bg-white border border-amber-300 rounded-full px-2 py-0.5 inline-flex items-center gap-1">${i + 1}. ${escapeHTML((state.tables[p.tableId] || {}).name || '?')}.${escapeHTML(p.col)} <button onclick="advConcatDelPart(${i})" class="text-amber-400 hover:text-red-600 font-bold">✕</button></span>`).join(' ') : '<span class="text-[10px] text-slate-400 italic">Empilez au moins 2 colonnes (dans l\'ordre) via « ➕ ajouter cette colonne ».</span>';
+            box.innerHTML = parts.length ? parts.map((p, i) => `<span class="text-[10px] bg-white border border-amber-300 rounded-full px-2 py-0.5 inline-flex items-center gap-1" title="${escapeHTML(p.via ? 'chemin : ' + advViaLabel(p.via) : 'chemin par défaut')}">${i + 1}. ${escapeHTML((state.tables[p.tableId] || {}).name || '?')}.${escapeHTML(p.col)}${p.via ? `<em class="text-amber-600 not-italic font-bold">${escapeHTML(advViaTxt(p.via))}</em>` : ''} <button onclick="advConcatDelPart(${i})" class="text-amber-400 hover:text-red-600 font-bold">✕</button></span>`).join(' ') : '<span class="text-[10px] text-slate-400 italic">Empilez au moins 2 colonnes (dans l\'ordre) via « ➕ ajouter cette colonne ».</span>';
         }
         function advAddCalcColumn() {
             const fn = el('adv-calc-fn').value;
@@ -12787,7 +12839,7 @@
                 renderAdvExtract();
                 return;
             }
-            const a = { tableId: el('adv-calc-a-tbl').value, col: el('adv-calc-a-col').value };
+            const a = { tableId: el('adv-calc-a-tbl').value, col: el('adv-calc-a-col').value, via: advViaVal('adv-calc-a-via') };
             if (!a.tableId || !a.col) return showError('Choisissez la colonne source.');
             const calc = { fn, a };
             let defAlias = '';
@@ -12808,7 +12860,8 @@
 
         function advColLabel(c) {
             if (c.kind === 'calc') {
-                const cal = c.calc; const rf = r => r ? ((state.tables[r.tableId] || {}).name + '.' + r.col) : '?';
+                // V6.16 : chaque référence affiche son chemin quand il n'est pas celui par défaut.
+                const cal = c.calc; const rf = r => r ? ((state.tables[r.tableId] || {}).name + '.' + r.col + advViaTxt(r.via)) : '?';
                 if (cal.fn === 'concat') { if (cal.parts && cal.parts.length) return `ƒ CONCAT(${cal.parts.map(rf).join(` "${cal.sep || ' '}" `)})`; return `ƒ CONCAT(${rf(cal.a)}, "${cal.sep || ' '}", ${rf(cal.b)})`; }
                 if (cal.fn === 'left') return `ƒ GAUCHE(${rf(cal.a)}, ${cal.n})`;
                 if (cal.fn === 'right') return `ƒ DROITE(${rf(cal.a)}, ${cal.n})`;
@@ -12817,10 +12870,10 @@
                 if (cal.fn === 'si') return `ƒ SI(${rf(cal.a)} ${SCOPE_OPS[cal.op] || cal.op} "${cal.val}" → "${cal.then}" ; "${cal.else}")`;
                 return 'ƒ calculée';
             }
-            if (c.kind === 'link') { const t2 = state.tables[c.tableId]; return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${(t2 ? t2.name : '?')}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}`; }
-            if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; const at = advHierAttrs(cf); const atTxt = at.length > 1 ? ' · extrait : ' + at.join(', ') : (cf.labelCol || (cf.labelCols && cf.labelCols[0]) ? ' · extrait : ' + at[0] : ''); return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux${atTxt})`; }
+            if (c.kind === 'link') { const t2 = state.tables[c.tableId]; return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${(t2 ? t2.name : '?')}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}${advViaTxt(c.via)}`; }
+            if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; const at = advHierAttrs(cf); const atTxt = at.length > 1 ? ' · extrait : ' + at.join(', ') : (cf.labelCol || (cf.labelCols && cf.labelCols[0]) ? ' · extrait : ' + at[0] : ''); return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux${atTxt})${advViaTxt(c.via)}`; }
             const t = state.tables[c.tableId];
-            return (t ? t.name : '?') + '.' + c.col + (c.via ? ` <span class="text-[10px] text-amber-700 font-bold">via ${escapeHTML(advViaLabel(c.via))}</span>` : '');
+            return (t ? t.name : '?') + '.' + c.col + advViaTxt(c.via);
         }
         // ===== Paramétrages d'extraction enregistrables =====
         function epList() { return state.extractPresets = state.extractPresets || []; }
@@ -12979,6 +13032,7 @@
                 <div class="p-2 flex items-end gap-1.5 flex-wrap">
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table liée</label>
                     <select id="adv-link-tbl" onchange="advLinkTblChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${reach.filter(t => t.id !== s.baseId).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select></div>
+                    ${advViaSelectHtml('adv-link-via')}
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Mode</label>
                     <select id="adv-link-mode" onchange="advLinkModeChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${Object.entries(ADV_LINK_MODES).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
                     <div id="adv-link-col-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Colonne</label>
@@ -12996,6 +13050,7 @@
                 <div class="p-2 flex items-end gap-1.5 flex-wrap">
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table hiérarchique</label>
                     <select id="adv-hier-tbl" onchange="advHierTblChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${reach.map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select></div>
+                    ${advViaSelectHtml('adv-hier-via')}
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Type</label>
                     <select id="adv-hier-type" onchange="advHierTypeChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="simple">Parent dans la même table</option><option value="link">Via table de liaison</option></select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Identifiant</label>
@@ -13027,10 +13082,10 @@
                     <select id="adv-calc-fn" onchange="advCalcFnChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${Object.entries(ADV_CALC_FNS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Colonne source</label>
                     <div class="flex gap-1"><select id="adv-calc-a-tbl" onchange="advCalcTblChanged('a')" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
-                    <select id="adv-calc-a-col" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div></div>
+                    <select id="adv-calc-a-col" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>${advViaSelectHtml('adv-calc-a-via')}</div></div>
                     <div id="adv-calc-b-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">2e colonne</label>
                     <div class="flex gap-1"><select id="adv-calc-b-tbl" onchange="advCalcTblChanged('b')" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
-                    <select id="adv-calc-b-col" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div></div>
+                    <select id="adv-calc-b-col" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>${advViaSelectHtml('adv-calc-b-via')}</div></div>
                     <div id="adv-calc-parts-wrap" class="hidden basis-full"><label class="text-[9px] uppercase font-bold text-slate-400 block">Colonnes à concaténer (choisissez « Colonne source » puis ➕, dans l'ordre — 2 ou plus)</label>
                     <div class="flex items-center gap-1.5 flex-wrap mt-0.5"><button onclick="advConcatAddPart()" class="text-[11px] bg-white border border-amber-300 text-amber-700 px-2 py-1 rounded font-bold hover:bg-amber-50">➕ ajouter cette colonne</button><span id="adv-calc-parts" class="flex items-center gap-1 flex-wrap"><span class="text-[10px] text-slate-400 italic">Empilez au moins 2 colonnes (dans l'ordre).</span></span></div></div>
                     <div id="adv-calc-sep-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Séparateur</label>
@@ -13057,12 +13112,13 @@
             // -- Filtres --
             html += `<div class="mb-4">
                 <div class="text-[11px] font-bold text-slate-600 uppercase mb-2">2. Filtres</div>`;
-            if (s.filters.length) html += `<div class="flex flex-wrap gap-1.5 mb-2">${s.filters.map(f => `<span class="text-[11px] bg-blue-50 border border-blue-200 text-blue-800 rounded-full px-2.5 py-1 flex items-center gap-1"><strong>${escapeHTML((state.tables[f.tableId] || {}).name || '')}.${escapeHTML(f.col)}</strong> ${ADV_OPS[f.op] || SCOPE_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` "${escapeHTML(f.val)}"`} <button onclick="advRemoveFilter('${f.id}')" class="text-blue-400 hover:text-red-500">✕</button></span>`).join('')}</div>`;
+            if (s.filters.length) html += `<div class="flex flex-wrap gap-1.5 mb-2">${s.filters.map(f => `<span class="text-[11px] bg-blue-50 border border-blue-200 text-blue-800 rounded-full px-2.5 py-1 flex items-center gap-1"><strong>${escapeHTML((state.tables[f.tableId] || {}).name || '')}.${escapeHTML(f.col)}</strong>${f.via ? `<em class="not-italic text-[10px] text-amber-700 font-bold">${escapeHTML(advViaTxt(f.via))}</em>` : ''} ${ADV_OPS[f.op] || SCOPE_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` "${escapeHTML(f.val)}"`} <button onclick="advRemoveFilter('${f.id}')" class="text-blue-400 hover:text-red-500">✕</button></span>`).join('')}</div>`;
             html += `<div class="flex items-end gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
                 <select id="adv-flt-tbl" onchange="advFltTblChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
                 <select id="adv-flt-col" onchange="advFillFilterVals()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
                 <select id="adv-flt-op" onchange="el('adv-flt-val').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(ADV_OPS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
                 <input type="text" id="adv-flt-val" list="adv-flt-vals" onfocus="advFillFilterVals()" class="border border-slate-300 p-1.5 rounded text-xs w-36" placeholder="choisir ou saisir..."><datalist id="adv-flt-vals"></datalist>
+                ${advViaSelectHtml('adv-flt-via')}
                 <button onclick="advAddFilter()" class="text-xs bg-blue-600 text-white px-3 py-1.5 rounded font-bold">+ Filtre</button>
             </div></div>`;
             // -- Options : dédoublonnage & agrégats --
@@ -13076,20 +13132,22 @@
                     <label class="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-700"><input type="checkbox" ${s.group.on ? 'checked' : ''} onchange="advToggleGroup(this.checked)"> 🧮 Regrouper & agréger (group by)</label>
                     ${s.group.on ? `<div class="mt-2">
                         <p class="text-[10px] text-slate-400 mb-1.5">Sans colonne en sortie = totaux globaux (une seule ligne). Ajoutez des <strong>critères</strong> à un agrégat pour reproduire NB.SI.ENS / SOMME.SI.ENS.</p>
-                        ${s.group.aggs.length ? `<div class="space-y-1 mb-2">${s.group.aggs.map(a => `<div class="flex items-center gap-1.5 flex-wrap text-[11px] bg-slate-50 rounded p-1"><span class="font-bold">${ADV_AGGS[a.fn].split(' (')[0]}</span> <span class="font-mono text-slate-500">${a.fn === 'count' ? '' : escapeHTML((state.tables[a.tableId] || {}).name + '.' + a.col)}</span>${(a.conds || []).length ? ` <span class="text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">SI ${(a.conds || []).map(cc => escapeHTML(((state.tables[cc.tableId] || {}).name || '') + '.' + cc.col + ' ' + (SCOPE_OPS[cc.op] || cc.op) + (cc.op === 'empty' || cc.op === 'notempty' ? '' : ' "' + cc.val + '"'))).join(' ET ')}</span>` : ''} → <input type="text" value="${escapeHTML(a.alias)}" onchange="advUpdateAgg('${a.id}','alias',this.value)" class="border border-slate-200 rounded p-0.5 text-[11px] w-28"> <button onclick="advRemoveAgg('${a.id}')" class="text-red-400 hover:text-red-600 ml-auto">✕</button></div>`).join('')}</div>` : ''}
-                        ${advPendingAggConds.length ? `<div class="flex flex-wrap gap-1 mb-1.5">${advPendingAggConds.map((cc, i) => `<span class="text-[10px] bg-amber-100 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5">critère : ${escapeHTML(((state.tables[cc.tableId] || {}).name || '') + '.' + cc.col + ' ' + (SCOPE_OPS[cc.op] || cc.op) + (cc.op === 'empty' || cc.op === 'notempty' ? '' : ' "' + cc.val + '"'))} <button onclick="advRemovePendingCond(${i})" class="text-amber-500 hover:text-red-600">✕</button></span>`).join('')}</div>` : ''}
+                        ${s.group.aggs.length ? `<div class="space-y-1 mb-2">${s.group.aggs.map(a => `<div class="flex items-center gap-1.5 flex-wrap text-[11px] bg-slate-50 rounded p-1"><span class="font-bold">${ADV_AGGS[a.fn].split(' (')[0]}</span> <span class="font-mono text-slate-500">${a.fn === 'count' ? '' : escapeHTML((state.tables[a.tableId] || {}).name + '.' + a.col + advViaTxt(a.via))}</span>${(a.conds || []).length ? ` <span class="text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">SI ${(a.conds || []).map(cc => escapeHTML(((state.tables[cc.tableId] || {}).name || '') + '.' + cc.col + advViaTxt(cc.via) + ' ' + (SCOPE_OPS[cc.op] || cc.op) + (cc.op === 'empty' || cc.op === 'notempty' ? '' : ' "' + cc.val + '"'))).join(' ET ')}</span>` : ''} → <input type="text" value="${escapeHTML(a.alias)}" onchange="advUpdateAgg('${a.id}','alias',this.value)" class="border border-slate-200 rounded p-0.5 text-[11px] w-28"> <button onclick="advRemoveAgg('${a.id}')" class="text-red-400 hover:text-red-600 ml-auto">✕</button></div>`).join('')}</div>` : ''}
+                        ${advPendingAggConds.length ? `<div class="flex flex-wrap gap-1 mb-1.5">${advPendingAggConds.map((cc, i) => `<span class="text-[10px] bg-amber-100 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5">critère : ${escapeHTML(((state.tables[cc.tableId] || {}).name || '') + '.' + cc.col + advViaTxt(cc.via) + ' ' + (SCOPE_OPS[cc.op] || cc.op) + (cc.op === 'empty' || cc.op === 'notempty' ? '' : ' "' + cc.val + '"'))} <button onclick="advRemovePendingCond(${i})" class="text-amber-500 hover:text-red-600">✕</button></span>`).join('')}</div>` : ''}
                         <div class="flex items-end gap-1.5 flex-wrap mb-1.5 bg-amber-50/40 border border-amber-100 rounded p-1.5">
                             <span class="text-[9px] uppercase font-bold text-amber-600 self-center">Critères (optionnel, NB.SI.ENS)</span>
                             <select id="adv-aggc-tbl" onchange="advAggCondTblChanged()" class="border border-slate-300 p-1 rounded text-[11px] bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
                             <select id="adv-aggc-col" onchange="advFillAggCondVals()" class="border border-slate-300 p-1 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
                             <select id="adv-aggc-op" onchange="el('adv-aggc-val').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1 rounded text-[11px] bg-white">${Object.entries(SCOPE_OPS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
                             <input type="text" id="adv-aggc-val" list="adv-aggc-vals" onfocus="advFillAggCondVals()" class="border border-slate-300 p-1 rounded text-[11px] w-28" placeholder="valeur..."><datalist id="adv-aggc-vals"></datalist>
+                            ${advViaSelectHtml('adv-aggc-via')}
                             <button onclick="advAddAggCond()" class="text-[11px] bg-amber-600 text-white px-2 py-1 rounded font-bold">+ Critère</button>
                         </div>
                         <div class="flex items-end gap-1.5 flex-wrap">
                             <select id="adv-agg-fn" class="border border-slate-300 p-1 rounded text-[11px] bg-white">${Object.entries(ADV_AGGS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
                             <select id="adv-agg-tbl" onchange="advAggTblChanged()" class="border border-slate-300 p-1 rounded text-[11px] bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
                             <select id="adv-agg-col" class="border border-slate-300 p-1 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                            ${advViaSelectHtml('adv-agg-via')}
                             <button onclick="advAddAgg()" class="text-[11px] bg-indigo-600 text-white px-2 py-1 rounded font-bold">+ Agrégat${advPendingAggConds.length ? ' (avec ' + advPendingAggConds.length + ' critère(s))' : ''}</button>
                         </div>
                     </div>` : ''}
@@ -13126,20 +13184,23 @@
             if (window.lucide) lucide.createIcons({ root: body });
             if (el('adv-calc-fn')) { advCalcFnChanged(); advRenderConcatParts(); }
             if (el('adv-hier-label')) advRenderHierAttrs();
+            advInitViaSelects();
             if (!s.customSql && el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql();
         }
+        // Après chaque rendu, tous les sélecteurs de chemin se calent sur leur table courante.
+        const ADV_VIA_SELECTS = [['adv-col-via', 'adv-col-tbl'], ['adv-calc-a-via', 'adv-calc-a-tbl'], ['adv-calc-b-via', 'adv-calc-b-tbl'],
+            ['adv-flt-via', 'adv-flt-tbl'], ['adv-agg-via', 'adv-agg-tbl'], ['adv-aggc-via', 'adv-aggc-tbl'],
+            ['adv-link-via', 'adv-link-tbl'], ['adv-hier-via', 'adv-hier-tbl']];
+        function advInitViaSelects() { ADV_VIA_SELECTS.forEach(([v, t]) => { const s2 = el(t); if (s2 && el(v)) advViaSync(v, s2.value); }); }
         function advColColChanged() {
             const id = el('adv-col-tbl').value; const t = state.tables[id]; const c = el('adv-col-col');
             if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('');
             // V6.14 : si cette table est reliée plusieurs fois, on propose PAR COLONNE le lien à emprunter.
-            const opts = advViaOptions(id); const w = el('adv-col-via-wrap'), sel = el('adv-col-via');
-            if (!w || !sel) return;
-            w.classList.toggle('hidden', opts.length === 0); w.classList.toggle('inline-flex', opts.length > 0);
-            sel.innerHTML = '<option value="">— chemin par défaut —</option>' + opts.map(o => `<option value="${escapeHTML(o.key)}">${escapeHTML(o.label)}</option>`).join('');
+            advViaSync('adv-col-via', id);
         }
         // -- Synthèse d'une table liée (ex-modes Transposer / Compter de l'ancien écran) --
         const ADV_LINK_MODES = { count: 'Compter les lignes liées', countd: 'Compter les valeurs uniques', values: 'Transposer en texte (valeurs concaténées)', indexed: 'Transposer en colonnes (n premières)' };
-        function advLinkTblChanged() { const t = state.tables[el('adv-link-tbl').value]; const c = el('adv-link-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function advLinkTblChanged() { const id = el('adv-link-tbl').value; const t = state.tables[id]; const c = el('adv-link-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advViaSync('adv-link-via', id); }
         function advLinkModeChanged() { const m = el('adv-link-mode').value; el('adv-link-col-wrap').classList.toggle('hidden', m === 'count'); el('adv-link-n-wrap').classList.toggle('hidden', m !== 'indexed'); }
         function advAddLinkColumn() {
             const t = el('adv-link-tbl').value, mode = el('adv-link-mode').value;
@@ -13148,11 +13209,11 @@
             if (t === state.advExtract.baseId) return showError('Choisissez une table LIÉE (pas la table de départ).');
             const tn = (state.tables[t] || {}).name || '';
             const def = mode === 'count' ? 'nb_' + tn : (mode === 'countd' ? 'nbu_' + col : col);
-            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'link', tableId: t, mode, col, n: parseInt(el('adv-link-n').value) || 3, alias: (el('adv-link-alias').value || '').trim() || def, transform: 'none' });
+            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'link', tableId: t, mode, col, n: parseInt(el('adv-link-n').value) || 3, via: advViaVal('adv-link-via'), alias: (el('adv-link-alias').value || '').trim() || def, transform: 'none' });
             renderAdvExtract();
         }
         // -- Hiérarchie aplatie (ex-mode « Aplatir Hiérarchie ») --
-        function advHierTblChanged() { const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); const lb = el('adv-hier-label'); if (t && lb) lb.innerHTML = '<option value="">— l\'identifiant —</option>' + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); state.advExtract._hierAttrs = []; advRenderHierAttrs(); }
+        function advHierTblChanged() { advViaSync('adv-hier-via', el('adv-hier-tbl').value); const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); const lb = el('adv-hier-label'); if (t && lb) lb.innerHTML = '<option value="">— l\'identifiant —</option>' + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); state.advExtract._hierAttrs = []; advRenderHierAttrs(); }
         // Attributs multiples à extraire par niveau de hiérarchie (pile ordonnée).
         function advHierAddAttr() { const v = el('adv-hier-label') ? el('adv-hier-label').value : ''; const s = state.advExtract; s._hierAttrs = s._hierAttrs || []; if (!s._hierAttrs.includes(v)) s._hierAttrs.push(v); advRenderHierAttrs(); }
         function advHierDelAttr(i) { const s = state.advExtract; (s._hierAttrs || []).splice(i, 1); advRenderHierAttrs(); }
@@ -13173,7 +13234,7 @@
             if (!conf.idCol) return showError('Choisissez la colonne identifiant de la hiérarchie.');
             if (type !== 'link' && !conf.parentCol) return showError('Choisissez la colonne parent.');
             if (type === 'link' && (!conf.linkTable || !conf.linkChildCol || !conf.linkParentCol)) return showError('Complétez la table de liaison (enfant + parent).');
-            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'hier', tableId: t, conf, alias: (el('adv-hier-alias').value || '').trim() || ((state.tables[t] || {}).name || 'hier'), transform: 'none' });
+            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'hier', tableId: t, conf, via: advViaVal('adv-hier-via'), alias: (el('adv-hier-alias').value || '').trim() || ((state.tables[t] || {}).name || 'hier'), transform: 'none' });
             state.advExtract._hierAttrs = [];
             renderAdvExtract();
         }
@@ -13244,8 +13305,8 @@
         }
         function advSetJoinType(v) { state.advExtract.joinType = v; }
         function advSetLimit500(v) { state.advExtract.limit500 = v; }
-        function advFltTblChanged() { const t = state.tables[el('adv-flt-tbl').value]; const c = el('adv-flt-col'); if (t && c) { c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advFillFilterVals(); } }
-        function advAggTblChanged() { const t = state.tables[el('adv-agg-tbl').value]; const c = el('adv-agg-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function advFltTblChanged() { const id = el('adv-flt-tbl').value; const t = state.tables[id]; const c = el('adv-flt-col'); if (t && c) { c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advFillFilterVals(); } advViaSync('adv-flt-via', id); }
+        function advAggTblChanged() { const id = el('adv-agg-tbl').value; const t = state.tables[id]; const c = el('adv-agg-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advViaSync('adv-agg-via', id); }
 
         function populateFilterTableSelect(ctx) { const s=el(`filterTableSelect_${ctx}`); s.innerHTML = tableOptionsHtml({ placeholder: '1. Sélectionner une table...', readyOnly: true }); }
         function populateFilterSelect(ctx) { const t=el(`filterTableSelect_${ctx}`).value; const s=el(`filterColSelect_${ctx}`); if(!t)return; s.disabled=false; s.classList.remove('bg-slate-100', 'text-slate-400'); s.innerHTML='<option value="">2. Sélectionner une colonne...</option>'+state.tables[t].headers.map(h=>`<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join(''); }
