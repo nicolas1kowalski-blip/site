@@ -548,7 +548,6 @@
             </div>
             <div id="emptyStateViz" class="text-center py-16 bg-white border border-dashed rounded-xl mb-6"><h3 class="text-lg font-bold text-slate-700">Analyses Multi-Tables (BI)</h3></div>
             <div id="vizElementsContainer" class="hidden">
-                <div id="vizFilterInfo" class="hidden bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-800 mb-6 font-medium">Filtres Globaux Actifs</div>
                 <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                     <h2 class="text-lg font-bold text-indigo-800 mb-4">2. Configuration du Graphique</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -1312,11 +1311,6 @@
                 <button onclick="graphFit('${which}')" class="text-[11px] bg-white border border-slate-300 px-2 h-6 rounded font-bold text-slate-600 hover:bg-slate-100" title="Recentrer">⤢</button>
             </span>`;
         }
-        function setMcdLayout(v) {
-            state.graphConfig.mcdLayout = v;
-            if (networkInstance) { networkInstance.destroy(); networkInstance = null; }
-            renderGraph(); persistAppState();
-        }
         // Vue du modèle : 'links' = cartes compactes (7 colonnes max) · 'schema' = schéma complet
         // (toutes les colonnes, formats 🎛 et clés) — façon schéma de base de données.
         function setMcdView(v) {
@@ -1393,36 +1387,8 @@
         // ② Masquer / réafficher des tables du graphe.
         function mcdHideTable(id) { const h = state.graphConfig.mcdHidden = state.graphConfig.mcdHidden || []; if (!h.includes(id)) h.push(id); if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
         function mcdUnhideAll() { state.graphConfig.mcdHidden = []; if (networkInstance) { networkInstance.destroy(); networkInstance = null; } renderGraph(); try { renderRelationsList(); } catch (e) {} persistAppState(); }
-        // ① Focus + ⑤ voisinage : jouent sur les états 'active'/'inactive' (déjà stylés).
-        function mcdApplyFocus() {
-            if (mcdIsSvg()) return svgApplyFocus();
-            const g = networkInstance; if (!g) return;
-            const th = (state.graphConfig.mcdTheme || '').trim();
-            if (!(th && state.graphConfig.mcdFocus)) return;
-            try {
-                g.getNodes().forEach(n => { const t = state.tables[n.getID()]; g.setItemState(n, 'inactive', !t || (t.theme || '').trim() !== th); });
-            } catch (e) {}
-        }
         // ⑤ Surligne une table et ses voisines directes ; le reste est estompé.
         let mcdHighlightId = null;
-        function mcdHighlightNeighbors(id) {
-            if (mcdIsSvg()) return svgHighlightNeighbors(id);
-            const g = networkInstance; if (!g) return;
-            if (mcdHighlightId === id) { mcdClearHighlight(); return; }
-            mcdHighlightId = id;
-            const keep = new Set([id]);
-            state.relations.forEach(r => { if (r.sourceTable === id) keep.add(r.targetTable); else if (r.targetTable === id) keep.add(r.sourceTable); });
-            try {
-                g.getNodes().forEach(n => g.setItemState(n, 'inactive', !keep.has(n.getID())));
-                g.getEdges().forEach(e => { const m = e.getModel(); g.setItemState(e, 'inactive', !(keep.has(m.source) && keep.has(m.target))); });
-            } catch (e) {}
-        }
-        function mcdClearHighlight() {
-            if (mcdIsSvg()) return svgClearHighlight();
-            const g = networkInstance; if (!g) return; mcdHighlightId = null;
-            try { g.getNodes().forEach(n => g.setItemState(n, 'inactive', false)); g.getEdges().forEach(e => g.setItemState(e, 'inactive', false)); } catch (e) {}
-            mcdApplyFocus(); // rétablit l'estompage de focus s'il était actif
-        }
         function mcdScopeButtonsHtml() {
             const sc = mcdScope();
             const btn = (v, lbl, title) => `<button onclick="setMcdScope('${v}')" data-scope="${v}" title="${title}" class="mcdScopeBtn text-[11px] px-2.5 py-1 font-bold ${sc === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}">${lbl}</button>`;
@@ -2635,26 +2601,6 @@
             if (nodes.length === 1) { nodes.push({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: '', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: cid, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
             return { nodes, edges };
         }
-        function boElUsageCellHtml(bo, elm, stId) {
-            const assets = state.governance.assets || [];
-            const used = elm.usedBy || [];
-            const tgl = stId ? `boFacetElToggleUsedBy('${bo.id}','${stId}','${elm.id}'` : `boElToggleUsedBy('${bo.id}','${elm.id}'`;
-            const setF = stId ? `boFacetElSetField('${bo.id}','${stId}','${elm.id}'` : `boElSetField('${bo.id}','${elm.id}'`;
-            const selUid = 'bo-use-' + (stId ? stId + '-' : '') + elm.id;
-            const chips = used.map(id => { const a = assetById(id); if (!a) return '';
-                return `<span class="text-[10px] bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-1.5 py-0.5 inline-flex items-center gap-1">${escapeHTML(assetLabel(a))}<button onclick="${tgl},'${a.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
-            const remain = assets.filter(a => !used.includes(a.id));
-            const globalSrc = (bo.producedBy || [])[0] || '';
-            const appOpts = assets.filter(a => a.kind === 'app');
-            const diff = elm.sourceApp && elm.sourceApp !== globalSrc;
-            return `<div class="flex flex-wrap items-center gap-1">
-                ${chips || '<span class="text-[10px] bg-slate-50 border border-slate-200 text-slate-400 rounded-full px-1.5 py-0.5" title="Aucune application / aucun processus déclaré comme utilisateur de cet attribut">😴 sans usage déclaré</span>'}
-                ${remain.length ? `<select id="${selUid}" class="border border-slate-200 p-0.5 rounded text-[10px] bg-white max-w-[120px]">${remain.map(a => `<option value="${a.id}">${escapeHTML(assetLabel(a))}</option>`).join('')}</select><button onclick="${tgl}, el('${selUid}').value, true)" class="text-[10px] bg-white border border-slate-300 px-1.5 py-0.5 rounded font-bold hover:bg-slate-50" title="Déclarer un utilisateur de cet attribut">+</button>` : (assets.length ? '' : '<span class="text-[9px] text-slate-300">(déclarez des applis/processus dans Gouvernance)</span>')}
-            </div>
-            ${appOpts.length ? `<div class="flex items-center gap-1 mt-1"><span class="text-[9px] uppercase font-bold text-slate-400" title="Source de CET attribut, si différente de celle de l'objet">src</span>
-                <select onchange="${setF},'sourceApp',this.value)" class="border p-0.5 rounded text-[10px] ${diff ? 'border-amber-400 bg-amber-50 font-bold' : 'border-slate-200 bg-white'}"><option value="">(celle de l'objet)</option>${appOpts.map(a => `<option value="${a.id}" ${elm.sourceApp === a.id ? 'selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
-                ${diff ? '<span class="text-[9px] font-black text-amber-600" title="Cet attribut vient d\'une autre application que l\'objet">≠ objet</span>' : ''}</div>` : ''}`;
-        }
         function boFacetElToggleUsedBy(boId, stId, feId, assetId, on) {
             const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo || !assetId) return;
             const st = getBoFacets(bo).find(x => x.id === stId); if (!st) return;
@@ -3735,7 +3681,6 @@
         // ou côté 1 (référentiel). L'utilisateur arbitre, puis l'objet est généré structuré.
         function openBoDesigner() { govState.designer = { rootId: '', analysis: null }; renderGovernance(); }
         function closeBoDesigner() { govState.designer = null; renderGovernance(); }
-        function reverseCard(c) { return c === '1-N' ? 'N-1' : (c === 'N-1' ? '1-N' : c); }
 
         function renderBoDesigner() {
             const d = govState.designer;
@@ -5817,7 +5762,6 @@
 
         // ---- Moteur de réconciliation DuckDB (distorsion + volumétrie + exemples) ----
         function lfKeyExpr(al, col) { return `NULLIF(UPPER(TRIM(CAST(${al}.${sqlIdent(col)} AS VARCHAR))), '')`; }
-        function lfValExpr(al, col) { return `NULLIF(TRIM(CAST(${al}.${sqlIdent(col)} AS VARCHAR)), '')`; }
         // Liste normalisée des attributs contrôlés par un lien (compat : ancien srcAttr/tgtAttr unique).
         function lfEdgePairs(e) {
             if (Array.isArray(e.attrPairs) && e.attrPairs.length) return e.attrPairs.map(pp => ({ id: pp.id || ('ap_' + generateId()), src: pp.src || '', tgt: pp.tgt || '', xform: pp.xform || { kind: 'none' } }));
@@ -6017,36 +5961,6 @@
         function lfSetView(v) { lfView = (v === 'attrs') ? 'attrs' : 'systems'; renderGovernance(); }
         function lfNodeAttrs(n) { const set = new Set(); lfModel().edges.forEach(e => { const K = lfEdgeKeys(e); const pairs = lfEdgePairs(e); if (e.source === n.id) { if (K.sK) set.add('\U0001F511 ' + K.sK); pairs.forEach(pp => { if (pp.src) set.add(pp.src); }); } if (e.target === n.id) { if (K.tK) set.add('\U0001F511 ' + K.tK); pairs.forEach(pp => { if (pp.tgt) set.add(pp.tgt); }); } }); return Array.from(set); }
         function lfXkChanged() { const k = el('lf-e-xk') ? el('lf-e-xk').value : 'none'; const a = el('lf-e-xagg-w'), sc = el('lf-e-xsc-w'); if (a) a.classList.toggle('hidden', k !== 'agg'); if (sc) sc.classList.toggle('hidden', k !== 'scalar'); }
-        function lfXformLabel(e) { const x = e.xform; if (!x || x.kind === 'none') return ''; if (x.kind === 'agg') return (LF_XFORM_AGG[x.fn] || x.fn) + '(' + (lfEdgeKeys(e).sA || 'attribut') + ') par clé'; if (x.kind === 'scalar') return (LF_XFORM_SCALAR[x.op] || x.op) + (x.param ? ' ' + x.param : ''); return ''; }
-        // Construit la réconciliation en SQL en REJOUANT la transformation déclarée sur le maître :
-        // le maître est agrégé/normalisé par la règle, puis comparé à l'aval, clé par clé.
-        function lfReconParts(e, A, B) {
-            const KK = lfEdgeKeys(e);
-            const kA = lfKeyExpr('a', KK.sK), kB = lfKeyExpr('b', KK.tK);
-            const aq = 'a.' + sqlIdent(KK.sA), bq = 'b.' + sqlIdent(KK.tA);
-            const x = e.xform || { kind: 'none' };
-            let mSel, dSel;
-            if (x.kind === 'agg') {
-                const fn = ({ sum: 'SUM', avg: 'AVG', min: 'MIN', max: 'MAX', count: 'COUNT' })[x.fn] || 'SUM';
-                const mv = x.fn === 'count' ? 'ROUND(COUNT(*)::DOUBLE, 4)' : `ROUND(${fn}(TRY_CAST(${aq} AS DOUBLE)), 4)`;
-                mSel = `SELECT ${kA} AS k, ${mv} AS mv FROM ${A} a WHERE ${kA} IS NOT NULL GROUP BY 1`;
-                dSel = `SELECT ${kB} AS k, ROUND(MIN(TRY_CAST(${bq} AS DOUBLE)), 4) AS mv FROM ${B} b WHERE ${kB} IS NOT NULL GROUP BY 1`;
-                return { base: `WITH m AS (${mSel}), d AS (${dSel})`, join: 'm JOIN d USING (k)', mism: 'm.mv IS DISTINCT FROM d.mv' };
-            }
-            let numeric = false, digits = 4, mexpr;
-            if (x.kind === 'scalar') {
-                if (x.op === 'round') { digits = parseInt(x.param) || 0; numeric = true; mexpr = `ROUND(TRY_CAST(${aq} AS DOUBLE), ${digits})`; }
-                else if (x.op === 'factor') { numeric = true; mexpr = `ROUND(TRY_CAST(${aq} AS DOUBLE) * ${parseFloat(x.param) || 1}, 4)`; }
-                else if (x.op === 'abs') { numeric = true; mexpr = `ROUND(ABS(TRY_CAST(${aq} AS DOUBLE)), 4)`; }
-                else if (x.op === 'upper') { mexpr = `UPPER(TRIM(CAST(${aq} AS VARCHAR)))`; }
-                else if (x.op === 'lower') { mexpr = `LOWER(TRIM(CAST(${aq} AS VARCHAR)))`; }
-                else { mexpr = `NULLIF(TRIM(CAST(${aq} AS VARCHAR)), '')`; }
-            } else { mexpr = `NULLIF(TRIM(CAST(${aq} AS VARCHAR)), '')`; }
-            const dexpr = numeric ? `ROUND(TRY_CAST(${bq} AS DOUBLE), ${digits})` : `NULLIF(TRIM(CAST(${bq} AS VARCHAR)), '')`;
-            mSel = `SELECT ${kA} AS k, MIN(${mexpr}) AS mv FROM ${A} a WHERE ${kA} IS NOT NULL GROUP BY 1`;
-            dSel = `SELECT ${kB} AS k, MIN(${dexpr}) AS mv FROM ${B} b WHERE ${kB} IS NOT NULL GROUP BY 1`;
-            return { base: `WITH m AS (${mSel}), d AS (${dSel})`, join: 'm JOIN d USING (k)', mism: 'm.mv IS DISTINCT FROM d.mv' };
-        }
         // Journal des contrôles / alertes.
         function lfLog() { const g = state.governance; if (!Array.isArray(g.flowLog)) g.flowLog = []; return g.flowLog; }
         function lfLogPush(e, s, t) {
@@ -6746,11 +6660,6 @@
             await duckStreamRows(table.id, limit, onRow, onProgress);
         }
 
-        async function readTableRows(table, limit = 0) {
-            const results = [];
-            await processDataStream(table, limit, row => results.push(row));
-            return results;
-        }
 
         function readFileAsText(file) {
             return new Promise((resolve, reject) => {
@@ -7435,17 +7344,6 @@
 
         // ---- Rapport d'écarts entre sources (même clé, valeurs différentes) ----
         function tdDivAttrs(t, d) { return t.headers.filter(h => h !== 'SOURCE_ORIGINE' && !(d.key || []).includes(h)); }
-        function tdDivSql(tId) { const t = state.tables[tId]; const d = t && t.design; if (!t || !d) return null; return tdDivSqlFor(t, d, sqlIdent(duckTableName(tId))); }
-        function tdDivSqlFor(t, d, T) {
-            if (!d || !(d.key || []).length) return null;
-            const keyE = d.key.map(a => `COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), '')`).join(" || ' | ' || ");
-            const keyDisp = d.key.map(a => `COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '')`).join(" || ' | ' || ");
-            const attrs = tdDivAttrs(t, d);
-            if (!attrs.length) return null;
-            const branches = attrs.map(a => `SELECT ${keyDisp} AS cle, ${sqlLiteral(a)} AS attribut, ${sqlIdent('SOURCE_ORIGINE')} AS source, COALESCE(CAST(${sqlIdent(a)} AS VARCHAR), '') AS valeur
-                FROM ${T} WHERE ${keyE} IN (SELECT ${keyE} FROM ${T} GROUP BY 1 HAVING COUNT(DISTINCT COALESCE(UPPER(TRIM(CAST(${sqlIdent(a)} AS VARCHAR))), chr(2))) > 1)`);
-            return `SELECT * FROM (\n${branches.join('\nUNION ALL\n')}\n) z ORDER BY cle, attribut, source`;
-        }
         // Collecte les écarts ATTRIBUT PAR ATTRIBUT sur la projection légère TMP : chaque requête ne
         // manipule qu'une seule colonne → jeu de travail minimal, jamais de débordement disque, même
         // sans répertoire temporaire inscriptible (file://). Retourne au plus `limit` lignes.
@@ -9689,8 +9587,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.16.0';
+        const APP_VERSION = '6.16.1';
         const APP_CHANGELOG = [
+            { v: '6.16.1', d: '2026-07-27', t: 'Nettoyage : suppression du code de l\'ancien écran d\'extraction', items: [
+                'L\'ancien écran d\'extraction « cartes par table » avait été retiré de l\'interface lors de l\'unification (4.0), mais tout son code était resté : écran de sélection, filtres intelligents, moteur JS historique et moteur SQL de première génération. Il ne pouvait plus s\'exécuter — ses conteneurs et son bouton n\'existent plus dans la page.',
+                '38 fonctions supprimées, environ 800 lignes : renderExtractionColumns, validateExtractionState, startExtraction, runLegacyExtraction, runSqlExtraction, les filtres intelligents (addFilter, removeFilter, loadFilterValues, rowPassesFilters, buildFilterWhereSql) et divers utilitaires devenus orphelins (mcdHighlightNeighbors, lfReconParts, boElUsageCellHtml, tdDivSql…).',
+                'Conservé volontairement : la reprise des anciens paramétrages. Une session ou un fichier d\'échange enregistré avec l\'ancien écran continue d\'être relu et converti vers le moteur actuel — colonnes, transposition, comptage et hiérarchies comprises.',
+                'Retiré aussi : le bandeau « Filtres Globaux Actifs », que plus aucun code ne pouvait afficher.',
+                'Aucun changement de comportement : cette version ne fait qu\'alléger le fichier.'] },
             { v: '6.16.0', d: '2026-07-27', t: 'Extraction : le choix du chemin s\'applique à TOUTES les fonctionnalités', items: [
                 'Le sélecteur « via » n\'existait que sur l\'ajout d\'une colonne simple. Il est maintenant le même composant partout : colonnes calculées (chaque morceau d\'une concaténation, et la colonne source de GAUCHE/DROITE/STXT/NBCAR/SI), filtres, agrégats et leurs critères, synthèses de table liée (Σ) et hiérarchies aplaties.',
                 'On peut donc concaténer une même colonne ramenée par DEUX chemins différents (nom du souscripteur « → » nom du bénéficiaire), filtrer sur un chemin et compter sur l\'autre, ou résumer une table liée en précisant par où passer.',
@@ -11540,24 +11444,6 @@
             mm.innerHTML = `<svg width="${MW}" height="${MH}">${rects}${view}</svg>`;
         }
 
-        // (le moteur SVG est le seul rendu du Modèle de données)
-
-        function getRequiredPath(baseId, targetIds, rels) {
-            const activeNodes = new Set(); activeNodes.add(baseId);
-            if (targetIds.length === 0) return Array.from(activeNodes);
-            const adj = {};
-            rels.forEach(r => { if (!r.sourceCol || !r.targetCol) return; if (!adj[r.sourceTable]) adj[r.sourceTable] = []; if (!adj[r.targetTable]) adj[r.targetTable] = []; adj[r.sourceTable].push(r.targetTable); adj[r.targetTable].push(r.sourceTable); });
-            targetIds.forEach(targetId => {
-                if (targetId === baseId) return;
-                const queue = [[baseId]]; const visited = new Set([baseId]); let foundPath = null;
-                while (queue.length > 0) {
-                    const path = queue.shift(); const current = path[path.length - 1];
-                    if (current === targetId) { foundPath = path; break; }
-                    if (adj[current]) { adj[current].forEach(neighbor => { if (!visited.has(neighbor)) { visited.add(neighbor); queue.push([...path, neighbor]); } }); }
-                }
-                if (foundPath) foundPath.forEach(node => activeNodes.add(node));
-            }); return Array.from(activeNodes);
-        }
 
         function getReachableTables(startNodeId) {
             const visited = new Set(); const queue = [startNodeId]; const adj = {};
@@ -11578,110 +11464,10 @@
             if (val && state.tables[val]) advSetBase(val); else renderAdvExtract();
         }
 
-        function toggleColumn(t,c,k){ if(k){ if(!state.selectedCols[t].includes(c)) state.selectedCols[t].push(c); } else state.selectedCols[t]=state.selectedCols[t].filter(x=>x!==c); renderExtractionColumns(); persistAppState(); }
-        function toggleAllColumns(b){ const t=el('baseTableSelect').value; Object.keys(state.tables).forEach(x=>state.selectedCols[x] = b?[...state.tables[x].headers]:[]); renderExtractionColumns(); persistAppState(); }
-        function togglePivot(t,v){ state.pivotMode[t]=v; renderExtractionColumns(); persistAppState(); }
-        function updateHierConfig(tId, f, v) { if (!state.hierarchyConfig[tId]) state.hierarchyConfig[tId] = { type:'simple', idCol:'', parentCol:'', linkTable:'', linkChildCol:'', linkParentCol:'', linkValidFromCol:'', linkValidToCol:'', refDate:'', maxDepth:5 }; state.hierarchyConfig[tId][f] = v; if (f === 'linkTable') { state.hierarchyConfig[tId].linkChildCol = ''; state.hierarchyConfig[tId].linkParentCol = ''; state.hierarchyConfig[tId].linkValidFromCol = ''; state.hierarchyConfig[tId].linkValidToCol = ''; } renderExtractionColumns(); persistAppState(); }
 
-        function renderExtractionColumns() {
-            const cont = el('extractionColumns'); if (!cont) return;
-            const baseId = el('baseTableSelect').value; cont.innerHTML=''; if (!baseId) return;
-            let _cardsHtml = '';
-            const targetIdsForVisual = new Set(Object.keys(state.selectedCols).filter(id => state.selectedCols[id] && state.selectedCols[id].length > 0));
-            Object.keys(state.filters).forEach(tId => { if (Object.keys(state.filters[tId]).length > 0) targetIdsForVisual.add(tId); });
-            Object.keys(state.pivotMode).forEach(tId => { if (state.pivotMode[tId] === 'hierarchy' || state.pivotMode[tId] === 'count' || state.pivotMode[tId] === 'count_values' || state.pivotMode[tId] === 'values') targetIdsForVisual.add(tId); });
-            const activeTableIdsForVisual = getRequiredPath(baseId, Array.from(targetIdsForVisual), state.relations);
 
-            getReachableTables(baseId).forEach(tableId => {
-                const table = state.tables[tableId]; const isBase = tableId === baseId;
-                if (!state.selectedCols[tableId]) state.selectedCols[tableId] = isBase ? [...table.headers] : [];
-                if (!state.pivotMode[tableId]) state.pivotMode[tableId] = 'none';
-                const hasCols = state.selectedCols[tableId].length > 0, isActiveVisual = activeTableIdsForVisual.includes(tableId), isBridge = isActiveVisual && !hasCols && !isBase && state.pivotMode[tableId]==='none'; 
 
-                let checksHtml = table.headers.map(h => `<label class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded cursor-pointer group"><input type="checkbox" onchange="toggleColumn('${tableId}', '${escapeHTML(h.replace(/'/g, "\\'"))}', this.checked)" ${state.selectedCols[tableId].includes(h) ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"><span class="text-sm text-slate-700 group-hover:text-indigo-700 truncate" title="${escapeHTML(h)}">${escapeHTML(h)}</span></label>`).join('');
 
-                let hierarchyHtml = '';
-                if (state.pivotMode[tableId] === 'hierarchy') {
-                    if (!state.hierarchyConfig[tableId]) state.hierarchyConfig[tableId] = { type:'simple', idCol:'', parentCol:'', linkTable:'', linkChildCol:'', linkParentCol:'', linkValidFromCol:'', linkValidToCol:'', refDate:'', maxDepth:5 };
-                    const conf = state.hierarchyConfig[tableId];
-                    let idOpts = '<option value="">-- ID --</option>', parentOpts = '<option value="">-- Parent --</option>';
-                    table.headers.forEach(h => { idOpts += `<option value="${escapeHTML(h)}" ${conf.idCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`; parentOpts += `<option value="${escapeHTML(h)}" ${conf.parentCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`; });
-                    let hierarchyTypeHtml = `<div class="mb-2"><select onchange="updateHierConfig('${tableId}', 'type', this.value)" class="w-full text-xs bg-white border border-purple-200 rounded p-1"><option value="simple" ${conf.type === 'simple' || !conf.type ? 'selected' : ''}>Dans cette même table</option><option value="link" ${conf.type === 'link' ? 'selected' : ''}>Via table de liaison</option></select></div>`;
-                    if (conf.type === 'link') {
-                        let tableOpts = '<option value="">-- Liaison --</option>'; Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => { tableOpts += `<option value="${t.id}" ${conf.linkTable === t.id ? 'selected' : ''}>${escapeHTML(t.name)}</option>`; });
-                        let lcOpts = '<option value="">-- Enfant --</option>', lpOpts = '<option value="">-- Parent --</option>', ldOpts = '<option value="">-- Non utilisé --</option>', ldToOpts = '<option value="">-- Non utilisé --</option>';
-                        if (conf.linkTable && state.tables[conf.linkTable]) { state.tables[conf.linkTable].headers.forEach(h => { lcOpts += `<option value="${escapeHTML(h)}" ${conf.linkChildCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`; lpOpts += `<option value="${escapeHTML(h)}" ${conf.linkParentCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`; ldOpts += `<option value="${escapeHTML(h)}" ${conf.linkValidFromCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`; ldToOpts += `<option value="${escapeHTML(h)}" ${conf.linkValidToCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`; }); }
-                        hierarchyHtml = `<div class="px-4 py-3 bg-purple-50 border-b border-purple-100 flex flex-col gap-2">${hierarchyTypeHtml}<div class="grid grid-cols-2 gap-2 mb-2"><select onchange="updateHierConfig('${tableId}', 'idCol', this.value)" class="border p-1">${idOpts}</select><select onchange="updateHierConfig('${tableId}', 'linkTable', this.value)" class="border p-1">${tableOpts}</select></div><div class="grid grid-cols-3 gap-2 mb-2"><select onchange="updateHierConfig('${tableId}', 'linkChildCol', this.value)" class="border p-1">${lcOpts}</select><select onchange="updateHierConfig('${tableId}', 'linkParentCol', this.value)" class="border p-1">${lpOpts}</select><input type="number" min="1" max="20" value="${conf.maxDepth}" onchange="updateHierConfig('${tableId}', 'maxDepth', this.value)" class="border p-1"></div><div class="grid grid-cols-3 gap-2 pt-2 border-t border-purple-200/50"><select onchange="updateHierConfig('${tableId}', 'linkValidFromCol', this.value)" class="border p-1">${ldOpts}</select><select onchange="updateHierConfig('${tableId}', 'linkValidToCol', this.value)" class="border p-1">${ldToOpts}</select><input type="date" value="${conf.refDate || ''}" onchange="updateHierConfig('${tableId}', 'refDate', this.value)" class="border p-1"></div></div>`;
-                    } else {
-                        hierarchyHtml = `<div class="px-4 py-3 bg-purple-50 border-b border-purple-100 flex flex-col gap-2">${hierarchyTypeHtml}<div class="grid grid-cols-3 gap-2"><select onchange="updateHierConfig('${tableId}', 'idCol', this.value)" class="border p-1">${idOpts}</select><select onchange="updateHierConfig('${tableId}', 'parentCol', this.value)" class="border p-1">${parentOpts}</select><input type="number" min="1" max="20" value="${conf.maxDepth}" onchange="updateHierConfig('${tableId}', 'maxDepth', this.value)" class="border p-1"></div></div>`;
-                    }
-                }
-
-                const pivotToggleHtml = `<div class="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex justify-between items-center"><span class="text-xs font-bold text-indigo-800">Mode</span><select onchange="togglePivot('${tableId}', this.value)" class="text-xs font-medium border text-indigo-700 rounded-md p-1.5 w-48 shadow-sm"><option value="none" ${state.pivotMode[tableId] === 'none' ? 'selected' : ''}>Standard</option><option value="indexed" ${state.pivotMode[tableId] === 'indexed' ? 'selected' : ''}>Transposer: Cols</option><option value="values" ${state.pivotMode[tableId] === 'values' ? 'selected' : ''}>Transposer: Texte</option><option value="count" ${state.pivotMode[tableId] === 'count' ? 'selected' : ''}>Compter Lignes</option><option value="count_values" ${state.pivotMode[tableId] === 'count_values' ? 'selected' : ''}>Compter Val. Uniques</option><option value="hierarchy" ${state.pivotMode[tableId] === 'hierarchy' ? 'selected' : ''}>Aplatir Hiérarchie</option></select></div>`;
-
-                let styleClasses = '', headerBadge = '', headerBg = '';
-                if (isBase) { styleClasses = 'table-active border-indigo-400 ring-2 ring-indigo-200 shadow-md'; headerBg = 'bg-indigo-600 text-white'; headerBadge = '<span class="text-[10px] uppercase font-bold bg-white text-indigo-700 px-2 py-0.5 rounded shadow-sm">Maitre</span>'; } 
-                else if (isBridge) { styleClasses = 'table-bridge border-blue-400 shadow-md'; headerBg = 'bg-blue-100 text-blue-800'; headerBadge = '<span class="text-[9px] uppercase font-bold text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-200">Pont</span>'; } 
-                else if (hasCols || state.pivotMode[tableId] === 'count') { styleClasses = 'table-active border-indigo-300 shadow-md'; headerBg = 'bg-indigo-100 text-indigo-800'; } 
-                else { styleClasses = 'table-inactive border-slate-200 shadow-sm'; headerBg = 'bg-slate-100 text-slate-500'; headerBadge = '<span class="text-[9px] uppercase font-bold text-slate-400">Ignorée</span>'; }
-
-                _cardsHtml += `<div class="bg-white border rounded-xl overflow-hidden flex flex-col max-h-[42rem] ${styleClasses}"><div class="${headerBg} border-b px-4 py-3 flex items-center gap-2 sticky top-0 z-10 transition-colors"><i data-lucide="${isBase ? 'database' : (isBridge ? 'link' : 'table')}" class="w-5 h-5"></i><h3 class="font-bold text-sm truncate flex-grow">${escapeHTML(table.name)}</h3>${headerBadge}</div>${pivotToggleHtml}${hierarchyHtml}<div class="p-3 overflow-y-auto custom-scrollbar flex-grow bg-slate-50"><div class="bg-white border border-slate-100 rounded-lg p-1 shadow-sm">${checksHtml}</div></div></div>`;
-            });
-            cont.innerHTML = _cardsHtml;
-            lucide.createIcons(); validateExtractionState();
-        }
-
-        // Détermine les tables réellement impliquées dans l'extraction pour la table de base choisie.
-        function computeActiveExtractionIds(baseId) {
-            const targetIdsSet = new Set(Object.keys(state.selectedCols).filter(id => state.selectedCols[id] && state.selectedCols[id].length > 0));
-            Object.keys(state.filters).forEach(tId => { if (Object.keys(state.filters[tId]).length) targetIdsSet.add(tId); });
-            Object.keys(state.pivotMode).forEach(tId => { if (['hierarchy', 'count', 'values', 'count_values'].includes(state.pivotMode[tId])) targetIdsSet.add(tId); });
-            const activeIds = getRequiredPath(baseId, Array.from(targetIdsSet), state.relations);
-            const validRels = state.relations.filter(r => r.sourceCol && r.targetCol && activeIds.includes(r.sourceTable) && activeIds.includes(r.targetTable));
-            return { activeIds, validRels };
-        }
-
-        // Construit un arbre de jointure (base -> tables reliées) à partir des relations valides :
-        // pour chaque table encore non rattachée, on cherche une relation qui la connecte à une table
-        // déjà rattachée. childCount indique, pour chaque table, combien d'autres tables se greffent sur elle.
-        function buildExtractionJoinTree(baseId, activeIds, validRels) {
-            const joined = new Set([baseId]);
-            const order = [baseId];
-            const edgeOf = {};
-            const childCount = {}; activeIds.forEach(id => childCount[id] = 0);
-            let progress = true;
-            while (progress && joined.size < activeIds.length) {
-                progress = false;
-                for (const rel of validRels) {
-                    let childId = null, parentId = null;
-                    if (joined.has(rel.sourceTable) && !joined.has(rel.targetTable)) { parentId = rel.sourceTable; childId = rel.targetTable; }
-                    else if (joined.has(rel.targetTable) && !joined.has(rel.sourceTable)) { parentId = rel.targetTable; childId = rel.sourceTable; }
-                    if (childId && activeIds.includes(childId) && !joined.has(childId)) {
-                        joined.add(childId); order.push(childId);
-                        edgeOf[childId] = { rel, parentId };
-                        childCount[parentId] = (childCount[parentId] || 0) + 1;
-                        progress = true;
-                    }
-                }
-            }
-            if (joined.size < activeIds.length) throw new Error("Impossible de relier toutes les tables actives : vérifiez les relations de l'étape 2 (modèle de données).");
-            return { order, edgeOf, childCount };
-        }
-
-        // Les pivots "values"/"count_values"/"hierarchy" restent calculés par l'ancien moteur JS
-        // (Map en mémoire) : plus complexes à traduire en SQL, ils sont prévus pour une prochaine étape.
-        // De même, un pivot "indexed"/"count" qui sert aussi de pont vers d'autres tables (rare) repasse
-        // par l'ancien moteur pour rester correct. Dans tous les autres cas, l'extraction passe entièrement
-        // par DuckDB (jointures SQL) et peut donc gérer des fichiers bien plus volumineux.
-        function extractionNeedsLegacyEngine(baseId, activeIds, validRels) {
-            if (activeIds.some(tId => ['values', 'count_values', 'hierarchy'].includes(state.pivotMode[tId]))) return true;
-            try {
-                const { childCount } = buildExtractionJoinTree(baseId, activeIds, validRels);
-                return activeIds.some(tId => ['indexed', 'count'].includes(state.pivotMode[tId]) && (childCount[tId] || 0) > 0);
-            } catch (e) {
-                return true;
-            }
-        }
 
         // Évite les collisions de noms de colonnes en sortie (ex: deux tables différentes sanitizées
         // vers le même préfixe + même nom de colonne, ou deux mappings du comparateur identiques).
@@ -11692,486 +11478,11 @@
             return `${name}_${i}`;
         }
 
-        function buildFilterWhereSql(tId, alias) {
-            const filters = state.filters[tId];
-            if (!filters || !Object.keys(filters).length) return '1=1';
-            const clauses = Object.keys(filters).map(col => {
-                const f = filters[col];
-                const colExpr = `CAST(${alias}.${sqlIdent(col)} AS VARCHAR)`;
-                if (f.type === 'list') {
-                    const vals = Array.from(f.values);
-                    if (vals.length === 0) return '1=0';
-                    return `TRIM(${colExpr}) IN (${vals.map(v => sqlLiteral(String(v))).join(', ')})`;
-                }
-                if (f.type === 'number') {
-                    const numExpr = `TRY_CAST(REPLACE(TRIM(${colExpr}), ',', '.') AS DOUBLE)`;
-                    const parts = [`${numExpr} IS NOT NULL`];
-                    if (f.min !== null && f.min !== undefined) parts.push(`${numExpr} >= ${Number(f.min)}`);
-                    if (f.max !== null && f.max !== undefined) parts.push(`${numExpr} <= ${Number(f.max)}`);
-                    return parts.join(' AND ');
-                }
-                if (f.type === 'date') {
-                    const dateExpr = `COALESCE(TRY_STRPTIME(TRIM(${colExpr}), '%d/%m/%Y'), TRY_STRPTIME(TRIM(${colExpr}), '%d-%m-%Y'), TRY_STRPTIME(TRIM(${colExpr}), '%Y-%m-%d'), TRY_CAST(TRIM(${colExpr}) AS TIMESTAMP))`;
-                    const parts = [`${dateExpr} IS NOT NULL`];
-                    if (f.from) parts.push(`${dateExpr} >= ${sqlLiteral(f.from)}::TIMESTAMP`);
-                    if (f.to) parts.push(`${dateExpr} <= ${sqlLiteral(f.to)}::TIMESTAMP`);
-                    return parts.join(' AND ');
-                }
-                if (f.type === 'text') {
-                    const needle = String(f.contains).replace(/[%_\\]/g, ch => '\\' + ch);
-                    return `LOWER(TRIM(${colExpr})) LIKE '%' || ${sqlLiteral(needle)} || '%' ESCAPE '\\'`;
-                }
-                return '1=1';
-            });
-            return clauses.join(' AND ');
-        }
 
-        function validateExtractionState() {
-            const btn = el('btnRun'); if (!btn) return; let hasCols = false;
-            Object.values(state.selectedCols).forEach(cols => { if (cols.length > 0) hasCols = true; });
-            Object.keys(state.pivotMode).forEach(tId => { if(state.pivotMode[tId] === 'count') hasCols = true; });
-            let relsValid = true; state.relations.forEach(r => { if (!r.sourceCol || !r.targetCol) relsValid = false; });
-            let hierValid = true;
-            Object.keys(state.pivotMode).forEach(tId => {
-                if (state.pivotMode[tId] === 'hierarchy') {
-                    const c = state.hierarchyConfig && state.hierarchyConfig[tId]; if (!c) { hierValid = false; return; }
-                    if (c.type === 'link' && c.linkTable) { if (!c.idCol || !c.linkTable || !c.linkChildCol || !c.linkParentCol) hierValid = false; } else { if (!c.idCol || !c.parentCol) hierValid = false; }
-                }
-            });
 
-            // Le bouclier mémoire ne concerne que l'ancien moteur JS (pivots values/count_values/hierarchy),
-            // qui charge encore une table entière en mémoire. Les extractions "none/indexed/count" passent
-            // par DuckDB (jointures SQL) et n'ont pas cette limite.
-            let memWarn = false, reqF = []; const baseId = el('baseTableSelect').value;
-            if (baseId) {
-                const { activeIds: aIds, validRels: aRels } = computeActiveExtractionIds(baseId);
-                if (extractionNeedsLegacyEngine(baseId, aIds, aRels)) {
-                    aIds.forEach(tId => { if (tId !== baseId && state.tables[tId].size > 75 * 1024 * 1024) { if (!state.filters[tId] || Object.keys(state.filters[tId]).length === 0) { memWarn = true; reqF.push(state.tables[tId].name); } } });
-                }
-            }
 
-            btn.disabled = !hasCols || !relsValid || !hierValid || memWarn;
-            if (!relsValid) showError("Certaines relations dans l'étape 2 sont incomplètes.");
-            else if (!hierValid) showError("Configuration Hiérarchique incomplète pour une table (Étape 3).");
-            else if (memWarn) showError(`⚠️ BOUCLIER MÉMOIRE ACTIF : La table '${reqF.join(', ')}' est très volumineuse. Vous DEVEZ ajouter au moins un Filtre Intelligent sur cette table.`);
-            else hideError();
-        }
 
-        function toggleAddAsSourceName() {
-            el('addAsSourceNameWrapper').classList.toggle('hidden', !el('addAsSourceCheck').checked);
-        }
 
-        // ---- Ancien moteur (JS, Map en mémoire) : utilisé uniquement quand un pivot values/count_values/
-        // hierarchy est actif, ou qu'un pivot indexed/count sert aussi de pont vers d'autres tables.
-        async function runLegacyExtraction({ baseId, baseTable, isTest, globalJoinType, activeIds, validRels, addAsSource, fileStream, useStream, pb, sd }) {
-            sd.innerText = "Construction des dictionnaires en mémoire...";
-            const tableIndexKeys = {}; activeIds.forEach(id => tableIndexKeys[id] = new Set());
-            validRels.forEach(r => { tableIndexKeys[r.sourceTable].add(r.sourceCol); tableIndexKeys[r.targetTable].add(r.targetCol); });
-
-            const dbMaps = {}, tMaxN = {}, hierMaps = {}, hierLinkMaps = {}, linkNeeded = {}, tPreload = new Set(activeIds.filter(id=>id!==baseId));
-            const tableUniqueValues = {};
-
-            Object.keys(state.pivotMode).forEach(tId => {
-                if (state.pivotMode[tId] === 'hierarchy') {
-                    tPreload.add(tId); const c = state.hierarchyConfig[tId];
-                    if (c && c.type === 'link' && c.linkTable) { if(!linkNeeded[c.linkTable]) linkNeeded[c.linkTable]=[]; linkNeeded[c.linkTable].push(tId); tPreload.add(c.linkTable); }
-                }
-            });
-
-            tPreload.forEach(id => {
-                tMaxN[id] = 1; dbMaps[id] = {};
-                if (tableIndexKeys[id]) tableIndexKeys[id].forEach(col => dbMaps[id][col] = new Map());
-                if (state.pivotMode[id] === 'values' || state.pivotMode[id] === 'count_values') {
-                    tableUniqueValues[id] = {};
-                    if (state.selectedCols[id]) state.selectedCols[id].forEach(c => tableUniqueValues[id][c] = new Set());
-                }
-            });
-
-            for (let rId of Array.from(tPreload)) {
-                const rTable = state.tables[rId];
-                if (!tableIndexKeys[rId] && state.pivotMode[rId] !== 'hierarchy' && !linkNeeded[rId]) continue;
-
-                sd.innerText = `Chargement en mémoire : ${rTable.name}...`;
-                await processDataStream(rTable, 0, (row) => {
-                    if (!rowPassesFilters(row, rId)) return;
-                    if (rId !== baseId && tableIndexKeys[rId]) {
-                        let maxL=0; tableIndexKeys[rId].forEach(col => {
-                            const v = row[col]; if (v !== undefined && v !== null && String(v).trim() !== '') {
-                                const sk = String(v).trim().toUpperCase(); if (!dbMaps[rId][col].has(sk)) dbMaps[rId][col].set(sk, []);
-                                dbMaps[rId][col].get(sk).push(row); if(dbMaps[rId][col].get(sk).length > maxL) maxL = dbMaps[rId][col].get(sk).length;
-                            }
-                        }); if (maxL > tMaxN[rId]) tMaxN[rId] = Math.min(maxL, 150);
-                    }
-
-                    if (state.pivotMode[rId] === 'values' || state.pivotMode[rId] === 'count_values') {
-                        if (state.selectedCols[rId]) {
-                            state.selectedCols[rId].forEach(col => {
-                                const v = row[col];
-                                if (v !== undefined && v !== null && String(v).trim() !== '') {
-                                    if (tableUniqueValues[rId][col].size < 150) tableUniqueValues[rId][col].add(String(v).trim());
-                                }
-                            });
-                        }
-                    }
-
-                    if (state.pivotMode[rId] === 'hierarchy') {
-                        const c = state.hierarchyConfig[rId];
-                        if (c && c.idCol) {
-                            const idVal = row[c.idCol]; if (idVal !== undefined && idVal !== null && String(idVal).trim() !== '') {
-                                const strId = String(idVal).trim().toUpperCase(); if (!hierMaps[rId]) hierMaps[rId] = new Map();
-                                const lr = {}; if (c.type === 'simple' && c.parentCol) lr[c.parentCol] = row[c.parentCol];
-                                if (state.selectedCols[rId]) state.selectedCols[rId].forEach(x => lr[x] = row[x]);
-                                hierMaps[rId].set(strId, lr);
-                            }
-                        }
-                    }
-
-                    if (linkNeeded[rId]) {
-                        linkNeeded[rId].forEach(mainTId => {
-                            const c = state.hierarchyConfig[mainTId];
-                            const cVal = row[c.linkChildCol], pVal = row[c.linkParentCol];
-                            if (cVal !== undefined && cVal !== null && String(cVal).trim() !== '') {
-                                const sCId = String(cVal).trim().toUpperCase();
-                                let isValid = true;
-                                if (c.refDate && (c.linkValidFromCol || c.linkValidToCol)) {
-                                    const tt = new Date(c.refDate).getTime(), fT = parseFlexibleDate(row[c.linkValidFromCol]), tT = parseFlexibleDate(row[c.linkValidToCol]);
-                                    if (fT !== null && tt < fT) isValid = false; if (tT !== null && tt > tT) isValid = false;
-                                }
-                                if (isValid) { if (!hierLinkMaps[mainTId]) hierLinkMaps[mainTId] = new Map(); hierLinkMaps[mainTId].set(sCId, String(pVal||'').trim().toUpperCase()); }
-                            }
-                        });
-                    }
-                });
-            }
-
-            let gMaxN=1; Array.from(tPreload).forEach(id => { if (tMaxN[id] > gMaxN) gMaxN = tMaxN[id]; }); const sMaxN = Math.min(gMaxN, 150);
-            const outHead = [], outputSchema = [];
-
-            activeIds.forEach(tId => {
-                const tN = state.tables[tId].name.split('.')[0].replace(/[^a-zA-Z0-9]/g, '_'); const pM = state.pivotMode[tId] || 'none';
-                if (pM === 'count') { outHead.push(`${tN}_TOTAL_LIGNES`); outputSchema.push({ tableId: tId, colName: null, mode: 'count' }); }
-                if (state.selectedCols[tId] && state.selectedCols[tId].length > 0) {
-                    if (pM === 'none' || (tId === baseId && pM !== 'hierarchy')) { state.selectedCols[tId].forEach(col => { outHead.push(`${tN}_${col}`); outputSchema.push({ tableId: tId, colName: col, mode: 'none' }); }); }
-                    else if (pM === 'indexed') { const limit = sMaxN; for (let i = 0; i < limit; i++) { state.selectedCols[tId].forEach(col => { const suffix = limit > 1 ? `_${i+1}` : ''; outHead.push(`${tN}_${col}${suffix}`); outputSchema.push({ tableId: tId, colName: col, mode: 'indexed', occurenceIndex: i }); }); } }
-                    else if (pM === 'values' || pM === 'count_values') {
-                        state.selectedCols[tId].forEach(col => {
-                            const uniqueVals = Array.from(tableUniqueValues[tId][col] || []);
-                            if (uniqueVals.length === 0) {
-                                outHead.push(`${tN}_${col}`); outputSchema.push({ tableId: tId, colName: col, mode: 'none' });
-                            } else {
-                                uniqueVals.sort().forEach(val => {
-                                    const safeVal = val.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-                                    const suffix = pM === 'count_values' ? '_NB' : '';
-                                    outHead.push(`${tN}_${col}_${safeVal}${suffix}`);
-                                    outputSchema.push({ tableId: tId, colName: col, mode: pM, targetValue: val });
-                                });
-                            }
-                        });
-                    }
-                    else if (pM === 'hierarchy') { const d = parseInt(state.hierarchyConfig[tId].maxDepth) || 5; for (let lvl = 0; lvl <= d; lvl++) { state.selectedCols[tId].forEach(col => { const suffix = lvl === 0 ? '' : `_Niv${lvl}`; outHead.push(`${tN}_${col}${suffix}`); outputSchema.push({ tableId: tId, colName: col, mode: 'hierarchy', level: lvl }); }); } }
-                }
-            });
-
-            if (outputSchema.length === 0) throw new Error("Aucune colonne sélectionnée pour l'exportation.");
-
-            let blobParts = [], chunkBuf = []; const headerLine = outHead.map(escapeCSV).join(';') + '\n';
-            if (useStream) await fileStream.write("﻿" + headerLine); else blobParts.push(headerLine);
-
-            sd.innerText = "Génération du tableau croisé..."; pb.style.width = '30%'; let pRows = 0;
-            const extractedRows = addAsSource ? [] : null;
-
-            const resolveRow = (bRow) => {
-                const ctx = { [baseId]: [bRow] }; let changed=true, iters=0;
-                while (changed && iters < activeIds.length*3) {
-                    changed=false; validRels.forEach(rel => {
-                        if (ctx[rel.sourceTable] && !ctx[rel.targetTable]) {
-                            let all = []; ctx[rel.sourceTable].forEach(sr => {
-                                const v = sr[rel.sourceCol]; if (v !== undefined && v !== null && String(v).trim() !== '') {
-                                    const m = dbMaps[rel.targetTable] && dbMaps[rel.targetTable][rel.targetCol];
-                                    if (m) { const tr = m.get(String(v).trim().toUpperCase()); if(tr) tr.forEach(x=>all.push(x)); }
-                                }
-                            }); if (all.length > 0) { ctx[rel.targetTable] = Array.from(new Set(all)); changed=true; }
-                        } else if (ctx[rel.targetTable] && !ctx[rel.sourceTable]) {
-                            let all = []; ctx[rel.targetTable].forEach(tr => {
-                                const v = tr[rel.targetCol]; if (v !== undefined && v !== null && String(v).trim() !== '') {
-                                    const m = dbMaps[rel.sourceTable] && dbMaps[rel.sourceTable][rel.sourceCol];
-                                    if (m) { const sr = m.get(String(v).trim().toUpperCase()); if(sr) sr.forEach(x=>all.push(x)); }
-                                }
-                            }); if (all.length > 0) { ctx[rel.sourceTable] = Array.from(new Set(all)); changed=true; }
-                        }
-                    }); iters++;
-                } return ctx;
-            };
-
-            await processDataStream(baseTable, isTest ? 500 : 0, async (bRow) => {
-                if (!rowPassesFilters(bRow, baseId)) return;
-
-                const ctx = resolveRow(bRow);
-                if (globalJoinType === 'inner') {
-                    let missing = false;
-                    for (let t of activeIds) { if (state.pivotMode[t] !== 'none') continue; if (!ctx[t] || !ctx[t].length) { missing = true; break; } }
-                    if (missing) return;
-                }
-                pRows++;
-                const hChains = {};
-                activeIds.forEach(tId => {
-                    if (state.pivotMode[tId] === 'hierarchy') {
-                        let curr = tId === baseId ? bRow : (ctx[tId] && ctx[tId].length ? ctx[tId][0] : null);
-                        const chain = [curr], conf = state.hierarchyConfig[tId], d = parseInt(conf.maxDepth) || 5; let loop = curr;
-                        for (let lvl=1; lvl<=d; lvl++) {
-                            if (loop) {
-                                let pid = null;
-                                if (conf.type === 'link') { const cid = loop[conf.idCol]; if (cid !== undefined && cid !== null) pid = hierLinkMaps[tId]?.get(String(cid).trim().toUpperCase()); }
-                                else { const rp = loop[conf.parentCol]; if (rp !== undefined && rp !== null) pid = String(rp).trim().toUpperCase(); }
-                                if (pid && hierMaps[tId]) { loop = hierMaps[tId].get(pid); chain.push(loop || null); } else { chain.push(null); loop = null; }
-                            } else { chain.push(null); }
-                        } hChains[tId] = chain;
-                    }
-                });
-
-                const outRow = [];
-                const rawRow = extractedRows ? {} : null;
-                outputSchema.forEach((schema, colIdx) => {
-                    let rowVal = '';
-                    if (schema.mode === 'count') {
-                        const arr = ctx[schema.tableId]; rowVal = arr ? arr.length : 0;
-                    } else if (schema.mode === 'hierarchy') {
-                        const chain = hChains[schema.tableId]; const cell = chain ? chain[schema.level] : null; rowVal = cell ? cell[schema.colName] : '';
-                    } else {
-                        const arr = ctx[schema.tableId]; const first = arr && arr.length > 0 ? arr[0] : null;
-                        if (schema.mode === 'indexed') {
-                            const idx = schema.occurenceIndex; const row = arr && arr.length > idx ? arr[idx] : null; rowVal = row ? row[schema.colName] : '';
-                        } else if (schema.mode === 'values') {
-                            const val = schema.targetValue; const exists = arr && arr.some(r => String(r[schema.colName] || '').trim() === val); rowVal = exists ? val : '';
-                        } else if (schema.mode === 'count_values') {
-                            const val = schema.targetValue; const count = arr ? arr.filter(r => String(r[schema.colName] || '').trim() === val).length : 0; rowVal = count;
-                        } else {
-                            rowVal = first ? first[schema.colName] : '';
-                        }
-                    }
-                    outRow.push(escapeCSV(rowVal));
-                    if (rawRow) rawRow[outHead[colIdx]] = rowVal;
-                });
-                if (rawRow) extractedRows.push(rawRow);
-
-                chunkBuf.push(outRow.join(';'));
-                if (chunkBuf.length >= 5000) {
-                    const dat = chunkBuf.join('\n') + '\n';
-                    if (useStream) await fileStream.write(dat); else blobParts.push(dat);
-                    chunkBuf = [];
-                }
-            }, (cursor, total) => {
-                pb.style.width = (30 + Math.floor((cursor / total) * 70)) + '%';
-                sd.innerText = `${pRows} lignes...`;
-            });
-
-            if (chunkBuf.length > 0) {
-                const d = chunkBuf.join('\n') + '\n';
-                if (useStream) await fileStream.write(d); else blobParts.push(d);
-            }
-
-            return { rowCount: pRows, blobParts, outHead, extractedRows, duckResultTableId: null };
-        }
-
-        // ---- Nouveau moteur (DuckDB, jointures SQL) : utilisé dès qu'aucun pivot values/count_values/
-        // hierarchy n'est actif. Les jointures et agrégations sont exécutées par DuckDB, pas par des Map JS.
-        async function runSqlExtraction({ baseId, isTest, globalJoinType, activeIds, validRels, addAsSource, fileStream, useStream, pb, sd }) {
-            const { conn } = await getDB();
-            sd.innerText = "Préparation de la requête SQL...";
-            const { order, edgeOf } = buildExtractionJoinTree(baseId, activeIds, validRels);
-
-            const aliasOf = {}; order.forEach((tId, i) => aliasOf[tId] = 'a' + i);
-            const tN = tId => state.tables[tId].name.split('.')[0].replace(/[^a-zA-Z0-9]/g, '_');
-            const normExpr = (alias, col) => `NULLIF(UPPER(TRIM(CAST(${alias}.${sqlIdent(col)} AS VARCHAR))), '')`;
-
-            const joinClauses = [];
-            const baseLimitSql = isTest ? 'LIMIT 500' : '';
-            joinClauses.push(`FROM (SELECT * FROM ${sqlIdent(duckTableName(baseId))} ORDER BY __rn ${baseLimitSql}) AS ${aliasOf[baseId]}`);
-
-            const limitByIndexedTable = {};
-            for (let i = 1; i < order.length; i++) {
-                const tId = order[i];
-                const alias = aliasOf[tId];
-                const { rel, parentId } = edgeOf[tId];
-                const parentAlias = aliasOf[parentId];
-                const onThisSide = rel.sourceTable === tId ? rel.sourceCol : rel.targetCol;
-                const onParentSide = rel.sourceTable === parentId ? rel.sourceCol : rel.targetCol;
-                const pivotMode = state.pivotMode[tId] || 'none';
-
-                if (pivotMode === 'indexed' || pivotMode === 'count') {
-                    const filterSql = buildFilterWhereSql(tId, 'g');
-                    if (pivotMode === 'indexed') {
-                        const limitRes = await conn.query(`
-                            SELECT COALESCE(LEAST(150, MAX(cnt)), 1)::BIGINT AS m FROM (
-                                SELECT ${normExpr('g', onThisSide)} AS k, COUNT(*) AS cnt
-                                FROM ${sqlIdent(duckTableName(tId))} g WHERE ${filterSql} GROUP BY 1
-                            ) sub
-                        `);
-                        limitByIndexedTable[tId] = Number(arrowResultToObjects(limitRes)[0].m);
-                        const cols = state.selectedCols[tId] || [];
-                        const aggExprs = cols.map(c => `list(g.${sqlIdent(c)} ORDER BY g.__rn) AS ${sqlIdent('__l_' + c)}`).join(', ');
-                        joinClauses.push(`LEFT JOIN (
-                            SELECT ${normExpr('g', onThisSide)} AS __key${aggExprs ? ', ' + aggExprs : ''}
-                            FROM ${sqlIdent(duckTableName(tId))} g
-                            WHERE ${filterSql}
-                            GROUP BY 1
-                        ) AS ${alias} ON ${alias}.__key = ${normExpr(parentAlias, onParentSide)}`);
-                    } else {
-                        joinClauses.push(`LEFT JOIN (
-                            SELECT ${normExpr('g', onThisSide)} AS __key, COUNT(*) AS __cnt
-                            FROM ${sqlIdent(duckTableName(tId))} g
-                            WHERE ${filterSql}
-                            GROUP BY 1
-                        ) AS ${alias} ON ${alias}.__key = ${normExpr(parentAlias, onParentSide)}`);
-                    }
-                } else {
-                    // "Prendre la première ligne correspondante" : on déduplique la table cible une seule
-                    // fois (indépendamment des lignes de base) via QUALIFY + ROW_NUMBER, puis on la joint
-                    // normalement. DuckDB peut alors faire un hash-join classique au lieu d'une sous-requête
-                    // corrélée par ligne de base (LATERAL), ce qui change tout sur des tables de plusieurs
-                    // millions de lignes.
-                    const filterSql = buildFilterWhereSql(tId, 'x');
-                    const joinKeyword = globalJoinType === 'inner' ? 'JOIN' : 'LEFT JOIN';
-                    joinClauses.push(`${joinKeyword} (
-                        SELECT * FROM ${sqlIdent(duckTableName(tId))} x
-                        WHERE ${filterSql}
-                        QUALIFY ROW_NUMBER() OVER (PARTITION BY ${normExpr('x', onThisSide)} ORDER BY x.__rn) = 1
-                    ) AS ${alias} ON ${normExpr(alias, onThisSide)} = ${normExpr(parentAlias, onParentSide)}`);
-                }
-            }
-
-            const outHead = [];
-            const selectExprs = [];
-            order.forEach(tId => {
-                const alias = aliasOf[tId];
-                const pivotMode = state.pivotMode[tId] || 'none';
-                const cols = state.selectedCols[tId] || [];
-                if (pivotMode === 'count') {
-                    outHead.push(dedupeHeader(outHead, `${tN(tId)}_TOTAL_LIGNES`));
-                    selectExprs.push(`COALESCE(${alias}.__cnt, 0) AS ${sqlIdent(outHead[outHead.length - 1])}`);
-                } else if (pivotMode === 'indexed') {
-                    const limit = limitByIndexedTable[tId] || 1;
-                    cols.forEach(c => {
-                        for (let i = 0; i < limit; i++) {
-                            const suffix = limit > 1 ? `_${i + 1}` : '';
-                            outHead.push(dedupeHeader(outHead, `${tN(tId)}_${c}${suffix}`));
-                            selectExprs.push(`${alias}.${sqlIdent('__l_' + c)}[${i + 1}] AS ${sqlIdent(outHead[outHead.length - 1])}`);
-                        }
-                    });
-                } else {
-                    cols.forEach(c => {
-                        outHead.push(dedupeHeader(outHead, `${tN(tId)}_${c}`));
-                        selectExprs.push(`${alias}.${sqlIdent(c)} AS ${sqlIdent(outHead[outHead.length - 1])}`);
-                    });
-                }
-            });
-
-            if (outHead.length === 0) throw new Error("Aucune colonne sélectionnée pour l'exportation.");
-
-            const baseFilterSql = buildFilterWhereSql(baseId, aliasOf[baseId]);
-            sd.innerText = "Exécution de la jointure SQL..."; pb.style.width = '20%';
-
-            const resultTId = 'tb_' + generateId();
-            await conn.query(`
-                CREATE TABLE ${sqlIdent(duckTableName(resultTId))} AS
-                SELECT row_number() OVER () AS __rn, * FROM (
-                    SELECT ${selectExprs.join(', ')}
-                    ${joinClauses.join('\n')}
-                    WHERE ${baseFilterSql}
-                ) AS final_q
-            `);
-
-            const countRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(resultTId))}`);
-            const rowCount = Number(arrowResultToObjects(countRes)[0].n);
-
-            const headerLine = outHead.map(escapeCSV).join(';') + '\n';
-            const blobParts = [];
-            if (useStream) await fileStream.write("﻿" + headerLine); else blobParts.push(headerLine);
-
-            let chunkBuf = [];
-            sd.innerText = "Écriture du résultat..."; pb.style.width = '60%';
-            await duckStreamRows(resultTId, 0, async (row) => {
-                chunkBuf.push(outHead.map(h => escapeCSV(row[h])).join(';'));
-                if (chunkBuf.length >= 5000) {
-                    const dat = chunkBuf.join('\n') + '\n';
-                    if (useStream) await fileStream.write(dat); else blobParts.push(dat);
-                    chunkBuf = [];
-                }
-            }, (cursor, total) => {
-                pb.style.width = (60 + Math.floor((cursor / total) * 40)) + '%';
-                sd.innerText = `${cursor} lignes...`;
-            });
-            if (chunkBuf.length > 0) {
-                const d = chunkBuf.join('\n') + '\n';
-                if (useStream) await fileStream.write(d); else blobParts.push(d);
-            }
-
-            if (!addAsSource) await duckDropTable(resultTId);
-
-            return { rowCount, blobParts, outHead, extractedRows: null, duckResultTableId: addAsSource ? resultTId : null };
-        }
-
-        async function startExtraction() {
-            hideError();
-            const baseId = el('baseTableSelect').value; const baseTable = state.tables[baseId]; if(!baseTable) return;
-            const isTest = el('testModeCheck').checked;
-            const globalJoinType = document.querySelector('input[name="globalJoinType"]:checked').value;
-            const addAsSource = el('addAsSourceCheck').checked;
-
-            const { activeIds, validRels } = computeActiveExtractionIds(baseId);
-            const useLegacy = extractionNeedsLegacyEngine(baseId, activeIds, validRels);
-
-            el('btnRun').disabled = true; el('progressArea').classList.remove('hidden'); el('downloadArea').classList.add('hidden');
-            const pb = el('progressBar'); const sd = el('statusDetail'); pb.style.width = '5%';
-
-            let fileStream = null, useStream = false;
-            if (window.showSaveFilePicker && !isTest) {
-                try {
-                    sd.innerText = "En attente d'autorisation pour enregistrer...";
-                    const fh = await window.showSaveFilePicker({ suggestedName: `Extraction_${Date.now()}.csv`, types: [{ accept: {'text/csv': ['.csv']} }] });
-                    fileStream = await fh.createWritable(); useStream = true;
-                } catch (e) { if (e.name === 'AbortError') { el('btnRun').disabled = false; el('progressArea').classList.add('hidden'); return; } }
-            }
-
-            try {
-                const params = { baseId, baseTable, isTest, globalJoinType, activeIds, validRels, addAsSource, fileStream, useStream, pb, sd };
-                const result = useLegacy ? await runLegacyExtraction(params) : await runSqlExtraction(params);
-
-                pb.style.width = '100%';
-                el('statusText').innerText = isTest ? "Test Terminé" : "Extraction Terminée";
-                el('finalReport').innerText = `${result.rowCount.toLocaleString('fr-FR')} lignes exportées avec succès.`;
-
-                if (useStream) {
-                    await fileStream.close();
-                    el('downloadLinkWrapper').innerHTML = `<div class="p-4 bg-emerald-50 text-emerald-800 text-sm"><i data-lucide="check" class="w-5 h-5 inline"></i> Fichier sauvegardé sur le disque !</div>`;
-                    lucide.createIcons();
-                } else {
-                    const finalBlob = new Blob(["﻿", ...result.blobParts], { type: 'text/csv;charset=utf-8;' });
-                    const l = el('downloadLink'); l.href = URL.createObjectURL(finalBlob); l.download = `Extraction_${Date.now()}.csv`;
-                }
-                el('downloadArea').classList.remove('hidden');
-
-                if (addAsSource && result.rowCount > 0) {
-                    const newTableId = result.duckResultTableId || ('tb_' + generateId());
-                    const requestedName = el('addAsSourceName').value.trim();
-                    const newName = requestedName || `Extraction_${new Date().toLocaleString('fr-FR').replace(/[\/:, ]+/g, '-')}`;
-                    if (!result.duckResultTableId) {
-                        // Moteur JS historique : les lignes sont encore en mémoire, on les charge dans DuckDB.
-                        await ingestRowsIntoDuckDB(newTableId, result.extractedRows, result.outHead);
-                    }
-                    state.tables[newTableId] = { id: newTableId, name: newName, file: null, type: 'extraction', size: result.rowCount, config: {}, headers: result.outHead.slice(), columnsMeta: {}, status: 'ready', sampleData: await duckSampleRows(newTableId, 5) };
-                    // Traçabilité (data lineage) : on mémorise de quelles tables provient cette extraction.
-                    state.governance.lineage[newName] = { from: activeIds.map(id => state.tables[id] ? state.tables[id].name : null).filter(Boolean), date: new Date().toISOString() };
-                    el('emptyStateSources').classList.add('hidden');
-                    renderTables(); updateBaseTableSelect(); updateVizBaseTableSelect(); populateQualTables();
-                    if (!el('step-2').classList.contains('hidden')) { renderRelationsList(); renderGraph(); }
-                    persistTableData(newTableId); persistAppState();
-                    showSuccess(`Nouvelle source "${newName}" ajoutée (${result.rowCount.toLocaleString('fr-FR')} lignes) — disponible dans les phases Exploitation, Qualité et Gouvernance.`);
-                }
-
-            } catch (e) { showError("Erreur Extraction : " + e.message); el('progressArea').classList.add('hidden'); console.error(e); }
-            finally { el('btnRun').disabled = false; }
-        }
 
         // ======================= Extraction avancée (SQL & gouvernance) =======================
         // Un moteur d'extraction déclaratif 100% DuckDB : on décrit colonnes (avec transformations et
@@ -12183,8 +11494,6 @@
         // Fonctions calculées « façon Excel » disponibles dans les colonnes.
         const ADV_CALC_FNS = { concat: 'CONCATENER (2 colonnes ou plus + séparateur)', left: 'GAUCHE (n premiers caractères)', right: 'DROITE (n derniers)', mid: 'STXT (extraire du milieu)', len: 'NBCAR (longueur)', si: 'SI (condition → valeur A sinon B)' };
 
-        function advExtractOpen() { return true; }
-        function toggleAdvExtract() { renderAdvExtract(); }
         function advReachableTables() {
             const s = state.advExtract; if (!s.baseId) return [];
             const ids = getReachableTables(s.baseId);
@@ -12231,16 +11540,6 @@
                 }
                 default: return "''";
             }
-        }
-        // Tables référencées par une colonne (simple ou calculée) — pour planifier les jointures.
-        function advColTables(c) {
-            if (c.kind === 'link' || c.kind === 'hier') return []; // ancrées via la table parente, jamais jointes ligne à ligne
-            if (c.kind !== 'calc') return [c.tableId];
-            const ids = [];
-            (c.calc.parts || []).forEach(p => { if (p && p.tableId) ids.push(p.tableId); });
-            if (c.calc.a) ids.push(c.calc.a.tableId);
-            if (c.calc.b) ids.push(c.calc.b.tableId);
-            return ids;
         }
         // Besoins de jointure d'une colonne, avec le LIEN emprunté (via) — cf. advPlanJoins.
         function advColNeeds(c) {
@@ -13308,110 +12607,11 @@
         function advFltTblChanged() { const id = el('adv-flt-tbl').value; const t = state.tables[id]; const c = el('adv-flt-col'); if (t && c) { c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advFillFilterVals(); } advViaSync('adv-flt-via', id); }
         function advAggTblChanged() { const id = el('adv-agg-tbl').value; const t = state.tables[id]; const c = el('adv-agg-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); advViaSync('adv-agg-via', id); }
 
-        function populateFilterTableSelect(ctx) { const s=el(`filterTableSelect_${ctx}`); s.innerHTML = tableOptionsHtml({ placeholder: '1. Sélectionner une table...', readyOnly: true }); }
-        function populateFilterSelect(ctx) { const t=el(`filterTableSelect_${ctx}`).value; const s=el(`filterColSelect_${ctx}`); if(!t)return; s.disabled=false; s.classList.remove('bg-slate-100', 'text-slate-400'); s.innerHTML='<option value="">2. Sélectionner une colonne...</option>'+state.tables[t].headers.map(h=>`<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join(''); }
         
-        async function loadFilterValues(ctx) {
-            const tableId = el(`filterTableSelect_${ctx}`).value, col = el(`filterColSelect_${ctx}`).value; if (!tableId || !col) return;
-            const table = state.tables[tableId]; el(`filterValuesLoading_${ctx}`).classList.remove('hidden'); el(`filterValuesContainer_${ctx}`).classList.add('hidden'); el(`addFilterBtn_${ctx}`).classList.add('hidden');
-            const uniqueValues = new Set(); let totalRows = 0, numCount = 0, dateCount = 0, minN = Infinity, maxN = -Infinity;
-            try {
-                await processDataStream(table, 15000, (row) => {
-                    const val = row[col];
-                    if (val !== undefined && val !== null) {
-                        const strVal = String(val).trim();
-                        if (strVal !== '') {
-                            uniqueValues.add(strVal); totalRows++;
-                            if (isDateVal(strVal)) dateCount++;
-                            else if (isNumVal(strVal)) { numCount++; const n = parseFloat(strVal.replace(',', '.')); if (!isNaN(n)) { minN = Math.min(minN, n); maxN = Math.max(maxN, n); } }
-                        }
-                    }
-                });
 
-                let colType = 'list';
-                if (totalRows > 0) { if (dateCount / totalRows >= 0.8) colType = 'date'; else if (numCount / totalRows >= 0.8) colType = 'number'; }
-                const container = el(`filterValuesContainer_${ctx}`); container.innerHTML = ''; container.className = "hidden bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4 shadow-inner";
-                
-                const typeInd = document.createElement('div'); typeInd.id = `filterTypeIndicator_${ctx}`; typeInd.dataset.type = colType; typeInd.className = 'hidden'; container.appendChild(typeInd);
 
-                if (totalRows === 0) { container.innerHTML += `<div class="text-sm text-slate-500 italic">Aucune donnée trouvée.</div>`; } 
-                else if (colType === 'number') {
-                    const step = Number.isInteger(minN) && Number.isInteger(maxN) ? "1" : "0.01";
-                    container.innerHTML += `<div class="flex flex-col gap-3"><div class="text-sm font-medium text-slate-700 flex items-center gap-2"><i data-lucide="calculator" class="w-4 h-4 text-blue-500"></i> Valeur numérique</div><div class="flex items-center gap-4"><div class="w-1/2"><label class="block text-xs text-slate-500 mb-1">Minimum</label><input type="number" step="${step}" id="filterNumMin_${ctx}" class="w-full border p-2 text-sm rounded bg-white"></div><div class="w-1/2"><label class="block text-xs text-slate-500 mb-1">Maximum</label><input type="number" step="${step}" id="filterNumMax_${ctx}" class="w-full border p-2 text-sm rounded bg-white"></div></div></div>`;
-                    el(`addFilterBtn_${ctx}`).classList.remove('hidden');
-                } else if (colType === 'date') {
-                    container.innerHTML += `<div class="flex flex-col gap-3"><div class="text-sm font-medium text-slate-700 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4 text-blue-500"></i> Date</div><div class="flex items-center gap-4"><div class="w-1/2"><label class="block text-xs text-slate-500 mb-1">Du</label><input type="date" id="filterDateFrom_${ctx}" class="w-full border p-2 text-sm rounded bg-white"></div><div class="w-1/2"><label class="block text-xs text-slate-500 mb-1">Au</label><input type="date" id="filterDateTo_${ctx}" class="w-full border p-2 text-sm rounded bg-white"></div></div></div>`;
-                    el(`addFilterBtn_${ctx}`).classList.remove('hidden');
-                } else {
-                    const sortedVals = Array.from(uniqueValues).sort();
-                    if (sortedVals.length > 200) {
-                        typeInd.dataset.type = 'text';
-                        container.innerHTML += `<div class="flex flex-col gap-3"><div class="text-sm font-medium text-slate-700 flex items-center gap-2"><i data-lucide="search" class="w-4 h-4 text-blue-500"></i> Texte libre (&gt;200 valeurs)</div><div><label class="block text-xs text-slate-500 mb-1">Contient (ignore la casse)</label><input type="text" id="filterTextContains_${ctx}" class="w-full border p-2 text-sm rounded bg-white" placeholder="Saisir texte..."></div></div>`;
-                        el(`addFilterBtn_${ctx}`).classList.remove('hidden');
-                    } else {
-                        container.className = "hidden bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-56 overflow-y-auto mb-4 custom-scrollbar shadow-inner";
-                        const headerDiv = document.createElement('div'); headerDiv.className = 'col-span-full text-sm font-medium text-slate-700 mb-3 flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-200 pb-3';
-                        headerDiv.innerHTML = `<span class="flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-blue-500"></i> Valeurs</span><div class="flex gap-2"><button type="button" onclick="document.querySelectorAll('.filter-val-checkbox-${ctx}').forEach(cb => cb.checked = true)" class="text-xs bg-white border border-slate-300 py-1 px-2 rounded shadow-sm hover:bg-slate-50">Tout cocher</button><button type="button" onclick="document.querySelectorAll('.filter-val-checkbox-${ctx}').forEach(cb => cb.checked = false)" class="text-xs bg-white border border-slate-300 py-1 px-2 rounded shadow-sm hover:bg-slate-50">Tout décocher</button></div>`;
-                        container.appendChild(headerDiv);
-                        const gridDiv = document.createElement('div'); gridDiv.className = 'grid grid-cols-2 md:grid-cols-4 gap-2';
-                        let _valsHtml = '';
-                        sortedVals.forEach(v => {
-                            const displayV = v === '' ? '(Vide)' : escapeHTML(v); const safeVal = escapeHTML(JSON.stringify(v));
-                            _valsHtml += `<label class="flex items-center gap-2 py-1.5 px-2 bg-white hover:bg-indigo-50 rounded cursor-pointer border border-slate-200 shadow-sm"><input type="checkbox" data-val="${safeVal}" class="filter-val-checkbox-${ctx} w-4 h-4 text-indigo-600 rounded"><span class="text-xs font-medium text-slate-700 truncate" title="${displayV}">${displayV}</span></label>`;
-                        });
-                        gridDiv.innerHTML = _valsHtml;
-                        container.appendChild(gridDiv); el(`addFilterBtn_${ctx}`).classList.remove('hidden');
-                    }
-                }
-                container.classList.remove('hidden'); lucide.createIcons({ root: container });
-            } catch (err) { console.error(err); showError("Erreur profilage filtres."); } 
-            finally { el(`filterValuesLoading_${ctx}`).classList.add('hidden'); }
-        }
 
-        function addFilter(ctx) {
-            const tableId = el(`filterTableSelect_${ctx}`).value, col = el(`filterColSelect_${ctx}`).value, typeInd = el(`filterTypeIndicator_${ctx}`), colType = typeInd ? typeInd.dataset.type : 'list';
-            if (!state.filters[tableId]) state.filters[tableId] = {};
-            if (colType === 'number') { const minVal = el(`filterNumMin_${ctx}`).value, maxVal = el(`filterNumMax_${ctx}`).value; if (minVal === '' && maxVal === '') return showError("Saisir un minimum ou un maximum."); state.filters[tableId][col] = { type: 'number', min: minVal !== '' ? parseFloat(minVal) : null, max: maxVal !== '' ? parseFloat(maxVal) : null }; }
-            else if (colType === 'date') { const fromVal = el(`filterDateFrom_${ctx}`).value, toVal = el(`filterDateTo_${ctx}`).value; if (!fromVal && !toVal) return showError("Sélectionnez une date."); state.filters[tableId][col] = { type: 'date', from: fromVal, to: toVal }; }
-            else if (colType === 'text') { const textVal = el(`filterTextContains_${ctx}`).value; if (!textVal) return showError("Saisir un texte."); state.filters[tableId][col] = { type: 'text', contains: textVal.toLowerCase() }; }
-            else { const checkboxes = document.querySelectorAll(`.filter-val-checkbox-${ctx}:checked`); if (checkboxes.length === 0) return showError("Sélectionnez au moins une valeur."); const selectedValues = Array.from(checkboxes).map(cb => JSON.parse(cb.dataset.val)); state.filters[tableId][col] = { type: 'list', values: new Set(selectedValues) }; }
-            el(`filterColSelect_${ctx}`).value = ''; el(`filterValuesContainer_${ctx}`).classList.add('hidden'); el(`addFilterBtn_${ctx}`).classList.add('hidden');
-            renderActiveFilters(); renderExtractionColumns(); persistAppState();
-        }
 
-        function removeFilter(tId, col) { if (state.filters[tId] && state.filters[tId][col]) { delete state.filters[tId][col]; renderActiveFilters(); renderExtractionColumns(); persistAppState(); } }
-
-        function renderActiveFilters() {
-            const containers = [el('activeFiltersList_ext'), el('activeFiltersList_viz')];
-            let hasFilters = false; Object.keys(state.filters).forEach(tId => { if (Object.keys(state.filters[tId]).length > 0) hasFilters = true; });
-            if (!hasFilters) { containers.forEach(c => { if(c) c.innerHTML = '<span class="text-xs text-slate-400 italic mt-1">Aucun filtre actif.</span>'; }); const vizAlert = el('vizFilterInfo'); if(vizAlert) vizAlert.classList.add('hidden'); return; }
-            const vizAlert = el('vizFilterInfo'); if(vizAlert) vizAlert.classList.remove('hidden');
-            let htmlContent = '';
-            Object.keys(state.filters).forEach(tId => {
-                if (!state.tables[tId]) return; const tName = state.tables[tId].name;
-                Object.keys(state.filters[tId]).forEach(col => {
-                    const f = state.filters[tId][col]; let valDisplay = '', icon = 'filter';
-                    if (f.type === 'number') { icon = 'calculator'; if (f.min !== null && f.max !== null) valDisplay = `Entre ${f.min} et ${f.max}`; else if (f.min !== null) valDisplay = `≥ ${f.min}`; else if (f.max !== null) valDisplay = `≤ ${f.max}`; } 
-                    else if (f.type === 'date') { icon = 'calendar'; if (f.from && f.to) valDisplay = `Du ${f.from} au ${f.to}`; else if (f.from) valDisplay = `À partir du ${f.from}`; else if (f.to) valDisplay = `Jusqu'au ${f.to}`; } 
-                    else if (f.type === 'text') { icon = 'search'; valDisplay = `Contient "${f.contains}"`; } 
-                    else { icon = 'list'; const vals = Array.from(f.values); valDisplay = vals.length > 3 ? `${vals.slice(0, 3).join(', ')}... (+${vals.length - 3})` : vals.join(', '); }
-                    htmlContent += `<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-1.5 rounded-full shadow-sm max-w-full mb-1"><i data-lucide="${icon}" class="w-3 h-3 text-blue-500 flex-shrink-0"></i><span class="font-bold truncate max-w-[120px]" title="${escapeHTML(tName)}">${escapeHTML(tName)}</span><span class="text-blue-400">|</span><span class="font-bold truncate max-w-[100px]" title="${escapeHTML(col)}">${escapeHTML(col)}</span><span class="text-blue-400"> : </span><span class="truncate max-w-[150px]" title="${escapeHTML(valDisplay)}">${escapeHTML(valDisplay)}</span><button onclick="removeFilter('${tId}', '${escapeHTML(col)}')" class="ml-1 text-blue-400 hover:text-red-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
-                });
-            });
-            containers.forEach(c => { if(c) { c.innerHTML = htmlContent; lucide.createIcons({root: c}); } });
-        }
-
-        function rowPassesFilters(row, tableId) {
-            if (!state.filters[tableId] || Object.keys(state.filters[tableId]).length === 0) return true;
-            for (let filterCol in state.filters[tableId]) {
-                const f = state.filters[tableId][filterCol]; if (!(filterCol in row)) return false; 
-                const valStr = String(row[filterCol] || '').trim();
-                if (f.type === 'list') { if (!f.values.has(valStr)) return false; } 
-                else if (f.type === 'number') { if (!valStr) return false; const num = parseFloat(valStr.replace(',', '.')); if (isNaN(num)) return false; if (f.min !== null && num < f.min) return false; if (f.max !== null && num > f.max) return false; } 
-                else if (f.type === 'date') { if (!valStr) return false; let d = new Date(valStr); if (isNaN(d.getTime())) { const parts = valStr.split(/[\/\- ]/); if (parts.length >= 3 && parts[2].length === 4) { d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`); } } if (isNaN(d.getTime())) return false; if (f.from && d < new Date(f.from)) return false; if (f.to && d > new Date(f.to)) return false; } 
-                else if (f.type === 'text') { if (!valStr) return false; if (!valStr.toLowerCase().includes(f.contains)) return false; }
-            } return true;
-        }
 
         // ==========================================
         //  STEP 4: STATS BI
@@ -14040,19 +13240,6 @@
             return sql;
         }
 
-        async function fetchRelatedRows(tableId, colName, keysSet, limit = 2000) {
-            const table = state.tables[tableId];
-            const results = [];
-            if (!table) return results;
-
-            await processDataStream(table, limit, (row) => {
-                const val = row[colName];
-                if (val !== undefined && val !== null && keysSet.has(String(val).trim().toUpperCase())) {
-                    results.push(row);
-                }
-            });
-            return results;
-        }
 
         // Motifs de détection sémantique (mêmes règles qu'avant, traduites en regex SQL/RE2).
         // ======================= Inspecteur d'anomalies =======================
@@ -15591,7 +14778,7 @@
         (function () {
             const KEEP = ['renderGovernance', 'renderTables', 'renderTablesDesign', 'renderQualityRules', 'renderRecipes', 'renderSrcWatch', 'renderLineageFlow',
                 'renderDashboards', 'renderLinkage', 'renderRelationsList', 'renderSourceUpdatePanel', 'renderNlAssistant',
-                'renderAdvExtract', 'renderExtractionColumns'];
+                'renderAdvExtract'];
             // Identité stable d'un panneau dépliable entre deux rendus : son id, sinon le texte de son
             // résumé DÉBARRASSÉ des compteurs (« (11 nœud(s), 10 lien(s)) » change à chaque suppression).
             const DET_SEL = 'main details, .drawer-ux details';
