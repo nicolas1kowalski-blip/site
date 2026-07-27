@@ -4813,7 +4813,7 @@
                           consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' },
                           app: { lbl: 'Application', ic: '🖥', col: 0, badge: 'lf-r-app' },
                           object: { lbl: 'Objet métier', ic: '🏛️', col: 1, badge: 'lf-r-obj' } };
-        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit', composes: 'Compose', diffuses: 'Diffuse' };
+        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit', composes: 'Compose', diffuses: 'Diffuse', represents: 'Représente' };
         // Nature d'une alimentation table→table (v5.13) : comment la cible reçoit la donnée.
         const LF_NATURE = { recopie: 'Recopie', complement: 'Complément', correction: 'Correction' };
         function lfEdgeNature(e) { return e && LF_NATURE[e.nature] ? e.nature : 'recopie'; }
@@ -5408,6 +5408,8 @@
                     if (s.role === 'destinataire') { desiredBo.add('diffuses:' + boN.id + ':' + tN2.id); if (!m.edges.some(e => e.source === boN.id && e.target === tN2.id)) { m.edges.push({ id: 'le_' + generateId(), source: boN.id, target: tN2.id, type: 'feeds', rel: 'diffuses', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++; } }
                     else { desiredBo.add('composes:' + tN2.id + ':' + boN.id); if (!m.edges.some(e => e.source === tN2.id && e.target === boN.id)) { m.edges.push({ id: 'le_' + generateId(), source: tN2.id, target: boN.id, type: 'feeds', rel: 'composes', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++; } }
                 });
+                // V6.5 : l'application « référentiel » qui matérialise l'objet → vrai lien app → objet.
+                if (_reprApp) { const appN = nodeForApp(_reprApp); if (appN && appN.id !== boN.id) { desiredBo.add('represents:' + appN.id + ':' + boN.id); if (!m.edges.some(e => e.source === appN.id && e.target === boN.id && lfEdgeRel(e) === 'represents')) { m.edges.push({ id: 'le_' + generateId(), source: appN.id, target: boN.id, type: 'feeds', rel: 'represents', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++; } } }
             });
             // -- Purge des liens d'usage DÉRIVÉS obsolètes (déclaration retirée). Les liens MANUELS
             //    (derived non vrai) et les usages d'applis non concernées sont laissés intacts. --
@@ -5415,10 +5417,9 @@
             m.edges = m.edges.filter(e => {
                 if (!e.derived) return true;
                 const rel = lfEdgeRel(e);
-                if (rel === 'composes' || rel === 'diffuses') { // liens d'objet métier
+                if (rel === 'composes' || rel === 'diffuses' || rel === 'represents') { // liens d'objet métier
                     if (only) return true; // synchro ciblée d'une appli : on ne touche pas les objets
-                    const key = rel === 'composes' ? (rel + ':' + e.source + ':' + e.target) : (rel + ':' + e.source + ':' + e.target);
-                    if (m.showObjects && desiredBo.has(key)) return true;
+                    if (m.showObjects && desiredBo.has(rel + ':' + e.source + ':' + e.target)) return true;
                     removedE++; return false; // objets masqués OU lien obsolète → retiré
                 }
                 if (rel !== 'reads' && rel !== 'writes') return true;
@@ -9504,8 +9505,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.4.0';
+        const APP_VERSION = '6.5.0';
         const APP_CHANGELOG = [
+            { v: '6.5.0', d: '2026-07-24', t: 'V6 Lot 5 — l\'application « référentiel » d\'un objet métier devient un vrai lien du lineage', items: [
+                'Quand un objet métier est « représenté par une application » (référentiel/MDM), le lineage trace désormais un VRAI lien application → objet métier (« Représente »), au lieu d\'un simple badge.',
+                'Le lien est dérivé automatiquement : il apparaît/disparaît quand on désigne ou retire le référentiel, et l\'application référentiel reste sur la carte tant qu\'elle porte l\'objet.',
+                'Il n\'affecte ni les rôles de tables ni la santé (comme les liens Compose/Diffuse) : c\'est une relation documentaire de matérialisation.'] },
             { v: '6.4.0', d: '2026-07-24', t: 'Extraction : concaténer 2 colonnes OU PLUS + extraire un attribut par niveau de hiérarchie', items: [
                 'Colonne calculée CONCATENER : on empile désormais 2 colonnes OU PLUS (dans l\'ordre) avec le séparateur de son choix. Les valeurs vides sont ignorées (pas de séparateur orphelin). L\'ancienne concaténation à 2 colonnes reste lisible.',
                 'Hiérarchie aplatie : nouveau champ « Attribut à extraire » — chaque niveau peut restituer un ATTRIBUT de la table hiérarchique (ex. le libellé) au lieu de l\'identifiant. La récursion reste indexée sur l\'identifiant ; seule la valeur affichée par niveau change.',
