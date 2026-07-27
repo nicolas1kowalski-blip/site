@@ -864,7 +864,7 @@
         // Référentiel de gouvernance : indexé par NOM de table (et non id technique) pour survivre
         // aux rechargements et aux échanges de bundles entre collègues.
         state.governance = { perimeters: [], dictionary: {}, glossary: [], useCases: [], businessObjects: [], rules: [], lineage: {}, qualityHistory: [], assets: [], srcWatch: {}, flow: { nodes: [], edges: [], threshold: 1.0 }, flowLog: [] };
-        let govState = { tab: 'dictionary', dictTable: null, resetArmed: false, selectedBoId: null, showMulti: false };
+        let govState = { tab: 'catalog', dictTable: null, resetArmed: false, selectedBoId: null, showMulti: false }; // V6.12 : on entre par « Découvrir » (Catalogue)
         let lineageGraph = null;
 
         const el = id => document.getElementById(id);
@@ -6746,10 +6746,13 @@
               tabs: [ { n: 8, icon: '✅', label: 'Qualité & Audit' }, { n: 12, icon: '📏', label: 'Règles & score' }, { n: 15, icon: '🤝', label: 'Rapprochement' } ] },
             // La phase Gouvernance vit dans l'écran 9 : ses sous-onglets (g:...) sont rendus dans la
             // MÊME barre que ceux des autres phases, et pilotent govState.tab au lieu d'un numéro d'écran.
-            { id: 'gov', badge: '④', label: 'Gouvernance', desc: 'Objets, dictionnaire, lineage', color: 'emerald', step: 9,
+            { id: 'gov', badge: '④', label: 'Gouvernance', desc: 'Objets, dictionnaire, lineage', color: 'emerald', step: 9, icon: '📚',
               tabs: [
                   // Modèle clair (R4) : 6 familles alignées sur les 3 plans (physique / acteurs / sens
-                  // métier) + Lineage, Contrôle, Diffusion. Vocabulaire unifié : Table / Application / Objet.
+                  // métier) + Lineage, Contrôle. Vocabulaire unifié : Table / Application / Objet.
+                  // V6.12 : « Découvrir » (le catalogue) est le POINT D'ENTRÉE — on commence par
+                  // chercher la donnée disponible, puis on descend vers le patrimoine et le détail.
+                  { g: 'catalog', icon: '🧭', label: 'Catalogue', fam: 'Découvrir' },
                   { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Patrimoine' },
                   { g: 'model', icon: '🧬', label: 'Modèle de données', fam: 'Patrimoine' },
                   { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
@@ -6761,7 +6764,6 @@
                   { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Lineage', hidden: true },
                   { g: 'srcwatch', icon: '🛰️', label: 'Surveillance des sources', fam: 'Contrôle' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Contrôle' },
-                  { g: 'catalog', icon: '🗂️', label: 'Catalogue', fam: 'Diffusion' },
               ] },
         ];
         const PHASE_COLORS = {
@@ -6789,7 +6791,7 @@
             if (pn) pn.innerHTML = NAV_PHASES.map(p => {
                 const c = PHASE_COLORS[p.color]; const on = p.id === activePhase.id;
                 return `<button onclick="switchPhase('${p.id}')" class="flex items-center gap-2.5 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${on ? c.on : c.off}">
-                    <span class="text-lg leading-none">${p.tabs[0].icon}</span>
+                    <span class="text-lg leading-none">${p.icon || p.tabs[0].icon}</span>
                     <span class="text-left leading-tight"><span class="block text-sm font-bold">${p.badge} ${p.label}</span><span class="block text-[10px] ${on ? 'text-white/80' : 'opacity-70'}">${p.desc}</span></span>
                 </button>`;
             }).join('');
@@ -9663,8 +9665,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.11.0';
+        const APP_VERSION = '6.12.0';
         const APP_CHANGELOG = [
+            { v: '6.12.0', d: '2026-07-24', t: 'Gouvernance : « Diffusion » devient « Découvrir » et passe en point d\'entrée', items: [
+                'La famille « 🗂️ Diffusion » est renommée « 🧭 Découvrir » et placée EN PREMIER : on entre dans la Gouvernance par le catalogue, c\'est-à-dire par la donnée disponible, avant de descendre vers le patrimoine, les acteurs et le détail.',
+                'Le Catalogue devient l\'écran affiché par défaut à l\'ouverture de la Gouvernance (et quand on clique la phase ④ Gouvernance).',
+                'Ordre des familles : 🧭 Découvrir · Patrimoine · Acteurs · Sens métier · Lineage · Contrôle. Aucun écran n\'est supprimé ni déplacé de famille.',
+                'L\'icône du bouton de phase « Gouvernance » est désormais explicite (📚) et ne dépend plus du premier onglet, pour que le réordonnancement ne change pas la barre de navigation.'] },
             { v: '6.11.0', d: '2026-07-24', t: 'Lineage : le flux se lit en OBJETS MÉTIER, plus en tables', items: [
                 'Nouvelle lecture par défaut « 🏛️ Vue métier » : chaque table technique est ABSORBÉE par l\'objet métier qu\'elle compose. Les alimentations entre tables d\'un même objet deviennent internes et disparaissent ; celles entre objets deviennent des liens entre objets métier.',
                 'Le graphe ne montre donc plus que ce qui a un sens métier : Applications ▸ Objets métier ▸ Consommateurs. L\'objet affiche un badge « 📦 N tables » (détail au survol).',
