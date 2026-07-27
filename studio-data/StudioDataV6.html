@@ -9587,8 +9587,15 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.16.1';
+        const APP_VERSION = '6.17.0';
         const APP_CHANGELOG = [
+            { v: '6.17.0', d: '2026-07-27', t: 'Extraction : vue graphique optionnelle — choisir les colonnes sur le schéma des liens', items: [
+                'Nouvelle case à cocher « 🗺️ Vue graphique » en haut de l\'extraction. Elle AJOUTE un schéma au-dessus de l\'écran habituel, qui reste entièrement disponible et synchronisé : rien n\'est remplacé.',
+                'Le schéma déplie, depuis la table de départ, l\'arbre des chemins de jointure. Chaque case est une table ATTEINTE PAR UN CHEMIN PRÉCIS, et les traits portent le lien en clair (COLONNE = COLONNE).',
+                'Une table reliée plusieurs fois apparaît une fois par lien : cocher la colonne sur la bonne case renseigne le « via » automatiquement — plus besoin de le choisir dans une liste.',
+                'Dans chaque case : cocher/décocher une colonne, « tout / rien », renommer la colonne en sortie, choisir sa transformation, poser un filtre (opérateur + valeur) directement sur la ligne.',
+                'Sur une table liée : « Σ compter » ajoute en un clic le nombre de lignes liées par ce chemin, et « ⭐ départ » permet de repartir de cette table.',
+                'Les cases se déplacent à la souris ou au doigt ; leur position est mémorisée pour la session (et exclue des paramétrages enregistrés).'] },
             { v: '6.16.1', d: '2026-07-27', t: 'Nettoyage : suppression du code de l\'ancien écran d\'extraction', items: [
                 'L\'ancien écran d\'extraction « cartes par table » avait été retiré de l\'interface lors de l\'unification (4.0), mais tout son code était resté : écran de sélection, filtres intelligents, moteur JS historique et moteur SQL de première génération. Il ne pouvait plus s\'exécuter — ses conteneurs et son bouton n\'existent plus dans la page.',
                 '38 fonctions supprimées, environ 800 lignes : renderExtractionColumns, validateExtractionState, startExtraction, runLegacyExtraction, runSqlExtraction, les filtres intelligents (addFilter, removeFilter, loadFilterValues, rowPassesFilters, buildFilterWhereSql) et divers utilitaires devenus orphelins (mcdHighlightNeighbors, lfReconParts, boElUsageCellHtml, tdDivSql…).',
@@ -12195,7 +12202,7 @@
             const name = (prompt('Nom du paramétrage d\'extraction :', epSuggestName()) || '').trim();
             if (!name) return;
             const cfg = JSON.parse(JSON.stringify(s));
-            delete cfg.migrated;
+            delete cfg.migrated; delete cfg._gpos; // positions du graphe : propres à la session
             epRemapTableRefs(cfg, id => (state.tables[id] ? state.tables[id].name : id)); // id → nom
             const baseName = (state.tables[s.baseId] || {}).name || '';
             const existing = epList().find(p => p.name.toLowerCase() === name.toLowerCase());
@@ -12288,6 +12295,8 @@
                 <span class="bg-indigo-100 text-indigo-800 font-bold px-2.5 py-1 rounded-full">${escapeHTML((state.tables[s.baseId] || {}).name || '—')}</span>
                 ${s.objectId ? `<span class="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">objet : ${escapeHTML((bos.find(b => b.id === s.objectId) || {}).name || '')}</span>` : ''}
             </div>`;
+            // -- V6.17 : vue graphique (option) — l'écran déclaratif ci-dessous reste inchangé --
+            html += advGraphHtml();
             // -- V6.13 : deux tables reliées PLUSIEURS fois → on demande quel lien utiliser --
             const _amb = advJoinChoices(s);
             if (_amb.length) {
@@ -12484,6 +12493,7 @@
             if (el('adv-calc-fn')) { advCalcFnChanged(); advRenderConcatParts(); }
             if (el('adv-hier-label')) advRenderHierAttrs();
             advInitViaSelects();
+            if (s.graphMode) setTimeout(advDrawGraph, 0);
             if (!s.customSql && el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql();
         }
         // Après chaque rendu, tous les sélecteurs de chemin se calent sur leur table courante.
@@ -12491,6 +12501,220 @@
             ['adv-flt-via', 'adv-flt-tbl'], ['adv-agg-via', 'adv-agg-tbl'], ['adv-aggc-via', 'adv-aggc-tbl'],
             ['adv-link-via', 'adv-link-tbl'], ['adv-hier-via', 'adv-hier-tbl']];
         function advInitViaSelects() { ADV_VIA_SELECTS.forEach(([v, t]) => { const s2 = el(t); if (s2 && el(v)) advViaSync(v, s2.value); }); }
+        // ============ V6.17 : VUE GRAPHIQUE DE L'EXTRACTION (option, l'écran classique reste) ============
+        // Le graphe matérialise ce que le planificateur de jointures fait déjà : à partir de la table de
+        // départ, il déplie un ARBRE DE ROUTES. Chaque nœud = une table atteinte PAR UN CHEMIN PRÉCIS.
+        // Une table reliée deux fois apparaît donc deux fois, une par lien : cocher une colonne sur le
+        // bon nœud renseigne le « via » tout seul — plus besoin de le choisir dans une liste.
+        const ADV_G_MAXHOPS = 3, ADV_G_MAXNODES = 24;
+        function advGInjectCss() {
+            if (el('advGStyles')) return;
+            const st = document.createElement('style'); st.id = 'advGStyles';
+            st.textContent = `
+            #advGCanvas{position:relative;background:linear-gradient(0deg,#fbfcfe,#fff);border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;min-height:320px}
+            #advGCanvas .advg-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;text-align:center;padding:24px}
+            .advg-edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+            .advg-node{position:absolute;width:236px;background:#fff;border:1.5px solid #d4dbe6;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 16px rgba(15,23,42,.06);z-index:2;overflow:hidden}
+            .advg-node.advg-base{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15),0 6px 16px rgba(15,23,42,.08)}
+            .advg-nh{display:flex;align-items:center;gap:7px;padding:7px 9px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;cursor:grab;touch-action:none;user-select:none}
+            .advg-base .advg-nh{background:#eef2ff}
+            .advg-nm{font-weight:800;font-size:12px;color:#1e293b;line-height:1.15;flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .advg-via{font-size:9.5px;color:#b45309;font-weight:700;padding:2px 9px 4px;background:#fffbeb;border-bottom:1px solid #fde68a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .advg-cnt{font-size:9.5px;font-weight:800;background:#4f46e5;color:#fff;border-radius:999px;padding:1px 6px}
+            .advg-cols{max-height:190px;overflow-y:auto;padding:3px 0}
+            .advg-row{display:flex;align-items:center;gap:5px;padding:2px 8px;font-size:11px;cursor:pointer}
+            .advg-row:hover{background:#f8fafc}
+            .advg-row.on{background:#eef2ff}
+            .advg-row .advg-cn{flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155}
+            .advg-row.on .advg-cn{font-weight:700;color:#3730a3}
+            .advg-mini{display:flex;gap:3px;padding:0 8px 4px 25px}
+            .advg-mini input,.advg-mini select{font-size:10px;border:1px solid #c7d2fe;border-radius:4px;padding:1px 3px;background:#fff;min-width:0}
+            .advg-flt{margin:0 8px 4px 25px;display:flex;gap:3px;align-items:center;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 3px}
+            .advg-flt select,.advg-flt input{font-size:10px;border:1px solid #bfdbfe;border-radius:4px;padding:1px 2px;background:#fff;min-width:0}
+            .advg-btn{font-size:10px;border:1px solid #cbd5e1;background:#fff;border-radius:5px;padding:1px 5px;cursor:pointer;color:#475569;font-weight:700}
+            .advg-btn:hover{border-color:#6366f1;color:#4338ca}
+            .advg-foot{display:flex;gap:4px;padding:5px 8px;border-top:1px solid #f1f5f9;background:#fcfdff;flex-wrap:wrap}
+            .advg-elbl{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:1px 7px;font-size:9.5px;color:#64748b;white-space:nowrap;z-index:3;pointer-events:none;box-shadow:0 1px 2px rgba(15,23,42,.05)}`;
+            document.head.appendChild(st);
+        }
+        // Arbre des routes : chaque entrée = { key, tableId, via, parentKey, rel, depth }.
+        function advRoutes() {
+            const s = state.advExtract, base = s.baseId; if (!base || !state.tables[base]) return [];
+            const rels = (state.relations || []).filter(advRelValid);
+            const adj = {};
+            rels.forEach(r => { (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable });
+                               (adj[r.targetTable] = adj[r.targetTable] || []).push({ rel: r, other: r.sourceTable }); });
+            const root = { key: advRouteKey(base, ''), tableId: base, via: '', parentKey: null, rel: null, depth: 0 };
+            const out = [root]; const seen = new Set([root.key]); const queue = [{ node: root, path: [], visited: new Set([base]) }];
+            while (queue.length && out.length < ADV_G_MAXNODES) {
+                const { node, path, visited } = queue.shift();
+                if (path.length >= ADV_G_MAXHOPS) continue;
+                for (const e of (adj[node.tableId] || [])) {
+                    if (out.length >= ADV_G_MAXNODES) break;
+                    if (visited.has(e.other)) continue; // pas de retour en arrière : l'arbre reste lisible
+                    const np = path.concat([e.rel]); const via = advPathKey(np);
+                    const k = advRouteKey(e.other, via); if (seen.has(k)) continue;
+                    seen.add(k);
+                    const child = { key: k, tableId: e.other, via, parentKey: node.key, rel: e.rel, depth: node.depth + 1 };
+                    out.push(child); queue.push({ node: child, path: np, visited: new Set([...visited, e.other]) });
+                }
+            }
+            // Une table atteinte par un SEUL chemin garde « via » vide : c'est le chemin par défaut du
+            // planificateur, et le paramétrage reste ainsi identique à celui de l'écran classique.
+            const nb = {}; out.forEach(r => { nb[r.tableId] = (nb[r.tableId] || 0) + 1; });
+            out.forEach(r => { if (r.parentKey && nb[r.tableId] === 1) r.via = ''; });
+            return out;
+        }
+        function advGRouteOf(key) { return advRoutes().find(r => r.key === key) || null; }
+        function advGCol(rt, col) { return (state.advExtract.columns || []).find(c => !c.kind && c.tableId === rt.tableId && c.col === col && (c.via || '') === (rt.via || '')); }
+        function advGFilters(rt, col) { return (state.advExtract.filters || []).filter(f => f.tableId === rt.tableId && f.col === col && (f.via || '') === (rt.via || '')); }
+        // Alias unique et lisible : on suffixe par la table traversée quand le nom est déjà pris.
+        function advGAlias(rt, col) {
+            const s = state.advExtract; const taken = new Set((s.columns || []).map(c => c.alias));
+            if (!taken.has(col)) return col;
+            const tn = ((state.tables[rt.tableId] || {}).name || '').replace(/\.[a-z]+$/i, '').replace(/\W+/g, '_');
+            let a = (tn ? tn + '_' : '') + col, i = 2;
+            while (taken.has(a)) a = (tn ? tn + '_' : '') + col + '_' + (i++);
+            return a;
+        }
+        function advGToggleCol(key, col) {
+            const rt = advGRouteOf(key); if (!rt) return;
+            const s = state.advExtract; const ex = advGCol(rt, col);
+            if (ex) s.columns = s.columns.filter(c => c !== ex);
+            else s.columns.push({ id: 'ac_' + generateId(), tableId: rt.tableId, col, via: rt.via || '', alias: advGAlias(rt, col), transform: 'none' });
+            renderAdvExtract();
+        }
+        function advGAllCols(key, on) {
+            const rt = advGRouteOf(key); const t = rt && state.tables[rt.tableId]; if (!t) return;
+            const s = state.advExtract;
+            if (on) t.headers.forEach(h => { if (!advGCol(rt, h)) s.columns.push({ id: 'ac_' + generateId(), tableId: rt.tableId, col: h, via: rt.via || '', alias: advGAlias(rt, h), transform: 'none' }); });
+            else s.columns = s.columns.filter(c => c.kind || !(c.tableId === rt.tableId && (c.via || '') === (rt.via || '')));
+            renderAdvExtract();
+        }
+        function advGSetField(key, col, field, val) {
+            const rt = advGRouteOf(key); const c = rt && advGCol(rt, col); if (!c) return;
+            c[field] = val; if (field === 'alias' && !val) c.alias = col;
+            advGDrawSoft();
+        }
+        function advGAddFilter(key, col) {
+            const rt = advGRouteOf(key); if (!rt) return;
+            state.advExtract.filters.push({ id: 'af_' + generateId(), tableId: rt.tableId, col, op: '=', val: '', via: rt.via || '' });
+            renderAdvExtract();
+        }
+        function advGSetFilter(id, field, val) { const f = (state.advExtract.filters || []).find(x => x.id === id); if (f) { f[field] = val; advGDrawSoft(); } }
+        function advGDelFilter(id) { state.advExtract.filters = (state.advExtract.filters || []).filter(f => f.id !== id); renderAdvExtract(); }
+        // Σ en un clic : compte les lignes liées, ancré sur CE chemin (aucune multiplication de lignes).
+        function advGAddCount(key) {
+            const rt = advGRouteOf(key); if (!rt || rt.tableId === state.advExtract.baseId) return;
+            const tn = (state.tables[rt.tableId] || {}).name || 'liees';
+            state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'link', tableId: rt.tableId, mode: 'count', col: '', n: 3, via: rt.via || '', alias: advGAlias(rt, 'nb_' + tn), transform: 'none' });
+            renderAdvExtract();
+        }
+        function advGSetBase(key) {
+            const rt = advGRouteOf(key); if (!rt || rt.tableId === state.advExtract.baseId) return;
+            if (!confirm('Repartir de « ' + ((state.tables[rt.tableId] || {}).name || '') + ' » comme table de départ ? Les colonnes déjà choisies seront conservées si elles restent atteignables.')) return;
+            state.advExtract.baseId = rt.tableId;
+            state.advExtract.columns = (state.advExtract.columns || []).map(c => Object.assign({}, c, { via: '' }));
+            state.advExtract.filters = (state.advExtract.filters || []).map(f => Object.assign({}, f, { via: '' }));
+            const bs = el('baseTableSelect'); if (bs) bs.value = rt.tableId;
+            renderAdvExtract();
+        }
+        function advGToggleMode(on) { state.advExtract.graphMode = !!on; renderAdvExtract(); }
+        function advGraphHtml() {
+            const s = state.advExtract;
+            return `<div class="mb-4 rounded-xl border ${s.graphMode ? 'border-indigo-300 bg-indigo-50/30' : 'border-slate-200 bg-slate-50/60'} p-3">
+                <label class="flex items-center gap-2 cursor-pointer text-[12px] font-bold text-slate-700">
+                    <input type="checkbox" ${s.graphMode ? 'checked' : ''} onchange="advGToggleMode(this.checked)" class="w-4 h-4">
+                    🗺️ Vue graphique — choisir les colonnes directement sur le schéma des liens
+                    <span class="font-medium text-slate-400 normal-case">(option : l'écran classique ci-dessous reste disponible et reste synchronisé)</span>
+                </label>
+                ${s.graphMode ? `<p class="text-[11px] text-slate-500 mt-2 mb-2">Chaque case est une table <strong>atteinte par un chemin précis</strong>. Une table reliée plusieurs fois apparaît une fois par lien : cochez la colonne sur la bonne case, le chemin est renseigné tout seul. Les cases se déplacent à la souris.</p>
+                <div id="advGCanvas"></div>` : ''}
+            </div>`;
+        }
+        // Redessine le graphe SANS re-rendre tout l'écran (saisie d'alias / de valeur de filtre fluide).
+        function advGDrawSoft() { if (el('advGCanvas')) advDrawGraph(); if (el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql(); }
+        function advDrawGraph() {
+            const c = el('advGCanvas'); if (!c) return;
+            advGInjectCss();
+            const s = state.advExtract; const routes = advRoutes();
+            if (!routes.length) { c.innerHTML = '<div class="advg-empty">Choisissez une table de départ pour afficher le schéma.</div>'; return; }
+            const byDepth = {}; routes.forEach(r => (byDepth[r.depth] = byDepth[r.depth] || []).push(r));
+            const maxD = Math.max(...routes.map(r => r.depth));
+            const NW = 236, colGap = 96, W = Math.max(560, c.clientWidth || 900);
+            // hauteur d'une case : en-tête + via + colonnes + pied
+            const hOf = r => { const t = state.tables[r.tableId] || { headers: [] };
+                const nsel = (s.columns || []).filter(x => !x.kind && x.tableId === r.tableId && (x.via || '') === (r.via || '')).length;
+                const nflt = (s.filters || []).filter(x => x.tableId === r.tableId && (x.via || '') === (r.via || '')).length;
+                return 30 + (r.via ? 16 : 0) + Math.min(190, 6 + t.headers.length * 19 + nsel * 21 + nflt * 23) + 30; };
+            const pos = {}; let H = 320;
+            Object.keys(byDepth).forEach(d => {
+                const arr = byDepth[d]; const x = 12 + Number(d) * (NW + colGap);
+                let y = 34; arr.forEach(r => { pos[r.key] = { x, y, h: hOf(r) }; y += hOf(r) + 20; });
+                H = Math.max(H, y + 10);
+            });
+            routes.forEach(r => { const p = state.advExtract._gpos && state.advExtract._gpos[r.key]; if (p && pos[r.key]) { pos[r.key].x = p.x; pos[r.key].y = p.y; } });
+            H = Math.max(H, ...routes.map(r => pos[r.key].y + pos[r.key].h + 16));
+            const CW = Math.max(W, 24 + (maxD + 1) * (NW + colGap));
+            c.style.height = H + 'px';
+            let paths = '', labels = '';
+            routes.forEach(r => {
+                if (!r.parentKey || !pos[r.parentKey]) return;
+                const a = pos[r.parentKey], b = pos[r.key];
+                const x1 = a.x + NW, y1 = a.y + 16, x2 = b.x, y2 = b.y + 16, mx = (x1 + x2) / 2;
+                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#advGA)" opacity=".85"/>`;
+                labels += `<div class="advg-elbl" style="left:${mx}px;top:${(y1 + y2) / 2}px">🔗 ${escapeHTML(advRelLabel(r.rel))}</div>`;
+            });
+            let hh = `<svg class="advg-edges" viewBox="0 0 ${CW} ${H}" preserveAspectRatio="none"><defs><marker id="advGA" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>${paths}</svg>`;
+            routes.forEach(r => {
+                const t = state.tables[r.tableId] || { headers: [], name: '?' }; const p = pos[r.key];
+                const isBase = !r.parentKey;
+                const sel = (s.columns || []).filter(x => !x.kind && x.tableId === r.tableId && (x.via || '') === (r.via || ''));
+                let rows = '';
+                t.headers.forEach(h => {
+                    const cc = advGCol(r, h); const on = !!cc;
+                    rows += `<div class="advg-row${on ? ' on' : ''}" onclick="advGToggleCol('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')})">
+                        <input type="checkbox" ${on ? 'checked' : ''} onclick="event.stopPropagation();advGToggleCol('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')})">
+                        <span class="advg-cn" title="${escapeHTML(h)}">${escapeHTML(h)}</span>
+                        <button class="advg-btn" title="Filtrer sur cette colonne" onclick="event.stopPropagation();advGAddFilter('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')})">⛃</button></div>`;
+                    if (on) rows += `<div class="advg-mini">
+                        <input type="text" value="${escapeHTML(cc.alias || '')}" title="Nom de la colonne en sortie" style="flex:1"
+                               onchange="advGSetField('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')}, 'alias', this.value)">
+                        <select title="Transformation" onchange="advGSetField('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')}, 'transform', this.value)">${Object.entries(ADV_TRANSFORMS).map(([v, l]) => `<option value="${v}" ${v === (cc.transform || 'none') ? 'selected' : ''}>${escapeHTML(l)}</option>`).join('')}</select></div>`;
+                    advGFilters(r, h).forEach(f => {
+                        rows += `<div class="advg-flt">
+                            <select onchange="advGSetFilter('${f.id}','op',this.value)" style="flex:0 0 auto">${Object.entries(ADV_OPS).map(([v, l]) => `<option value="${v}" ${v === f.op ? 'selected' : ''}>${escapeHTML(l)}</option>`).join('')}</select>
+                            ${(f.op === 'empty' || f.op === 'notempty') ? '' : `<input type="text" value="${escapeHTML(f.val || '')}" placeholder="valeur" style="flex:1" onchange="advGSetFilter('${f.id}','val',this.value)">`}
+                            <button class="advg-btn" title="Retirer ce filtre" onclick="advGDelFilter('${f.id}')">✕</button></div>`;
+                    });
+                });
+                hh += `<div class="advg-node${isBase ? ' advg-base' : ''}" data-rk="${r.key}" style="left:${p.x}px;top:${p.y}px">
+                    <div class="advg-nh"><span>${isBase ? '⭐' : '🔗'}</span><span class="advg-nm" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</span>${sel.length ? `<span class="advg-cnt">${sel.length}</span>` : ''}</div>
+                    ${r.via ? `<div class="advg-via" title="${escapeHTML(advViaLabel(r.via))}">via ${escapeHTML(advViaLabel(r.via))}</div>` : ''}
+                    <div class="advg-cols">${rows || '<div class="advg-row"><span class="advg-cn" style="color:#94a3b8">aucune colonne</span></div>'}</div>
+                    <div class="advg-foot">
+                        <button class="advg-btn" onclick="advGAllCols('${r.key}', true)">tout</button>
+                        <button class="advg-btn" onclick="advGAllCols('${r.key}', false)">rien</button>
+                        ${isBase ? '<span style="font-size:9.5px;color:#6366f1;font-weight:700;align-self:center">table de départ</span>'
+                                 : `<button class="advg-btn" title="Compter les lignes liées par ce chemin (1 valeur par ligne de départ)" onclick="advGAddCount('${r.key}')">Σ compter</button>
+                                    <button class="advg-btn" title="Repartir de cette table" onclick="advGSetBase('${r.key}')">⭐ départ</button>`}
+                    </div></div>`;
+            });
+            c.innerHTML = hh + labels;
+            // déplacement des cases à la souris / au doigt (par l'en-tête, pour ne pas gêner les cases à cocher)
+            c.querySelectorAll('.advg-node').forEach(nd => {
+                const head = nd.querySelector('.advg-nh'); if (!head) return;
+                head.addEventListener('pointerdown', ev => {
+                    ev.preventDefault(); const rk = nd.dataset.rk;
+                    const x0 = ev.clientX, y0 = ev.clientY, l0 = parseFloat(nd.style.left), t0 = parseFloat(nd.style.top);
+                    const mv = e2 => { nd.style.left = (l0 + e2.clientX - x0) + 'px'; nd.style.top = Math.max(0, t0 + e2.clientY - y0) + 'px'; };
+                    const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up);
+                        const g = state.advExtract._gpos = state.advExtract._gpos || {};
+                        g[rk] = { x: parseFloat(nd.style.left), y: parseFloat(nd.style.top) }; advDrawGraph(); };
+                    document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+                });
+            });
+        }
         function advColColChanged() {
             const id = el('adv-col-tbl').value; const t = state.tables[id]; const c = el('adv-col-col');
             if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('');
