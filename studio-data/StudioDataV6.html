@@ -9689,8 +9689,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.14.0';
+        const APP_VERSION = '6.15.0';
         const APP_CHANGELOG = [
+            { v: '6.15.0', d: '2026-07-24', t: 'Extraction : les chemins indirects (tables de liaison) sont aussi proposés au choix', items: [
+                'Le choix « via » ne se limitait qu\'aux liens DIRECTS. Il porte désormais un CHEMIN complet : direct, ou passant par une ou plusieurs tables intermédiaires (tables de liaison).',
+                'Quand une table est atteignable par PLUSIEURS chemins, la liste déroulante les propose tous, écrits en clair : la suite des tables traversées (⇢ LIEN → CLIENT) puis le détail des jointures (colonne = colonne) de chaque saut.',
+                'Le planificateur parcourt le chemin retenu depuis la table de départ et pose un alias SQL dédié à CHAQUE saut, tables intermédiaires comprises — deux chemins qui partagent une table de liaison ne se mélangent donc jamais.',
+                'Comme avant : rien ne s\'affiche s\'il n\'y a qu\'un seul chemin, et une colonne sans « via » emprunte le chemin par défaut. Toutes les manipulations (alias, transformations, calculs, filtres, regroupements, agrégats) restent disponibles par chemin.'] },
             { v: '6.14.0', d: '2026-07-24', t: 'Extraction : ramener les données de la MÊME table par plusieurs liens à la fois', items: [
                 'La 6.13 ne permettait de choisir qu\'UN lien par couple de tables : impossible de ramener, dans la même extraction, le nom du souscripteur ET celui du bénéficiaire. C\'est corrigé — une table peut désormais être jointe PLUSIEURS FOIS, une fois par lien.',
                 'Chaque colonne porte son propre lien : un sélecteur « via » apparaît dans la ligne d\'ajout dès que la table choisie est reliée plusieurs fois. Le lien retenu est rappelé dans la liste des colonnes, et l\'alias de sortie est rendu unique automatiquement.',
@@ -12324,19 +12329,53 @@
             if (!x) return 'x0';
             return map[advRouteKey(x.tableId, x.via)] || map[advRouteKey(x.tableId, '')] || 'x0';
         }
-        // Liens alternatifs proposables pour une table (uniquement là où il y a une vraie ambiguïté).
+        // V6.15 : un « via » est un CHEMIN complet (1..N liens), pas seulement un lien direct — le
+        // chemin peut traverser des tables intermédiaires (tables de liaison). Clé = ids joints par '>'.
+        function advPathKey(path) { return path.map(r => r.id).join('>'); }
+        function advPathLabel(path) {
+            if (!path.length) return '';
+            const names = []; // suite des tables traversées, pour se repérer d'un coup d'œil
+            let cur = (state.advExtract || {}).baseId;
+            path.forEach(r => { const nxt = r.sourceTable === cur ? r.targetTable : r.sourceTable; names.push((state.tables[nxt] || {}).name || '?'); cur = nxt; });
+            const detail = path.map(r => advRelLabel(r)).join('  ›  ');
+            return (path.length > 1 ? '⇢ ' + names.join(' → ') + '  ·  ' : '') + detail;
+        }
+        // Tous les chemins simples entre la table de départ et une table cible (bornés pour rester lisibles).
+        function advPaths(baseId, targetId, maxHops) {
+            maxHops = maxHops || 3;
+            const rels = (state.relations || []).filter(advRelValid);
+            const adj = {};
+            rels.forEach(r => {
+                (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable });
+                (adj[r.targetTable] = adj[r.targetTable] || []).push({ rel: r, other: r.sourceTable });
+            });
+            const out = []; const seen = new Set();
+            const walk = (cur, visited, path) => {
+                if (path.length >= maxHops || out.length >= 12) return;
+                (adj[cur] || []).forEach(e => {
+                    if (out.length >= 12) return;
+                    const np = path.concat([e.rel]);
+                    if (e.other === targetId) { const k = advPathKey(np); if (!seen.has(k)) { seen.add(k); out.push(np); } return; }
+                    if (visited.has(e.other)) return;
+                    walk(e.other, new Set([...visited, e.other]), np);
+                });
+            };
+            if (baseId && targetId && baseId !== targetId) walk(baseId, new Set([baseId]), []);
+            return out;
+        }
+        // Chemins proposables pour une table : seulement s'il y en a PLUSIEURS (sinon aucune ambiguïté).
         function advViaOptions(tableId) {
             const base = (state.advExtract || {}).baseId;
             if (!tableId || tableId === base) return [];
-            const byPair = advRelsByPair(); const out = [];
-            Object.keys(byPair).forEach(k => {
-                const list = byPair[k]; if (list.length < 2) return;
-                if (k.split('|').indexOf(tableId) < 0) return;
-                list.forEach(r => out.push(r));
-            });
-            return out;
+            const paths = advPaths(base, tableId);
+            if (paths.length < 2) return [];
+            return paths.map(pth => ({ key: advPathKey(pth), label: advPathLabel(pth), path: pth }));
         }
-        function advViaLabel(via) { const r = (state.relations || []).find(x => x.id === via); return r ? advRelLabel(r) : ''; }
+        function advViaLabel(via) {
+            const ids = String(via || '').split('>').filter(Boolean);
+            const path = ids.map(id => (state.relations || []).find(x => x.id === id)).filter(Boolean);
+            return path.length === ids.length ? advPathLabel(path) : '';
+        }
         function advPlanJoins(baseId, needs) {
             needs = (needs || []).map(x => (typeof x === 'string' ? { tableId: x, via: '' } : x)).filter(x => x && x.tableId);
             const map = {}; map[advRouteKey(baseId, '')] = 'x0';
@@ -12358,12 +12397,7 @@
                 return a;
             };
             const unreachable = [];
-            // Les extrémités « amont » des liens explicites doivent être jointes par défaut d'abord.
-            const viaOthers = needs.filter(x => x.via).map(x => {
-                const r = allRels.find(y => y.id === x.via); if (!r) return null;
-                return r.sourceTable === x.tableId ? r.targetTable : r.sourceTable;
-            }).filter(Boolean);
-            const defaultTargets = [...new Set([...needs.filter(x => !x.via).map(x => x.tableId), ...viaOthers])].filter(x => x !== baseId);
+            const defaultTargets = [...new Set(needs.filter(x => !x.via).map(x => x.tableId))].filter(x => x !== baseId);
             // 1. Routes PAR DÉFAUT (BFS, un lien par paire) — comportement historique.
             for (const target of defaultTargets) {
                 if (joined.has(target)) continue;
@@ -12382,15 +12416,25 @@
                     map[advRouteKey(stp.id, '')] = a; joined.add(stp.id);
                 });
             }
-            // 2. Routes EXPLICITES : un alias DÉDIÉ par lien — la même table peut être jointe plusieurs fois.
+            // 2. Routes EXPLICITES : on PARCOURT le chemin depuis la table de départ, en posant un alias
+            //    dédié à CHAQUE saut — y compris les tables intermédiaires (tables de liaison). La même
+            //    table peut donc être jointe plusieurs fois, par des chemins directs ou indirects.
             needs.filter(x => x.via).forEach(x => {
                 const key = advRouteKey(x.tableId, x.via); if (map[key]) return;
-                const rel = allRels.find(r => r.id === x.via);
-                if (!rel) { if (!map[advRouteKey(x.tableId, '')]) unreachable.push(x.tableId); return; }
-                const other = rel.sourceTable === x.tableId ? rel.targetTable : rel.sourceTable;
-                const fromAlias = map[advRouteKey(other, '')];
-                if (!fromAlias) { unreachable.push(x.tableId); return; }
-                map[key] = addJoin(rel, x.tableId, fromAlias);
+                const ids = String(x.via).split('>').filter(Boolean);
+                const path = ids.map(id => allRels.find(r => r.id === id)).filter(Boolean);
+                if (path.length !== ids.length) { if (!map[advRouteKey(x.tableId, '')]) unreachable.push(x.tableId); return; }
+                let curTable = baseId, curAlias = map[advRouteKey(baseId, '')]; const prefix = []; let broken = false;
+                for (const rel of path) {
+                    const nxt = rel.sourceTable === curTable ? rel.targetTable : (rel.targetTable === curTable ? rel.sourceTable : null);
+                    if (nxt == null) { broken = true; break; }
+                    prefix.push(rel.id);
+                    const rk = advRouteKey(nxt, prefix.join('>'));
+                    if (!map[rk]) map[rk] = addJoin(rel, nxt, curAlias);
+                    curTable = nxt; curAlias = map[rk];
+                }
+                if (broken || curTable !== x.tableId) { unreachable.push(x.tableId); return; }
+                map[key] = curAlias;
             });
             return { map, joins, unreachable };
         }
@@ -12640,7 +12684,12 @@
             const via = (el('adv-col-via') && !el('adv-col-via-wrap').classList.contains('hidden')) ? el('adv-col-via').value : '';
             // Même colonne ramenée par un AUTRE lien : on distingue l'alias de sortie pour éviter le doublon.
             const cols = state.advExtract.columns;
-            let alias = col; if (cols.some(c => c.alias === alias)) { const r = (state.relations || []).find(x => x.id === via); alias = col + '_' + ((r && (r.sourceTable === t ? r.targetCol : r.sourceCol)) || (cols.filter(c => c.col === col).length + 1)); }
+            let alias = col;
+            if (cols.some(c => c.alias === alias)) {
+                const lastId = String(via || '').split('>').filter(Boolean).pop();
+                const r = (state.relations || []).find(x => x.id === lastId);
+                alias = col + '_' + ((r && (r.sourceTable === t ? r.targetCol : r.sourceCol)) || (cols.filter(c => c.col === col).length + 1));
+            }
             while (cols.some(c => c.alias === alias)) alias += '_2';
             cols.push({ id: 'ac_' + generateId(), tableId: t, col, via, alias, transform: 'none' });
             renderAdvExtract();
@@ -13086,7 +13135,7 @@
             const opts = advViaOptions(id); const w = el('adv-col-via-wrap'), sel = el('adv-col-via');
             if (!w || !sel) return;
             w.classList.toggle('hidden', opts.length === 0); w.classList.toggle('inline-flex', opts.length > 0);
-            sel.innerHTML = '<option value="">— lien par défaut —</option>' + opts.map(r => `<option value="${r.id}">${escapeHTML(advRelLabel(r))}</option>`).join('');
+            sel.innerHTML = '<option value="">— chemin par défaut —</option>' + opts.map(o => `<option value="${escapeHTML(o.key)}">${escapeHTML(o.label)}</option>`).join('');
         }
         // -- Synthèse d'une table liée (ex-modes Transposer / Compter de l'ancien écran) --
         const ADV_LINK_MODES = { count: 'Compter les lignes liées', countd: 'Compter les valeurs uniques', values: 'Transposer en texte (valeurs concaténées)', indexed: 'Transposer en colonnes (n premières)' };
