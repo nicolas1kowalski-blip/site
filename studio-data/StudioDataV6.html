@@ -9505,8 +9505,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.5.0';
+        const APP_VERSION = '6.6.0';
         const APP_CHANGELOG = [
+            { v: '6.6.0', d: '2026-07-24', t: 'Extraction — hiérarchie aplatie : extraire PLUSIEURS attributs par niveau', items: [
+                'La hiérarchie aplatie ne se limite plus à un seul attribut par niveau : on empile plusieurs colonnes (ex. code ET libellé) via « ➕ ajouter l\'attribut ». Chaque niveau produit alors une colonne par attribut (ex. org_niv1_CODE, org_niv1_LIBELLE, …).',
+                'Techniquement, la CTE récursive porte une liste de structs par niveau ; un seul attribut reste une liste de scalaires (rétro-compatible avec les paramétrages existants).',
+                'Cumulable avec la profondeur, les filtres, synthèses et agrégats ; les réglages sont conservés dans les paramétrages d\'extraction enregistrés.'] },
             { v: '6.5.0', d: '2026-07-24', t: 'V6 Lot 5 — l\'application « référentiel » d\'un objet métier devient un vrai lien du lineage', items: [
                 'Quand un objet métier est « représenté par une application » (référentiel/MDM), le lineage trace désormais un VRAI lien application → objet métier (« Représente »), au lieu d\'un simple badge.',
                 'Le lien est dérivé automatiquement : il apparaît/disparaît quand on désigne ou retire le référentiel, et l\'application référentiel reste sur la carte tant qu\'elle porte l\'objet.',
@@ -11862,6 +11866,12 @@
             const ids = getReachableTables(s.baseId);
             return ids.map(id => state.tables[id]).filter(t => t && t.status === 'ready');
         }
+        // V6.6 : attributs extraits par niveau de hiérarchie (1 ou plusieurs). Une valeur vide (identifiant
+        // par défaut) est résolue vers la colonne identifiant.
+        function advHierAttrs(conf) {
+            const raw = (conf.labelCols && conf.labelCols.length) ? conf.labelCols : [conf.labelCol || ''];
+            return raw.map(c => c || conf.idCol).filter(Boolean);
+        }
         function advColExpr(map, c) {
             if (c.kind === 'calc') return advCalcExpr(map, c.calc);
             const q = `${map[c.tableId]}.${sqlIdent(c.col)}`;
@@ -11991,9 +12001,15 @@
                 return Array.from({ length: n }, (_, k) => ({ expr: `(SELECT ${colRaw} FROM ${S} s WHERE ${key} ORDER BY s.${sqlIdent('__rn')} LIMIT 1 OFFSET ${k})`, alias: al + '_' + (k + 1) }));
             }
             if (c.kind === 'hier') {
-                const maxD = Math.max(1, Math.min(20, parseInt((c.conf || {}).maxDepth) || 5));
+                const conf = c.conf || {};
+                const maxD = Math.max(1, Math.min(20, parseInt(conf.maxDepth) || 5));
                 const al = c.alias || ((state.tables[c.tableId] || {}).name || 'hier');
-                return Array.from({ length: maxD }, (_, k) => ({ expr: `list_extract(${hierRef[c.id]}, ${k + 1})`, alias: al + '_niv' + (k + 1) }));
+                const attrs = advHierAttrs(conf); const chain = hierRef[c.id]; const out = [];
+                for (let k = 0; k < maxD; k++) {
+                    if (attrs.length <= 1) out.push({ expr: `list_extract(${chain}, ${k + 1})`, alias: al + '_niv' + (k + 1) });
+                    else attrs.forEach((cn, i) => out.push({ expr: `list_extract(${chain}, ${k + 1})['a${i}']`, alias: al + '_niv' + (k + 1) + '_' + cn }));
+                }
+                return out;
             }
             return [{ expr: advColExpr(map, c), alias: c.alias || c.col }];
         }
@@ -12023,9 +12039,13 @@
                 const T = sqlIdent(duckTableName(c.tableId)); const H = 'h' + (hn++);
                 const maxD = Math.max(1, Math.min(20, parseInt(conf.maxDepth) || 5));
                 const id2 = sqlIdent(conf.idCol);
-                // V6.4 : la valeur émise par niveau peut être un ATTRIBUT de la table (labelCol),
-                // pas seulement l'identifiant. La récursion reste indexée sur l'identifiant.
-                const lblC = conf.labelCol ? sqlIdent(conf.labelCol) : id2; const lbl = a2 => `TRIM(CAST(${a2}.${lblC} AS VARCHAR))`;
+                // V6.4/6.6 : chaque niveau restitue 1 ou PLUSIEURS attributs de la table. Un seul → liste
+                // de scalaires (rétro-compat) ; plusieurs → liste de structs {a0, a1, …}. La récursion
+                // reste indexée sur l'identifiant.
+                const hAttrs = advHierAttrs(conf);
+                const lbl = a2 => hAttrs.length > 1
+                    ? `{ ${hAttrs.map((c2, i) => `'a${i}': TRIM(CAST(${a2}.${sqlIdent(c2)} AS VARCHAR))`).join(', ')} }`
+                    : `TRIM(CAST(${a2}.${sqlIdent(hAttrs[0] || conf.idCol)} AS VARCHAR))`;
                 let baseWhere, stepJoin;
                 if (conf.type === 'link' && conf.linkTable) {
                     if (!conf.linkChildCol || !conf.linkParentCol) return { err: 'Hiérarchie via liaison : colonnes enfant/parent requises.' };
@@ -12335,7 +12355,7 @@
                 return 'ƒ calculée';
             }
             if (c.kind === 'link') { const t2 = state.tables[c.tableId]; return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${(t2 ? t2.name : '?')}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}`; }
-            if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux)`; }
+            if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; const at = advHierAttrs(cf); const atTxt = at.length > 1 ? ' · extrait : ' + at.join(', ') : (cf.labelCol || (cf.labelCols && cf.labelCols[0]) ? ' · extrait : ' + at[0] : ''); return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux${atTxt})`; }
             const t = state.tables[c.tableId]; return (t ? t.name : '?') + '.' + c.col;
         }
         // ===== Paramétrages d'extraction enregistrables =====
@@ -12499,8 +12519,8 @@
                     <select id="adv-hier-type" onchange="advHierTypeChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="simple">Parent dans la même table</option><option value="link">Via table de liaison</option></select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Identifiant</label>
                     <select id="adv-hier-id" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
-                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block" title="Colonne de la table hiérarchique à extraire pour chaque niveau (ex. le libellé au lieu du code). Par défaut : l'identifiant.">Attribut à extraire</label>
-                    <select id="adv-hier-label" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="">— l'identifiant —</option>${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
+                    <div class="basis-full"><label class="text-[9px] uppercase font-bold text-slate-400 block" title="Colonnes de la table hiérarchique à restituer par niveau (ex. code ET libellé). Par défaut : l'identifiant.">Attributs à extraire par niveau (1 ou plusieurs)</label>
+                    <div class="flex items-center gap-1.5 flex-wrap mt-0.5"><select id="adv-hier-label" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="">— l'identifiant —</option>${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select><button onclick="advHierAddAttr()" class="text-[11px] bg-white border border-purple-300 text-purple-700 px-2 py-1 rounded font-bold hover:bg-purple-50">➕ ajouter l'attribut</button><span id="adv-hier-attrs" class="flex items-center gap-1 flex-wrap"></span></div></div>
                     <div id="adv-hier-simple-wrap"><label class="text-[9px] uppercase font-bold text-slate-400 block">Parent</label>
                     <select id="adv-hier-parent" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
                     <div id="adv-hier-link-wrap" class="hidden flex items-end gap-1.5 flex-wrap">
@@ -12624,6 +12644,7 @@
             body.innerHTML = html;
             if (window.lucide) lucide.createIcons({ root: body });
             if (el('adv-calc-fn')) { advCalcFnChanged(); advRenderConcatParts(); }
+            if (el('adv-hier-label')) advRenderHierAttrs();
             if (!s.customSql && el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql();
         }
         function advColColChanged() { const t = state.tables[el('adv-col-tbl').value]; const c = el('adv-col-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
@@ -12642,13 +12663,21 @@
             renderAdvExtract();
         }
         // -- Hiérarchie aplatie (ex-mode « Aplatir Hiérarchie ») --
-        function advHierTblChanged() { const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); const lb = el('adv-hier-label'); if (t && lb) lb.innerHTML = '<option value="">— l\'identifiant —</option>' + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function advHierTblChanged() { const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); const lb = el('adv-hier-label'); if (t && lb) lb.innerHTML = '<option value="">— l\'identifiant —</option>' + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); state.advExtract._hierAttrs = []; advRenderHierAttrs(); }
+        // Attributs multiples à extraire par niveau de hiérarchie (pile ordonnée).
+        function advHierAddAttr() { const v = el('adv-hier-label') ? el('adv-hier-label').value : ''; const s = state.advExtract; s._hierAttrs = s._hierAttrs || []; if (!s._hierAttrs.includes(v)) s._hierAttrs.push(v); advRenderHierAttrs(); }
+        function advHierDelAttr(i) { const s = state.advExtract; (s._hierAttrs || []).splice(i, 1); advRenderHierAttrs(); }
+        function advRenderHierAttrs() {
+            const box = el('adv-hier-attrs'); if (!box) return; const parts = state.advExtract._hierAttrs || [];
+            box.innerHTML = parts.length ? parts.map((c, i) => `<span class="text-[10px] bg-white border border-purple-300 rounded-full px-2 py-0.5 inline-flex items-center gap-1">${escapeHTML(c || 'identifiant')} <button onclick="advHierDelAttr(${i})" class="text-purple-400 hover:text-red-600 font-bold">✕</button></span>`).join(' ') : '<span class="text-[10px] text-slate-400 italic">Par défaut : l\'attribut sélectionné (1). Ajoutez-en pour en extraire plusieurs par niveau.</span>';
+        }
         function advHierLinkTblChanged() { const t = state.tables[el('adv-hier-ltbl').value]; ['adv-hier-lchild', 'adv-hier-lparent', 'adv-hier-lfrom', 'adv-hier-lto'].forEach((x, i) => { const c = el(x); if (t && c) c.innerHTML = (i >= 2 ? '<option value="">— non utilisé —</option>' : '') + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); }
         function advHierTypeChanged() { const link = el('adv-hier-type').value === 'link'; el('adv-hier-simple-wrap').classList.toggle('hidden', link); el('adv-hier-link-wrap').classList.toggle('hidden', !link); }
         function advAddHierColumn() {
             const t = el('adv-hier-tbl').value; if (!t) return;
             const type = el('adv-hier-type').value;
-            const conf = { type, idCol: el('adv-hier-id').value, labelCol: el('adv-hier-label') ? el('adv-hier-label').value : '', parentCol: type === 'link' ? '' : el('adv-hier-parent').value,
+            const _hAttrs = (state.advExtract._hierAttrs && state.advExtract._hierAttrs.length) ? state.advExtract._hierAttrs.slice() : [el('adv-hier-label') ? el('adv-hier-label').value : ''];
+            const conf = { type, idCol: el('adv-hier-id').value, labelCols: _hAttrs, parentCol: type === 'link' ? '' : el('adv-hier-parent').value,
                 linkTable: type === 'link' ? el('adv-hier-ltbl').value : '', linkChildCol: type === 'link' ? el('adv-hier-lchild').value : '', linkParentCol: type === 'link' ? el('adv-hier-lparent').value : '',
                 linkValidFromCol: type === 'link' ? el('adv-hier-lfrom').value : '', linkValidToCol: type === 'link' ? el('adv-hier-lto').value : '', refDate: type === 'link' ? el('adv-hier-refdate').value : '',
                 maxDepth: parseInt(el('adv-hier-depth').value) || 5 };
@@ -12656,6 +12685,7 @@
             if (type !== 'link' && !conf.parentCol) return showError('Choisissez la colonne parent.');
             if (type === 'link' && (!conf.linkTable || !conf.linkChildCol || !conf.linkParentCol)) return showError('Complétez la table de liaison (enfant + parent).');
             state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'hier', tableId: t, conf, alias: (el('adv-hier-alias').value || '').trim() || ((state.tables[t] || {}).name || 'hier'), transform: 'none' });
+            state.advExtract._hierAttrs = [];
             renderAdvExtract();
         }
         // -- Ajout de colonnes en masse : un tir groupé qui remplit la liste déclarative --
