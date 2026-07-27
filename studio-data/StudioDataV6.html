@@ -4929,15 +4929,34 @@
         // compose un objet métier est absorbée par cet objet ; ses alimentations deviennent des liens
         // entre objets. Les tables qui ne composent aucun objet retombent dans leur application (V6.7).
         function lfCollapseToObjects(nodes, edges) {
-            if (lfModel().grain !== 'bo') return { nodes, edges, foldCount: {} };
+            if (lfModel().grain !== 'bo') return { nodes, edges, foldCount: {}, unqualified: [] };
             const byId = {}; nodes.forEach(n => byId[n.id] = n);
             const fold = {};
+            // 1. table qui COMPOSE un objet métier → absorbée par cet objet
             edges.forEach(e => {
                 if (lfEdgeRel(e) !== 'composes') return;
                 const s = byId[e.source], t = byId[e.target];
                 if (s && t && lfNodeKind(s) === 'table' && lfNodeKind(t) === 'object' && !fold[s.id]) fold[s.id] = t.id;
             });
-            return lfFoldGraph(nodes, edges, fold);
+            // 2. table DIFFUSÉE par un objet (destinataire) → absorbée par ce même objet
+            edges.forEach(e => {
+                if (lfEdgeRel(e) !== 'diffuses') return;
+                const s = byId[e.source], t = byId[e.target];
+                if (s && t && lfNodeKind(s) === 'object' && lfNodeKind(t) === 'table' && !fold[t.id]) fold[t.id] = s.id;
+            });
+            // 3. table restante → son APPLICATION propriétaire (c'est elle le maître du fichier)
+            nodes.forEach(n => {
+                if (lfNodeKind(n) !== 'table' || fold[n.id]) return;
+                const prod = lfProducerOf(n.id); if (prod && byId[prod.id] && prod.id !== n.id) fold[n.id] = prod.id;
+            });
+            // 4. tables ni rattachées à un objet ni possédées par une application : elles n'ont pas de
+            //    sens métier — on les SORT de la lecture métier et on les liste dans le bandeau.
+            const unqualified = nodes.filter(n => lfNodeKind(n) === 'table' && !fold[n.id]);
+            const drop = new Set(unqualified.map(n => n.id));
+            const r = lfFoldGraph(nodes, edges, fold);
+            return { nodes: r.nodes.filter(n => !drop.has(n.id)),
+                     edges: r.edges.filter(e => !drop.has(e.source) && !drop.has(e.target)),
+                     foldCount: r.foldCount, unqualified };
         }
         function lfSetGrain(g2) {
             const m = lfModel(); m.grain = g2 === 'table' ? 'table' : 'bo';
@@ -5136,10 +5155,12 @@
             // -- lecture métier : rappel + tables encore non rattachées à un objet --
             if (m.grain !== 'table') {
                 const _b1 = lfCollapseToObjects(m.nodes, m.edges);
-                const _orphan = lfCollapseSources(_b1.nodes, _b1.edges).nodes.filter(n => lfNodeKind(n) === 'table');
-                html += `<div class="text-[11px] rounded-lg px-3 py-2 mb-2 ${_orphan.length ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}">
-                    🏛️ <b>Lecture métier</b> : le flux est lu en <b>objets métier</b> — les tables techniques sont absorbées par l'objet qu'elles composent (badge « 📦 N tables »).
-                    ${_orphan.length ? `<br>⚠ <b>${_orphan.length} table(s)</b> encore visible(s) car rattachée(s) à <b>aucun objet métier</b> : ${_orphan.slice(0, 6).map(n => escapeHTML(n.name)).join(', ')}${_orphan.length > 6 ? '…' : ''} — ajoutez-les comme <b>source</b> d'un objet métier (onglet Objets métier ▸ Sources) pour qu'elles disparaissent de la lecture métier.` : ''}
+                const _unq = _b1.unqualified || [];
+                const _nbObj = _b1.nodes.filter(n => lfNodeKind(n) === 'object').length;
+                html += `<div class="text-[11px] rounded-lg px-3 py-2 mb-2 ${_unq.length ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}">
+                    🏛️ <b>Lecture métier</b> : le flux ne montre que des <b>objets métier</b> et des <b>applications</b>. Chaque table technique est absorbée par l'objet qu'elle compose (badge « 📦 N tables »), sinon par l'application qui la produit.
+                    ${_nbObj === 0 ? '<br>⚠ <b>Aucun objet métier</b> sur la carte : créez-en un (onglet <b>Objets métier</b>) et déclarez ses <b>sources</b> — sans objet métier, il n\'y a rien à lire au niveau métier.' : ''}
+                    ${_unq.length ? `<br>⚠ <b>${_unq.length} table(s) écartée(s)</b> de la lecture métier car rattachée(s) à <b>aucun objet métier</b> et <b>aucune application</b> : ${_unq.slice(0, 8).map(n => escapeHTML(n.name)).join(', ')}${_unq.length > 8 ? '…' : ''}<br>→ déclarez-les comme <b>source d'un objet métier</b> (Objets métier ▸ Sources) ou comme <b>source produite</b> par une application (Applications &amp; processus) pour qu'elles entrent dans le flux.` : ''}
                 </div>`;
             }
             // -- panneau « Cohérence du modèle » (R3) : maîtrise unifiée + contradictions --
@@ -5461,6 +5482,9 @@
             opts = opts || {}; const only = opts.onlyAssetId || null; const silent = !!opts.silent;
             const say = msg => { if (!silent) showSuccess(msg); };
             const m = lfModel(); const g = state.governance; const dict = g.dictionary || {};
+            // V6.12.1 : en lecture MÉTIER, les objets métier sont indispensables (sans eux, aucun lien
+            // « compose » n'est dérivé et les tables ne peuvent pas être repliées). On les force.
+            if (m.grain === 'bo' && !m.showObjects) m.showObjects = true;
             let addedN = 0, addedE = 0, filledO = 0, removedE = 0, removedN = 0;
             // Usages DÉRIVÉS souhaités après cette synchro (clé rel:appId:tableId) : sert à retirer
             // les liens « lit »/« écrit » devenus obsolètes (table qui n'est plus déclarée).
@@ -9665,8 +9689,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.12.0';
+        const APP_VERSION = '6.12.1';
         const APP_CHANGELOG = [
+            { v: '6.12.1', d: '2026-07-24', t: 'Correctif : des tables techniques restaient visibles dans la lecture métier', items: [
+                'CAUSE 1 : si l\'interrupteur « Objets métier » avait été décoché, aucun lien « compose » n\'était dérivé — donc aucune table ne pouvait être repliée, et la carte n\'affichait que des tables. Pire, la case était masquée en vue métier, donc impossible à rétablir. Les objets métier sont désormais FORCÉS en lecture métier.',
+                'CAUSE 2 : le repli s\'arrêtait aux tables composant un objet. Il est maintenant TOTAL — plus aucune table n\'apparaît en lecture métier : table composant un objet → absorbée par l\'objet ; table diffusée par un objet → absorbée par ce même objet ; table restante → absorbée par l\'application qui la produit.',
+                'Les tables rattachées à AUCUN objet et AUCUNE application sont écartées de la carte et listées nommément dans le bandeau, avec les deux gestes possibles pour les qualifier.',
+                'Un message explicite apparaît quand il n\'existe aucun objet métier : sans objet, il n\'y a rien à lire au niveau métier.'] },
             { v: '6.12.0', d: '2026-07-24', t: 'Gouvernance : « Diffusion » devient « Découvrir » et passe en point d\'entrée', items: [
                 'La famille « 🗂️ Diffusion » est renommée « 🧭 Découvrir » et placée EN PREMIER : on entre dans la Gouvernance par le catalogue, c\'est-à-dire par la donnée disponible, avant de descendre vers le patrimoine, les acteurs et le détail.',
                 'Le Catalogue devient l\'écran affiché par défaut à l\'ouverture de la Gouvernance (et quand on clique la phase ④ Gouvernance).',
