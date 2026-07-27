@@ -6949,7 +6949,7 @@
         // avec une colonne SOURCE_ORIGINE (traçabilité) et s'utilise partout comme une table normale.
         // Avec une clé : les doublons de clé STRICTEMENT identiques sont dédoublonnés (on garde une
         // ligne) ; ceux qui divergent sont CONSERVÉS et mis en évidence dans le rapport d'écarts.
-        let tdState = { editing: null };
+        let tdState = { editing: null, graph: false };
 
         function tdNewDesign() {
             tdState.editing = { name: '', sources: [], attrs: [], calcs: [], key: [], targetId: null };
@@ -7535,6 +7535,162 @@
         }
 
         // ---- Écran 🧱 Tables : liste des tables conçues + éditeur de recette ----
+        // ============ V6.18 : VUE GRAPHIQUE DU CONCEPTEUR DE TABLE (option) ============
+        // On tire un trait d'une colonne source vers un attribut de la table conçue pour créer
+        // l'alimentation. Déposer sur le corps de la table crée l'attribut et le relie dans la foulée.
+        // À l'ajout d'une source, l'alimentation automatique par nom de colonne est déjà appliquée
+        // (tdAddSource) : les traits apparaissent immédiatement, il n'y a plus qu'à corriger.
+        function tdGInjectCss() {
+            if (el('tdgStyles')) return;
+            const st = document.createElement('style'); st.id = 'tdgStyles';
+            st.textContent = `
+            #tdgCanvas{position:relative;background:linear-gradient(0deg,#fbfcfe,#fff);border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;min-height:300px}
+            #tdgCanvas .tdg-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;text-align:center;padding:24px}
+            .tdg-edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+            .tdg-node{position:absolute;width:216px;background:#fff;border:1.5px solid #d4dbe6;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 16px rgba(15,23,42,.06);z-index:2;overflow:hidden}
+            .tdg-node.tdg-tgt{width:250px;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.13),0 6px 16px rgba(15,23,42,.08)}
+            .tdg-nh{display:flex;align-items:center;gap:6px;padding:7px 9px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;font-size:12px;font-weight:800;color:#1e293b}
+            .tdg-tgt .tdg-nh{background:#eff6ff;color:#1d4ed8}
+            .tdg-nm{flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .tdg-list{max-height:210px;overflow-y:auto;padding:3px 0}
+            .tdg-col,.tdg-attr{display:flex;align-items:center;gap:5px;padding:3px 9px;font-size:11px;color:#334155}
+            .tdg-col{cursor:crosshair}
+            .tdg-col:hover{background:#eef6ff}
+            .tdg-col.mapped{color:#1d4ed8;font-weight:700}
+            .tdg-attr{background:#fff}
+            .tdg-attr.over{background:#dbeafe;outline:1px dashed #2563eb;outline-offset:-2px}
+            .tdg-attr .tdg-an{flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .tdg-key{font-size:9px;color:#b45309}
+            .tdg-dot{width:7px;height:7px;border-radius:50%;background:#cbd5e1;flex:0 0 auto}
+            .tdg-col.mapped .tdg-dot,.tdg-attr.fed .tdg-dot{background:#2563eb}
+            .tdg-foot{display:flex;gap:4px;padding:5px 8px;border-top:1px solid #f1f5f9;background:#fcfdff;flex-wrap:wrap}
+            .tdg-btn{font-size:10px;border:1px solid #cbd5e1;background:#fff;border-radius:5px;padding:1px 5px;cursor:pointer;color:#475569;font-weight:700}
+            .tdg-btn:hover{border-color:#2563eb;color:#1d4ed8}
+            .tdg-hint{position:absolute;left:10px;top:8px;font-size:10.5px;color:#64748b;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:2px 9px;z-index:4}`;
+            document.head.appendChild(st);
+        }
+        function tdGToggle(on) { tdState.graph = !!on; renderTablesDesign(); }
+        // Alimentation automatique : rapproche par nom normalisé les attributs encore non alimentés.
+        function tdGAutoFeed(si) {
+            const d = tdState.editing; const s = d && d.sources[si]; if (!s) return 0;
+            const t = tableByName(s.src); if (!t) return 0;
+            let n = 0;
+            d.attrs.forEach(a => { if (s.map[a]) return; const m = t.headers.find(h => normColName(h) === normColName(a)); if (m) { s.map[a] = m; n++; } });
+            renderTablesDesign();
+            showSuccess(n ? `⚡ ${n} attribut(s) alimenté(s) automatiquement depuis « ${s.src} ».` : `Aucune correspondance de nom supplémentaire trouvée dans « ${s.src} ».`);
+            return n;
+        }
+        function tdGMap(si, attr, col) {
+            const d = tdState.editing; const s = d && d.sources[si]; if (!s) return;
+            if (col) s.map[attr] = col; else delete s.map[attr];
+            renderTablesDesign();
+        }
+        // Dépôt sur le corps de la table : on crée l'attribut (nom de la colonne) et on le relie.
+        function tdGDropNew(si, col) {
+            const d = tdState.editing; const s = d && d.sources[si]; if (!s || !col) return;
+            let a = col, i = 2; while (d.attrs.includes(a)) a = col + '_' + (i++);
+            d.attrs.push(a); s.map[a] = col; renderTablesDesign();
+        }
+        function tdGraphHtml() {
+            const d = tdState.editing; if (!d) return '';
+            return `<div class="mb-3 rounded-xl border ${tdState.graph ? 'border-blue-300 bg-blue-50/30' : 'border-slate-200 bg-slate-50/60'} p-3">
+                <label class="flex items-center gap-2 cursor-pointer text-[12px] font-bold text-slate-700">
+                    <input type="checkbox" ${tdState.graph ? 'checked' : ''} onchange="tdGToggle(this.checked)" class="w-4 h-4">
+                    🔗 Vue graphique — relier les sources à la table en tirant des traits
+                    <span class="font-medium text-slate-400 normal-case">(option : le formulaire ci-dessous reste disponible et synchronisé)</span>
+                </label>
+                ${tdState.graph ? `<div id="tdgCanvas" class="mt-2"></div>` : ''}
+            </div>`;
+        }
+        function tdDrawGraph() {
+            const c = el('tdgCanvas'); if (!c) return; tdGInjectCss();
+            const d = tdState.editing; if (!d) { c.innerHTML = ''; return; }
+            if (!(d.sources || []).length) { c.style.height = '300px'; c.innerHTML = '<div class="tdg-empty">Ajoutez une source (menu « Sources contributrices » ci-dessous) :<br>ses colonnes seront reliées automatiquement aux attributs de même nom, et vous pourrez corriger les traits à la souris.</div>'; return; }
+            const NW = 216, TW = 250, GAP = 190, ROW = 19;
+            const hSrc = s => 30 + Math.min(210, 6 + ((tableByName(s.src) || { headers: [] }).headers.length) * ROW) + 30;
+            const hTgt = 30 + Math.min(210, 6 + (d.attrs.length || 1) * ROW) + 30;
+            let y = 36; const spos = [];
+            d.sources.forEach((s, si) => { spos[si] = { x: 14, y, h: hSrc(s) }; y += hSrc(s) + 18; });
+            const H = Math.max(300, y + 10, 36 + hTgt + 20);
+            const tpos = { x: 14 + NW + GAP, y: Math.max(36, (H - hTgt) / 2), h: hTgt };
+            const CW = Math.max(560, c.clientWidth || 900, tpos.x + TW + 20);
+            c.style.height = H + 'px';
+            const srcRowY = (si, ci) => spos[si].y + 30 + 3 + ci * ROW + ROW / 2;
+            const tgtRowY = ai => tpos.y + 30 + 3 + ai * ROW + ROW / 2;
+            let paths = '';
+            d.sources.forEach((s, si) => {
+                const t = tableByName(s.src); if (!t) return;
+                d.attrs.forEach((a, ai) => {
+                    const col = s.map[a]; if (!col) return;
+                    const ci = t.headers.indexOf(col); if (ci < 0) return;
+                    const y1 = srcRowY(si, ci), y2 = tgtRowY(ai);
+                    if (y1 > spos[si].y + spos[si].h || y2 > tpos.y + tpos.h) return; // ligne hors zone visible
+                    const x1 = spos[si].x + NW, x2 = tpos.x, mx = (x1 + x2) / 2;
+                    paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="#2563eb" stroke-width="1.8" opacity=".8" marker-end="url(#tdgA)"/>`;
+                });
+            });
+            let hh = `<svg class="tdg-edges" viewBox="0 0 ${CW} ${H}" preserveAspectRatio="none"><defs><marker id="tdgA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2563eb"/></marker></defs>${paths}</svg>`;
+            hh += `<div class="tdg-hint">Tirez une colonne (à gauche) vers un attribut (à droite). Déposez sur le corps de la table pour créer l'attribut.</div>`;
+            d.sources.forEach((s, si) => {
+                const t = tableByName(s.src); const p = spos[si];
+                const mapped = new Set(Object.values(s.map || {}));
+                const rows = t ? t.headers.map((h, ci) => `<div class="tdg-col${mapped.has(h) ? ' mapped' : ''}" data-si="${si}" data-col="${escapeHTML(h)}" style="height:${ROW}px" title="${escapeHTML(h)}"><span class="tdg-nm">${escapeHTML(h)}</span><span class="tdg-dot"></span></div>`).join('')
+                              : '<div class="tdg-col" style="color:#dc2626">source introuvable</div>';
+                hh += `<div class="tdg-node" style="left:${p.x}px;top:${p.y}px">
+                    <div class="tdg-nh"><span>📄</span><span class="tdg-nm" title="${escapeHTML(s.src)}">${escapeHTML(s.src)}</span></div>
+                    <div class="tdg-list">${rows}</div>
+                    <div class="tdg-foot"><button class="tdg-btn" title="Relier automatiquement les attributs de même nom" onclick="tdGAutoFeed(${si})">⚡ auto-alimenter</button>
+                    <button class="tdg-btn" title="Détacher cette source" onclick="tdRemoveSource(${si})">✕ retirer</button></div></div>`;
+            });
+            const fed = a => (d.sources || []).some(s => s.map && s.map[a]);
+            hh += `<div class="tdg-node tdg-tgt" id="tdgTarget" style="left:${tpos.x}px;top:${tpos.y}px">
+                <div class="tdg-nh"><span>🧱</span><span class="tdg-nm" title="${escapeHTML(d.name || 'Nouvelle table')}">${escapeHTML(d.name || 'Nouvelle table')}</span></div>
+                <div class="tdg-list">${d.attrs.length ? d.attrs.map((a, ai) => `<div class="tdg-attr${fed(a) ? ' fed' : ''}" data-attr="${escapeHTML(a)}" style="height:${ROW}px"><span class="tdg-dot"></span><span class="tdg-an" title="${escapeHTML(a)}">${escapeHTML(a)}</span>${(d.key || []).includes(a) ? '<span class="tdg-key">🔑</span>' : ''}</div>`).join('')
+                    : '<div class="tdg-attr" style="color:#94a3b8">aucun attribut — tirez une colonne ici</div>'}</div>
+                <div class="tdg-foot"><span style="font-size:9.5px;color:#64748b">${d.attrs.filter(fed).length}/${d.attrs.length} attribut(s) alimenté(s)</span></div></div>`;
+            c.innerHTML = hh;
+            // --- tirer un trait : colonne source → attribut cible ---
+            const svg = c.querySelector('.tdg-edges');
+            c.querySelectorAll('.tdg-col[data-si]').forEach(row => {
+                row.addEventListener('pointerdown', ev => {
+                    ev.preventDefault();
+                    const si = Number(row.dataset.si), col = row.dataset.col;
+                    const cr = c.getBoundingClientRect(), rr = row.getBoundingClientRect();
+                    const x1 = rr.right - cr.left, y1 = rr.top - cr.top + rr.height / 2;
+                    const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    tmp.setAttribute('stroke', '#f59e0b'); tmp.setAttribute('stroke-width', '2'); tmp.setAttribute('fill', 'none'); tmp.setAttribute('stroke-dasharray', '5 4');
+                    if (svg) svg.appendChild(tmp);
+                    let hov = null;
+                    const mv = e2 => {
+                        const x2 = e2.clientX - cr.left, y2 = e2.clientY - cr.top, mx = (x1 + x2) / 2;
+                        tmp.setAttribute('d', `M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`);
+                        const under = document.elementFromPoint(e2.clientX, e2.clientY);
+                        const at = under && under.closest ? under.closest('.tdg-attr[data-attr]') : null;
+                        if (hov && hov !== at) hov.classList.remove('over');
+                        hov = at; if (hov) hov.classList.add('over');
+                    };
+                    const up = e2 => {
+                        document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up);
+                        if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
+                        if (hov) hov.classList.remove('over');
+                        const under = document.elementFromPoint(e2.clientX, e2.clientY);
+                        const at = under && under.closest ? under.closest('.tdg-attr[data-attr]') : null;
+                        if (at) return tdGMap(si, at.dataset.attr, col);
+                        const tgt = under && under.closest ? under.closest('#tdgTarget') : null;
+                        if (tgt) return tdGDropNew(si, col); // dépôt sur la table : on crée l'attribut
+                    };
+                    document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+                });
+            });
+            // clic sur un attribut alimenté : on coupe l'alimentation (une source à la fois)
+            c.querySelectorAll('.tdg-attr[data-attr]').forEach(at => {
+                at.addEventListener('dblclick', () => {
+                    const a = at.dataset.attr; const d2 = tdState.editing;
+                    const si = (d2.sources || []).findIndex(s => s.map && s.map[a]);
+                    if (si >= 0) tdGMap(si, a, '');
+                });
+            });
+        }
         function renderTablesDesign() {
             const c = el('tablesDesignContent'); if (!c) return;
             const designed = Object.values(state.tables).filter(t => t.type === 'designed');
@@ -7559,6 +7715,7 @@
             }
             if (tdState.editing) html += tdEditorHtml();
             c.innerHTML = html;
+            if (tdState.editing && tdState.graph) setTimeout(tdDrawGraph, 0);
             // Remplit (en tâche de fond) les listes de valeurs proposées des filtres d'entrée.
             const d = tdState.editing;
             if (d) (d.sources || []).forEach((s, si) => (s.filters || []).forEach((f, fi) => { if (f.col) tdFillDatalist(`tdfval-${si}-${fi}`, s.src, f.col); }));
@@ -7587,6 +7744,7 @@
             </div>`).join('');
             return `<div class="bg-white p-6 rounded-xl border-2 border-blue-300 shadow-md">
                 <h3 class="font-black text-blue-800 text-sm mb-4">${d.targetId ? '✏️ Modifier la table' : '➕ Nouvelle table'}</h3>
+                ${tdGraphHtml()}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Nom de la table</label>
                         <input type="text" value="${escapeHTML(d.name)}" onchange="tdSetName(this.value)" placeholder="ex : EMPLACEMENTS_CONSOLIDES" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold"></div>
@@ -9587,8 +9745,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.17.0';
+        const APP_VERSION = '6.18.0';
         const APP_CHANGELOG = [
+            { v: '6.18.0', d: '2026-07-27', t: 'Tables conçues : vue graphique optionnelle — relier les sources en tirant des traits', items: [
+                'Nouvelle case à cocher « 🔗 Vue graphique » dans le concepteur de table. Elle AJOUTE un schéma au-dessus du formulaire habituel, qui reste disponible et synchronisé : rien n\'est remplacé.',
+                'À gauche les sources contributrices avec leurs colonnes, à droite la table conçue avec ses attributs. Les alimentations existantes sont dessinées en traits bleus.',
+                'Tirez une colonne source vers un attribut pour créer l\'alimentation. Déposez sur le corps de la table pour créer l\'attribut au nom de la colonne et le relier dans la foulée. Double-clic sur un attribut pour couper son alimentation.',
+                'Auto-alimentation à la création : à l\'ajout d\'une source, les colonnes de même nom sont reliées automatiquement — les traits apparaissent tout de suite. Le bouton « ⚡ auto-alimenter » rejoue ce rapprochement sur les attributs encore vides.',
+                'Le pied de la table indique en permanence combien d\'attributs sont alimentés.'] },
             { v: '6.17.0', d: '2026-07-27', t: 'Extraction : vue graphique optionnelle — choisir les colonnes sur le schéma des liens', items: [
                 'Nouvelle case à cocher « 🗺️ Vue graphique » en haut de l\'extraction. Elle AJOUTE un schéma au-dessus de l\'écran habituel, qui reste entièrement disponible et synchronisé : rien n\'est remplacé.',
                 'Le schéma déplie, depuis la table de départ, l\'arbre des chemins de jointure. Chaque case est une table ATTEINTE PAR UN CHEMIN PRÉCIS, et les traits portent le lien en clair (COLONNE = COLONNE).',
