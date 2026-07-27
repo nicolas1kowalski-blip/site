@@ -2240,7 +2240,7 @@
                 + (_am ? '<select onchange="govState.lineageAttrBo=this.value; renderLineageGraph()" class="border border-emerald-300 rounded-lg px-2 py-1.5 text-xs font-bold bg-emerald-50/50">' + _bos.map(b2 => '<option value="' + b2.id + '"' + (govState.lineageAttrBo === b2.id ? ' selected' : '') + '>🏛️ ' + escapeHTML(b2.name) + '</option>').join('') + '</select>'
                     + '<input type="text" value="' + escapeHTML(govState.lineageAttrQ || '') + '" oninput="govState.lineageAttrQ=this.value; attrFlowApplyFocus()" placeholder="🔍 filtrer les attributs…" class="text-[11px] border border-slate-300 rounded px-2 py-1.5 w-44 bg-white">' : '')
                 + '</div>'
-                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
+                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer" title="Par défaut, un fichier source est intégré à l\'application qui le produit. Décochez pour afficher chaque fichier séparément."><input type="checkbox" ' + (govState.lineageFoldSrc !== false ? 'checked' : '') + ' onchange="govState.lineageFoldSrc=this.checked; renderLineageGraph()"> 📦 Sources dans l\'appli</label>' + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
         }
 
@@ -4496,10 +4496,16 @@
         function _renderLineageImpl(wrap) {
             const nodes = [], edges = [], seen = new Set();
             const showSrcs = govState.lineageSrcs !== false, showBos = govState.lineageBos !== false;
+            // V6.7 : par défaut, un fichier source est INTÉGRÉ à l'application qui le produit — ses liens
+            // sont reportés sur l'application (c'est elle le maître, pas le fichier).
+            const foldSrc = govState.lineageFoldSrc !== false && govState.lineageApps !== false;
+            const srcFold = {}; const foldOwners = new Set(); const foldNames = {};
             if (showSrcs) Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
+                const own = foldSrc ? appOwnerOfSource(t.name) : null;
+                seen.add(t.name);
+                if (own) { srcFold['tbl:' + t.name] = 'as:' + own.id; foldOwners.add(own.id); (foldNames[own.id] = foldNames[own.id] || []).push(t.name); return; }
                 const colors = t.type === 'extraction' ? ['#f3e8ff', '#7c3aed'] : (t.type === 'api' ? ['#cffafe', '#0891b2'] : ['#dbeafe', '#2563eb']);
                 nodes.push({ id: 'tbl:' + t.name, type: 'studio-rich-node', title: t.name, content: (state.governance.dictionary[t.name] || {}).sourceSystem || '', fill: colors[0], stroke: colors[1] });
-                seen.add(t.name);
             });
             Object.keys(state.governance.lineage).forEach(derived => {
                 if (!seen.has(derived)) return;
@@ -4519,6 +4525,7 @@
             const showApps = govState.lineageApps !== false, showProcs = govState.lineageProcs !== false;
             const assets = state.governance.assets || [];
             const usedAssets = new Set();
+            foldOwners.forEach(id => usedAssets.add(id)); // une appli qui absorbe ses sources reste affichée
             const assetOk = a => a && ((a.kind === 'app' && showApps) || (a.kind === 'process' && showProcs));
             if (showApps) Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
                 const sys = String((state.governance.dictionary[t.name] || {}).sourceSystem || '').trim().toLowerCase(); if (!sys) return;
@@ -4538,7 +4545,9 @@
                 linkedTables.forEach(tn => { if (seen.has(tn)) { usedAssets.add(pr.id); edges.push({ id: 'use:' + pr.id + ':' + tn, source: 'tbl:' + tn, target: 'as:' + pr.id, label: 'utilisé par', style: { stroke: '#d97706', endArrow: { path: '', fill: '#d97706' } } }); } });
             });
             assets.forEach(a => { if (!usedAssets.has(a.id)) return; const isApp = a.kind === 'app';
-                nodes.push({ id: 'as:' + a.id, type: 'studio-rich-node', title: (isApp ? '🖥 ' : '⚙️ ') + a.name, content: [assetDomainEff(a), a.criticality || ''].filter(Boolean).join(' · '), fill: isApp ? '#e2e8f0' : '#ffedd5', stroke: isApp ? '#334155' : '#ea580c' }); });
+                const fn = foldNames[a.id] || [];
+                const sub = [assetDomainEff(a), a.criticality || '', fn.length ? '📦 ' + fn.length + ' source' + (fn.length > 1 ? 's' : '') + ' : ' + fn.slice(0, 3).join(', ') + (fn.length > 3 ? '…' : '') : ''].filter(Boolean).join(' · ');
+                nodes.push({ id: 'as:' + a.id, type: 'studio-rich-node', title: (isApp ? '🖥 ' : '⚙️ ') + a.name, content: sub, fill: isApp ? '#e2e8f0' : '#ffedd5', stroke: isApp ? '#334155' : '#ea580c' }); });
             if (showBos) state.governance.businessObjects.forEach(bo => {
                 // Vision fine : les attributs de l'objet avec leur colonne source (mode 🔬).
                 if (govState.lineageBoDetail && (bo.elements || []).length) {
@@ -4568,9 +4577,20 @@
                 const linkedTables = new Set(); (bo.elements || []).forEach(e2 => (e2.mappings || []).forEach(m => linkedTables.add(m.table)));
                 linkedTables.forEach(tn => { if (seen.has(tn) && !declared.has(tn) && !ctxMasters.has(tn)) edges.push({ id: 'bo:' + bo.id + ':' + tn, source: 'tbl:' + tn, target: 'bo:' + bo.id, label: 'décrit', style: { stroke: '#86efac', lineDash: [2, 3], endArrow: { path: '', fill: '#86efac' } } }); });
             });
+            // Sources repliées : leurs liens sont reportés sur l'application qui les produit ; le lien
+            // « produit » app → fichier devient interne (self-edge) et disparaît, puis on dédoublonne.
+            const _fm = id => srcFold[id] || id;
+            const _fseen = new Set(); const foldedEdges = [];
+            edges.forEach(e => {
+                const s = _fm(e.source), t = _fm(e.target);
+                if (s === t) return;
+                const k = s + '¦' + t + '¦' + (e.label || '');
+                if (_fseen.has(k)) return; _fseen.add(k);
+                foldedEdges.push((s === e.source && t === e.target) ? e : Object.assign({}, e, { source: s, target: t }));
+            });
             // Les liens vers des nœuds masqués par les filtres sont écartés.
             const nodeIds = new Set(nodes.map(n => n.id));
-            const shownEdges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+            const shownEdges = foldedEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
             if (lineageGraph) { lineageGraph.destroy(); lineageGraph = null; }
             lineageGraph = createSvgGraph(wrap, { type: 'dagre', rankdir: 'LR', nodesep: 18, ranksep: 80 }, {
                 width: wrap.clientWidth || 900, height: wrap.clientHeight || 550,
@@ -4829,8 +4849,31 @@
             if (!Array.isArray(g.flow.edges)) g.flow.edges = [];
             if (typeof g.flow.threshold !== 'number') g.flow.threshold = 1.0;
             if (typeof g.flow.showObjects !== 'boolean') g.flow.showObjects = true; // objets métier affichés par défaut
+            if (typeof g.flow.hideSources !== 'boolean') g.flow.hideSources = true; // V6.7 : sources repliées DANS leur application
             return g.flow;
         }
+        // V6.7 : par défaut, un fichier source n'apparaît pas comme case à part — il est INTÉGRÉ à
+        // l'application qui le produit (c'est elle le maître). Les liens du fichier sont reportés sur
+        // l'application ; le lien « écrit » app → fichier disparaît (il devient interne).
+        function lfCollapseSources(nodes, edges) {
+            if (lfModel().hideSources === false) return { nodes, edges, foldCount: {}, folded: 0 };
+            const fold = {};
+            nodes.forEach(n => { if (lfNodeKind(n) !== 'table') return; const prod = lfProducerOf(n.id); if (prod && prod.id !== n.id) fold[n.id] = prod.id; });
+            const ids = Object.keys(fold);
+            if (!ids.length) return { nodes, edges, foldCount: {}, folded: 0 };
+            const foldCount = {}; ids.forEach(id => { foldCount[fold[id]] = (foldCount[fold[id]] || 0) + 1; });
+            const map = id => fold[id] || id;
+            const seen = new Set(); const outEdges = [];
+            edges.forEach(e => {
+                const s = map(e.source), t = map(e.target);
+                if (s === t) return; // « écrit » app → son propre fichier : devient interne
+                const k = s + '¦' + t + '¦' + lfEdgeRel(e);
+                if (seen.has(k)) return; seen.add(k);
+                outEdges.push((s === e.source && t === e.target) ? e : Object.assign({}, e, { source: s, target: t, _foldedFrom: e.source !== s ? (lfNode(e.source) || {}).name : null, _foldedTo: e.target !== t ? (lfNode(e.target) || {}).name : null }));
+            });
+            return { nodes: nodes.filter(n => !fold[n.id]), edges: outEdges, foldCount, folded: ids.length };
+        }
+        function lfToggleSources(on) { lfModel().hideSources = !on; persistAppState(); renderGovernance(); showSuccess(on ? '📄 Sources affichées comme cases distinctes.' : '📦 Sources intégrées à leur application.'); }
         function lfNode(id) { return lfModel().nodes.find(n => n.id === id); }
         function lfEdge(id) { return lfModel().edges.find(e => e.id === id); }
         // Modèle table-centré (v5.3.0) : le rôle et le type de lien ne sont plus saisis à la main,
@@ -4983,6 +5026,7 @@
                         <button onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
                     </div>
                     <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Afficher les objets métier (vues) et leurs sources sur la carte"><input type="checkbox" ${m.showObjects ? 'checked' : ''} onchange="lfToggleObjects(this.checked)"> 🏛️ Objets métier</label>
+                    <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Par défaut, les fichiers sources sont INTÉGRÉS à l'application qui les produit (c'est elle le maître). Cochez pour afficher chaque fichier comme une case distincte."><input type="checkbox" ${m.hideSources === false ? 'checked' : ''} onchange="lfToggleSources(this.checked)"> 📄 Détailler les sources</label>
                     <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
@@ -5113,8 +5157,10 @@
 
         function lfDrawGraph() {
             const c = el('lfCanvas'); if (!c) return;
-            const m = lfModel(); const nodes = m.nodes, edges = m.edges;
-            if (!nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Aucun flux déclaré.<br>Ajoutez des systèmes et des liens ci-dessous, ou cliquez « ✨ Générer depuis les objets métier ».</div>'; return; }
+            const m = lfModel();
+            if (!m.nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Aucun flux déclaré.<br>Ajoutez des systèmes et des liens ci-dessous, ou cliquez « ✨ Générer depuis les objets métier ».</div>'; return; }
+            const _cl = lfCollapseSources(m.nodes, m.edges); const nodes = _cl.nodes, edges = _cl.edges, foldCount = _cl.foldCount;
+            if (!nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Toutes les cases sont des sources intégrées à leur application.<br>Décochez « 📄 Détailler les sources » pour les afficher.</div>'; return; }
             const idset = new Set(nodes.map(n => n.id));
             const indeg = {}, adj = {}; nodes.forEach(n => { indeg[n.id] = 0; adj[n.id] = []; });
             edges.forEach(e => { if (idset.has(e.source) && idset.has(e.target) && e.source !== e.target) { adj[e.source].push(e.target); indeg[e.target]++; } });
@@ -5167,7 +5213,7 @@
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
                 hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}${isObj ? ' lf-kind-obj' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="Tables contenues / produites par cette application">📦 contient ${lfOwnedTables(n.id).length}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isObj && n.reprAppName ? `<span class="lf-role lf-r-app" title="Objet métier matérialisé/porté par cette application (référentiel)">🖥 ${escapeHTML(n.reprAppName)}</span>` : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
+                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="${foldCount[n.id] ? lfOwnedTables(n.id).map(t2 => t2.name).join(', ') + ' — sources intégrées à cette application (décochez « Détailler les sources » pour les afficher)' : 'Tables contenues / produites par cette application'}">📦 ${foldCount[n.id] ? 'contient ' + foldCount[n.id] + ' source' + (foldCount[n.id] > 1 ? 's' : '') : 'contient ' + lfOwnedTables(n.id).length}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isObj && n.reprAppName ? `<span class="lf-role lf-r-app" title="Objet métier matérialisé/porté par cette application (référentiel)">🖥 ${escapeHTML(n.reprAppName)}</span>` : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
@@ -9505,8 +9551,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.6.0';
+        const APP_VERSION = '6.7.0';
         const APP_CHANGELOG = [
+            { v: '6.7.0', d: '2026-07-24', t: 'Lineage — les sources sont désormais INTÉGRÉES à leur application par défaut', items: [
+                'Dans les deux graphes (Vue systèmes et Bout en bout), un fichier source n\'apparaît plus comme une case à part : il est INTÉGRÉ à l\'application qui le produit — c\'est elle le maître, pas le fichier. Les cartes sont beaucoup plus lisibles.',
+                'Les liens du fichier sont reportés sur l\'application : une alimentation « fichier → référentiel » devient « application → référentiel », et le lien interne « l\'appli écrit son fichier » disparaît. Les doublons de liens sont fusionnés.',
+                'L\'application affiche le nombre de sources qu\'elle contient (badge « 📦 contient N sources », avec leurs noms au survol).',
+                'Réversible à tout moment : « 📄 Détailler les sources » (Vue systèmes) et « 📦 Sources dans l\'appli » (Bout en bout) réaffichent chaque fichier séparément. Aucune donnée n\'est perdue — c\'est un simple repli d\'affichage.'] },
             { v: '6.6.0', d: '2026-07-24', t: 'Extraction — hiérarchie aplatie : extraire PLUSIEURS attributs par niveau', items: [
                 'La hiérarchie aplatie ne se limite plus à un seul attribut par niveau : on empile plusieurs colonnes (ex. code ET libellé) via « ➕ ajouter l\'attribut ». Chaque niveau produit alors une colonne par attribut (ex. org_niv1_CODE, org_niv1_LIBELLE, …).',
                 'Techniquement, la CTE récursive porte une liste de structs par niveau ; un seul attribut reste une liste de scalaires (rétro-compatible avec les paramétrages existants).',
