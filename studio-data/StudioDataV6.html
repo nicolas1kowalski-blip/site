@@ -4895,28 +4895,66 @@
             if (typeof g.flow.threshold !== 'number') g.flow.threshold = 1.0;
             if (typeof g.flow.showObjects !== 'boolean') g.flow.showObjects = true; // objets métier affichés par défaut
             if (typeof g.flow.hideSources !== 'boolean') g.flow.hideSources = true; // V6.7 : sources repliées DANS leur application
+            if (g.flow.grain !== 'table') g.flow.grain = 'bo'; // V6.11 : lecture MÉTIER par défaut (objets métier, pas tables)
             return g.flow;
+        }
+        // Brique commune de repli : applique une correspondance nœud → nœud absorbant, reporte les liens
+        // et fusionne les doublons. Un lien devenu interne (source = cible) disparaît.
+        function lfFoldGraph(nodes, edges, fold) {
+            const ids = Object.keys(fold);
+            if (!ids.length) return { nodes, edges, foldCount: {} };
+            const foldCount = {}; ids.forEach(id => { foldCount[fold[id]] = (foldCount[fold[id]] || 0) + 1; });
+            const map = id => fold[id] || id;
+            const byId = {}; nodes.forEach(n => byId[n.id] = n);
+            const kindOf = id => { const n = byId[id]; return n ? lfNodeKind(n) : 'table'; };
+            const seen = new Set(); const out = [];
+            edges.forEach(e => {
+                const s = map(e.source), t = map(e.target);
+                if (s === t) return; // lien devenu interne au nœud absorbant
+                let rel = lfEdgeRel(e);
+                // Le sens métier prime : ce qui arrivait sur une table absorbée par un objet devient
+                // « produit », ce qui en partait vers une application devient « consommé par ».
+                const ks = kindOf(s), kt = kindOf(t);
+                if (kt === 'object' && (rel === 'writes' || rel === 'feeds') && ks === 'app') rel = 'produces';
+                else if (ks === 'object' && (rel === 'reads' || rel === 'feeds') && kt === 'app') rel = 'consumes';
+                else if (kt === 'object' && rel === 'composes') rel = 'composes';
+                const k = s + '¦' + t + '¦' + rel;
+                if (seen.has(k)) return; seen.add(k);
+                out.push((s === e.source && t === e.target && rel === lfEdgeRel(e)) ? e
+                    : Object.assign({}, e, { source: s, target: t, rel, _folded: true }));
+            });
+            return { nodes: nodes.filter(n => !fold[n.id]), edges: out, foldCount };
+        }
+        // V6.11 : LECTURE MÉTIER — le lineage se lit en OBJETS MÉTIER, pas en tables. Chaque table qui
+        // compose un objet métier est absorbée par cet objet ; ses alimentations deviennent des liens
+        // entre objets. Les tables qui ne composent aucun objet retombent dans leur application (V6.7).
+        function lfCollapseToObjects(nodes, edges) {
+            if (lfModel().grain !== 'bo') return { nodes, edges, foldCount: {} };
+            const byId = {}; nodes.forEach(n => byId[n.id] = n);
+            const fold = {};
+            edges.forEach(e => {
+                if (lfEdgeRel(e) !== 'composes') return;
+                const s = byId[e.source], t = byId[e.target];
+                if (s && t && lfNodeKind(s) === 'table' && lfNodeKind(t) === 'object' && !fold[s.id]) fold[s.id] = t.id;
+            });
+            return lfFoldGraph(nodes, edges, fold);
+        }
+        function lfSetGrain(g2) {
+            const m = lfModel(); m.grain = g2 === 'table' ? 'table' : 'bo';
+            if (m.grain === 'bo' && !m.showObjects) { m.showObjects = true; lfSyncFromData({ silent: true }); }
+            persistAppState(); renderGovernance();
+            showSuccess(m.grain === 'bo' ? '🏛️ Lecture métier : le flux est lu en objets métier.' : '📄 Lecture technique : les tables sont détaillées.');
         }
         // V6.7 : par défaut, un fichier source n'apparaît pas comme case à part — il est INTÉGRÉ à
         // l'application qui le produit (c'est elle le maître). Les liens du fichier sont reportés sur
         // l'application ; le lien « écrit » app → fichier disparaît (il devient interne).
         function lfCollapseSources(nodes, edges) {
             if (lfModel().hideSources === false) return { nodes, edges, foldCount: {}, folded: 0 };
+            const byId = {}; nodes.forEach(n => byId[n.id] = n);
             const fold = {};
-            nodes.forEach(n => { if (lfNodeKind(n) !== 'table') return; const prod = lfProducerOf(n.id); if (prod && prod.id !== n.id) fold[n.id] = prod.id; });
-            const ids = Object.keys(fold);
-            if (!ids.length) return { nodes, edges, foldCount: {}, folded: 0 };
-            const foldCount = {}; ids.forEach(id => { foldCount[fold[id]] = (foldCount[fold[id]] || 0) + 1; });
-            const map = id => fold[id] || id;
-            const seen = new Set(); const outEdges = [];
-            edges.forEach(e => {
-                const s = map(e.source), t = map(e.target);
-                if (s === t) return; // « écrit » app → son propre fichier : devient interne
-                const k = s + '¦' + t + '¦' + lfEdgeRel(e);
-                if (seen.has(k)) return; seen.add(k);
-                outEdges.push((s === e.source && t === e.target) ? e : Object.assign({}, e, { source: s, target: t, _foldedFrom: e.source !== s ? (lfNode(e.source) || {}).name : null, _foldedTo: e.target !== t ? (lfNode(e.target) || {}).name : null }));
-            });
-            return { nodes: nodes.filter(n => !fold[n.id]), edges: outEdges, foldCount, folded: ids.length };
+            nodes.forEach(n => { if (lfNodeKind(n) !== 'table') return; const prod = lfProducerOf(n.id); if (prod && prod.id !== n.id && byId[prod.id]) fold[n.id] = prod.id; });
+            const r = lfFoldGraph(nodes, edges, fold);
+            return { nodes: r.nodes, edges: r.edges, foldCount: r.foldCount, folded: Object.keys(fold).length };
         }
         function lfToggleSources(on) { lfModel().hideSources = !on; persistAppState(); renderGovernance(); showSuccess(on ? '📄 Sources affichées comme cases distinctes.' : '📦 Sources intégrées à leur application.'); }
         function lfNode(id) { return lfModel().nodes.find(n => n.id === id); }
@@ -5070,8 +5108,12 @@
                         <button onclick="lfSetView('attrs')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">Vue attributs</button>
                         <button onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
                     </div>
-                    <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Afficher les objets métier (vues) et leurs sources sur la carte"><input type="checkbox" ${m.showObjects ? 'checked' : ''} onchange="lfToggleObjects(this.checked)"> 🏛️ Objets métier</label>
-                    <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Par défaut, les fichiers sources sont INTÉGRÉS à l'application qui les produit (c'est elle le maître). Cochez pour afficher chaque fichier comme une case distincte."><input type="checkbox" ${m.hideSources === false ? 'checked' : ''} onchange="lfToggleSources(this.checked)"> 📄 Détailler les sources</label>
+                    <div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold" title="Le flux se lit en OBJETS MÉTIER : les tables techniques sont absorbées par l'objet qu'elles composent. La vue technique les détaille.">
+                        <button onclick="lfSetGrain('bo')" class="px-3 py-1.5 ${m.grain === 'table' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-emerald-600 text-white'}">🏛️ Vue métier</button>
+                        <button onclick="lfSetGrain('table')" class="px-3 py-1.5 ${m.grain === 'table' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">📄 Vue technique</button>
+                    </div>
+                    ${m.grain === 'table' ? `<label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Afficher les objets métier (vues) et leurs sources sur la carte"><input type="checkbox" ${m.showObjects ? 'checked' : ''} onchange="lfToggleObjects(this.checked)"> 🏛️ Objets métier</label>
+                    <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Par défaut, les fichiers sources sont INTÉGRÉS à l'application qui les produit (c'est elle le maître). Cochez pour afficher chaque fichier comme une case distincte."><input type="checkbox" ${m.hideSources === false ? 'checked' : ''} onchange="lfToggleSources(this.checked)"> 📄 Détailler les sources</label>` : ''}
                     <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
@@ -5091,6 +5133,15 @@
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.usage};display:inline-block;background-image:linear-gradient(90deg,${LF_COLOR.usage} 60%,transparent 0);background-size:8px 3px"></span> <b class="text-slate-700">Usage</b> — 🖥 application lit / écrit, produit / consomme un objet métier</span>
                 <span class="ml-auto">💡 <b>Glissez</b> les nœuds pour les repositionner · <b>cliquez</b> un nœud ou une étiquette de lien pour le détail.</span>
             </div>`;
+            // -- lecture métier : rappel + tables encore non rattachées à un objet --
+            if (m.grain !== 'table') {
+                const _b1 = lfCollapseToObjects(m.nodes, m.edges);
+                const _orphan = lfCollapseSources(_b1.nodes, _b1.edges).nodes.filter(n => lfNodeKind(n) === 'table');
+                html += `<div class="text-[11px] rounded-lg px-3 py-2 mb-2 ${_orphan.length ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}">
+                    🏛️ <b>Lecture métier</b> : le flux est lu en <b>objets métier</b> — les tables techniques sont absorbées par l'objet qu'elles composent (badge « 📦 N tables »).
+                    ${_orphan.length ? `<br>⚠ <b>${_orphan.length} table(s)</b> encore visible(s) car rattachée(s) à <b>aucun objet métier</b> : ${_orphan.slice(0, 6).map(n => escapeHTML(n.name)).join(', ')}${_orphan.length > 6 ? '…' : ''} — ajoutez-les comme <b>source</b> d'un objet métier (onglet Objets métier ▸ Sources) pour qu'elles disparaissent de la lecture métier.` : ''}
+                </div>`;
+            }
             // -- panneau « Cohérence du modèle » (R3) : maîtrise unifiée + contradictions --
             const _chk = lfModelChecks();
             if (_chk.length) {
@@ -5204,8 +5255,13 @@
             const c = el('lfCanvas'); if (!c) return;
             const m = lfModel();
             if (!m.nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Aucun flux déclaré.<br>Ajoutez des systèmes et des liens ci-dessous, ou cliquez « ✨ Générer depuis les objets métier ».</div>'; return; }
-            const _cl = lfCollapseSources(m.nodes, m.edges); const nodes = _cl.nodes, edges = _cl.edges, foldCount = _cl.foldCount;
-            if (!nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Toutes les cases sont des sources intégrées à leur application.<br>Décochez « 📄 Détailler les sources » pour les afficher.</div>'; return; }
+            // Repli en deux temps : d'abord les tables dans l'OBJET MÉTIER qu'elles composent (lecture
+            // métier), puis les sources restantes dans leur application propriétaire.
+            const _bo = lfCollapseToObjects(m.nodes, m.edges);
+            const _cl = lfCollapseSources(_bo.nodes, _bo.edges);
+            const nodes = _cl.nodes, edges = _cl.edges;
+            const foldCount = Object.assign({}, _bo.foldCount, _cl.foldCount);
+            if (!nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Toutes les cases sont repliées dans leur objet métier ou leur application.<br>Basculez en « 📄 Vue technique » pour détailler les tables.</div>'; return; }
             const idset = new Set(nodes.map(n => n.id));
             const indeg = {}, adj = {}; nodes.forEach(n => { indeg[n.id] = 0; adj[n.id] = []; });
             edges.forEach(e => { if (idset.has(e.source) && idset.has(e.target) && e.source !== e.target) { adj[e.source].push(e.target); indeg[e.target]++; } });
@@ -5258,7 +5314,7 @@
                 const attrsBlock = attrView ? `<div class="lf-attrs">${(lfNodeAttrs(n).slice(0, 5).map(a => `<div class="lf-attr">${escapeHTML(a)}</div>`).join('')) || '<div class="lf-attr" style="color:#94a3b8">— aucun attribut relié —</div>'}</div>` : '';
                 hh += `<div class="lf-node lf-i-${role}${isApp ? ' lf-kind-app' : ''}${isObj ? ' lf-kind-obj' : ''}" data-node="${n.id}" style="left:${p.x}px;top:${p.y}px">
                     <div class="lf-nh"><span class="lf-ic">${lfIcon(n)}</span><div><div class="lf-nm">${escapeHTML(n.name)}</div><div class="lf-sc">${escapeHTML(n.origine || n.domain || (LF_ROLE[role] || {}).lbl || '')}</div></div></div>
-                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="${foldCount[n.id] ? lfOwnedTables(n.id).map(t2 => t2.name).join(', ') + ' — sources intégrées à cette application (décochez « Détailler les sources » pour les afficher)' : 'Tables contenues / produites par cette application'}">📦 ${foldCount[n.id] ? 'contient ' + foldCount[n.id] + ' source' + (foldCount[n.id] > 1 ? 's' : '') : 'contient ' + lfOwnedTables(n.id).length}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isObj && n.reprAppName ? `<span class="lf-role lf-r-app" title="Objet métier matérialisé/porté par cette application (référentiel)">🖥 ${escapeHTML(n.reprAppName)}</span>` : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
+                    <span class="lf-role ${roleCls}">${lfIsReport(n) ? 'Rapport' : (LF_ROLE[role] || {}).lbl}</span>${consolidates ? '<span class="lf-role lf-r-ref" title="Alimenté par ≥ 2 sources">⑃ consolide</span>' : ''}${isApp && lfOwnedTables(n.id).length ? `<span class="lf-role lf-r-src" title="${foldCount[n.id] ? lfOwnedTables(n.id).map(t2 => t2.name).join(', ') + ' — sources intégrées à cette application (décochez « Détailler les sources » pour les afficher)' : 'Tables contenues / produites par cette application'}">📦 ${foldCount[n.id] ? 'contient ' + foldCount[n.id] + ' source' + (foldCount[n.id] > 1 ? 's' : '') : 'contient ' + lfOwnedTables(n.id).length}</span>` : ''}${isObj && foldCount[n.id] ? `<span class="lf-role lf-r-src" title="Tables techniques qui composent cet objet métier — basculez en « Vue technique » pour les détailler">📦 ${foldCount[n.id]} table${foldCount[n.id] > 1 ? 's' : ''}</span>` : ''}${isApp && lfAppProduces(n.id) ? '<span class="lf-role lf-r-master" title="Produit (écrit) ses fichiers : c\'est elle le maître de la donnée">🗄 maître</span>' : ''}${lfIsReport(n) ? '<span class="lf-role lf-r-cons" title="Application terminale : elle restitue la donnée (rapport, tableau de bord)">📑 terminal</span>' : ''}${isObj && n.reprAppName ? `<span class="lf-role lf-r-app" title="Objet métier matérialisé/porté par cette application (référentiel)">🖥 ${escapeHTML(n.reprAppName)}</span>` : ''}${isApp && lfWritebackTables(n.id).length ? '<span class="lf-role lf-r-app" title="Lit ET écrit la même table (écriture en retour) — ses modifications resynchronisent le référentiel et ses consommateurs">↺ écriture en retour</span>' : ''}
                     ${attrsBlock}
                     <div class="lf-health">${freshChip}${distChip}</div></div>`;
             });
@@ -9607,8 +9663,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.10.1';
+        const APP_VERSION = '6.11.0';
         const APP_CHANGELOG = [
+            { v: '6.11.0', d: '2026-07-24', t: 'Lineage : le flux se lit en OBJETS MÉTIER, plus en tables', items: [
+                'Nouvelle lecture par défaut « 🏛️ Vue métier » : chaque table technique est ABSORBÉE par l\'objet métier qu\'elle compose. Les alimentations entre tables d\'un même objet deviennent internes et disparaissent ; celles entre objets deviennent des liens entre objets métier.',
+                'Le graphe ne montre donc plus que ce qui a un sens métier : Applications ▸ Objets métier ▸ Consommateurs. L\'objet affiche un badge « 📦 N tables » (détail au survol).',
+                'Les tables encore rattachées à AUCUN objet métier restent visibles et sont listées dans un bandeau dédié, avec le geste pour les rattacher — la vue métier devient ainsi un outil de complétude.',
+                'Bascule « 📄 Vue technique » pour retrouver le détail table par table (avec les options « Objets métier » et « Détailler les sources »). Aucune donnée n\'est modifiée : c\'est un repli d\'affichage.'] },
             { v: '6.10.1', d: '2026-07-24', t: 'Confort : les panneaux dépliés ne se referment plus et l\'écran ne remonte plus après une action', items: [
                 'BUG CORRIGÉ : supprimer un nœud ou un lien dans « ⚙️ Construire le flux » (Lineage) refermait le panneau, ce qui raccourcissait la page et faisait « remonter » l\'écran. Le panneau reste désormais ouvert.',
                 'Correction GÉNÉRIQUE : l\'état déplié de TOUS les panneaux de l\'application est conservé d\'un rafraîchissement à l\'autre (lineage, applications, extraction, règles, objets métier…), y compris quand leur titre contient un compteur qui change.',
