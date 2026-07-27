@@ -9607,8 +9607,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.10.0';
+        const APP_VERSION = '6.10.1';
         const APP_CHANGELOG = [
+            { v: '6.10.1', d: '2026-07-24', t: 'Confort : les panneaux dépliés ne se referment plus et l\'écran ne remonte plus après une action', items: [
+                'BUG CORRIGÉ : supprimer un nœud ou un lien dans « ⚙️ Construire le flux » (Lineage) refermait le panneau, ce qui raccourcissait la page et faisait « remonter » l\'écran. Le panneau reste désormais ouvert.',
+                'Correction GÉNÉRIQUE : l\'état déplié de TOUS les panneaux de l\'application est conservé d\'un rafraîchissement à l\'autre (lineage, applications, extraction, règles, objets métier…), y compris quand leur titre contient un compteur qui change.',
+                'On ne rouvre que ce que vous aviez ouvert : un panneau que vous avez volontairement replié le reste, et un écran qui ouvre un panneau exprès (mode édition d\'un nœud) continue de le faire.',
+                'Le repositionnement du défilement est repassé sur trois frames pour rattraper les contenus qui changent de hauteur après coup (graphe du lineage, grands tableaux).'] },
             { v: '6.10.0', d: '2026-07-24', t: 'Objet métier \u2194 Applications : rattachement automatique dans les deux sens', items: [
                 'Puisque c\'est l\'APPLICATION qui est maître du fichier technique, ajouter une source à un objet métier rattache désormais AUTOMATIQUEMENT l\'application qui la produit : rôle maître/contributeur \u2192 « Produite par », rôle destinataire \u2192 « Consommée par ».',
                 'Et dans l\'autre sens : rattacher (ou détacher) une source à une application dans « Applications & processus » met à jour tous les objets métier qui utilisent cette source — plus besoin de le ressaisir des deux côtés.',
@@ -15240,9 +15245,18 @@
         // ======================= V3 UX : préservation du scroll et du focus =======================
         (function () {
             const KEEP = ['renderGovernance', 'renderTables', 'renderTablesDesign', 'renderQualityRules', 'renderRecipes', 'renderSrcWatch', 'renderLineageFlow',
-                'renderDashboards', 'renderLinkage', 'renderRelationsList', 'renderSourceUpdatePanel', 'renderNlAssistant'];
+                'renderDashboards', 'renderLinkage', 'renderRelationsList', 'renderSourceUpdatePanel', 'renderNlAssistant',
+                'renderAdvExtract', 'renderExtractionColumns'];
+            // Identité stable d'un panneau dépliable entre deux rendus : son id, sinon le texte de son
+            // résumé DÉBARRASSÉ des compteurs (« (11 nœud(s), 10 lien(s)) » change à chaque suppression).
+            const DET_SEL = 'main details, .drawer-ux details';
+            const detKey = d => { if (d.id) return '#' + d.id; const s = d.querySelector('summary'); return s ? s.textContent.replace(/\d+/g, '').replace(/\s+/g, ' ').trim() : ''; };
             const wrap = fn => function (...a) {
                 const win = { x: window.scrollX, y: window.scrollY };
+                // Panneaux OUVERTS avant le rendu : on ne réouvre que ceux-là (jamais on ne referme,
+                // pour ne pas contrarier un panneau que l'écran ouvre volontairement, ex. mode édition).
+                const dets = []; let dord = 0;
+                document.querySelectorAll(DET_SEL).forEach(d => { const o2 = dord++; if (d.open) dets.push({ key: detKey(d), ord: o2 }); });
                 const scrolled = []; let ord = 0;
                 document.querySelectorAll('main *, .drawer-ux *').forEach(e2 => {
                     const sc = (e2.scrollHeight > e2.clientHeight + 2) || (e2.scrollWidth > e2.clientWidth + 2);
@@ -15254,6 +15268,18 @@
                 const selStart = ae && typeof ae.selectionStart === 'number' ? ae.selectionStart : null;
                 const out = fn.apply(this, a);
                 const restore = () => {
+                    // 1. Panneaux dépliés : on les rouvre AVANT de replacer le scroll (la hauteur de la
+                    //    page en dépend — c'est la fermeture d'un panneau qui faisait « remonter » l'écran).
+                    if (dets.length) {
+                        const now = []; document.querySelectorAll(DET_SEL).forEach(d => now.push(d));
+                        const taken = new Set();
+                        dets.forEach(s2 => {
+                            let e2 = s2.key ? now.find((d, i) => !taken.has(i) && detKey(d) === s2.key) : null;
+                            if (!e2 && now[s2.ord] && !taken.has(s2.ord)) e2 = now[s2.ord];
+                            if (!e2) return; taken.add(now.indexOf(e2));
+                            if (!e2.open) e2.open = true;
+                        });
+                    }
                     window.scrollTo(win.x, win.y);
                     if (scrolled.length) {
                         // ré-indexe les zones défilables dans le même ordre : les zones sans id
@@ -15264,7 +15290,9 @@
                     }
                     if (focusId) { const e2 = el(focusId); if (e2 && document.activeElement !== e2 && e2.focus) { try { e2.focus({ preventScroll: true }); if (selStart != null && e2.setSelectionRange) e2.setSelectionRange(selStart, selStart); } catch (er) {} } }
                 };
-                restore(); requestAnimationFrame(restore);
+                // Deux frames : la seconde rattrape les contenus qui changent la hauteur après coup
+                // (graphe SVG du lineage, tableaux larges) sans jamais contrarier un défilement utilisateur.
+                restore(); requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
                 return out;
             };
             KEEP.forEach(nm => { if (typeof window[nm] === 'function' && !window[nm].__keepScroll) { const w = wrap(window[nm]); w.__keepScroll = true; window[nm] = w; } });
