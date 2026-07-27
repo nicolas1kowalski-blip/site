@@ -3015,6 +3015,7 @@
         // Sources & circulation : rôles + alertes MDM. Si des règles contextuelles existent, l'absence
         // de maître global n'est plus une anomalie (le maître dépend du contexte).
         function renderBoSourcesBlock(bo, names) {
+            if (boSyncAppsFromSources()) persistAppState(); // les applis propriétaires des sources se rattachent seules
             const sources = bo.sources || [];
             const masters = sources.filter(s => s.role === 'maitre');
             const hasCtxRules = ((bo.contextRules || {}).rules || []).length > 0;
@@ -3063,6 +3064,7 @@
                 </div>${flow}${reprSel}
                 ${assetAttachHtml('bo', bo.id, 'producedBy', bo.producedBy, '🖥 Produite par')}
                 ${assetAttachHtml('bo', bo.id, 'consumedBy', bo.consumedBy, '⚙️ Consommée par')}
+                <div class="text-[10px] text-slate-400 mt-1">🔗 Rattachement <b>automatique</b> : les applications <b>propriétaires des sources</b> ci-dessus sont ajoutées seules (maître/contributeur → « Produite par », destinataire → « Consommée par »)${(bo.producedByAuto || []).length || (bo.consumedByAuto || []).length ? ' — actuellement ' + [...(bo.producedByAuto || []), ...(bo.consumedByAuto || [])].map(id => escapeHTML(((assetById(id) || {}).name) || '?')).join(', ') : ''}. Vos rattachements manuels sont conservés.</div>
                 ${(() => { const att = [];
                     (state.governance.perimeters || []).forEach(p2 => { if ((p2.boIds || []).includes(bo.id)) att.push('🗂 ' + p2.name); });
                     (state.governance.glossary || []).forEach(g2 => { if ((g2.boIds || []).includes(bo.id)) att.push('📖 ' + g2.term); });
@@ -3991,12 +3993,13 @@
             const tbl = el('bo-src-tbl-' + boId).value, role = el('bo-src-role-' + boId).value;
             if (!tbl) return;
             attachSourceToObject(bo, tbl, role, false);
-            persistAppState(); renderGovernance();
+            boSyncAppsFromSources(); // l'application propriétaire du fichier se rattache automatiquement
+            persistAppState(); lfSyncFromData({ silent: true }); renderGovernance();
         }
-        function updateBoSourceRole(boId, tableName, role) { const bo = state.governance.businessObjects.find(x => x.id === boId); const s = bo && (bo.sources || []).find(x => x.table === tableName); if (s) { s.role = role; persistAppState(); renderGovernance(); } }
+        function updateBoSourceRole(boId, tableName, role) { const bo = state.governance.businessObjects.find(x => x.id === boId); const s = bo && (bo.sources || []).find(x => x.table === tableName); if (s) { s.role = role; boSyncAppsFromSources(); persistAppState(); lfSyncFromData({ silent: true }); renderGovernance(); } }
         // V6 Lot 2 : l'application « référentiel » qui matérialise/porte l'objet métier.
         function updateBoApp(boId, appId) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return; bo.appId = appId || ''; persistAppState(); lfSyncFromData({ silent: true }); renderGovernance(); }
-        function removeBoSource(boId, tableName) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (bo) { bo.sources = (bo.sources || []).filter(s => s.table !== tableName); persistAppState(); renderGovernance(); } }
+        function removeBoSource(boId, tableName) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (bo) { bo.sources = (bo.sources || []).filter(s => s.table !== tableName); boSyncAppsFromSources(); persistAppState(); lfSyncFromData({ silent: true }); renderGovernance(); } }
 
         // ---- Périmètres métier ----
         function renderGovPerimeters() {
@@ -4062,7 +4065,7 @@
         function addAssetCol(id) { const a = assetById(id); if (!a) return; const tbl = el('as-tbl-' + id).value, col = el('as-col-' + id).value; if (!tbl || !col) return; a.columns = a.columns || []; if (!a.columns.some(l => l.table === tbl && l.col === col)) a.columns.push({ table: tbl, col }); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); }
         function removeAssetCol(id, idx) { const a = assetById(id); if (a && a.columns) { a.columns.splice(idx, 1); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); } }
         function renderGovAssets() {
-            if (migrateAppSources()) persistAppState();
+            if (migrateAppSources() | boSyncAppsFromSources()) persistAppState();
             const assets = state.governance.assets || [];
             const names = readyTableNames();
             const srcNames = sourceTableNames();
@@ -4112,6 +4115,9 @@
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">📄 Sources produites <span class="text-slate-300 normal-case font-normal">— fichiers dont cette application est maître</span></div>
                         <div class="flex flex-wrap gap-1.5 mb-2">${srcNames.length ? srcNames.map(n => { const owner = appOwnerOfSource(n); const mine = owner && owner.id === a.id; const other = owner && owner.id !== a.id;
                             return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>
+                        ${(() => { const objs = appBusinessObjects(a); return objs.length ? `<div class="text-[10px] uppercase font-bold text-emerald-600 mb-1">🏛️ Objets métier alimentés <span class="text-slate-300 normal-case font-normal">— déduits des sources ci-dessus (l'application y est rattachée automatiquement)</span></div>
+                        <div class="flex flex-wrap gap-1.5 mb-2">${objs.map(bo => { const isProd = (bo.producedBy || []).includes(a.id), isCons = (bo.consumedBy || []).includes(a.id);
+                            return `<button onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
                         ${(() => { const d = appDownstream(a); return (d.srcs.length && (d.bos.length || d.consumers.length)) ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>` : ''; })()}` : ''}
                         ${kind === 'process' ? `
                         <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -4165,7 +4171,46 @@
                 a.sources = (a.sources || []).filter(n => n !== tableName);
                 if (String(dict[tableName].sourceSystem || '').trim().toLowerCase() === String(a.name || '').trim().toLowerCase()) dict[tableName].sourceSystem = '';
             }
+            boSyncAppsFromSources(); // l'appli devient « Produite par » des objets qui utilisent cette source
             persistAppState(); lfSyncFromData({ silent: true }); renderGovernance();
+        }
+        // ---- V6.10 : réconciliation BIDIRECTIONNELLE objet métier ↔ applications ----
+        // C'est l'application qui est maître du fichier technique. Donc dès qu'une SOURCE entre dans un
+        // objet métier, l'application qui la produit devient « Produite par » (rôle maître/contributeur)
+        // ou « Consommée par » (rôle destinataire) — et inversement, rattacher/détacher une source à une
+        // application met à jour tous les objets qui l'utilisent. Les rattachements SAISIS À LA MAIN sont
+        // conservés : on ne retire que ce qu'on avait soi-même déduit et qui n'est plus justifié.
+        function boSyncAppsFromSources() {
+            let changed = false;
+            (state.governance.businessObjects || []).forEach(bo => {
+                const wantProd = [], wantCons = [];
+                (bo.sources || []).forEach(s => {
+                    if (!s || !s.table) return;
+                    const own = appOwnerOfSource(s.table); if (!own) return;
+                    const bucket = s.role === 'destinataire' ? wantCons : wantProd;
+                    if (!bucket.includes(own.id)) bucket.push(own.id);
+                });
+                bo.producedBy = bo.producedBy || []; bo.consumedBy = bo.consumedBy || [];
+                const prevP = bo.producedByAuto || [], prevC = bo.consumedByAuto || [];
+                // 1. ajouts déduits
+                wantProd.forEach(id => { if (!bo.producedBy.includes(id)) { bo.producedBy.push(id); changed = true; } });
+                wantCons.forEach(id => { if (!bo.consumedBy.includes(id)) { bo.consumedBy.push(id); changed = true; } });
+                // 2. retraits des SEULS liens déduits devenus injustifiés (les manuels restent)
+                const keepP = bo.producedBy.filter(id => wantProd.includes(id) || !prevP.includes(id));
+                if (keepP.length !== bo.producedBy.length) { bo.producedBy = keepP; changed = true; }
+                const keepC = bo.consumedBy.filter(id => wantCons.includes(id) || !prevC.includes(id));
+                if (keepC.length !== bo.consumedBy.length) { bo.consumedBy = keepC; changed = true; }
+                // 3. mémorise ce qui est déduit (pour pouvoir le retirer plus tard)
+                if (JSON.stringify(wantProd) !== JSON.stringify(prevP)) { bo.producedByAuto = wantProd; changed = true; }
+                if (JSON.stringify(wantCons) !== JSON.stringify(prevC)) { bo.consumedByAuto = wantCons; changed = true; }
+            });
+            return changed;
+        }
+        // Objets métier alimentés par les sources d'une application (sens application → objets).
+        function appBusinessObjects(app) {
+            if (!app || app.kind !== 'app') return [];
+            const srcs = new Set(assetUsage(app).srcs);
+            return (state.governance.businessObjects || []).filter(bo => (bo.sources || []).some(s => s && srcs.has(s.table)));
         }
         // Migration : reconstruit a.sources à partir du « Système source » (nom) déclaré au dictionnaire.
         function migrateAppSources() {
@@ -9562,8 +9607,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.9.0';
+        const APP_VERSION = '6.10.0';
         const APP_CHANGELOG = [
+            { v: '6.10.0', d: '2026-07-24', t: 'Objet métier \u2194 Applications : rattachement automatique dans les deux sens', items: [
+                'Puisque c\'est l\'APPLICATION qui est maître du fichier technique, ajouter une source à un objet métier rattache désormais AUTOMATIQUEMENT l\'application qui la produit : rôle maître/contributeur \u2192 « Produite par », rôle destinataire \u2192 « Consommée par ».',
+                'Et dans l\'autre sens : rattacher (ou détacher) une source à une application dans « Applications & processus » met à jour tous les objets métier qui utilisent cette source — plus besoin de le ressaisir des deux côtés.',
+                'La fiche d\'une application liste maintenant ses « 🏛️ Objets métier alimentés », cliquables pour ouvrir directement la fiche de l\'objet.',
+                'Vos rattachements MANUELS sont préservés : seule la partie déduite est retirée quand elle n\'est plus justifiée (source retirée de l\'objet, ou source détachée de l\'application).',
+                'Le lineage suit immédiatement : les nœuds et liens « Produit » / « Consommé par » de la carte se mettent à jour sans action.'] },
             { v: '6.9.0', d: '2026-07-24', t: 'Correctif Règles & score : la règle « Cohérence (expression) » comparait les dates comme du texte', items: [
                 'BUG CORRIGÉ : « [DATE_FIN] >= [DATE_DEBUT] » comparait les valeurs LEXICOGRAPHIQUEMENT (les sources sont chargées en texte). Une ligne valide 31/12/2023 → 01/01/2024 était donc signalée en erreur, et l\'écran semblait remonter les lignes conformes au lieu des lignes fautives.',
                 'BUG CORRIGÉ : comparer une colonne à un nombre (« [MONTANT] >= 100 ») plantait la requête (Binder Error : VARCHAR vs entier).',
