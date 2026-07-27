@@ -9504,8 +9504,12 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.3.0';
+        const APP_VERSION = '6.4.0';
         const APP_CHANGELOG = [
+            { v: '6.4.0', d: '2026-07-24', t: 'Extraction : concaténer 2 colonnes OU PLUS + extraire un attribut par niveau de hiérarchie', items: [
+                'Colonne calculée CONCATENER : on empile désormais 2 colonnes OU PLUS (dans l\'ordre) avec le séparateur de son choix. Les valeurs vides sont ignorées (pas de séparateur orphelin). L\'ancienne concaténation à 2 colonnes reste lisible.',
+                'Hiérarchie aplatie : nouveau champ « Attribut à extraire » — chaque niveau peut restituer un ATTRIBUT de la table hiérarchique (ex. le libellé) au lieu de l\'identifiant. La récursion reste indexée sur l\'identifiant ; seule la valeur affichée par niveau change.',
+                'Les deux fonctionnent dans le moteur d\'extraction déclaratif (SQL DuckDB), cumulables avec filtres, synthèses, dédoublonnage et agrégats ; les paramétrages enregistrés conservent ces nouveaux réglages.'] },
             { v: '6.3.0', d: '2026-07-24', t: 'V6 Lot 4 — le squelette rendu visible : chaîne aval de l\'application, rien à ressaisir', items: [
                 'Bandeau « Modèle » en tête des Applications : 🖥 Application ▸ 📄 Sources ▸ 🏛️ Objet métier ▸ 📥 Consommateurs — le squelette est rappelé partout.',
                 'Chaque application affiche sa CHAÎNE AVAL, reconstruite depuis le paramétrage déjà déclaré : ses sources → les objets métier qu\'elles alimentent → les consommateurs de ces objets. On récupère le paramétrage amont au lieu de tout refaire.',
@@ -11844,7 +11848,7 @@
         const ADV_TRANSFORMS = { none: '— brut —', trim: 'Espaces (trim)', upper: 'MAJUSCULES', lower: 'minuscules', noaccent: 'Sans accents' };
         const ADV_AGGS = { count: 'Nombre de lignes (NB / NB.SI.ENS)', countd: 'Nombre distinct', sum: 'Somme (SOMME.SI.ENS)', avg: 'Moyenne (MOYENNE.SI.ENS)', min: 'Minimum', max: 'Maximum' };
         // Fonctions calculées « façon Excel » disponibles dans les colonnes.
-        const ADV_CALC_FNS = { concat: 'CONCATENER (2 colonnes + séparateur)', left: 'GAUCHE (n premiers caractères)', right: 'DROITE (n derniers)', mid: 'STXT (extraire du milieu)', len: 'NBCAR (longueur)', si: 'SI (condition → valeur A sinon B)' };
+        const ADV_CALC_FNS = { concat: 'CONCATENER (2 colonnes ou plus + séparateur)', left: 'GAUCHE (n premiers caractères)', right: 'DROITE (n derniers)', mid: 'STXT (extraire du milieu)', len: 'NBCAR (longueur)', si: 'SI (condition → valeur A sinon B)' };
 
         function advExtractOpen() { return true; }
         function toggleAdvExtract() { renderAdvExtract(); }
@@ -11869,7 +11873,15 @@
             const ref = r => `COALESCE(CAST(${map[r.tableId]}.${sqlIdent(r.col)} AS VARCHAR), '')`;
             const a = calc.a ? ref(calc.a) : "''";
             switch (calc.fn) {
-                case 'concat': return `${a} || ${sqlLiteral(calc.sep || ' ')} || ${calc.b ? ref(calc.b) : "''"}`;
+                case 'concat': {
+                    // V6.4 : concaténation de 2 colonnes OU PLUS avec le séparateur choisi (concat_ws
+                    // ignore les valeurs vides → pas de séparateur orphelin). Rétro-compat : ancien a+b.
+                    if (calc.parts && calc.parts.length) {
+                        const refRaw = r => `NULLIF(TRIM(CAST(${map[r.tableId]}.${sqlIdent(r.col)} AS VARCHAR)), '')`;
+                        return `concat_ws(${sqlLiteral(calc.sep != null ? calc.sep : ' ')}, ${calc.parts.map(refRaw).join(', ')})`;
+                    }
+                    return `${a} || ${sqlLiteral(calc.sep || ' ')} || ${calc.b ? ref(calc.b) : "''"}`;
+                }
                 case 'left': return `LEFT(${a}, ${parseInt(calc.n) || 1})`;
                 case 'right': return `RIGHT(${a}, ${parseInt(calc.n) || 1})`;
                 case 'mid': return `SUBSTRING(${a}, ${parseInt(calc.start) || 1}, ${parseInt(calc.n) || 1})`;
@@ -11886,6 +11898,7 @@
             if (c.kind === 'link' || c.kind === 'hier') return []; // ancrées via la table parente, jamais jointes ligne à ligne
             if (c.kind !== 'calc') return [c.tableId];
             const ids = [];
+            (c.calc.parts || []).forEach(p => { if (p && p.tableId) ids.push(p.tableId); });
             if (c.calc.a) ids.push(c.calc.a.tableId);
             if (c.calc.b) ids.push(c.calc.b.tableId);
             return ids;
@@ -12004,7 +12017,10 @@
                 const conf = c.conf || {}; if (!conf.idCol) return { err: 'Hiérarchie : choisissez la colonne identifiant.' };
                 const T = sqlIdent(duckTableName(c.tableId)); const H = 'h' + (hn++);
                 const maxD = Math.max(1, Math.min(20, parseInt(conf.maxDepth) || 5));
-                const id2 = sqlIdent(conf.idCol); const lbl = a2 => `TRIM(CAST(${a2}.${id2} AS VARCHAR))`;
+                const id2 = sqlIdent(conf.idCol);
+                // V6.4 : la valeur émise par niveau peut être un ATTRIBUT de la table (labelCol),
+                // pas seulement l'identifiant. La récursion reste indexée sur l'identifiant.
+                const lblC = conf.labelCol ? sqlIdent(conf.labelCol) : id2; const lbl = a2 => `TRIM(CAST(${a2}.${lblC} AS VARCHAR))`;
                 let baseWhere, stepJoin;
                 if (conf.type === 'link' && conf.linkTable) {
                     if (!conf.linkChildCol || !conf.linkParentCol) return { err: 'Hiérarchie via liaison : colonnes enfant/parent requises.' };
@@ -12249,24 +12265,45 @@
         // -- Colonnes calculées « façon Excel » --
         function advCalcFnChanged() {
             const fn = el('adv-calc-fn').value;
-            el('adv-calc-b-wrap').classList.toggle('hidden', fn !== 'concat');
-            el('adv-calc-sep-wrap').classList.toggle('hidden', fn !== 'concat');
+            const concat = fn === 'concat';
+            if (el('adv-calc-b-wrap')) el('adv-calc-b-wrap').classList.add('hidden'); // remplacé par la liste de colonnes (concat N)
+            if (el('adv-calc-parts-wrap')) el('adv-calc-parts-wrap').classList.toggle('hidden', !concat);
+            el('adv-calc-sep-wrap').classList.toggle('hidden', !concat);
             el('adv-calc-n-wrap').classList.toggle('hidden', !(fn === 'left' || fn === 'right' || fn === 'mid'));
             el('adv-calc-start-wrap').classList.toggle('hidden', fn !== 'mid');
             el('adv-calc-si-wrap').classList.toggle('hidden', fn !== 'si');
         }
         function advCalcTblChanged(which) { const t = state.tables[el('adv-calc-' + which + '-tbl').value]; const c = el('adv-calc-' + which + '-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        // Concaténation N colonnes : pile de colonnes empilées via la « Colonne source » ci-dessus.
+        function advConcatAddPart() {
+            const tableId = el('adv-calc-a-tbl').value, col = el('adv-calc-a-col').value;
+            if (!tableId || !col) return showError('Choisissez une colonne source à ajouter.');
+            const s = state.advExtract; s._ccParts = s._ccParts || []; s._ccParts.push({ tableId, col }); advRenderConcatParts();
+        }
+        function advConcatDelPart(i) { const s = state.advExtract; (s._ccParts || []).splice(i, 1); advRenderConcatParts(); }
+        function advRenderConcatParts() {
+            const box = el('adv-calc-parts'); if (!box) return; const parts = state.advExtract._ccParts || [];
+            box.innerHTML = parts.length ? parts.map((p, i) => `<span class="text-[10px] bg-white border border-amber-300 rounded-full px-2 py-0.5 inline-flex items-center gap-1">${i + 1}. ${escapeHTML((state.tables[p.tableId] || {}).name || '?')}.${escapeHTML(p.col)} <button onclick="advConcatDelPart(${i})" class="text-amber-400 hover:text-red-600 font-bold">✕</button></span>`).join(' ') : '<span class="text-[10px] text-slate-400 italic">Empilez au moins 2 colonnes (dans l\'ordre) via « ➕ ajouter cette colonne ».</span>';
+        }
         function advAddCalcColumn() {
             const fn = el('adv-calc-fn').value;
+            // Concaténation N colonnes : construite depuis la liste des colonnes empilées.
+            if (fn === 'concat') {
+                const parts = (state.advExtract._ccParts || []).slice();
+                if (parts.length < 2) return showError('Ajoutez au moins 2 colonnes à concaténer (bouton « ➕ ajouter cette colonne »).');
+                const sep = el('adv-calc-sep').value;
+                const calc = { fn: 'concat', parts, sep };
+                const defAlias = parts.map(p => p.col).join('_');
+                state.advExtract.columns.push({ id: 'ac_' + generateId(), kind: 'calc', calc, alias: (el('adv-calc-alias').value || '').trim() || defAlias, transform: 'none', tableId: parts[0].tableId, col: '(calculée)' });
+                state.advExtract._ccParts = [];
+                renderAdvExtract();
+                return;
+            }
             const a = { tableId: el('adv-calc-a-tbl').value, col: el('adv-calc-a-col').value };
             if (!a.tableId || !a.col) return showError('Choisissez la colonne source.');
             const calc = { fn, a };
             let defAlias = '';
-            if (fn === 'concat') {
-                calc.b = { tableId: el('adv-calc-b-tbl').value, col: el('adv-calc-b-col').value };
-                calc.sep = el('adv-calc-sep').value;
-                defAlias = a.col + '_' + (calc.b.col || '');
-            } else if (fn === 'left' || fn === 'right') { calc.n = parseInt(el('adv-calc-n').value) || 1; defAlias = (fn === 'left' ? 'gauche_' : 'droite_') + a.col; }
+            if (fn === 'left' || fn === 'right') { calc.n = parseInt(el('adv-calc-n').value) || 1; defAlias = (fn === 'left' ? 'gauche_' : 'droite_') + a.col; }
             else if (fn === 'mid') { calc.start = parseInt(el('adv-calc-start').value) || 1; calc.n = parseInt(el('adv-calc-n').value) || 1; defAlias = 'stxt_' + a.col; }
             else if (fn === 'len') { defAlias = 'nbcar_' + a.col; }
             else if (fn === 'si') {
@@ -12284,7 +12321,7 @@
         function advColLabel(c) {
             if (c.kind === 'calc') {
                 const cal = c.calc; const rf = r => r ? ((state.tables[r.tableId] || {}).name + '.' + r.col) : '?';
-                if (cal.fn === 'concat') return `ƒ CONCAT(${rf(cal.a)}, "${cal.sep || ' '}", ${rf(cal.b)})`;
+                if (cal.fn === 'concat') { if (cal.parts && cal.parts.length) return `ƒ CONCAT(${cal.parts.map(rf).join(` "${cal.sep || ' '}" `)})`; return `ƒ CONCAT(${rf(cal.a)}, "${cal.sep || ' '}", ${rf(cal.b)})`; }
                 if (cal.fn === 'left') return `ƒ GAUCHE(${rf(cal.a)}, ${cal.n})`;
                 if (cal.fn === 'right') return `ƒ DROITE(${rf(cal.a)}, ${cal.n})`;
                 if (cal.fn === 'mid') return `ƒ STXT(${rf(cal.a)}, ${cal.start}, ${cal.n})`;
@@ -12342,7 +12379,7 @@
             epRemapTableRefs(cfg, n => { const t = tableByName(n); return t ? t.id : '__MISSING__'; });
             // 3. Retire les colonnes / filtres / agrégats qui pointent vers une table absente.
             const bad = x => x && x.tableId === '__MISSING__';
-            if (Array.isArray(cfg.columns)) cfg.columns = cfg.columns.filter(c => !bad(c) && !(c.calc && (bad(c.calc.a) || bad(c.calc.b))) && !(c.conf && bad({ tableId: c.conf.linkTable })));
+            if (Array.isArray(cfg.columns)) cfg.columns = cfg.columns.filter(c => !bad(c) && !(c.calc && (bad(c.calc.a) || bad(c.calc.b) || (c.calc.parts || []).some(bad))) && !(c.conf && bad({ tableId: c.conf.linkTable })));
             if (Array.isArray(cfg.filters)) cfg.filters = cfg.filters.filter(f => !bad(f));
             if (cfg.group && Array.isArray(cfg.group.aggs)) cfg.group.aggs = cfg.group.aggs.filter(a => !bad(a) && !(a.conds || []).some(bad));
             // 4. Défauts de forme + nettoyage des clés de dédoublonnage devenues orphelines.
@@ -12457,6 +12494,8 @@
                     <select id="adv-hier-type" onchange="advHierTypeChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="simple">Parent dans la même table</option><option value="link">Via table de liaison</option></select></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Identifiant</label>
                     <select id="adv-hier-id" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
+                    <div><label class="text-[9px] uppercase font-bold text-slate-400 block" title="Colonne de la table hiérarchique à extraire pour chaque niveau (ex. le libellé au lieu du code). Par défaut : l'identifiant.">Attribut à extraire</label>
+                    <select id="adv-hier-label" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white"><option value="">— l'identifiant —</option>${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
                     <div id="adv-hier-simple-wrap"><label class="text-[9px] uppercase font-bold text-slate-400 block">Parent</label>
                     <select id="adv-hier-parent" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${((reach[0] || { headers: [] }).headers).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div>
                     <div id="adv-hier-link-wrap" class="hidden flex items-end gap-1.5 flex-wrap">
@@ -12486,6 +12525,8 @@
                     <div id="adv-calc-b-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">2e colonne</label>
                     <div class="flex gap-1"><select id="adv-calc-b-tbl" onchange="advCalcTblChanged('b')" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
                     <select id="adv-calc-b-col" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select></div></div>
+                    <div id="adv-calc-parts-wrap" class="hidden basis-full"><label class="text-[9px] uppercase font-bold text-slate-400 block">Colonnes à concaténer (choisissez « Colonne source » puis ➕, dans l'ordre — 2 ou plus)</label>
+                    <div class="flex items-center gap-1.5 flex-wrap mt-0.5"><button onclick="advConcatAddPart()" class="text-[11px] bg-white border border-amber-300 text-amber-700 px-2 py-1 rounded font-bold hover:bg-amber-50">➕ ajouter cette colonne</button><span id="adv-calc-parts" class="flex items-center gap-1 flex-wrap"><span class="text-[10px] text-slate-400 italic">Empilez au moins 2 colonnes (dans l'ordre).</span></span></div></div>
                     <div id="adv-calc-sep-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Séparateur</label>
                     <input type="text" id="adv-calc-sep" value=" " class="border border-slate-300 p-1.5 rounded text-[11px] w-14"></div>
                     <div id="adv-calc-start-wrap" class="hidden"><label class="text-[9px] uppercase font-bold text-slate-400 block">Début</label>
@@ -12577,6 +12618,7 @@
             </div>`;
             body.innerHTML = html;
             if (window.lucide) lucide.createIcons({ root: body });
+            if (el('adv-calc-fn')) { advCalcFnChanged(); advRenderConcatParts(); }
             if (!s.customSql && el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql();
         }
         function advColColChanged() { const t = state.tables[el('adv-col-tbl').value]; const c = el('adv-col-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
@@ -12595,13 +12637,13 @@
             renderAdvExtract();
         }
         // -- Hiérarchie aplatie (ex-mode « Aplatir Hiérarchie ») --
-        function advHierTblChanged() { const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); }
+        function advHierTblChanged() { const t = state.tables[el('adv-hier-tbl').value]; ['adv-hier-id', 'adv-hier-parent'].forEach(x => { const c = el(x); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); const lb = el('adv-hier-label'); if (t && lb) lb.innerHTML = '<option value="">— l\'identifiant —</option>' + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
         function advHierLinkTblChanged() { const t = state.tables[el('adv-hier-ltbl').value]; ['adv-hier-lchild', 'adv-hier-lparent', 'adv-hier-lfrom', 'adv-hier-lto'].forEach((x, i) => { const c = el(x); if (t && c) c.innerHTML = (i >= 2 ? '<option value="">— non utilisé —</option>' : '') + t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }); }
         function advHierTypeChanged() { const link = el('adv-hier-type').value === 'link'; el('adv-hier-simple-wrap').classList.toggle('hidden', link); el('adv-hier-link-wrap').classList.toggle('hidden', !link); }
         function advAddHierColumn() {
             const t = el('adv-hier-tbl').value; if (!t) return;
             const type = el('adv-hier-type').value;
-            const conf = { type, idCol: el('adv-hier-id').value, parentCol: type === 'link' ? '' : el('adv-hier-parent').value,
+            const conf = { type, idCol: el('adv-hier-id').value, labelCol: el('adv-hier-label') ? el('adv-hier-label').value : '', parentCol: type === 'link' ? '' : el('adv-hier-parent').value,
                 linkTable: type === 'link' ? el('adv-hier-ltbl').value : '', linkChildCol: type === 'link' ? el('adv-hier-lchild').value : '', linkParentCol: type === 'link' ? el('adv-hier-lparent').value : '',
                 linkValidFromCol: type === 'link' ? el('adv-hier-lfrom').value : '', linkValidToCol: type === 'link' ? el('adv-hier-lto').value : '', refDate: type === 'link' ? el('adv-hier-refdate').value : '',
                 maxDepth: parseInt(el('adv-hier-depth').value) || 5 };
