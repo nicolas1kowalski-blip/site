@@ -9689,8 +9689,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.13.0';
+        const APP_VERSION = '6.14.0';
         const APP_CHANGELOG = [
+            { v: '6.14.0', d: '2026-07-24', t: 'Extraction : ramener les données de la MÊME table par plusieurs liens à la fois', items: [
+                'La 6.13 ne permettait de choisir qu\'UN lien par couple de tables : impossible de ramener, dans la même extraction, le nom du souscripteur ET celui du bénéficiaire. C\'est corrigé — une table peut désormais être jointe PLUSIEURS FOIS, une fois par lien.',
+                'Chaque colonne porte son propre lien : un sélecteur « via » apparaît dans la ligne d\'ajout dès que la table choisie est reliée plusieurs fois. Le lien retenu est rappelé dans la liste des colonnes, et l\'alias de sortie est rendu unique automatiquement.',
+                'Toutes les manipulations restent disponibles sur ces colonnes : alias métier, transformations, colonnes calculées (concaténation, GAUCHE/DROITE/STXT/NBCAR/SI), filtres, dédoublonnage, regroupements et agrégats — chacun pouvant viser un lien précis.',
+                'Techniquement, le planificateur raisonne désormais par ROUTE (table + lien) et non plus par table : chaque route obtient son propre alias SQL. Le choix « par défaut » de la 6.13 reste et sert aux colonnes qui ne précisent rien.'] },
             { v: '6.13.0', d: '2026-07-24', t: 'Extraction : quand deux tables sont reliées plusieurs fois, on vous demande quel lien utiliser', items: [
                 'CORRECTIF DE FOND : si deux tables étaient reliées par PLUSIEURS liens dans le modèle (ex. CONTRAT.souscripteur et CONTRAT.beneficiaire pointant tous deux sur CLIENT), l\'extraction choisissait SILENCIEUSEMENT le premier lien déclaré — le résultat pouvait donc être faux sans aucun signal.',
                 'Un encart « 🔗 Quel lien utiliser ? » apparaît désormais dès qu\'une ambiguïté existe sur le chemin de jointure réellement utilisé : une ligne par couple de tables, une simple liste déroulante avec les liens possibles écrits en clair (TABLE.colonne = TABLE.colonne, avec la cardinalité).',
@@ -12181,7 +12186,7 @@
         }
         function advColExpr(map, c) {
             if (c.kind === 'calc') return advCalcExpr(map, c.calc);
-            const q = `${map[c.tableId]}.${sqlIdent(c.col)}`;
+            const q = `${advAlias(map, c)}.${sqlIdent(c.col)}`;
             switch (c.transform) {
                 case 'trim': return `TRIM(CAST(${q} AS VARCHAR))`;
                 case 'upper': return `UPPER(TRIM(CAST(${q} AS VARCHAR)))`;
@@ -12192,14 +12197,14 @@
         }
         // Traduit une colonne calculée « façon Excel » en SQL DuckDB.
         function advCalcExpr(map, calc) {
-            const ref = r => `COALESCE(CAST(${map[r.tableId]}.${sqlIdent(r.col)} AS VARCHAR), '')`;
+            const ref = r => `COALESCE(CAST(${advAlias(map, r)}.${sqlIdent(r.col)} AS VARCHAR), '')`;
             const a = calc.a ? ref(calc.a) : "''";
             switch (calc.fn) {
                 case 'concat': {
                     // V6.4 : concaténation de 2 colonnes OU PLUS avec le séparateur choisi (concat_ws
                     // ignore les valeurs vides → pas de séparateur orphelin). Rétro-compat : ancien a+b.
                     if (calc.parts && calc.parts.length) {
-                        const refRaw = r => `NULLIF(TRIM(CAST(${map[r.tableId]}.${sqlIdent(r.col)} AS VARCHAR)), '')`;
+                        const refRaw = r => `NULLIF(TRIM(CAST(${advAlias(map, r)}.${sqlIdent(r.col)} AS VARCHAR)), '')`;
                         return `concat_ws(${sqlLiteral(calc.sep != null ? calc.sep : ' ')}, ${calc.parts.map(refRaw).join(', ')})`;
                     }
                     return `${a} || ${sqlLiteral(calc.sep || ' ')} || ${calc.b ? ref(calc.b) : "''"}`;
@@ -12209,7 +12214,7 @@
                 case 'mid': return `SUBSTRING(${a}, ${parseInt(calc.start) || 1}, ${parseInt(calc.n) || 1})`;
                 case 'len': return `LENGTH(${a})`;
                 case 'si': {
-                    const cond = advCondSql(map[calc.a.tableId], { col: calc.a.col, op: calc.op || '=', val: calc.val || '' });
+                    const cond = advCondSql(advAlias(map, calc.a), { col: calc.a.col, op: calc.op || '=', val: calc.val || '' });
                     return `CASE WHEN ${cond} THEN ${sqlLiteral(calc.then || '')} ELSE ${sqlLiteral(calc.else || '')} END`;
                 }
                 default: return "''";
@@ -12224,6 +12229,16 @@
             if (c.calc.a) ids.push(c.calc.a.tableId);
             if (c.calc.b) ids.push(c.calc.b.tableId);
             return ids;
+        }
+        // Besoins de jointure d'une colonne, avec le LIEN emprunté (via) — cf. advPlanJoins.
+        function advColNeeds(c) {
+            if (c.kind === 'link' || c.kind === 'hier') return [];
+            if (c.kind !== 'calc') return [{ tableId: c.tableId, via: c.via || '' }];
+            const out = [];
+            (c.calc.parts || []).forEach(p => { if (p && p.tableId) out.push({ tableId: p.tableId, via: p.via || '' }); });
+            if (c.calc.a) out.push({ tableId: c.calc.a.tableId, via: c.calc.a.via || '' });
+            if (c.calc.b) out.push({ tableId: c.calc.b.tableId, via: c.calc.b.via || '' });
+            return out;
         }
         const ADV_OPS = { '=': '=', '!=': '≠', 'contains': 'contient', 'in': 'dans la liste (;)', '>=': '≥ (nombre)', '<=': '≤ (nombre)', 'dfrom': 'à partir du (date)', 'dto': 'jusqu\'au (date)', 'empty': 'est vide', 'notempty': "n'est pas vide" };
         function advCondSql(alias, c) {
@@ -12265,12 +12280,12 @@
         // Paires réellement utilisées par le plan de jointures ET reliées par plusieurs liens.
         function advJoinChoices(spec) {
             if (!spec || !spec.baseId || !state.tables[spec.baseId]) return [];
-            const needed = new Set([spec.baseId]);
-            (spec.columns || []).forEach(c => advColTables(c).forEach(id => needed.add(id)));
-            (spec.filters || []).forEach(f => needed.add(f.tableId));
-            if (spec.group && spec.group.on) (spec.group.aggs || []).forEach(a => { if (a.tableId) needed.add(a.tableId); (a.conds || []).forEach(cc => needed.add(cc.tableId)); });
-            (spec.columns || []).filter(c => c.kind === 'link' || c.kind === 'hier').forEach(c => { const a = advLinkAnchor(spec.baseId, c.tableId); if (a) needed.add(a.parentId); });
-            let joins = []; try { joins = advPlanJoins(spec.baseId, Array.from(needed)).joins || []; } catch (e) { return []; }
+            const needs = [{ tableId: spec.baseId, via: '' }];
+            (spec.columns || []).forEach(c => advColNeeds(c).forEach(x => needs.push(x)));
+            (spec.filters || []).forEach(f => needs.push({ tableId: f.tableId, via: f.via || '' }));
+            if (spec.group && spec.group.on) (spec.group.aggs || []).forEach(a => { if (a.tableId) needs.push({ tableId: a.tableId, via: a.via || '' }); (a.conds || []).forEach(cc => needs.push({ tableId: cc.tableId, via: cc.via || '' })); });
+            (spec.columns || []).filter(c => c.kind === 'link' || c.kind === 'hier').forEach(c => { const a = advLinkAnchor(spec.baseId, c.tableId); if (a) needs.push({ tableId: a.parentId, via: '' }); });
+            let joins = []; try { joins = advPlanJoins(spec.baseId, needs).joins || []; } catch (e) { return []; }
             const byPair = advRelsByPair(); const out = []; const seen = new Set();
             joins.forEach(j => {
                 if (!j.rel) return; const k = advRelPairKey(j.rel);
@@ -12300,29 +12315,58 @@
         // MCD. Les liens INDIRECTS sont gérés : si une table n'est pas reliée directement, on cherche
         // le plus court chemin (BFS) à travers les tables intermédiaires (tables de lien, plusieurs
         // sauts possibles) et TOUTES les tables du chemin sont jointes automatiquement.
-        function advPlanJoins(baseId, neededIds) {
-            const map = {}; map[baseId] = 'x0';
+        // V6.14 : une table peut être jointe PLUSIEURS FOIS, une fois par lien. Un « besoin » est donc
+        // { tableId, via } où « via » est l'identifiant du lien emprunté au dernier saut ('' = lien par
+        // défaut). Chaque route obtient son propre alias SQL, ce qui permet de ramener les colonnes de la
+        // même table par des liens différents dans la MÊME extraction (souscripteur ET bénéficiaire).
+        function advRouteKey(tableId, via) { return tableId + '|' + (via || ''); }
+        function advAlias(map, x) {
+            if (!x) return 'x0';
+            return map[advRouteKey(x.tableId, x.via)] || map[advRouteKey(x.tableId, '')] || 'x0';
+        }
+        // Liens alternatifs proposables pour une table (uniquement là où il y a une vraie ambiguïté).
+        function advViaOptions(tableId) {
+            const base = (state.advExtract || {}).baseId;
+            if (!tableId || tableId === base) return [];
+            const byPair = advRelsByPair(); const out = [];
+            Object.keys(byPair).forEach(k => {
+                const list = byPair[k]; if (list.length < 2) return;
+                if (k.split('|').indexOf(tableId) < 0) return;
+                list.forEach(r => out.push(r));
+            });
+            return out;
+        }
+        function advViaLabel(via) { const r = (state.relations || []).find(x => x.id === via); return r ? advRelLabel(r) : ''; }
+        function advPlanJoins(baseId, needs) {
+            needs = (needs || []).map(x => (typeof x === 'string' ? { tableId: x, via: '' } : x)).filter(x => x && x.tableId);
+            const map = {}; map[advRouteKey(baseId, '')] = 'x0';
             const joined = new Set([baseId]); const joins = []; let n = 1;
-            // V6.13 : quand DEUX tables sont reliées par PLUSIEURS liens, on n'en garde qu'UN par paire —
-            // celui explicitement choisi par l'utilisateur, sinon le premier déclaré.
+            const allRels = (state.relations || []).filter(advRelValid);
+            // Chemin PAR DÉFAUT : un seul lien par paire (celui choisi, sinon le premier déclaré).
             const rels = Object.keys(advRelsByPair()).map(k => advChosenRel(k)).filter(Boolean);
             const adj = {};
             rels.forEach(r => {
                 (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable });
                 (adj[r.targetTable] = adj[r.targetTable] || []).push({ rel: r, other: r.sourceTable });
             });
-            const joinVia = (rel, id) => {
-                const a = 'x' + (n++); map[id] = a;
+            // Pose une jointure et renvoie son alias ; « fromAlias » est le côté déjà joint.
+            const addJoin = (rel, id, fromAlias) => {
+                const a = 'x' + (n++);
                 const idCol = rel.sourceTable === id ? rel.sourceCol : rel.targetCol;
-                const other = rel.sourceTable === id ? rel.targetTable : rel.sourceTable;
                 const otherCol = rel.sourceTable === id ? rel.targetCol : rel.sourceCol;
-                joins.push({ id, alias: a, rel, on: `UPPER(TRIM(CAST(${a}.${sqlIdent(idCol)} AS VARCHAR))) = UPPER(TRIM(CAST(${map[other]}.${sqlIdent(otherCol)} AS VARCHAR)))` });
-                joined.add(id);
+                joins.push({ id, alias: a, rel, on: `UPPER(TRIM(CAST(${a}.${sqlIdent(idCol)} AS VARCHAR))) = UPPER(TRIM(CAST(${fromAlias}.${sqlIdent(otherCol)} AS VARCHAR)))` });
+                return a;
             };
             const unreachable = [];
-            for (const target of neededIds.filter(x => x !== baseId)) {
+            // Les extrémités « amont » des liens explicites doivent être jointes par défaut d'abord.
+            const viaOthers = needs.filter(x => x.via).map(x => {
+                const r = allRels.find(y => y.id === x.via); if (!r) return null;
+                return r.sourceTable === x.tableId ? r.targetTable : r.sourceTable;
+            }).filter(Boolean);
+            const defaultTargets = [...new Set([...needs.filter(x => !x.via).map(x => x.tableId), ...viaOthers])].filter(x => x !== baseId);
+            // 1. Routes PAR DÉFAUT (BFS, un lien par paire) — comportement historique.
+            for (const target of defaultTargets) {
                 if (joined.has(target)) continue;
-                // BFS depuis l'ensemble déjà joint vers la cible, en passant par n'importe quelle table chargée
                 const prev = {}; const queue = Array.from(joined); const seen = new Set(joined);
                 while (queue.length && !prev[target]) {
                     const cur = queue.shift();
@@ -12331,11 +12375,23 @@
                     }
                 }
                 if (!prev[target]) { unreachable.push(target); continue; }
-                // Remonte le chemin cible → table déjà jointe, puis joint chaque étape dans l'ordre
                 const path = []; let cur = target;
-                while (!joined.has(cur)) { path.unshift({ id: cur, rel: prev[cur].rel }); cur = prev[cur].from; }
-                path.forEach(stp => joinVia(stp.rel, stp.id));
+                while (!joined.has(cur)) { path.unshift({ id: cur, rel: prev[cur].rel, from: prev[cur].from }); cur = prev[cur].from; }
+                path.forEach(stp => {
+                    const a = addJoin(stp.rel, stp.id, map[advRouteKey(stp.from, '')]);
+                    map[advRouteKey(stp.id, '')] = a; joined.add(stp.id);
+                });
             }
+            // 2. Routes EXPLICITES : un alias DÉDIÉ par lien — la même table peut être jointe plusieurs fois.
+            needs.filter(x => x.via).forEach(x => {
+                const key = advRouteKey(x.tableId, x.via); if (map[key]) return;
+                const rel = allRels.find(r => r.id === x.via);
+                if (!rel) { if (!map[advRouteKey(x.tableId, '')]) unreachable.push(x.tableId); return; }
+                const other = rel.sourceTable === x.tableId ? rel.targetTable : rel.sourceTable;
+                const fromAlias = map[advRouteKey(other, '')];
+                if (!fromAlias) { unreachable.push(x.tableId); return; }
+                map[key] = addJoin(rel, x.tableId, fromAlias);
+            });
             return { map, joins, unreachable };
         }
         // Développe une colonne de la spec en 1..N items { expr, alias } — les types « link »
@@ -12343,7 +12399,7 @@
         function advExpandCol(map, c, hierRef) {
             if (c.kind === 'link') {
                 const a = c._anchor; const S = sqlIdent(duckTableName(c.tableId));
-                const key = `${advNk('s.' + sqlIdent(a.childCol))} = ${advNk(map[a.parentId] + '.' + sqlIdent(a.parentCol))}`;
+                const key = `${advNk('s.' + sqlIdent(a.childCol))} = ${advNk(advAlias(map, { tableId: a.parentId }) + '.' + sqlIdent(a.parentCol))}`;
                 const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : null;
                 const al = c.alias || c.col || 'synthese';
                 if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} s WHERE ${key})`, alias: al }];
@@ -12370,19 +12426,20 @@
             const cols = spec.columns;
             const globalAggMode = spec.group.on && spec.group.aggs.length > 0; // agrégats possibles sans dimension (comme une cellule de synthèse Excel)
             if (!cols.length && !globalAggMode) return { err: 'Ajoutez au moins une colonne.' };
-            const needed = new Set([spec.baseId]);
-            cols.forEach(c => advColTables(c).forEach(id => needed.add(id)));
-            spec.filters.forEach(f => needed.add(f.tableId));
-            if (spec.group.on) spec.group.aggs.forEach(a => { if (a.tableId) needed.add(a.tableId); (a.conds || []).forEach(cc => needed.add(cc.tableId)); });
+            // Besoins de jointure, chacun avec le LIEN emprunté ('' = lien par défaut de la paire).
+            const needs = [{ tableId: spec.baseId, via: '' }];
+            cols.forEach(c => advColNeeds(c).forEach(x => needs.push(x)));
+            spec.filters.forEach(f => needs.push({ tableId: f.tableId, via: f.via || '' }));
+            if (spec.group.on) spec.group.aggs.forEach(a => { if (a.tableId) needs.push({ tableId: a.tableId, via: a.via || '' }); (a.conds || []).forEach(cc => needs.push({ tableId: cc.tableId, via: cc.via || '' })); });
             // ancrages des colonnes « synthèse » / « hiérarchie » : on joint la table PARENTE du lien,
             // jamais la table résumée elle-même (pas de multiplication de lignes).
             for (const c of cols.filter(c2 => c2.kind === 'link' || c2.kind === 'hier')) {
                 if (c.tableId === spec.baseId && c.kind === 'hier') { c._anchor = null; continue; }
                 const a = advLinkAnchor(spec.baseId, c.tableId);
                 if (!a) return { err: `« ${(state.tables[c.tableId] || {}).name || '?'} » n'est pas reliée à la table de départ dans le modèle de données (étape 2).` };
-                c._anchor = a; needed.add(a.parentId);
+                c._anchor = a; needs.push({ tableId: a.parentId, via: '' });
             }
-            const { map, joins, unreachable } = advPlanJoins(spec.baseId, Array.from(needed));
+            const { map, joins, unreachable } = advPlanJoins(spec.baseId, needs);
             if (unreachable.length) return { err: 'Tables non reliées dans le modèle de données : ' + unreachable.map(id => (state.tables[id] || {}).name).join(', ') + '. Ajoutez un lien à l\'étape 2 (modèle de données).' };
             // CTE récursives des hiérarchies + leur jointure dédiée
             const ctes = [], hierJoins = [], hierRef = {}; let hn = 0;
@@ -12419,18 +12476,18 @@
                 ctes.push(`${H}(k, chain) AS (\n  SELECT ${advNk('t.' + id2)}, [${lbl('t')}] FROM ${T} t WHERE ${baseWhere}\n  UNION ALL\n  SELECT ${advNk('c.' + id2)}, list_append(p.chain, ${lbl('c')}) FROM ${T} c ${stepJoin} WHERE len(p.chain) < ${maxD} AND NOT list_contains(p.chain, ${lbl('c')})\n)`);
                 const a = c._anchor;
                 if (!a) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk('x0.' + id2)}`); hierRef[c.id] = `${H}.chain`; }
-                else if (a.childCol === conf.idCol) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk(map[a.parentId] + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}.chain`; }
-                else { hierJoins.push(`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(a.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ON hh.k = ${advNk('t2.' + id2)}) ${H}x ON ${H}x.jk = ${advNk(map[a.parentId] + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}x.chain`; }
+                else if (a.childCol === conf.idCol) { hierJoins.push(`LEFT JOIN ${H} ON ${H}.k = ${advNk(advAlias(map, { tableId: a.parentId }) + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}.chain`; }
+                else { hierJoins.push(`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(a.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ON hh.k = ${advNk('t2.' + id2)}) ${H}x ON ${H}x.jk = ${advNk(advAlias(map, { tableId: a.parentId }) + '.' + sqlIdent(a.parentCol))}`); hierRef[c.id] = `${H}x.chain`; }
             }
             const JT = spec.joinType === 'inner' ? 'JOIN' : 'LEFT JOIN';
             const fromSql = `${sqlIdent(duckTableName(spec.baseId))} x0` + (joins.length ? '\n  ' + joins.map(j => `${JT} ${sqlIdent(duckTableName(j.id))} ${j.alias} ON ${j.on}`).join('\n  ') : '') + (hierJoins.length ? '\n  ' + hierJoins.join('\n  ') : '');
             const withSql = ctes.length ? 'WITH RECURSIVE ' + ctes.join(',\n') + '\n' : '';
-            const whereSql = spec.filters.length ? '\nWHERE ' + spec.filters.map(f => advCondSql(map[f.tableId], f)).join('\n  AND ') : '';
+            const whereSql = spec.filters.length ? '\nWHERE ' + spec.filters.map(f => advCondSql(advAlias(map, f), f)).join('\n  AND ') : '';
             const outCols = []; let selectSql, tail = '';
             if (spec.group.on) {
                 const dims = cols.flatMap(c => advExpandCol(map, c, hierRef));
                 const aggs = spec.group.aggs.map(a => {
-                    const q = a.col && a.col !== '*' ? `${map[a.tableId]}.${sqlIdent(a.col)}` : null;
+                    const q = a.col && a.col !== '*' ? `${advAlias(map, a)}.${sqlIdent(a.col)}` : null;
                     let e;
                     if (a.fn === 'count') e = 'COUNT(*)';
                     else if (a.fn === 'countd') e = `COUNT(DISTINCT ${q})`;
@@ -12439,7 +12496,7 @@
                     else if (a.fn === 'min') e = `MIN(${q})`;
                     else e = `MAX(${q})`;
                     // Critères façon NB.SI.ENS / SOMME.SI.ENS : FILTER (WHERE ...) sur l'agrégat
-                    if ((a.conds || []).length) e += ` FILTER (WHERE ${(a.conds || []).map(cc => advCondSql(map[cc.tableId], cc)).join(' AND ')})`;
+                    if ((a.conds || []).length) e += ` FILTER (WHERE ${(a.conds || []).map(cc => advCondSql(advAlias(map, cc), cc)).join(' AND ')})`;
                     return { expr: e, alias: a.alias || (a.fn + '_' + (a.col || 'lignes')) };
                 });
                 const all = [...dims, ...aggs]; all.forEach(x => outCols.push({ alias: x.alias }));
@@ -12580,7 +12637,12 @@
         function advSetBase(v) { state.advExtract.baseId = v; state.advExtract.columns = state.advExtract.columns.filter(c => c.kind === 'calc' || c.tableId === v || getReachableTables(v).includes(c.tableId)); const bs = el('baseTableSelect'); if (bs && bs.value !== v) bs.value = v; renderAdvExtract(); }
         function advAddColumn() {
             const t = el('adv-col-tbl').value, col = el('adv-col-col').value; if (!t || !col) return;
-            state.advExtract.columns.push({ id: 'ac_' + generateId(), tableId: t, col, alias: col, transform: 'none' });
+            const via = (el('adv-col-via') && !el('adv-col-via-wrap').classList.contains('hidden')) ? el('adv-col-via').value : '';
+            // Même colonne ramenée par un AUTRE lien : on distingue l'alias de sortie pour éviter le doublon.
+            const cols = state.advExtract.columns;
+            let alias = col; if (cols.some(c => c.alias === alias)) { const r = (state.relations || []).find(x => x.id === via); alias = col + '_' + ((r && (r.sourceTable === t ? r.targetCol : r.sourceCol)) || (cols.filter(c => c.col === col).length + 1)); }
+            while (cols.some(c => c.alias === alias)) alias += '_2';
+            cols.push({ id: 'ac_' + generateId(), tableId: t, col, via, alias, transform: 'none' });
             renderAdvExtract();
         }
         function advUpdateColumn(id, f, v) { const c = state.advExtract.columns.find(x => x.id === id); if (c) { c[f] = v; if (f !== 'alias') renderAdvExtract(); } }
@@ -12708,7 +12770,8 @@
             }
             if (c.kind === 'link') { const t2 = state.tables[c.tableId]; return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${(t2 ? t2.name : '?')}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}`; }
             if (c.kind === 'hier') { const t2 = state.tables[c.tableId]; const cf = c.conf || {}; const at = advHierAttrs(cf); const atTxt = at.length > 1 ? ' · extrait : ' + at.join(', ') : (cf.labelCol || (cf.labelCols && cf.labelCols[0]) ? ' · extrait : ' + at[0] : ''); return `🌳 Hiérarchie ${(t2 ? t2.name : '?')} (${cf.idCol || '?'} ⤴ ${cf.type === 'link' ? 'liaison ' + ((state.tables[cf.linkTable] || {}).name || '?') : (cf.parentCol || '?')}, ${cf.maxDepth || 5} niveaux${atTxt})`; }
-            const t = state.tables[c.tableId]; return (t ? t.name : '?') + '.' + c.col;
+            const t = state.tables[c.tableId];
+            return (t ? t.name : '?') + '.' + c.col + (c.via ? ` <span class="text-[10px] text-amber-700 font-bold">via ${escapeHTML(advViaLabel(c.via))}</span>` : '');
         }
         // ===== Paramétrages d'extraction enregistrables =====
         function epList() { return state.extractPresets = state.extractPresets || []; }
@@ -12829,7 +12892,7 @@
             if (_amb.length) {
                 html += `<div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
                     <div class="text-[12px] font-bold text-amber-800 mb-1.5">🔗 Quel lien utiliser ?</div>
-                    <div class="text-[11px] text-amber-700 mb-2">Ces tables sont reliées par <b>plusieurs liens</b> dans le modèle de données. Choisissez celui qui doit servir à l'extraction — le résultat en dépend.</div>
+                    <div class="text-[11px] text-amber-700 mb-2">Ces tables sont reliées par <b>plusieurs liens</b> dans le modèle de données. Choisissez ici le lien <b>par défaut</b> — et pour ramener <b>la même table par plusieurs liens à la fois</b> (ex. le nom du souscripteur ET celui du bénéficiaire), précisez le lien <b>colonne par colonne</b> avec le sélecteur « via » de la ligne d'ajout.</div>
                     ${_amb.map(a => `<div class="flex items-center gap-2 flex-wrap mb-1.5">
                         <span class="text-[11px] font-bold text-slate-700 bg-white border border-amber-200 rounded px-2 py-1">${escapeHTML(a.a)} ↔ ${escapeHTML(a.b)}</span>
                         <select onchange="advSetJoinChoice('${escapeHTML(a.key)}', this.value)" class="border border-amber-300 p-1.5 rounded text-[11px] bg-white min-w-[280px]">
@@ -12856,6 +12919,8 @@
             html += `<div class="flex items-end gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
                 <select id="adv-col-tbl" onchange="advColColChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${[state.tables[s.baseId], ...reach.filter(t => t.id !== s.baseId)].filter(Boolean).map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('')}</select>
                 <select id="adv-col-col" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${(state.tables[s.baseId] ? state.tables[s.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                <span id="adv-col-via-wrap" class="hidden items-center gap-1"><span class="text-[10px] font-bold text-amber-700">via</span>
+                <select id="adv-col-via" class="border border-amber-300 p-1.5 rounded text-xs bg-white"></select></span>
                 <button onclick="advAddColumn()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">+ Colonne</button>
                 <button onclick="advAddAllColumns()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded font-medium">+ Toutes</button>
                 <button onclick="advBulkOpen()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded font-bold">➕ Plusieurs colonnes…</button>
@@ -13014,7 +13079,15 @@
             if (el('adv-hier-label')) advRenderHierAttrs();
             if (!s.customSql && el('adv-sql-wrap') && !el('adv-sql-wrap').classList.contains('hidden')) advShowSql();
         }
-        function advColColChanged() { const t = state.tables[el('adv-col-tbl').value]; const c = el('adv-col-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
+        function advColColChanged() {
+            const id = el('adv-col-tbl').value; const t = state.tables[id]; const c = el('adv-col-col');
+            if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('');
+            // V6.14 : si cette table est reliée plusieurs fois, on propose PAR COLONNE le lien à emprunter.
+            const opts = advViaOptions(id); const w = el('adv-col-via-wrap'), sel = el('adv-col-via');
+            if (!w || !sel) return;
+            w.classList.toggle('hidden', opts.length === 0); w.classList.toggle('inline-flex', opts.length > 0);
+            sel.innerHTML = '<option value="">— lien par défaut —</option>' + opts.map(r => `<option value="${r.id}">${escapeHTML(advRelLabel(r))}</option>`).join('');
+        }
         // -- Synthèse d'une table liée (ex-modes Transposer / Compter de l'ancien écran) --
         const ADV_LINK_MODES = { count: 'Compter les lignes liées', countd: 'Compter les valeurs uniques', values: 'Transposer en texte (valeurs concaténées)', indexed: 'Transposer en colonnes (n premières)' };
         function advLinkTblChanged() { const t = state.tables[el('adv-link-tbl').value]; const c = el('adv-link-col'); if (t && c) c.innerHTML = t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
