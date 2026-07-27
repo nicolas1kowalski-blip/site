@@ -9689,8 +9689,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.12.1';
+        const APP_VERSION = '6.13.0';
         const APP_CHANGELOG = [
+            { v: '6.13.0', d: '2026-07-24', t: 'Extraction : quand deux tables sont reliées plusieurs fois, on vous demande quel lien utiliser', items: [
+                'CORRECTIF DE FOND : si deux tables étaient reliées par PLUSIEURS liens dans le modèle (ex. CONTRAT.souscripteur et CONTRAT.beneficiaire pointant tous deux sur CLIENT), l\'extraction choisissait SILENCIEUSEMENT le premier lien déclaré — le résultat pouvait donc être faux sans aucun signal.',
+                'Un encart « 🔗 Quel lien utiliser ? » apparaît désormais dès qu\'une ambiguïté existe sur le chemin de jointure réellement utilisé : une ligne par couple de tables, une simple liste déroulante avec les liens possibles écrits en clair (TABLE.colonne = TABLE.colonne, avec la cardinalité).',
+                'Le choix pilote vraiment le SQL généré : la jointure, les synthèses de tables liées et les ancrages de hiérarchie utilisent le lien retenu. Il est mémorisé avec le paramétrage d\'extraction.',
+                'Rien ne change quand il n\'y a qu\'un seul lien : l\'encart ne s\'affiche pas et le comportement est identique.'] },
             { v: '6.12.1', d: '2026-07-24', t: 'Correctif : des tables techniques restaient visibles dans la lecture métier', items: [
                 'CAUSE 1 : si l\'interrupteur « Objets métier » avait été décoché, aucun lien « compose » n\'était dérivé — donc aucune table ne pouvait être repliée, et la carte n\'affichait que des tables. Pire, la case était masquée en vue métier, donc impossible à rétablir. Les objets métier sont désormais FORCÉS en lecture métier.',
                 'CAUSE 2 : le repli s\'arrêtait aux tables composant un objet. Il est maintenant TOTAL — plus aucune table n\'apparaît en lecture métier : table composant un objet → absorbée par l\'objet ; table diffusée par un objet → absorbée par ce même objet ; table restante → absorbée par l\'application qui la produit.',
@@ -12233,10 +12238,53 @@
             if (c.op === 'dfrom' || c.op === 'dto') { const d = `COALESCE(TRY_CAST(${raw} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`; return `${d} ${c.op === 'dfrom' ? '>=' : '<='} DATE ${sqlLiteral(c.val)}`; }
             return `${norm} = ${sqlLiteral(String(c.val).toUpperCase())}`;
         }
+        // ---- V6.13 : DEUX TABLES, PLUSIEURS LIENS — on demande lequel utiliser ----
+        // Deux tables peuvent être reliées plusieurs fois (ex. CONTRAT.souscripteur et
+        // CONTRAT.beneficiaire pointant tous deux sur CLIENT). Sans choix explicite, l'extraction
+        // prenait silencieusement le premier lien trouvé. On matérialise donc le choix, par PAIRE.
+        function advRelValid(r) { return r && r.sourceCol && r.targetCol && state.tables[r.sourceTable] && state.tables[r.targetTable] && state.tables[r.sourceTable].status === 'ready' && state.tables[r.targetTable].status === 'ready'; }
+        function advRelPairKey(r) { return [r.sourceTable, r.targetTable].slice().sort().join('|'); }
+        function advRelsByPair() {
+            const out = {};
+            (state.relations || []).filter(advRelValid).forEach(r => { const k = advRelPairKey(r); (out[k] = out[k] || []).push(r); });
+            return out;
+        }
+        function advRelLabel(r) {
+            const a = state.tables[r.sourceTable], b = state.tables[r.targetTable];
+            return `${a ? a.name : '?'}.${r.sourceCol} = ${b ? b.name : '?'}.${r.targetCol}` + (r.cardinality ? ` (${r.cardinality})` : '');
+        }
+        function advChosenRel(pairKey) {
+            const list = advRelsByPair()[pairKey] || []; if (!list.length) return null;
+            const id = ((state.advExtract || {}).joinChoice || {})[pairKey];
+            return list.find(r => r.id === id) || list[0];
+        }
+        function advSetJoinChoice(pairKey, relId) {
+            const s = state.advExtract; s.joinChoice = s.joinChoice || {}; s.joinChoice[pairKey] = relId;
+            renderAdvExtract();
+        }
+        // Paires réellement utilisées par le plan de jointures ET reliées par plusieurs liens.
+        function advJoinChoices(spec) {
+            if (!spec || !spec.baseId || !state.tables[spec.baseId]) return [];
+            const needed = new Set([spec.baseId]);
+            (spec.columns || []).forEach(c => advColTables(c).forEach(id => needed.add(id)));
+            (spec.filters || []).forEach(f => needed.add(f.tableId));
+            if (spec.group && spec.group.on) (spec.group.aggs || []).forEach(a => { if (a.tableId) needed.add(a.tableId); (a.conds || []).forEach(cc => needed.add(cc.tableId)); });
+            (spec.columns || []).filter(c => c.kind === 'link' || c.kind === 'hier').forEach(c => { const a = advLinkAnchor(spec.baseId, c.tableId); if (a) needed.add(a.parentId); });
+            let joins = []; try { joins = advPlanJoins(spec.baseId, Array.from(needed)).joins || []; } catch (e) { return []; }
+            const byPair = advRelsByPair(); const out = []; const seen = new Set();
+            joins.forEach(j => {
+                if (!j.rel) return; const k = advRelPairKey(j.rel);
+                if (seen.has(k)) return; seen.add(k);
+                const list = byPair[k] || []; if (list.length < 2) return;
+                const [ia, ib] = k.split('|');
+                out.push({ key: k, a: (state.tables[ia] || {}).name || '?', b: (state.tables[ib] || {}).name || '?', rels: list, chosen: advChosenRel(k) });
+            });
+            return out;
+        }
         // Ancrage d'une table « résumée » : la relation qui la relie au chemin de jointures.
         function advLinkAnchor(baseId, tableId) {
             if (tableId === baseId) return null;
-            const rels = state.relations.filter(r => r.sourceCol && r.targetCol && state.tables[r.sourceTable] && state.tables[r.targetTable] && state.tables[r.sourceTable].status === 'ready' && state.tables[r.targetTable].status === 'ready');
+            const rels = Object.keys(advRelsByPair()).map(k => advChosenRel(k)).filter(Boolean);
             const adj = {};
             rels.forEach(r => { (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable }); (adj[r.targetTable] = adj[r.targetTable] || []).push({ rel: r, other: r.sourceTable }); });
             const prev = {}; const seen = new Set([baseId]); const queue = [baseId];
@@ -12255,7 +12303,9 @@
         function advPlanJoins(baseId, neededIds) {
             const map = {}; map[baseId] = 'x0';
             const joined = new Set([baseId]); const joins = []; let n = 1;
-            const rels = state.relations.filter(r => r.sourceCol && r.targetCol && state.tables[r.sourceTable] && state.tables[r.targetTable] && state.tables[r.sourceTable].status === 'ready' && state.tables[r.targetTable].status === 'ready');
+            // V6.13 : quand DEUX tables sont reliées par PLUSIEURS liens, on n'en garde qu'UN par paire —
+            // celui explicitement choisi par l'utilisateur, sinon le premier déclaré.
+            const rels = Object.keys(advRelsByPair()).map(k => advChosenRel(k)).filter(Boolean);
             const adj = {};
             rels.forEach(r => {
                 (adj[r.sourceTable] = adj[r.sourceTable] || []).push({ rel: r, other: r.targetTable });
@@ -12266,7 +12316,7 @@
                 const idCol = rel.sourceTable === id ? rel.sourceCol : rel.targetCol;
                 const other = rel.sourceTable === id ? rel.targetTable : rel.sourceTable;
                 const otherCol = rel.sourceTable === id ? rel.targetCol : rel.sourceCol;
-                joins.push({ id, alias: a, on: `UPPER(TRIM(CAST(${a}.${sqlIdent(idCol)} AS VARCHAR))) = UPPER(TRIM(CAST(${map[other]}.${sqlIdent(otherCol)} AS VARCHAR)))` });
+                joins.push({ id, alias: a, rel, on: `UPPER(TRIM(CAST(${a}.${sqlIdent(idCol)} AS VARCHAR))) = UPPER(TRIM(CAST(${map[other]}.${sqlIdent(otherCol)} AS VARCHAR)))` });
                 joined.add(id);
             };
             const unreachable = [];
@@ -12774,6 +12824,21 @@
                 <span class="bg-indigo-100 text-indigo-800 font-bold px-2.5 py-1 rounded-full">${escapeHTML((state.tables[s.baseId] || {}).name || '—')}</span>
                 ${s.objectId ? `<span class="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">objet : ${escapeHTML((bos.find(b => b.id === s.objectId) || {}).name || '')}</span>` : ''}
             </div>`;
+            // -- V6.13 : deux tables reliées PLUSIEURS fois → on demande quel lien utiliser --
+            const _amb = advJoinChoices(s);
+            if (_amb.length) {
+                html += `<div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                    <div class="text-[12px] font-bold text-amber-800 mb-1.5">🔗 Quel lien utiliser ?</div>
+                    <div class="text-[11px] text-amber-700 mb-2">Ces tables sont reliées par <b>plusieurs liens</b> dans le modèle de données. Choisissez celui qui doit servir à l'extraction — le résultat en dépend.</div>
+                    ${_amb.map(a => `<div class="flex items-center gap-2 flex-wrap mb-1.5">
+                        <span class="text-[11px] font-bold text-slate-700 bg-white border border-amber-200 rounded px-2 py-1">${escapeHTML(a.a)} ↔ ${escapeHTML(a.b)}</span>
+                        <select onchange="advSetJoinChoice('${escapeHTML(a.key)}', this.value)" class="border border-amber-300 p-1.5 rounded text-[11px] bg-white min-w-[280px]">
+                            ${a.rels.map(r => `<option value="${r.id}" ${a.chosen && r.id === a.chosen.id ? 'selected' : ''}>${escapeHTML(advRelLabel(r))}</option>`).join('')}
+                        </select>
+                        <span class="text-[10px] text-amber-600">${a.rels.length} liens possibles</span>
+                    </div>`).join('')}
+                </div>`;
+            }
             // -- Colonnes --
             html += `<div class="mb-4">
                 <div class="text-[11px] font-bold text-slate-600 uppercase mb-2">1. Colonnes en sortie ${s.group.on ? '<span class="text-indigo-500 normal-case">(dimensions du regroupement)</span>' : ''}</div>`;
