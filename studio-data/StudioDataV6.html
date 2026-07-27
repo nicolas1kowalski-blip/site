@@ -9562,8 +9562,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.8.0';
+        const APP_VERSION = '6.9.0';
         const APP_CHANGELOG = [
+            { v: '6.9.0', d: '2026-07-24', t: 'Correctif Règles & score : la règle « Cohérence (expression) » comparait les dates comme du texte', items: [
+                'BUG CORRIGÉ : « [DATE_FIN] >= [DATE_DEBUT] » comparait les valeurs LEXICOGRAPHIQUEMENT (les sources sont chargées en texte). Une ligne valide 31/12/2023 → 01/01/2024 était donc signalée en erreur, et l\'écran semblait remonter les lignes conformes au lieu des lignes fautives.',
+                'BUG CORRIGÉ : comparer une colonne à un nombre (« [MONTANT] >= 100 ») plantait la requête (Binder Error : VARCHAR vs entier).',
+                'Les comparaisons sont désormais TYPÉES automatiquement, dans l\'ordre : DATE (jj/mm/aaaa, aaaa-mm-jj, jj-mm-aaaa, jj.mm.aaaa, aaaa/mm/jj, avec ou sans heure), puis NOMBRE (virgule décimale et espaces milliers), puis TEXTE. Les valeurs vides ou non interprétables ne sont jamais comptées en échec.',
+                'ET / OU, parenthèses, fonctions SQL (LENGTH…) et opérateurs à l\'intérieur des chaînes littérales sont gérés correctement ; « != » est accepté comme « <> ».',
+                'Audit complet de l\'écran : les 8 autres types de règles (non vide, format, plage, liste, intégrité référentielle, condition si… alors…, unicité, fraîcheur) ont été vérifiés un par un sur données réelles — aucun autre défaut trouvé.'] },
             { v: '6.8.0', d: '2026-07-24', t: 'Lineage — les applications déclarées sur un objet métier apparaissent enfin sur la carte', items: [
                 'Les applications renseignées dans la fiche d\'un objet métier (« 🖥 Produite par » et « ⚙️ Consommée par ») deviennent de VRAIS nœuds et liens de la Vue systèmes : « Produit » (application → objet) et « Consommé par » (objet → application).',
                 'Elles s\'affichent même si elles ne lisent ni n\'écrivent aucune table — c\'est le cas typique d\'un consommateur déclaré uniquement au niveau métier (ex. ORION/LYNX, ENERGY sur l\'objet Emplacement).',
@@ -9842,6 +9848,81 @@
         }
         function qrDup(id) { const r = qrRules().find(x => x.id === id); if (!r) return; const c = JSON.parse(JSON.stringify(r)); c.id = 'qr_' + generateId(); c.name = r.name + ' (copie)'; delete c.last; qrRules().push(c); persistAppState(); renderQualityRules(); }
         function qrDel(id) { state.governance.qualityRules = qrRules().filter(x => x.id !== id); persistAppState(); renderQualityRules(); }
+        // ---- V6.9 : compilateur d'EXPRESSION typée pour la règle « Cohérence (expression) » ----
+        // Les sources sont chargées en TEXTE : comparer « [DATE_FIN] >= [DATE_DEBUT] » brut donnait une
+        // comparaison LEXICOGRAPHIQUE (01/01/2024 « < » 31/12/2023 → faux positif) et comparer une colonne
+        // à un nombre plantait (VARCHAR vs INTEGER). On compile donc chaque comparaison en essayant, dans
+        // l'ordre : DATE (formats FR/ISO), puis NOMBRE (virgule/espaces), puis TEXTE.
+        function qrTxtSql(x) { return `NULLIF(TRIM(CAST(${x} AS VARCHAR)), '')`; }
+        function qrDateSql(x) { const t = `TRIM(CAST(${x} AS VARCHAR))`;
+            return `COALESCE(TRY_CAST(TRY_STRPTIME(${t}, '%d/%m/%Y') AS DATE), TRY_CAST(TRY_STRPTIME(${t}, '%Y-%m-%d') AS DATE), TRY_CAST(TRY_STRPTIME(${t}, '%d-%m-%Y') AS DATE), TRY_CAST(TRY_STRPTIME(${t}, '%d.%m.%Y') AS DATE), TRY_CAST(TRY_STRPTIME(${t}, '%Y/%m/%d') AS DATE), TRY_CAST(TRY_STRPTIME(${t}, '%d/%m/%Y %H:%M:%S') AS DATE), TRY_CAST(TRY_STRPTIME(${t}, '%Y-%m-%d %H:%M:%S') AS DATE))`; }
+        function qrNumSql(x) { const t = `TRIM(CAST(${x} AS VARCHAR))`;
+            return `TRY_CAST(REPLACE(REPLACE(REPLACE(${t}, ' ', ''), chr(160), ''), ',', '.') AS DOUBLE)`; }
+        function qrSmartCmp(l, op, r2) {
+            const dL = qrDateSql(l), dR = qrDateSql(r2), nL = qrNumSql(l), nR = qrNumSql(r2), tL = qrTxtSql(l), tR = qrTxtSql(r2);
+            return `(CASE WHEN ${dL} IS NOT NULL AND ${dR} IS NOT NULL THEN (${dL} ${op} ${dR})`
+                 + ` WHEN ${nL} IS NOT NULL AND ${nR} IS NOT NULL THEN (${nL} ${op} ${nR})`
+                 + ` ELSE (${tL} ${op} ${tR}) END)`;
+        }
+        // Découpe une expression en atomes séparés par AND/OR au niveau 0 (hors parenthèses et chaînes).
+        function qrSplitLogical(s) {
+            const out = []; let depth = 0, quote = null, cur = '', i = 0;
+            while (i < s.length) {
+                const ch = s[i];
+                if (quote) { cur += ch; if (ch === quote) quote = null; i++; continue; }
+                if (ch === "'" || ch === '"') { quote = ch; cur += ch; i++; continue; }
+                if (ch === '(') depth++;
+                if (ch === ')') depth--;
+                if (depth === 0) {
+                    const m = s.slice(i).match(/^\s+(AND|OR)\s+/i);
+                    if (m) { out.push({ atom: cur }); out.push({ op: m[1].toUpperCase() }); cur = ''; i += m[0].length; continue; }
+                }
+                cur += ch; i++;
+            }
+            out.push({ atom: cur });
+            return out;
+        }
+        // Repère l'opérateur de comparaison de plus haut niveau d'un atome ; null s'il n'y en a pas.
+        function qrFindCmp(s) {
+            let depth = 0, quote = null;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s[i];
+                if (quote) { if (ch === quote) quote = null; continue; }
+                if (ch === "'" || ch === '"') { quote = ch; continue; }
+                if (ch === '(') { depth++; continue; }
+                if (ch === ')') { depth--; continue; }
+                if (depth !== 0) continue;
+                const two = s.substr(i, 2);
+                if (two === '>=' || two === '<=' || two === '<>' || two === '!=') return { i, op: two === '!=' ? '<>' : two, len: 2 };
+                if (ch === '>' || ch === '<' || ch === '=') return { i, op: ch, len: 1 };
+            }
+            return null;
+        }
+        function qrExprSql(formula) {
+            const src = String(formula || '').trim(); if (!src) return null;
+            const compileAtom = a => {
+                let s = a.trim(); if (!s) return null;
+                // parenthèses englobantes : on compile l'intérieur
+                if (s[0] === '(' && s[s.length - 1] === ')') {
+                    let d = 0, wraps = true;
+                    for (let i = 0; i < s.length; i++) { if (s[i] === '(') d++; else if (s[i] === ')') { d--; if (d === 0 && i < s.length - 1) { wraps = false; break; } } }
+                    if (wraps) { const inner = qrExprSql(s.slice(1, -1)); return inner ? `(${inner})` : null; }
+                }
+                const c = qrFindCmp(s);
+                if (!c) return tdFormulaSql(s); // pas une comparaison (IS NULL, LIKE…) → tel quel
+                const left = tdFormulaSql(s.slice(0, c.i).trim()), right = tdFormulaSql(s.slice(c.i + c.len).trim());
+                if (!left || !right) return tdFormulaSql(s);
+                return qrSmartCmp(left, c.op, right);
+            };
+            const parts = qrSplitLogical(src);
+            let sql = '';
+            parts.forEach(p => {
+                if (p.op) { sql += ' ' + p.op + ' '; return; }
+                const a = compileAtom(p.atom);
+                sql += (a == null ? 'TRUE' : a);
+            });
+            return sql.trim() || null;
+        }
         // Condition d'échec SQL (par ligne). Les types agrégés (unicité) sont traités à part.
         function qrFailCond(r) {
             const c = r.col ? sqlIdent(r.col) : null; if (!c && r.type !== 'expr') return null;
@@ -9871,7 +9952,7 @@
                     const ifC = part(c, raw, P.ifOp || 'filled', P.ifVal);
                     const thenC = part(c2, raw2, P.thenOp || 'empty', P.thenVal);
                     return (ifC && thenC) ? `(${ifC} AND NOT ${thenC})` : null; }
-                case 'expr': { const e2 = String(P.formula || '').trim(); return e2 ? `(NOT COALESCE((${tdFormulaSql(e2)}), TRUE))` : null; }
+                case 'expr': { const e2 = qrExprSql(P.formula); return e2 ? `(NOT COALESCE((${e2}), TRUE))` : null; }
                 case 'fresh': { const n = parseInt(P.days) || 365;
                     const d = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
                     return `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND (${d} IS NULL OR ${d} < CURRENT_DATE - INTERVAL ${n} DAY))`; }
@@ -10017,7 +10098,8 @@
                     const thenSel = `<select onchange="qrSet('${r.id}','p.thenCol',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white max-w-[130px]"><option value="">— colonne —</option>${hs.filter(h => h !== r.col).map(h => `<option value="${escapeHTML(h)}" ${P.thenCol === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
                     return `<span class="font-bold text-slate-500">Si</span> ${colSel('col', r.col)} ${opSel('ifOp', P.ifOp, 'filled')}${(P.ifOp || 'filled') === 'val' ? ' ' + inp('ifVal', P.ifVal, 'valeur, ou liste séparée par ;', 'w-44') : ''}
                         <span class="font-bold text-slate-500">alors</span> ${thenSel} ${opSel('thenOp', P.thenOp, 'empty')}${(P.thenOp || 'empty') === 'val' ? ' ' + inp('thenVal', P.thenVal, 'valeur, ou liste séparée par ;', 'w-44') : ''}`; }
-                case 'expr': return inp('formula', P.formula, 'ex : [DATE_FIN] >= [DATE_DEBUT]', 'w-64');
+                case 'expr': return inp('formula', P.formula, 'ex : [DATE_FIN] >= [DATE_DEBUT]', 'w-64')
+                    + `<div class="text-[9px] text-slate-400 mt-0.5">La règle liste les lignes qui <b>ne respectent PAS</b> l'expression. Comparaison typée automatique : <b>dates</b> (jj/mm/aaaa, aaaa-mm-jj…), sinon <b>nombres</b> (virgule/espaces), sinon texte. ET/OU et parenthèses acceptés.</div>`;
                 case 'fresh': return colSel('col', r.col) + ' âge max ' + inp('days', P.days, '365', 'w-14') + ' jours';
                 default: return '';
             }
