@@ -4833,7 +4833,7 @@
                           consumer: { lbl: 'Consommateur', ic: '📊', col: 2, badge: 'lf-r-cons' },
                           app: { lbl: 'Application', ic: '🖥', col: 0, badge: 'lf-r-app' },
                           object: { lbl: 'Objet métier', ic: '🏛️', col: 1, badge: 'lf-r-obj' } };
-        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit', composes: 'Compose', diffuses: 'Diffuse', represents: 'Représente' };
+        const LF_EDGE_TYPES = { feeds: 'Alimente', consolidates: 'Consolide', transforms: 'Transforme', reads: 'Lecture', writes: 'Écrit', composes: 'Compose', diffuses: 'Diffuse', represents: 'Représente', produces: 'Produit', consumes: 'Consommé par' };
         // Nature d'une alimentation table→table (v5.13) : comment la cible reçoit la donnée.
         const LF_NATURE = { recopie: 'Recopie', complement: 'Complément', correction: 'Correction' };
         function lfEdgeNature(e) { return e && LF_NATURE[e.nature] ? e.nature : 'recopie'; }
@@ -5043,7 +5043,7 @@
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.ok};display:inline-block"></span> <b class="text-slate-700">Sain</b> — frais &amp; cohérent</span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.warn};display:inline-block"></span> <b class="text-slate-700">À surveiller</b></span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.bad};display:inline-block"></span> <b class="text-slate-700">Alerte</b> — retard ou distorsion forte</span>
-                <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.usage};display:inline-block;background-image:linear-gradient(90deg,${LF_COLOR.usage} 60%,transparent 0);background-size:8px 3px"></span> <b class="text-slate-700">Usage</b> — 🖥 application lit / écrit</span>
+                <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.usage};display:inline-block;background-image:linear-gradient(90deg,${LF_COLOR.usage} 60%,transparent 0);background-size:8px 3px"></span> <b class="text-slate-700">Usage</b> — 🖥 application lit / écrit, produit / consomme un objet métier</span>
                 <span class="ml-auto">💡 <b>Glissez</b> les nœuds pour les repositionner · <b>cliquez</b> un nœud ou une étiquette de lien pour le détail.</span>
             </div>`;
             // -- panneau « Cohérence du modèle » (R3) : maîtrise unifiée + contradictions --
@@ -5456,6 +5456,17 @@
                 });
                 // V6.5 : l'application « référentiel » qui matérialise l'objet → vrai lien app → objet.
                 if (_reprApp) { const appN = nodeForApp(_reprApp); if (appN && appN.id !== boN.id) { desiredBo.add('represents:' + appN.id + ':' + boN.id); if (!m.edges.some(e => e.source === appN.id && e.target === boN.id && lfEdgeRel(e) === 'represents')) { m.edges.push({ id: 'le_' + generateId(), source: appN.id, target: boN.id, type: 'feeds', rel: 'represents', attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++; } } }
+                // V6.8 : les applications déclarées sur l'objet (« Produite par » / « Consommée par »)
+                // deviennent de vrais nœuds et liens de la carte — même si elles ne lisent aucune table.
+                const _boEdge = (asset, rel) => {
+                    if (!asset) return; const appN = nodeForApp(asset); if (!appN || appN.id === boN.id) return;
+                    const [s2, t2] = rel === 'produces' ? [appN, boN] : [boN, appN];
+                    desiredBo.add(rel + ':' + s2.id + ':' + t2.id);
+                    if (m.edges.some(e => e.source === s2.id && e.target === t2.id && lfEdgeRel(e) === rel)) return;
+                    m.edges.push({ id: 'le_' + generateId(), source: s2.id, target: t2.id, type: 'feeds', rel, attrPairs: [], slaHours: 24, transformation: '', lastRun: null, derived: true }); addedE++;
+                };
+                (bo.producedBy || []).forEach(id => _boEdge(assetById(id), 'produces'));
+                (bo.consumedBy || []).forEach(id => _boEdge(assetById(id), 'consumes'));
             });
             // -- Purge des liens d'usage DÉRIVÉS obsolètes (déclaration retirée). Les liens MANUELS
             //    (derived non vrai) et les usages d'applis non concernées sont laissés intacts. --
@@ -5463,7 +5474,7 @@
             m.edges = m.edges.filter(e => {
                 if (!e.derived) return true;
                 const rel = lfEdgeRel(e);
-                if (rel === 'composes' || rel === 'diffuses' || rel === 'represents') { // liens d'objet métier
+                if (rel === 'composes' || rel === 'diffuses' || rel === 'represents' || rel === 'produces' || rel === 'consumes') { // liens d'objet métier
                     if (only) return true; // synchro ciblée d'une appli : on ne touche pas les objets
                     if (m.showObjects && desiredBo.has(rel + ':' + e.source + ':' + e.target)) return true;
                     removedE++; return false; // objets masqués OU lien obsolète → retiré
@@ -9551,8 +9562,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.7.0';
+        const APP_VERSION = '6.8.0';
         const APP_CHANGELOG = [
+            { v: '6.8.0', d: '2026-07-24', t: 'Lineage — les applications déclarées sur un objet métier apparaissent enfin sur la carte', items: [
+                'Les applications renseignées dans la fiche d\'un objet métier (« 🖥 Produite par » et « ⚙️ Consommée par ») deviennent de VRAIS nœuds et liens de la Vue systèmes : « Produit » (application → objet) et « Consommé par » (objet → application).',
+                'Elles s\'affichent même si elles ne lisent ni n\'écrivent aucune table — c\'est le cas typique d\'un consommateur déclaré uniquement au niveau métier (ex. ORION/LYNX, ENERGY sur l\'objet Emplacement).',
+                'Comme tous les liens d\'objet métier, ils sont dérivés automatiquement : ils apparaissent/disparaissent quand on relie ou délie l\'application dans la fiche, et suivent l\'interrupteur « 🏛️ Objets métier ».',
+                'Ils n\'affectent ni les rôles de tables ni la santé : ce sont des liens d\'usage (violet), au même titre que lit/écrit.'] },
             { v: '6.7.0', d: '2026-07-24', t: 'Lineage — les sources sont désormais INTÉGRÉES à leur application par défaut', items: [
                 'Dans les deux graphes (Vue systèmes et Bout en bout), un fichier source n\'apparaît plus comme une case à part : il est INTÉGRÉ à l\'application qui le produit — c\'est elle le maître, pas le fichier. Les cartes sont beaucoup plus lisibles.',
                 'Les liens du fichier sont reportés sur l\'application : une alimentation « fichier → référentiel » devient « application → référentiel », et le lien interne « l\'appli écrit son fichier » disparaît. Les doublons de liens sont fusionnés.',
