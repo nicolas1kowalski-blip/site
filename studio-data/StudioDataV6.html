@@ -9751,8 +9751,15 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.20.0';
+        const APP_VERSION = '6.21.0';
         const APP_CHANGELOG = [
+            { v: '6.21.0', d: '2026-07-27', t: 'Profilage : distribution, dates, forme des colonnes et colonnes redondantes', items: [
+                'Distribution des colonnes numériques : P05, premier quartile, MÉDIANE, troisième quartile et P95. Un avertissement signale les colonnes où moyenne et médiane s\'écartent nettement — c\'est le signe d\'une série tirée par ses extrêmes, où la moyenne trompe.',
+                'Valeurs atypiques au sens de l\'écart interquartile (Tukey), en plus de la règle des 3 écarts-types. Cette dernière suppose une distribution symétrique et ne détecte presque rien sur des montants ou des durées ; l\'écart interquartile ne fait aucune hypothèse de forme.',
+                'Profil des colonnes de date : première et dernière date réellement présentes, nombre de dates dans le futur et de dates antérieures à 1900.',
+                'Forme de chaque colonne, signalée par une pastille : clé candidate (toujours remplie et sans doublon), colonne constante (une seule valeur, donc sans information), faible cardinalité (bonne candidate pour une liste de valeurs autorisées).',
+                'Colonnes redondantes : détection des colonnes strictement identiques ligne à ligne. Seules les paires plausibles sont comparées (même type, même cardinalité, même remplissage) et leur nombre est plafonné pour rester rapide sur les tables larges.',
+                'Toutes les nouvelles anomalies (atypiques, dates futures, dates trop anciennes) sont inspectables avec « 👁 Voir » et exportables en CSV, comme les précédentes. L\'export d\'audit reprend l\'ensemble des nouvelles mesures.'] },
             { v: '6.20.0', d: '2026-07-27', t: 'Qualité : exécution d\'une règle à la fois + deux types de règles avancées', items: [
                 'Chaque règle a désormais son bouton ▶ : elle s\'exécute seule, sans relancer toute la suite, et son résultat s\'affiche immédiatement (conforme, ou nombre de lignes/groupes en échec).',
                 'Nouveau type « Condition SQL libre » : vous écrivez la condition que doit respecter une ligne valide, la règle liste celles qui ne la respectent pas. Lecture seule et une seule condition — les instructions d\'écriture et le « ; » sont refusés, avec un message explicite sous le champ.',
@@ -13908,6 +13915,20 @@
                     const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
                     entries.push({ col: h, kind: `Valeurs aberrantes (hors moyenne ± 3σ)`, n: c.outliers, sql: sel(`${numE} IS NOT NULL AND (${numE} < ${c.mean - 3 * c.stdDev} OR ${numE} > ${c.mean + 3 * c.stdDev})`) });
                 }
+                // V6.21 : atypiques au sens de Tukey (hors [Q1 − 1,5 IQR ; Q3 + 1,5 IQR]) — pertinent
+                // même sur une distribution asymétrique, là où la règle des 3σ ne détecte rien.
+                if (c.outliersIqr > 0 && c.iqrLow != null && c.iqrHigh != null) {
+                    const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
+                    entries.push({ col: h, kind: `Valeurs atypiques (hors écart interquartile)`, n: c.outliersIqr, sql: sel(`${numE} IS NOT NULL AND (${numE} < ${c.iqrLow} OR ${numE} > ${c.iqrHigh})`) });
+                }
+                if (c.datesFuture > 0) {
+                    const dE = `COALESCE(TRY_CAST(${tdNormExpr('date', `CAST(${sqlIdent(h)} AS VARCHAR)`)} AS DATE), CAST(TRY_CAST(CAST(${sqlIdent(h)} AS VARCHAR) AS TIMESTAMP) AS DATE))`;
+                    entries.push({ col: h, kind: 'Dates dans le futur', n: c.datesFuture, sql: sel(`${dE} > CURRENT_DATE`) });
+                }
+                if (c.datesAncient > 0) {
+                    const dE = `COALESCE(TRY_CAST(${tdNormExpr('date', `CAST(${sqlIdent(h)} AS VARCHAR)`)} AS DATE), CAST(TRY_CAST(CAST(${sqlIdent(h)} AS VARCHAR) AS TIMESTAMP) AS DATE))`;
+                    entries.push({ col: h, kind: 'Dates antérieures à 1900', n: c.datesAncient, sql: sel(`${dE} < DATE '1900-01-01'`) });
+                }
                 const validCount = stats.totalRows - c.nullCount;
                 const typRe = { 'Numérique': re.num, 'Email': re.email, 'Téléphone': re.phone }[c.semanticType];
                 const typN = { 'Numérique': c.numNum, 'Email': c.numEmail, 'Téléphone': c.numPhone }[c.semanticType];
@@ -14066,6 +14087,8 @@
                     const trimmed = `TRIM(${raw})`;
                     const numExpr = `TRY_CAST(REPLACE(${trimmed}, ',', '.') AS DOUBLE)`;
                     const isNum = `regexp_matches(${trimmed}, '${re.num}')`;
+                    // V6.21 : profil des DATES — bornes réelles et valeurs hors du possible.
+                    const dateExpr = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
                     colExprs.push(`
                         SUM(CASE WHEN NOT (${notBlank}) THEN 1 ELSE 0 END)::BIGINT AS c${i}_null,
                         SUM(CASE WHEN ${notBlank} AND ${isNum} THEN 1 ELSE 0 END)::BIGINT AS c${i}_num,
@@ -14083,7 +14106,16 @@
                         SUM(CASE WHEN ${sqlIdent(h)} IS NOT NULL AND ${raw} <> '' AND ${raw} <> ${trimmed} THEN 1 ELSE 0 END)::BIGINT AS c${i}_sp,
                         SUM(CASE WHEN ${notBlank} AND regexp_matches(${trimmed}, '  +') THEN 1 ELSE 0 END)::BIGINT AS c${i}_msp,
                         SUM(CASE WHEN ${notBlank} AND UPPER(${trimmed}) IN ('N/A','NA','NULL','-','--','?','X','XX','INCONNU','NC','TBD','NONE','AUCUN','VIDE','#N/A','SANS','A DEFINIR','À DÉFINIR') THEN 1 ELSE 0 END)::BIGINT AS c${i}_ph,
-                        approx_count_distinct(CASE WHEN ${notBlank} THEN UPPER(${trimmed}) END)::BIGINT AS c${i}_ucnt
+                        approx_count_distinct(CASE WHEN ${notBlank} THEN UPPER(${trimmed}) END)::BIGINT AS c${i}_ucnt,
+                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.05) AS c${i}_p05,
+                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.25) AS c${i}_p25,
+                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.5) AS c${i}_p50,
+                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.75) AS c${i}_p75,
+                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.95) AS c${i}_p95,
+                        MIN(CASE WHEN ${notBlank} THEN ${dateExpr} END) AS c${i}_dmin,
+                        MAX(CASE WHEN ${notBlank} THEN ${dateExpr} END) AS c${i}_dmax,
+                        SUM(CASE WHEN ${notBlank} AND ${dateExpr} > CURRENT_DATE THEN 1 ELSE 0 END)::BIGINT AS c${i}_dfut,
+                        SUM(CASE WHEN ${notBlank} AND ${dateExpr} < DATE '1900-01-01' THEN 1 ELSE 0 END)::BIGINT AS c${i}_dold
                     `);
                 });
                 const res = await conn.query(`SELECT ${colExprs.join(', ')} FROM ${sourceExpr} AS src`);
@@ -14123,7 +14155,20 @@
                     spaceIssues: Number(colRow[`c${i}_sp`] || 0), multiSpace: Number(colRow[`c${i}_msp`] || 0),
                     placeholders: Number(colRow[`c${i}_ph`] || 0),
                     caseDupGroups: Math.max(0, Number(colRow[`c${i}_distinct`]) - Number(colRow[`c${i}_ucnt`] || colRow[`c${i}_distinct`])),
-                    outliers: 0,
+                    outliers: 0, outliersIqr: 0,
+                    // V6.21 : distribution (quantiles approchés), profil de date, forme de la colonne
+                    p05: colRow[`c${i}_p05`] !== null ? Number(colRow[`c${i}_p05`]) : null,
+                    p25: colRow[`c${i}_p25`] !== null ? Number(colRow[`c${i}_p25`]) : null,
+                    median: colRow[`c${i}_p50`] !== null ? Number(colRow[`c${i}_p50`]) : null,
+                    p75: colRow[`c${i}_p75`] !== null ? Number(colRow[`c${i}_p75`]) : null,
+                    p95: colRow[`c${i}_p95`] !== null ? Number(colRow[`c${i}_p95`]) : null,
+                    dateMin: colRow[`c${i}_dmin`] != null ? String(colRow[`c${i}_dmin`]).slice(0, 10) : null,
+                    dateMax: colRow[`c${i}_dmax`] != null ? String(colRow[`c${i}_dmax`]).slice(0, 10) : null,
+                    datesFuture: Number(colRow[`c${i}_dfut`] || 0), datesAncient: Number(colRow[`c${i}_dold`] || 0),
+                    cardinalityRatio: validCount > 0 ? Number(colRow[`c${i}_distinct`]) / validCount : 0,
+                    isConstant: validCount > 0 && Number(colRow[`c${i}_distinct`]) === 1,
+                    isCandidateKey: validCount > 0 && validCount === totalRows && Number(colRow[`c${i}_distinct`]) === validCount,
+                    duplicateOf: null,
                     frequentValues: []
                 };
             });
@@ -14143,6 +14188,63 @@
                 const outRes = await conn.query(`SELECT ${outExprs.join(', ')} FROM ${sourceExpr} AS src`);
                 const outRow = arrowResultToObjects(outRes)[0];
                 numCols.forEach((h, i) => { stats.columns[h].outliers = Number(outRow['o' + i] || 0); });
+            }
+            // V6.21 : valeurs aberrantes ROBUSTES (Tukey, 1,5 × écart interquartile). La règle des 3
+            // écarts-types suppose une distribution symétrique : sur des montants ou des durées, très
+            // asymétriques, elle rate presque tout. L'IQR ne fait aucune hypothèse de forme.
+            const iqrCols = targetHeaders.filter(h => { const c = stats.columns[h];
+                return c.semanticType === 'Numérique' && c.p25 != null && c.p75 != null && c.p75 > c.p25; });
+            if (iqrCols.length) {
+                const iqrExprs = iqrCols.map((h, i) => {
+                    const c = stats.columns[h]; const iqr = c.p75 - c.p25;
+                    const lo = c.p25 - 1.5 * iqr, hi = c.p75 + 1.5 * iqr;
+                    const numE = `TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)`;
+                    stats.columns[h].iqrLow = lo; stats.columns[h].iqrHigh = hi;
+                    return `SUM(CASE WHEN ${numE} IS NOT NULL AND (${numE} < ${lo} OR ${numE} > ${hi}) THEN 1 ELSE 0 END)::BIGINT AS q${i}`;
+                });
+                const iqrRes = arrowResultToObjects(await conn.query(`SELECT ${iqrExprs.join(', ')} FROM ${sourceExpr} AS src`))[0];
+                iqrCols.forEach((h, i) => { stats.columns[h].outliersIqr = Number(iqrRes['q' + i] || 0); });
+            }
+            // V6.21 : le nombre de valeurs distinctes de la passe rapide est APPROCHÉ (HyperLogLog) :
+            // sur 20 valeurs réellement uniques il peut annoncer 17. Un verdict « clé candidate » ou
+            // « colonne constante » ne peut donc pas s'appuyer dessus. On recompte EXACTEMENT, mais
+            // seulement pour les colonnes plausibles — celles qui approchent l'unicité ou la constante.
+            const exactCand = targetHeaders.filter(h => { const c = stats.columns[h];
+                const vc = totalRows - c.nullCount; return vc > 0 && (c.distinctCount <= 2 || c.distinctCount >= vc * 0.8); });
+            if (exactCand.length) {
+                for (let start = 0; start < exactCand.length; start += 8) {
+                    const slice = exactCand.slice(start, start + 8);
+                    const ex = slice.map((h, k) => `COUNT(DISTINCT NULLIF(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ''))::BIGINT AS e${start + k}`);
+                    const row = arrowResultToObjects(await conn.query(`SELECT ${ex.join(', ')} FROM ${sourceExpr} AS src`))[0];
+                    slice.forEach((h, k) => {
+                        const c = stats.columns[h]; const vc = totalRows - c.nullCount;
+                        const d = Number(row['e' + (start + k)] || 0);
+                        c.distinctExact = d;
+                        c.cardinalityRatio = vc > 0 ? d / vc : 0;
+                        c.isConstant = vc > 0 && d === 1;
+                        c.isCandidateKey = vc > 0 && vc === totalRows && d === vc;
+                    });
+                }
+            }
+            // V6.21 : COLONNES REDONDANTES — deux colonnes qui portent exactement la même information.
+            // On ne compare que des paires plausibles (même type, même cardinalité, même remplissage),
+            // et on plafonne le nombre de paires pour rester rapide sur les tables très larges.
+            const dupCand = targetHeaders.filter(h => { const c = stats.columns[h]; return !c.isConstant && c.distinctCount > 1; });
+            const pairs = [];
+            for (let i = 0; i < dupCand.length && pairs.length < 80; i++) {
+                for (let j = i + 1; j < dupCand.length && pairs.length < 80; j++) {
+                    const A = stats.columns[dupCand[i]], B = stats.columns[dupCand[j]];
+                    if (A.distinctCount === B.distinctCount && A.nullCount === B.nullCount && A.semanticType === B.semanticType) pairs.push([dupCand[i], dupCand[j]]);
+                }
+            }
+            if (pairs.length) {
+                const nk = h => `NULLIF(UPPER(TRIM(CAST(${sqlIdent(h)} AS VARCHAR))), '')`;
+                const pExprs = pairs.map(([x, y], i) => `SUM(CASE WHEN ${nk(x)} IS DISTINCT FROM ${nk(y)} THEN 1 ELSE 0 END)::BIGINT AS p${i}`);
+                const pRes = arrowResultToObjects(await conn.query(`SELECT ${pExprs.join(', ')} FROM ${sourceExpr} AS src`))[0];
+                pairs.forEach(([x, y], i) => { if (Number(pRes['p' + i] || 0) === 0) {
+                    // la seconde est signalée comme recopie de la première (on garde la 1re comme référence)
+                    if (!stats.columns[y].duplicateOf) stats.columns[y].duplicateOf = x;
+                } });
             }
 
             // Top 10 des valeurs fréquentes : une requête GROUP BY par colonne (ne peut pas être combiné
@@ -14859,7 +14961,7 @@
         // ---- Export des résultats d'audit (pour retravailler la donnée à l'extérieur) ----
         function exportAuditCsv() {
             const s = currentProfilingStats; if (!s) return showError("Lancez d'abord un audit.");
-            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'top_valeurs'];
+            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'top_valeurs'];
             const rows = [head.map(escapeCSV).join(';')];
             Object.values(s.columns).forEach(c => {
                 rows.push([c.name, c.semanticType, c.completeness.toFixed(2), c.nullCount, c.distinctCount,
@@ -14867,7 +14969,10 @@
                     c.min !== null && c.min !== undefined ? c.min : '', c.max !== null && c.max !== undefined ? c.max : '',
                     c.mean ? c.mean.toFixed(4) : '', c.stdDev ? c.stdDev.toFixed(4) : '',
                     c.minLen, c.maxLen, c.avgLen ? c.avgLen.toFixed(1) : '',
-                    c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0,
+                    c.p05 != null ? c.p05 : '', c.p25 != null ? c.p25 : '', c.median != null ? c.median : '', c.p75 != null ? c.p75 : '', c.p95 != null ? c.p95 : '',
+                    c.dateMin || '', c.dateMax || '', c.datesFuture || 0, c.datesAncient || 0,
+                    c.cardinalityRatio != null ? (100 * c.cardinalityRatio).toFixed(2) : '', c.isCandidateKey ? 'oui' : '', c.isConstant ? 'oui' : '', c.duplicateOf || '',
+                    c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0, c.outliersIqr || 0,
                     (c.frequentValues || []).slice(0, 5).map(f => `${f.val} (${f.count})`).join(' | ')].map(escapeCSV).join(';'));
             });
             downloadTextFile(`Audit_${s.tableName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.csv`, rows.join('\n'));
@@ -15027,6 +15132,16 @@
                         <div class="p-3 border rounded-xl bg-slate-50"><span class="text-[10px] text-slate-500 uppercase block font-bold">Maximum</span><span class="text-sm font-black text-slate-800">${c.max !== null ? c.max.toLocaleString('fr-FR') : '-'}</span></div>
                         <div class="p-3 border rounded-xl bg-slate-50 col-span-2 md:col-span-1"><span class="text-[10px] text-slate-500 uppercase block font-bold">Somme</span><span class="text-sm font-black text-slate-800">${c.sum.toLocaleString('fr-FR', {maximumFractionDigits: 0})}</span></div>
                     </div>
+                    ${c.median != null ? `<div class="mt-3">
+                        <div class="text-[10px] text-slate-400 uppercase font-bold mb-1.5">Distribution — la médiane et les quartiles décrivent mieux qu'une moyenne une série déséquilibrée</div>
+                        <div class="grid grid-cols-5 gap-2">${[['P05', c.p05], ['Q1 (25 %)', c.p25], ['Médiane', c.median], ['Q3 (75 %)', c.p75], ['P95', c.p95]].map(([l, v]) =>
+                            `<div class="p-2 border rounded-lg ${l === 'Médiane' ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">${l}</span><span class="text-[12px] font-black ${l === 'Médiane' ? 'text-indigo-700' : 'text-slate-700'}">${v == null ? '—' : Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}</span></div>`).join('')}</div>
+                        ${(() => { const iqr = (c.p75 != null && c.p25 != null) ? c.p75 - c.p25 : null;
+                            // On mesure l'écart moyenne/médiane à l'aune de l'écart INTERQUARTILE : l'écart-type
+                            // est lui-même gonflé par les valeurs extrêmes, il masquerait l'asymétrie qu'on cherche.
+                            const scale = (iqr && iqr > 0) ? iqr * 0.5 : ((c.stdDev || 0) * 0.5);
+                            return scale > 0 && Math.abs(c.median - c.mean) > scale; })() ? `<div class="text-[10px] text-amber-700 mt-1.5">⚠ Moyenne (${c.mean.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}) et médiane (${c.median.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}) s'écartent nettement : distribution asymétrique, la moyenne est tirée par les extrêmes.</div>` : ''}
+                    </div>` : ''}
                 `;
             } else {
                 statsGridHtml = `
@@ -15035,6 +15150,12 @@
                         <div class="p-3 border rounded-xl bg-slate-50"><span class="text-[10px] text-slate-500 uppercase block font-bold">Long. Max</span><span class="text-sm font-black text-slate-800">${c.maxLen} car.</span></div>
                         <div class="p-3 border rounded-xl bg-slate-50"><span class="text-[10px] text-slate-500 uppercase block font-bold">Long. Moyenne</span><span class="text-sm font-black text-slate-800">${c.avgLen.toFixed(1)} car.</span></div>
                     </div>
+                    ${c.semanticType === 'Date/Heure' && (c.dateMin || c.dateMax) ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                        <div class="p-2 border rounded-lg bg-white"><span class="text-[9px] text-slate-500 uppercase block font-bold">Première date</span><span class="text-[12px] font-black text-slate-700">${escapeHTML(c.dateMin || '—')}</span></div>
+                        <div class="p-2 border rounded-lg bg-white"><span class="text-[9px] text-slate-500 uppercase block font-bold">Dernière date</span><span class="text-[12px] font-black text-slate-700">${escapeHTML(c.dateMax || '—')}</span></div>
+                        <div class="p-2 border rounded-lg ${c.datesFuture ? 'bg-amber-50 border-amber-200' : 'bg-white'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">Dans le futur</span><span class="text-[12px] font-black ${c.datesFuture ? 'text-amber-700' : 'text-slate-400'}">${Number(c.datesFuture || 0).toLocaleString('fr-FR')}</span></div>
+                        <div class="p-2 border rounded-lg ${c.datesAncient ? 'bg-amber-50 border-amber-200' : 'bg-white'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">Avant 1900</span><span class="text-[12px] font-black ${c.datesAncient ? 'text-amber-700' : 'text-slate-400'}">${Number(c.datesAncient || 0).toLocaleString('fr-FR')}</span></div>
+                    </div>` : ''}
                 `;
             }
 
@@ -15089,10 +15210,16 @@
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Taux de remplissage</span><div class="flex items-center gap-2"><span class="text-xl font-black" style="color:${meterColor(fillRate)}">${fmtPctUx(fillRate)}</span><span class="text-xs text-slate-400">${(currentProfilingStats && currentProfilingStats.totalRows ? Math.max(0, currentProfilingStats.totalRows - c.nullCount).toLocaleString('fr-FR') + ' renseignée(s) · ' : '')}${Number(c.nullCount).toLocaleString('fr-FR')} vide(s)</span></div></div>
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Cardinalité</span><div class="flex items-center gap-2"><span class="text-xl font-black text-slate-800">${c.distinctCount.toLocaleString('fr-FR')}${c.hasMoreDistinct ? '+' : ''}</span><span class="text-xs text-slate-400">valeur(s) distincte(s)</span></div></div>
                 </div>
+                ${(() => { const tags = [];
+                    if (c.isCandidateKey) tags.push(['bg-emerald-50 border-emerald-200 text-emerald-800', '🔑 Clé candidate', 'Toujours renseignée et sans doublon : cette colonne peut identifier une ligne à elle seule.']);
+                    if (c.isConstant) tags.push(['bg-amber-50 border-amber-200 text-amber-800', '▪ Colonne constante', 'Une seule valeur sur toute la table : elle n\'apporte aucune information.']);
+                    if (c.duplicateOf) tags.push(['bg-amber-50 border-amber-200 text-amber-800', '⧉ Recopie de « ' + escapeHTML(c.duplicateOf) + ' »', 'Valeurs strictement identiques à celles de cette autre colonne, ligne à ligne.']);
+                    if (!c.isConstant && !c.isCandidateKey && c.cardinalityRatio != null && c.cardinalityRatio > 0 && c.cardinalityRatio < 0.02 && c.distinctCount > 1) tags.push(['bg-sky-50 border-sky-200 text-sky-800', '≡ Peu de valeurs (' + c.distinctCount.toLocaleString('fr-FR') + ')', 'Faible cardinalité : bonne candidate pour une liste de valeurs autorisées.']);
+                    return tags.length ? `<div class="flex flex-wrap gap-2 mb-5">${tags.map(([cl, l, ti]) => `<span title="${ti}" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border ${cl}">${l}</span>`).join('')}</div>` : ''; })()}
                 <div class="mb-6"><h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Statistiques descriptives</h5>${statsGridHtml}</div>
                 <div class="mb-6"><h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Hygiène de saisie</h5>
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        ${[['Espaces déb./fin', c.spaceIssues, 'Espaces début/fin'], ['Espaces multiples', c.multiSpace, 'Espaces multiples'], ['Bouche-trous', c.placeholders, 'Valeurs bouche-trous'], ['Variantes de casse', c.caseDupGroups, 'Casse incohérente'], ['Aberrantes (3σ)', c.outliers, 'Valeurs aberrantes']].map(([lbl, v, pre]) => { const ix = (v || 0) > 0 ? idxOfPrefix(pre) : null; const clickable = ix !== null;
+                        ${[['Espaces déb./fin', c.spaceIssues, 'Espaces début/fin'], ['Espaces multiples', c.multiSpace, 'Espaces multiples'], ['Bouche-trous', c.placeholders, 'Valeurs bouche-trous'], ['Variantes de casse', c.caseDupGroups, 'Casse incohérente'], ['Aberrantes (3σ)', c.outliers, 'Valeurs aberrantes'], ['Aberrantes (écart interq.)', c.outliersIqr, 'Valeurs atypiques']].map(([lbl, v, pre]) => { const ix = (v || 0) > 0 ? idxOfPrefix(pre) : null; const clickable = ix !== null;
                             return `<${clickable ? 'button' : 'div'} ${clickable ? `onclick="qualViewInspect(${ix}, this, 0)" title="Voir les lignes concernées"` : ''} class="p-2.5 border rounded-xl text-left ${(v || 0) > 0 ? 'bg-sky-50 border-sky-200' + (clickable ? ' hover:bg-sky-100 hover:border-sky-400 cursor-pointer' : '') : 'bg-slate-50'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">${lbl}${clickable ? ' 👁' : ''}</span><span class="text-sm font-black ${(v || 0) > 0 ? 'text-sky-700' : 'text-slate-400'}">${(v || 0).toLocaleString('fr-FR')}</span></${clickable ? 'button' : 'div'}>`; }).join('')}
                     </div>
                 </div>
