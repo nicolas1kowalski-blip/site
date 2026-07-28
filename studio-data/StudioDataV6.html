@@ -9751,8 +9751,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.19.0';
+        const APP_VERSION = '6.20.0';
         const APP_CHANGELOG = [
+            { v: '6.20.0', d: '2026-07-27', t: 'Qualité : exécution d\'une règle à la fois + deux types de règles avancées', items: [
+                'Chaque règle a désormais son bouton ▶ : elle s\'exécute seule, sans relancer toute la suite, et son résultat s\'affiche immédiatement (conforme, ou nombre de lignes/groupes en échec).',
+                'Nouveau type « Condition SQL libre » : vous écrivez la condition que doit respecter une ligne valide, la règle liste celles qui ne la respectent pas. Lecture seule et une seule condition — les instructions d\'écriture et le « ; » sont refusés, avec un message explicite sous le champ.',
+                'Nouveau type « Agrégat par groupe » : « pour chaque CONTRAT, le nombre de lignes où STATUT = ACTIF doit être ≤ 1 », « pour chaque COMMANDE, la somme des MONTANT doit être = 0 »… Regroupement sur une ou plusieurs colonnes, six agrégats, six opérateurs, et un filtre facultatif sur les lignes prises en compte.',
+                'Pour ces règles d\'agrégat, l\'unité contrôlée est le GROUPE : le résultat compte les groupes non conformes, et l\'inspection « 👁 Voir / ⬇ CSV » affiche les lignes de ces groupes — donc directement ce qu\'il faut corriger.',
+                'Les deux nouveaux types s\'utilisent aussi sur un objet métier (évalués sur sa table maître), entrent dans le score pondéré, les dettes qualité et les instantanés, comme toutes les autres règles.'] },
             { v: '6.19.0', d: '2026-07-27', t: 'Comparateur : clé composite et comparaison des seuls écarts de clé', items: [
                 'La clé d\'identification n\'est plus limitée à UNE colonne. On empile autant de couples de colonnes (A ↔ B) que nécessaire : elles sont appariées dans l\'ordre et forment une clé composite.',
                 'En SQL, les parties de la clé sont normalisées puis concaténées avec un séparateur impossible à trouver dans une donnée. Si une seule partie est vide, la clé entière est nulle et la ligne est écartée — même règle que pour une clé simple.',
@@ -10064,7 +10070,9 @@
         (function () { const b2 = el('appVersionBadge'); if (b2) b2.textContent = 'v' + appVersionShort(); })();
 
         // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
-        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', cond: 'Condition (si… alors…)', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)' };
+        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', cond: 'Condition (si… alors…)', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)', sql: 'Condition SQL libre (avancé)', group: 'Agrégat par groupe (avancé)' };
+        // V6.20 : règles évaluées à la maille GROUPE et non à la ligne — elles ont leur propre requête.
+        const QR_GROUPED = ['unique', 'group'];
         const QR_W = { 'Faible': 1, 'Moyenne': 2, 'Haute': 3, 'Critique': 5 };
         let qrSnapshots = [];   // instantanés E2 (persistés à part, comme l'historique qualité)
         let qrChartInst = null;
@@ -10092,6 +10100,10 @@
                     const k = `COALESCE(UPPER(TRIM(concat_ws(chr(1), ${cols.map(c2 => `CAST(${sqlIdent(c2)} AS VARCHAR)`).join(', ')}))), '')`;
                     const res = arrowResultToObjects(await conn.query(`SELECT (SELECT COUNT(*) FROM ${T})::BIGINT AS total, COALESCE(SUM(c), 0)::BIGINT AS fails FROM (SELECT COUNT(*)::BIGINT AS c FROM ${T} GROUP BY ${k} HAVING COUNT(*) > 1)`))[0];
                     total += Number(res.total); fails += Number(res.fails || 0); ran = true;
+                } else if (vr.type === 'group') {
+                    const g = qrGroupSql(vr, T); if (!g) continue;
+                    const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${g.bad} THEN 1 ELSE 0 END)::BIGINT AS fails FROM (${g.sql})`))[0];
+                    total += Number(res.total); fails += Number(res.fails || 0); ran = true;
                 } else {
                     const fc = qrFailCond(vr); if (!fc) continue;
                     const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${fc} THEN 1 ELSE 0 END)::BIGINT AS fails FROM ${T}`))[0];
@@ -10107,7 +10119,7 @@
             if (f.startsWith('p.')) { r.p = r.p || {}; r.p[f.slice(2)] = v; } else r[f] = v;
             if (f === 'table') { if (String(v).startsWith('bo:')) { r.bo = String(v).slice(3); r.table = ''; } else r.bo = null; r.col = ''; r.p = {}; }
             persistAppState();
-            if (f === 'table' || f === 'type' || f === 'enabled' || f === 'p.refTable' || f === 'p.ifOp' || f === 'p.thenOp') renderQualityRules();
+            if (f === 'table' || f === 'type' || f === 'enabled' || f === 'p.refTable' || f === 'p.ifOp' || f === 'p.thenOp' || f === 'p.gAgg' || f === 'p.sql') renderQualityRules();
         }
         function qrDup(id) { const r = qrRules().find(x => x.id === id); if (!r) return; const c = JSON.parse(JSON.stringify(r)); c.id = 'qr_' + generateId(); c.name = r.name + ' (copie)'; delete c.last; qrRules().push(c); persistAppState(); renderQualityRules(); }
         function qrDel(id) { state.governance.qualityRules = qrRules().filter(x => x.id !== id); persistAppState(); renderQualityRules(); }
@@ -10188,7 +10200,8 @@
         }
         // Condition d'échec SQL (par ligne). Les types agrégés (unicité) sont traités à part.
         function qrFailCond(r) {
-            const c = r.col ? sqlIdent(r.col) : null; if (!c && r.type !== 'expr') return null;
+            // « expr » et « sql » portent leur propre expression : elles n'exigent pas de colonne cible.
+            const c = r.col ? sqlIdent(r.col) : null; if (!c && r.type !== 'expr' && r.type !== 'sql') return null;
             const raw = c ? `CAST(${c} AS VARCHAR)` : null;
             const P = r.p || {};
             switch (r.type) {
@@ -10216,11 +10229,60 @@
                     const thenC = part(c2, raw2, P.thenOp || 'empty', P.thenVal);
                     return (ifC && thenC) ? `(${ifC} AND NOT ${thenC})` : null; }
                 case 'expr': { const e2 = qrExprSql(P.formula); return e2 ? `(NOT COALESCE((${e2}), TRUE))` : null; }
+                // V6.20 : l'utilisateur écrit lui-même la condition que doit respecter une ligne valide.
+                // On liste les lignes qui ne la respectent pas. Une condition NULL est traitée comme
+                // respectée (comme pour « expr »), pour ne pas transformer une donnée absente en échec.
+                case 'sql': { const e3 = qrSqlCond(P.sql); return e3 ? `(NOT COALESCE((${e3}), TRUE))` : null; }
                 case 'fresh': { const n = parseInt(P.days) || 365;
                     const d = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
                     return `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND (${d} IS NULL OR ${d} < CURRENT_DATE - INTERVAL ${n} DAY))`; }
                 default: return null;
             }
+        }
+        // Condition SQL libre : on n'accepte QU'UNE expression booléenne. Tout ce qui pourrait
+        // enchaîner une autre instruction (« ; ») ou modifier les données est refusé — l'écran de
+        // qualité lit, il n'écrit jamais.
+        const QR_SQL_FORBIDDEN = /\b(insert|update|delete|drop|alter|create|attach|copy|pragma|call|export|install|load)\b/i;
+        function qrSqlCheck(txt) {
+            const v = String(txt || '').trim();
+            if (!v) return { ok: false, err: 'Condition vide.' };
+            if (v.includes(';')) return { ok: false, err: 'Le caractère « ; » n\'est pas autorisé : écrivez une seule condition.' };
+            if (QR_SQL_FORBIDDEN.test(v)) return { ok: false, err: 'Seule une condition de lecture est autorisée (pas de INSERT/UPDATE/DELETE/DROP…).' };
+            let d = 0; for (const ch of v) { if (ch === '(') d++; else if (ch === ')') d--; if (d < 0) return { ok: false, err: 'Parenthèses déséquilibrées.' }; }
+            if (d !== 0) return { ok: false, err: 'Parenthèses déséquilibrées.' };
+            return { ok: true, sql: v };
+        }
+        function qrSqlCond(txt) { const c = qrSqlCheck(txt); return c.ok ? c.sql : null; }
+        // Règle d'agrégat : on regroupe par une ou plusieurs colonnes, on calcule un agrégat
+        // (éventuellement sur un sous-ensemble de lignes) et on compare au seuil attendu. L'unité
+        // contrôlée est le GROUPE : « total » = nombre de groupes, « échecs » = groupes non conformes.
+        const QR_G_AGGS = { count: 'nombre de lignes', countd: 'nombre de valeurs distinctes', sum: 'somme', min: 'minimum', max: 'maximum', avg: 'moyenne' };
+        const QR_G_OPS = { '=': '=', '<=': '≤', '>=': '≥', '<': '<', '>': '>', '!=': '≠' };
+        function qrGroupSql(r, T) {
+            const P = r.p || {};
+            const keys = String(P.gKeys || '').split(';').map(x => x.trim()).filter(Boolean);
+            if (!keys.length) return null;
+            const fn = P.gAgg || 'count';
+            const col = P.gCol ? sqlIdent(P.gCol) : null;
+            if (fn !== 'count' && !col) return null;
+            const numE = col ? `TRY_CAST(REPLACE(TRIM(CAST(${col} AS VARCHAR)), ',', '.') AS DOUBLE)` : null;
+            const where = P.gWhere ? qrSqlCond(P.gWhere) : null;
+            if (P.gWhere && !where) return null;
+            const only = x => where ? `CASE WHEN (${where}) THEN ${x} END` : x;
+            let agg;
+            if (fn === 'count') agg = where ? `SUM(CASE WHEN (${where}) THEN 1 ELSE 0 END)` : 'COUNT(*)';
+            else if (fn === 'countd') agg = `COUNT(DISTINCT ${only(col)})`;
+            else if (fn === 'sum') agg = `COALESCE(SUM(${only(numE)}), 0)`;
+            else if (fn === 'avg') agg = `AVG(${only(numE)})`;
+            else if (fn === 'min') agg = `MIN(${only(numE)})`;
+            else agg = `MAX(${only(numE)})`;
+            const op = QR_G_OPS[P.gOp] ? P.gOp : '<=';
+            const val = parseFloat(String(P.gVal == null ? '' : P.gVal).replace(',', '.'));
+            if (isNaN(val)) return null;
+            const gk = keys.map(k => sqlIdent(k)).join(', ');
+            return { keys, gk,
+                sql: `SELECT ${gk}, ${agg} AS __v FROM ${T} GROUP BY ${gk}`,
+                bad: `(__v IS NULL OR NOT (__v ${op} ${val}))` };
         }
         function qrUniqueKey(r) { const cols = (String((r.p || {}).cols || r.col || '')).split(';').map(x => x.trim()).filter(Boolean); return cols; }
         // ---- v3.8 : règles sur OBJET MÉTIER — résolues vers les colonnes réelles via les correspondances ----
@@ -10242,7 +10304,7 @@
                 const tn = Object.keys(byT).find(t2 => attrs.every(a2 => byT[t2][a2]));
                 return tn ? [{ table: tn, cols: attrs.map(a2 => byT[tn][a2]) }] : [];
             }
-            if (r.type === 'expr') { const src = (bo.sources || []).find(s2 => s2.role === 'maitre') || (bo.sources || [])[0]; const t = src && tableByName(src.table); return (t && t.status === 'ready') ? [{ table: src.table }] : []; }
+            if (r.type === 'expr' || r.type === 'sql' || r.type === 'group') { const src = (bo.sources || []).find(s2 => s2.role === 'maitre') || (bo.sources || [])[0]; const t = src && tableByName(src.table); return (t && t.status === 'ready') ? [{ table: src.table }] : []; }
             if (!r.col) return [];
             const maps = qrBoAttrMaps(bo, r.col);
             if (r.type === 'cond') {
@@ -10265,7 +10327,25 @@
             if (r.type === 'unique') { const cols = qrUniqueKey(r); if (!cols.length) return null;
                 const k = `COALESCE(UPPER(TRIM(concat_ws(chr(1), ${cols.map(c2 => `CAST(${sqlIdent(c2)} AS VARCHAR)`).join(', ')}))), '')`;
                 return `SELECT * FROM ${T} WHERE ${k} IN (SELECT ${k} FROM ${T} GROUP BY 1 HAVING COUNT(*) > 1) ORDER BY ${k}`; }
+            if (r.type === 'group') { const g = qrGroupSql(r, T); if (!g) return null;
+                // On restitue les LIGNES des groupes fautifs : c'est ce qu'on corrige concrètement.
+                return `SELECT * FROM ${T} WHERE (${g.gk}) IN (SELECT ${g.gk} FROM (${g.sql}) WHERE ${g.bad}) ORDER BY ${g.gk}`; }
             const fc = qrFailCond(r); return fc ? `SELECT * FROM ${T} WHERE ${fc}` : null;
+        }
+        // V6.20 : exécuter UNE règle, à la demande, sans lancer toute la suite.
+        async function qrRunOne(id, btn) {
+            const r = qrRules().find(x => x.id === id); if (!r) return;
+            if (btn) btn.disabled = true;
+            try {
+                const res = await qrEvalRule(r);
+                persistAppState(); renderQualityRules();
+                if (!res.ran) return showError(`« ${r.name} » n'a pas pu être évaluée : cible ou paramètres incomplets.`);
+                const unit = QR_GROUPED.includes(r.type) ? 'groupe' : 'ligne';
+                showSuccess(res.fails === 0
+                    ? `✅ « ${r.name} » : conforme (${res.total.toLocaleString('fr-FR')} ${unit}${res.total > 1 ? 's' : ''} contrôlé${res.total > 1 ? 's' : ''}).`
+                    : `⚠️ « ${r.name} » : ${res.fails.toLocaleString('fr-FR')} ${unit}${res.fails > 1 ? 's' : ''} en échec sur ${res.total.toLocaleString('fr-FR')} (${(100 * res.rate).toFixed(1)} % conforme).`);
+            } catch (e) { showError('Exécution impossible : ' + e.message); }
+            finally { if (btn) btn.disabled = false; }
         }
         // Exécution d'une suite (toutes les tables, une table, ou un domaine) — UNE passe par table
         // pour toutes les règles « par ligne », requêtes dédiées pour l'unicité.
@@ -10293,11 +10373,16 @@
                 const byTable = {}; units.forEach(u => (byTable[u.vr.table] = byTable[u.vr.table] || []).push(u));
                 for (const tn of Object.keys(byTable)) {
                     const t = tableByName(tn); const T = sqlIdent(duckTableName(t.id));
-                    const rowUnits = byTable[tn].map(u => ({ u, fc: u.vr.type === 'unique' ? null : qrFailCond(u.vr) })).filter(x => x.fc);
+                    const rowUnits = byTable[tn].map(u => ({ u, fc: QR_GROUPED.includes(u.vr.type) ? null : qrFailCond(u.vr) })).filter(x => x.fc);
                     if (rowUnits.length) {
                         const sel = rowUnits.map((x, i) => `SUM(CASE WHEN ${x.fc} THEN 1 ELSE 0 END)::BIGINT AS f${i}`).join(', ');
                         const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, ${sel} FROM ${T}`))[0];
                         rowUnits.forEach((x, i) => bump(x.u.r, Number(res.total), Number(res['f' + i] || 0)));
+                    }
+                    for (const u of byTable[tn].filter(u2 => u2.vr.type === 'group')) {
+                        const g = qrGroupSql(u.vr, T); if (!g) continue;
+                        const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS total, SUM(CASE WHEN ${g.bad} THEN 1 ELSE 0 END)::BIGINT AS fails FROM (${g.sql})`))[0];
+                        bump(u.r, Number(res.total), Number(res.fails || 0));
                     }
                     for (const u of byTable[tn].filter(u2 => u2.vr.type === 'unique')) {
                         const cols = qrUniqueKey(u.vr); if (!cols.length) continue;
@@ -10364,6 +10449,17 @@
                 case 'expr': return inp('formula', P.formula, 'ex : [DATE_FIN] >= [DATE_DEBUT]', 'w-64')
                     + `<div class="text-[9px] text-slate-400 mt-0.5">La règle liste les lignes qui <b>ne respectent PAS</b> l'expression. Comparaison typée automatique : <b>dates</b> (jj/mm/aaaa, aaaa-mm-jj…), sinon <b>nombres</b> (virgule/espaces), sinon texte. ET/OU et parenthèses acceptés.</div>`;
                 case 'fresh': return colSel('col', r.col) + ' âge max ' + inp('days', P.days, '365', 'w-14') + ' jours';
+                case 'sql': { const chk = P.sql ? qrSqlCheck(P.sql) : null;
+                    return inp('sql', P.sql, "ex : \"DATE_FIN\" IS NULL OR \"DATE_FIN\" >= \"DATE_DEBUT\"", 'w-full')
+                        + `<div class="text-[9px] ${chk && !chk.ok ? 'text-red-600 font-bold' : 'text-slate-400'} mt-0.5">${chk && !chk.ok ? '⚠ ' + escapeHTML(chk.err) : 'Condition SQL que doit respecter une ligne <b>valide</b> — la règle liste celles qui ne la respectent pas. Noms de colonnes entre guillemets doubles. Lecture seule, une seule condition (pas de « ; »).'}</div>`; }
+                case 'group': {
+                    const sel = (f, cur, opts, dft) => `<select onchange="qrSet('${r.id}','p.${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white">${Object.entries(opts).map(([k, l]) => `<option value="${k}" ${(cur || dft) === k ? 'selected' : ''}>${escapeHTML(l)}</option>`).join('')}</select>`;
+                    const needCol = (P.gAgg || 'count') !== 'count';
+                    return `<span class="font-bold text-slate-500">Pour chaque</span> ${inp('gKeys', P.gKeys, 'colonnes de regroupement (séparées par ;)', 'w-48')}
+                        <span class="font-bold text-slate-500">le</span> ${sel('gAgg', P.gAgg, QR_G_AGGS, 'count')} ${needCol ? 'de ' + colSel('p.gCol', P.gCol) : ''}
+                        ${sel('gOp', P.gOp, QR_G_OPS, '<=')} ${inp('gVal', P.gVal, '1', 'w-16')}
+                        <div class="mt-1"><span class="text-[10px] text-slate-400">en ne comptant que les lignes où (facultatif)</span> ${inp('gWhere', P.gWhere, "ex : \"STATUT\" = 'ACTIF'", 'w-56')}</div>
+                        <div class="text-[9px] text-slate-400 mt-0.5">L'unité contrôlée est le <b>groupe</b> : le résultat compte les groupes non conformes, et l'inspection affiche les lignes de ces groupes.</div>`; }
                 default: return '';
             }
         }
@@ -10422,8 +10518,8 @@
                     <td class="p-2"><select onchange="qrSet('${r.id}','type',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white w-full">${Object.entries(QR_TYPES).map(([k, l]) => `<option value="${k}" ${r.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
                     <td class="p-2">${(r.table || r.bo) ? qrParamsHtml(r) : '<span class="text-slate-300 italic">choisissez une cible</span>'}</td>
                     <td class="p-2"><select onchange="qrSet('${r.id}','crit',this.value)" class="border border-slate-200 rounded px-1 py-1 bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === r.crit ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
-                    <td class="p-2">${r.last ? `<span class="font-black ${qrScoreColor(Math.round(100 * r.last.rate))}">${(100 * r.last.rate).toFixed(1)} %</span> <span class="text-slate-400">· ${r.last.fails.toLocaleString('fr-FR')} échec(s)</span>${idx != null ? '<br>' + qualInspectButtons(idx) : ''}` : '<span class="text-slate-300 italic">jamais exécutée</span>'}</td>
-                    <td class="p-2 whitespace-nowrap"><button onclick="qrDup('${r.id}')" class="text-slate-300 hover:text-indigo-600" title="Dupliquer">⧉</button> <button onclick="qrDel('${r.id}')" class="text-slate-300 hover:text-red-500 font-bold" title="Supprimer">✕</button></td>
+                    <td class="p-2">${r.last ? `<span class="font-black ${qrScoreColor(Math.round(100 * r.last.rate))}">${(100 * r.last.rate).toFixed(1)} %</span> <span class="text-slate-400">· ${r.last.fails.toLocaleString('fr-FR')} ${QR_GROUPED.includes(r.type) ? 'groupe(s)' : 'ligne(s)'} en échec</span>${idx != null ? '<br>' + qualInspectButtons(idx) : ''}` : '<span class="text-slate-300 italic">jamais exécutée</span>'}</td>
+                    <td class="p-2 whitespace-nowrap"><button onclick="qrRunOne('${r.id}', this)" class="text-purple-600 hover:text-purple-800 font-bold" title="Exécuter uniquement cette règle">▶</button> <button onclick="qrDup('${r.id}')" class="text-slate-300 hover:text-indigo-600" title="Dupliquer">⧉</button> <button onclick="qrDel('${r.id}')" class="text-slate-300 hover:text-red-500 font-bold" title="Supprimer">✕</button></td>
                 </tr>`; }).join('')}</tbody></table></div>
             <p class="text-[10px] text-slate-400 mt-1.5">Les règles sont persistées avec la gouvernance (bundles compris) et <strong>rejouées automatiquement</strong> quand la source correspondante est rafraîchie. Tout le calcul est fait en SQL DuckDB, en une passe par table.</p>`;
             c.innerHTML = html;
