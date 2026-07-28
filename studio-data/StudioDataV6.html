@@ -625,22 +625,27 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div class="bg-indigo-50/50 p-4 rounded-lg border border-indigo-200">
                         <h3 class="font-bold text-indigo-800 mb-3">Fichier de Base (A)</h3>
-                        <select id="compTableA" onchange="handleCompTableChange('A')" class="w-full border p-2 mb-3 rounded bg-white text-sm"></select>
-                        <label class="block text-xs font-bold text-slate-500 mb-1">Clé Unique d'Identification</label>
-                        <select id="compKeyA" class="w-full border p-2 rounded bg-white text-sm"></select>
+                        <select id="compTableA" onchange="handleCompTableChange('A')" class="w-full border p-2 rounded bg-white text-sm"></select>
                     </div>
                     <div class="bg-emerald-50/50 p-4 rounded-lg border border-emerald-200">
                         <h3 class="font-bold text-emerald-800 mb-3">Fichier à Comparer (B)</h3>
-                        <select id="compTableB" onchange="handleCompTableChange('B')" class="w-full border p-2 mb-3 rounded bg-white text-sm"></select>
-                        <label class="block text-xs font-bold text-slate-500 mb-1">Clé Unique d'Identification</label>
-                        <select id="compKeyB" class="w-full border p-2 rounded bg-white text-sm"></select>
+                        <select id="compTableB" onchange="handleCompTableChange('B')" class="w-full border p-2 rounded bg-white text-sm"></select>
                     </div>
                 </div>
                 <div class="border-t border-slate-200 pt-6 mb-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold text-slate-700">Correspondances des valeurs à vérifier</h3>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-slate-700">🔑 Clé d'identification <span class="font-normal text-slate-400 text-sm">— une ou plusieurs colonnes (clé composite)</span></h3>
+                        <button onclick="addCompKey()" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded font-bold flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Ajouter une colonne à la clé</button>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">Les colonnes sont appariées deux à deux (A ↔ B) et concaténées dans l'ordre. Une ligne dont une partie de la clé est vide est écartée.</p>
+                    <div id="compKeysArea" class="space-y-2"></div>
+                </div>
+                <div class="border-t border-slate-200 pt-6 mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-slate-700">Correspondances des valeurs à vérifier <span class="font-normal text-slate-400 text-sm">— facultatif</span></h3>
                         <button onclick="addCompMapping()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border px-3 py-1.5 rounded font-medium flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Ajouter un mapping</button>
                     </div>
+                    <p class="text-xs text-slate-400 mb-3">Laissez cette liste vide pour ne comparer que <strong>les écarts de clé</strong> : les clés présentes d'un côté et pas de l'autre.</p>
                     <div id="compMappingsArea" class="space-y-2"><p class="text-sm text-slate-400 italic">Aucune correspondance. Ajoutez des colonnes pour les comparer.</p></div>
                 </div>
                 <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 flex gap-6">
@@ -858,7 +863,7 @@
         let networkInstance = null; let currentChart = null; 
         let browserState = { tableId: null, filters: {}, sortCol: null, sortDir: 'asc', data: [], linkMap: {} };
         let browserFilterTimeout = null; let expNetInstance = null; let expDataStore = {};
-        let compState = { mappings: [] }; let currentProfilingStats = null; let currentProfilingTableId = null;
+        let compState = { mappings: [], keys: [] }; let currentProfilingStats = null; let currentProfilingTableId = null;
         let currentProfilingWhere = ''; let qualAuditWhereOverride = null;
         // Référentiel de gouvernance : indexé par NOM de table (et non id technique) pour survivre
         // aux rechargements et aux échanges de bundles entre collègues.
@@ -6939,6 +6944,7 @@
             if(num===5) { populateExpTableSelect(); ['expBaseTable', 'expConfigTable'].forEach(comboifyTableSelect); }
             if(num===6) { populateBrowserTableSelect(); comboifyTableSelect('browserTableSelect'); }
             if(num===7) { populateCompareTables(); ['compTableA', 'compTableB'].forEach(comboifyTableSelect); }
+            if(num===7) { renderCompKeys(); renderCompMappings(); }
             if(num===8) { populateQualTables(); comboifyTableSelect('qualTable'); }
             if(num===9) renderGovernance();
         }
@@ -9745,8 +9751,15 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.18.0';
+        const APP_VERSION = '6.19.0';
         const APP_CHANGELOG = [
+            { v: '6.19.0', d: '2026-07-27', t: 'Comparateur : clé composite et comparaison des seuls écarts de clé', items: [
+                'La clé d\'identification n\'est plus limitée à UNE colonne. On empile autant de couples de colonnes (A ↔ B) que nécessaire : elles sont appariées dans l\'ordre et forment une clé composite.',
+                'En SQL, les parties de la clé sont normalisées puis concaténées avec un séparateur impossible à trouver dans une donnée. Si une seule partie est vide, la clé entière est nulle et la ligne est écartée — même règle que pour une clé simple.',
+                'Le rapport restitue une colonne de sortie PAR partie de clé (CLE_<colonne>), plus lisible qu\'une clé collée en un seul champ.',
+                'Nouveau mode : si aucune correspondance de valeurs n\'est renseignée, la comparaison porte uniquement sur les ÉCARTS DE CLÉ — les clés présentes d\'un côté et pas de l\'autre. Le message « Mappez au moins une colonne » disparaît.',
+                'Le résumé s\'adapte : clés évaluées, présentes des deux côtés, en plus dans A (absentes de B), en plus dans B (absentes de A). En mode classique, la tuile « Lignes absentes » précise désormais la répartition entre les deux sens.',
+                'Confort : choisir une colonne de clé côté A propose automatiquement celle de même nom côté B.'] },
             { v: '6.18.0', d: '2026-07-27', t: 'Tables conçues : vue graphique optionnelle — relier les sources en tirant des traits', items: [
                 'Nouvelle case à cocher « 🔗 Vue graphique » dans le concepteur de table. Elle AJOUTE un schéma au-dessus du formulaire habituel, qui reste disponible et synchronisé : rien n\'est remplacé.',
                 'À gauche les sources contributrices avec leurs colonnes, à droite la table conçue avec ses attributs. Les alimentations existantes sont dessinées en traits bleus.',
@@ -13293,10 +13306,41 @@
         //  STEP 7: COMPARATEUR
         // ==========================================
         function handleCompTableChange(side) {
-            const tId = el(`compTable${side}`).value; const selectKey = el(`compKey${side}`);
-            if(tId && state.tables[tId]) { selectKey.innerHTML = '<option value="">Clé d\'identification...</option>' + state.tables[tId].headers.map(h => `<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join(''); } 
-            else { selectKey.innerHTML = ''; }
-            renderCompMappings();
+            if (!compState.keys.length) compState.keys.push({ id: generateId(), colA: '', colB: '' });
+            renderCompKeys(); renderCompMappings();
+        }
+
+        // ---- V6.19 : clé COMPOSITE — autant de couples de colonnes (A ↔ B) que nécessaire ----
+        function addCompKey() { compState.keys.push({ id: generateId(), colA: '', colB: '' }); renderCompKeys(); }
+        function removeCompKey(id) { compState.keys = compState.keys.filter(k => k.id !== id); if (!compState.keys.length) compState.keys.push({ id: generateId(), colA: '', colB: '' }); renderCompKeys(); }
+        function updateCompKey(id, side, val) {
+            const k = compState.keys.find(x => x.id === id); if (!k) return;
+            if (side === 'A') {
+                k.colA = val;
+                // Confort : on propose d'emblée la colonne de même nom côté B si elle existe.
+                const tB = state.tables[el('compTableB').value];
+                if (val && !k.colB && tB) { const m = tB.headers.find(h => normColName(h) === normColName(val)); if (m) k.colB = m; }
+            } else k.colB = val;
+            renderCompKeys();
+        }
+        function compKeyParts() { return (compState.keys || []).filter(k => k.colA && k.colB); }
+        function renderCompKeys() {
+            const area = el('compKeysArea'); if (!area) return;
+            const tA = state.tables[el('compTableA').value], tB = state.tables[el('compTableB').value];
+            const opts = (t, cur, lbl) => `<option value="">${lbl}</option>` + (t ? t.headers.map(h => `<option value="${escapeHTML(h)}" ${h === cur ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('') : '');
+            if (!compState.keys.length) compState.keys.push({ id: generateId(), colA: '', colB: '' });
+            area.innerHTML = compState.keys.map((k, i) => `
+                <div class="flex items-center gap-3 bg-amber-50/40 p-2 border border-amber-200 rounded">
+                    <span class="text-[10px] font-black text-amber-700 w-6 text-center">${i + 1}</span>
+                    <div class="w-5/12"><select class="w-full border border-slate-300 p-2 text-sm rounded bg-white" onchange="updateCompKey('${k.id}', 'A', this.value)">${opts(tA, k.colA, 'Colonne clé Fichier A...')}</select></div>
+                    <div class="w-2/12 flex justify-center text-amber-500 font-bold">↔</div>
+                    <div class="w-5/12"><select class="w-full border border-slate-300 p-2 text-sm rounded bg-white" onchange="updateCompKey('${k.id}', 'B', this.value)">${opts(tB, k.colB, 'Colonne clé Fichier B...')}</select></div>
+                    <button onclick="removeCompKey('${k.id}')" class="text-red-500 hover:text-red-700 ml-2" title="Retirer cette colonne de la clé">✕</button>
+                </div>`).join('');
+            const parts = compKeyParts();
+            area.insertAdjacentHTML('beforeend', parts.length > 1
+                ? `<p class="text-[11px] text-amber-700 font-bold">Clé composite sur ${parts.length} colonnes : ${escapeHTML(parts.map(k => k.colA).join(' + '))} ↔ ${escapeHTML(parts.map(k => k.colB).join(' + '))}</p>`
+                : (parts.length ? `<p class="text-[11px] text-slate-400">Clé simple : ${escapeHTML(parts[0].colA)} ↔ ${escapeHTML(parts[0].colB)}.</p>` : ''));
         }
 
         function addCompMapping() { compState.mappings.push({ id: generateId(), colA: '', colB: '' }); renderCompMappings(); }
@@ -13336,11 +13380,14 @@
         async function runComparison() {
             hideError();
             const tIdA = el('compTableA').value, tIdB = el('compTableB').value;
-            const keyA = el('compKeyA').value, keyB = el('compKeyB').value;
+            const keyParts = compKeyParts();
 
-            if(!tIdA || !tIdB || !keyA || !keyB) return showError("Sélectionnez les tables et clés.");
+            if(!tIdA || !tIdB) return showError("Sélectionnez les deux tables à comparer.");
+            if(!keyParts.length) return showError("Choisissez au moins une colonne de clé de chaque côté (A ↔ B).");
             const validMappings = compState.mappings.filter(m => m.colA && m.colB);
-            if(validMappings.length === 0) return showError("Mappez au moins une colonne.");
+            // V6.19 : sans aucune correspondance, on ne compare QUE la présence des clés
+            // (celles en moins et celles en plus d'un fichier à l'autre).
+            const keyOnly = validMappings.length === 0;
 
             el('btnRunComp').disabled = true;
             el('compProgressArea').classList.remove('hidden');
@@ -13356,11 +13403,25 @@
                 const { conn } = await getDB();
                 st.innerText = "Exécution de la jointure SQL...";
 
-                const keyExprA = comparisonNormExpr('', keyA, ignoreSpace, ignoreCase, true);
-                const keyExprB = comparisonNormExpr('', keyB, ignoreSpace, ignoreCase, true);
+                // Clé composite : les parties normalisées sont concaténées avec un séparateur qui ne peut
+                // pas figurer dans une donnée (chr(31), séparateur d'unité). Si UNE partie est vide, la
+                // clé entière est nulle et la ligne est écartée — comme pour une clé simple.
+                const compositeKeySql = (side) => {
+                    const parts = keyParts.map(k => comparisonNormExpr('', side === 'A' ? k.colA : k.colB, ignoreSpace, ignoreCase, true));
+                    if (parts.length === 1) return parts[0];
+                    return `CASE WHEN ${parts.map(pp => `${pp} IS NULL`).join(' OR ')} THEN NULL ELSE ${parts.join(" || chr(31) || ")} END`;
+                };
+                const keyExprA = compositeKeySql('A'), keyExprB = compositeKeySql('B');
 
-                const outSchema = ['CLE_IDENTIFICATION', 'STATUT_LIGNE'];
-                const selectExprs = [`COALESCE(a.${sqlIdent(keyA)}, b.__nk) AS ${sqlIdent('CLE_IDENTIFICATION')}`];
+                // Une colonne de sortie par partie de clé : plus lisible qu'une clé concaténée.
+                const outSchema = [];
+                const selectExprs = [];
+                keyParts.forEach(k => {
+                    const h = dedupeHeader(outSchema, keyParts.length > 1 ? `CLE_${k.colA}` : 'CLE_IDENTIFICATION');
+                    outSchema.push(h);
+                    selectExprs.push(`COALESCE(CAST(a.${sqlIdent(k.colA)} AS VARCHAR), CAST(b.${sqlIdent(k.colB)} AS VARCHAR)) AS ${sqlIdent(h)}`);
+                });
+                outSchema.push('STATUT_LIGNE');
 
                 const diffFlags = validMappings.map((m, i) => `__d${i}`);
                 validMappings.forEach((m, i) => {
@@ -13372,8 +13433,8 @@
                     CASE
                         WHEN a.__nk IS NULL THEN 'Manquant Fichier A'
                         WHEN b.__nk IS NULL THEN 'Manquant Fichier B'
-                        WHEN (${diffFlags.map(f => `COALESCE(${f}, false)`).join(' OR ')}) THEN 'Valeurs Différentes'
-                        ELSE '100% Identique'
+                        ${keyOnly ? "ELSE 'Clé présente des deux côtés'" : `WHEN (${diffFlags.map(f => `COALESCE(${f}, false)`).join(' OR ')}) THEN 'Valeurs Différentes'
+                        ELSE '100% Identique'`}
                     END AS ${sqlIdent('STATUT_LIGNE')}
                 `);
                 validMappings.forEach((m, i) => {
@@ -13404,10 +13465,12 @@
                 `);
                 pb.style.width = '50%'; st.innerText = "Calcul des statistiques...";
 
-                const totalRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tIdA))}`);
+                const totalRes = await conn.query(keyOnly
+                    ? `SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(resultTId))}`
+                    : `SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tIdA))}`);
                 const statsRes = await conn.query(`
                     SELECT
-                        SUM(CASE WHEN ${sqlIdent('STATUT_LIGNE')} = '100% Identique' THEN 1 ELSE 0 END)::BIGINT AS identical,
+                        SUM(CASE WHEN ${sqlIdent('STATUT_LIGNE')} IN ('100% Identique', 'Clé présente des deux côtés') THEN 1 ELSE 0 END)::BIGINT AS identical,
                         SUM(CASE WHEN ${sqlIdent('STATUT_LIGNE')} = 'Valeurs Différentes' THEN 1 ELSE 0 END)::BIGINT AS diff,
                         SUM(CASE WHEN ${sqlIdent('STATUT_LIGNE')} = 'Manquant Fichier A' THEN 1 ELSE 0 END)::BIGINT AS missinga,
                         SUM(CASE WHEN ${sqlIdent('STATUT_LIGNE')} = 'Manquant Fichier B' THEN 1 ELSE 0 END)::BIGINT AS missingb
@@ -13433,7 +13496,20 @@
                 await duckDropTable(resultTId);
 
                 pb.style.width = '100%'; st.innerText = "Comparaison Terminée !";
-                el('compSummary').innerHTML = `<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-left"><div class="bg-indigo-50 border p-4 rounded-xl"><div class="text-xs font-bold uppercase mb-1">Total évalué</div><div class="text-2xl font-black">${total}</div></div><div class="bg-emerald-50 border p-4 rounded-xl"><div class="text-xs font-bold uppercase mb-1">100% Identiques</div><div class="text-2xl font-black">${identical}</div></div><div class="bg-amber-50 border p-4 rounded-xl"><div class="text-xs font-bold uppercase mb-1">Avec Différences</div><div class="text-2xl font-black">${diff}</div></div><div class="bg-red-50 border p-4 rounded-xl"><div class="text-xs font-bold uppercase mb-1">Lignes Absentes</div><div class="text-2xl font-black">${missingA + missingB}</div></div></div>`;
+                const keyLbl = keyParts.map(k => k.colA).join(' + ');
+                const tile = (bg, lbl, val, sub) => `<div class="${bg} border p-4 rounded-xl"><div class="text-xs font-bold uppercase mb-1">${lbl}</div><div class="text-2xl font-black">${Number(val).toLocaleString('fr-FR')}</div>${sub ? `<div class="text-[10px] text-slate-500 mt-1">${sub}</div>` : ''}</div>`;
+                el('compSummary').innerHTML = keyOnly
+                    ? `<div class="text-xs text-slate-500 mb-3">Comparaison des <strong>écarts de clé</strong> sur <strong>${escapeHTML(keyLbl)}</strong> — aucune valeur n'était à contrôler.</div>
+                       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+                       ${tile('bg-indigo-50', 'Clés évaluées', total, 'union des deux fichiers')}
+                       ${tile('bg-emerald-50', 'Présentes des deux côtés', identical, '')}
+                       ${tile('bg-red-50', 'En plus dans A', missingB, 'absentes du fichier B')}
+                       ${tile('bg-amber-50', 'En plus dans B', missingA, 'absentes du fichier A')}</div>`
+                    : `<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-left">
+                       ${tile('bg-indigo-50', 'Total évalué', total, '')}
+                       ${tile('bg-emerald-50', '100% Identiques', identical, '')}
+                       ${tile('bg-amber-50', 'Avec Différences', diff, '')}
+                       ${tile('bg-red-50', 'Lignes Absentes', missingA + missingB, `${missingB} en plus dans A · ${missingA} en plus dans B`)}</div>`;
 
                 const finalBlob = new Blob(["﻿", ...blobParts], { type: 'text/csv;charset=utf-8;' });
                 const dl = el('compDownloadLink'); dl.href = URL.createObjectURL(finalBlob); dl.download = `Comparaison_Resultat_${Date.now()}.csv`;
