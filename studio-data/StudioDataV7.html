@@ -446,6 +446,10 @@
 
     /* ---------- 4. Les commandes ----------
        Boutons : trois registres seulement — plein, teinté, nu. Pression tactile. */
+    /* Remise à zéro du bouton : sans elle, on hérite du gris #efefef du navigateur
+       dès que la feuille utilitaire n'est pas là. Une classe de fond reprend
+       toujours le dessus (spécificité de classe > spécificité d'élément). */
+    button{background-color:transparent;background-image:none;border:0;color:inherit}
     button{font-family:var(--v7-font);cursor:pointer;
            transition:background-color .18s var(--v7-ease),color .18s var(--v7-ease),
                       box-shadow .18s var(--v7-ease),transform .12s var(--v7-ease),opacity .18s}
@@ -541,15 +545,97 @@
                       box-shadow:0 1px 3px rgba(15,23,42,.12) !important}
     .v7-seg .v7-ic{width:14px;height:14px;flex:0 0 14px;display:inline-block;vertical-align:-2px;margin-right:5px}
 
-    /* Icônes de contenu : alignées sur la ligne de base du titre qu'elles ouvrent. */
-    .v7-cic{display:inline-flex;align-items:center;vertical-align:-2px;margin-right:2px}
-    .v7-cic .v7-ic{width:1.05em;height:1.05em;flex:0 0 auto;opacity:.75}
-    h1 .v7-cic .v7-ic,h2 .v7-cic .v7-ic,h3 .v7-cic .v7-ic{opacity:.85}
     /* Le badge de version doit rester lisible sur le rail sombre. */
     .v7-brand .vr{background:rgba(255,255,255,.08) !important;color:rgba(255,255,255,.62) !important;
                   border-radius:5px;padding:2px 6px !important;font-size:10px !important;
                   font-weight:500 !important;letter-spacing:.01em;border:none !important}
     .v7-brand .vr:hover{background:rgba(255,255,255,.14) !important;color:#fff !important}
+
+    /* ---------- 8. Une couleur, pas un arc-en-ciel (V7.2) ----------
+       550 textes colorés en rouge, vert, ambre et indigo saturés : chaque écran
+       tirait dans quatre directions. On garde le SENS (une alerte reste rouge,
+       une réussite reste verte) mais on baisse la saturation d'un cran et on
+       aligne les nuances : une seule teinte par intention, lisible sur fond
+       clair comme sombre. L'accent, lui, reste réservé à l'action. */
+    :root{
+      --v7-ok:#1c7f57; --v7-warn:#8a6212; --v7-bad:#c2402f; --v7-info:#3f4fb0;
+    }
+    html[data-theme="dark"]{
+      --v7-ok:#5fd3a3; --v7-warn:#e2b155; --v7-bad:#f08a7c; --v7-info:#9aa6f5;
+    }
+    .text-emerald-500,.text-emerald-600,.text-emerald-700,.text-emerald-800,
+    .text-green-500,.text-green-600,.text-green-700,.text-green-800,
+    .text-teal-600,.text-teal-700{color:var(--v7-ok) !important}
+    .text-amber-500,.text-amber-600,.text-amber-700,.text-amber-800,
+    .text-orange-500,.text-orange-600,.text-orange-700,.text-yellow-600,
+    .text-yellow-700{color:var(--v7-warn) !important}
+    .text-red-500,.text-red-600,.text-red-700,.text-red-800,
+    .text-rose-500,.text-rose-600,.text-rose-700{color:var(--v7-bad) !important}
+    .text-indigo-500,.text-indigo-600,.text-indigo-700,.text-indigo-800,
+    .text-blue-500,.text-blue-600,.text-blue-700,.text-blue-800,
+    .text-violet-600,.text-violet-700,.text-purple-600,.text-purple-700,
+    .text-sky-600,.text-sky-700,.text-fuchsia-600,.text-cyan-600,
+    .text-cyan-700,.text-lime-600,.text-pink-600{color:var(--v7-info) !important}
+
+    /* Les dégradés appartiennent à une autre époque : surfaces franches. */
+    [class*="bg-gradient"]{background-image:none !important;
+      background-color:color-mix(in srgb,var(--v7-accent) 8%,var(--v7-surface)) !important}
+
+    /* Les pictogrammes prennent le ton de leur contexte, sans le surcharger. */
+    .v7-cic{display:inline-flex;align-items:center;vertical-align:-2px;margin-right:3px}
+    .v7-cic .v7-ic{width:1.02em;height:1.02em;flex:0 0 auto;opacity:.72;stroke-width:1.7}
+    h1 .v7-cic .v7-ic,h2 .v7-cic .v7-ic,h3 .v7-cic .v7-ic,h4 .v7-cic .v7-ic{opacity:.85}
+    button .v7-cic .v7-ic{opacity:.9}
+    /* Un picto seul (bouton de fermeture, action d'icône) reste cliquable et centré. */
+    button > .v7-cic:only-child{margin-right:0}
+
+    /* Le bandeau du catalogue et les canevas gardaient des dégradés de leur époque. */
+    .cat-hero{background:var(--v7-surface) !important;color:var(--v7-txt) !important;
+              box-shadow:0 0 0 1px var(--v7-hair) !important;border-radius:18px !important;
+              padding:26px 28px !important}
+    .cat-hero *{color:inherit}
+    .cat-hero .text-slate-300,.cat-hero .text-slate-400,.cat-hero .opacity-80{color:var(--v7-muted) !important}
+    #tdgCanvas,#advGCanvas{background:var(--v7-surface-2) !important;border-color:var(--v7-hair) !important}
+    .topvals .track i{background:var(--v7-accent) !important}
+    /* Le fond pointillé des graphes : un semis plus discret. */
+    #networkGraph,#expGraphContainer{background-color:var(--v7-surface-2) !important}
+
+    /* Composants propres à l'application : leurs fonds clairs étaient écrits en dur,
+       hors de portée du remappage. On les rattache au thème. */
+    html[data-theme="dark"] .cat-bigsearch,html[data-theme="dark"] .empty-ux,
+    html[data-theme="dark"] .cat-tico,html[data-theme="dark"] .cat-oav,
+    html[data-theme="dark"] .cat-tag,html[data-theme="dark"] .fmt-ux,
+    html[data-theme="dark"] .s-perso,html[data-theme="dark"] .subfam,
+    html[data-theme="dark"] .qual,html[data-theme="dark"] .typ,
+    html[data-theme="dark"] .topvals .lbl,html[data-theme="dark"] .rule-ux .st,
+    html[data-theme="dark"] .seg-ux button.on,html[data-theme="dark"] .ctx-chip.active,
+    html[data-theme="dark"] .cat-hs b,html[data-theme="dark"] .tt .tip{
+      background:var(--v7-surface-2) !important;color:var(--v7-txt) !important;
+      border-color:var(--v7-hair) !important}
+    html[data-theme="dark"] .sticky-header th,html[data-theme="dark"] #uxProfilTable thead th{
+      background:var(--v7-surface) !important;color:var(--v7-muted) !important}
+    html[data-theme="dark"] #uxProfilTable tbody tr:hover{background:rgba(255,255,255,.04) !important}
+    html[data-theme="dark"] .cat-bigsearch{box-shadow:0 0 0 1px var(--v7-hair) !important}
+    html[data-theme="dark"] .tt .tip{background:#0b1018 !important;color:#e9eef6 !important}
+    html[data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-track{background:transparent !important}
+    /* L'état vide : une surface posée, pas une carte blanche sur fond sombre. */
+    .empty-ux{background:var(--v7-surface) !important;border-radius:16px !important;
+              box-shadow:0 0 0 1px var(--v7-hair) !important;border:none !important}
+
+    /* Les 24 jetons hérités de la V3 : ils pilotent encore des dizaines de
+       composants (profilage, panneaux, règles) et n'avaient jamais de valeur
+       sombre. On les rebranche sur le thème plutôt que de corriger chaque règle. */
+    html[data-theme="dark"]{
+      --bg:#0a0e15; --panel:#131923; --panel-2:#171f2b;
+      --border:#252f3f; --border-strong:#33405a;
+      --ink:#e9eef6; --muted:#aab6c7; --faint:#7d8a9d;
+      --ok:#5fd3a3; --ok-bg:rgba(16,185,129,.16);
+      --warn:#e2b155; --warn-bg:rgba(245,158,11,.16);
+      --bad:#f08a7c; --bad-bg:rgba(239,68,68,.16);
+      --info:#9aa6f5; --info-bg:rgba(59,130,246,.16);
+      --data:#7f9cf5; --etl:#a5b4fc; --gov:#5fd3a3; --quality:#e2b155;
+      --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 10px 40px rgba(0,0,0,.55);
+    }
 
     /* ---------- 7. Détails ---------- */
     ::selection{background:color-mix(in srgb,var(--v7-accent) 26%,transparent)}
@@ -7524,7 +7610,42 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             '🎯': '<circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1.2"/>',
             '🔒': '<rect x="4.6" y="10.2" width="14.8" height="10" rx="2.2"/><path d="M8.2 10.2V7.6a3.8 3.8 0 0 1 7.6 0v2.6"/>',
             '⬆': '<path d="M12 20V4.6M6.4 10.2 12 4.6l5.6 5.6"/>',
-            '⬇': '<path d="M12 4v15.4M6.4 13.8 12 19.4l5.6-5.6"/>'
+            '⬇': '<path d="M12 4v15.4M6.4 13.8 12 19.4l5.6-5.6"/>',
+            '✕': '<path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/>',
+            '✖': '<path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8"/>',
+            '✔': '<path d="M4.8 12.6 9.6 17.4 19.2 6.6"/>',
+            '✓': '<path d="M4.8 12.6 9.6 17.4 19.2 6.6"/>',
+            '➕': '<path d="M12 4.6v14.8M4.6 12h14.8"/>',
+            '➖': '<path d="M4.6 12h14.8"/>',
+            '🔑': '<circle cx="8.2" cy="8.2" r="4"/><path d="M11 11 20 20M17.4 17.4l2-2M14.6 14.6l2-2"/>',
+            '😴': '<circle cx="12" cy="12" r="8.4"/><path d="M8.4 14.8h3.2l-3.2 3h3.2M14.2 9.4h2.6l-2.6 2.6h2.6"/>',
+            '🗂': '<path d="M3.6 7.4a1.8 1.8 0 0 1 1.8-1.8h3.4l1.8 2.2h8a1.8 1.8 0 0 1 1.8 1.8v8.6a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8z"/><path d="M3.6 10.8h16.8"/>',
+            '📂': '<path d="M3.6 7.4a1.8 1.8 0 0 1 1.8-1.8h3.4l1.8 2.2h8a1.8 1.8 0 0 1 1.8 1.8v8.6a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8z"/>',
+            '📁': '<path d="M3.6 7.4a1.8 1.8 0 0 1 1.8-1.8h3.4l1.8 2.2h8a1.8 1.8 0 0 1 1.8 1.8v8.6a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8z"/>',
+            '🔌': '<path d="M9 4.2v5M15 4.2v5"/><path d="M6.6 9.2h10.8v3a5.4 5.4 0 0 1-10.8 0z"/><path d="M12 17.6v2.6"/>',
+            '⛔': '<circle cx="12" cy="12" r="8.4"/><path d="M6.6 6.6 17.4 17.4"/>',
+            '🚫': '<circle cx="12" cy="12" r="8.4"/><path d="M6.6 6.6 17.4 17.4"/>',
+            '🛡': '<path d="M12 3.6 4.8 6.6v5c0 4.4 3 8.2 7.2 9.4 4.2-1.2 7.2-5 7.2-9.4v-5z"/>',
+            '👑': '<path d="M3.6 8.2 6.8 14 12 6.4 17.2 14l3.2-5.8v9.4a1.4 1.4 0 0 1-1.4 1.4H5a1.4 1.4 0 0 1-1.4-1.4z"/>',
+            '🗺': '<path d="m3.6 7 5.4-2.2 6 2.4 5.4-2.2v12.4l-5.4 2.2-6-2.4L3.6 19.4z"/><path d="M9 4.8v12.6M15 7.2v12.4"/>',
+            '✎': '<path d="M16.4 3.9a2.1 2.1 0 0 1 3 3L8 18.3l-4 1 1-4z"/>',
+            '📝': '<path d="M16.4 3.9a2.1 2.1 0 0 1 3 3L8 18.3l-4 1 1-4z"/>',
+            '🏷': '<path d="M11.6 3.8H5.4a1.6 1.6 0 0 0-1.6 1.6v6.2a1.8 1.8 0 0 0 .53 1.27l7.1 7.1a1.6 1.6 0 0 0 2.26 0l6.2-6.2a1.6 1.6 0 0 0 0-2.26l-7.1-7.1A1.8 1.8 0 0 0 11.6 3.8z"/><circle cx="8.2" cy="8.2" r="1.1"/>',
+            '⏱': '<circle cx="12" cy="13.4" r="7.2"/><path d="M12 9.8v3.6l2.4 1.6M9.4 2.8h5.2"/>',
+            '⏳': '<path d="M7 3.6h10M7 20.4h10"/><path d="M8 3.6v3.6L12 12l4-4.8V3.6M8 20.4v-3.6L12 12l4 4.8v3.6"/>',
+            '📅': '<rect x="3.8" y="5.4" width="16.4" height="15" rx="2"/><path d="M3.8 10h16.4M8.4 3.6v3.6M15.6 3.6v3.6"/>',
+            '🔔': '<path d="M17.4 10.4a5.4 5.4 0 0 0-10.8 0c0 5.2-2.2 6.6-2.2 6.6h15.2s-2.2-1.4-2.2-6.6z"/><path d="M13.6 20.2a1.9 1.9 0 0 1-3.2 0"/>',
+            '⭐': '<path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.6L12 17l-5.1 2.6 1-5.6-4.1-4 5.7-.8z"/>',
+            '🚀': '<path d="M5.2 14.6c-1.4 1.4-1.8 5.2-1.8 5.2s3.8-.4 5.2-1.8a2.4 2.4 0 0 0-3.4-3.4z"/><path d="M11 16 8 13c.9-3.5 3-8.4 9.2-9.2.8 6.2-4.1 8.3-6.2 9.2z"/>',
+            '🧊': '<path d="M20.4 8.4 12 4.2 3.6 8.4v7.2L12 19.8l8.4-4.2z"/><path d="M3.6 8.4 12 12.6l8.4-4.2M12 12.6v7.2"/>',
+            '🗃': '<rect x="3.6" y="4.2" width="16.8" height="15.6" rx="2"/><path d="M3.6 9.4h16.8M3.6 14.6h16.8"/>',
+            '📌': '<path d="M12 13.4v7M8 3.6h8l-1.2 6.2 2.6 2.2H6.6l2.6-2.2z"/>',
+            '🔬': '<path d="M8.4 20.4h10M6.6 20.4h1.8"/><path d="M11 4.6h2.6v6.2H11z"/><path d="M12.3 10.8a5 5 0 0 1 3.4 8.6M9 19.4a5 5 0 0 1 .6-7.2"/>',
+            '🧮': '<rect x="3.8" y="3.8" width="16.4" height="16.4" rx="2"/><path d="M3.8 9h16.4M9 3.8v16.4"/>',
+            '🌐': '<circle cx="12" cy="12" r="8.4"/><path d="M3.6 12h16.8"/><path d="M12 3.6a12 12 0 0 1 0 16.8 12 12 0 0 1 0-16.8z"/>',
+            '📤': '<path d="M12 14.6V3.9M8 7.9 12 3.9l4 4"/><path d="M4 15.5v3.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-3.2"/>',
+            '📈': '<path d="M4 16.4 9.4 11l3.4 3.4 6.8-6.8"/><path d="M15.6 7.6h4v4"/>',
+            '📉': '<path d="M4 7.6 9.4 13l3.4-3.4 6.8 6.8"/><path d="M15.6 16.4h4v-4"/>'
         };
         // Rend l'icône d'un émoji sous forme de tracé ; à défaut, garde l'émoji.
         function v7Ico(emoji, cls) {
@@ -7544,43 +7665,47 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
              2. l'émoji doit ouvrir le texte et être suivi d'une espace ;
              3. les canevas de graphes et les zones de saisie sont exclus.
            ----------------------------------------------------------------------- */
-        const V7_VS16 = /️/g;
+        const V7_VS16 = /\uFE0F/g;
         const V7_ICO_KEYS = Object.keys(V7_ICONS).map(k => k.replace(V7_VS16, ''));
-        const V7_LEAD_RE = new RegExp('^\\s*(' + V7_ICO_KEYS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\uFE0F?\\s');
+        const V7_ESC = k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Toutes les occurrences, où qu'elles soient dans le texte — pas seulement en tête.
+        const V7_ANY_RE = new RegExp('(' + V7_ICO_KEYS.map(V7_ESC).join('|') + ')\\uFE0F?', 'g');
+        // Là où vit la DONNÉE de l'utilisateur : on n'y touche jamais.
         const V7_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'SVG', 'TEXTAREA', 'INPUT', 'OPTION', 'SELECT', 'CODE', 'PRE', 'TD', 'TH']);
         const V7_SKIP_IDS = new Set(['advGCanvas', 'lfCanvas', 'tdgCanvas', 'v7Nav']);
 
-        function v7IsTitleCtx(elm) {
-            if (!elm) return false;
-            const t = elm.tagName;
-            if (t === 'H1' || t === 'H2' || t === 'H3' || t === 'H4' || t === 'BUTTON' || t === 'SUMMARY' || t === 'LEGEND') return true;
-            const c = elm.className;
-            if (typeof c !== 'string') return false;
-            return /\bfont-(bold|black|semibold)\b/.test(c) || /\buppercase\b/.test(c);
-        }
         function v7Deemojify(root) {
-            root = root || el('v7MainContent') || document.querySelector('.v7-main');
+            root = root || document.querySelector('.v7-main');
             if (!root || !root.querySelectorAll) return 0;
             let n = 0;
             const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
                 acceptNode(node) {
-                    if (!V7_LEAD_RE.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+                    V7_ANY_RE.lastIndex = 0;
+                    if (!V7_ANY_RE.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
                     for (let p = node.parentElement; p && p !== root; p = p.parentElement) {
                         if (V7_SKIP_TAGS.has(p.tagName) || V7_SKIP_IDS.has(p.id) || p.isContentEditable) return NodeFilter.FILTER_REJECT;
                     }
-                    return v7IsTitleCtx(node.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
                 }
             });
             const hits = []; let x;
             while ((x = w.nextNode())) hits.push(x);
             hits.forEach(node => {
-                const m = node.nodeValue.match(V7_LEAD_RE); if (!m) return;
-                const svg = v7Ico(m[1]); if (!/^<svg/.test(svg)) return;
-                const span = document.createElement('span');
-                span.className = 'v7-cic'; span.innerHTML = svg;
-                node.nodeValue = node.nodeValue.slice(m[0].length - 1);  // on garde l'espace
-                node.parentNode.insertBefore(span, node);
-                n++;
+                const txt = node.nodeValue;
+                const frag = document.createDocumentFragment();
+                let last = 0, m; V7_ANY_RE.lastIndex = 0;
+                while ((m = V7_ANY_RE.exec(txt))) {
+                    const svg = v7Ico(m[1]);
+                    if (!/^<svg/.test(svg)) continue;
+                    if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+                    const span = document.createElement('span');
+                    span.className = 'v7-cic'; span.innerHTML = svg;
+                    frag.appendChild(span);
+                    last = m.index + m[0].length; n++;
+                }
+                if (!last) return;
+                if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+                node.parentNode.replaceChild(frag, node);
             });
             return n;
         }
@@ -10678,8 +10803,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.1.0';
+        const APP_VERSION = '7.2.0';
         const APP_CHANGELOG = [
+            { v: '7.2.0', d: '2026-07-29', t: 'Épuration — pictogrammes partout, une couleur par intention', items: [
+                'La 7.1 n\'avait converti que les titres : <b>999 émojis</b> restaient affichés, sur 127 caractères différents. Le jeu passe à <b>77 pictogrammes</b> et la conversion s\'applique désormais à toute l\'interface — libellés, boutons, puces, messages, états vides — et plus seulement aux titres.',
+                'La garantie sur vos données est inchangée et reste testée : les <b>cellules de tableau</b>, les champs de saisie, les listes déroulantes et les canevas de graphes ne sont jamais réécrits. Un émoji non couvert reste affiché tel quel.',
+                '<b>Fin de l\'arc-en-ciel</b> : 550 textes tiraient en rouge, vert, ambre et indigo saturés, chaque écran partant dans quatre directions. Le sens est conservé — une alerte reste rouge, une réussite verte — mais sur une seule nuance par intention, désaturée d\'un cran et accordée au thème clair comme au sombre.',
+                '<b>Les dégradés disparaissent</b> au profit de surfaces franches.',
+                'Les pictogrammes prennent le ton de leur contexte : discrets dans le corps de texte, plus affirmés dans les titres et les boutons.'] },
             { v: '7.1.0', d: '2026-07-29', t: 'Refonte totale du langage visuel — typographie, air, tracés', items: [
                 'Le diagnostic, mesuré sur le fichier : 1012 graisses lourdes contre 24 moyennes, 270 libellés en capitales, 559 textes minuscules pour 74 grands, 1304 espacements serrés contre 437 généreux, 1891 bordures. C\'est cela qui donnait l\'aspect « outil d\'administration ».',
                 '<b>Typographie</b> — police système (SF Pro sur Mac, Segoe UI sur Windows), échelle complète de 10,5 à 31 px, interlettrage négatif sur les titres. Le mur de gras tombe à deux niveaux : la hiérarchie se lit désormais à la taille et à la couleur, plus à la graisse.',
