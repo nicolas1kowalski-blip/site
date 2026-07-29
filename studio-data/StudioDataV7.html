@@ -338,6 +338,233 @@
       .v7-side{position:relative;width:100%;flex-basis:auto;height:auto;max-height:44vh}
       body.v7-collapsed .v7-side{--v7-side-w:100%}
     }
+    /* ============================================================================
+       V7.1 — REFONTE TOTALE DU LANGAGE VISUEL
+       ----------------------------------------------------------------------------
+       Le diagnostic, mesuré sur le fichier : 1012 graisses lourdes contre 24
+       moyennes, 270 libellés en capitales, 559 textes minuscules pour 74 grands
+       (aucune hiérarchie), 1304 espacements serrés contre 437 généreux, 1891
+       bordures — des boîtes dans des boîtes. C'est la signature d'un outil
+       d'administration, pas d'un produit dessiné.
+       La réponse tient en cinq principes : peu de graisses, une vraie échelle
+       typographique, de l'air, presque plus de traits (on sépare par l'espace et
+       l'élévation), et une seule couleur d'accent.
+       Ces règles redéfinissent le vocabulaire utilitaire employé par les 40
+       écrans : ceux-ci changent d'aspect sans être réécrits.
+       Le !important est nécessaire — Tailwind Play injecte sa feuille APRÈS.
+       ============================================================================ */
+
+    /* ---------- 1. Typographie ---------- */
+    :root{
+      --v7-font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+      --v7-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+      --v7-ease:cubic-bezier(.4,0,.2,1);
+    }
+    html,body,button,input,select,textarea,.font-sans{font-family:var(--v7-font) !important}
+    body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+         font-size:14px;line-height:1.55;letter-spacing:-.006em}
+
+    /* Les graisses : on passe d'un mur de gras à deux niveaux lisibles.
+       La hiérarchie repose désormais sur la taille et la couleur, pas sur le gras. */
+    .font-black{font-weight:640 !important;letter-spacing:-.021em !important}
+    .font-bold{font-weight:600 !important;letter-spacing:-.014em !important}
+    .font-semibold{font-weight:560 !important;letter-spacing:-.010em !important}
+    .font-medium{font-weight:500 !important}
+
+    /* Les capitales deviennent une étiquette de section discrète, plus un cri. */
+    .uppercase{letter-spacing:.055em !important;font-weight:560 !important;opacity:.8}
+    .uppercase.text-xs{font-size:10.5px !important}
+
+    /* Une vraie échelle : le petit texte respire, les titres prennent de l'ampleur
+       et resserrent leur interlettrage (signature des affichages Apple). */
+    .text-xs{font-size:12.5px !important;line-height:1.5 !important}
+    .text-sm{font-size:13.5px !important;line-height:1.55 !important}
+    .text-base{font-size:15px !important;line-height:1.55 !important}
+    .text-lg{font-size:17px !important;line-height:1.45 !important;letter-spacing:-.014em !important}
+    .text-xl{font-size:20px !important;line-height:1.35 !important;letter-spacing:-.019em !important}
+    .text-2xl{font-size:25px !important;line-height:1.25 !important;letter-spacing:-.023em !important}
+    .text-3xl{font-size:31px !important;line-height:1.2 !important;letter-spacing:-.026em !important}
+    h1,h2,h3{letter-spacing:-.021em}
+    code,pre,.font-mono{font-family:var(--v7-mono) !important;font-size:12.5px}
+
+    /* ---------- 2. L'air ----------
+       Chaque espacement serré est dilaté d'environ 40 %. C'est le changement le
+       plus visible : l'interface cesse d'être compacte pour devenir posée. */
+    .p-1{padding:6px !important}      .p-1\.5{padding:8px !important}
+    .p-2{padding:11px !important}     .p-2\.5{padding:13px !important}
+    .p-3{padding:16px !important}     .p-4{padding:22px !important}
+    .p-5{padding:28px !important}     .p-6{padding:34px !important}
+    .px-1{padding-left:6px !important;padding-right:6px !important}
+    .px-1\.5{padding-left:8px !important;padding-right:8px !important}
+    .px-2{padding-left:11px !important;padding-right:11px !important}
+    .px-2\.5{padding-left:13px !important;padding-right:13px !important}
+    .px-3{padding-left:16px !important;padding-right:16px !important}
+    .px-4{padding-left:22px !important;padding-right:22px !important}
+    .py-0\.5{padding-top:3px !important;padding-bottom:3px !important}
+    .py-1{padding-top:6px !important;padding-bottom:6px !important}
+    .py-1\.5{padding-top:8px !important;padding-bottom:8px !important}
+    .py-2{padding-top:11px !important;padding-bottom:11px !important}
+    .py-3{padding-top:16px !important;padding-bottom:16px !important}
+    .py-4{padding-top:22px !important;padding-bottom:22px !important}
+    .gap-1{gap:6px !important} .gap-1\.5{gap:8px !important}
+    .gap-2{gap:10px !important} .gap-3{gap:14px !important} .gap-4{gap:20px !important}
+    .mb-1{margin-bottom:6px !important} .mb-2{margin-bottom:11px !important}
+    .mb-3{margin-bottom:16px !important} .mb-4{margin-bottom:22px !important}
+    .mb-6{margin-bottom:32px !important} .mt-4{margin-top:22px !important}
+
+    /* ---------- 3. Les traits disparaissent ----------
+       On ne cerne plus : on pose. Les bordures deviennent des filets d'un demi-ton,
+       et la séparation passe par l'espace et une ombre très basse. */
+    :root{--v7-hair:rgba(15,23,42,.075); --v7-hair-2:rgba(15,23,42,.13);}
+    html[data-theme="dark"]{--v7-hair:rgba(255,255,255,.085); --v7-hair-2:rgba(255,255,255,.15);}
+    .border,.border-t,.border-b,.border-l,.border-r,.border-2{border-color:var(--v7-hair) !important}
+    .border-slate-100,.border-slate-200,.border-slate-300,.border-gray-200,.border-gray-300{
+      border-color:var(--v7-hair) !important}
+    .border-slate-400,.border-slate-500{border-color:var(--v7-hair-2) !important}
+    .border-2{border-width:1px !important}
+    .divide-y > * + *{border-color:var(--v7-hair) !important}
+
+    /* Rayons unifiés — une seule famille de courbes, continue et douce. */
+    .rounded{border-radius:8px !important}
+    .rounded-lg{border-radius:11px !important}
+    .rounded-xl{border-radius:15px !important}
+    .rounded-b-lg{border-radius:0 0 11px 11px !important}
+
+    /* Les surfaces : blanches, sans cerne dur, posées par une ombre imperceptible. */
+    .bg-white{box-shadow:0 0 0 1px var(--v7-hair), 0 1px 2px rgba(15,23,42,.04)}
+    .bg-white.border,.bg-white[class*="border-"]{border-color:transparent !important}
+    html[data-theme="dark"] .bg-white{box-shadow:0 0 0 1px var(--v7-hair), 0 1px 3px rgba(0,0,0,.3)}
+    .bg-slate-50{background-color:color-mix(in srgb,var(--v7-txt) 3.5%,transparent) !important}
+    .bg-slate-100{background-color:color-mix(in srgb,var(--v7-txt) 6%,transparent) !important}
+
+    /* Teintes sémantiques : lavées, jamais criardes. */
+    .bg-amber-50,.bg-amber-100{background-color:color-mix(in srgb,#f59e0b 11%,transparent) !important}
+    .bg-red-50,.bg-red-100{background-color:color-mix(in srgb,#ef4444 10%,transparent) !important}
+    .bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100{background-color:color-mix(in srgb,#10b981 11%,transparent) !important}
+    .bg-blue-50,.bg-blue-100{background-color:color-mix(in srgb,#3b82f6 10%,transparent) !important}
+    .bg-indigo-50,.bg-indigo-100{background-color:color-mix(in srgb,var(--v7-accent) 10%,transparent) !important}
+
+    /* ---------- 4. Les commandes ----------
+       Boutons : trois registres seulement — plein, teinté, nu. Pression tactile. */
+    button{font-family:var(--v7-font);cursor:pointer;
+           transition:background-color .18s var(--v7-ease),color .18s var(--v7-ease),
+                      box-shadow .18s var(--v7-ease),transform .12s var(--v7-ease),opacity .18s}
+    button:active{transform:scale(.975)}
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+      outline:none;box-shadow:0 0 0 3.5px color-mix(in srgb,var(--v7-accent) 32%,transparent) !important}
+
+    /* Plein : l'accent unique, sans dégradé ni ombre portée colorée. */
+    button[class*="bg-indigo-6"],button[class*="bg-indigo-5"],button[class*="bg-blue-6"],
+    a[class*="bg-indigo-6"]{background-color:var(--v7-accent) !important;color:#fff !important;
+      border:none !important;box-shadow:none !important;font-weight:560 !important}
+    button[class*="bg-indigo-6"]:hover,button[class*="bg-blue-6"]:hover,a[class*="bg-indigo-6"]:hover{
+      background-color:color-mix(in srgb,var(--v7-accent) 86%,#000) !important}
+    button[class*="bg-emerald-6"],button[class*="bg-green-6"]{background-color:#10b981 !important;border:none !important}
+    button[class*="bg-red-6"],button[class*="bg-rose-6"]{background-color:#ef4444 !important;border:none !important}
+    button[class*="bg-amber-6"],button[class*="bg-amber-5"]{background-color:#f59e0b !important;border:none !important}
+
+    /* Nu : le bouton secondaire perd son cadre et gagne un fond au survol. */
+    button.bg-white{box-shadow:0 0 0 1px var(--v7-hair) !important;background-color:transparent !important}
+    button.bg-white:hover{background-color:color-mix(in srgb,var(--v7-txt) 5%,transparent) !important}
+
+    /* Champs : hauteur confortable, fond légèrement creusé, pas de cadre dur. */
+    input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea{
+      background-color:color-mix(in srgb,var(--v7-txt) 4%,transparent) !important;
+      border:1px solid transparent !important;border-radius:9px !important;
+      padding:7px 11px !important;font-size:13.5px !important;color:var(--v7-txt) !important;
+      transition:background-color .18s var(--v7-ease),box-shadow .18s var(--v7-ease)}
+    input:hover:not([type=checkbox]):not([type=radio]),select:hover,textarea:hover{
+      background-color:color-mix(in srgb,var(--v7-txt) 6.5%,transparent) !important}
+    input:focus,select:focus,textarea:focus{
+      background-color:var(--v7-surface) !important;
+      box-shadow:0 0 0 1px var(--v7-hair-2),0 0 0 3.5px color-mix(in srgb,var(--v7-accent) 30%,transparent) !important}
+    input[type=checkbox],input[type=radio]{accent-color:var(--v7-accent);width:15px;height:15px;cursor:pointer}
+    label{cursor:pointer}
+
+    /* ---------- 5. Tableaux ----------
+       Plus de quadrillage : des lignes séparées par un filet, une tête discrète. */
+    table{border-collapse:separate !important;border-spacing:0;width:100%}
+    table th{font-weight:560 !important;font-size:11px !important;letter-spacing:.045em;text-transform:uppercase;
+             color:var(--v7-muted) !important;text-align:left;padding:9px 13px !important;
+             background:transparent !important;border-bottom:1px solid var(--v7-hair) !important;white-space:nowrap}
+    table td{padding:10px 13px !important;border-bottom:1px solid var(--v7-hair) !important;
+             border-left:none !important;border-right:none !important;font-size:13px}
+    table tr:last-child td{border-bottom:none !important}
+    table tbody tr{transition:background-color .12s var(--v7-ease)}
+    table tbody tr:hover{background-color:color-mix(in srgb,var(--v7-txt) 3%,transparent)}
+
+    /* ---------- 6. La coque, reprise ----------
+       Barre supérieure translucide et floutée, titre à l'échelle d'un vrai en-tête. */
+    .v7-top{background:color-mix(in srgb,var(--v7-surface) 72%,transparent) !important;
+            backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+            border-bottom:1px solid var(--v7-hair) !important;box-shadow:none !important;
+            padding:14px 26px !important}
+    .v7-top h1{font-size:21px !important;font-weight:640 !important;letter-spacing:-.023em !important}
+    .v7-top .sub{font-size:12.5px !important;font-weight:450 !important;color:var(--v7-muted) !important;
+                 letter-spacing:-.004em}
+    .v7-main > main{padding:26px 26px 64px !important;max-width:1440px}
+    /* La surface d'écran : plus de cadre, l'espace et l'ombre suffisent. */
+    .v7-main > main > div[id^="step-"]{border:none !important;border-radius:18px !important;
+        padding:28px !important;box-shadow:0 0 0 1px var(--v7-hair),0 1px 3px rgba(15,23,42,.04) !important}
+
+    /* Le rail : sélection en pastille pleine, comme une barre latérale native. */
+    :root{--v7-side-w:262px}
+    .v7-side{background:var(--v7-side) !important;border-right:1px solid rgba(255,255,255,.05)}
+    .v7-brand{padding:20px 16px 14px !important;border-bottom-color:rgba(255,255,255,.05) !important}
+    .v7-mark{border-radius:10px !important;font-weight:640 !important}
+    .v7-brand .nm{font-size:15px !important;font-weight:600 !important;letter-spacing:-.019em !important}
+    .v7-nav{padding:12px 10px 6px !important}
+    .v7-grp{margin-bottom:2px !important}
+    .v7-grp>.hd{font-size:13px !important;font-weight:560 !important;letter-spacing:-.008em !important;
+                padding:9px 11px !important;border-radius:10px !important;gap:11px !important;
+                transition:background-color .16s var(--v7-ease),color .16s var(--v7-ease)}
+    .v7-grp.on>.hd{background:rgba(255,255,255,.07) !important;color:#fff !important}
+    .v7-grp>.hd .bd{font-size:10px !important;opacity:.35 !important;font-weight:500 !important}
+    .v7-items{margin-left:19px !important;padding-left:10px !important;
+              border-left:1px solid rgba(255,255,255,.06) !important}
+    .v7-it{font-size:12.5px !important;font-weight:450 !important;letter-spacing:-.006em !important;
+           padding:7px 11px !important;border-radius:9px !important;gap:10px !important;
+           transition:background-color .16s var(--v7-ease),color .16s var(--v7-ease)}
+    .v7-it.on{background:var(--v7-accent) !important;color:#fff !important;font-weight:530 !important;
+              box-shadow:0 1px 6px color-mix(in srgb,var(--v7-accent) 45%,transparent)}
+    .v7-foot{border-top-color:rgba(255,255,255,.05) !important;padding:10px !important}
+    .v7-fbtn{font-size:12px !important;font-weight:450 !important;border-radius:9px !important;padding:8px 11px !important}
+    /* Les icônes du rail sont des tracés, plus des émojis. */
+    .v7-ic{width:17px;height:17px;flex:0 0 17px;stroke:currentColor;fill:none;
+           stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.92}
+    .v7-it .v7-ic{width:15px;height:15px;flex:0 0 15px;stroke-width:1.7}
+    .v7-seg{background:color-mix(in srgb,var(--v7-txt) 5%,transparent) !important;border:none !important;
+            border-radius:9px !important;padding:2px !important}
+    .v7-seg button{font-size:12px !important;font-weight:530 !important;border-radius:7px !important;
+                   padding:6px 12px !important}
+    .v7-seg button.on{background:var(--v7-surface) !important;color:var(--v7-txt) !important;
+                      box-shadow:0 1px 3px rgba(15,23,42,.12) !important}
+    .v7-seg .v7-ic{width:14px;height:14px;flex:0 0 14px;display:inline-block;vertical-align:-2px;margin-right:5px}
+
+    /* Icônes de contenu : alignées sur la ligne de base du titre qu'elles ouvrent. */
+    .v7-cic{display:inline-flex;align-items:center;vertical-align:-2px;margin-right:2px}
+    .v7-cic .v7-ic{width:1.05em;height:1.05em;flex:0 0 auto;opacity:.75}
+    h1 .v7-cic .v7-ic,h2 .v7-cic .v7-ic,h3 .v7-cic .v7-ic{opacity:.85}
+    /* Le badge de version doit rester lisible sur le rail sombre. */
+    .v7-brand .vr{background:rgba(255,255,255,.08) !important;color:rgba(255,255,255,.62) !important;
+                  border-radius:5px;padding:2px 6px !important;font-size:10px !important;
+                  font-weight:500 !important;letter-spacing:.01em;border:none !important}
+    .v7-brand .vr:hover{background:rgba(255,255,255,.14) !important;color:#fff !important}
+
+    /* ---------- 7. Détails ---------- */
+    ::selection{background:color-mix(in srgb,var(--v7-accent) 26%,transparent)}
+    ::-webkit-scrollbar{width:9px;height:9px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--v7-txt) 18%,transparent);border-radius:5px;
+                              border:2px solid transparent;background-clip:content-box}
+    ::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--v7-txt) 30%,transparent);background-clip:content-box}
+    hr{border:none;border-top:1px solid var(--v7-hair)}
+    /* Les pastilles rondes (compteurs, statuts) : plus fines, mieux centrées. */
+    .rounded-full{font-weight:530 !important;letter-spacing:0 !important}
+    /* On respecte le réglage système de réduction des animations. */
+    @media (prefers-reduced-motion:reduce){*,*::before,*::after{
+      transition-duration:.01ms !important;animation-duration:.01ms !important}}
+
     /* ---- Mode sombre : remappage des classes utilitaires réellement utilisées ---- */
 html[data-theme="dark"] .bg-amber-100{background-color:rgba(245,158,11,0.18) !important}
 html[data-theme="dark"] .bg-amber-200{background-color:rgba(245,158,11,0.22) !important}
@@ -564,9 +791,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         </div>
         <nav id="v7Nav" class="v7-nav"></nav>
         <div class="v7-foot">
-          <button class="v7-fbtn" onclick="openBackupCenter()" title="Centre de sauvegarde"><span class="ic">💾</span><span class="lbl" id="v7PersistLbl">Sauvegarde</span></button>
-          <button class="v7-fbtn" onclick="document.getElementById('configUploader').click()" title="Importer une configuration"><span class="ic">⬆</span><span class="lbl">Importer</span></button>
-          <button class="v7-fbtn" onclick="exportConfiguration()" title="Exporter la configuration"><span class="ic">⬇</span><span class="lbl">Exporter</span></button>
+          <button class="v7-fbtn" onclick="openBackupCenter()" title="Centre de sauvegarde"><svg class="v7-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 20.4H4.4a1.8 1.8 0 0 1-1.8-1.8V5.4a1.8 1.8 0 0 1 1.8-1.8h11l6 6v9a1.8 1.8 0 0 1-1.8 1.8z"/><path d="M16.6 20.4v-6.8H7.4v6.8M7.4 3.6v4.6h6.4"/></svg><span class="lbl" id="v7PersistLbl">Sauvegarde</span></button>
+          <button class="v7-fbtn" onclick="document.getElementById('configUploader').click()" title="Importer une configuration"><svg class="v7-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V4.6M6.4 10.2 12 4.6l5.6 5.6"/></svg><span class="lbl">Importer</span></button>
+          <button class="v7-fbtn" onclick="exportConfiguration()" title="Exporter la configuration"><svg class="v7-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v15.4M6.4 13.8 12 19.4l5.6-5.6"/></svg><span class="lbl">Exporter</span></button>
           <button class="v7-fbtn" onclick="v7ToggleCollapse()" title="Réduire ou déployer le menu"><span class="ic" id="v7CollapseIc">⟨</span><span class="lbl">Réduire</span></button>
         </div>
       </aside>
@@ -7245,6 +7472,137 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ===================== V7 : NAVIGATION EN RAIL LATÉRAL =====================
         // Les phases deviennent des groupes dépliables, les écrans des entrées. La barre du haut
         // ne porte plus que le titre de l'écran courant et, pour la gouvernance, ses familles.
+        /* ============================================================================
+           V7.1 — Icônes vectorielles
+           Les émojis étaient le trait le plus daté de l'interface : rendus par le
+           système, ils changent d'un poste à l'autre, refusent la couleur du texte
+           et jurent avec une typographie soignée. On les remplace, là où ils
+           structurent la navigation, par des tracés d'un poids unique qui héritent
+           de la couleur courante. La table est indexée par l'émoji d'origine : les
+           écrans n'ont rien à déclarer, et tout émoji non couvert reste affiché
+           tel quel — aucune icône ne peut disparaître.
+           ============================================================================ */
+        const V7_ICONS = {
+            '🏠': '<path d="M3 10.7 12 3.5l9 7.2"/><path d="M5.6 9.4V20a.8.8 0 0 0 .8.8h11.2a.8.8 0 0 0 .8-.8V9.4"/><path d="M9.8 20.8v-6h4.4v6"/>',
+            '📥': '<path d="M12 3.5v10.7"/><path d="M8 10.3 12 14.2l4-3.9"/><path d="M4 15.5v3.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-3.2"/>',
+            '🧱': '<rect x="3.2" y="4.5" width="17.6" height="15" rx="2.2"/><path d="M3.2 9.6h17.6M3.2 14.5h17.6M9.5 9.6v4.9M15 4.6v5M15 14.5v5"/>',
+            '🔗': '<path d="M10.2 13.8a3.8 3.8 0 0 0 5.6.3l2.6-2.6a3.8 3.8 0 0 0-5.4-5.4l-1.5 1.5"/><path d="M13.8 10.2a3.8 3.8 0 0 0-5.6-.3l-2.6 2.6a3.8 3.8 0 0 0 5.4 5.4l1.5-1.5"/>',
+            '⚗️': '<path d="M3.8 4.8h16.4l-6.5 7.7v6.3l-3.4 2.1v-8.4z"/>',
+            '🧹': '<path d="M4 20 14.2 9.8"/><path d="M16.6 3.4l.85 2.05 2.05.85-2.05.85-.85 2.05-.85-2.05-2.05-.85 2.05-.85z"/><path d="M6.4 4.2l.55 1.3 1.3.55-1.3.55L6.4 7.9l-.55-1.3-1.3-.55 1.3-.55z"/>',
+            '📋': '<rect x="3.2" y="4" width="7.4" height="7.2" rx="1.8"/><rect x="13.4" y="4" width="7.4" height="4.6" rx="1.8"/><rect x="3.2" y="14" width="7.4" height="6" rx="1.8"/><rect x="13.4" y="11.4" width="7.4" height="8.6" rx="1.8"/>',
+            '⚖️': '<path d="M12 4.2v16"/><path d="M6 7.6h12"/><path d="M6.2 7.7 3.4 14h5.6z"/><path d="M17.8 7.7 15 14h5.6z"/><path d="M8 20.4h8"/>',
+            '🔎': '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20.4 20.4"/>',
+            '📊': '<path d="M4.6 20.2v-7.4"/><path d="M9.9 20.2V6.6"/><path d="M15.2 20.2v-5.4"/><path d="M20.5 20.2V9.4"/>',
+            '📈': '<path d="M4 16.4 9.4 11l3.4 3.4 6.8-6.8"/><path d="M15.6 7.6h4v4"/>',
+            '🕸️': '<circle cx="12" cy="5.4" r="2.3"/><circle cx="5.2" cy="17.4" r="2.3"/><circle cx="18.8" cy="17.4" r="2.3"/><path d="M10.7 7.5 6.5 15.3M13.3 7.5l4.2 7.8M7.5 17.4h9"/>',
+            '✅': '<circle cx="12" cy="12" r="8.4"/><path d="M8.3 12.2l2.6 2.6 4.9-5.2"/>',
+            '📏': '<rect x="2.8" y="8.2" width="18.4" height="7.6" rx="1.8"/><path d="M7 8.4v2.8M11 8.4v4.2M15 8.4v2.8M19 8.4v4.2"/>',
+            '🤝': '<path d="M4 5.4v3.4a4 4 0 0 0 4 4h8a4 4 0 0 1 4 4v2"/><path d="M20 5.4v3.4a4 4 0 0 1-4 4"/><path d="M17.4 16.4 20 19l2.4-2.4" transform="translate(-2.4 0)"/>',
+            '📚': '<path d="M4 5.2A1.6 1.6 0 0 1 5.6 3.6h4.2A2.2 2.2 0 0 1 12 5.8v13a1.9 1.9 0 0 0-1.9-1.9H4z"/><path d="M20 5.2a1.6 1.6 0 0 0-1.6-1.6h-4.2A2.2 2.2 0 0 0 12 5.8v13a1.9 1.9 0 0 1 1.9-1.9H20z"/>',
+            '🧭': '<circle cx="12" cy="12" r="8.4"/><path d="M15.2 8.8l-1.9 4.5-4.5 1.9 1.9-4.5z"/>',
+            '🏛️': '<path d="M3.4 9.5 12 4.2l8.6 5.3"/><path d="M5.8 10v8.2M10 10v8.2M14 10v8.2M18.2 10v8.2"/><path d="M3.4 20.4h17.2"/>',
+            '🖥': '<rect x="2.8" y="4.2" width="18.4" height="12.2" rx="2"/><path d="M9 20.4h6M12 16.6v3.8"/>',
+            '📖': '<path d="M12 6.4S10 4.4 4.6 4.4v13.2C10 17.6 12 19.6 12 19.6s2-2 7.4-2V4.4C14 4.4 12 6.4 12 6.4z"/><path d="M12 6.4v13.2"/>',
+            '🧩': '<path d="M9.6 4.4h4.8v1.9a1.85 1.85 0 1 0 3.7 0V4.4h1.5v5h-1.9a1.85 1.85 0 1 0 0 3.7h1.9v6.5h-5v-1.9a1.85 1.85 0 1 0-3.7 0v1.9h-6.5v-6.5h1.9a1.85 1.85 0 1 0 0-3.7H4.4v-5h5.2z"/>',
+            '🧬': '<circle cx="5.6" cy="6.4" r="2.1"/><circle cx="5.6" cy="17.6" r="2.1"/><circle cx="18.4" cy="12" r="2.1"/><path d="M7.7 6.9 16.4 11.2M7.7 17.1l8.7-4.3"/>',
+            '🎚️': '<path d="M4 8.4h9.9M18.1 8.4H20M4 15.6h3.9M12.1 15.6H20"/><circle cx="16" cy="8.4" r="2.1"/><circle cx="10" cy="15.6" r="2.1"/>',
+            '🔐': '<rect x="4.6" y="10.2" width="14.8" height="10" rx="2.2"/><path d="M8.2 10.2V7.6a3.8 3.8 0 0 1 7.6 0v2.6"/>',
+            '🛰️': '<circle cx="12" cy="12" r="2.2"/><path d="M12 4.2a7.8 7.8 0 0 1 7.8 7.8M12 7.8a4.2 4.2 0 0 1 4.2 4.2"/><path d="M4.4 12a7.6 7.6 0 0 0 7.6 7.6"/>',
+            '🚨': '<path d="M12 3.6a4.6 4.6 0 0 0-4.6 4.6v5.2H16.6V8.2A4.6 4.6 0 0 0 12 3.6z"/><path d="M4.6 13.4h14.8v2.2H4.6z"/><path d="M8.6 15.6v2.4a3.4 3.4 0 0 0 6.8 0v-2.4"/>',
+            '⚠️': '<path d="M12 4.2 21 19.2H3z"/><path d="M12 9.8v4.2M12 16.9v.1"/>',
+            '📄': '<path d="M13.6 3.8H7.2a1.8 1.8 0 0 0-1.8 1.8v12.8a1.8 1.8 0 0 0 1.8 1.8h9.6a1.8 1.8 0 0 0 1.8-1.8V8.6z"/><path d="M13.6 3.8v4.8h5"/>',
+            '📦': '<path d="M20.4 8.4 12 4.2 3.6 8.4v7.2L12 19.8l8.4-4.2z"/><path d="M3.6 8.4 12 12.6l8.4-4.2M12 12.6v7.2"/>',
+            '⚙️': '<circle cx="12" cy="12" r="3.1"/><path d="M19.2 14.2a1.6 1.6 0 0 0 .32 1.76l.06.06a1.9 1.9 0 1 1-2.7 2.7l-.06-.06a1.6 1.6 0 0 0-2.72 1.14v.17a1.9 1.9 0 1 1-3.8 0v-.09a1.6 1.6 0 0 0-2.78-1.06l-.06.06a1.9 1.9 0 1 1-2.7-2.7l.06-.06A1.6 1.6 0 0 0 4.8 14.2h-.17a1.9 1.9 0 1 1 0-3.8h.09A1.6 1.6 0 0 0 5.78 7.6l-.06-.06a1.9 1.9 0 1 1 2.7-2.7l.06.06A1.6 1.6 0 0 0 11.2 4.8v-.17a1.9 1.9 0 1 1 3.8 0v.09a1.6 1.6 0 0 0 2.72 1.14l.06-.06a1.9 1.9 0 1 1 2.7 2.7l-.06.06a1.6 1.6 0 0 0 1.14 2.72h.17a1.9 1.9 0 1 1 0 3.8h-.09z"/>',
+            '🌳': '<path d="M12 20.4v-5.6"/><path d="M12 14.8a5.4 5.4 0 0 0 5.4-5.4A5.4 5.4 0 0 0 12 4a5.4 5.4 0 0 0-5.4 5.4 5.4 5.4 0 0 0 5.4 5.4z"/><path d="M8.6 20.4h6.8"/>',
+            '👁️': '<path d="M2.6 12S6 5.6 12 5.6 21.4 12 21.4 12 18 18.4 12 18.4 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.8"/>',
+            '🔄': '<path d="M20.2 11.2a8.2 8.2 0 0 0-14-4.4L3.8 9.2"/><path d="M3.8 12.8a8.2 8.2 0 0 0 14 4.4l2.4-2.4"/><path d="M3.8 4.6v4.6h4.6M20.2 19.4v-4.6h-4.6"/>',
+            '💾': '<path d="M19.6 20.4H4.4a1.8 1.8 0 0 1-1.8-1.8V5.4a1.8 1.8 0 0 1 1.8-1.8h11l6 6v9a1.8 1.8 0 0 1-1.8 1.8z"/><path d="M16.6 20.4v-6.8H7.4v6.8M7.4 3.6v4.6h6.4"/>',
+            '🔍': '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20.4 20.4"/>',
+            '✏️': '<path d="M16.4 3.9a2.1 2.1 0 0 1 3 3L8 18.3l-4 1 1-4z"/>',
+            '🗑️': '<path d="M3.8 6.6h16.4M9.4 6.6V4.8a1.4 1.4 0 0 1 1.4-1.4h2.4a1.4 1.4 0 0 1 1.4 1.4v1.8M18.2 6.6v12.2a1.8 1.8 0 0 1-1.8 1.8H7.6a1.8 1.8 0 0 1-1.8-1.8V6.6"/>',
+            '💡': '<path d="M9.2 18.4h5.6M10 21h4"/><path d="M12 3.2a6 6 0 0 0-3.6 10.8c.6.5.9 1.1 1 1.8h5.2c.1-.7.4-1.3 1-1.8A6 6 0 0 0 12 3.2z"/>',
+            '🎯': '<circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1.2"/>',
+            '🔒': '<rect x="4.6" y="10.2" width="14.8" height="10" rx="2.2"/><path d="M8.2 10.2V7.6a3.8 3.8 0 0 1 7.6 0v2.6"/>',
+            '⬆': '<path d="M12 20V4.6M6.4 10.2 12 4.6l5.6 5.6"/>',
+            '⬇': '<path d="M12 4v15.4M6.4 13.8 12 19.4l5.6-5.6"/>'
+        };
+        // Rend l'icône d'un émoji sous forme de tracé ; à défaut, garde l'émoji.
+        function v7Ico(emoji, cls) {
+            const d = V7_ICONS[emoji] || V7_ICONS[(emoji || '').replace('️', '')];
+            if (!d) return `<span class="ic">${emoji || ''}</span>`;
+            return `<svg class="v7-ic ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+        }
+
+        /* --- Icônes de contenu -------------------------------------------------
+           Les titres de section portaient encore des émojis. On les convertit en
+           tracés APRÈS rendu, par chirurgie sur les nœuds texte uniquement : aucun
+           élément n'est recréé, donc aucun écouteur d'événement n'est perturbé.
+           Trois garde-fous, parce que la donnée de l'utilisateur peut elle-même
+           contenir des émojis et ne doit jamais être réécrite :
+             1. on n'opère que dans un contexte de TITRE (h1-h4, bouton, libellé
+                en gras ou en capitales) — jamais dans une cellule de tableau ;
+             2. l'émoji doit ouvrir le texte et être suivi d'une espace ;
+             3. les canevas de graphes et les zones de saisie sont exclus.
+           ----------------------------------------------------------------------- */
+        const V7_VS16 = /️/g;
+        const V7_ICO_KEYS = Object.keys(V7_ICONS).map(k => k.replace(V7_VS16, ''));
+        const V7_LEAD_RE = new RegExp('^\\s*(' + V7_ICO_KEYS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\uFE0F?\\s');
+        const V7_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'SVG', 'TEXTAREA', 'INPUT', 'OPTION', 'SELECT', 'CODE', 'PRE', 'TD', 'TH']);
+        const V7_SKIP_IDS = new Set(['advGCanvas', 'lfCanvas', 'tdgCanvas', 'v7Nav']);
+
+        function v7IsTitleCtx(elm) {
+            if (!elm) return false;
+            const t = elm.tagName;
+            if (t === 'H1' || t === 'H2' || t === 'H3' || t === 'H4' || t === 'BUTTON' || t === 'SUMMARY' || t === 'LEGEND') return true;
+            const c = elm.className;
+            if (typeof c !== 'string') return false;
+            return /\bfont-(bold|black|semibold)\b/.test(c) || /\buppercase\b/.test(c);
+        }
+        function v7Deemojify(root) {
+            root = root || el('v7MainContent') || document.querySelector('.v7-main');
+            if (!root || !root.querySelectorAll) return 0;
+            let n = 0;
+            const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    if (!V7_LEAD_RE.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+                    for (let p = node.parentElement; p && p !== root; p = p.parentElement) {
+                        if (V7_SKIP_TAGS.has(p.tagName) || V7_SKIP_IDS.has(p.id) || p.isContentEditable) return NodeFilter.FILTER_REJECT;
+                    }
+                    return v7IsTitleCtx(node.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                }
+            });
+            const hits = []; let x;
+            while ((x = w.nextNode())) hits.push(x);
+            hits.forEach(node => {
+                const m = node.nodeValue.match(V7_LEAD_RE); if (!m) return;
+                const svg = v7Ico(m[1]); if (!/^<svg/.test(svg)) return;
+                const span = document.createElement('span');
+                span.className = 'v7-cic'; span.innerHTML = svg;
+                node.nodeValue = node.nodeValue.slice(m[0].length - 1);  // on garde l'espace
+                node.parentNode.insertBefore(span, node);
+                n++;
+            });
+            return n;
+        }
+        // Les écrans se redessinent par innerHTML : on repasse après coup, en une
+        // seule fois par image, et sans se ré-observer soi-même.
+        let v7DeemojiPending = false, v7DeemojiObs = null;
+        function v7WatchIcons() {
+            const root = document.querySelector('.v7-main'); if (!root || v7DeemojiObs) return;
+            v7DeemojiObs = new MutationObserver(() => {
+                if (v7DeemojiPending) return;
+                v7DeemojiPending = true;
+                requestAnimationFrame(() => {
+                    v7DeemojiPending = false;
+                    v7DeemojiObs.disconnect();
+                    try { v7Deemojify(root); } catch (e) {}
+                    v7DeemojiObs.observe(root, { childList: true, subtree: true });
+                });
+            });
+            v7DeemojiObs.observe(root, { childList: true, subtree: true });
+            try { v7Deemojify(root); } catch (e) {}
+        }
+
         function renderNav() {
             const activePhase = phaseOfTab(currentTab);
             const nav = el('v7Nav');
@@ -7255,11 +7613,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const itemsHtml = items.map(t => {
                         const isOn = on && (t.n === currentTab || (p.id === 'gov' && govState.tab === t.g));
                         const act = p.id === 'gov' ? `openGovTab('${t.g}')` : `switchTab(${t.n})`;
-                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}"><span class="ic">${t.icon}</span><span class="lbl">${escapeHTML(t.label)}</span></button>`;
+                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span></button>`;
                     }).join('');
                     return `<div class="v7-grp${on ? ' on open' : ''}" data-phase="${p.id}">
                         <button class="hd" onclick="v7ClickPhase('${p.id}')" title="${escapeHTML(p.label)} — ${escapeHTML(p.desc || '')}">
-                            <span class="ic">${p.icon || p.tabs[0].icon}</span>
+                            ${v7Ico(p.icon || p.tabs[0].icon)}
                             <span class="lbl">${escapeHTML(p.label)}<span class="bd">${p.badge || ''}</span></span>
                             ${items.length > 1 ? '<span class="ch">▶</span>' : ''}
                         </button>
@@ -7280,7 +7638,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const fams = [];
                     activePhase.tabs.filter(t => !t.hidden).forEach(t => { if (!fams.some(f => f.name === t.fam)) fams.push({ name: t.fam, first: t.g, icon: t.icon }); });
                     const curFam = (activePhase.tabs.find(t => t.g === govState.tab) || {}).fam;
-                    fam.innerHTML = fams.map(f => `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${f.icon} ${escapeHTML(f.name)}</button>`).join('');
+                    fam.innerHTML = fams.map(f => `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${v7Ico(f.icon)}${escapeHTML(f.name)}</button>`).join('');
                 }
             }
             if (window.lucide) { try { lucide.createIcons(); } catch (e) {} }
@@ -7499,6 +7857,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             currentTab = num;
             renderNav();
             try { v7ApplyTheme(); } catch (e3) {}
+            try { v7WatchIcons(); } catch (e4) {}
             try { renderContextBar(); } catch (e2) {}
             if(num===10) renderTablesDesign();
             if(num===11) renderCockpit();
@@ -10319,8 +10678,18 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.0.0';
+        const APP_VERSION = '7.1.0';
         const APP_CHANGELOG = [
+            { v: '7.1.0', d: '2026-07-29', t: 'Refonte totale du langage visuel — typographie, air, tracés', items: [
+                'Le diagnostic, mesuré sur le fichier : 1012 graisses lourdes contre 24 moyennes, 270 libellés en capitales, 559 textes minuscules pour 74 grands, 1304 espacements serrés contre 437 généreux, 1891 bordures. C\'est cela qui donnait l\'aspect « outil d\'administration ».',
+                '<b>Typographie</b> — police système (SF Pro sur Mac, Segoe UI sur Windows), échelle complète de 10,5 à 31 px, interlettrage négatif sur les titres. Le mur de gras tombe à deux niveaux : la hiérarchie se lit désormais à la taille et à la couleur, plus à la graisse.',
+                '<b>De l\'air</b> — tous les espacements serrés sont dilatés d\'environ 40 %. Les champs et les boutons gagnent une hauteur confortable.',
+                '<b>Les traits disparaissent</b> — les 1891 bordures deviennent des filets d\'un demi-ton. On ne cerne plus les blocs, on les pose : la séparation passe par l\'espace et une ombre très basse. Rayons unifiés en une seule famille de courbes.',
+                '<b>Les émojis deviennent des tracés</b> — une table de 25 icônes vectorielles d\'un poids unique remplace les émojis de la navigation, des phases et des familles. Elles héritent de la couleur du texte ; tout émoji non couvert reste affiché tel quel.',
+                '<b>Commandes</b> — trois registres de bouton seulement (plein, teinté, nu), pression tactile à l\'appui, anneau de focus à l\'accent. Champs au fond légèrement creusé, sans cadre dur.',
+                '<b>Tableaux</b> — le quadrillage disparaît au profit d\'un filet par ligne, d\'une tête discrète en petites capitales et de cellules aérées.',
+                '<b>Coque</b> — barre supérieure translucide et floutée, titre à l\'échelle d\'un vrai en-tête, sélection du rail en pastille pleine.',
+                'Aucun écran n\'a été réécrit : la refonte porte sur le vocabulaire visuel dont ils héritent tous. Les fonctions, les calculs et le SQL sont inchangés.'] },
             { v: '7.0.0', d: '2026-07-29', t: 'Studio Data V7 — refonte de l\'interface : rail latéral, mode sombre, séparation nette', items: [
                 'Navigation déplacée à GAUCHE dans un rail sombre : les phases deviennent des groupes dépliables, les écrans des entrées. Le rail se réduit à une bande d\'icônes, et cet état est mémorisé.',
                 'La barre du haut est allégée : elle ne porte plus que le titre de l\'écran courant, son contexte, les familles de la gouvernance et le sélecteur de thème.',
