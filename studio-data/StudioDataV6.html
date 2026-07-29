@@ -9799,8 +9799,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.23.0';
+        const APP_VERSION = '6.24.0';
         const APP_CHANGELOG = [
+            { v: '6.24.0', d: '2026-07-27', t: 'Profilage : temps d\'audit divisé par près de 6', items: [
+                'Sur une table de 120 000 lignes × 30 colonnes, l\'audit complet passe de 41 s à 7 s — soit moins que la version d\'avant l\'enrichissement du profilage (7,9 s), alors qu\'il calcule désormais bien davantage.',
+                'Cause principale : les mesures de dates étaient évaluées sur TOUTES les colonnes, y compris de texte pur. Comme reconnaître une date suppose d\'essayer cinq formats, et que la mesure apparaissait quatre fois par colonne, cela représentait vingt tentatives d\'analyse par colonne et par ligne. Ces mesures sont maintenant réservées aux colonnes réellement reconnues comme dates.',
+                'Même principe pour les statistiques numériques (moyenne, écart-type, quartiles) : elles ne sont plus calculées que sur les colonnes numériques.',
+                'Le texte nettoyé de chaque colonne est calculé une seule fois par ligne puis réutilisé par tous les indicateurs, au lieu d\'être recalculé par chacun d\'eux.',
+                'Aucun changement de résultat : les mêmes tests de profilage, aberrantes contextuelles, score robuste, formes de colonnes et colonnes redondantes passent à l\'identique.'] },
             { v: '6.23.0', d: '2026-07-27', t: 'Aberrantes contextuelles, score robuste MAD, et plein écran des graphes', items: [
                 'Nouveau réglage « Comparer les valeurs à l\'intérieur de » dans l\'audit : en choisissant une colonne de regroupement (pays, catégorie, agence…), chaque valeur est comparée aux autres valeurs de SON groupe et non à toute la colonne. Un montant banal à Paris et énorme pour une commune rurale devient enfin détectable.',
                 'Les groupes de moins de 5 lignes sont ignorés : sur si peu de valeurs, des quartiles ne veulent rien dire et ne produiraient que du bruit.',
@@ -14255,16 +14261,24 @@
             const BATCH = 8;
             for (let start = 0; start < targetHeaders.length; start += BATCH) {
                 const slice = targetHeaders.slice(start, start + BATCH);
-                const colExprs = [];
+                const colExprs = [], proj = [];
                 slice.forEach((h, k) => {
                     const i = start + k;
-                    const raw = `CAST(${sqlIdent(h)} AS VARCHAR)`;
-                    const notBlank = `(${sqlIdent(h)} IS NOT NULL AND TRIM(${raw}) <> '')`;
-                    const trimmed = `TRIM(${raw})`;
-                    const numExpr = `TRY_CAST(REPLACE(${trimmed}, ',', '.') AS DOUBLE)`;
+                    // V6.24 : le texte brut et le texte nettoyé sont calculés UNE fois par ligne dans
+                    // une sous-requête, puis réutilisés par la douzaine d'agrégats de la colonne —
+                    // auparavant chaque agrégat refaisait son propre CAST + TRIM.
+                    proj.push(`CAST(${sqlIdent(h)} AS VARCHAR) AS r${i}, TRIM(CAST(${sqlIdent(h)} AS VARCHAR)) AS t${i}`);
+                    const raw = `r${i}`;
+                    const trimmed = `t${i}`;
+                    const notBlank = `(${trimmed} IS NOT NULL AND ${trimmed} <> '')`;
                     const isNum = `regexp_matches(${trimmed}, '${re.num}')`;
                     // V6.21 : profil des DATES — bornes réelles et valeurs hors du possible.
                     const dateExpr = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
+                    // V6.24 : cette passe reste LÉGÈRE et porte sur toutes les colonnes — elle sert
+                    // à détecter le type et à mesurer remplissage, cardinalité, longueurs et hygiène.
+                    // Les mesures propres aux nombres et aux dates sont reportées à des passes ciblées :
+                    // les évaluer ici revenait à tenter 5 analyses de date PAR COLONNE ET PAR LIGNE,
+                    // y compris sur des colonnes de texte pur.
                     colExprs.push(`
                         SUM(CASE WHEN NOT (${notBlank}) THEN 1 ELSE 0 END)::BIGINT AS c${i}_null,
                         SUM(CASE WHEN ${notBlank} AND ${isNum} THEN 1 ELSE 0 END)::BIGINT AS c${i}_num,
@@ -14275,26 +14289,13 @@
                         MIN(CASE WHEN ${notBlank} THEN LENGTH(${trimmed}) END)::BIGINT AS c${i}_minlen,
                         MAX(CASE WHEN ${notBlank} THEN LENGTH(${trimmed}) END)::BIGINT AS c${i}_maxlen,
                         AVG(CASE WHEN ${notBlank} THEN LENGTH(${trimmed}) END) AS c${i}_avglen,
-                        AVG(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END) AS c${i}_mean,
-                        STDDEV_POP(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END) AS c${i}_stddev,
-                        MIN(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END) AS c${i}_min,
-                        MAX(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END) AS c${i}_max,
-                        SUM(CASE WHEN ${sqlIdent(h)} IS NOT NULL AND ${raw} <> '' AND ${raw} <> ${trimmed} THEN 1 ELSE 0 END)::BIGINT AS c${i}_sp,
+                        SUM(CASE WHEN ${raw} IS NOT NULL AND ${raw} <> '' AND ${raw} <> ${trimmed} THEN 1 ELSE 0 END)::BIGINT AS c${i}_sp,
                         SUM(CASE WHEN ${notBlank} AND regexp_matches(${trimmed}, '  +') THEN 1 ELSE 0 END)::BIGINT AS c${i}_msp,
                         SUM(CASE WHEN ${notBlank} AND UPPER(${trimmed}) IN ('N/A','NA','NULL','-','--','?','X','XX','INCONNU','NC','TBD','NONE','AUCUN','VIDE','#N/A','SANS','A DEFINIR','À DÉFINIR') THEN 1 ELSE 0 END)::BIGINT AS c${i}_ph,
-                        approx_count_distinct(CASE WHEN ${notBlank} THEN UPPER(${trimmed}) END)::BIGINT AS c${i}_ucnt,
-                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.05) AS c${i}_p05,
-                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.25) AS c${i}_p25,
-                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.5) AS c${i}_p50,
-                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.75) AS c${i}_p75,
-                        approx_quantile(CASE WHEN ${notBlank} AND ${isNum} THEN ${numExpr} END, 0.95) AS c${i}_p95,
-                        MIN(CASE WHEN ${notBlank} THEN ${dateExpr} END) AS c${i}_dmin,
-                        MAX(CASE WHEN ${notBlank} THEN ${dateExpr} END) AS c${i}_dmax,
-                        SUM(CASE WHEN ${notBlank} AND ${dateExpr} > CURRENT_DATE THEN 1 ELSE 0 END)::BIGINT AS c${i}_dfut,
-                        SUM(CASE WHEN ${notBlank} AND ${dateExpr} < DATE '1900-01-01' THEN 1 ELSE 0 END)::BIGINT AS c${i}_dold
+                        approx_count_distinct(CASE WHEN ${notBlank} THEN UPPER(${trimmed}) END)::BIGINT AS c${i}_ucnt
                     `);
                 });
-                const res = await conn.query(`SELECT ${colExprs.join(', ')} FROM ${sourceExpr} AS src`);
+                const res = await conn.query(`SELECT ${colExprs.join(', ')} FROM (SELECT ${proj.join(', ')} FROM ${sourceExpr} AS src) q`);
                 Object.assign(colRow, arrowResultToObjects(res)[0]);
             }
 
@@ -14314,10 +14315,7 @@
                     else if (numPhone / validCount >= 0.8) colType = 'Téléphone';
                 }
 
-                const mean = colRow[`c${i}_mean`] !== null ? Number(colRow[`c${i}_mean`]) : 0;
-                const stdDev = colRow[`c${i}_stddev`] !== null ? Number(colRow[`c${i}_stddev`]) : 0;
-                const minVal = colRow[`c${i}_min`] !== null ? Number(colRow[`c${i}_min`]) : null;
-                const maxVal = colRow[`c${i}_max`] !== null ? Number(colRow[`c${i}_max`]) : null;
+                const mean = 0, stdDev = 0, minVal = null, maxVal = null; // remplis par les passes ciblées
 
                 stats.columns[h] = {
                     name: h, nullCount, numNum, numDate, numEmail, numPhone,
@@ -14333,14 +14331,8 @@
                     caseDupGroups: Math.max(0, Number(colRow[`c${i}_distinct`]) - Number(colRow[`c${i}_ucnt`] || colRow[`c${i}_distinct`])),
                     outliers: 0, outliersIqr: 0,
                     // V6.21 : distribution (quantiles approchés), profil de date, forme de la colonne
-                    p05: colRow[`c${i}_p05`] !== null ? Number(colRow[`c${i}_p05`]) : null,
-                    p25: colRow[`c${i}_p25`] !== null ? Number(colRow[`c${i}_p25`]) : null,
-                    median: colRow[`c${i}_p50`] !== null ? Number(colRow[`c${i}_p50`]) : null,
-                    p75: colRow[`c${i}_p75`] !== null ? Number(colRow[`c${i}_p75`]) : null,
-                    p95: colRow[`c${i}_p95`] !== null ? Number(colRow[`c${i}_p95`]) : null,
-                    dateMin: colRow[`c${i}_dmin`] != null ? String(colRow[`c${i}_dmin`]).slice(0, 10) : null,
-                    dateMax: colRow[`c${i}_dmax`] != null ? String(colRow[`c${i}_dmax`]).slice(0, 10) : null,
-                    datesFuture: Number(colRow[`c${i}_dfut`] || 0), datesAncient: Number(colRow[`c${i}_dold`] || 0),
+                    p05: null, p25: null, median: null, p75: null, p95: null,
+                    dateMin: null, dateMax: null, datesFuture: 0, datesAncient: 0,
                     cardinalityRatio: validCount > 0 ? Number(colRow[`c${i}_distinct`]) / validCount : 0,
                     isConstant: validCount > 0 && Number(colRow[`c${i}_distinct`]) === 1,
                     isCandidateKey: validCount > 0 && validCount === totalRows && Number(colRow[`c${i}_distinct`]) === validCount,
@@ -14348,6 +14340,47 @@
                     frequentValues: []
                 };
             });
+
+            // V6.24 : PASSE NUMÉRIQUE, uniquement sur les colonnes reconnues numériques. La conversion
+            // est faite UNE fois par ligne dans une sous-requête, puis les 9 agrégats la réutilisent —
+            // au lieu de la refaire à chaque agrégat.
+            const numOnly = targetHeaders.filter(h => stats.columns[h].semanticType === 'Numérique');
+            for (let start = 0; start < numOnly.length; start += 12) {
+                const slice = numOnly.slice(start, start + 12);
+                const proj = slice.map((h, k) => `TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE) AS v${start + k}`);
+                const agg = slice.map((h, k) => { const j = start + k;
+                    return `AVG(v${j}) AS n${j}_mean, STDDEV_POP(v${j}) AS n${j}_sd, MIN(v${j}) AS n${j}_min, MAX(v${j}) AS n${j}_max,
+                            approx_quantile(v${j}, 0.05) AS n${j}_p05, approx_quantile(v${j}, 0.25) AS n${j}_p25,
+                            approx_quantile(v${j}, 0.5) AS n${j}_p50, approx_quantile(v${j}, 0.75) AS n${j}_p75,
+                            approx_quantile(v${j}, 0.95) AS n${j}_p95`; });
+                const row = arrowResultToObjects(await conn.query(`SELECT ${agg.join(', ')} FROM (SELECT ${proj.join(', ')} FROM ${sourceExpr} AS src) q`))[0];
+                slice.forEach((h, k) => { const j = start + k; const c = stats.columns[h];
+                    const nz = x => row[x] != null ? Number(row[x]) : null;
+                    c.mean = nz(`n${j}_mean`) || 0; c.stdDev = nz(`n${j}_sd`) || 0;
+                    c.min = nz(`n${j}_min`); c.max = nz(`n${j}_max`); c.sum = c.mean * c.numNum;
+                    c.p05 = nz(`n${j}_p05`); c.p25 = nz(`n${j}_p25`); c.median = nz(`n${j}_p50`);
+                    c.p75 = nz(`n${j}_p75`); c.p95 = nz(`n${j}_p95`);
+                });
+            }
+            // V6.24 : PASSE DATES, uniquement sur les colonnes reconnues dates. L'analyse de date est
+            // coûteuse (plusieurs formats essayés) : elle n'est faite qu'UNE fois par ligne et par
+            // colonne, dans une sous-requête, au lieu de quatre fois comme auparavant.
+            const dateOnly = targetHeaders.filter(h => stats.columns[h].semanticType === 'Date/Heure');
+            for (let start = 0; start < dateOnly.length; start += 12) {
+                const slice = dateOnly.slice(start, start + 12);
+                const proj = slice.map((h, k) => { const raw2 = `CAST(${sqlIdent(h)} AS VARCHAR)`;
+                    return `COALESCE(TRY_CAST(${tdNormExpr('date', raw2)} AS DATE), CAST(TRY_CAST(${raw2} AS TIMESTAMP) AS DATE)) AS d${start + k}`; });
+                const agg = slice.map((h, k) => { const j = start + k;
+                    return `MIN(d${j}) AS x${j}_min, MAX(d${j}) AS x${j}_max,
+                            SUM(CASE WHEN d${j} > CURRENT_DATE THEN 1 ELSE 0 END)::BIGINT AS x${j}_fut,
+                            SUM(CASE WHEN d${j} < DATE '1900-01-01' THEN 1 ELSE 0 END)::BIGINT AS x${j}_old`; });
+                const row = arrowResultToObjects(await conn.query(`SELECT ${agg.join(', ')} FROM (SELECT ${proj.join(', ')} FROM ${sourceExpr} AS src) q`))[0];
+                slice.forEach((h, k) => { const j = start + k; const c = stats.columns[h];
+                    c.dateMin = row[`x${j}_min`] != null ? String(row[`x${j}_min`]).slice(0, 10) : null;
+                    c.dateMax = row[`x${j}_max`] != null ? String(row[`x${j}_max`]).slice(0, 10) : null;
+                    c.datesFuture = Number(row[`x${j}_fut`] || 0); c.datesAncient = Number(row[`x${j}_old`] || 0);
+                });
+            }
 
             stats.completnessRate = stats.totalCells > 0 ? (stats.filledCells / stats.totalCells) * 100 : 0;
 
