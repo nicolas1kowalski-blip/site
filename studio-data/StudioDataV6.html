@@ -689,6 +689,11 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="border-t border-slate-200 pt-4 mb-4">
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Comparer les valeurs <strong>à l'intérieur de</strong> (optionnel)</label>
+                            <select id="qualGroupCol" class="w-full border border-slate-300 p-2.5 rounded-lg text-sm bg-white"><option value="">— toute la table —</option></select>
+                            <p class="text-[10px] text-slate-400 mt-1.5">Une valeur peut être normale globalement et aberrante dans son contexte : un montant banal à Paris, énorme pour une commune rurale. En choisissant une colonne de regroupement, chaque valeur est comparée aux <strong>autres valeurs de son groupe</strong>, et non à toute la colonne.</p>
+                        </div>
                         <div class="border-t border-slate-200 pt-4">
                             <div class="flex items-center justify-between mb-2">
                                 <label class="block text-xs font-bold text-slate-500">3. Filtres (optionnel) — n'auditer que les lignes retenues</label>
@@ -863,7 +868,7 @@
         let networkInstance = null; let currentChart = null; 
         let browserState = { tableId: null, filters: {}, sortCol: null, sortDir: 'asc', data: [], linkMap: {} };
         let browserFilterTimeout = null; let expNetInstance = null; let expDataStore = {};
-        let compState = { mappings: [], keys: [] }; let currentProfilingStats = null; let currentProfilingTableId = null;
+        let compState = { mappings: [], keys: [] }; let currentProfilingStats = null; let currentProfilingTableId = null; let currentProfilingGroupCol = '';
         let currentProfilingWhere = ''; let qualAuditWhereOverride = null;
         // Référentiel de gouvernance : indexé par NOM de table (et non id technique) pour survivre
         // aux rechargements et aux échanges de bundles entre collègues.
@@ -5122,6 +5127,7 @@
                                 </select></label>
                             <button onclick="lfSetFocusBo('')" class="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50">✕ tout afficher</button>` : ''}`; })()}
                     <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
+                    ${gfxFullBtn('lfCanvas', 'lfDrawGraph')}
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
                 </div>
@@ -5284,6 +5290,7 @@
             const maxCol = Math.max(0, ...nodes.map(n => colOf[n.id]));
             const cols = {}; nodes.forEach(n => { (cols[colOf[n.id]] = cols[colOf[n.id]] || []).push(n); });
             const attrView = lfView === 'attrs';
+            const _full = c.classList.contains('gfx-full');
             const W = Math.max(560, c.clientWidth || 900), NW = 208, NH = attrView ? 152 : 96, rowGap = NH + 22, topPad = 40;
             const maxRows = Math.max(...Object.values(cols).map(a => a.length));
             let H = Math.max(360, topPad + maxRows * rowGap + 16);
@@ -5294,6 +5301,7 @@
             // Positions manuelles (glisser-déposer) : prioritaires sur la disposition automatique.
             nodes.forEach(n => { if (typeof n.x === 'number' && typeof n.y === 'number') pos[n.id] = { x: n.x, y: n.y }; });
             H = Math.max(H, ...nodes.map(n => (pos[n.id] ? pos[n.id].y + NH + 20 : 0)));
+            if (_full) H = Math.max(H, window.innerHeight - 8);
             c.style.height = H + 'px';
             // arêtes SVG
             let paths = ''; const chips = [];
@@ -9791,8 +9799,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.22.0';
+        const APP_VERSION = '6.23.0';
         const APP_CHANGELOG = [
+            { v: '6.23.0', d: '2026-07-27', t: 'Aberrantes contextuelles, score robuste MAD, et plein écran des graphes', items: [
+                'Nouveau réglage « Comparer les valeurs à l\'intérieur de » dans l\'audit : en choisissant une colonne de regroupement (pays, catégorie, agence…), chaque valeur est comparée aux autres valeurs de SON groupe et non à toute la colonne. Un montant banal à Paris et énorme pour une commune rurale devient enfin détectable.',
+                'Les groupes de moins de 5 lignes sont ignorés : sur si peu de valeurs, des quartiles ne veulent rien dire et ne produiraient que du bruit.',
+                'Nouveau détecteur par score robuste (écart absolu médian). Contrairement à l\'écart-type, il ne se laisse pas gonfler par les valeurs qu\'il doit dénoncer ; contrairement à l\'écart interquartile, il rend une NOTE par ligne. La liste d\'anomalies est donc triée du plus grave au moins grave, avec la colonne SCORE_ECART — une file de traitement plutôt qu\'un tas indifférencié.',
+                'Les deux nouveaux détecteurs sont inspectables (👁 Voir / ⬇ CSV) et présents dans l\'export d\'audit, comme les précédents.',
+                'Plein écran : bouton ⛶ sur la vue graphique de l\'extraction et sur le graphe de lineage. Le graphe occupe toute la fenêtre et se redessine à la taille disponible ; on en sort par le bouton ou par la touche Échap.'] },
             { v: '6.22.0', d: '2026-07-27', t: 'Filtres : trouver une colonne dans un modèle large, isoler un objet métier dans le lineage', items: [
                 'Extraction, vue graphique : une barre de filtre au-dessus du schéma. Recherche par nom de colonne OU de table (insensible à la casse et aux accents), option « colonnes choisies seulement », option « masquer les tables sans résultat ».',
                 'Le filtre ne touche QUE l\'affichage : la configuration en cours n\'est jamais modifiée, et une colonne déjà cochée reste toujours visible pour ne pas perdre de vue ce qui est construit.',
@@ -12833,6 +12847,50 @@
         // Une table reliée deux fois apparaît donc deux fois, une par lien : cocher une colonne sur le
         // bon nœud renseigne le « via » tout seul — plus besoin de le choisir dans une liste.
         const ADV_G_MAXHOPS = 3, ADV_G_MAXNODES = 24;
+        // ============ V6.23 : PLEIN ÉCRAN DES GRAPHES (extraction & lineage) ============
+        // Un seul mécanisme pour les deux canevas : on épingle le conteneur en plein écran, on
+        // redessine (la largeur disponible change), et on rend la sortie évidente (bouton + Échap).
+        let gfxFullId = null, gfxFullRedraw = null;
+        function gfxInjectCss() {
+            if (el('gfxStyles')) return;
+            const st = document.createElement('style'); st.id = 'gfxStyles';
+            st.textContent = `
+            .gfx-full{position:fixed !important;inset:0 !important;z-index:60 !important;margin:0 !important;border-radius:0 !important;
+                      width:100vw !important;max-width:100vw !important;min-height:100vh !important;overflow:auto !important;background:#fff !important}
+            body.gfx-lock{overflow:hidden !important}
+            .gfx-exit{position:fixed;top:12px;right:16px;z-index:61;background:#1e293b;color:#fff;border:none;border-radius:10px;
+                      padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.25)}
+            .gfx-exit:hover{background:#334155}`;
+            document.head.appendChild(st);
+        }
+        function gfxIsFull(id) { const c = el(id); return !!c && c.classList.contains('gfx-full'); }
+        function gfxExitFull() {
+            const c = gfxFullId ? el(gfxFullId) : null;
+            if (c) c.classList.remove('gfx-full');
+            document.body.classList.remove('gfx-lock');
+            const btn = document.querySelector('.gfx-exit'); if (btn) btn.remove();
+            const rd = gfxFullRedraw; gfxFullId = null; gfxFullRedraw = null;
+            if (typeof rd === 'function') setTimeout(rd, 0);
+        }
+        function gfxToggleFull(id, redrawName) {
+            gfxInjectCss();
+            const c = el(id); if (!c) return;
+            if (gfxIsFull(id)) return gfxExitFull();
+            if (gfxFullId) gfxExitFull();
+            c.classList.add('gfx-full'); document.body.classList.add('gfx-lock');
+            gfxFullId = id; gfxFullRedraw = window[redrawName];
+            if (!document.querySelector('.gfx-exit')) {
+                const b2 = document.createElement('button'); b2.className = 'gfx-exit';
+                b2.textContent = '✕ Quitter le plein écran (Échap)';
+                b2.onclick = gfxExitFull; document.body.appendChild(b2);
+            }
+            if (!window.__gfxEsc) { window.__gfxEsc = true;
+                document.addEventListener('keydown', e2 => { if (e2.key === 'Escape' && gfxFullId) gfxExitFull(); }); }
+            if (typeof window[redrawName] === 'function') setTimeout(window[redrawName], 0);
+        }
+        function gfxFullBtn(id, redrawName, label) {
+            return `<button onclick="gfxToggleFull('${id}', '${redrawName}')" title="Afficher le graphe en plein écran (Échap pour sortir)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50">⛶ ${label || 'Plein écran'}</button>`;
+        }
         function advGInjectCss() {
             if (el('advGStyles')) return;
             const st = document.createElement('style'); st.id = 'advGStyles';
@@ -12980,6 +13038,7 @@
                     <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="N'afficher que les colonnes déjà choisies"><input type="checkbox" ${advGFilter().onlySel ? 'checked' : ''} onchange="advGSetView('onlySel', this.checked)"> colonnes choisies seulement</label>
                     <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="Masquer les tables qui n'ont plus aucune colonne visible (hors table de départ)"><input type="checkbox" ${advGFilter().hideEmpty ? 'checked' : ''} onchange="advGSetView('hideEmpty', this.checked)"> masquer les tables sans résultat</label>
                     ${(advGFilter().q || advGFilter().onlySel || advGFilter().hideEmpty) ? `<button onclick="advGClearFilter()" class="text-[11px] font-bold text-slate-500 border border-slate-300 rounded px-2 py-1 hover:bg-slate-50">✕ tout afficher</button>` : ''}
+                    ${gfxFullBtn('advGCanvas', 'advDrawGraph')}
                     <span class="text-[10px] text-slate-400">le filtre ne change que l'affichage — les colonnes déjà choisies restent visibles et sélectionnées</span>
                 </div>
                 <div id="advGCanvas"></div>` : ''}
@@ -13020,6 +13079,7 @@
             routes.forEach(r => { const p = state.advExtract._gpos && state.advExtract._gpos[r.key]; if (p && pos[r.key]) { pos[r.key].x = p.x; pos[r.key].y = p.y; } });
             H = Math.max(H, ...routes.map(r => pos[r.key].y + pos[r.key].h + 16));
             const CW = Math.max(W, 24 + (maxD + 1) * (NW + colGap));
+            if (c.classList.contains('gfx-full')) H = Math.max(H, window.innerHeight - 8);
             c.style.height = H + 'px';
             let paths = '', labels = '';
             routes.forEach(r => {
@@ -13797,6 +13857,13 @@
             } else {
                 colSelect.innerHTML = '<option value="">Toutes les colonnes (Audit global)</option>';
             }
+            // V6.23 : colonne de regroupement pour les aberrantes CONTEXTUELLES. On ne propose que des
+            // colonnes exploitables comme contexte : ni la colonne auditée, ni une quasi-clé.
+            const gSel = el('qualGroupCol');
+            if (gSel) {
+                const t = tId && state.tables[tId];
+                gSel.innerHTML = '<option value="">— toute la table —</option>' + (t ? t.headers.map(h => `<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join('') : '');
+            }
             renderQualFilters('file');
         }
 
@@ -14009,6 +14076,26 @@
                 if (c.outliersIqr > 0 && c.iqrLow != null && c.iqrHigh != null) {
                     const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
                     entries.push({ col: h, kind: `Valeurs atypiques (hors écart interquartile)`, n: c.outliersIqr, sql: sel(`${numE} IS NOT NULL AND (${numE} < ${c.iqrLow} OR ${numE} > ${c.iqrHigh})`) });
+                }
+                if (c.outliersMad > 0 && c.madSigma > 0) {
+                    const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
+                    const score = `ROUND(ABS(${numE} - ${c.median}) / ${c.madSigma}, 2)`;
+                    // On expose le SCORE et on trie du plus grave au moins grave : la liste devient
+                    // une file de traitement, pas un tas d'anomalies indifférenciées.
+                    entries.push({ col: h, kind: 'Valeurs extrêmes (score robuste MAD > 3,5)', n: c.outliersMad,
+                        sql: `SELECT ${score} AS ${sqlIdent('SCORE_ECART')}, * EXCLUDE (__rn) FROM ${T} WHERE ${numE} IS NOT NULL AND ABS(${numE} - ${c.median}) / ${c.madSigma} > 3.5 ORDER BY 1 DESC` });
+                }
+                if (c.outliersCtx > 0 && stats.groupCol) {
+                    const G = sqlIdent(stats.groupCol);
+                    const numE2 = `TRY_CAST(REPLACE(TRIM(CAST(s2.${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)`;
+                    entries.push({ col: h, kind: `Valeurs aberrantes dans leur groupe (${stats.groupCol})`, n: c.outliersCtx,
+                        sql: `WITH b AS (SELECT ${G} AS g, approx_quantile(TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE), 0.25) AS q1,
+                                               approx_quantile(TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE), 0.75) AS q3
+                                        FROM ${T} GROUP BY 1 HAVING COUNT(TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)) >= 5)
+                              SELECT s2.* EXCLUDE (__rn) FROM ${T} s2 JOIN b ON s2.${G} IS NOT DISTINCT FROM b.g
+                              WHERE b.q3 > b.q1 AND ${numE2} IS NOT NULL
+                                AND (${numE2} < b.q1 - 1.5 * (b.q3 - b.q1) OR ${numE2} > b.q3 + 1.5 * (b.q3 - b.q1))
+                              ORDER BY s2.${G}` });
                 }
                 if (c.datesFuture > 0) {
                     const dE = `COALESCE(TRY_CAST(${tdNormExpr('date', `CAST(${sqlIdent(h)} AS VARCHAR)`)} AS DATE), CAST(TRY_CAST(CAST(${sqlIdent(h)} AS VARCHAR) AS TIMESTAMP) AS DATE))`;
@@ -14313,6 +14400,60 @@
                         c.isConstant = vc > 0 && d === 1;
                         c.isCandidateKey = vc > 0 && vc === totalRows && d === vc;
                     });
+                }
+            }
+            // V6.23 : ÉCART ABSOLU MÉDIAN (MAD). L'écart-type se laisse gonfler par les valeurs qu'il
+            // devrait dénoncer ; la médiane des écarts à la médiane, non. On en tire un SCORE PAR LIGNE
+            // (|x − médiane| / (1,4826 × MAD)) qui permet de trier les anomalies de la plus grave à la
+            // moins grave, là où l'écart interquartile ne rend qu'un verdict binaire.
+            const madCols = targetHeaders.filter(h => { const c = stats.columns[h]; return c.semanticType === 'Numérique' && c.median != null; });
+            if (madCols.length) {
+                for (let start = 0; start < madCols.length; start += 8) {
+                    const slice = madCols.slice(start, start + 8);
+                    const ex = slice.map((h, k) => { const c = stats.columns[h];
+                        const numE = `TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)`;
+                        return `approx_quantile(ABS(${numE} - ${c.median}), 0.5) AS m${start + k}`; });
+                    const row = arrowResultToObjects(await conn.query(`SELECT ${ex.join(', ')} FROM ${sourceExpr} AS src`))[0];
+                    slice.forEach((h, k) => { const c = stats.columns[h];
+                        const mad = row['m' + (start + k)] != null ? Number(row['m' + (start + k)]) : 0;
+                        c.mad = mad; c.madSigma = mad > 0 ? 1.4826 * mad : 0; });
+                }
+                // Comptage des lignes au-delà du seuil usuel (score robuste > 3,5)
+                const scored = madCols.filter(h => stats.columns[h].madSigma > 0);
+                if (scored.length) {
+                    const ex = scored.map((h, i) => { const c = stats.columns[h];
+                        const numE = `TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)`;
+                        return `SUM(CASE WHEN ${numE} IS NOT NULL AND ABS(${numE} - ${c.median}) / ${c.madSigma} > 3.5 THEN 1 ELSE 0 END)::BIGINT AS s${i}`; });
+                    const row = arrowResultToObjects(await conn.query(`SELECT ${ex.join(', ')} FROM ${sourceExpr} AS src`))[0];
+                    scored.forEach((h, i) => { stats.columns[h].outliersMad = Number(row['s' + i] || 0); });
+                }
+            }
+            // V6.23 : ABERRANTES CONTEXTUELLES. Les bornes ne sont plus calculées sur toute la colonne
+            // mais À L'INTÉRIEUR de chaque groupe : une valeur normale dans l'absolu peut être aberrante
+            // dans son contexte (et inversement, un écart global peut être parfaitement normal ici).
+            // Les groupes de moins de 5 lignes sont ignorés : leurs quartiles ne veulent rien dire.
+            const grpCol = currentProfilingGroupCol && targetHeaders.includes(currentProfilingGroupCol) ? currentProfilingGroupCol : '';
+            stats.groupCol = grpCol || null;
+            if (grpCol) {
+                const G = sqlIdent(grpCol);
+                const ctxCols = targetHeaders.filter(h => h !== grpCol && stats.columns[h].semanticType === 'Numérique');
+                for (const h of ctxCols) {
+                    const numE = `TRY_CAST(REPLACE(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)`;
+                    try {
+                        const res = arrowResultToObjects(await conn.query(`
+                            WITH b AS (SELECT ${G} AS g, COUNT(${numE})::BIGINT AS n,
+                                              approx_quantile(${numE}, 0.25) AS q1, approx_quantile(${numE}, 0.75) AS q3
+                                       FROM ${sourceExpr} AS src GROUP BY 1 HAVING COUNT(${numE}) >= 5)
+                            SELECT COUNT(*)::BIGINT AS grp,
+                                   (SELECT COUNT(*)::BIGINT FROM ${sourceExpr} AS s2 JOIN b ON s2.${G} IS NOT DISTINCT FROM b.g
+                                     WHERE TRY_CAST(REPLACE(TRIM(CAST(s2.${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE) IS NOT NULL
+                                       AND (TRY_CAST(REPLACE(TRIM(CAST(s2.${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE) < b.q1 - 1.5 * (b.q3 - b.q1)
+                                         OR TRY_CAST(REPLACE(TRIM(CAST(s2.${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE) > b.q3 + 1.5 * (b.q3 - b.q1))
+                                       AND b.q3 > b.q1) AS bad
+                            FROM b`))[0];
+                        stats.columns[h].ctxGroups = Number(res.grp || 0);
+                        stats.columns[h].outliersCtx = Number(res.bad || 0);
+                    } catch (e) { stats.columns[h].ctxError = String(e.message || e); }
                 }
             }
             // V6.21 : COLONNES REDONDANTES — deux colonnes qui portent exactement la même information.
@@ -15050,7 +15191,7 @@
         // ---- Export des résultats d'audit (pour retravailler la donnée à l'extérieur) ----
         function exportAuditCsv() {
             const s = currentProfilingStats; if (!s) return showError("Lancez d'abord un audit.");
-            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'top_valeurs'];
+            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'extremes_mad', 'aberrantes_dans_groupe', 'mad', 'top_valeurs'];
             const rows = [head.map(escapeCSV).join(';')];
             Object.values(s.columns).forEach(c => {
                 rows.push([c.name, c.semanticType, c.completeness.toFixed(2), c.nullCount, c.distinctCount,
@@ -15061,7 +15202,7 @@
                     c.p05 != null ? c.p05 : '', c.p25 != null ? c.p25 : '', c.median != null ? c.median : '', c.p75 != null ? c.p75 : '', c.p95 != null ? c.p95 : '',
                     c.dateMin || '', c.dateMax || '', c.datesFuture || 0, c.datesAncient || 0,
                     c.cardinalityRatio != null ? (100 * c.cardinalityRatio).toFixed(2) : '', c.isCandidateKey ? 'oui' : '', c.isConstant ? 'oui' : '', c.duplicateOf || '',
-                    c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0, c.outliersIqr || 0,
+                    c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0, c.outliersIqr || 0, c.outliersMad || 0, c.outliersCtx || 0, c.mad != null ? c.mad : '',
                     (c.frequentValues || []).slice(0, 5).map(f => `${f.val} (${f.count})`).join(' | ')].map(escapeCSV).join(';'));
             });
             downloadTextFile(`Audit_${s.tableName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.csv`, rows.join('\n'));
@@ -15306,9 +15447,10 @@
                     if (!c.isConstant && !c.isCandidateKey && c.cardinalityRatio != null && c.cardinalityRatio > 0 && c.cardinalityRatio < 0.02 && c.distinctCount > 1) tags.push(['bg-sky-50 border-sky-200 text-sky-800', '≡ Peu de valeurs (' + c.distinctCount.toLocaleString('fr-FR') + ')', 'Faible cardinalité : bonne candidate pour une liste de valeurs autorisées.']);
                     return tags.length ? `<div class="flex flex-wrap gap-2 mb-5">${tags.map(([cl, l, ti]) => `<span title="${ti}" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border ${cl}">${l}</span>`).join('')}</div>` : ''; })()}
                 <div class="mb-6"><h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Statistiques descriptives</h5>${statsGridHtml}</div>
+                ${(currentProfilingStats && currentProfilingStats.groupCol && c.semanticType === 'Numérique') ? `<div class="mb-4 text-[11px] bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 text-violet-800">🧭 Analyse <strong>contextuelle</strong> activée : les valeurs sont comparées à l'intérieur de chaque <strong>${escapeHTML(currentProfilingStats.groupCol)}</strong>${c.ctxGroups ? ` (${Number(c.ctxGroups).toLocaleString('fr-FR')} groupe(s) d'au moins 5 lignes)` : ''}.${c.madSigma ? ` Score robuste disponible : une valeur est signalée au-delà de 3,5 écarts médians.` : ''}</div>` : ''}
                 <div class="mb-6"><h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Hygiène de saisie</h5>
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        ${[['Espaces déb./fin', c.spaceIssues, 'Espaces début/fin'], ['Espaces multiples', c.multiSpace, 'Espaces multiples'], ['Bouche-trous', c.placeholders, 'Valeurs bouche-trous'], ['Variantes de casse', c.caseDupGroups, 'Casse incohérente'], ['Aberrantes (3σ)', c.outliers, 'Valeurs aberrantes'], ['Aberrantes (écart interq.)', c.outliersIqr, 'Valeurs atypiques']].map(([lbl, v, pre]) => { const ix = (v || 0) > 0 ? idxOfPrefix(pre) : null; const clickable = ix !== null;
+                        ${[['Espaces déb./fin', c.spaceIssues, 'Espaces début/fin'], ['Espaces multiples', c.multiSpace, 'Espaces multiples'], ['Bouche-trous', c.placeholders, 'Valeurs bouche-trous'], ['Variantes de casse', c.caseDupGroups, 'Casse incohérente'], ['Aberrantes (3σ)', c.outliers, 'Valeurs aberrantes'], ['Aberrantes (écart interq.)', c.outliersIqr, 'Valeurs atypiques'], ['Extrêmes (score MAD)', c.outliersMad, 'Valeurs extrêmes'], ['Aberrantes dans leur groupe', c.outliersCtx, 'Valeurs aberrantes dans leur groupe']].map(([lbl, v, pre]) => { const ix = (v || 0) > 0 ? idxOfPrefix(pre) : null; const clickable = ix !== null;
                             return `<${clickable ? 'button' : 'div'} ${clickable ? `onclick="qualViewInspect(${ix}, this, 0)" title="Voir les lignes concernées"` : ''} class="p-2.5 border rounded-xl text-left ${(v || 0) > 0 ? 'bg-sky-50 border-sky-200' + (clickable ? ' hover:bg-sky-100 hover:border-sky-400 cursor-pointer' : '') : 'bg-slate-50'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">${lbl}${clickable ? ' 👁' : ''}</span><span class="text-sm font-black ${(v || 0) > 0 ? 'text-sky-700' : 'text-slate-400'}">${(v || 0).toLocaleString('fr-FR')}</span></${clickable ? 'button' : 'div'}>`; }).join('')}
                     </div>
                 </div>
@@ -15491,6 +15633,7 @@
             hideError();
             currentProfilingTableId = tId;
             currentProfilingWhere = whereSql;
+            currentProfilingGroupCol = (el('qualGroupCol') && el('qualGroupCol').value !== col) ? (el('qualGroupCol') || {}).value || '' : '';
 
             el('qualResultArea').classList.remove('hidden'); el('qualLoading').classList.remove('hidden'); el('qualDashboard').classList.add('hidden'); el('btnRunQual').disabled = true;
             bgTaskStart(`Audit de "${state.tables[tId] ? state.tables[tId].name : ''}" en cours`);
