@@ -9799,8 +9799,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.24.0';
+        const APP_VERSION = '6.25.0';
         const APP_CHANGELOG = [
+            { v: '6.25.0', d: '2026-07-27', t: 'Profilage : fin de deux fausses alertes (dates factices, valeurs rares)', items: [
+                'Le type « date » n\'est plus décidé sur la seule RESSEMBLANCE de forme. Une référence du genre 1234-56-78 ou un code aaaa-bb-cc en avait tous les traits sans être une date : l\'application exige désormais que 80 % des valeurs s\'ANALYSENT réellement comme des dates. Sinon la colonne redevient du texte et plus aucune alerte de date ne la concerne — la fiche explique pourquoi, avec le pourcentage réellement analysable.',
+                'Une date dans le futur n\'est plus signalée comme une anomalie : une échéance, une fin de contrat ou une date planifiée sont normalement à venir. Seul l\'invraisemblable est remonté — au-delà d\'un siècle dans le futur, ce qui attrape les erreurs de saisie du type 2999. Le décompte des dates futures reste affiché à titre indicatif dans la fiche.',
+                'L\'alerte « format hors motif dominant » ne s\'applique plus aux colonnes à faible cardinalité (15 valeurs distinctes ou moins). Sur un drapeau TRUE/FALSE ou une liste de statuts, la « forme » n\'a aucun sens : une valeur simplement RARE était signalée comme un écart de format, alors qu\'elle est parfaitement légitime.',
+                'L\'export d\'audit distingue désormais les dates futures des dates invraisemblables.'] },
             { v: '6.24.0', d: '2026-07-27', t: 'Profilage : temps d\'audit divisé par près de 6', items: [
                 'Sur une table de 120 000 lignes × 30 colonnes, l\'audit complet passe de 41 s à 7 s — soit moins que la version d\'avant l\'enrichissement du profilage (7,9 s), alors qu\'il calcule désormais bien davantage.',
                 'Cause principale : les mesures de dates étaient évaluées sur TOUTES les colonnes, y compris de texte pur. Comme reconnaître une date suppose d\'essayer cinq formats, et que la mesure apparaissait quatre fois par colonne, cela représentait vingt tentatives d\'analyse par colonne et par ligne. Ces mesures sont maintenant réservées aux colonnes réellement reconnues comme dates.',
@@ -14103,9 +14108,12 @@
                                 AND (${numE2} < b.q1 - 1.5 * (b.q3 - b.q1) OR ${numE2} > b.q3 + 1.5 * (b.q3 - b.q1))
                               ORDER BY s2.${G}` });
                 }
-                if (c.datesFuture > 0) {
+                // V6.25 : une date future n'est PAS une anomalie — une échéance, une fin de contrat ou
+                // une date planifiée sont normalement dans le futur. On ne signale que l'invraisemblable :
+                // au-delà d'un siècle. Le simple décompte des dates futures reste affiché dans la fiche.
+                if (c.datesFar > 0) {
                     const dE = `COALESCE(TRY_CAST(${tdNormExpr('date', `CAST(${sqlIdent(h)} AS VARCHAR)`)} AS DATE), CAST(TRY_CAST(CAST(${sqlIdent(h)} AS VARCHAR) AS TIMESTAMP) AS DATE))`;
-                    entries.push({ col: h, kind: 'Dates dans le futur', n: c.datesFuture, sql: sel(`${dE} > CURRENT_DATE`) });
+                    entries.push({ col: h, kind: 'Dates invraisemblables (plus d\'un siècle dans le futur)', n: c.datesFar, sql: sel(`${dE} > CURRENT_DATE + INTERVAL 100 YEAR`) });
                 }
                 if (c.datesAncient > 0) {
                     const dE = `COALESCE(TRY_CAST(${tdNormExpr('date', `CAST(${sqlIdent(h)} AS VARCHAR)`)} AS DATE), CAST(TRY_CAST(CAST(${sqlIdent(h)} AS VARCHAR) AS TIMESTAMP) AS DATE))`;
@@ -14116,7 +14124,11 @@
                 const typN = { 'Numérique': c.numNum, 'Email': c.numEmail, 'Téléphone': c.numPhone }[c.semanticType];
                 if (typRe && validCount > typN) entries.push({ col: h, kind: `Ne respecte pas le type ${c.semanticType}`, n: validCount - typN, sql: sel(`${notBlank(h)} AND NOT regexp_matches(${trimOf(h)}, '${typRe}')`) });
                 if (c.semanticType === 'Date/Heure' && validCount > c.numDate) entries.push({ col: h, kind: 'Ne respecte pas le type Date', n: validCount - c.numDate, sql: sel(`${notBlank(h)} AND NOT (regexp_matches(${trimOf(h)}, '${re.date1}') OR regexp_matches(${trimOf(h)}, '${re.date2}'))`) });
-                if ((c.patterns || []).length > 1 && c.patterns[0].pct >= 60) {
+                // V6.25 : sur une colonne à faible cardinalité (drapeau TRUE/FALSE, liste de statuts…),
+                // la « forme » n'a aucun sens : une valeur simplement RARE apparaissait comme un écart
+                // de format. L'analyse de motif est réservée aux colonnes à valeurs libres.
+                const enumLike = (c.distinctExact != null ? c.distinctExact : c.distinctCount) <= 15;
+                if (!enumLike && (c.patterns || []).length > 1 && c.patterns[0].pct >= 60) {
                     const maskE = `left(regexp_replace(regexp_replace(${trimOf(h)}, '[A-Za-zÀ-ÖØ-öø-ÿ]', 'A', 'g'), '[0-9]', '9', 'g'), 24)`;
                     const devN = c.patterns.slice(1).reduce((s2, p) => s2 + p.count, 0);
                     entries.push({ col: h, kind: `Format hors motif dominant "${c.patterns[0].pattern}"`, n: devN, sql: sel(`${notBlank(h)} AND ${maskE} <> ${sqlLiteral(c.patterns[0].pattern)}`) });
@@ -14372,13 +14384,28 @@
                     return `COALESCE(TRY_CAST(${tdNormExpr('date', raw2)} AS DATE), CAST(TRY_CAST(${raw2} AS TIMESTAMP) AS DATE)) AS d${start + k}`; });
                 const agg = slice.map((h, k) => { const j = start + k;
                     return `MIN(d${j}) AS x${j}_min, MAX(d${j}) AS x${j}_max,
+                            COUNT(d${j})::BIGINT AS x${j}_ok,
                             SUM(CASE WHEN d${j} > CURRENT_DATE THEN 1 ELSE 0 END)::BIGINT AS x${j}_fut,
-                            SUM(CASE WHEN d${j} < DATE '1900-01-01' THEN 1 ELSE 0 END)::BIGINT AS x${j}_old`; });
+                            SUM(CASE WHEN d${j} < DATE '1900-01-01' THEN 1 ELSE 0 END)::BIGINT AS x${j}_old,
+                            SUM(CASE WHEN d${j} > CURRENT_DATE + INTERVAL 100 YEAR THEN 1 ELSE 0 END)::BIGINT AS x${j}_far`; });
                 const row = arrowResultToObjects(await conn.query(`SELECT ${agg.join(', ')} FROM (SELECT ${proj.join(', ')} FROM ${sourceExpr} AS src) q`))[0];
                 slice.forEach((h, k) => { const j = start + k; const c = stats.columns[h];
+                    const validCount2 = totalRows - c.nullCount;
+                    const parsed = Number(row[`x${j}_ok`] || 0);
+                    // V6.25 : le type « date » n'est plus décidé par une simple ressemblance de forme.
+                    // Une référence du genre 1234-56-78 ressemble à une date sans en être une : on exige
+                    // que les valeurs s'ANALYSENT réellement comme des dates. Sinon la colonne redevient
+                    // du texte, et aucune alerte de date n'est produite à son sujet.
+                    if (validCount2 > 0 && parsed / validCount2 < 0.8) {
+                        c.semanticType = 'Texte'; c.physicalType = 'string';
+                        c.dateMin = null; c.dateMax = null; c.datesFuture = 0; c.datesAncient = 0; c.datesFar = 0;
+                        c.dateDemoted = true; c.dateParsedPct = validCount2 ? (100 * parsed / validCount2) : 0;
+                        return;
+                    }
                     c.dateMin = row[`x${j}_min`] != null ? String(row[`x${j}_min`]).slice(0, 10) : null;
                     c.dateMax = row[`x${j}_max`] != null ? String(row[`x${j}_max`]).slice(0, 10) : null;
                     c.datesFuture = Number(row[`x${j}_fut`] || 0); c.datesAncient = Number(row[`x${j}_old`] || 0);
+                    c.datesFar = Number(row[`x${j}_far`] || 0);
                 });
             }
 
@@ -15224,7 +15251,7 @@
         // ---- Export des résultats d'audit (pour retravailler la donnée à l'extérieur) ----
         function exportAuditCsv() {
             const s = currentProfilingStats; if (!s) return showError("Lancez d'abord un audit.");
-            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'extremes_mad', 'aberrantes_dans_groupe', 'mad', 'top_valeurs'];
+            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'dates_invraisemblables', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'extremes_mad', 'aberrantes_dans_groupe', 'mad', 'top_valeurs'];
             const rows = [head.map(escapeCSV).join(';')];
             Object.values(s.columns).forEach(c => {
                 rows.push([c.name, c.semanticType, c.completeness.toFixed(2), c.nullCount, c.distinctCount,
@@ -15233,7 +15260,7 @@
                     c.mean ? c.mean.toFixed(4) : '', c.stdDev ? c.stdDev.toFixed(4) : '',
                     c.minLen, c.maxLen, c.avgLen ? c.avgLen.toFixed(1) : '',
                     c.p05 != null ? c.p05 : '', c.p25 != null ? c.p25 : '', c.median != null ? c.median : '', c.p75 != null ? c.p75 : '', c.p95 != null ? c.p95 : '',
-                    c.dateMin || '', c.dateMax || '', c.datesFuture || 0, c.datesAncient || 0,
+                    c.dateMin || '', c.dateMax || '', c.datesFuture || 0, c.datesAncient || 0, c.datesFar || 0,
                     c.cardinalityRatio != null ? (100 * c.cardinalityRatio).toFixed(2) : '', c.isCandidateKey ? 'oui' : '', c.isConstant ? 'oui' : '', c.duplicateOf || '',
                     c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0, c.outliersIqr || 0, c.outliersMad || 0, c.outliersCtx || 0, c.mad != null ? c.mad : '',
                     (c.frequentValues || []).slice(0, 5).map(f => `${f.val} (${f.count})`).join(' | ')].map(escapeCSV).join(';'));
@@ -15416,7 +15443,7 @@
                     ${c.semanticType === 'Date/Heure' && (c.dateMin || c.dateMax) ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
                         <div class="p-2 border rounded-lg bg-white"><span class="text-[9px] text-slate-500 uppercase block font-bold">Première date</span><span class="text-[12px] font-black text-slate-700">${escapeHTML(c.dateMin || '—')}</span></div>
                         <div class="p-2 border rounded-lg bg-white"><span class="text-[9px] text-slate-500 uppercase block font-bold">Dernière date</span><span class="text-[12px] font-black text-slate-700">${escapeHTML(c.dateMax || '—')}</span></div>
-                        <div class="p-2 border rounded-lg ${c.datesFuture ? 'bg-amber-50 border-amber-200' : 'bg-white'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">Dans le futur</span><span class="text-[12px] font-black ${c.datesFuture ? 'text-amber-700' : 'text-slate-400'}">${Number(c.datesFuture || 0).toLocaleString('fr-FR')}</span></div>
+                        <div class="p-2 border rounded-lg bg-white" title="Une date future est souvent normale (échéance, fin de contrat, date planifiée) : ce nombre est indicatif, il n'est pas signalé comme anomalie."><span class="text-[9px] text-slate-500 uppercase block font-bold">Dans le futur</span><span class="text-[12px] font-black text-slate-500">${Number(c.datesFuture || 0).toLocaleString('fr-FR')}</span>${c.datesFar ? `<span class="block text-[9px] font-bold text-amber-700">dont ${Number(c.datesFar).toLocaleString('fr-FR')} invraisemblable(s)</span>` : ''}</div>
                         <div class="p-2 border rounded-lg ${c.datesAncient ? 'bg-amber-50 border-amber-200' : 'bg-white'}"><span class="text-[9px] text-slate-500 uppercase block font-bold">Avant 1900</span><span class="text-[12px] font-black ${c.datesAncient ? 'text-amber-700' : 'text-slate-400'}">${Number(c.datesAncient || 0).toLocaleString('fr-FR')}</span></div>
                     </div>` : ''}
                 `;
@@ -15473,6 +15500,7 @@
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Taux de remplissage</span><div class="flex items-center gap-2"><span class="text-xl font-black" style="color:${meterColor(fillRate)}">${fmtPctUx(fillRate)}</span><span class="text-xs text-slate-400">${(currentProfilingStats && currentProfilingStats.totalRows ? Math.max(0, currentProfilingStats.totalRows - c.nullCount).toLocaleString('fr-FR') + ' renseignée(s) · ' : '')}${Number(c.nullCount).toLocaleString('fr-FR')} vide(s)</span></div></div>
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Cardinalité</span><div class="flex items-center gap-2"><span class="text-xl font-black text-slate-800">${c.distinctCount.toLocaleString('fr-FR')}${c.hasMoreDistinct ? '+' : ''}</span><span class="text-xs text-slate-400">valeur(s) distincte(s)</span></div></div>
                 </div>
+                ${c.dateDemoted ? `<div class="mb-4 text-[11px] bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sky-800">📐 Cette colonne <strong>ressemble</strong> à des dates mais n'en contient pas : seules ${Number(c.dateParsedPct || 0).toFixed(0)} % des valeurs s'analysent réellement comme une date. Elle est traitée comme du texte, et aucune alerte de date n'est produite.</div>` : ''}
                 ${(() => { const tags = [];
                     if (c.isCandidateKey) tags.push(['bg-emerald-50 border-emerald-200 text-emerald-800', '🔑 Clé candidate', 'Toujours renseignée et sans doublon : cette colonne peut identifier une ligne à elle seule.']);
                     if (c.isConstant) tags.push(['bg-amber-50 border-amber-200 text-amber-800', '▪ Colonne constante', 'Une seule valeur sur toute la table : elle n\'apporte aucune information.']);
