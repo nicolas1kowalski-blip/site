@@ -2199,6 +2199,7 @@
             else if (govState.tab === 'model') { c.innerHTML = '<div class="flex justify-end gap-2 mb-2">' + graphToolbarHtml('model') + '<button onclick="exportGraphImage(\'model\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l\'image</button></div><div id="modelGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Diagramme du modèle métier : 🏛️ objets (vert), ◆ compositions (ce qui fait partie de l\'objet), → références entre objets, cardinalités sur les liens. Construit via l\'assistant "Concevoir depuis le modèle de données".</p>'; renderObjectModelDiagram(); requestAnimationFrame(() => reflowGraph('model')); }
             else if (govState.tab === 'perimeters') c.innerHTML = renderGovPerimeters();
             else if (govState.tab === 'glossary') c.innerHTML = renderGovGlossary();
+            else if (govState.tab === 'vlists') c.innerHTML = renderValueLists();
             else if (govState.tab === 'usecases') { govState.tab = 'assets'; c.innerHTML = renderGovAssets(); }
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
@@ -2265,6 +2266,7 @@
                     <td class="p-2"><input type="text" value="${escapeHTML(c.examples || '')}" placeholder="ex: PAR01 ; LYO02..." onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','examples',this.value)" class="w-44 border border-slate-200 p-1.5 rounded text-xs ${c.examplesAuto ? 'bg-indigo-50/50' : ''}" title="${c.examplesAuto ? 'Échantillonné automatiquement depuis la source' : 'Saisie manuelle'}"></td>
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, c.sensitivity)}</select></td>
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select></td>
+                    <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','valueListId',this.value)" title="Rattacher cet attribut à une liste de valeurs : l'audit contrôlera l'appartenance au référentiel au lieu de signaler les valeurs rares." class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[150px] ${c.valueListId ? 'border-indigo-300 bg-indigo-50/50 font-bold' : ''}"><option value="">— aucune —</option>${vlList().map(L => `<option value="${L.id}" ${c.valueListId === L.id ? 'selected' : ''}>${escapeHTML(L.name)}</option>`).join('')}</select></td>
                 </tr>`;
             });
             return modeBar + wfBar + `
@@ -2287,12 +2289,153 @@
                 </div>
                 <div class="border border-slate-200 rounded-lg overflow-x-auto">
                     <table class="w-full text-left text-sm">
-                        <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Définition fonctionnelle</th><th class="p-2">Type technique</th><th class="p-2">Exemples de valeurs</th><th class="p-2">Sensibilité</th><th class="p-2">Terme glossaire</th></tr></thead>
+                        <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Définition fonctionnelle</th><th class="p-2">Type technique</th><th class="p-2">Exemples de valeurs</th><th class="p-2">Sensibilité</th><th class="p-2">Terme glossaire</th><th class="p-2">Liste de valeurs</th></tr></thead>
                         <tbody class="divide-y divide-slate-100">${colRows}</tbody>
                     </table>
                 </div>`;
         }
         function updateDictField(tn, f, v) { ensureDictEntry(tn)[f] = v; persistAppState(); }
+        // ============ V6.27 : LISTES DE VALEURS (référentiels de codes) ============
+        // Une liste de valeurs dit ce qu'un attribut a le droit de contenir. Deux façons de la définir :
+        //   • en clair   : on saisit « code ; libellé ; statut » ligne à ligne ;
+        //   • par source : une table déjà chargée sert de référentiel. Elle peut porter PLUSIEURS listes,
+        //     auquel cas une colonne « nom de la liste » les distingue.
+        // Conséquence directe sur l'audit : une colonne rattachée à une liste n'est plus jugée sur la
+        // RARETÉ de ses valeurs (un code 1 ou 2 rare reste parfaitement normal), mais sur leur
+        // APPARTENANCE au référentiel — ce qui est la seule question qui vaille.
+        function vlList() { const g = state.governance; g.valueLists = g.valueLists || []; return g.valueLists; }
+        function vlById(id) { return vlList().find(v => v.id === id) || null; }
+        function vlAdd() {
+            vlList().push({ id: 'vl_' + generateId(), name: 'Nouvelle liste', description: '', kind: 'inline',
+                values: [], srcTable: '', colCode: '', colLabel: '', colStatus: '', colList: '', listValue: '', activeStatus: '' });
+            persistAppState(); renderGovernance();
+        }
+        function vlSet(id, f, v) {
+            const L = vlById(id); if (!L) return;
+            L[f] = v;
+            if (f === 'srcTable') { L.colCode = ''; L.colLabel = ''; L.colStatus = ''; L.colList = ''; L.listValue = ''; }
+            persistAppState(); renderGovernance();
+        }
+        function vlDel(id) {
+            const L = vlById(id); if (!L) return;
+            const used = vlUsage(id);
+            if (!confirm(`Supprimer la liste « ${L.name} » ?` + (used.length ? `\n\n${used.length} attribut(s) y sont rattachés — ils ne seront plus contrôlés.` : ''))) return;
+            state.governance.valueLists = vlList().filter(v => v.id !== id);
+            used.forEach(u => { const d = (state.governance.dictionary || {})[u.table]; if (d && d.columns[u.col]) delete d.columns[u.col].valueListId; });
+            persistAppState(); renderGovernance();
+        }
+        // Saisie en clair : une ligne = code ; libellé ; statut (les deux derniers sont facultatifs).
+        function vlParseInline(txt) {
+            return String(txt || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+                const p = l.split(';').map(x => x.trim());
+                return { code: p[0] || '', label: p[1] || '', status: p[2] || '' };
+            }).filter(v => v.code);
+        }
+        function vlSetInline(id, txt) { const L = vlById(id); if (!L) return; L.values = vlParseInline(txt); persistAppState(); renderGovernance(); }
+        function vlInlineText(L) { return (L.values || []).map(v => [v.code, v.label, v.status].filter((x, i) => i === 0 || x).join(' ; ')).join('\n'); }
+        // Attributs rattachés à une liste (dictionnaire).
+        function vlUsage(id) {
+            const out = [];
+            Object.entries(state.governance.dictionary || {}).forEach(([tn, d]) => {
+                Object.entries(d.columns || {}).forEach(([col, c]) => { if (c && c.valueListId === id) out.push({ table: tn, col }); });
+            });
+            return out;
+        }
+        function vlBindingFor(tableName, col) {
+            const d = (state.governance.dictionary || {})[tableName];
+            const c = d && d.columns && d.columns[col];
+            return c && c.valueListId ? vlById(c.valueListId) : null;
+        }
+        // Requête SQL rendant les codes autorisés — utilisable dans un NOT IN.
+        // Les codes sont normalisés (majuscules, sans espaces de bord) des DEUX côtés de la comparaison.
+        const vlNk = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
+        function vlCodesSql(L) {
+            if (!L) return null;
+            if (L.kind === 'table') {
+                const t = tableByName(L.srcTable); if (!t || t.status !== 'ready' || !L.colCode) return null;
+                const where = [];
+                if (L.colList && L.listValue) where.push(`${vlNk(sqlIdent(L.colList))} = ${sqlLiteral(String(L.listValue).trim().toUpperCase())}`);
+                if (L.colStatus && L.activeStatus) where.push(`${vlNk(sqlIdent(L.colStatus))} = ${sqlLiteral(String(L.activeStatus).trim().toUpperCase())}`);
+                return `SELECT ${vlNk(sqlIdent(L.colCode))} AS c FROM ${sqlIdent(duckTableName(t.id))} WHERE ${vlNk(sqlIdent(L.colCode))} IS NOT NULL${where.length ? ' AND ' + where.join(' AND ') : ''}`;
+            }
+            const vals = (L.values || []).filter(v => !L.activeStatus || !v.status || String(v.status).trim().toUpperCase() === String(L.activeStatus).trim().toUpperCase());
+            if (!vals.length) return null;
+            return `SELECT * FROM (VALUES ${vals.map(v => `(${sqlLiteral(String(v.code).trim().toUpperCase())})`).join(', ')}) AS t(c)`;
+        }
+        // Condition SQL « cette valeur n'appartient pas au référentiel » (vide = non contrôlé).
+        function vlOutsideCond(L, colExpr) {
+            const codes = vlCodesSql(L); if (!codes) return null;
+            return `(${vlNk(colExpr)} IS NOT NULL AND ${vlNk(colExpr)} NOT IN (${codes}))`;
+        }
+        function vlCount(L) {
+            if (!L) return null;
+            if (L.kind === 'inline') return (L.values || []).length;
+            return null; // liste par source : le décompte se fait à l'exécution
+        }
+        function vlLabel(L) { return L ? `${L.name}${L.kind === 'table' ? ` (source ${L.srcTable || '?'})` : ` (${(L.values || []).length} code(s))`}` : ''; }
+        // Aperçu à la demande d'une liste par source : combien de codes, et lesquels.
+        async function vlPreview(id, btn) {
+            const L = vlById(id); const box = el('vl-prev-' + id); if (!L || !box) return;
+            const codes = vlCodesSql(L);
+            if (!codes) { box.innerHTML = '<span class="text-[11px] text-red-600">Complétez la source et la colonne du code.</span>'; return; }
+            if (btn) btn.disabled = true;
+            try {
+                const { conn } = await getDB();
+                const rows = arrowResultToObjects(await conn.query(`SELECT c FROM (${codes}) q GROUP BY 1 ORDER BY 1 LIMIT 50`));
+                const n = arrowResultToObjects(await conn.query(`SELECT COUNT(DISTINCT c)::BIGINT AS n FROM (${codes}) q`))[0];
+                box.innerHTML = `<span class="text-[11px] text-slate-600"><strong>${Number(n.n).toLocaleString('fr-FR')}</strong> code(s) : ${rows.map(r => `<span class="inline-block bg-white border border-slate-200 rounded px-1.5 py-0.5 mr-1 mb-1 font-mono text-[10px]">${escapeHTML(String(r.c))}</span>`).join('')}${Number(n.n) > 50 ? ' …' : ''}</span>`;
+            } catch (e) { box.innerHTML = `<span class="text-[11px] text-red-600">${escapeHTML(e.message)}</span>`; }
+            finally { if (btn) btn.disabled = false; }
+        }
+        function renderValueLists() {
+            const lists = vlList();
+            const readyTables = Object.values(state.tables).filter(t => t.status === 'ready');
+            let html = `<div class="flex items-center justify-between mb-2">
+                <div><h3 class="text-base font-black text-slate-800">🎚️ Listes de valeurs</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Déclarez ce qu'un attribut a le droit de contenir. Un attribut rattaché à une liste n'est plus jugé sur la <strong>rareté</strong> de ses valeurs — un code peu fréquent reste normal — mais sur leur <strong>appartenance</strong> au référentiel.</p></div>
+                <button onclick="vlAdd()" class="text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold whitespace-nowrap">+ Liste</button>
+            </div>`;
+            if (!lists.length) return html + emptyStateHtml('🎚️', 'Aucune liste de valeurs', 'Saisissez vos codes en clair, ou désignez une table déjà chargée qui sert de référentiel (nom de liste, code, libellé, statut).', '+ Créer une liste', 'vlAdd()');
+            html += lists.map(L => {
+                const used = vlUsage(L.id);
+                const t = tableByName(L.srcTable);
+                const hs = t ? t.headers : [];
+                const colSel = (f, ph) => `<select onchange="vlSet('${L.id}','${f}',this.value)" class="border border-slate-300 rounded p-1.5 text-[11px] bg-white"><option value="">${ph}</option>${hs.map(h => `<option value="${escapeHTML(h)}" ${L[f] === h ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>`;
+                return `<div class="border border-slate-200 rounded-xl p-4 mb-3 bg-white">
+                    <div class="flex items-center gap-2 flex-wrap mb-2">
+                        <input type="text" value="${escapeHTML(L.name)}" onchange="vlSet('${L.id}','name',this.value)" class="font-black text-sm border border-slate-200 rounded px-2 py-1 w-56">
+                        <select onchange="vlSet('${L.id}','kind',this.value)" class="border border-slate-300 rounded p-1.5 text-[11px] bg-white">
+                            <option value="inline" ${L.kind === 'inline' ? 'selected' : ''}>Codes saisis en clair</option>
+                            <option value="table" ${L.kind === 'table' ? 'selected' : ''}>Depuis une table de référence</option>
+                        </select>
+                        <input type="text" value="${escapeHTML(L.description || '')}" onchange="vlSet('${L.id}','description',this.value)" placeholder="à quoi sert cette liste…" class="border border-slate-200 rounded px-2 py-1 text-[11px] flex-grow min-w-[160px]">
+                        <span class="text-[10px] font-bold px-2 py-1 rounded ${used.length ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}" title="${used.map(u => u.table + '.' + u.col).join(', ') || 'Rattachez-la à un attribut depuis le Dictionnaire'}">${used.length} attribut(s) rattaché(s)</span>
+                        <button onclick="vlDel('${L.id}')" class="text-slate-300 hover:text-red-600 font-bold">✕</button>
+                    </div>
+                    ${L.kind === 'inline' ? `
+                        <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Codes — une ligne par valeur : <span class="font-mono normal-case">code ; libellé ; statut</span> (libellé et statut facultatifs)</label>
+                        <textarea onchange="vlSetInline('${L.id}', this.value)" rows="4" placeholder="1 ; Actif&#10;2 ; Suspendu&#10;3 ; Résilié ; OBSOLETE" class="w-full border border-slate-300 rounded p-2 text-[11px] font-mono">${escapeHTML(vlInlineText(L))}</textarea>`
+                    : `
+                        <div class="flex items-end gap-2 flex-wrap">
+                            <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table de référence</label>
+                            <select onchange="vlSet('${L.id}','srcTable',this.value)" class="border border-slate-300 rounded p-1.5 text-[11px] bg-white"><option value="">— table —</option>${readyTables.map(t2 => `<option value="${escapeHTML(t2.name)}" ${L.srcTable === t2.name ? 'selected' : ''}>${escapeHTML(t2.name)}</option>`).join('')}</select></div>
+                            <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Code</label>${colSel('colCode', '— code —')}</div>
+                            <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Libellé</label>${colSel('colLabel', '— facultatif —')}</div>
+                            <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Statut</label>${colSel('colStatus', '— facultatif —')}</div>
+                            <div><label class="text-[9px] uppercase font-bold text-slate-400 block" title="Si la table porte PLUSIEURS listes, la colonne qui les distingue.">Nom de liste</label>${colSel('colList', '— une seule liste —')}</div>
+                            ${L.colList ? `<div><label class="text-[9px] uppercase font-bold text-slate-400 block">Valeur du nom</label><input type="text" value="${escapeHTML(L.listValue || '')}" onchange="vlSet('${L.id}','listValue',this.value)" placeholder="ex: STATUT_CONTRAT" class="border border-slate-300 rounded p-1.5 text-[11px] w-40"></div>` : ''}
+                        </div>`}
+                    <div class="flex items-end gap-2 flex-wrap mt-2">
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block" title="Ne retenir que les codes portant ce statut. Laisser vide pour accepter tous les codes de la liste.">Statut « actif »</label>
+                        <input type="text" value="${escapeHTML(L.activeStatus || '')}" onchange="vlSet('${L.id}','activeStatus',this.value)" placeholder="ex: ACTIF (facultatif)" class="border border-slate-300 rounded p-1.5 text-[11px] w-40"></div>
+                        <button onclick="vlPreview('${L.id}', this)" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1.5 rounded font-bold text-slate-600">👁 Aperçu des codes</button>
+                        <div id="vl-prev-${L.id}" class="flex-grow"></div>
+                    </div>
+                    ${used.length ? `<div class="mt-2 text-[10px] text-slate-500">Rattachée à : ${used.map(u => `<span class="font-mono bg-slate-100 rounded px-1.5 py-0.5 mr-1">${escapeHTML(u.table)}.${escapeHTML(u.col)}</span>`).join('')}</div>` : '<div class="mt-2 text-[10px] text-slate-400 italic">Pas encore rattachée. Allez dans <b>📚 Dictionnaire</b>, colonne <b>Liste de valeurs</b>, pour l\'associer à un attribut.</div>'}
+                </div>`;
+            }).join('');
+            return html;
+        }
         function updateDictColField(tn, col, f, v) { const d = ensureDictEntry(tn); if (!d.columns[col]) d.columns[col] = {}; d.columns[col][f] = v; if (f === 'examples') d.columns[col].examplesAuto = false; persistAppState(); }
 
         // Remplit automatiquement les exemples de valeurs de chaque attribut en interrogeant la source
@@ -6746,6 +6889,7 @@
                   { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
                   { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
                   { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
+                  { g: 'vlists', icon: '🎚️', label: 'Listes de valeurs', fam: 'Sens métier' },
                   { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Sens métier' },
                   { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Sens métier' },
                   { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
@@ -9801,8 +9945,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.26.0';
+        const APP_VERSION = '6.27.0';
         const APP_CHANGELOG = [
+            { v: '6.27.0', d: '2026-07-27', t: 'Listes de valeurs : déclarer ce qu\'un attribut a le droit de contenir', items: [
+                'Nouvel écran <b>Gouvernance ▸ 🎚️ Listes de valeurs</b>. Une liste se définit de deux façons : en clair, une ligne par valeur au format « code ; libellé ; statut » ; ou depuis une table déjà chargée servant de référentiel — vous désignez les colonnes code, libellé, statut, et une colonne « nom de liste » si la même table en porte plusieurs.',
+                'Un champ « statut actif » permet de n\'accepter que les codes en vigueur : les codes obsolètes du référentiel cessent alors d\'être valides.',
+                'Le <b>Dictionnaire</b> gagne une colonne « Liste de valeurs » pour rattacher un attribut à un référentiel, et un aperçu affiche à la demande les codes réellement retenus.',
+                'Effet sur l\'audit : un attribut rattaché n\'est plus jugé sur la RARETÉ de ses valeurs. Des codes 1, 2, 3, 4 dont le 1 et le 2 sont rares ne déclenchent plus ni valeur aberrante, ni écart de format — c\'est normal. Le seul contrôle devient l\'APPARTENANCE : les valeurs hors référentiel sont signalées, inspectables et exportables.',
+                'Nouveau type de règle de qualité « Appartenance à une liste de valeurs », qui réutilise le même référentiel et entre dans le score comme les autres.'] },
             { v: '6.26.0', d: '2026-07-27', t: 'Vues graphiques : étiquettes de liens discrètes et vrai plein écran', items: [
                 'Les étiquettes des liens se chevauchaient dès qu\'un modèle comptait une dizaine de tables, au point de masquer le schéma. Elles n\'apparaissent plus qu\'au SURVOL de la case concernée, mise en évidence au passage — et le chemin emprunté reste de toute façon écrit sur la case elle-même.',
                 'Une case à cocher « étiquettes des liens » permet de toutes les réafficher en permanence quand c\'est utile.',
@@ -10155,7 +10305,7 @@
         (function () { const b2 = el('appVersionBadge'); if (b2) b2.textContent = 'v' + appVersionShort(); })();
 
         // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
-        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', cond: 'Condition (si… alors…)', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)', sql: 'Condition SQL libre (avancé)', group: 'Agrégat par groupe (avancé)' };
+        const QR_TYPES = { notnull: 'Non vide', unique: 'Unicité (mono/composite)', format: 'Format (regex)', range: 'Plage min/max', inlist: 'Liste de valeurs', fk: 'Intégrité référentielle', cond: 'Condition (si… alors…)', expr: 'Cohérence (expression)', fresh: 'Fraîcheur (date)', sql: 'Condition SQL libre (avancé)', group: 'Agrégat par groupe (avancé)', vlist: 'Appartenance à une liste de valeurs' };
         // V6.20 : règles évaluées à la maille GROUPE et non à la ligne — elles ont leur propre requête.
         const QR_GROUPED = ['unique', 'group'];
         const QR_W = { 'Faible': 1, 'Moyenne': 2, 'Haute': 3, 'Critique': 5 };
@@ -10318,6 +10468,8 @@
                 // On liste les lignes qui ne la respectent pas. Une condition NULL est traitée comme
                 // respectée (comme pour « expr »), pour ne pas transformer une donnée absente en échec.
                 case 'sql': { const e3 = qrSqlCond(P.sql); return e3 ? `(NOT COALESCE((${e3}), TRUE))` : null; }
+                // V6.27 : contrôle d'appartenance à une liste de valeurs déclarée en gouvernance.
+                case 'vlist': { const L = vlById(P.listId); return L ? vlOutsideCond(L, c) : null; }
                 case 'fresh': { const n = parseInt(P.days) || 365;
                     const d = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
                     return `(${c} IS NOT NULL AND TRIM(${raw}) <> '' AND (${d} IS NULL OR ${d} < CURRENT_DATE - INTERVAL ${n} DAY))`; }
@@ -10534,6 +10686,9 @@
                 case 'expr': return inp('formula', P.formula, 'ex : [DATE_FIN] >= [DATE_DEBUT]', 'w-64')
                     + `<div class="text-[9px] text-slate-400 mt-0.5">La règle liste les lignes qui <b>ne respectent PAS</b> l'expression. Comparaison typée automatique : <b>dates</b> (jj/mm/aaaa, aaaa-mm-jj…), sinon <b>nombres</b> (virgule/espaces), sinon texte. ET/OU et parenthèses acceptés.</div>`;
                 case 'fresh': return colSel('col', r.col) + ' âge max ' + inp('days', P.days, '365', 'w-14') + ' jours';
+                case 'vlist': { const L = vlById(P.listId);
+                    return colSel('col', r.col) + ` <select onchange="qrSet('${r.id}','p.listId',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white"><option value="">— liste —</option>${vlList().map(x => `<option value="${x.id}" ${P.listId === x.id ? 'selected' : ''}>${escapeHTML(x.name)}</option>`).join('')}</select>`
+                        + `<div class="text-[9px] text-slate-400 mt-0.5">${vlList().length ? 'La règle liste les valeurs qui n\'appartiennent pas au référentiel choisi.' : 'Aucune liste définie — créez-en une dans <b>Gouvernance ▸ Listes de valeurs</b>.'}${L ? ' Référentiel : ' + escapeHTML(vlLabel(L)) + '.' : ''}</div>`; }
                 case 'sql': { const chk = P.sql ? qrSqlCheck(P.sql) : null;
                     return inp('sql', P.sql, "ex : \"DATE_FIN\" IS NULL OR \"DATE_FIN\" >= \"DATE_DEBUT\"", 'w-full')
                         + `<div class="text-[9px] ${chk && !chk.ok ? 'text-red-600 font-bold' : 'text-slate-400'} mt-0.5">${chk && !chk.ok ? '⚠ ' + escapeHTML(chk.err) : 'Condition SQL que doit respecter une ligne <b>valide</b> — la règle liste celles qui ne la respectent pas. Noms de colonnes entre guillemets doubles. Lecture seule, une seule condition (pas de « ; »).'}</div>`; }
@@ -14099,21 +14254,22 @@
             if (stats.emptyRows > 0) entries.push({ col: '(toute la ligne)', kind: 'Lignes entièrement vides', n: stats.emptyRows, sql: sel(t.headers.map(h => `(${sqlIdent(h)} IS NULL OR ${trimOf(h)} = '')`).join(' AND ')) });
             Object.values(stats.columns).forEach(c => {
                 const h = c.name; if (!t.headers.includes(h)) return;
+                const vlBound = vlBindingFor(t.name, h);   // V6.27 : liste de valeurs rattachée à cet attribut
                 if (c.spaceIssues > 0) entries.push({ col: h, kind: 'Espaces début/fin', n: c.spaceIssues, sql: sel(`${sqlIdent(h)} IS NOT NULL AND ${rawOf(h)} <> '' AND ${rawOf(h)} <> ${trimOf(h)}`) });
                 if (c.multiSpace > 0) entries.push({ col: h, kind: 'Espaces multiples', n: c.multiSpace, sql: sel(`${notBlank(h)} AND regexp_matches(${trimOf(h)}, '  +')`) });
                 if (c.placeholders > 0) entries.push({ col: h, kind: 'Valeurs bouche-trous (N/A, -, ?...)', n: c.placeholders, sql: sel(`${notBlank(h)} AND UPPER(${trimOf(h)}) IN ('N/A','NA','NULL','-','--','?','X','XX','INCONNU','NC','TBD','NONE','AUCUN','VIDE','#N/A','SANS','A DEFINIR','À DÉFINIR')`) });
                 if (c.caseDupGroups > 0) entries.push({ col: h, kind: 'Casse incohérente (même valeur, casses différentes)', n: c.caseDupGroups, sql: sel(`${notBlank(h)} AND UPPER(${trimOf(h)}) IN (SELECT UPPER(${trimOf(h)}) FROM ${T} WHERE ${notBlank(h)} GROUP BY 1 HAVING COUNT(DISTINCT ${trimOf(h)}) > 1)`) });
-                if (c.outliers > 0 && c.stdDev > 0) {
+                if (c.outliers > 0 && c.stdDev > 0 && !vlBound) {
                     const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
                     entries.push({ col: h, kind: `Valeurs aberrantes (hors moyenne ± 3σ)`, n: c.outliers, sql: sel(`${numE} IS NOT NULL AND (${numE} < ${c.mean - 3 * c.stdDev} OR ${numE} > ${c.mean + 3 * c.stdDev})`) });
                 }
                 // V6.21 : atypiques au sens de Tukey (hors [Q1 − 1,5 IQR ; Q3 + 1,5 IQR]) — pertinent
                 // même sur une distribution asymétrique, là où la règle des 3σ ne détecte rien.
-                if (c.outliersIqr > 0 && c.iqrLow != null && c.iqrHigh != null) {
+                if (c.outliersIqr > 0 && c.iqrLow != null && c.iqrHigh != null && !vlBound) {
                     const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
                     entries.push({ col: h, kind: `Valeurs atypiques (hors écart interquartile)`, n: c.outliersIqr, sql: sel(`${numE} IS NOT NULL AND (${numE} < ${c.iqrLow} OR ${numE} > ${c.iqrHigh})`) });
                 }
-                if (c.outliersMad > 0 && c.madSigma > 0) {
+                if (c.outliersMad > 0 && c.madSigma > 0 && !vlBound) {
                     const numE = `TRY_CAST(REPLACE(${trimOf(h)}, ',', '.') AS DOUBLE)`;
                     const score = `ROUND(ABS(${numE} - ${c.median}) / ${c.madSigma}, 2)`;
                     // On expose le SCORE et on trie du plus grave au moins grave : la liste devient
@@ -14121,7 +14277,7 @@
                     entries.push({ col: h, kind: 'Valeurs extrêmes (score robuste MAD > 3,5)', n: c.outliersMad,
                         sql: `SELECT ${score} AS ${sqlIdent('SCORE_ECART')}, * EXCLUDE (__rn) FROM ${T} WHERE ${numE} IS NOT NULL AND ABS(${numE} - ${c.median}) / ${c.madSigma} > 3.5 ORDER BY 1 DESC` });
                 }
-                if (c.outliersCtx > 0 && stats.groupCol) {
+                if (c.outliersCtx > 0 && stats.groupCol && !vlBound) {
                     const G = sqlIdent(stats.groupCol);
                     const numE2 = `TRY_CAST(REPLACE(TRIM(CAST(s2.${sqlIdent(h)} AS VARCHAR)), ',', '.') AS DOUBLE)`;
                     entries.push({ col: h, kind: `Valeurs aberrantes dans leur groupe (${stats.groupCol})`, n: c.outliersCtx,
@@ -14149,6 +14305,14 @@
                 const typN = { 'Numérique': c.numNum, 'Email': c.numEmail, 'Téléphone': c.numPhone }[c.semanticType];
                 if (typRe && validCount > typN) entries.push({ col: h, kind: `Ne respecte pas le type ${c.semanticType}`, n: validCount - typN, sql: sel(`${notBlank(h)} AND NOT regexp_matches(${trimOf(h)}, '${typRe}')`) });
                 if (c.semanticType === 'Date/Heure' && validCount > c.numDate) entries.push({ col: h, kind: 'Ne respecte pas le type Date', n: validCount - c.numDate, sql: sel(`${notBlank(h)} AND NOT (regexp_matches(${trimOf(h)}, '${re.date1}') OR regexp_matches(${trimOf(h)}, '${re.date2}'))`) });
+                // V6.27 : colonne rattachée à une LISTE DE VALEURS. La question n'est plus « cette valeur
+                // est-elle rare ? » (un code 1 ou 2 peu fréquent est parfaitement normal) mais « appartient-
+                // elle au référentiel ? ». On remplace donc les alertes statistiques par ce seul contrôle.
+                if (vlBound) {
+                    const cond = vlOutsideCond(vlBound, sqlIdent(h));
+                    if (cond && (c.outsideList || 0) > 0) entries.push({ col: h, kind: `Valeur hors référentiel « ${vlBound.name} »`, n: c.outsideList, sql: sel(`${notBlank(h)} AND ${cond}`) });
+                    return; // aucune alerte de rareté, de forme ni de valeur aberrante sur cette colonne
+                }
                 // V6.25 : sur une colonne à faible cardinalité (drapeau TRUE/FALSE, liste de statuts…),
                 // la « forme » n'a aucun sens : une valeur simplement RARE apparaissait comme un écart
                 // de format. L'analyse de motif est réservée aux colonnes à valeurs libres.
@@ -14166,7 +14330,7 @@
             const entries = qualAnomalyEntries(stats, tId);
             if (!entries.length) { box.innerHTML = '<p class="text-xs text-emerald-700">✔ Aucune anomalie d\'hygiène ou de format détectée.</p>'; return; }
             box.innerHTML = `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Anomalie</th><th class="p-2 text-right">Lignes (échantillon audité)</th><th class="p-2">Actions</th></tr></thead><tbody class="divide-y divide-slate-100">` +
-                entries.map(e => { const esql = currentProfilingWhere ? `SELECT * FROM (${e.sql}) __flt WHERE ${currentProfilingWhere}` : e.sql; const idx = registerQualInspect(`${e.col} — ${e.kind}`, esql); return `<tr class="hover:bg-amber-50/40"><td class="p-2 font-bold">${escapeHTML(e.col)}</td><td class="p-2">${escapeHTML(e.kind)}</td><td class="p-2 text-right font-black text-amber-700">${e.n.toLocaleString('fr-FR')}</td><td class="p-2"><div>${qualInspectButtons(idx)}</div></td></tr>`; }).join('') +
+                entries.map(e => { const esql = currentProfilingWhere ? `SELECT * FROM (${e.sql}) __flt WHERE ${currentProfilingWhere}` : e.sql; const idx = registerQualInspect(`${e.col} — ${e.kind}`, esql); return `<tr class="hover:bg-amber-50/40"><td class="p-2 font-bold">${escapeHTML(e.col)}</td><td class="p-2">${escapeHTML(e.kind)}</td><td class="p-2 text-right font-black text-amber-700">${e.n == null ? '—' : e.n.toLocaleString('fr-FR')}</td><td class="p-2"><div>${qualInspectButtons(idx)}</div></td></tr>`; }).join('') +
                 `</tbody></table></div><p class="text-[10px] text-slate-400 mt-1.5">👁 Voir = échantillon paginé à l'écran (50 lignes) · ⬇ CSV = extraction de la <strong>totalité</strong> des lignes en anomalie (recherche sur la table complète, le comptage peut donc dépasser celui de l'échantillon audité).</p>`;
         }
 
@@ -14540,6 +14704,17 @@
                         stats.columns[h].outliersCtx = Number(res.bad || 0);
                     } catch (e) { stats.columns[h].ctxError = String(e.message || e); }
                 }
+            }
+            // V6.27 : appartenance aux LISTES DE VALEURS déclarées. Une requête par colonne rattachée
+            // seulement — il y en a peu, et c'est le contrôle qui remplace toutes les alertes de rareté.
+            for (const h of targetHeaders) {
+                const L = vlBindingFor(table.name, h); if (!L) continue;
+                const cond = vlOutsideCond(L, sqlIdent(h)); if (!cond) { stats.columns[h].vlError = 'Liste incomplète'; continue; }
+                try {
+                    const r2 = arrowResultToObjects(await conn.query(`SELECT SUM(CASE WHEN ${cond} THEN 1 ELSE 0 END)::BIGINT AS n FROM ${sourceExpr} AS src`))[0];
+                    stats.columns[h].outsideList = Number(r2.n || 0);
+                    stats.columns[h].valueListName = L.name;
+                } catch (e) { stats.columns[h].vlError = String(e.message || e); }
             }
             // V6.21 : COLONNES REDONDANTES — deux colonnes qui portent exactement la même information.
             // On ne compare que des paires plausibles (même type, même cardinalité, même remplissage),
@@ -15276,7 +15451,7 @@
         // ---- Export des résultats d'audit (pour retravailler la donnée à l'extérieur) ----
         function exportAuditCsv() {
             const s = currentProfilingStats; if (!s) return showError("Lancez d'abord un audit.");
-            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'dates_invraisemblables', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'extremes_mad', 'aberrantes_dans_groupe', 'mad', 'top_valeurs'];
+            const head = ['colonne', 'type_semantique', 'completude_pct', 'vides', 'valeurs_distinctes', 'format_dominant', 'format_dominant_pct', 'nb_formats', 'min', 'max', 'moyenne', 'ecart_type', 'long_min', 'long_max', 'long_moyenne', 'p05', 'q1', 'mediane', 'q3', 'p95', 'date_min', 'date_max', 'dates_futur', 'dates_avant_1900', 'dates_invraisemblables', 'ratio_cardinalite_pct', 'cle_candidate', 'colonne_constante', 'recopie_de', 'espaces_debut_fin', 'espaces_multiples', 'bouche_trous', 'variantes_casse', 'aberrantes_3sigma', 'aberrantes_iqr', 'extremes_mad', 'aberrantes_dans_groupe', 'mad', 'liste_de_valeurs', 'hors_referentiel', 'top_valeurs'];
             const rows = [head.map(escapeCSV).join(';')];
             Object.values(s.columns).forEach(c => {
                 rows.push([c.name, c.semanticType, c.completeness.toFixed(2), c.nullCount, c.distinctCount,
@@ -15287,7 +15462,7 @@
                     c.p05 != null ? c.p05 : '', c.p25 != null ? c.p25 : '', c.median != null ? c.median : '', c.p75 != null ? c.p75 : '', c.p95 != null ? c.p95 : '',
                     c.dateMin || '', c.dateMax || '', c.datesFuture || 0, c.datesAncient || 0, c.datesFar || 0,
                     c.cardinalityRatio != null ? (100 * c.cardinalityRatio).toFixed(2) : '', c.isCandidateKey ? 'oui' : '', c.isConstant ? 'oui' : '', c.duplicateOf || '',
-                    c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0, c.outliersIqr || 0, c.outliersMad || 0, c.outliersCtx || 0, c.mad != null ? c.mad : '',
+                    c.spaceIssues || 0, c.multiSpace || 0, c.placeholders || 0, c.caseDupGroups || 0, c.outliers || 0, c.outliersIqr || 0, c.outliersMad || 0, c.outliersCtx || 0, c.mad != null ? c.mad : '', c.valueListName || '', c.outsideList != null ? c.outsideList : '',
                     (c.frequentValues || []).slice(0, 5).map(f => `${f.val} (${f.count})`).join(' | ')].map(escapeCSV).join(';'));
             });
             downloadTextFile(`Audit_${s.tableName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.csv`, rows.join('\n'));
@@ -15525,6 +15700,8 @@
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Taux de remplissage</span><div class="flex items-center gap-2"><span class="text-xl font-black" style="color:${meterColor(fillRate)}">${fmtPctUx(fillRate)}</span><span class="text-xs text-slate-400">${(currentProfilingStats && currentProfilingStats.totalRows ? Math.max(0, currentProfilingStats.totalRows - c.nullCount).toLocaleString('fr-FR') + ' renseignée(s) · ' : '')}${Number(c.nullCount).toLocaleString('fr-FR')} vide(s)</span></div></div>
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Cardinalité</span><div class="flex items-center gap-2"><span class="text-xl font-black text-slate-800">${c.distinctCount.toLocaleString('fr-FR')}${c.hasMoreDistinct ? '+' : ''}</span><span class="text-xs text-slate-400">valeur(s) distincte(s)</span></div></div>
                 </div>
+                ${c.valueListName ? `<div class="mb-4 text-[11px] ${(c.outsideList || 0) > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'} border rounded-lg px-3 py-2">🎚️ Attribut rattaché à la liste de valeurs <strong>${escapeHTML(c.valueListName)}</strong> : ${(c.outsideList || 0) > 0 ? `<strong>${Number(c.outsideList).toLocaleString('fr-FR')}</strong> valeur(s) hors référentiel.` : 'toutes les valeurs appartiennent au référentiel.'} Les alertes de rareté et de valeurs aberrantes sont désactivées sur cet attribut — un code peu fréquent y est normal.</div>` : ''}
+                ${c.vlError ? `<div class="mb-4 text-[11px] bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-700">🎚️ Liste de valeurs non exploitable : ${escapeHTML(c.vlError)}.</div>` : ''}
                 ${c.dateDemoted ? `<div class="mb-4 text-[11px] bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sky-800">📐 Cette colonne <strong>ressemble</strong> à des dates mais n'en contient pas : seules ${Number(c.dateParsedPct || 0).toFixed(0)} % des valeurs s'analysent réellement comme une date. Elle est traitée comme du texte, et aucune alerte de date n'est produite.</div>` : ''}
                 ${(() => { const tags = [];
                     if (c.isCandidateKey) tags.push(['bg-emerald-50 border-emerald-200 text-emerald-800', '🔑 Clé candidate', 'Toujours renseignée et sans doublon : cette colonne peut identifier une ligne à elle seule.']);
