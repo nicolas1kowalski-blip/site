@@ -2140,8 +2140,9 @@
                     ${dc ? `<td class="p-2"><input type="text" value="${escapeHTML(dc.definition || '')}" placeholder="Définition métier..." onchange="updateDictColField('${T}','${C}','definition',this.value)" class="w-full border border-slate-200 p-1.5 rounded text-xs"></td>
                     <td class="p-2"><input type="text" value="${escapeHTML(dc.examples || '')}" placeholder="exemples..." onchange="updateDictColField('${T}','${C}','examples',this.value)" class="w-36 border border-slate-200 p-1.5 rounded text-xs"></td>
                     <td class="p-2"><select onchange="updateDictColField('${T}','${C}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, dc.sensitivity)}</select></td>
-                    <td class="p-2"><select onchange="updateDictColField('${T}','${C}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(dc.term)}</select></td>`
-                    : '<td class="p-2 text-xs text-slate-300 italic" colspan="4">Mappez cet attribut à une colonne (fiche objet ▸ Structure) pour le documenter.</td>'}
+                    <td class="p-2"><select onchange="updateDictColField('${T}','${C}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(dc.term)}</select></td>
+                    <td class="p-2">${vlSelectHtml(m.table, m.col, dc.valueListId)}</td>`
+                    : '<td class="p-2 text-xs text-slate-300 italic" colspan="5">Mappez cet attribut à une colonne (fiche objet ▸ Structure) pour le documenter.</td>'}
                 </tr>`;
             });
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
@@ -2157,7 +2158,7 @@
                 </div>
                 <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${rows.length}) <span class="text-slate-400 font-medium text-xs">— les définitions s'enregistrent sur la colonne mappée (partagées avec la vue par table)</span></h3>
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier</th><th class="p-2">Colonne</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th></tr></thead>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier</th><th class="p-2">Colonne</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="6" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
         }
         function ensureDictEntry(tableName) {
@@ -2266,7 +2267,7 @@
                     <td class="p-2"><input type="text" value="${escapeHTML(c.examples || '')}" placeholder="ex: PAR01 ; LYO02..." onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','examples',this.value)" class="w-44 border border-slate-200 p-1.5 rounded text-xs ${c.examplesAuto ? 'bg-indigo-50/50' : ''}" title="${c.examplesAuto ? 'Échantillonné automatiquement depuis la source' : 'Saisie manuelle'}"></td>
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, c.sensitivity)}</select></td>
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select></td>
-                    <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','valueListId',this.value)" title="Rattacher cet attribut à une liste de valeurs : l'audit contrôlera l'appartenance au référentiel au lieu de signaler les valeurs rares." class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[150px] ${c.valueListId ? 'border-indigo-300 bg-indigo-50/50 font-bold' : ''}"><option value="">— aucune —</option>${vlList().map(L => `<option value="${L.id}" ${c.valueListId === L.id ? 'selected' : ''}>${escapeHTML(L.name)}</option>`).join('')}</select></td>
+                    <td class="p-2">${vlSelectHtml(tn, h, c.valueListId)}</td>
                 </tr>`;
             });
             return modeBar + wfBar + `
@@ -2289,7 +2290,7 @@
                 </div>
                 <div class="border border-slate-200 rounded-lg overflow-x-auto">
                     <table class="w-full text-left text-sm">
-                        <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Définition fonctionnelle</th><th class="p-2">Type technique</th><th class="p-2">Exemples de valeurs</th><th class="p-2">Sensibilité</th><th class="p-2">Terme glossaire</th><th class="p-2">Liste de valeurs</th></tr></thead>
+                        <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Définition fonctionnelle</th><th class="p-2">Type technique</th><th class="p-2">Exemples de valeurs</th><th class="p-2">Sensibilité</th><th class="p-2">Terme glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                         <tbody class="divide-y divide-slate-100">${colRows}</tbody>
                     </table>
                 </div>`;
@@ -2304,6 +2305,33 @@
         // RARETÉ de ses valeurs (un code 1 ou 2 rare reste parfaitement normal), mais sur leur
         // APPARTENANCE au référentiel — ce qui est la seule question qui vaille.
         function vlList() { const g = state.governance; g.valueLists = g.valueLists || []; return g.valueLists; }
+        // Sélecteur de rattachement, identique dans le dictionnaire (par table ET par objet métier),
+        // dans la fiche d'audit d'une colonne et dans l'écran des listes.
+        function vlSelectHtml(tableName, col, cur) {
+            const T = escapeHTML(String(tableName).replace(/'/g, "\\'")), C = escapeHTML(String(col).replace(/'/g, "\\'"));
+            if (!vlList().length) return `<a onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
+            return `<select onchange="vlBind('${T}','${C}', this.value)" title="Rattacher cet attribut à une liste de valeurs : l'audit contrôlera l'appartenance au référentiel au lieu de signaler les valeurs rares." class="border p-1.5 rounded text-xs bg-white max-w-[160px] ${cur ? 'border-indigo-400 bg-indigo-50/60 font-bold text-indigo-800' : 'border-slate-200'}"><option value="">— aucune —</option>${vlList().map(L => `<option value="${L.id}" ${cur === L.id ? 'selected' : ''}>${escapeHTML(L.name)}</option>`).join('')}</select>`;
+        }
+        function vlBindPickTable(id) {
+            const t = tableByName(el('vlb-t-' + id).value); const c = el('vlb-c-' + id);
+            if (c) c.innerHTML = '<option value="">— colonne —</option>' + (t ? t.headers.map(h => `<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join('') : '');
+        }
+        function vlBindFromPicker(id) {
+            const tn = el('vlb-t-' + id).value, col = el('vlb-c-' + id).value;
+            if (!tn || !col) return showError('Choisissez une table et une colonne à rattacher.');
+            vlBind(tn, col, id);
+            showSuccess(`🎚️ ${tn}.${col} est rattaché à la liste « ${(vlById(id) || {}).name} ».`);
+        }
+        function vlBind(tableName, col, listId) {
+            updateDictColField(tableName, col, 'valueListId', listId || '');
+            if (typeof renderGovernance === 'function') renderGovernance();
+            if (currentProfilingStats && currentProfilingTableId && (state.tables[currentProfilingTableId] || {}).name === tableName) {
+                const c = currentProfilingStats.columns[col];
+                if (c) { const L = listId ? vlById(listId) : null; c.valueListName = L ? L.name : null; if (!L) { c.outsideList = null; c.vlError = null; } }
+                if (el('profilingColumnDetailPanel')) showColumnProfilingDetail(col);
+                if (typeof renderQualAnomalyInspector === 'function') renderQualAnomalyInspector(currentProfilingStats, currentProfilingTableId);
+            }
+        }
         function vlById(id) { return vlList().find(v => v.id === id) || null; }
         function vlAdd() {
             vlList().push({ id: 'vl_' + generateId(), name: 'Nouvelle liste', description: '', kind: 'inline',
@@ -2431,7 +2459,15 @@
                         <button onclick="vlPreview('${L.id}', this)" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1.5 rounded font-bold text-slate-600">👁 Aperçu des codes</button>
                         <div id="vl-prev-${L.id}" class="flex-grow"></div>
                     </div>
-                    ${used.length ? `<div class="mt-2 text-[10px] text-slate-500">Rattachée à : ${used.map(u => `<span class="font-mono bg-slate-100 rounded px-1.5 py-0.5 mr-1">${escapeHTML(u.table)}.${escapeHTML(u.col)}</span>`).join('')}</div>` : '<div class="mt-2 text-[10px] text-slate-400 italic">Pas encore rattachée. Allez dans <b>📚 Dictionnaire</b>, colonne <b>Liste de valeurs</b>, pour l\'associer à un attribut.</div>'}
+                    <div class="mt-2 flex items-end gap-2 flex-wrap border-t border-slate-100 pt-2">
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Rattacher un attribut</label>
+                        <select id="vlb-t-${L.id}" onchange="vlBindPickTable('${L.id}')" class="border border-slate-300 rounded p-1.5 text-[11px] bg-white"><option value="">— table —</option>${readyTables.map(t2 => `<option value="${escapeHTML(t2.name)}">${escapeHTML(t2.name)}</option>`).join('')}</select></div>
+                        <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Colonne</label>
+                        <select id="vlb-c-${L.id}" class="border border-slate-300 rounded p-1.5 text-[11px] bg-white"><option value="">— colonne —</option></select></div>
+                        <button onclick="vlBindFromPicker('${L.id}')" class="text-[11px] bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">🎚️ Rattacher</button>
+                        <span class="text-[10px] text-slate-400">se fait aussi depuis <b>📚 Dictionnaire</b> (colonne « Liste de valeurs ») ou depuis la fiche d'une colonne dans <b>Qualité &amp; Audit</b>.</span>
+                    </div>
+                    ${used.length ? `<div class="mt-2 text-[10px] text-slate-500">Rattachée à : ${used.map(u => `<span class="font-mono bg-slate-100 rounded px-1.5 py-0.5 mr-1">${escapeHTML(u.table)}.${escapeHTML(u.col)} <button onclick="vlBind('${escapeHTML(u.table)}','${escapeHTML(String(u.col).replace(/'/g, "\\'"))}','')" class="text-slate-400 hover:text-red-600 font-bold" title="Détacher">✕</button></span>`).join('')}</div>` : '<div class="mt-2 text-[10px] text-slate-400 italic">Pas encore rattachée à un attribut.</div>'}
                 </div>`;
             }).join('');
             return html;
@@ -9945,8 +9981,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.27.0';
+        const APP_VERSION = '6.27.1';
         const APP_CHANGELOG = [
+            { v: '6.27.1', d: '2026-07-27', t: 'Listes de valeurs : le rattachement se fait depuis les trois écrans concernés', items: [
+                'Le rattachement n\'apparaissait que dans le Dictionnaire en mode « par table technique ». Il est maintenant proposé aussi en mode « par objet métier », sur chaque attribut mappé à une colonne.',
+                'Surtout : il se fait directement depuis la <b>fiche d\'une colonne dans Qualité &amp; Audit</b>, c\'est-à-dire là où la fausse alerte apparaît. Un bandeau explique la démarche et le rattachement est pris en compte immédiatement, sans relancer l\'audit.',
+                'L\'écran des listes de valeurs gagne un sélecteur table + colonne pour rattacher depuis la liste elle-même, et une croix pour détacher un attribut déjà rattaché.',
+                'Le même composant sert partout : le rattachement est identique et l\'attribut rattaché est mis en évidence en indigo.'] },
             { v: '6.27.0', d: '2026-07-27', t: 'Listes de valeurs : déclarer ce qu\'un attribut a le droit de contenir', items: [
                 'Nouvel écran <b>Gouvernance ▸ 🎚️ Listes de valeurs</b>. Une liste se définit de deux façons : en clair, une ligne par valeur au format « code ; libellé ; statut » ; ou depuis une table déjà chargée servant de référentiel — vous désignez les colonnes code, libellé, statut, et une colonne « nom de liste » si la même table en porte plusieurs.',
                 'Un champ « statut actif » permet de n\'accepter que les codes en vigueur : les codes obsolètes du référentiel cessent alors d\'être valides.',
@@ -15700,7 +15741,18 @@
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Taux de remplissage</span><div class="flex items-center gap-2"><span class="text-xl font-black" style="color:${meterColor(fillRate)}">${fmtPctUx(fillRate)}</span><span class="text-xs text-slate-400">${(currentProfilingStats && currentProfilingStats.totalRows ? Math.max(0, currentProfilingStats.totalRows - c.nullCount).toLocaleString('fr-FR') + ' renseignée(s) · ' : '')}${Number(c.nullCount).toLocaleString('fr-FR')} vide(s)</span></div></div>
                     <div class="border rounded-xl p-3 bg-slate-50/50"><span class="text-xs text-slate-500 block uppercase font-bold mb-1">Cardinalité</span><div class="flex items-center gap-2"><span class="text-xl font-black text-slate-800">${c.distinctCount.toLocaleString('fr-FR')}${c.hasMoreDistinct ? '+' : ''}</span><span class="text-xs text-slate-400">valeur(s) distincte(s)</span></div></div>
                 </div>
-                ${c.valueListName ? `<div class="mb-4 text-[11px] ${(c.outsideList || 0) > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'} border rounded-lg px-3 py-2">🎚️ Attribut rattaché à la liste de valeurs <strong>${escapeHTML(c.valueListName)}</strong> : ${(c.outsideList || 0) > 0 ? `<strong>${Number(c.outsideList).toLocaleString('fr-FR')}</strong> valeur(s) hors référentiel.` : 'toutes les valeurs appartiennent au référentiel.'} Les alertes de rareté et de valeurs aberrantes sont désactivées sur cet attribut — un code peu fréquent y est normal.</div>` : ''}
+                ${(() => { const tn2 = (state.tables[currentProfilingTableId] || {}).name; if (!tn2) return '';
+                    const bound = vlBindingFor(tn2, c.name);
+                    const box = bound ? ((c.outsideList || 0) > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800') : 'bg-slate-50 border-slate-200 text-slate-600';
+                    return `<div class="mb-4 text-[11px] ${box} border rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap">
+                        <span>🎚️ <strong>Liste de valeurs</strong></span>
+                        ${vlSelectHtml(tn2, c.name, bound ? bound.id : '')}
+                        <span>${bound
+                            ? ((c.outsideList || 0) > 0
+                                ? `<strong>${Number(c.outsideList).toLocaleString('fr-FR')}</strong> valeur(s) hors référentiel. Les alertes de rareté et de valeurs aberrantes sont désactivées sur cet attribut — un code peu fréquent y est normal.`
+                                : 'toutes les valeurs appartiennent au référentiel. Les alertes de rareté sont désactivées sur cet attribut.')
+                            : 'Si cet attribut ne prend que des valeurs d\'une liste figée, rattachez-le : l\'audit contrôlera l\'appartenance au référentiel au lieu de signaler les codes rares.'}</span>
+                    </div>`; })()}
                 ${c.vlError ? `<div class="mb-4 text-[11px] bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-700">🎚️ Liste de valeurs non exploitable : ${escapeHTML(c.vlError)}.</div>` : ''}
                 ${c.dateDemoted ? `<div class="mb-4 text-[11px] bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sky-800">📐 Cette colonne <strong>ressemble</strong> à des dates mais n'en contient pas : seules ${Number(c.dateParsedPct || 0).toFixed(0)} % des valeurs s'analysent réellement comme une date. Elle est traitée comme du texte, et aucune alerte de date n'est produite.</div>` : ''}
                 ${(() => { const tags = [];
