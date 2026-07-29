@@ -4908,6 +4908,31 @@
                      edges: r.edges.filter(e => !drop.has(e.source) && !drop.has(e.target)),
                      foldCount: r.foldCount, unqualified };
         }
+        // V6.22 : FOCUS SUR UN OBJET MÉTIER. Sur une carte chargée, on veut voir « qui alimente ce
+        // référentiel et qui le consomme » sans le reste. On garde l'objet, ses voisins directs, et
+        // — au rayon 2 — les voisins de ces voisins, pour remonter jusqu'aux sources amont.
+        function lfFocusBo(nodes, edges) {
+            const m = lfModel(); const boId = m.focusBo || '';
+            if (!boId) return { nodes, edges, focused: null };
+            const bo = (state.governance.businessObjects || []).find(b => b.id === boId);
+            if (!bo) return { nodes, edges, focused: null };
+            const target = nodes.find(n => lfNodeKind(n) === 'object' && (n.boId === boId || n.name === bo.name));
+            if (!target) return { nodes: [], edges: [], focused: bo, missing: true };
+            const radius = Math.max(1, Math.min(3, parseInt(m.focusRadius) || 2));
+            const adj = {};
+            edges.forEach(e => { (adj[e.source] = adj[e.source] || []).push(e.target); (adj[e.target] = adj[e.target] || []).push(e.source); });
+            const keep = new Set([target.id]); let front = [target.id];
+            for (let d = 0; d < radius; d++) {
+                const next = [];
+                front.forEach(id => (adj[id] || []).forEach(o => { if (!keep.has(o)) { keep.add(o); next.push(o); } }));
+                front = next; if (!front.length) break;
+            }
+            return { nodes: nodes.filter(n => keep.has(n.id)),
+                     edges: edges.filter(e => keep.has(e.source) && keep.has(e.target)),
+                     focused: bo, center: target.id };
+        }
+        function lfSetFocusBo(id) { const m = lfModel(); m.focusBo = id || ''; persistAppState(); renderGovernance(); }
+        function lfSetFocusRadius(v) { const m = lfModel(); m.focusRadius = Math.max(1, Math.min(3, parseInt(v) || 2)); persistAppState(); renderGovernance(); }
         function lfSetGrain(g2) {
             const m = lfModel(); m.grain = g2 === 'table' ? 'table' : 'bo';
             if (m.grain === 'bo' && !m.showObjects) { m.showObjects = true; lfSyncFromData({ silent: true }); }
@@ -5083,6 +5108,19 @@
                     </div>
                     ${m.grain === 'table' ? `<label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Afficher les objets métier (vues) et leurs sources sur la carte"><input type="checkbox" ${m.showObjects ? 'checked' : ''} onchange="lfToggleObjects(this.checked)"> 🏛️ Objets métier</label>
                     <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Par défaut, les fichiers sources sont INTÉGRÉS à l'application qui les produit (c'est elle le maître). Cochez pour afficher chaque fichier comme une case distincte."><input type="checkbox" ${m.hideSources === false ? 'checked' : ''} onchange="lfToggleSources(this.checked)"> 📄 Détailler les sources</label>` : ''}
+                    ${(() => { const bos = state.governance.businessObjects || [];
+                        if (!bos.length) return '';
+                        const cur = m.focusBo || '';
+                        return `<label class="text-[11px] font-semibold ${cur ? 'text-emerald-700' : 'text-slate-600'} flex items-center gap-1" title="N'afficher que ce référentiel et son voisinage : qui l'alimente, qui le consomme.">🏛️ Objet métier
+                            <select onchange="lfSetFocusBo(this.value)" class="border ${cur ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 bg-white'} rounded p-1 text-[11px] ml-1 max-w-[14rem]">
+                                <option value="">— tous les objets —</option>
+                                ${bos.map(b2 => `<option value="${b2.id}" ${cur === b2.id ? 'selected' : ''}>${escapeHTML(b2.name)}</option>`).join('')}
+                            </select></label>
+                            ${cur ? `<label class="text-[11px] text-slate-500 font-semibold" title="1 = uniquement les voisins directs de l'objet. 2 = on remonte d'un cran de plus (les sources des applications qui l'alimentent).">Voisinage
+                                <select onchange="lfSetFocusRadius(this.value)" class="border border-slate-300 rounded p-1 text-[11px] ml-1 bg-white">
+                                    ${[1, 2, 3].map(v => `<option value="${v}" ${(m.focusRadius || 2) === v ? 'selected' : ''}>${v} cran${v > 1 ? 's' : ''}</option>`).join('')}
+                                </select></label>
+                            <button onclick="lfSetFocusBo('')" class="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50">✕ tout afficher</button>` : ''}`; })()}
                     <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
@@ -5230,7 +5268,9 @@
             // métier), puis les sources restantes dans leur application propriétaire.
             const _bo = lfCollapseToObjects(m.nodes, m.edges);
             const _cl = lfCollapseSources(_bo.nodes, _bo.edges);
-            const nodes = _cl.nodes, edges = _cl.edges;
+            const _fo = lfFocusBo(_cl.nodes, _cl.edges);
+            if (_fo.missing) { c.style.height = '360px'; c.innerHTML = `<div class="lf-empty">L'objet métier « ${escapeHTML(_fo.focused.name)} » n'apparaît pas sur cette carte.<br>Vérifiez qu'il a des sources rattachées, ou choisissez « tous les objets ».</div>`; return; }
+            const nodes = _fo.nodes, edges = _fo.edges;
             const foldCount = Object.assign({}, _bo.foldCount, _cl.foldCount);
             if (!nodes.length) { c.style.height = '360px'; c.innerHTML = '<div class="lf-empty">Toutes les cases sont repliées dans leur objet métier ou leur application.<br>Basculez en « 📄 Vue technique » pour détailler les tables.</div>'; return; }
             const idset = new Set(nodes.map(n => n.id));
@@ -9751,8 +9791,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.21.0';
+        const APP_VERSION = '6.22.0';
         const APP_CHANGELOG = [
+            { v: '6.22.0', d: '2026-07-27', t: 'Filtres : trouver une colonne dans un modèle large, isoler un objet métier dans le lineage', items: [
+                'Extraction, vue graphique : une barre de filtre au-dessus du schéma. Recherche par nom de colonne OU de table (insensible à la casse et aux accents), option « colonnes choisies seulement », option « masquer les tables sans résultat ».',
+                'Le filtre ne touche QUE l\'affichage : la configuration en cours n\'est jamais modifiée, et une colonne déjà cochée reste toujours visible pour ne pas perdre de vue ce qui est construit.',
+                'Quand une table est conservée par le filtre, ses tables parentes le sont aussi : le chemin de jointure reste lisible de bout en bout. Un bandeau rappelle combien de tables et de colonnes sont affichées, et chaque case indique combien de colonnes sont masquées.',
+                'Lineage : nouveau sélecteur « 🏛️ Objet métier » pour n\'afficher qu\'un référentiel et son voisinage — qui l\'alimente, qui le consomme. Le rayon de voisinage est réglable de 1 à 3 crans (2 par défaut, ce qui remonte jusqu\'aux sources des applications productrices).',
+                'Si l\'objet choisi n\'apparaît pas sur la carte, le graphe le dit explicitement au lieu de s\'afficher vide.'] },
             { v: '6.21.0', d: '2026-07-27', t: 'Profilage : distribution, dates, forme des colonnes et colonnes redondantes', items: [
                 'Distribution des colonnes numériques : P05, premier quartile, MÉDIANE, troisième quartile et P95. Un avertissement signale les colonnes où moyenne et médiane s\'écartent nettement — c\'est le signe d\'une série tirée par ses extrêmes, où la moyenne trompe.',
                 'Valeurs atypiques au sens de l\'écart interquartile (Tukey), en plus de la règle des 3 écarts-types. Cette dernière suppose une distribution symétrique et ne détecte presque rien sur des montants ou des durées ; l\'écart interquartile ne fait aucune hypothèse de forme.',
@@ -12900,6 +12946,25 @@
             renderAdvExtract();
         }
         function advGToggleMode(on) { state.advExtract.graphMode = !!on; renderAdvExtract(); }
+        // V6.22 : sur un modèle large, on ne cherche pas une colonne à l'œil. Le filtre réduit ce qui
+        // est AFFICHÉ (jamais ce qui est sélectionné) : la configuration en cours n'est pas touchée.
+        function advGFilter() { const s = state.advExtract; s.gFilter = s.gFilter || { q: '', onlySel: false, hideEmpty: false }; return s.gFilter; }
+        function advGSetView(f, v) { const g = advGFilter(); g[f] = (f === 'q') ? String(v || '') : !!v; advDrawGraph(); }
+        function advGClearFilter() { const g = advGFilter(); g.q = ''; g.onlySel = false; g.hideEmpty = false; renderAdvExtract(); }
+        const advGNorm = x => String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Colonnes visibles d'une route, selon le filtre. Une colonne DÉJÀ CHOISIE reste toujours
+        // visible : on ne doit jamais perdre de vue ce qu'on a déjà construit.
+        function advGVisibleCols(rt) {
+            const t = state.tables[rt.tableId] || { headers: [], name: '' };
+            const g = advGFilter(); const q = advGNorm(g.q).trim();
+            const tableMatches = q && advGNorm(t.name).includes(q);
+            return t.headers.filter(h => {
+                const chosen = !!advGCol(rt, h);
+                if (g.onlySel && !chosen) return false;
+                if (!q) return true;
+                return chosen || tableMatches || advGNorm(h).includes(q);
+            });
+        }
         function advGraphHtml() {
             const s = state.advExtract;
             return `<div class="mb-4 rounded-xl border ${s.graphMode ? 'border-indigo-300 bg-indigo-50/30' : 'border-slate-200 bg-slate-50/60'} p-3">
@@ -12909,6 +12974,14 @@
                     <span class="font-medium text-slate-400 normal-case">(option : l'écran classique ci-dessous reste disponible et reste synchronisé)</span>
                 </label>
                 ${s.graphMode ? `<p class="text-[11px] text-slate-500 mt-2 mb-2">Chaque case est une table <strong>atteinte par un chemin précis</strong>. Une table reliée plusieurs fois apparaît une fois par lien : cochez la colonne sur la bonne case, le chemin est renseigné tout seul. Les cases se déplacent à la souris.</p>
+                <div class="flex items-center gap-2 flex-wrap mb-2 bg-white border border-slate-200 rounded-lg p-2">
+                    <span class="text-[11px] font-bold text-slate-500">🔎 Filtrer</span>
+                    <input type="text" id="adv-g-q" value="${escapeHTML(advGFilter().q)}" oninput="advGSetView('q', this.value)" placeholder="nom de colonne ou de table…" class="border border-slate-300 rounded px-2 py-1 text-xs w-56">
+                    <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="N'afficher que les colonnes déjà choisies"><input type="checkbox" ${advGFilter().onlySel ? 'checked' : ''} onchange="advGSetView('onlySel', this.checked)"> colonnes choisies seulement</label>
+                    <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="Masquer les tables qui n'ont plus aucune colonne visible (hors table de départ)"><input type="checkbox" ${advGFilter().hideEmpty ? 'checked' : ''} onchange="advGSetView('hideEmpty', this.checked)"> masquer les tables sans résultat</label>
+                    ${(advGFilter().q || advGFilter().onlySel || advGFilter().hideEmpty) ? `<button onclick="advGClearFilter()" class="text-[11px] font-bold text-slate-500 border border-slate-300 rounded px-2 py-1 hover:bg-slate-50">✕ tout afficher</button>` : ''}
+                    <span class="text-[10px] text-slate-400">le filtre ne change que l'affichage — les colonnes déjà choisies restent visibles et sélectionnées</span>
+                </div>
                 <div id="advGCanvas"></div>` : ''}
             </div>`;
         }
@@ -12917,16 +12990,27 @@
         function advDrawGraph() {
             const c = el('advGCanvas'); if (!c) return;
             advGInjectCss();
-            const s = state.advExtract; const routes = advRoutes();
+            const s = state.advExtract; let routes = advRoutes();
             if (!routes.length) { c.innerHTML = '<div class="advg-empty">Choisissez une table de départ pour afficher le schéma.</div>'; return; }
+            // V6.22 : filtrage d'affichage. On conserve toujours la table de départ, et toute case
+            // gardée conserve ses PARENTS pour que le chemin reste lisible de bout en bout.
+            const gF = advGFilter(); const filtering = !!(gF.q || gF.onlySel || gF.hideEmpty);
+            const totalRoutes = routes.length;
+            if (filtering && gF.hideEmpty) {
+                const keep = new Set();
+                routes.forEach(r => { if (!r.parentKey || advGVisibleCols(r).length) keep.add(r.key); });
+                const byKey = {}; routes.forEach(r => byKey[r.key] = r);
+                [...keep].forEach(k => { let cur = byKey[k]; while (cur && cur.parentKey) { keep.add(cur.parentKey); cur = byKey[cur.parentKey]; } });
+                routes = routes.filter(r => keep.has(r.key));
+            }
             const byDepth = {}; routes.forEach(r => (byDepth[r.depth] = byDepth[r.depth] || []).push(r));
             const maxD = Math.max(...routes.map(r => r.depth));
             const NW = 236, colGap = 96, W = Math.max(560, c.clientWidth || 900);
             // hauteur d'une case : en-tête + via + colonnes + pied
-            const hOf = r => { const t = state.tables[r.tableId] || { headers: [] };
-                const nsel = (s.columns || []).filter(x => !x.kind && x.tableId === r.tableId && (x.via || '') === (r.via || '')).length;
-                const nflt = (s.filters || []).filter(x => x.tableId === r.tableId && (x.via || '') === (r.via || '')).length;
-                return 30 + (r.via ? 16 : 0) + Math.min(190, 6 + t.headers.length * 19 + nsel * 21 + nflt * 23) + 30; };
+            const hOf = r => { const vis = advGVisibleCols(r);
+                const nsel = vis.filter(h => advGCol(r, h)).length;
+                const nflt = vis.reduce((a2, h) => a2 + advGFilters(r, h).length, 0);
+                return 30 + (r.via ? 16 : 0) + Math.min(190, 6 + Math.max(1, vis.length) * 19 + nsel * 21 + nflt * 23) + 30; };
             const pos = {}; let H = 320;
             Object.keys(byDepth).forEach(d => {
                 const arr = byDepth[d]; const x = 12 + Number(d) * (NW + colGap);
@@ -12950,8 +13034,9 @@
                 const t = state.tables[r.tableId] || { headers: [], name: '?' }; const p = pos[r.key];
                 const isBase = !r.parentKey;
                 const sel = (s.columns || []).filter(x => !x.kind && x.tableId === r.tableId && (x.via || '') === (r.via || ''));
+                const vis = advGVisibleCols(r); const hidden = t.headers.length - vis.length;
                 let rows = '';
-                t.headers.forEach(h => {
+                vis.forEach(h => {
                     const cc = advGCol(r, h); const on = !!cc;
                     rows += `<div class="advg-row${on ? ' on' : ''}" onclick="advGToggleCol('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')})">
                         <input type="checkbox" ${on ? 'checked' : ''} onclick="event.stopPropagation();advGToggleCol('${r.key}', ${JSON.stringify(h).replace(/"/g, '&quot;')})">
@@ -12971,7 +13056,7 @@
                 hh += `<div class="advg-node${isBase ? ' advg-base' : ''}" data-rk="${r.key}" style="left:${p.x}px;top:${p.y}px">
                     <div class="advg-nh"><span>${isBase ? '⭐' : '🔗'}</span><span class="advg-nm" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</span>${sel.length ? `<span class="advg-cnt">${sel.length}</span>` : ''}</div>
                     ${r.via ? `<div class="advg-via" title="${escapeHTML(advViaLabel(r.via))}">via ${escapeHTML(advViaLabel(r.via))}</div>` : ''}
-                    <div class="advg-cols">${rows || '<div class="advg-row"><span class="advg-cn" style="color:#94a3b8">aucune colonne</span></div>'}</div>
+                    <div class="advg-cols">${rows || '<div class="advg-row"><span class="advg-cn" style="color:#94a3b8">aucune colonne ne correspond au filtre</span></div>'}${hidden > 0 ? `<div class="advg-row" style="color:#94a3b8;font-style:italic">+ ${hidden} colonne(s) masquée(s) par le filtre</div>` : ''}</div>
                     <div class="advg-foot">
                         <button class="advg-btn" onclick="advGAllCols('${r.key}', true)">tout</button>
                         <button class="advg-btn" onclick="advGAllCols('${r.key}', false)">rien</button>
@@ -12980,6 +13065,10 @@
                                     <button class="advg-btn" title="Repartir de cette table" onclick="advGSetBase('${r.key}')">⭐ départ</button>`}
                     </div></div>`;
             });
+            if (filtering) {
+                const nCols = routes.reduce((a2, r) => a2 + advGVisibleCols(r).length, 0);
+                hh += `<div class="advg-elbl" style="left:50%;top:14px;background:#fffbeb;border-color:#fcd34d;color:#92400e;font-weight:700">🔎 ${routes.length}/${totalRoutes} table(s) · ${nCols} colonne(s) affichée(s)</div>`;
+            }
             c.innerHTML = hh + labels;
             // déplacement des cases à la souris / au doigt (par l'en-tête, pour ne pas gêner les cases à cocher)
             c.querySelectorAll('.advg-node').forEach(nd => {
