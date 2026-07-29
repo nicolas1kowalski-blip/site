@@ -5098,7 +5098,9 @@
             const lastRunAt = edges.reduce((mx, e) => e.lastRun && e.lastRun.at && e.lastRun.at > mx ? e.lastRun.at : mx, 0);
             const tile = (cls, lbl, val) => `<div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm"><div class="text-[11px] text-slate-500 font-semibold">${lbl}</div><div class="text-xl font-black mt-0.5 ${cls}">${val}</div></div>`;
 
-            let html = `<div class="flex items-center gap-3 mb-1 flex-wrap">
+            // V6.26 : #lfWrap enveloppe la barre d'outils ET le canevas — en plein écran, les réglages
+            // (vue métier/technique, focus objet, seuil) restent donc accessibles au-dessus du graphe.
+            let html = `<div id="lfWrap"><div class="gfx-bar flex items-center gap-3 mb-1 flex-wrap">
                 <h3 class="text-base font-black text-slate-800">🕸️ Lineage &amp; santé du flux</h3>
                 <span class="text-xs text-slate-500">La carte du flux (maître → référentiel → consommateurs), enrichie de la fraîcheur et de la distorsion mesurées. Elle lit <b>les mêmes données</b> que « Bout en bout » (resynchronisée à l'ouverture) ; ici, centrée sur les <b>tables &amp; applications mesurables</b>.</span>
                 <div class="ml-auto flex items-center gap-2">
@@ -5127,19 +5129,19 @@
                                 </select></label>
                             <button onclick="lfSetFocusBo('')" class="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50">✕ tout afficher</button>` : ''}`; })()}
                     <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
-                    ${gfxFullBtn('lfCanvas', 'lfDrawGraph')}
+                    ${gfxFullBtn('lfWrap', 'lfDrawGraph')}
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
                     <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
                 </div>
             </div>`;
-            html += `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-3">
+            html += `<div class="gfx-hide-full grid grid-cols-2 md:grid-cols-4 gap-3 my-3">
                 ${tile(slaOk === measurableEdges.length ? 'text-emerald-600' : 'text-amber-600', '🎯 SLA de fraîcheur respectés', measurableEdges.length ? `${slaOk} <span class="text-sm text-slate-400 font-bold">/ ${measurableEdges.length} flux</span>` : '—')}
                 ${tile(distOver ? 'text-red-600' : 'text-emerald-600', '⚠️ Distorsions au-dessus du seuil', distOver + ' <span class="text-sm text-slate-400 font-bold">flux</span>')}
                 ${tile('text-amber-600', '⏱ Flux le plus en retard', worst ? `<span class="text-sm">${escapeHTML(worst.name || '')} · ${lfAge(worst.age)}</span>` : '<span class="text-sm text-slate-400">—</span>')}
                 ${tile('text-slate-700', '🔎 Dernier contrôle', lastRunAt ? `<span class="text-sm">${new Date(lastRunAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : '<span class="text-sm text-slate-400">jamais</span>')}
             </div>`;
             // -- légende --
-            html += `<div class="flex flex-wrap gap-4 text-[11px] text-slate-500 mb-2 px-0.5">
+            html += `<div class="gfx-hide-full flex flex-wrap gap-4 text-[11px] text-slate-500 mb-2 px-0.5">
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.ok};display:inline-block"></span> <b class="text-slate-700">Sain</b> — frais &amp; cohérent</span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.warn};display:inline-block"></span> <b class="text-slate-700">À surveiller</b></span>
                 <span class="inline-flex items-center gap-1.5"><span style="width:20px;height:3px;border-radius:2px;background:${LF_COLOR.bad};display:inline-block"></span> <b class="text-slate-700">Alerte</b> — retard ou distorsion forte</span>
@@ -5168,7 +5170,7 @@
                 </div>`;
             }
             // -- graphe --
-            html += `<div id="lfCanvas"></div>`;
+            html += `<div id="lfCanvas"></div></div>`;   // ferme #lfWrap (ouvert avec la barre d'outils)
             // -- constructeur du flux --
             html += lfBuilderHtml(nodes, edges, tables);
             html += lfJournalHtml();
@@ -5290,7 +5292,7 @@
             const maxCol = Math.max(0, ...nodes.map(n => colOf[n.id]));
             const cols = {}; nodes.forEach(n => { (cols[colOf[n.id]] = cols[colOf[n.id]] || []).push(n); });
             const attrView = lfView === 'attrs';
-            const _full = c.classList.contains('gfx-full');
+            const _full = !!(c.closest && c.closest('.gfx-full'));
             const W = Math.max(560, c.clientWidth || 900), NW = 208, NH = attrView ? 152 : 96, rowGap = NH + 22, topPad = 40;
             const maxRows = Math.max(...Object.values(cols).map(a => a.length));
             let H = Math.max(360, topPad + maxRows * rowGap + 16);
@@ -5301,7 +5303,7 @@
             // Positions manuelles (glisser-déposer) : prioritaires sur la disposition automatique.
             nodes.forEach(n => { if (typeof n.x === 'number' && typeof n.y === 'number') pos[n.id] = { x: n.x, y: n.y }; });
             H = Math.max(H, ...nodes.map(n => (pos[n.id] ? pos[n.id].y + NH + 20 : 0)));
-            if (_full) H = Math.max(H, window.innerHeight - 8);
+            if (_full) H = Math.max(H, gfxAvailH(c));
             c.style.height = H + 'px';
             // arêtes SVG
             let paths = ''; const chips = [];
@@ -9799,8 +9801,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '6.25.0';
+        const APP_VERSION = '6.26.0';
         const APP_CHANGELOG = [
+            { v: '6.26.0', d: '2026-07-27', t: 'Vues graphiques : étiquettes de liens discrètes et vrai plein écran', items: [
+                'Les étiquettes des liens se chevauchaient dès qu\'un modèle comptait une dizaine de tables, au point de masquer le schéma. Elles n\'apparaissent plus qu\'au SURVOL de la case concernée, mise en évidence au passage — et le chemin emprunté reste de toute façon écrit sur la case elle-même.',
+                'Une case à cocher « étiquettes des liens » permet de toutes les réafficher en permanence quand c\'est utile.',
+                'Le plein écran englobe désormais la barre d\'outils : recherche, « colonnes choisies seulement », masquage des tables sans résultat pour l\'extraction ; vue métier/technique, focus objet métier et seuil pour le lineage. Elle reste collée en haut de l\'écran.',
+                'Le graphe occupe exactement la hauteur restante sous cette barre, et les blocs secondaires (tuiles d\'indicateurs, légende) s\'effacent en plein écran pour laisser la place au schéma.'] },
             { v: '6.25.0', d: '2026-07-27', t: 'Profilage : fin de deux fausses alertes (dates factices, valeurs rares)', items: [
                 'Le type « date » n\'est plus décidé sur la seule RESSEMBLANCE de forme. Une référence du genre 1234-56-78 ou un code aaaa-bb-cc en avait tous les traits sans être une date : l\'application exige désormais que 80 % des valeurs s\'ANALYSENT réellement comme des dates. Sinon la colonne redevient du texte et plus aucune alerte de date ne la concerne — la fiche explique pourquoi, avec le pourcentage réellement analysable.',
                 'Une date dans le futur n\'est plus signalée comme une anomalie : une échéance, une fin de contrat ou une date planifiée sont normalement à venir. Seul l\'invraisemblable est remonté — au-delà d\'un siècle dans le futur, ce qui attrape les erreurs de saisie du type 2999. Le décompte des dates futures reste affiché à titre indicatif dans la fiche.',
@@ -12867,14 +12874,20 @@
             const st = document.createElement('style'); st.id = 'gfxStyles';
             st.textContent = `
             .gfx-full{position:fixed !important;inset:0 !important;z-index:60 !important;margin:0 !important;border-radius:0 !important;
-                      width:100vw !important;max-width:100vw !important;min-height:100vh !important;overflow:auto !important;background:#fff !important}
+                      width:100vw !important;max-width:100vw !important;height:100vh !important;overflow:auto !important;background:#fff !important;
+                      padding:10px 12px 12px !important;box-shadow:none !important}
+            /* En plein écran, la barre d'outils reste visible et collée en haut. */
+            .gfx-full .gfx-bar{position:sticky;top:0;z-index:62;background:#fff;padding-bottom:6px;border-bottom:1px solid #e2e8f0;margin-bottom:8px}
+            .gfx-full .gfx-hide-full{display:none !important}
             body.gfx-lock{overflow:hidden !important}
             .gfx-exit{position:fixed;top:12px;right:16px;z-index:61;background:#1e293b;color:#fff;border:none;border-radius:10px;
                       padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.25)}
             .gfx-exit:hover{background:#334155}`;
             document.head.appendChild(st);
         }
-        function gfxIsFull(id) { const c = el(id); return !!c && c.classList.contains('gfx-full'); }
+        function gfxIsFull(id) { const c = el(id); return !!c && (c.classList.contains('gfx-full') || !!(c.closest && c.closest('.gfx-full'))); }
+        // Hauteur disponible pour un canevas en plein écran : tout ce qui reste sous la barre d'outils.
+        function gfxAvailH(c) { const top = c.getBoundingClientRect().top; return Math.max(240, window.innerHeight - top - 12); }
         function gfxExitFull() {
             const c = gfxFullId ? el(gfxFullId) : null;
             if (c) c.classList.remove('gfx-full');
@@ -12929,7 +12942,9 @@
             .advg-btn{font-size:10px;border:1px solid #cbd5e1;background:#fff;border-radius:5px;padding:1px 5px;cursor:pointer;color:#475569;font-weight:700}
             .advg-btn:hover{border-color:#6366f1;color:#4338ca}
             .advg-foot{display:flex;gap:4px;padding:5px 8px;border-top:1px solid #f1f5f9;background:#fcfdff;flex-wrap:wrap}
-            .advg-elbl{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:1px 7px;font-size:9.5px;color:#64748b;white-space:nowrap;z-index:3;pointer-events:none;box-shadow:0 1px 2px rgba(15,23,42,.05)}`;
+            .advg-elbl{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:1px 7px;font-size:9.5px;color:#64748b;white-space:nowrap;z-index:3;pointer-events:none;box-shadow:0 1px 2px rgba(15,23,42,.05);max-width:280px;overflow:hidden;text-overflow:ellipsis}
+            .advg-elbl-hid{opacity:0;transition:opacity .12s}
+            .advg-elbl-hid.advg-elbl-on{opacity:1;z-index:12;border-color:#6366f1;color:#3730a3;box-shadow:0 3px 10px rgba(15,23,42,.14);max-width:none}`;
             document.head.appendChild(st);
         }
         // Arbre des routes : chaque entrée = { key, tableId, via, parentKey, rel, depth }.
@@ -13043,16 +13058,17 @@
                     <span class="font-medium text-slate-400 normal-case">(option : l'écran classique ci-dessous reste disponible et reste synchronisé)</span>
                 </label>
                 ${s.graphMode ? `<p class="text-[11px] text-slate-500 mt-2 mb-2">Chaque case est une table <strong>atteinte par un chemin précis</strong>. Une table reliée plusieurs fois apparaît une fois par lien : cochez la colonne sur la bonne case, le chemin est renseigné tout seul. Les cases se déplacent à la souris.</p>
-                <div class="flex items-center gap-2 flex-wrap mb-2 bg-white border border-slate-200 rounded-lg p-2">
+                <div id="advGWrap"><div class="gfx-bar flex items-center gap-2 flex-wrap mb-2 bg-white border border-slate-200 rounded-lg p-2">
                     <span class="text-[11px] font-bold text-slate-500">🔎 Filtrer</span>
                     <input type="text" id="adv-g-q" value="${escapeHTML(advGFilter().q)}" oninput="advGSetView('q', this.value)" placeholder="nom de colonne ou de table…" class="border border-slate-300 rounded px-2 py-1 text-xs w-56">
                     <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="N'afficher que les colonnes déjà choisies"><input type="checkbox" ${advGFilter().onlySel ? 'checked' : ''} onchange="advGSetView('onlySel', this.checked)"> colonnes choisies seulement</label>
                     <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="Masquer les tables qui n'ont plus aucune colonne visible (hors table de départ)"><input type="checkbox" ${advGFilter().hideEmpty ? 'checked' : ''} onchange="advGSetView('hideEmpty', this.checked)"> masquer les tables sans résultat</label>
                     ${(advGFilter().q || advGFilter().onlySel || advGFilter().hideEmpty) ? `<button onclick="advGClearFilter()" class="text-[11px] font-bold text-slate-500 border border-slate-300 rounded px-2 py-1 hover:bg-slate-50">✕ tout afficher</button>` : ''}
-                    ${gfxFullBtn('advGCanvas', 'advDrawGraph')}
+                    <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer" title="Sur un modèle chargé, les étiquettes des liens se chevauchent. Décochée, l'étiquette n'apparaît qu'au survol d'une case — et le chemin reste rappelé sur la case elle-même."><input type="checkbox" ${advGFilter().edgeLabels ? 'checked' : ''} onchange="advGSetView('edgeLabels', this.checked)"> étiquettes des liens</label>
+                    ${gfxFullBtn('advGWrap', 'advDrawGraph')}
                     <span class="text-[10px] text-slate-400">le filtre ne change que l'affichage — les colonnes déjà choisies restent visibles et sélectionnées</span>
                 </div>
-                <div id="advGCanvas"></div>` : ''}
+                <div id="advGCanvas"></div></div>` : ''}
             </div>`;
         }
         // Redessine le graphe SANS re-rendre tout l'écran (saisie d'alias / de valeur de filtre fluide).
@@ -13090,7 +13106,7 @@
             routes.forEach(r => { const p = state.advExtract._gpos && state.advExtract._gpos[r.key]; if (p && pos[r.key]) { pos[r.key].x = p.x; pos[r.key].y = p.y; } });
             H = Math.max(H, ...routes.map(r => pos[r.key].y + pos[r.key].h + 16));
             const CW = Math.max(W, 24 + (maxD + 1) * (NW + colGap));
-            if (c.classList.contains('gfx-full')) H = Math.max(H, window.innerHeight - 8);
+            if (c.closest && c.closest('.gfx-full')) H = Math.max(H, gfxAvailH(c));
             c.style.height = H + 'px';
             let paths = '', labels = '';
             routes.forEach(r => {
@@ -13098,7 +13114,7 @@
                 const a = pos[r.parentKey], b = pos[r.key];
                 const x1 = a.x + NW, y1 = a.y + 16, x2 = b.x, y2 = b.y + 16, mx = (x1 + x2) / 2;
                 paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#advGA)" opacity=".85"/>`;
-                labels += `<div class="advg-elbl" style="left:${mx}px;top:${(y1 + y2) / 2}px">🔗 ${escapeHTML(advRelLabel(r.rel))}</div>`;
+                labels += `<div class="advg-elbl${gF.edgeLabels ? '' : ' advg-elbl-hid'}" data-for="${r.key}" style="left:${mx}px;top:${(y1 + y2) / 2}px">🔗 ${escapeHTML(advRelLabel(r.rel))}</div>`;
             });
             let hh = `<svg class="advg-edges" viewBox="0 0 ${CW} ${H}" preserveAspectRatio="none"><defs><marker id="advGA" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>${paths}</svg>`;
             routes.forEach(r => {
@@ -13142,6 +13158,15 @@
             }
             c.innerHTML = hh + labels;
             // déplacement des cases à la souris / au doigt (par l'en-tête, pour ne pas gêner les cases à cocher)
+            // V6.26 : l'étiquette d'un lien n'apparaît qu'au survol de la case d'arrivée, sauf si
+            // l'utilisateur a demandé à toutes les voir. Le chemin reste de toute façon écrit sur la case.
+            c.querySelectorAll('.advg-node[data-rk]').forEach(nd => {
+                const lb = c.querySelector(`.advg-elbl[data-for="${CSS.escape(nd.dataset.rk)}"]`);
+                if (lb && lb.classList.contains('advg-elbl-hid')) {
+                    nd.addEventListener('mouseenter', () => lb.classList.add('advg-elbl-on'));
+                    nd.addEventListener('mouseleave', () => lb.classList.remove('advg-elbl-on'));
+                }
+            });
             c.querySelectorAll('.advg-node').forEach(nd => {
                 const head = nd.querySelector('.advg-nh'); if (!head) return;
                 head.addEventListener('pointerdown', ev => {
