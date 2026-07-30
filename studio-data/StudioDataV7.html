@@ -1612,6 +1612,49 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // Options de lecture CSV construites depuis la config de la source :
         //  - delim / encodage ; - guillemets (config.quote='none' => quote='' : les " au milieu d'un
         //    champ ne cassent plus la lecture) ; - ignore_errors pour sauter les lignes malformées.
+        /* ---- Encodage : détecter AVANT de lire, plutôt que tâtonner après l'échec ----
+           Le moteur attend de l'UTF-8. Un fichier Windows/ANSI ou UTF-16 le fait échouer, et
+           l'ancienne réparation par essais successifs avait deux angles morts mesurés :
+             — un fichier UTF-16 lu en latin-1 ne produit AUCUNE erreur : on obtenait une seule
+               colonne nommée « ÿþI » et des octets NUL partout, source marquée prête ;
+             — la réparation « ignorer les lignes fautives » sur un fichier ANSI conservait
+               ZÉRO ligne : une table vide, marquée prête elle aussi.
+           On lit donc les premiers octets et on tranche : marque d'ordre, présence d'octets NUL,
+           puis validation UTF-8 stricte. À défaut, c'est du Windows-1252. */
+        const ENC_SNIFF_BYTES = 65536;
+        function sniffEncodingFromBytes(buf) {
+            const b = new Uint8Array(buf);
+            if (b.length >= 3 && b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) return { enc: 'UTF-8', why: 'marque d\'ordre UTF-8' };
+            if (b.length >= 2 && ((b[0] === 0xFF && b[1] === 0xFE) || (b[0] === 0xFE && b[1] === 0xFF))) return { enc: 'UTF-16', why: 'marque d\'ordre UTF-16' };
+            // UTF-16 sans marque : un octet sur deux est nul sur un texte latin.
+            let nul = 0; const n = Math.min(b.length, 4096);
+            for (let i = 0; i < n; i++) if (b[i] === 0) nul++;
+            if (n > 32 && nul / n > 0.2) return { enc: 'UTF-16', why: 'un octet sur deux est nul (UTF-16 sans marque d\'ordre)' };
+            // Validation UTF-8 stricte : c'est elle qui distingue l'UTF-8 du Windows-1252.
+            try { new TextDecoder('utf-8', { fatal: true }).decode(b); return { enc: 'UTF-8', why: 'octets valides en UTF-8' }; }
+            catch (e) { return { enc: 'ISO-8859-1', why: 'octets invalides en UTF-8 — fichier Windows/ANSI' }; }
+        }
+        async function sniffFileEncoding(file) {
+            if (!file || !file.slice) return null;
+            try {
+                const head = file.slice(0, Math.min(ENC_SNIFF_BYTES, file.size || ENC_SNIFF_BYTES));
+                return sniffEncodingFromBytes(await readFileAsArrayBuffer(head));
+            } catch (e) { return null; }
+        }
+        // Une lecture « réussie » peut être totalement fausse. On refuse donc les résultats qui
+        // portent la signature d'un mauvais décodage plutôt que de les livrer.
+        function ingestLooksWrong(headers, sample) {
+            const hs = headers || [];
+            if (!hs.length) return 'aucune colonne détectée';
+            const txt = hs.join('|') + '|' + (sample || []).slice(0, 5).map(r => Object.values(r || {}).join('|')).join('|');
+            if (/\u0000/.test(txt)) return 'octets nuls dans les données (fichier UTF-16 lu comme du texte simple)';
+            if (/�/.test(txt)) return 'caractères de remplacement (encodage incorrect)';
+            if (hs.length === 1 && /[\uFFFE\uFEFF]|ÿþ|þÿ/.test(hs[0])) return 'une seule colonne portant une marque d\'ordre (encodage incorrect)';
+            // Mojibake classique : « Ã© » pour « é », « Ã¨ » pour « è »…
+            if (/Ã[©¨ªàŽ¢«»¯]|â€™|â€œ/.test(txt)) return 'accents dégradés (fichier ANSI lu comme de l\'UTF-8)';
+            return null;
+        }
+
         function csvReadClauses(config) {
             config = config || {};
             let c = '';
@@ -1756,6 +1799,32 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return [];
         }
 
+        // Un classeur Excel a rarement une seule feuille, et la première est souvent une page de
+        // garde ou un sommaire. Prendre SheetNames[0] sans le dire donnait une source vide ou
+        // incohérente, sans que rien n'indique que les autres feuilles existaient.
+        // On retient donc la feuille la plus fournie, et on garde la liste des autres pour le dire.
+        function xlsxPickSheet(wb) {
+            const names = (wb && wb.SheetNames) || [];
+            if (!names.length) return { name: null, others: [], counts: {} };
+            const counts = {};
+            names.forEach(n => {
+                try {
+                    const ref = wb.Sheets[n] && wb.Sheets[n]['!ref'];
+                    if (!ref) { counts[n] = 0; return; }
+                    const r = XLSX.utils.decode_range(ref);
+                    counts[n] = Math.max(0, (r.e.r - r.s.r)) * Math.max(1, (r.e.c - r.s.c + 1));
+                } catch (e) { counts[n] = 0; }
+            });
+            let best = names[0];
+            names.forEach(n => { if (counts[n] > counts[best]) best = n; });
+            return { name: best, others: names.filter(n => n !== best), counts };
+        }
+        function xlsxSheetNote(pick, fileName) {
+            if (!pick || !pick.others.length) return '';
+            return `« ${fileName} » contient ${pick.others.length + 1} feuilles. La feuille « ${pick.name} » a été retenue (la plus fournie).`
+                 + ` Non chargée(s) : ${pick.others.join(', ')}. Pour en charger une autre, dupliquez le fichier en ne gardant que la feuille voulue.`;
+        }
+
         // Ingestion unifiée : lit le fichier (csv/txt/xlsx) ou reçoit des lignes déjà en mémoire (api/extraction)
         // et alimente la table DuckDB correspondante. Retourne la liste des colonnes.
         async function ingestFileTable(tId) {
@@ -1770,7 +1839,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     for (const f of table.files) {
                         const buffer = await readFileAsArrayBuffer(f);
                         const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-                        const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+                        const pk = xlsxPickSheet(wb);
+                        if (!pk.name) throw new Error(`« ${f.name} » ne contient aucune feuille.`);
+                        const nt = xlsxSheetNote(pk, f.name); if (nt) table.xlsxNote = ((table.xlsxNote || '') + ' ' + nt).trim();
+                        const raw = XLSX.utils.sheet_to_json(wb.Sheets[pk.name], { defval: "" });
                         raw.forEach(rr => { const c = {}; Object.keys(rr).forEach(k => { const ch = cleanHeader(k); headersSet.add(ch); c[ch] = rr[k]; }); rows.push(c); });
                     }
                     if (!rows.length) throw new Error("Fichiers vides");
@@ -1783,8 +1855,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             } else if (table.type === 'xlsx' || table.type === 'xls') {
                 const buffer = await readFileAsArrayBuffer(table.file);
                 const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-                const rawJson = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-                if (rawJson.length === 0) throw new Error("Fichier vide");
+                const pick = xlsxPickSheet(workbook);
+                if (!pick.name) throw new Error("Ce classeur ne contient aucune feuille.");
+                const rawJson = XLSX.utils.sheet_to_json(workbook.Sheets[pick.name], { defval: "" });
+                table.xlsxSheet = pick.name; table.xlsxNote = xlsxSheetNote(pick, table.name);
+                if (rawJson.length === 0) throw new Error(`La feuille « ${pick.name} » ne contient aucune ligne.`
+                    + (pick.others.length ? ` Autres feuilles du classeur : ${pick.others.join(', ')}.` : ''));
                 const headersSet = new Set();
                 const rows = rawJson.map(r => { const c = {}; Object.keys(r).forEach(k => { const ch = cleanHeader(k); headersSet.add(ch); c[ch] = r[k]; }); return c; });
                 return ingestRowsIntoDuckDB(tId, rows, Array.from(headersSet));
@@ -1828,8 +1904,16 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const attempts = [];
             // D'abord l'encodage : une erreur unicode vient presque toujours d'un fichier Windows/ANSI.
             if (isEncodingError(err)) {
-                if (t.config.enc !== 'ISO-8859-1') attempts.push({ patch: { enc: 'ISO-8859-1' }, label: 'encodage Windows/ANSI (Latin-1)' });
-                if (t.config.enc !== 'UTF-16') attempts.push({ patch: { enc: 'UTF-16' }, label: 'encodage UTF-16' });
+                // On relit les octets : ils désignent le bon encodage bien mieux qu'un ordre figé.
+                // Sans cela, un fichier UTF-16 était « réparé » en latin-1 sans la moindre erreur.
+                let first = null;
+                try { const sn = await sniffFileEncoding(t.file); if (sn) first = sn.enc; } catch (e0) {}
+                const encOrder = first ? [first, 'ISO-8859-1', 'UTF-16', 'UTF-8'] : ['ISO-8859-1', 'UTF-16', 'UTF-8'];
+                const seen = new Set();
+                encOrder.forEach(en => {
+                    if (seen.has(en) || en === t.config.enc) return; seen.add(en);
+                    attempts.push({ patch: { enc: en }, label: en === 'ISO-8859-1' ? 'encodage Windows/ANSI (Latin-1)' : (en === 'UTF-16' ? 'encodage UTF-16' : 'encodage UTF-8') });
+                });
             }
             if (isCsvScanError(err)) {
             if (t.config.quote !== 'none') attempts.push({ patch: { quote: 'none' }, label: 'guillemets traités comme du texte brut (aucune perte)' });
@@ -1843,12 +1927,20 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 try {
                     const headers = await ingestFileTable(tId);
                     // Validation par un scan COMPLET en flux : c'est lui qui révèle les erreurs de vue.
-                    await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tId))}`);
-                    t.headers = headers;
-                    try { t.sampleData = await duckSampleRows(tId, 6); } catch (e2) {}
+                    const cnt = Number(arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tId))}`))[0].n);
+                    let smp = []; try { smp = await duckSampleRows(tId, 6); } catch (e2) {}
+                    // Une lecture qui « passe » peut être totalement fausse : un fichier UTF-16 lu en
+                    // latin-1 ne lève aucune erreur, et « ignorer les lignes fautives » peut ne rien
+                    // conserver du tout. On refuse ces résultats au lieu de les livrer.
+                    if (cnt === 0) { t.config = prev; continue; }
+                    const wrong = ingestLooksWrong(headers, smp);
+                    if (wrong) { t.config = prev; continue; }
+                    t.headers = headers; t.sampleData = smp;
                     try { await persistTableData(tId); persistAppState(); } catch (e2) {}
                     renderTables();
-                    showSuccess(`⚙️ Lecture de « ${escapeHTML(t.name)} » réparée automatiquement : ${a.label}.`);
+                    const perte = a.patch && a.patch.ignoreErrors;
+                    showSuccess(`⚙️ Lecture de « ${escapeHTML(t.name)} » réparée automatiquement : ${a.label}.`
+                        + (perte ? ` ${cnt.toLocaleString('fr-FR')} ligne(s) conservée(s) — des lignes ont pu être écartées, vérifiez le total.` : ''));
                     return true;
                 } catch (e2) { t.config = prev; }
             }
@@ -7147,7 +7239,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 if (/\.(xlsx|xls)$/i.test(f.name)) {
                     if (typeof XLSX === 'undefined') throw new Error('lecture Excel indisponible ici — exportez la feuille en CSV.');
                     const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: 'array' });
-                    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+                    const pk3 = xlsxPickSheet(wb);
+                    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[pk3.name || wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
                     if (!aoa.length) throw new Error('feuille vide.');
                     giState.cols = aoa[0].map(x => String(x));
                     giState.rows = aoa.slice(1).filter(r => r.some(v => String(v).trim() !== '')).map(r => { const o = {}; giState.cols.forEach((c, i) => o[c] = r[i] == null ? '' : String(r[i])); return o; });
@@ -9716,7 +9809,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             }
             el('emptyStateSources').classList.add('hidden');
             const tId = 'tb_'+generateId();
-            state.tables[tId] = { id: tId, name: f.name, file: f, type: ext, size: f.size, config: {delim:'', enc:'UTF-8'}, headers: [], columnsMeta: {}, status: 'loading', srcModified: f.lastModified || Date.now() };
+            // On tranche l'encodage sur les octets AVANT de lire : le moteur attend de l'UTF-8, et
+            // tâtonner après coup laissait passer des lectures fausses sans erreur.
+            let sniff = null;
+            if (ext === 'csv' || ext === 'txt') { try { sniff = await sniffFileEncoding(f); } catch (e) {} }
+            state.tables[tId] = { id: tId, name: f.name, file: f, type: ext, size: f.size, config: {delim:'', enc: (sniff && sniff.enc) || 'UTF-8'}, encWhy: sniff ? sniff.why : '', headers: [], columnsMeta: {}, status: 'loading', srcModified: f.lastModified || Date.now() };
             state.pivotMode[tId] = 'none';
             renderTables();
             try {
@@ -9724,6 +9821,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const t = state.tables[tId];
                 t.headers = headers; t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready';
                 renderTables();
+                // Ce qui a été décidé à la place de l'utilisateur doit lui être dit.
+                if (t.xlsxNote) showError(t.xlsxNote);
+                else if (t.config && t.config.enc && t.config.enc !== 'UTF-8')
+                    showSuccess(`« ${escapeHTML(t.name)} » : encodage ${t.config.enc === 'ISO-8859-1' ? 'Windows/ANSI' : t.config.enc} détecté et appliqué${t.encWhy ? ' (' + t.encWhy + ')' : ''}.`);
                 autoDetectRelations(tId); updateBaseTableSelect(); populateQualTables();
                 await persistTableData(tId); persistAppState();
                 return tId;
@@ -10892,8 +10993,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.7.0';
+        const APP_VERSION = '7.8.0';
         const APP_CHANGELOG = [
+            { v: '7.8.0', d: '2026-07-29', t: 'Robustesse d\'ingestion : encodages, lectures fausses refusées, feuille Excel', items: [
+                '<b>L\'encodage est maintenant tranché sur les octets AVANT la lecture</b> — marque d\'ordre, présence d\'octets nuls, puis validation UTF-8 stricte — au lieu d\'être deviné par essais après un échec. Un fichier Windows/ANSI ou UTF-16 est reconnu du premier coup, et l\'application dit lequel elle a détecté et pourquoi.',
+                '<b>Deux corruptions silencieuses corrigées</b>, mesurées sur le moteur réel : un fichier <b>UTF-16 relu en Latin-1 ne provoquait aucune erreur</b> — on obtenait une unique colonne nommée « ÿþI » et des octets nuls partout, source marquée prête ; et la réparation « ignorer les lignes fautives » appliquée à un fichier ANSI <b>ne conservait aucune ligne</b> — une table vide, marquée prête elle aussi.',
+                '<b>Une réparation n\'est plus acceptée sans contrôle.</b> Un résultat vide, portant des octets nuls, des caractères de remplacement, une marque d\'ordre en guise de nom de colonne ou des accents dégradés (« RÃ©paration ») est refusé, et l\'essai suivant est tenté. Quand une réparation écarte des lignes, le nombre conservé est annoncé.',
+                '<b>Excel : la bonne feuille est choisie.</b> Seule la première feuille du classeur était lue, en silence — d\'où des sources vides quand le classeur commence par une page de garde. La feuille la plus fournie est désormais retenue, et un message nomme celle qui a été prise, celles qui ont été ignorées, et comment en charger une autre.',
+                'Le principe commun à ces correctifs : <b>ce qui est décidé à la place de l\'utilisateur doit lui être dit</b>, et une lecture douteuse vaut mieux refusée que livrée.'] },
             { v: '7.7.0', d: '2026-07-29', t: 'Retrait du connecteur Google Sheets', items: [
                 'Le connecteur Google Sheets introduit en 7.6 est <b>retiré</b> : il ne fonctionnait pas de façon fiable. Google ne sert le CSV qu\'aux feuilles publiées sur le web, et l\'autre voie de lecture dépend du navigateur et du poste — un partage « toute personne disposant du lien » ne suffit pas, contrairement à ce que la fonction laissait croire.',
                 'Le retrait est complet : bouton, fenêtre de saisie, lecture, rechargement, pastille de source et type <code>gsheet</code>. Aucun résidu, aucune source existante affectée.',
