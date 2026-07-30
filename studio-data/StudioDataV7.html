@@ -938,15 +938,23 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         <div id="gsModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
             <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl mx-4">
                 <h3 class="text-xl font-bold mb-1 flex items-center gap-2">📗 Feuille Google Sheets</h3>
-                <p class="text-xs text-slate-500 mb-4">Collez le lien de la feuille. Elle doit être partagée en lecture : dans Google Sheets, <b>Partager → Toute personne disposant du lien → Lecteur</b>. Une feuille privée ne peut pas être lue depuis le navigateur.</p>
+                <p class="text-xs text-slate-500 mb-3">Collez le lien de la feuille. Deux formes de lien fonctionnent, mais elles ne se valent pas :</p>
+                <div class="mb-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 leading-relaxed">
+                    <b>Recommandé — un lien « publié » :</b> dans Google Sheets, <b>Fichier → Partager → Publier sur le web</b>, choisissez l'onglet et le format <b>CSV</b>, puis collez le lien obtenu (il contient <code>/d/e/…/pub</code>). C'est la seule forme que Google autorise à lire depuis n'importe quelle page.
+                    <br><b>Sinon — le lien normal</b> de la barre d'adresse, avec la feuille partagée « toute personne disposant du lien » en <b>Lecteur</b>. Cela fonctionne souvent, mais pas depuis tous les navigateurs ni tous les postes.
+                </div>
                 <div class="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
                     <b>À savoir :</b> c'est la seule fonction de Studio Data qui sort de votre poste. L'identifiant de la feuille est transmis à Google pour la lire ; les données récupérées, elles, restent sur votre machine comme toutes les autres sources.
+                </div>
+                <div id="gsLocalWarn" class="hidden mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-900 leading-relaxed">
+                    Vous avez ouvert Studio Data <b>depuis un fichier local</b> (adresse commençant par <code>file://</code>). Dans ce mode, beaucoup de navigateurs bloquent les appels sortants : si la lecture échoue, utilisez le <b>lien publié</b> ci-dessus, ou téléchargez la feuille en CSV (<b>Fichier → Télécharger → CSV</b>) et chargez-la avec le bouton <b>Fichiers</b>.
                 </div>
                 <input type="text" id="gsTableName" placeholder="Nom de la source (facultatif)" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
                 <input type="url" id="gsUrl" placeholder="https://docs.google.com/spreadsheets/d/…" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
                 <input type="text" id="gsSheetName" placeholder="Nom de l'onglet (facultatif — sinon le premier, ou celui du lien)" class="w-full border border-slate-300 p-2.5 mb-1 rounded text-sm bg-slate-50">
                 <p class="text-[10px] text-slate-400 mb-3">Si votre lien contient déjà <code>#gid=…</code>, l'onglet correspondant est utilisé automatiquement.</p>
                 <div id="gsLoading" class="hidden mt-2 text-blue-700 text-sm">Lecture de la feuille en cours…</div>
+                <div id="gsError" class="hidden mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-[11px] text-red-900 leading-relaxed max-h-64 overflow-auto"></div>
                 <div class="mt-4 flex justify-end gap-2"><button onclick="toggleGsModal()" class="px-4 py-2 bg-slate-100 rounded text-sm font-bold">Annuler</button><button onclick="connectGSheet()" class="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-bold">Charger la feuille</button></div>
             </div>
         </div>
@@ -9743,39 +9751,103 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
             return { headers, rows };
         }
-        // Message d'erreur actionnable : dans 9 cas sur 10 le problème est le partage.
-        const GS_HELP = "Vérifiez que la feuille est partagée : dans Google Sheets, « Partager » → « Toute personne disposant du lien » → rôle Lecteur. Une feuille privée ne peut pas être lue depuis le navigateur.";
+        // ---- Diagnostic de lecture ----
+        // La V7.6 ne tentait que deux appels et, en cas d'échec, accusait le partage. C'est faux
+        // dans le cas le plus courant : une feuille correctement partagée « toute personne
+        // disposant du lien » échoue quand même, parce que Google ne sert le CSV qu'aux feuilles
+        // PUBLIÉES et que l'appel par balise script dépend du navigateur et du poste.
+        // On essaie donc plusieurs voies, on retient ce qu'a répondu chacune, et on affiche ce
+        // relevé : l'utilisateur peut agir, et le message ne l'envoie plus sur une fausse piste.
+        let gsLastDiag = '';
+        function gsCsvCandidates(p) {
+            const g = p.gid ? '&gid=' + encodeURIComponent(p.gid) : '';
+            return p.published
+                ? [`${GS_HOST}/spreadsheets/d/e/${p.id}/pub?output=csv${g}`]
+                : [`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?tqx=out:csv${g}`,
+                   `${GS_HOST}/spreadsheets/d/${p.id}/export?format=csv${g}`];
+        }
+        function gsGvizCandidates(p, sheetName, cb) {
+            const u = [];
+            if (p.gid) u.push(`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?gid=${encodeURIComponent(p.gid)}&tqx=responseHandler:${cb}`);
+            if (sheetName) u.push(`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tqx=responseHandler:${cb}`);
+            u.push(`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?tqx=responseHandler:${cb}`);   // premier onglet
+            return u;
+        }
+        function gsDiagText(log, p) {
+            const lines = log.map(x => `  • ${x.m} → ${x.r}`).join('\n');
+            return `Feuille ${p ? p.id : '?'}${p && p.gid ? ' (onglet ' + p.gid + ')' : ''}\n`
+                 + `Page ouverte depuis : ${location.protocol}\n${lines}`;
+        }
+        function gsFailHtml(log, p) {
+            const local = location.protocol === 'file:';
+            return `La feuille n'a pas pu être lue. <b>Ce n'est pas forcément un problème de partage</b> :
+                Google ne sert le CSV qu'aux feuilles <b>publiées</b>, et l'autre voie de lecture dépend du navigateur et du poste.
+                ${local ? '<br><b>Vous ouvrez Studio Data depuis un fichier local (file://)</b> — beaucoup de navigateurs y restreignent les appels réseau sortants, ce qui explique très probablement l\'échec.' : ''}
+                <br><br><b>Solution la plus fiable — publier la feuille :</b> dans Google Sheets,
+                <b>Fichier → Partager → Publier sur le web</b>, choisissez l'onglet et le format <b>CSV</b>,
+                puis collez ici le lien obtenu (il contient <code>/d/e/…/pub</code>).
+                <br><b>Solution immédiate :</b> <b>Fichier → Télécharger → CSV</b>, puis chargez le fichier avec le bouton <b>Fichiers</b>.
+                <br><br><span class="text-[10px] text-slate-500">Détail des tentatives :<br>${escapeHTML(gsDiagText(log, p)).replace(/\n/g, '<br>')}</span>`;
+        }
         async function gsLoad(rawUrl, sheetName) {
             const p = gsParseUrl(rawUrl);
             if (!p) throw new Error("Lien Google Sheets non reconnu. Collez l'URL complète de la feuille (elle contient /spreadsheets/d/…).");
-            // 1) tentative directe — fonctionne sur une feuille « publiée sur le web »
-            try {
-                const res = await fetch(gsCsvUrl(p), { credentials: 'omit' });
-                if (res.ok) {
+            const log = []; const note = (m, r) => log.push({ m, r });
+            // 1) Sorties CSV — fonctionnent sur une feuille publiée, et se lisent avec le
+            //    lecteur CSV de DuckDB (encodage, guillemets, auto-réparation).
+            for (const u of gsCsvCandidates(p)) {
+                const label = u.includes('/pub?') ? 'CSV publié' : (u.includes('gviz') ? 'CSV gviz' : 'CSV export');
+                try {
+                    const res = await fetch(u, { credentials: 'omit' });
+                    if (!res.ok) { note(label, 'refus HTTP ' + res.status); continue; }
                     const txt = await res.text();
-                    if (txt && !/^\s*<!DOCTYPE|<html/i.test(txt)) return { mode: 'csv', csv: txt, parsed: p };
-                }
-            } catch (e) { /* CORS le plus souvent : on bascule sur le JSONP */ }
-            // 2) repli JSONP, insensible au contrôle d'origine
-            const cb = 'gsCb_' + Math.random().toString(36).slice(2, 10);
-            let payload;
-            try { payload = await gsJsonp(gsGvizUrl(p, sheetName, cb), cb, 25000); }
-            catch (e) { throw new Error(`Lecture impossible (${e.message}). ${GS_HELP}`); }
-            if (!payload || payload.status === 'error') {
-                const d = payload && payload.errors && payload.errors[0] ? (payload.errors[0].detailed_message || payload.errors[0].message) : '';
-                throw new Error(`Google a refusé la lecture. ${String(d).replace(/<[^>]*>/g, '').slice(0, 200)} ${GS_HELP}`);
+                    if (!txt || /^\s*<!DOCTYPE|<html/i.test(txt)) { note(label, 'page HTML reçue (Google demande une connexion)'); continue; }
+                    note(label, 'succès'); gsLastDiag = gsDiagText(log, p);
+                    return { mode: 'csv', csv: txt, parsed: p, log };
+                } catch (e) { note(label, 'bloqué par le navigateur (' + String(e.message || e).slice(0, 60) + ')'); }
             }
-            const { headers, rows } = gsRowsFromGviz(payload.table);
-            if (!headers.length) throw new Error("Feuille lue mais aucune colonne n'a été trouvée : vérifiez que la première ligne contient bien des en-têtes.");
-            return { mode: 'gviz', headers, rows, parsed: p };
+            // 2) Point de sortie gviz par balise script, dans plusieurs variantes d'onglet.
+            for (const u of gsGvizCandidates(p, sheetName, 'PLACEHOLDER')) {
+                const cb = 'gsCb_' + Math.random().toString(36).slice(2, 10);
+                const url = u.replace('PLACEHOLDER', cb);
+                const label = 'gviz ' + (url.includes('gid=') ? 'par onglet (gid)' : (url.includes('sheet=') ? 'par nom d\'onglet' : 'premier onglet'));
+                try {
+                    const payload = await gsJsonp(url, cb, 20000);
+                    if (!payload || payload.status === 'error') {
+                        const d = payload && payload.errors && payload.errors[0] ? (payload.errors[0].detailed_message || payload.errors[0].message) : 'réponse vide';
+                        note(label, 'refus de Google : ' + String(d).replace(/<[^>]*>/g, '').slice(0, 120)); continue;
+                    }
+                    const { headers, rows } = gsRowsFromGviz(payload.table);
+                    if (!headers.length) { note(label, 'réponse lue mais aucune colonne (première ligne d\'en-têtes absente ?)'); continue; }
+                    note(label, `succès — ${headers.length} colonne(s), ${rows.length} ligne(s)`);
+                    gsLastDiag = gsDiagText(log, p);
+                    return { mode: 'gviz', headers, rows, parsed: p, log };
+                } catch (e) { note(label, String(e.message || e)); }
+            }
+            gsLastDiag = gsDiagText(log, p);
+            const err = new Error('lecture impossible');
+            err.gsHtml = gsFailHtml(log, p); err.gsDiag = gsLastDiag;
+            throw err;
         }
-        function toggleGsModal() { const m = el('gsModal'); if (m) m.classList.toggle('hidden'); }
+        function gsCopyDiag() {
+            try { navigator.clipboard.writeText(gsLastDiag || 'aucun diagnostic'); showSuccess('Diagnostic copié.'); }
+            catch (e) { showError('Copie impossible — le diagnostic est affiché ci-dessus.'); }
+        }
+        function toggleGsModal() {
+            const m = el('gsModal'); if (!m) return;
+            m.classList.toggle('hidden');
+            // Ouvrir Studio Data par double-clic (file://) restreint les appels sortants dans
+            // beaucoup de navigateurs : autant le dire AVANT la tentative, pas après l'échec.
+            const w = el('gsLocalWarn');
+            if (w) w.classList.toggle('hidden', location.protocol !== 'file:');
+        }
         async function connectGSheet() {
             const name = (el('gsTableName').value || '').trim();
             const url = (el('gsUrl').value || '').trim();
             const sheet = (el('gsSheetName').value || '').trim();
             if (!url) return showError("Collez le lien de la feuille Google Sheets.");
             el('gsLoading').classList.remove('hidden');
+            const eb = el('gsError'); if (eb) { eb.classList.add('hidden'); eb.innerHTML = ''; }
             const tId = 'tb_' + generateId();
             try {
                 const out = await gsLoad(url, sheet);
@@ -9809,7 +9881,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             } catch (e) {
                 delete state.tables[tId]; renderTables();
                 el('gsLoading').classList.add('hidden');
-                showError("Google Sheets : " + e.message);
+                const box = el('gsError');
+                if (box && e.gsHtml) {
+                    box.innerHTML = e.gsHtml + `<div class="mt-2"><button onclick="gsCopyDiag()" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold">Copier le diagnostic</button></div>`;
+                    box.classList.remove('hidden');
+                } else showError("Google Sheets : " + e.message);
             }
         }
         // Une feuille est vivante : on doit pouvoir la relire sans tout reparamétrer.
@@ -11076,8 +11152,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.6.0';
+        const APP_VERSION = '7.6.1';
         const APP_CHANGELOG = [
+            { v: '7.6.1', d: '2026-07-29', t: 'Google Sheets : diagnostic honnête au lieu d\'un message qui accuse le partage', items: [
+                '<b>Le message d\'erreur était faux dans le cas le plus courant.</b> Il concluait « la feuille n\'est pas partagée » alors qu\'elle pouvait l\'être correctement — le partage « toute personne disposant du lien / Lecteur » ne suffit pas à rendre une feuille lisible depuis n\'importe quelle page.',
+                '<b>Plusieurs voies sont désormais tentées</b> au lieu de deux : sortie CSV gviz, export CSV, lien publié, puis lecture par balise script en visant l\'onglet du lien, l\'onglet nommé, puis le premier onglet. La première qui répond gagne.',
+                '<b>Chaque tentative est relevée et affichée</b> avec ce qu\'elle a répondu — refus HTTP, blocage du navigateur, refus de Google (motif exact repris), page de connexion reçue à la place des données, ou réponse lue mais sans colonnes. Un bouton copie ce diagnostic.',
+                '<b>La voie fiable est indiquée d\'emblée</b> : publier la feuille (<b>Fichier → Partager → Publier sur le web</b>, onglet, format CSV) donne un lien que Google autorise à lire depuis n\'importe quelle page. Le lien normal de la barre d\'adresse fonctionne souvent, mais pas partout.',
+                '<b>Ouverture depuis un fichier local détectée.</b> Quand Studio Data est lancé par double-clic (adresse en <code>file://</code>), un avertissement s\'affiche <b>avant</b> la tentative : beaucoup de navigateurs y restreignent les appels sortants. La solution de repli — télécharger la feuille en CSV et la charger par le bouton Fichiers — est rappelée.',
+                'Une page HTML renvoyée par Google (invitation à se connecter) n\'est plus confondue avec des données.'] },
             { v: '7.6.0', d: '2026-07-29', t: 'Nouvelle source : feuille Google Sheets', items: [
                 'Un bouton <b>Google Sheets</b> rejoint Fichiers, Dossier, Fusionner et API dans l\'écran Sources. Collez le lien de la feuille ; l\'onglet est repris du lien (<code>#gid=…</code>) ou choisi par son nom.',
                 '<b>Pourquoi ce n\'est pas un simple téléchargement.</b> L\'application n\'a pas de serveur : tout se joue dans le navigateur, et Google ne renvoie pas d\'en-tête d\'autorisation d\'origine sur ses sorties CSV — un appel direct est refusé par le navigateur quelle que soit l\'URL. On tente d\'abord l\'appel direct (une feuille « publiée sur le web » peut passer), et on bascule sinon sur le point de sortie <i>gviz</i> chargé par balise script, qui n\'est pas soumis à cette restriction.',
