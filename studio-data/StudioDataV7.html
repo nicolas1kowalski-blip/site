@@ -951,7 +951,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             <div class="flex justify-between items-end mb-6">
                 <div><h2 class="text-xl font-bold text-slate-800">Fichiers chargés</h2><p class="text-sm text-slate-500 mt-1">Ajoutez d'abord vos fichiers ou connectez une base.</p></div>
                 <div class="flex flex-wrap gap-2">
-                    <input type="file" id="fileUploader" multiple accept=".csv, .txt, .xlsx, .xls" class="hidden" onchange="handleFilesAdded(event)">
+                    <input type="file" id="fileUploader" multiple accept=".csv, .txt, .xlsx, .xls, .json" class="hidden" onchange="handleFilesAdded(event)">
                     <input type="file" id="folderUploader" webkitdirectory directory multiple class="hidden" onchange="handleFilesAdded(event)">
                     <button onclick="document.getElementById('fileUploader').click()" class="bg-indigo-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="file-plus" class="w-5 h-5"></i> Fichiers</button>
                     <button onclick="document.getElementById('folderUploader').click()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="folder-plus" class="w-5 h-5"></i> Dossier</button>
@@ -1484,6 +1484,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         const escapeCSV = val => val !== null && val !== undefined ? '"' + String(val).replace(/"/g, '""') + '"' : '';
         const cleanFileName = n => n.toLowerCase().replace(/\.(csv|xlsx|xls|txt)$/,'').trim();
         const cleanHeader = h => h ? String(h).replace(/^\uFEFF/, '').trim() : 'Unamed_Col';
+        // Formats de source acceptés — une seule liste, partagée par le sélecteur de fichiers,
+        // le glisser-déposer, l'import de dossier et le message d'erreur.
+        const SRC_EXTS = ['csv', 'txt', 'xlsx', 'xls', 'json'];
         const isNumVal = v => /^\s*-?\d+([.,]\d+)?\s*$/.test(v);
         const isDateVal = v => { if(!v || v.length < 8) return false; return /^\s*\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(v) || /^\s*\d{4}[\/-]\d{1,2}[\/-]\d{1,2}/.test(v); };
         const parseFlexibleDate = v => { if(!v) return null; let d = new Date(String(v).trim()); if(isNaN(d.getTime())){ const p = String(v).trim().split(/[\/\- ]/); if(p.length >= 3 && p[2].length === 4) d = new Date(`${p[2]}-${p[1]}-${p[0]}`); } return isNaN(d.getTime()) ? null : d.getTime(); };
@@ -1687,19 +1690,52 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 await conn.query(`CREATE TABLE ${sqlIdent(tName)} (__rn BIGINT${headers.length ? ', ' + cols : ''})`);
                 return headers.slice();
             }
+            // Filet de sécurité : si l'appelant n'a pas su fournir la liste des colonnes, on la
+            // déduit des lignes elles-mêmes. Sans cela, chaque ligne se sérialisait en « {} » et
+            // DuckDB, ne trouvant aucun objet à décrire, créait UNE colonne nommée « json » —
+            // la table paraissait chargée mais était inutilisable.
+            let cols = (headers || []).filter(h => h !== undefined && h !== null && String(h) !== '');
+            if (!cols.length) {
+                const seen = new Set();
+                rows.forEach(r => { if (r && typeof r === 'object') Object.keys(r).forEach(k => seen.add(cleanHeader(k))); });
+                cols = Array.from(seen);
+            }
+            if (!cols.length) throw new Error("Aucune colonne détectée dans cette source : le fichier ne contient pas de tableau de lignes exploitable (attendu : une ligne d'en-têtes puis des lignes de données).");
             try { if (db.dropFile) await db.dropFile(virtualName); } catch (e) {}
             const ndjson = rows.map(r => {
                 const o = {};
-                headers.forEach(h => { const v = r[h]; o[h] = (v === undefined || v === null) ? null : String(v); });
+                cols.forEach(h => { const v = r ? r[h] : null; o[h] = (v === undefined || v === null) ? null : String(v); });
                 return JSON.stringify(o);
             }).join('\n');
             await db.registerFileText(virtualName, ndjson);
+            // On impose le schéma au lieu de le faire deviner : les noms de colonnes sont
+            // exactement ceux qu'on a calculés, et tout reste en VARCHAR comme partout ailleurs.
+            const colSpec = '{' + cols.map(h => `${sqlLiteral(h)}: 'VARCHAR'`).join(', ') + '}';
             await conn.query(`
                 CREATE TABLE ${sqlIdent(tName)} AS
                 SELECT row_number() OVER () AS __rn, *
-                FROM read_json_auto(${sqlLiteral(virtualName)})
+                FROM read_json(${sqlLiteral(virtualName)}, columns=${colSpec}, format='newline_delimited')
             `);
-            return duckTableHeaders(tId);
+            const got = await duckTableHeaders(tId);
+            // Garde-fou : si malgré tout on retombe sur la colonne « json », mieux vaut le dire
+            // franchement que de livrer une table que rien ne saura exploiter.
+            if (got.length === 1 && got[0] === 'json') throw new Error("Structure de source non reconnue : impossible d'en déduire des colonnes. Vérifiez que le fichier contient bien un tableau de lignes.");
+            return got;
+        }
+
+        // Retrouve le tableau d'enregistrements dans un JSON : à la racine, sous un chemin
+        // explicite (« data.items »), ou à défaut le premier tableau rencontré.
+        function jsonRowsFrom(v, path) {
+            if (path) { for (const seg of String(path).split('.').map(x => x.trim()).filter(Boolean)) { if (v == null || typeof v !== 'object') break; v = v[seg]; } }
+            if (Array.isArray(v)) return v;
+            if (v && typeof v === 'object') {
+                const direct = Object.values(v).find(x => Array.isArray(x) && x.length && typeof x[0] === 'object');
+                if (direct) return direct;
+                const any = Object.values(v).find(Array.isArray);
+                if (any) return any;
+                return [v];   // un objet seul = une ligne
+            }
+            return [];
         }
 
         // Ingestion unifiée : lit le fichier (csv/txt/xlsx) ou reçoit des lignes déjà en mémoire (api/extraction)
@@ -1734,6 +1770,23 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const headersSet = new Set();
                 const rows = rawJson.map(r => { const c = {}; Object.keys(r).forEach(k => { const ch = cleanHeader(k); headersSet.add(ch); c[ch] = r[k]; }); return c; });
                 return ingestRowsIntoDuckDB(tId, rows, Array.from(headersSet));
+            } else if (table.type === 'json') {
+                const txt = await readFileAsText(table.file);
+                let parsed;
+                try { parsed = JSON.parse(txt); } catch (e) { throw new Error("JSON illisible : " + e.message); }
+                const rows = jsonRowsFrom(parsed, (table.config && table.config.path) || '');
+                if (!rows.length) throw new Error("Aucune ligne trouvée dans ce JSON (attendu : un tableau d'objets, éventuellement imbriqué sous une clé).");
+                const headSet = new Set();
+                const flat = rows.map(r => {
+                    const o = {};
+                    if (r && typeof r === 'object' && !Array.isArray(r)) Object.keys(r).forEach(k => {
+                        const ch = cleanHeader(k); headSet.add(ch);
+                        const v = r[k];
+                        o[ch] = (v !== null && typeof v === 'object') ? JSON.stringify(v) : v;
+                    });
+                    return o;
+                });
+                return ingestRowsIntoDuckDB(tId, flat, Array.from(headSet));
             }
             throw new Error("Type de fichier non pris en charge pour l'ingestion.");
         }
@@ -9597,9 +9650,20 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 let json = await res.json();
                 if(path) path.split('.').forEach(k=>{ if(json[k]!==undefined) json=json[k]; });
                 if(!Array.isArray(json)){ const arrs=Object.values(json).filter(Array.isArray); if(arrs.length) json=arrs[0]; else throw new Error("Format invalide."); }
-                const flat = json.map(r => { const nr={}; Object.keys(r).forEach(k => nr[k] = r[k]&&typeof r[k]==='object'?JSON.stringify(r[k]):r[k]); return nr; });
+                // Les lignes doivent être indexées par le MÊME nom que les en-têtes : en gardant les
+                // clés brutes alors que les en-têtes étaient nettoyés (BOM, espaces de bord), toutes
+                // les valeurs ressortaient vides. On nettoie donc dès la construction des lignes.
+                const flat = json.map(r => {
+                    const nr = {};
+                    if (r && typeof r === 'object') Object.keys(r).forEach(k => {
+                        const v = r[k];
+                        nr[cleanHeader(k)] = (v && typeof v === 'object') ? JSON.stringify(v) : v;
+                    });
+                    return nr;
+                });
                 const head = new Set(); flat.forEach(r => Object.keys(r).forEach(k=>head.add(k)));
-                const headers = Array.from(head).map(cleanHeader);
+                const headers = Array.from(head);
+                if (!headers.length) throw new Error("La réponse ne contient pas d'objets exploitables (attendu : un tableau d'enregistrements avec des champs nommés).");
                 const tId = 'tb_'+generateId();
                 state.tables[tId] = { id: tId, name: name, file: null, type: 'api', size: flat.length, config: {url,path}, headers: [], columnsMeta: {}, status: 'loading' };
                 el('emptyStateSources').classList.add('hidden');
@@ -9624,7 +9688,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         // Charge un fichier comme NOUVELLE source (factorisé, réutilisé par l'import de dossier surveillé).
         async function loadNewSourceFromFile(f) {
-            const ext = f.name.split('.').pop().toLowerCase(); if(!['csv','txt','xlsx','xls'].includes(ext)) return null;
+            const ext = f.name.split('.').pop().toLowerCase();
+            if (!SRC_EXTS.includes(ext)) {
+                // Auparavant : return null, sans un mot. Le fichier disparaissait et l'utilisateur
+                // n'avait aucun moyen de comprendre pourquoi rien ne se passait.
+                showError(`« ${f.name} » n'a pas été chargé : format .${ext} non pris en charge. Formats acceptés : ${SRC_EXTS.map(x => '.' + x).join(', ')}. Un ZIP de ces fichiers fonctionne aussi.`);
+                return null;
+            }
             el('emptyStateSources').classList.add('hidden');
             const tId = 'tb_'+generateId();
             state.tables[tId] = { id: tId, name: f.name, file: f, type: ext, size: f.size, config: {delim:'', enc:'UTF-8'}, headers: [], columnsMeta: {}, status: 'loading', srcModified: f.lastModified || Date.now() };
@@ -10803,8 +10873,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.2.0';
+        const APP_VERSION = '7.3.0';
         const APP_CHANGELOG = [
+            { v: '7.3.0', d: '2026-07-29', t: 'Correctif de chargement : la colonne « json » et les fichiers ignorés en silence', items: [
+                '<b>La colonne « json ».</b> Quand la liste des colonnes n\'était pas transmise à l\'ingestion, chaque ligne se sérialisait en « {} » ; DuckDB, n\'ayant aucun objet à décrire, créait <b>une unique colonne nommée « json »</b> et la table paraissait chargée tout en étant inexploitable. Le défaut existait déjà en V6 — il ne vient pas de la refonte graphique.',
+                'Correction en profondeur : les colonnes sont désormais <b>déduites des lignes</b> si l\'appelant ne les fournit pas, et surtout le schéma est <b>imposé à DuckDB</b> au lieu d\'être deviné — les noms de colonnes sont exactement ceux calculés, y compris avec accents, apostrophes, guillemets ou espaces. Si aucune colonne ne peut être établie, un message explicite le dit au lieu de livrer une table fantôme.',
+                '<b>Import API.</b> Les lignes conservaient les noms de champs bruts alors que les en-têtes étaient nettoyés (BOM, espaces de bord) : toutes les valeurs ressortaient vides. Les deux côtés utilisent maintenant le même nom.',
+                '<b>Fichiers ignorés en silence.</b> Déposer un format non pris en charge ne produisait aucun message — le fichier disparaissait sans explication. Un message nomme désormais le fichier, son format et la liste des formats acceptés.',
+                '<b>Les fichiers .json sont acceptés</b> comme source, au même titre que CSV et Excel. Le tableau de lignes est retrouvé à la racine, sous un chemin explicite, ou automatiquement dans le document ; les valeurs imbriquées sont conservées en texte.'] },
             { v: '7.2.0', d: '2026-07-29', t: 'Épuration — pictogrammes partout, une couleur par intention', items: [
                 'La 7.1 n\'avait converti que les titres : <b>999 émojis</b> restaient affichés, sur 127 caractères différents. Le jeu passe à <b>77 pictogrammes</b> et la conversion s\'applique désormais à toute l\'interface — libellés, boutons, puces, messages, états vides — et plus seulement aux titres.',
                 'La garantie sur vos données est inchangée et reste testée : les <b>cellules de tableau</b>, les champs de saisie, les listes déroulantes et les canevas de graphes ne sont jamais réécrits. Un émoji non couvert reste affiché tel quel.',
