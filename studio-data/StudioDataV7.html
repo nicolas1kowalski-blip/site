@@ -1414,6 +1414,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             </div>
         </div>
 
+        <div id="step-16" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-blue-800 mb-1 flex items-center gap-2">📈 Séries temporelles</h2>
+                <p class="text-xs text-slate-500 mb-4">Déclarez ici les sources dont une ligne est une <strong>observation</strong> et non une entité : une valeur, pour un identifiant, à un instant donné. C'est une propriété de la <strong>structure</strong> de la donnée — au même titre qu'une clé ou une relation — et c'est ce qui rend visibles les défauts propres au temps, à commencer par <strong>la ligne qui n'existe pas</strong>.</p>
+                <div id="tsContent"></div>
+            </div>
+        </div>
         <div id="step-15" class="animate-fade-in hidden">
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                 <h2 class="text-lg font-bold text-rose-800 mb-1 flex items-center gap-2">🤝 Rapprochement inter-sources (résolution d'entités)</h2>
@@ -2867,7 +2874,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             else if (govState.tab === 'perimeters') c.innerHTML = renderGovPerimeters();
             else if (govState.tab === 'glossary') c.innerHTML = renderGovGlossary();
             else if (govState.tab === 'vlists') c.innerHTML = renderValueLists();
-            else if (govState.tab === 'series') c.innerHTML = tsScreenHtml();
             else if (govState.tab === 'usecases') { govState.tab = 'assets'; c.innerHTML = renderGovAssets(); }
             else if (govState.tab === 'assets') c.innerHTML = renderGovAssets();
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
@@ -4274,7 +4280,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         const ev = await qrEvalRule(r, __auditConn);
                         if (!ev.ran) { qparts.push(`<div class="text-xs text-slate-400">➖ ${escapeHTML(r.name)} — non applicable (colonne/table non résolue)</div>`); continue; }
                         const rate = Math.round(100 * ev.rate); const bad = ev.fails > 0;
-                        let insp = ''; if (bad) { const vs = qrInspectSql(r); if (vs) insp = qualInspectButtons(registerQualInspect(`Règle qualité : ${r.name}`, vs)); }
+                        let insp = ''; if (bad) { const vs = qrInspectSql(r); if (vs) insp = qualInspectButtons(registerQualInspect(`Règle qualité : ${r.name}`, vs, qrExplainHtml(r))); }
                         qparts.push(`<div class="text-xs ${bad ? 'text-red-600' : 'text-emerald-700'}">${bad ? '❌' : '✅'} ${escapeHTML(r.name)} <span class="text-slate-400">(${QR_TYPES[r.type] || r.type}${r.bo === bo.id ? ' · sur l\'objet' : (r.table ? ' · ' + escapeHTML(r.table) : '')})</span> — ${bad ? `${ev.fails.toLocaleString('fr-FR')} échec(s) sur ${ev.total.toLocaleString('fr-FR')} (${rate} %)` : `conforme (${ev.total.toLocaleString('fr-FR')} lignes)`}${insp}</div>`);
                     } catch (e) { qparts.push(`<div class="text-xs text-red-600">⚠️ ${escapeHTML(r.name)} : ${escapeHTML(e.message)}</div>`); }
                 }
@@ -7573,7 +7579,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // visuellement. switchTab(num) reste l'unité atomique « afficher l'étape N ».
         const NAV_PHASES = [
             { id: 'data', badge: '①', label: 'Données & Modèle', desc: 'Charger & modéliser', color: 'blue',
-              tabs: [ { n: 11, icon: '🏠', label: 'Cockpit' }, { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' } ] },
+              tabs: [ { n: 11, icon: '🏠', label: 'Cockpit' }, { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' }, { n: 16, icon: '📈', label: 'Séries temporelles' } ] },
             { id: 'etl', badge: '②', label: 'Exploitation', desc: 'ETL, croisements & analyse', color: 'indigo',
               tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 13, icon: '🧹', label: 'Préparation' }, { n: 14, icon: '📋', label: 'Tableaux de bord' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
             { id: 'quality', badge: '③', label: 'Qualité & Audit', desc: 'Profiling, anomalies, doublons', color: 'amber',
@@ -7593,7 +7599,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                   { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
                   { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
                   { g: 'vlists', icon: '🎚️', label: 'Listes de valeurs', fam: 'Sens métier' },
-                  { g: 'series', icon: '📈', label: 'Séries temporelles', fam: 'Sens métier' },
                   { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Sens métier' },
                   { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Sens métier' },
                   { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
@@ -8043,13 +8048,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function uxGoClean() { closeUxDrawer(); switchTab(13); }
 
         function switchTab(num) {
-            for (let i = 1; i <= 15; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
+            for (let i = 1; i <= 16; i++) { const s = el(`step-${i}`); if (s) s.classList.add('hidden'); }
             const stepEl = el(`step-${num}`); if (stepEl) stepEl.classList.remove('hidden');
             currentTab = num;
             renderNav();
             try { v7ApplyTheme(); } catch (e3) {}
             try { v7WatchIcons(); } catch (e4) {}
             try { renderContextBar(); } catch (e2) {}
+            if(num===16) renderTimeSeries();
             if(num===10) renderTablesDesign();
             if(num===11) renderCockpit();
             if(num===12) renderQualityRules();
@@ -10886,11 +10892,18 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.4.0';
+        const APP_VERSION = '7.5.0';
         const APP_CHANGELOG = [
+            { v: '7.5.0', d: '2026-07-29', t: 'Séries temporelles dans Données & Modèle + le détail des échecs explique la mesure', items: [
+                '<b>La déclaration des séries passe de Gouvernance à Données &amp; Modèle.</b> C\'est une propriété de la <b>structure</b> de la donnée — au même titre qu\'une clé ou une relation — pas un acte de gouvernance. Nouvel écran dans la phase ①, à côté du Modèle de données.',
+                '<b>Chaque règle explique ce qu\'elle mesure.</b> Un dépliant « Comment ce contrôle mesure l\'erreur » sous les réglages de chaque règle : ce qui est vérifié, la méthode employée, les seuils effectifs et l\'unité comptée. Les 20 types de règles sont documentés, pas seulement les nouveaux.',
+                '<b>Le détail d\'un échec restitue le raisonnement, pas la ligne brute.</b> Pour un trou, la ligne fautive n\'existe pas : il n\'y a rien à montrer d\'une table. L\'inspection affiche donc le dernier point avant le trou, le point suivant, l\'écart observé, le pas attendu, le nombre de points manquants et la règle appliquée.',
+                'Même principe pour les sept autres contrôles : le <b>saut</b> donne valeur précédente, valeur, écart absolu, variation en pourcentage et temps écoulé ; la <b>valeur figée</b> donne la valeur bloquée, le nombre de points, le début, la fin et la durée ; le <b>doublon</b> liste les valeurs concurrentes ; la <b>couverture</b> détaille points attendus, points manquants et taux ; la <b>fraîcheur</b> donne le dernier point, la référence et le retard.',
+                'L\'<b>aberrant saisonnier</b> va plus loin : il indique la médiane du créneau, l\'écart à cette médiane, le seuil déclenchant, le nombre de points du créneau <b>et la dispersion effectivement utilisée</b> — écart médian, écart moyen si la série est trop stable, ou dispersion de la série entière. C\'est ce qui permet de juger si le seuil est bien réglé plutôt que de le subir.',
+                'L\'explication de la règle est rappelée en tête du panneau d\'inspection, à côté du nombre d\'échecs.'] },
             { v: '7.4.0', d: '2026-07-29', t: 'Séries temporelles : maille, profil par série, calendrier de couverture et 8 contrôles', items: [
                 'Toute l\'application reposait sur « une ligne = une entité ». Sur une série temporelle, une ligne est une <b>observation</b> et l\'entité est la <b>série</b> — d\'où deux angles morts : <b>la ligne qui n\'existe pas</b> (le trou), qu\'aucun contrôle par ligne ne peut voir, et la valeur impossible en tant que <b>variation</b> alors qu\'elle est banale dans la distribution globale.',
-                '<b>Déclaration de la maille</b> (Gouvernance → Séries temporelles) : clé de série (mono ou composite), horodatage, mesure, et pas déclaré ou détecté. Le pas est reconnu tout seul, y compris au format d\'horodatage français.',
+                '<b>Déclaration de la maille</b> (Données & Modèle → Séries temporelles) : clé de série (mono ou composite), horodatage, mesure, et pas déclaré ou détecté. Le pas est reconnu tout seul, y compris au format d\'horodatage français.',
                 '<b>La régularité est mesurée, pas supposée.</b> Pour chaque série on calcule la part des intervalles égaux à l\'intervalle dominant : les séries cadencées sont jugées sur les trous et la couverture, les séries événementielles en sont exclues — elles ne sont pas fautives, elles sont d\'une autre nature.',
                 '<b>Profil par série</b> : points, période couverte, pas, régularité, trous, plus long trou, couverture, doublons, plus long plateau, retard, min/max de la mesure.',
                 '<b>Calendrier de couverture</b> : les séries en lignes, le temps en colonnes, une case par période — complet, partiel, aucun point, doublons. C\'est là qu\'on voit d\'un coup d\'œil qu\'un capteur s\'est arrêté.',
@@ -11560,7 +11573,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
               </div></div>`;
         }
         function renderTimeSeries() {
-            const c = el('govContent'); if (!c || govState.tab !== 'series') return '';
+            const c = el('tsContent'); if (!c) return '';
             const html = tsScreenHtml(); c.innerHTML = html; return html;
         }
         function tsScreenHtml() {
@@ -11886,6 +11899,169 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
             vr.p = vr.p || {}; if (res.thenCol) vr.p.thenCol = res.thenCol; if (res.cols) vr.p.cols = res.cols.join(';');
             return vr;
         }
+        /* ---- Ce que chaque contrôle mesure, en clair ----
+           Une règle qui échoue sans dire COMMENT elle a mesuré n'est pas exploitable :
+           on ne sait ni si le seuil est bon, ni par où commencer la correction. Chaque
+           type porte donc une explication, et chaque échec restitue les grandeurs qui
+           ont servi au verdict. */
+        const QR_HELP = {
+            notnull: { quoi: 'La colonne ne doit jamais être vide.', comment: 'Est comptée en échec toute ligne dont la valeur est NULL ou ne contient que des espaces.' },
+            unique:  { quoi: 'La clé ne doit désigner qu\'une seule ligne.', comment: 'Les valeurs sont comparées en majuscules et sans espaces de bord ; on compte les lignes appartenant à un groupe de plus d\'une occurrence.' },
+            format:  { quoi: 'La valeur doit respecter une forme.', comment: 'La valeur non vide est confrontée à l\'expression régulière ; une valeur vide n\'est pas jugée (c\'est le rôle de « Non vide »).' },
+            range:   { quoi: 'La valeur numérique doit rester dans une plage.', comment: 'Le texte est converti en nombre (virgule ou point, espaces insécables retirés) puis comparé aux bornes. Ce qui n\'est pas convertible est signalé à part.' },
+            inlist:  { quoi: 'La valeur doit figurer dans une liste écrite ici.', comment: 'Comparaison en majuscules et sans espaces de bord.' },
+            vlist:   { quoi: 'La valeur doit appartenir à une liste de valeurs déclarée.', comment: 'La liste vient du référentiel : on la modifie une fois, toutes les règles qui s\'y rattachent suivent.' },
+            fk:      { quoi: 'La valeur doit exister dans une table de référence.', comment: 'Jointure sur la colonne de référence ; les valeurs vides ne sont pas jugées.' },
+            cond:    { quoi: 'Si une condition est vraie, une autre doit l\'être aussi.', comment: 'Seules les lignes qui vérifient le « si » sont jugées ; les autres sont hors périmètre et n\'entrent pas dans le total.' },
+            expr:    { quoi: 'Une cohérence entre colonnes doit être vraie.', comment: 'Chaque comparaison est compilée en essayant successivement la DATE, puis le NOMBRE, puis le TEXTE — pour éviter qu\'un 01/01/2024 soit jugé « inférieur » à 31/12/2023 par comparaison alphabétique.' },
+            fresh:   { quoi: 'La date ne doit pas être trop ancienne.', comment: 'Écart entre la date de la ligne et aujourd\'hui, comparé au seuil.' },
+            sql:     { quoi: 'Une condition SQL libre définit l\'échec.', comment: 'La condition est évaluée ligne à ligne. Les ordres d\'écriture sont refusés.' },
+            group:   { quoi: 'Un agrégat par groupe doit respecter un seuil.', comment: 'L\'unité comptée est le GROUPE, pas la ligne : le résultat dit combien de groupes sont non conformes, et l\'inspection montre les lignes de ces groupes.' },
+            ts_gap:    { quoi: 'Aucun point attendu ne doit manquer.', comment: 'Pour chaque couple de points consécutifs on mesure l\'écart réel et on le compare au pas de la série (déclaré, ou déduit de l\'intervalle dominant). Seules les séries CADENCÉES sont jugées : une série événementielle n\'a pas de trou, elle a un rythme libre.' },
+            ts_dup:    { quoi: 'Un instant ne doit porter qu\'une seule valeur.', comment: 'On regroupe par (série, horodatage) et on retient les groupes de plus d\'une occurrence. L\'inspection montre les valeurs concurrentes.' },
+            ts_flat:   { quoi: 'La mesure ne doit pas rester figée.', comment: 'On repère les suites de points strictement identiques (technique dite des « îlots ») et on retient celles atteignant la longueur minimale. C\'est la signature d\'un capteur bloqué, qu\'aucune analyse de distribution ne voit.' },
+            ts_jump:   { quoi: 'La variation entre deux points doit rester plausible.', comment: 'On compare chaque point au précédent de la MÊME série. Une valeur peut être normale dans l\'absolu et impossible comme variation — c\'est ce que ce contrôle attrape.' },
+            ts_mono:   { quoi: 'La mesure doit évoluer dans un seul sens.', comment: 'Destiné aux compteurs, index et cumuls : tout recul est signalé, avec la valeur précédente et l\'ampleur du recul.' },
+            ts_fresh:  { quoi: 'Chaque série doit continuer d\'alimenter.', comment: 'Écart entre le dernier point de la série et la référence choisie (le point le plus récent du fichier, ou maintenant). L\'unité comptée est la SÉRIE.' },
+            ts_season: { quoi: 'Un point doit ressembler aux autres points du même créneau.', comment: 'On compare à la médiane du MÊME créneau (heure du jour, jour de semaine ou mois) pour la MÊME série, avec un écart robuste. Un creux nocturne normal cesse ainsi d\'être signalé. Quand la série est trop stable pour que l\'écart médian soit exploitable, on bascule sur l\'écart moyen puis sur la dispersion de la série entière — l\'inspection indique laquelle a servi.' },
+            ts_cover:  { quoi: 'Chaque série doit être suffisamment complète.', comment: 'Points distincts rapportés aux points attendus entre le premier et le dernier, au pas de la série. L\'unité comptée est la SÉRIE.' }
+        };
+        function qrExplain(r) {
+            const h = QR_HELP[r.type]; if (!h) return null;
+            const P = r.p || {}; const bits = [];
+            if (r.type === 'ts_flat') bits.push(`au moins ${Math.max(2, Number(P.minLen) || 3)} points identiques`);
+            if (r.type === 'ts_jump') { if (P.jumpAbs) bits.push(`écart absolu > ${P.jumpAbs}`); if (P.jumpPct) bits.push(`variation > ${P.jumpPct} %`); }
+            if (r.type === 'ts_mono') bits.push(`sens ${P.sens === 'decroissant' ? 'décroissant' : 'croissant'}`);
+            if (r.type === 'ts_fresh') bits.push(`retard > ${Number(P.maxAgeH) || 24} h depuis ${P.ref === 'now' ? 'maintenant' : 'le point le plus récent du fichier'}`);
+            if (r.type === 'ts_cover') bits.push(`couverture < ${Number(P.minPct) || 95} %`);
+            if (r.type === 'ts_season') bits.push(`créneau « ${P.bucket === 'dow' ? 'même jour de semaine' : (P.bucket === 'month' ? 'même mois' : 'même heure du jour')} », sensibilité k = ${Number(P.k) || 4}`);
+            if (P.serieLike) bits.push(`séries filtrées sur « ${P.serieLike} »`);
+            return { quoi: h.quoi, comment: h.comment, seuils: bits.join(' · ') };
+        }
+        function qrExplainHtml(r, compact) {
+            const e = qrExplain(r); if (!e) return '';
+            if (compact) return `<span class="text-[10px] text-slate-400" title="${escapeHTML(e.comment)}">${escapeHTML(e.quoi)}</span>`;
+            return `<div class="text-[11px] leading-relaxed"><div class="font-bold">${escapeHTML(e.quoi)}</div>
+                <div class="text-slate-500 mt-0.5">${escapeHTML(e.comment)}</div>
+                ${e.seuils ? `<div class="text-slate-500 mt-0.5"><b>Réglages :</b> ${escapeHTML(e.seuils)}</div>` : ''}
+                ${QR_TS_UNIT[r.type] ? `<div class="text-slate-400 mt-0.5">Unité comptée : <b>${QR_TS_UNIT[r.type]}</b>.</div>` : ''}</div>`;
+        }
+
+        /* ---- Inspection des contrôles de série : on restitue la MESURE, pas la ligne brute ----
+           Pour un trou, la ligne fautive n'existe pas : il n'y a rien à afficher d'une table.
+           Ce qu'il faut montrer, c'est le raisonnement — le point d'avant, le point d'après,
+           l'écart observé, le pas attendu et le nombre de points manquants. */
+        function tsInspectSql(r, c, T) {
+            const P = r.p || {};
+            const tol = Number(c.tol != null ? c.tol : 0.5);
+            const flt = tsFilterSql(P);
+            switch (r.type) {
+                case 'ts_gap':
+                    return `${tsCte(c, T)}
+SELECT s.sid AS "Série", s.pts AS "Dernier point avant le trou", s.ts AS "Point suivant",
+  s.d AS "Écart observé (s)", o.pas AS "Pas attendu (s)",
+  (s.d / o.pas - 1)::BIGINT AS "Points manquants",
+  ROUND(s.d::DOUBLE / o.pas, 2) AS "Fois le pas attendu",
+  'écart > pas x ${1 + tol}' AS "Règle appliquée"
+FROM st s JOIN ok o ON o.sid = s.sid
+WHERE s.d IS NOT NULL AND s.d > o.pas * ${1 + tol}${flt.replace('sid', 's.sid')}
+ORDER BY s.d DESC`;
+                case 'ts_dup':
+                    return `${tsCte(c, T)}
+SELECT sid AS "Série", ts AS "Horodatage", COUNT(*) AS "Nombre d'occurrences",
+  COUNT(DISTINCT v) AS "Valeurs distinctes",
+  string_agg(DISTINCT CAST(v AS VARCHAR), ' | ') AS "Valeurs concurrentes"
+FROM b WHERE 1=1${flt} GROUP BY sid, ts HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC`;
+                case 'ts_flat': {
+                    const n = Math.max(2, Number(P.minLen) || 3);
+                    return `${tsCte(c, T)}
+SELECT sid AS "Série", v AS "Valeur figée", COUNT(*) AS "Points consécutifs",
+  MIN(ts) AS "Depuis", MAX(ts) AS "Jusqu'à",
+  date_diff('second', MIN(ts), MAX(ts)) AS "Durée (s)",
+  'au moins ${n} points identiques' AS "Règle appliquée"
+FROM pl WHERE 1=1${flt} GROUP BY sid, v, grp HAVING COUNT(*) >= ${n} ORDER BY COUNT(*) DESC`;
+                }
+                case 'ts_jump': {
+                    const conds = [];
+                    if (P.jumpAbs) conds.push(`abs(v - pv) > ${Number(P.jumpAbs)}`);
+                    if (P.jumpPct) conds.push(`(pv <> 0 AND abs(v - pv) / abs(pv) * 100 > ${Number(P.jumpPct)})`);
+                    if (!conds.length) return null;
+                    return `${tsCte(c, T)}
+SELECT sid AS "Série", pts AS "Point précédent", ts AS "Horodatage",
+  pv AS "Valeur précédente", v AS "Valeur", ROUND(v - pv, 4) AS "Écart",
+  ROUND(abs(v - pv), 4) AS "Écart absolu",
+  CASE WHEN pv <> 0 THEN ROUND(abs(v - pv) / abs(pv) * 100, 1) END AS "Variation (%)",
+  d AS "Temps écoulé (s)",
+  '${escapeHTML(conds.join(' OU ')).replace(/'/g, "''")}' AS "Règle appliquée"
+FROM st WHERE pv IS NOT NULL AND v IS NOT NULL${flt} AND (${conds.join(' OR ')})
+ORDER BY abs(v - pv) DESC`;
+                }
+                case 'ts_mono': {
+                    const dec = P.sens === 'decroissant';
+                    return `${tsCte(c, T)}
+SELECT sid AS "Série", pts AS "Point précédent", ts AS "Horodatage",
+  pv AS "Valeur précédente", v AS "Valeur",
+  ROUND(${dec ? 'v - pv' : 'pv - v'}, 4) AS "${dec ? 'Hausse' : 'Recul'} constaté",
+  'sens attendu : ${dec ? 'décroissant' : 'croissant'}' AS "Règle appliquée"
+FROM st WHERE pv IS NOT NULL AND v IS NOT NULL${flt} AND v ${dec ? '>' : '<'} pv
+ORDER BY abs(v - pv) DESC`;
+                }
+                case 'ts_fresh': {
+                    const h = Number(P.maxAgeH) || 24;
+                    const ref = P.ref === 'now' ? 'now()::TIMESTAMP' : '(SELECT MAX(ts) FROM b)';
+                    return `${tsCte(c, T)}
+SELECT sid AS "Série", MAX(ts) AS "Dernier point reçu", ${ref} AS "Référence",
+  date_diff('hour', MAX(ts), ${ref}) AS "Retard (h)", ${h} AS "Retard maximal admis (h)",
+  COUNT(*) AS "Points de la série"
+FROM b WHERE 1=1${flt} GROUP BY sid HAVING date_diff('hour', MAX(ts), ${ref}) > ${h}
+ORDER BY 4 DESC`;
+                }
+                case 'ts_cover': {
+                    const min = Number(P.minPct) || 95;
+                    return `${tsCte(c, T)},
+  agg AS (SELECT sid, COUNT(DISTINCT ts) AS n_ts, COUNT(*) AS n, MIN(ts) AS t0, MAX(ts) AS t1 FROM b WHERE 1=1${flt} GROUP BY sid)
+SELECT a.sid AS "Série", a.t0 AS "Début", a.t1 AS "Fin", o.pas AS "Pas (s)",
+  a.n_ts AS "Horodatages distincts",
+  (FLOOR(date_diff('second', a.t0, a.t1) / o.pas) + 1)::BIGINT AS "Points attendus",
+  (FLOOR(date_diff('second', a.t0, a.t1) / o.pas) + 1 - a.n_ts)::BIGINT AS "Points manquants",
+  ROUND(100.0 * a.n_ts / NULLIF(FLOOR(date_diff('second', a.t0, a.t1) / o.pas) + 1, 0), 1) AS "Couverture (%)",
+  ${min} AS "Seuil (%)"
+FROM agg a JOIN ok o ON o.sid = a.sid
+WHERE 100.0 * a.n_ts / NULLIF(FLOOR(date_diff('second', a.t0, a.t1) / o.pas) + 1, 0) < ${min}
+ORDER BY 8`;
+                }
+                case 'ts_season': {
+                    const k = Number(P.k) || 4;
+                    const bk = P.bucket === 'dow' ? 'extract(dow FROM ts)' : (P.bucket === 'month' ? 'extract(month FROM ts)' : 'extract(hour FROM ts)');
+                    const lbl = P.bucket === 'dow' ? 'jour de semaine' : (P.bucket === 'month' ? 'mois' : 'heure du jour');
+                    // On expose la médiane du créneau, la dispersion retenue, le seuil calculé
+                    // ET la méthode employée : c'est ce qui permet de juger si le seuil est bon.
+                    return `${tsCte(c, T)},
+  s AS (SELECT sid, ${bk} AS bk, ts, v FROM b WHERE v IS NOT NULL${flt}),
+  m1 AS (SELECT sid, bk, median(v) AS med FROM s GROUP BY sid, bk),
+  m2 AS (SELECT s.sid, s.bk, median(abs(s.v - m1.med)) AS mad, avg(abs(s.v - m1.med)) AS aad, COUNT(*) AS n
+         FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk GROUP BY s.sid, s.bk),
+  ms AS (SELECT sid, median(v) AS smed FROM s GROUP BY sid),
+  m3 AS (SELECT s.sid, median(abs(s.v - ms.smed)) AS smad FROM s JOIN ms ON ms.sid = s.sid GROUP BY s.sid),
+  j AS (SELECT s.sid, s.bk, s.ts, s.v, m1.med, m2.mad, m2.aad, m2.n, m3.smad,
+      CASE WHEN m2.mad > 0 THEN ${k} * 1.4826 * m2.mad
+           WHEN m2.aad > 0 THEN ${k} * 1.2533 * m2.aad
+           WHEN m3.smad > 0 THEN ${k} * 1.4826 * m3.smad END AS seuil,
+      CASE WHEN m2.mad > 0 THEN 'écart médian du créneau'
+           WHEN m2.aad > 0 THEN 'écart moyen du créneau (série trop stable pour l''écart médian)'
+           WHEN m3.smad > 0 THEN 'dispersion de la série entière' END AS methode
+    FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND m2.bk = s.bk JOIN m3 ON m3.sid = s.sid)
+SELECT sid AS "Série", ts AS "Horodatage", bk AS "Créneau (${lbl})", v AS "Valeur",
+  ROUND(med, 4) AS "Médiane du créneau", ROUND(abs(v - med), 4) AS "Écart à la médiane",
+  ROUND(seuil, 4) AS "Seuil déclenchant", methode AS "Dispersion utilisée",
+  n AS "Points du créneau", ${k} AS "Sensibilité k"
+FROM j WHERE n >= 4 AND seuil IS NOT NULL AND abs(v - med) > seuil
+ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
+                }
+            }
+            return null;
+        }
+
         function qrInspectSql(r) {
             if (r.bo) { const rs = qrBoResolutions(r); return rs.length ? qrInspectSql(qrVirtual(r, rs[0])) : null; }
             const t = tableByName(r.table); if (!t) return null;
@@ -11896,6 +12072,10 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
             if (r.type === 'group') { const g = qrGroupSql(r, T); if (!g) return null;
                 // On restitue les LIGNES des groupes fautifs : c'est ce qu'on corrige concrètement.
                 return `SELECT * FROM ${T} WHERE (${g.gk}) IN (SELECT ${g.gk} FROM (${g.sql}) WHERE ${g.bad}) ORDER BY ${g.gk}`; }
+            if (QR_SERIES.includes(r.type)) {
+                const cfg = tsForTable(r.table);
+                return tsCfgOk(cfg) ? tsInspectSql(r, cfg, T) : null;
+            }
             const fc = qrFailCond(r); return fc ? `SELECT * FROM ${T} WHERE ${fc}` : null;
         }
         // V6.20 : exécuter UNE règle, à la demande, sans lancer toute la suite.
@@ -12032,7 +12212,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
                 default:
                     if (QR_SERIES.includes(r.type)) {
                         const cfg = tsForTable(r.table);
-                        if (!cfg) return `<span class="text-[11px] text-amber-700">Déclarez d'abord cette source comme série temporelle (Gouvernance → Séries temporelles).</span>`;
+                        if (!cfg) return `<span class="text-[11px] text-amber-700">Déclarez d'abord cette source comme série temporelle (Données & Modèle → Séries temporelles).</span>`;
                         const sel2 = (f, cur, opts, dft) => `<select onchange="qrSet('${r.id}','p.${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white">${Object.entries(opts).map(([k, l]) => `<option value="${k}" ${(cur || dft) === k ? 'selected' : ''}>${escapeHTML(l)}</option>`).join('')}</select>`;
                         const filt = `<span class="text-[10px] text-slate-400 ml-2">séries visées (facultatif)</span> ${inp('serieLike', P.serieLike, 'ex : CPT% (motif LIKE)', 'w-32')}`;
                         const base = `<span class="text-[10px] text-slate-400">maille : ${escapeHTML((cfg.keyCols || []).join(' + '))} × ${escapeHTML(cfg.tsCol)}</span>`;
@@ -12049,6 +12229,15 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
                     return '';
             }
         }
+        // Toute règle affiche ce qu'elle mesure, sous ses réglages : une règle qu'on ne
+        // comprend pas est une règle qu'on ne corrige pas.
+        const _qrParamsHtmlRaw = qrParamsHtml;
+        qrParamsHtml = function (r) {
+            const base = _qrParamsHtmlRaw(r);
+            const e = qrExplain(r); if (!e) return base;
+            return `${base}<details class="mt-1"><summary class="text-[10px] text-slate-400 cursor-pointer select-none">Comment ce contrôle mesure l'erreur</summary>
+                <div class="mt-1 p-2 rounded-lg bg-slate-50 border border-slate-200">${qrExplainHtml(r)}</div></details>`;
+        };
         function renderQualityRules() {
             const c = el('qrContent'); if (!c) return;
             const rules = qrRules();
@@ -12080,7 +12269,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
             // Dettes qualité
             if (debts.length) {
                 html += `<details class="mb-4 border border-red-100 rounded-lg px-3 py-2 bg-red-50/40" open><summary class="text-xs font-bold text-red-700 cursor-pointer">🧨 Dettes qualité — règles les plus en échec (impact = criticité × lignes)</summary>
-                <div class="mt-2 space-y-1">${debts.map(r => { const sql2 = qrInspectSql(r); const idx = sql2 ? registerQualInspect('Règle : ' + r.name, sql2) : null;
+                <div class="mt-2 space-y-1">${debts.map(r => { const sql2 = qrInspectSql(r); const idx = sql2 ? registerQualInspect('Règle : ' + r.name, sql2, qrExplainHtml(r)) : null;
                     return `<div class="flex items-center gap-2 text-xs bg-white border border-slate-200 rounded px-2 py-1.5"><span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${CRIT_COLORS[r.crit] || CRIT_COLORS['Faible']}">${r.crit}</span><strong>${escapeHTML(r.name)}</strong><span class="text-slate-400">${escapeHTML(r.table)}</span><span class="ml-auto font-bold text-red-600">${r.last.fails.toLocaleString('fr-FR')} ligne(s)</span><span class="text-slate-400">${(100 * r.last.rate).toFixed(1)} %</span>${idx != null ? qualInspectButtons(idx) : ''}</div>`; }).join('')}</div></details>`;
             }
             // Tendance + comparaison (E2)
@@ -12096,7 +12285,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
             <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-8" title="Active">✓</th><th class="p-2 w-44">Nom</th><th class="p-2 w-36">Table</th><th class="p-2 w-40">Type</th><th class="p-2">Paramètres</th><th class="p-2 w-24">Criticité</th><th class="p-2 w-44">Dernier résultat</th><th class="p-2 w-16"></th></tr></thead>
                 <tbody class="divide-y divide-slate-100">${rules.map(r => {
-                    const sql2 = r.last && r.last.fails > 0 ? qrInspectSql(r) : null; const idx = sql2 ? registerQualInspect('Règle : ' + r.name, sql2) : null;
+                    const sql2 = r.last && r.last.fails > 0 ? qrInspectSql(r) : null; const idx = sql2 ? registerQualInspect('Règle : ' + r.name, sql2, qrExplainHtml(r)) : null;
                     return `<tr class="${r.enabled ? '' : 'opacity-40'} hover:bg-slate-50 align-top">
                     <td class="p-2"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="qrSet('${r.id}','enabled',this.checked)" class="w-4 h-4 rounded text-purple-600"></td>
                     <td class="p-2"><input type="text" value="${escapeHTML(r.name)}" onchange="qrSet('${r.id}','name',this.value)" class="font-bold border border-slate-200 p-1 rounded w-full"></td>
@@ -15508,7 +15697,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
         // ou exporter la totalité en CSV pour correction. Alimenté par le profiling (hygiène,
         // formats, aberrants...), les règles métier du modèle de données et les facettes 1–1.
         let qualInspectRegistry = [];
-        function registerQualInspect(label, sql) { qualInspectRegistry.push({ label, sql }); return qualInspectRegistry.length - 1; }
+        function registerQualInspect(label, sql, explain) { qualInspectRegistry.push({ label, sql, explain }); return qualInspectRegistry.length - 1; }
         function qualInspectButtons(idx) {
             return `<span class="inline-flex gap-1 ml-2"><button onclick="qualViewInspect(${idx}, this, 0)" class="text-[10px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-50">👁 Voir</button><button onclick="qualExportInspect(${idx}, this)" class="text-[10px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-50">⬇ CSV</button></span>`;
         }
@@ -15524,7 +15713,8 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
             const entry = qualInspectRegistry[idx]; if (!entry) return;
             qualInspectModal();
             const head = el('qualInspectModalHead'), body = el('qualInspectModalBody');
-            head.innerHTML = `<strong class="text-amber-800">${escapeHTML(entry.label)}</strong><button onclick="closeQualInspectModal()" class="ml-auto text-amber-600 hover:text-red-600 font-black text-base leading-none px-1">✕</button>`;
+            head.innerHTML = `<strong class="text-amber-800">${escapeHTML(entry.label)}</strong><button onclick="closeQualInspectModal()" class="ml-auto text-amber-600 hover:text-red-600 font-black text-base leading-none px-1">✕</button>`
+                + (entry.explain ? `<div class="w-full mt-1 pt-1 border-t border-amber-200">${entry.explain}</div>` : '');
             body.innerHTML = '<p class="text-xs text-slate-400 p-4">Chargement des lignes en anomalie…</p>';
             try {
                 const { conn } = await getDB();
@@ -15540,7 +15730,8 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
                     ${offset > 0 ? `<button onclick="qualViewInspect(${idx}, null, ${Math.max(0, offset - page)})" class="bg-white border border-amber-300 px-2.5 py-1 rounded font-bold hover:bg-amber-100">← Précédent</button>` : ''}
                     ${offset + page < entry.total ? `<button onclick="qualViewInspect(${idx}, null, ${offset + page})" class="bg-white border border-amber-300 px-2.5 py-1 rounded font-bold hover:bg-amber-100">Suivant →</button>` : ''}
                     <button onclick="qualExportInspect(${idx}, this)" class="bg-white border border-amber-300 px-2.5 py-1 rounded font-bold hover:bg-amber-100">⬇ Exporter tout (CSV)</button>
-                    <button onclick="closeQualInspectModal()" class="ml-auto text-amber-600 hover:text-red-600 font-black text-base leading-none px-1" title="Fermer (Échap)">✕</button>`;
+                    <button onclick="closeQualInspectModal()" class="ml-auto text-amber-600 hover:text-red-600 font-black text-base leading-none px-1" title="Fermer (Échap)">✕</button>`
+                    + (entry.explain ? `<div class="w-full mt-1.5 pt-1.5 border-t border-amber-200">${entry.explain}</div>` : '');
                 if (!rows.length && offset === 0) { body.innerHTML = '<p class="text-xs text-emerald-700 p-4">Aucune ligne en anomalie (peut différer de l\'audit si celui-ci portait sur un échantillon).</p>'; return; }
                 const cols = rows.length ? Object.keys(rows[0]) : [];
                 body.innerHTML = `<table class="w-full text-left text-[11px]"><thead class="bg-slate-100 text-slate-600 font-bold sticky top-0 z-10"><tr>${cols.map(c => `<th class="p-2 whitespace-nowrap">${escapeHTML(c)}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100">${rows.map(rw => `<tr class="hover:bg-amber-50/50">${cols.map(c => `<td class="p-2 whitespace-nowrap">${escapeHTML(rw[c] == null ? '' : String(rw[c]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
