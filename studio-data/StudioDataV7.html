@@ -10892,8 +10892,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.5.0';
+        const APP_VERSION = '7.5.1';
         const APP_CHANGELOG = [
+            { v: '7.5.1', d: '2026-07-29', t: 'Horodatages lisibles dans le détail des échecs + la zone « séries visées » expliquée', items: [
+                '<b>Les horodatages et les durées deviennent lisibles.</b> Le détail d\'un échec affichait « 2026-01-03 11:00:00 » et « 133200 » — exact, mais illisible. On lit désormais <b>03/01/2026 à 11h00</b> et <b>1 j 13 h</b>. La mise en forme est faite dans la requête, donc l\'export CSV en profite aussi, sans retraitement.',
+                'Les colonnes sont renommées en conséquence : « Écart observé (s) » devient <b>Durée du trou</b>, « Pas attendu (s) » devient <b>Pas attendu de la série</b>, et une colonne <b>Ampleur</b> dit « 37 fois le pas » plutôt que de laisser faire le calcul.',
+                '<b>La zone « CPT% » est expliquée.</b> Elle n\'était identifiée que par un exemple, sans dire à quoi elle sert. Elle s\'intitule maintenant <b>Limiter à certaines séries</b>, indique que le contrôle porte par défaut sur toutes les séries, explique à quoi sert la restriction (un fichier qui mélange un compteur cumulatif et une mesure instantanée : la monotonie ne vaut que pour le premier) et donne trois exemples commentés du caractère <b>%</b>.',
+                'Le récapitulatif de chaque règle de série précise désormais explicitement « porte sur toutes les séries du fichier » quand aucune restriction n\'est posée.'] },
             { v: '7.5.0', d: '2026-07-29', t: 'Séries temporelles dans Données & Modèle + le détail des échecs explique la mesure', items: [
                 '<b>La déclaration des séries passe de Gouvernance à Données &amp; Modèle.</b> C\'est une propriété de la <b>structure</b> de la donnée — au même titre qu\'une clé ou une relation — pas un acte de gouvernance. Nouvel écran dans la phase ①, à côté du Modèle de données.',
                 '<b>Chaque règle explique ce qu\'elle mesure.</b> Un dépliant « Comment ce contrôle mesure l\'erreur » sous les réglages de chaque règle : ce qui est vérifié, la méthode employée, les seuils effectifs et l\'unité comptée. Les 20 types de règles sont documentés, pas seulement les nouveaux.',
@@ -11935,7 +11940,8 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
             if (r.type === 'ts_fresh') bits.push(`retard > ${Number(P.maxAgeH) || 24} h depuis ${P.ref === 'now' ? 'maintenant' : 'le point le plus récent du fichier'}`);
             if (r.type === 'ts_cover') bits.push(`couverture < ${Number(P.minPct) || 95} %`);
             if (r.type === 'ts_season') bits.push(`créneau « ${P.bucket === 'dow' ? 'même jour de semaine' : (P.bucket === 'month' ? 'même mois' : 'même heure du jour')} », sensibilité k = ${Number(P.k) || 4}`);
-            if (P.serieLike) bits.push(`séries filtrées sur « ${P.serieLike} »`);
+            if (P.serieLike) bits.push(`limité aux séries dont l'identifiant correspond à « ${P.serieLike} » (le % remplace n'importe quelle suite de caractères)`);
+            else if (QR_SERIES.includes(r.type)) bits.push('porte sur toutes les séries du fichier');
             return { quoi: h.quoi, comment: h.comment, seuils: bits.join(' · ') };
         }
         function qrExplainHtml(r, compact) {
@@ -11951,24 +11957,40 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
            Pour un trou, la ligne fautive n'existe pas : il n'y a rien à afficher d'une table.
            Ce qu'il faut montrer, c'est le raisonnement — le point d'avant, le point d'après,
            l'écart observé, le pas attendu et le nombre de points manquants. */
+        // Un horodatage brut (« 2026-01-03 11:00:00 ») et une durée en secondes (« 133200 »)
+        // sont exacts mais illisibles : on les met en forme DANS le SQL, pour que le
+        // panneau d'inspection et l'export CSV soient lisibles sans traitement côté page.
+        function tsDateSql(x) { return `strftime(${x}, '%d/%m/%Y à %Hh%M')`; }
+        function tsHumanSql(x) {
+            return `CASE
+   WHEN ${x} IS NULL THEN NULL
+   WHEN ${x} < 60 THEN CAST(ROUND(${x}) AS BIGINT) || ' s'
+   WHEN ${x} < 3600 THEN CAST(ROUND(${x}/60.0) AS BIGINT) || ' min'
+   WHEN ${x} < 86400 THEN CAST(FLOOR(${x}/3600) AS BIGINT) || ' h'
+        || CASE WHEN CAST(ROUND((${x}%3600)/60.0) AS BIGINT) > 0 THEN ' ' || CAST(ROUND((${x}%3600)/60.0) AS BIGINT) || ' min' ELSE '' END
+   ELSE CAST(FLOOR(${x}/86400) AS BIGINT) || ' j'
+        || CASE WHEN CAST(FLOOR((${x}%86400)/3600) AS BIGINT) > 0 THEN ' ' || CAST(FLOOR((${x}%86400)/3600) AS BIGINT) || ' h' ELSE '' END
+ END`;
+        }
         function tsInspectSql(r, c, T) {
             const P = r.p || {};
             const tol = Number(c.tol != null ? c.tol : 0.5);
             const flt = tsFilterSql(P);
+            const D = tsDateSql, H = tsHumanSql;
             switch (r.type) {
                 case 'ts_gap':
                     return `${tsCte(c, T)}
-SELECT s.sid AS "Série", s.pts AS "Dernier point avant le trou", s.ts AS "Point suivant",
-  s.d AS "Écart observé (s)", o.pas AS "Pas attendu (s)",
+SELECT s.sid AS "Série", ${D('s.pts')} AS "Dernier point avant le trou", ${D('s.ts')} AS "Point suivant",
+  ${H('s.d')} AS "Durée du trou", ${H('o.pas')} AS "Pas attendu de la série",
   (s.d / o.pas - 1)::BIGINT AS "Points manquants",
-  ROUND(s.d::DOUBLE / o.pas, 2) AS "Fois le pas attendu",
-  'écart > pas x ${1 + tol}' AS "Règle appliquée"
+  ROUND(s.d::DOUBLE / o.pas, 1) || ' fois le pas' AS "Ampleur",
+  'écart supérieur au pas x ${1 + tol}' AS "Règle appliquée"
 FROM st s JOIN ok o ON o.sid = s.sid
 WHERE s.d IS NOT NULL AND s.d > o.pas * ${1 + tol}${flt.replace('sid', 's.sid')}
 ORDER BY s.d DESC`;
                 case 'ts_dup':
                     return `${tsCte(c, T)}
-SELECT sid AS "Série", ts AS "Horodatage", COUNT(*) AS "Nombre d'occurrences",
+SELECT sid AS "Série", ${D('ts')} AS "Horodatage", COUNT(*) AS "Nombre d'occurrences",
   COUNT(DISTINCT v) AS "Valeurs distinctes",
   string_agg(DISTINCT CAST(v AS VARCHAR), ' | ') AS "Valeurs concurrentes"
 FROM b WHERE 1=1${flt} GROUP BY sid, ts HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC`;
@@ -11976,9 +11998,9 @@ FROM b WHERE 1=1${flt} GROUP BY sid, ts HAVING COUNT(*) > 1 ORDER BY COUNT(*) DE
                     const n = Math.max(2, Number(P.minLen) || 3);
                     return `${tsCte(c, T)}
 SELECT sid AS "Série", v AS "Valeur figée", COUNT(*) AS "Points consécutifs",
-  MIN(ts) AS "Depuis", MAX(ts) AS "Jusqu'à",
-  date_diff('second', MIN(ts), MAX(ts)) AS "Durée (s)",
-  'au moins ${n} points identiques' AS "Règle appliquée"
+  ${D('MIN(ts)')} AS "Depuis", ${D('MAX(ts)')} AS "Jusqu'à",
+  ${H("date_diff('second', MIN(ts), MAX(ts))")} AS "Durée du blocage",
+  'au moins ${n} points identiques d''affilée' AS "Règle appliquée"
 FROM pl WHERE 1=1${flt} GROUP BY sid, v, grp HAVING COUNT(*) >= ${n} ORDER BY COUNT(*) DESC`;
                 }
                 case 'ts_jump': {
@@ -11986,22 +12008,26 @@ FROM pl WHERE 1=1${flt} GROUP BY sid, v, grp HAVING COUNT(*) >= ${n} ORDER BY CO
                     if (P.jumpAbs) conds.push(`abs(v - pv) > ${Number(P.jumpAbs)}`);
                     if (P.jumpPct) conds.push(`(pv <> 0 AND abs(v - pv) / abs(pv) * 100 > ${Number(P.jumpPct)})`);
                     if (!conds.length) return null;
+                    const lbl = [];
+                    if (P.jumpAbs) lbl.push(`écart absolu supérieur à ${Number(P.jumpAbs)}`);
+                    if (P.jumpPct) lbl.push(`variation supérieure à ${Number(P.jumpPct)} %`);
                     return `${tsCte(c, T)}
-SELECT sid AS "Série", pts AS "Point précédent", ts AS "Horodatage",
+SELECT sid AS "Série", ${D('pts')} AS "Point précédent", ${D('ts')} AS "Horodatage",
   pv AS "Valeur précédente", v AS "Valeur", ROUND(v - pv, 4) AS "Écart",
   ROUND(abs(v - pv), 4) AS "Écart absolu",
   CASE WHEN pv <> 0 THEN ROUND(abs(v - pv) / abs(pv) * 100, 1) END AS "Variation (%)",
-  d AS "Temps écoulé (s)",
-  '${escapeHTML(conds.join(' OU ')).replace(/'/g, "''")}' AS "Règle appliquée"
+  ${H('d')} AS "Temps écoulé",
+  '${lbl.join(' ou ').replace(/'/g, "''")}' AS "Règle appliquée"
 FROM st WHERE pv IS NOT NULL AND v IS NOT NULL${flt} AND (${conds.join(' OR ')})
 ORDER BY abs(v - pv) DESC`;
                 }
                 case 'ts_mono': {
                     const dec = P.sens === 'decroissant';
                     return `${tsCte(c, T)}
-SELECT sid AS "Série", pts AS "Point précédent", ts AS "Horodatage",
+SELECT sid AS "Série", ${D('pts')} AS "Point précédent", ${D('ts')} AS "Horodatage",
   pv AS "Valeur précédente", v AS "Valeur",
   ROUND(${dec ? 'v - pv' : 'pv - v'}, 4) AS "${dec ? 'Hausse' : 'Recul'} constaté",
+  ${H('d')} AS "Temps écoulé",
   'sens attendu : ${dec ? 'décroissant' : 'croissant'}' AS "Règle appliquée"
 FROM st WHERE pv IS NOT NULL AND v IS NOT NULL${flt} AND v ${dec ? '>' : '<'} pv
 ORDER BY abs(v - pv) DESC`;
@@ -12010,17 +12036,17 @@ ORDER BY abs(v - pv) DESC`;
                     const h = Number(P.maxAgeH) || 24;
                     const ref = P.ref === 'now' ? 'now()::TIMESTAMP' : '(SELECT MAX(ts) FROM b)';
                     return `${tsCte(c, T)}
-SELECT sid AS "Série", MAX(ts) AS "Dernier point reçu", ${ref} AS "Référence",
-  date_diff('hour', MAX(ts), ${ref}) AS "Retard (h)", ${h} AS "Retard maximal admis (h)",
-  COUNT(*) AS "Points de la série"
+SELECT sid AS "Série", ${D('MAX(ts)')} AS "Dernier point reçu",
+  ${D(ref)} AS "Comparé à", ${H(`date_diff('second', MAX(ts), ${ref})`)} AS "Retard",
+  ${H(h * 3600)} AS "Retard maximal admis", COUNT(*) AS "Points de la série"
 FROM b WHERE 1=1${flt} GROUP BY sid HAVING date_diff('hour', MAX(ts), ${ref}) > ${h}
-ORDER BY 4 DESC`;
+ORDER BY date_diff('second', MAX(ts), ${ref}) DESC`;
                 }
                 case 'ts_cover': {
                     const min = Number(P.minPct) || 95;
                     return `${tsCte(c, T)},
   agg AS (SELECT sid, COUNT(DISTINCT ts) AS n_ts, COUNT(*) AS n, MIN(ts) AS t0, MAX(ts) AS t1 FROM b WHERE 1=1${flt} GROUP BY sid)
-SELECT a.sid AS "Série", a.t0 AS "Début", a.t1 AS "Fin", o.pas AS "Pas (s)",
+SELECT a.sid AS "Série", ${D('a.t0')} AS "Début", ${D('a.t1')} AS "Fin", ${H('o.pas')} AS "Pas de la série",
   a.n_ts AS "Horodatages distincts",
   (FLOOR(date_diff('second', a.t0, a.t1) / o.pas) + 1)::BIGINT AS "Points attendus",
   (FLOOR(date_diff('second', a.t0, a.t1) / o.pas) + 1 - a.n_ts)::BIGINT AS "Points manquants",
@@ -12034,8 +12060,6 @@ ORDER BY 8`;
                     const k = Number(P.k) || 4;
                     const bk = P.bucket === 'dow' ? 'extract(dow FROM ts)' : (P.bucket === 'month' ? 'extract(month FROM ts)' : 'extract(hour FROM ts)');
                     const lbl = P.bucket === 'dow' ? 'jour de semaine' : (P.bucket === 'month' ? 'mois' : 'heure du jour');
-                    // On expose la médiane du créneau, la dispersion retenue, le seuil calculé
-                    // ET la méthode employée : c'est ce qui permet de juger si le seuil est bon.
                     return `${tsCte(c, T)},
   s AS (SELECT sid, ${bk} AS bk, ts, v FROM b WHERE v IS NOT NULL${flt}),
   m1 AS (SELECT sid, bk, median(v) AS med FROM s GROUP BY sid, bk),
@@ -12051,7 +12075,7 @@ ORDER BY 8`;
            WHEN m2.aad > 0 THEN 'écart moyen du créneau (série trop stable pour l''écart médian)'
            WHEN m3.smad > 0 THEN 'dispersion de la série entière' END AS methode
     FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND m2.bk = s.bk JOIN m3 ON m3.sid = s.sid)
-SELECT sid AS "Série", ts AS "Horodatage", bk AS "Créneau (${lbl})", v AS "Valeur",
+SELECT sid AS "Série", ${D('ts')} AS "Horodatage", bk AS "Créneau (${lbl})", v AS "Valeur",
   ROUND(med, 4) AS "Médiane du créneau", ROUND(abs(v - med), 4) AS "Écart à la médiane",
   ROUND(seuil, 4) AS "Seuil déclenchant", methode AS "Dispersion utilisée",
   n AS "Points du créneau", ${k} AS "Sensibilité k"
@@ -12214,7 +12238,21 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                         const cfg = tsForTable(r.table);
                         if (!cfg) return `<span class="text-[11px] text-amber-700">Déclarez d'abord cette source comme série temporelle (Données & Modèle → Séries temporelles).</span>`;
                         const sel2 = (f, cur, opts, dft) => `<select onchange="qrSet('${r.id}','p.${f}',this.value)" class="border border-slate-200 rounded px-1 py-0.5 text-[11px] bg-white">${Object.entries(opts).map(([k, l]) => `<option value="${k}" ${(cur || dft) === k ? 'selected' : ''}>${escapeHTML(l)}</option>`).join('')}</select>`;
-                        const filt = `<span class="text-[10px] text-slate-400 ml-2">séries visées (facultatif)</span> ${inp('serieLike', P.serieLike, 'ex : CPT% (motif LIKE)', 'w-32')}`;
+                        const filt = `<div class="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200">
+                            <div class="flex items-center gap-2 flex-wrap">
+                              <span class="text-[11px] font-bold">Limiter à certaines séries</span>
+                              ${inp('serieLike', P.serieLike, 'vide = toutes les séries', 'w-44')}
+                              <span class="text-[10px] text-slate-400">facultatif</span>
+                            </div>
+                            <div class="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                              Par défaut le contrôle porte sur <b>toutes</b> les séries du fichier. Ce champ permet de n'en viser qu'une partie,
+                              utile quand un même fichier mélange des natures différentes — un compteur cumulatif et une mesure instantanée, par exemple :
+                              la monotonie ne vaut que pour le premier.<br>
+                              Le caractère <b>%</b> remplace n'importe quelle suite de caractères :
+                              <b>CPT%</b> = les séries dont l'identifiant commence par CPT ·
+                              <b>%PARIS%</b> = celles qui contiennent PARIS ·
+                              <b>CPT-LYON-02</b> = cette seule série.
+                            </div></div>`;
                         const base = `<span class="text-[10px] text-slate-400">maille : ${escapeHTML((cfg.keyCols || []).join(' + '))} × ${escapeHTML(cfg.tsCol)}</span>`;
                         let sp = '';
                         if (r.type === 'ts_flat') sp = `au moins ${inp('minLen', P.minLen, '3', 'w-14')} points identiques d'affilée`;
