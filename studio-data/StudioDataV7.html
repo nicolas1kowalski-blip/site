@@ -935,30 +935,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             </div>
         </div>
 
-        <div id="gsModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl mx-4">
-                <h3 class="text-xl font-bold mb-1 flex items-center gap-2">📗 Feuille Google Sheets</h3>
-                <p class="text-xs text-slate-500 mb-3">Collez le lien de la feuille. Deux formes de lien fonctionnent, mais elles ne se valent pas :</p>
-                <div class="mb-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 leading-relaxed">
-                    <b>Recommandé — un lien « publié » :</b> dans Google Sheets, <b>Fichier → Partager → Publier sur le web</b>, choisissez l'onglet et le format <b>CSV</b>, puis collez le lien obtenu (il contient <code>/d/e/…/pub</code>). C'est la seule forme que Google autorise à lire depuis n'importe quelle page.
-                    <br><b>Sinon — le lien normal</b> de la barre d'adresse, avec la feuille partagée « toute personne disposant du lien » en <b>Lecteur</b>. Cela fonctionne souvent, mais pas depuis tous les navigateurs ni tous les postes.
-                </div>
-                <div class="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
-                    <b>À savoir :</b> c'est la seule fonction de Studio Data qui sort de votre poste. L'identifiant de la feuille est transmis à Google pour la lire ; les données récupérées, elles, restent sur votre machine comme toutes les autres sources.
-                </div>
-                <div id="gsLocalWarn" class="hidden mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-900 leading-relaxed">
-                    Vous avez ouvert Studio Data <b>depuis un fichier local</b> (adresse commençant par <code>file://</code>). Dans ce mode, beaucoup de navigateurs bloquent les appels sortants : si la lecture échoue, utilisez le <b>lien publié</b> ci-dessus, ou téléchargez la feuille en CSV (<b>Fichier → Télécharger → CSV</b>) et chargez-la avec le bouton <b>Fichiers</b>.
-                </div>
-                <input type="text" id="gsTableName" placeholder="Nom de la source (facultatif)" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
-                <input type="url" id="gsUrl" placeholder="https://docs.google.com/spreadsheets/d/…" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
-                <input type="text" id="gsSheetName" placeholder="Nom de l'onglet (facultatif — sinon le premier, ou celui du lien)" class="w-full border border-slate-300 p-2.5 mb-1 rounded text-sm bg-slate-50">
-                <p class="text-[10px] text-slate-400 mb-3">Si votre lien contient déjà <code>#gid=…</code>, l'onglet correspondant est utilisé automatiquement.</p>
-                <div id="gsLoading" class="hidden mt-2 text-blue-700 text-sm">Lecture de la feuille en cours…</div>
-                <div id="gsError" class="hidden mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-[11px] text-red-900 leading-relaxed max-h-64 overflow-auto"></div>
-                <div class="mt-4 flex justify-end gap-2"><button onclick="toggleGsModal()" class="px-4 py-2 bg-slate-100 rounded text-sm font-bold">Annuler</button><button onclick="connectGSheet()" class="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-bold">Charger la feuille</button></div>
-            </div>
-        </div>
-
         <div id="boWizardModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
             <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl mx-4">
                 <h3 class="text-lg font-bold mb-1 flex items-center gap-2"><span class="text-xl">🏛️</span> Objet métier depuis la source <span id="boWizTableName" class="text-emerald-700"></span></h3>
@@ -992,7 +968,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <button onclick="document.getElementById('folderUploader').click()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="folder-plus" class="w-5 h-5"></i> Dossier</button>
                     <button onclick="openMergeModal()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm" title="Combiner plusieurs fichiers en une seule source"><i data-lucide="layers" class="w-5 h-5"></i> Fusionner</button>
                     <button onclick="toggleDbModal()" class="bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="database" class="w-5 h-5"></i> API</button>
-                    <button onclick="toggleGsModal()" class="bg-emerald-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm" title="Charger une feuille Google Sheets partagée en lecture">📗 Google Sheets</button>
                 </div>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
@@ -1831,7 +1806,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 });
                 return ingestRowsIntoDuckDB(tId, flat, Array.from(headSet));
             }
-            if (table.type === 'gsheet') throw new Error("Cette source est une feuille Google Sheets : utilisez le bouton de rechargement sur sa carte pour la relire.");
             throw new Error("Type de fichier non pris en charge pour l'ingestion.");
         }
 
@@ -5382,7 +5356,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const own = foldSrc ? appOwnerOfSource(t.name) : null;
                 seen.add(t.name);
                 if (own) { srcFold['tbl:' + t.name] = 'as:' + own.id; foldOwners.add(own.id); (foldNames[own.id] = foldNames[own.id] || []).push(t.name); return; }
-                const colors = t.type === 'extraction' ? ['#f3e8ff', '#7c3aed'] : (t.type === 'api' ? ['#cffafe', '#0891b2'] : (t.type === 'gsheet' ? ['#d1fae5', '#059669'] : ['#dbeafe', '#2563eb']));
+                const colors = t.type === 'extraction' ? ['#f3e8ff', '#7c3aed'] : (t.type === 'api' ? ['#cffafe', '#0891b2'] : ['#dbeafe', '#2563eb']);
                 nodes.push({ id: 'tbl:' + t.name, type: 'studio-rich-node', title: t.name, content: (state.governance.dictionary[t.name] || {}).sourceSystem || '', fill: colors[0], stroke: colors[1] });
             });
             Object.keys(state.governance.lineage).forEach(derived => {
@@ -7958,7 +7932,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return `<div class="empty-ux"><div class="em" aria-hidden="true">${em}</div><div class="ti">${escapeHTML(title)}</div><div class="tx">${escapeHTML(text)}</div>${ctaLabel ? `<button onclick="${ctaOnclick}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg">${escapeHTML(ctaLabel)}</button>` : ''}</div>`;
         }
         function fmtBadgeUx(t) {
-            const k = t.type === 'designed' ? ['built', 'CONÇUE'] : (t.type === 'extraction' ? ['extr', 'EXTR.'] : (t.type === 'gsheet' ? ['gs', 'GSHEET'] : (t.type === 'api' ? ['api', 'API'] : (t.type === 'xlsx' || /xls/i.test(t.type || '') ? ['xlsx', 'XLSX'] : (t.type === 'json' ? ['json', 'JSON'] : (t.type === 'txt' ? ['txt', 'TXT'] : ['csv', 'CSV']))))));
+            const k = t.type === 'designed' ? ['built', 'CONÇUE'] : (t.type === 'extraction' ? ['extr', 'EXTR.'] : (t.type === 'api' ? ['api', 'API'] : (t.type === 'xlsx' || /xls/i.test(t.type || '') ? ['xlsx', 'XLSX'] : (t.type === 'json' ? ['json', 'JSON'] : (t.type === 'txt' ? ['txt', 'TXT'] : ['csv', 'CSV'])))));
             return `<span class="fmt-ux fmt-${k[0]}">${k[1]}</span>`;
         }
         // Dernière complétude moyenne connue pour une table (issue de l'historique d'audits).
@@ -9683,240 +9657,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             finally { if (btn) { btn.disabled = false; btn.textContent = '🪄'; } }
         }
 
-        /* ================= GOOGLE SHEETS (V7.6) =================
-           Contrainte de fond : l'application n'a pas de serveur. Tout se joue donc dans le
-           navigateur, et Google ne renvoie pas d'en-tête CORS sur ses points de sortie CSV —
-           un simple fetch() est refusé par le navigateur, quelle que soit la qualité de l'URL.
-           La voie fiable est le point de sortie « gviz » interrogé en JSONP : une balise
-           <script> n'est pas soumise au contrôle d'origine. On tente quand même un fetch
-           d'abord (une feuille « publiée sur le web » peut passer, et c'est plus propre),
-           et on ne bascule en JSONP qu'en cas d'échec.
-
-           À dire clairement à l'utilisateur : c'est la PREMIÈRE fonction de l'application qui
-           sort du poste. L'identifiant de la feuille est transmis à Google, et la feuille doit
-           être partagée « toute personne disposant du lien ». Les données lues, elles, restent
-            — rien n'est renvoyé ailleurs.
-           ========================================================================= */
-        const GS_HOST = 'https://docs.google.com';
-        // Accepte l'URL complète copiée depuis la barre d'adresse, une URL publiée, ou l'identifiant seul.
-        function gsParseUrl(raw) {
-            const s = String(raw || '').trim();
-            if (!s) return null;
-            // /spreadsheets/d/<ID>/... ou /spreadsheets/d/e/<ID_PUBLIÉ>/...
-            let m = s.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
-            if (m) return { id: m[1], published: true, gid: (s.match(/[?&#]gid=([0-9]+)/) || [])[1] || null };
-            m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-            if (m) return { id: m[1], published: false, gid: (s.match(/[?&#]gid=([0-9]+)/) || [])[1] || null };
-            // identifiant collé seul
-            if (/^[a-zA-Z0-9-_]{20,}$/.test(s)) return { id: s, published: false, gid: null };
-            return null;
-        }
-        function gsGvizUrl(p, sheetName, jsonp) {
-            const q = [];
-            if (p.gid) q.push('gid=' + encodeURIComponent(p.gid));
-            else if (sheetName) q.push('sheet=' + encodeURIComponent(sheetName));
-            q.push(jsonp ? 'tqx=responseHandler:' + jsonp : 'tqx=out:csv');
-            return `${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?${q.join('&')}`;
-        }
-        function gsCsvUrl(p) {
-            if (p.published) return `${GS_HOST}/spreadsheets/d/e/${p.id}/pub?output=csv${p.gid ? '&gid=' + encodeURIComponent(p.gid) : ''}`;
-            return `${GS_HOST}/spreadsheets/d/${p.id}/export?format=csv${p.gid ? '&gid=' + encodeURIComponent(p.gid) : ''}`;
-        }
-        // Charge le point de sortie gviz par balise <script> : aucun contrôle d'origine ne
-        // s'applique. On nettoie systématiquement (script + callback), y compris en erreur.
-        function gsJsonp(url, cbName, timeoutMs) {
-            return new Promise((resolve, reject) => {
-                const sc = document.createElement('script');
-                let done = false;
-                const cleanup = () => { try { delete window[cbName]; } catch (e) { window[cbName] = undefined; } if (sc.parentNode) sc.parentNode.removeChild(sc); };
-                const t = setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('délai dépassé')); }, timeoutMs || 20000);
-                window[cbName] = payload => { if (done) return; done = true; clearTimeout(t); cleanup(); resolve(payload); };
-                sc.onerror = () => { if (done) return; done = true; clearTimeout(t); cleanup(); reject(new Error('feuille inaccessible')); };
-                sc.src = url; document.head.appendChild(sc);
-            });
-        }
-        // Le gviz renvoie des colonnes typées et des cellules { v: valeur, f: valeur formatée }.
-        // On garde la valeur FORMATÉE quand elle existe : c'est ce que l'utilisateur voit dans
-        // sa feuille (dates en jj/mm/aaaa, montants avec séparateurs), donc ce qu'il attend ici.
-        function gsRowsFromGviz(tbl) {
-            if (!tbl || !Array.isArray(tbl.cols)) return { headers: [], rows: [] };
-            const headers = tbl.cols.map((c, i) => cleanHeader(c.label || c.id || ('COL_' + (i + 1))));
-            const rows = (tbl.rows || []).map(r => {
-                const o = {};
-                headers.forEach((h, i) => {
-                    const cell = (r && r.c) ? r.c[i] : null;
-                    o[h] = !cell ? null : (cell.f != null ? cell.f : (cell.v != null ? cell.v : null));
-                });
-                return o;
-            });
-            return { headers, rows };
-        }
-        // ---- Diagnostic de lecture ----
-        // La V7.6 ne tentait que deux appels et, en cas d'échec, accusait le partage. C'est faux
-        // dans le cas le plus courant : une feuille correctement partagée « toute personne
-        // disposant du lien » échoue quand même, parce que Google ne sert le CSV qu'aux feuilles
-        // PUBLIÉES et que l'appel par balise script dépend du navigateur et du poste.
-        // On essaie donc plusieurs voies, on retient ce qu'a répondu chacune, et on affiche ce
-        // relevé : l'utilisateur peut agir, et le message ne l'envoie plus sur une fausse piste.
-        let gsLastDiag = '';
-        function gsCsvCandidates(p) {
-            const g = p.gid ? '&gid=' + encodeURIComponent(p.gid) : '';
-            return p.published
-                ? [`${GS_HOST}/spreadsheets/d/e/${p.id}/pub?output=csv${g}`]
-                : [`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?tqx=out:csv${g}`,
-                   `${GS_HOST}/spreadsheets/d/${p.id}/export?format=csv${g}`];
-        }
-        function gsGvizCandidates(p, sheetName, cb) {
-            const u = [];
-            if (p.gid) u.push(`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?gid=${encodeURIComponent(p.gid)}&tqx=responseHandler:${cb}`);
-            if (sheetName) u.push(`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tqx=responseHandler:${cb}`);
-            u.push(`${GS_HOST}/spreadsheets/d/${p.id}/gviz/tq?tqx=responseHandler:${cb}`);   // premier onglet
-            return u;
-        }
-        function gsDiagText(log, p) {
-            const lines = log.map(x => `  • ${x.m} → ${x.r}`).join('\n');
-            return `Feuille ${p ? p.id : '?'}${p && p.gid ? ' (onglet ' + p.gid + ')' : ''}\n`
-                 + `Page ouverte depuis : ${location.protocol}\n${lines}`;
-        }
-        function gsFailHtml(log, p) {
-            const local = location.protocol === 'file:';
-            return `La feuille n'a pas pu être lue. <b>Ce n'est pas forcément un problème de partage</b> :
-                Google ne sert le CSV qu'aux feuilles <b>publiées</b>, et l'autre voie de lecture dépend du navigateur et du poste.
-                ${local ? '<br><b>Vous ouvrez Studio Data depuis un fichier local (file://)</b> — beaucoup de navigateurs y restreignent les appels réseau sortants, ce qui explique très probablement l\'échec.' : ''}
-                <br><br><b>Solution la plus fiable — publier la feuille :</b> dans Google Sheets,
-                <b>Fichier → Partager → Publier sur le web</b>, choisissez l'onglet et le format <b>CSV</b>,
-                puis collez ici le lien obtenu (il contient <code>/d/e/…/pub</code>).
-                <br><b>Solution immédiate :</b> <b>Fichier → Télécharger → CSV</b>, puis chargez le fichier avec le bouton <b>Fichiers</b>.
-                <br><br><span class="text-[10px] text-slate-500">Détail des tentatives :<br>${escapeHTML(gsDiagText(log, p)).replace(/\n/g, '<br>')}</span>`;
-        }
-        async function gsLoad(rawUrl, sheetName) {
-            const p = gsParseUrl(rawUrl);
-            if (!p) throw new Error("Lien Google Sheets non reconnu. Collez l'URL complète de la feuille (elle contient /spreadsheets/d/…).");
-            const log = []; const note = (m, r) => log.push({ m, r });
-            // 1) Sorties CSV — fonctionnent sur une feuille publiée, et se lisent avec le
-            //    lecteur CSV de DuckDB (encodage, guillemets, auto-réparation).
-            for (const u of gsCsvCandidates(p)) {
-                const label = u.includes('/pub?') ? 'CSV publié' : (u.includes('gviz') ? 'CSV gviz' : 'CSV export');
-                try {
-                    const res = await fetch(u, { credentials: 'omit' });
-                    if (!res.ok) { note(label, 'refus HTTP ' + res.status); continue; }
-                    const txt = await res.text();
-                    if (!txt || /^\s*<!DOCTYPE|<html/i.test(txt)) { note(label, 'page HTML reçue (Google demande une connexion)'); continue; }
-                    note(label, 'succès'); gsLastDiag = gsDiagText(log, p);
-                    return { mode: 'csv', csv: txt, parsed: p, log };
-                } catch (e) { note(label, 'bloqué par le navigateur (' + String(e.message || e).slice(0, 60) + ')'); }
-            }
-            // 2) Point de sortie gviz par balise script, dans plusieurs variantes d'onglet.
-            for (const u of gsGvizCandidates(p, sheetName, 'PLACEHOLDER')) {
-                const cb = 'gsCb_' + Math.random().toString(36).slice(2, 10);
-                const url = u.replace('PLACEHOLDER', cb);
-                const label = 'gviz ' + (url.includes('gid=') ? 'par onglet (gid)' : (url.includes('sheet=') ? 'par nom d\'onglet' : 'premier onglet'));
-                try {
-                    const payload = await gsJsonp(url, cb, 20000);
-                    if (!payload || payload.status === 'error') {
-                        const d = payload && payload.errors && payload.errors[0] ? (payload.errors[0].detailed_message || payload.errors[0].message) : 'réponse vide';
-                        note(label, 'refus de Google : ' + String(d).replace(/<[^>]*>/g, '').slice(0, 120)); continue;
-                    }
-                    const { headers, rows } = gsRowsFromGviz(payload.table);
-                    if (!headers.length) { note(label, 'réponse lue mais aucune colonne (première ligne d\'en-têtes absente ?)'); continue; }
-                    note(label, `succès — ${headers.length} colonne(s), ${rows.length} ligne(s)`);
-                    gsLastDiag = gsDiagText(log, p);
-                    return { mode: 'gviz', headers, rows, parsed: p, log };
-                } catch (e) { note(label, String(e.message || e)); }
-            }
-            gsLastDiag = gsDiagText(log, p);
-            const err = new Error('lecture impossible');
-            err.gsHtml = gsFailHtml(log, p); err.gsDiag = gsLastDiag;
-            throw err;
-        }
-        function gsCopyDiag() {
-            try { navigator.clipboard.writeText(gsLastDiag || 'aucun diagnostic'); showSuccess('Diagnostic copié.'); }
-            catch (e) { showError('Copie impossible — le diagnostic est affiché ci-dessus.'); }
-        }
-        function toggleGsModal() {
-            const m = el('gsModal'); if (!m) return;
-            m.classList.toggle('hidden');
-            // Ouvrir Studio Data par double-clic (file://) restreint les appels sortants dans
-            // beaucoup de navigateurs : autant le dire AVANT la tentative, pas après l'échec.
-            const w = el('gsLocalWarn');
-            if (w) w.classList.toggle('hidden', location.protocol !== 'file:');
-        }
-        async function connectGSheet() {
-            const name = (el('gsTableName').value || '').trim();
-            const url = (el('gsUrl').value || '').trim();
-            const sheet = (el('gsSheetName').value || '').trim();
-            if (!url) return showError("Collez le lien de la feuille Google Sheets.");
-            el('gsLoading').classList.remove('hidden');
-            const eb = el('gsError'); if (eb) { eb.classList.add('hidden'); eb.innerHTML = ''; }
-            const tId = 'tb_' + generateId();
-            try {
-                const out = await gsLoad(url, sheet);
-                const tName = name || ('GSHEET_' + (out.parsed.id || '').slice(0, 8));
-                state.tables[tId] = { id: tId, name: tName, file: null, type: 'gsheet',
-                    size: 0, config: { url, sheet, gsId: out.parsed.id, gid: out.parsed.gid || '' },
-                    headers: [], columnsMeta: {}, status: 'loading' };
-                el('emptyStateSources').classList.add('hidden');
-                renderTables();
-                let headers;
-                if (out.mode === 'csv') {
-                    // On repasse par le lecteur CSV de DuckDB : même chemin que pour un fichier,
-                    // donc mêmes garanties (encodage, guillemets, auto-réparation).
-                    const { db, conn } = await getDB();
-                    const vname = 'gs_' + tId + '.csv';
-                    await db.registerFileText(vname, out.csv);
-                    await conn.query(`CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(tId))} AS
-                        SELECT row_number() OVER () AS __rn, * FROM read_csv_auto(${sqlLiteral(vname)}, header=true, all_varchar=true)`);
-                    headers = await duckTableHeaders(tId);
-                } else {
-                    headers = await ingestRowsIntoDuckDB(tId, out.rows, out.headers);
-                }
-                const t = state.tables[tId];
-                t.headers = headers; t.size = out.mode === 'csv' ? 0 : out.rows.length;
-                t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready';
-                t.srcModified = Date.now();
-                toggleGsModal(); el('gsLoading').classList.add('hidden');
-                renderTables(); autoDetectRelations(tId); updateBaseTableSelect(); populateQualTables();
-                await persistTableData(tId); persistAppState();
-                showSuccess(`Feuille « ${escapeHTML(t.name)} » chargée (${headers.length} colonne(s)).`);
-            } catch (e) {
-                delete state.tables[tId]; renderTables();
-                el('gsLoading').classList.add('hidden');
-                const box = el('gsError');
-                if (box && e.gsHtml) {
-                    box.innerHTML = e.gsHtml + `<div class="mt-2"><button onclick="gsCopyDiag()" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold">Copier le diagnostic</button></div>`;
-                    box.classList.remove('hidden');
-                } else showError("Google Sheets : " + e.message);
-            }
-        }
-        // Une feuille est vivante : on doit pouvoir la relire sans tout reparamétrer.
-        async function gsRefresh(tId) {
-            const t = state.tables[tId]; if (!t || t.type !== 'gsheet') return;
-            const prev = (t.headers || []).slice();
-            bgTaskStart(`Rechargement de « ${t.name} »`);
-            try {
-                const out = await gsLoad(t.config.url, t.config.sheet);
-                let headers;
-                if (out.mode === 'csv') {
-                    const { db, conn } = await getDB();
-                    const vname = 'gs_' + tId + '.csv';
-                    await db.registerFileText(vname, out.csv);
-                    await conn.query(`CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(tId))} AS
-                        SELECT row_number() OVER () AS __rn, * FROM read_csv_auto(${sqlLiteral(vname)}, header=true, all_varchar=true)`);
-                    headers = await duckTableHeaders(tId);
-                } else headers = await ingestRowsIntoDuckDB(tId, out.rows, out.headers);
-                t.headers = headers; t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready'; t.srcModified = Date.now();
-                const gone = prev.filter(h => !headers.includes(h)), added = headers.filter(h => !prev.includes(h));
-                renderTables(); updateBaseTableSelect(); populateQualTables();
-                await persistTableData(tId); persistAppState();
-                // Un changement de structure en amont casse silencieusement extractions et règles :
-                // on le dit plutôt que de le laisser découvrir plus tard.
-                if (gone.length || added.length)
-                    showError(`« ${t.name} » rechargée, mais la structure a changé : ${gone.length ? 'colonne(s) disparue(s) : ' + gone.join(', ') + '. ' : ''}${added.length ? 'colonne(s) ajoutée(s) : ' + added.join(', ') + '.' : ''} Vérifiez vos extractions et vos règles.`);
-                else showSuccess(`« ${t.name} » rechargée — structure inchangée.`);
-            } catch (e) { showError("Rechargement impossible : " + e.message); }
-            bgTaskEnd();
-        }
-
         function toggleDbModal() { el('dbModal').classList.toggle('hidden'); }
         
         async function connectApi() {
@@ -11152,22 +10892,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.6.1';
+        const APP_VERSION = '7.7.0';
         const APP_CHANGELOG = [
-            { v: '7.6.1', d: '2026-07-29', t: 'Google Sheets : diagnostic honnête au lieu d\'un message qui accuse le partage', items: [
-                '<b>Le message d\'erreur était faux dans le cas le plus courant.</b> Il concluait « la feuille n\'est pas partagée » alors qu\'elle pouvait l\'être correctement — le partage « toute personne disposant du lien / Lecteur » ne suffit pas à rendre une feuille lisible depuis n\'importe quelle page.',
-                '<b>Plusieurs voies sont désormais tentées</b> au lieu de deux : sortie CSV gviz, export CSV, lien publié, puis lecture par balise script en visant l\'onglet du lien, l\'onglet nommé, puis le premier onglet. La première qui répond gagne.',
-                '<b>Chaque tentative est relevée et affichée</b> avec ce qu\'elle a répondu — refus HTTP, blocage du navigateur, refus de Google (motif exact repris), page de connexion reçue à la place des données, ou réponse lue mais sans colonnes. Un bouton copie ce diagnostic.',
-                '<b>La voie fiable est indiquée d\'emblée</b> : publier la feuille (<b>Fichier → Partager → Publier sur le web</b>, onglet, format CSV) donne un lien que Google autorise à lire depuis n\'importe quelle page. Le lien normal de la barre d\'adresse fonctionne souvent, mais pas partout.',
-                '<b>Ouverture depuis un fichier local détectée.</b> Quand Studio Data est lancé par double-clic (adresse en <code>file://</code>), un avertissement s\'affiche <b>avant</b> la tentative : beaucoup de navigateurs y restreignent les appels sortants. La solution de repli — télécharger la feuille en CSV et la charger par le bouton Fichiers — est rappelée.',
-                'Une page HTML renvoyée par Google (invitation à se connecter) n\'est plus confondue avec des données.'] },
-            { v: '7.6.0', d: '2026-07-29', t: 'Nouvelle source : feuille Google Sheets', items: [
-                'Un bouton <b>Google Sheets</b> rejoint Fichiers, Dossier, Fusionner et API dans l\'écran Sources. Collez le lien de la feuille ; l\'onglet est repris du lien (<code>#gid=…</code>) ou choisi par son nom.',
-                '<b>Pourquoi ce n\'est pas un simple téléchargement.</b> L\'application n\'a pas de serveur : tout se joue dans le navigateur, et Google ne renvoie pas d\'en-tête d\'autorisation d\'origine sur ses sorties CSV — un appel direct est refusé par le navigateur quelle que soit l\'URL. On tente d\'abord l\'appel direct (une feuille « publiée sur le web » peut passer), et on bascule sinon sur le point de sortie <i>gviz</i> chargé par balise script, qui n\'est pas soumis à cette restriction.',
-                '<b>Ce que vous voyez est ce qui est repris.</b> Google renvoie pour chaque cellule une valeur brute et une valeur formatée ; on garde la formatée — vos dates restent en jj/mm/aaaa et vos montants gardent leurs séparateurs, comme dans la feuille.',
-                '<b>Une feuille est vivante</b> : sa carte porte un bouton de rechargement. Si la structure a changé entre deux lectures, les colonnes disparues et ajoutées sont nommées explicitement, parce qu\'un tel changement casse silencieusement extractions et règles.',
-                '<b>Point de transparence :</b> c\'est la seule fonction de Studio Data qui sort du poste de travail. L\'identifiant de la feuille est transmis à Google pour la lire ; les données récupérées restent sur votre machine comme toutes les autres sources. L\'avertissement figure dans la fenêtre de saisie.',
-                'La feuille doit être partagée en lecture (<b>Partager → Toute personne disposant du lien → Lecteur</b>). Si ce n\'est pas le cas, le message d\'erreur le dit et indique la manipulation exacte, au lieu d\'un échec technique.'] },
+            { v: '7.7.0', d: '2026-07-29', t: 'Retrait du connecteur Google Sheets', items: [
+                'Le connecteur Google Sheets introduit en 7.6 est <b>retiré</b> : il ne fonctionnait pas de façon fiable. Google ne sert le CSV qu\'aux feuilles publiées sur le web, et l\'autre voie de lecture dépend du navigateur et du poste — un partage « toute personne disposant du lien » ne suffit pas, contrairement à ce que la fonction laissait croire.',
+                'Le retrait est complet : bouton, fenêtre de saisie, lecture, rechargement, pastille de source et type <code>gsheet</code>. Aucun résidu, aucune source existante affectée.',
+                '<b>Pour charger une feuille Google, la voie sûre reste :</b> dans Google Sheets, <b>Fichier → Télécharger → Valeurs séparées par des virgules (.csv)</b>, puis charger le fichier avec le bouton <b>Fichiers</b>. Le résultat est identique, sans dépendre d\'un service extérieur.',
+                'Studio Data redevient ainsi <b>intégralement local</b> : plus aucune fonction ne sort du poste de travail.'] },
             { v: '7.5.1', d: '2026-07-29', t: 'Horodatages lisibles dans le détail des échecs + la zone « séries visées » expliquée', items: [
                 '<b>Les horodatages et les durées deviennent lisibles.</b> Le détail d\'un échec affichait « 2026-01-03 11:00:00 » et « 133200 » — exact, mais illisible. On lit désormais <b>03/01/2026 à 11h00</b> et <b>1 j 13 h</b>. La mise en forme est faite dans la requête, donc l\'export CSV en profite aussi, sans retraitement.',
                 'Les colonnes sont renommées en conséquence : « Écart observé (s) » devient <b>Durée du trou</b>, « Pas attendu (s) » devient <b>Pas attendu de la série</b>, et une colonne <b>Ampleur</b> dit « 37 fois le pas » plutôt que de laisser faire le calcul.',
@@ -13119,11 +12850,11 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             _shown.forEach(t => {
                 let html = `<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 relative group">
                     <div class="absolute top-3 right-3 flex items-center gap-1">
-                        ${t.type === 'gsheet' ? `<button onclick="gsRefresh('${t.id}')" title="Relire la feuille Google : une feuille est vivante, son contenu a pu changer" class="text-emerald-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : (t.type === 'designed' ? `<button onclick="tdRebuild('${t.id}', this)" title="Reconstruire la table depuis ses sources" class="text-blue-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : (t.type !== 'api' && t.type !== 'extraction' ? `<button onclick="manualUpdateSource('${t.id}')" title="Mettre à jour : recharger un fichier à la place de celui-ci" class="text-indigo-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : ''))}
+                        ${t.type === 'designed' ? `<button onclick="tdRebuild('${t.id}', this)" title="Reconstruire la table depuis ses sources" class="text-blue-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : (t.type !== 'api' && t.type !== 'extraction' ? `<button onclick="manualUpdateSource('${t.id}')" title="Mettre à jour : recharger un fichier à la place de celui-ci" class="text-indigo-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🔄</button>` : '')}
                         ${t.status === 'ready' ? `<button onclick="openBoWizard('${escapeHTML(t.name.replace(/'/g, "\\'"))}')" title="Constituer / rattacher un objet métier depuis cette source" class="text-emerald-600 opacity-0 group-hover:opacity-100 text-base leading-none p-0.5">🏛️</button>` : ''}
                         <button onclick="removeTable('${t.id}')" aria-label="Supprimer la source ${escapeHTML(t.name)}" class="text-red-500 opacity-0 group-hover:opacity-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                     </div>`;
-                const typeIcon = t.type === 'gsheet' ? 'sheet' : t.type === 'api' ? 'database' : (t.type === 'extraction' ? 'combine' : (t.type === 'designed' ? 'layers' : 'file'));
+                const typeIcon = t.type === 'api' ? 'database' : (t.type === 'extraction' ? 'combine' : (t.type === 'designed' ? 'layers' : 'file'));
                 html += `<div class="flex items-center gap-3 mb-3"><div class="${t.type === 'designed' ? 'bg-blue-100 p-2 rounded text-blue-600' : 'bg-indigo-100 p-2 rounded text-indigo-600'}"><i data-lucide="${typeIcon}" class="w-5 h-5"></i></div><div class="truncate"><h3 class="font-bold text-sm" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</h3>${t.type==='extraction'?'<span class="text-[9px] uppercase font-bold text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded">Source dérivée (Extraction)</span>':(t.type==='designed'?'<span class="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">🧱 Table conçue — gérée dans l\'onglet Tables</span>':(t.lastRefresh?`<span class="text-[9px] font-bold text-emerald-600" title="Dernière mise à jour">🔄 maj ${new Date(t.lastRefresh).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''))}</div></div>`;
                 if(t.status==='loading') html+=`<div class="text-indigo-600 text-sm">Analyse...</div>`;
                 else if(t.status==='error') {
