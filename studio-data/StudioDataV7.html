@@ -2890,43 +2890,97 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const master = boMasterTable(bo);
             const md = master ? ensureDictEntry(master.name) : null;
             const rows = [];
-            (boCoreElements(bo) || []).forEach(e2 => rows.push({ el: e2, facet: '' }));
+            (boCoreElements(bo) || []).forEach(e2 => rows.push({ el: e2, facet: '', stId: '' }));
             getBoFacets(bo).forEach(st => (st.elements || []).forEach(fe => rows.push({ el: fe, mappings: fe.col ? [{ table: st.table, col: fe.col }] : [], facet: st.name, stId: st.id })));
             boAttrLiftFromColumn(bo);   // reprise unique de ce qui avait été saisi sur les colonnes
             const selOpts = (opts, cur) => opts.map(o => `<option ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
             const glossOpts = cur => '<option value="">— Aucun terme —</option>' + state.governance.glossary.map(g => `<option value="${g.id}" ${g.id === cur ? 'selected' : ''}>${escapeHTML(g.term)}</option>`).join('');
-            let rowsHtml = '';
-            rows.forEach(r => {
-                const m = (r.mappings || r.el.mappings || [])[0];
-                const stId = r.stId || '';
-                const wr = (f) => `boAttrWrite('${bo.id}','${stId}','${r.el.id}','${f}',this.value)`;
-                rowsHtml += `<tr class="hover:bg-slate-50 align-top">
+            /* Deux niveaux de multiplicité, qu'il fallait cesser de confondre :
+                 — le GROUPE (la facette) se répète : « un client, plusieurs adresses ». La cardinalité
+                   appartient au groupe entier, pas à chacun de ses attributs pris isolément ;
+                 — l'ATTRIBUT lui-même peut porter plusieurs valeurs, ce que la technique exprime par
+                   des colonnes numérotées, et qu'on replie ici en « 1 à n valeurs ». */
+            const fold = govState.dictFold !== false;
+            const facets = getBoFacets(bo);
+            const sections = [{ st: null, rows: rows.filter(r => !r.stId) }]
+                .concat(facets.map(st => ({ st, rows: rows.filter(r => r.stId === st.id) })));
+            const secHeadHtml = (sec) => {
+                if (!sec.st) {
+                    if (!facets.length) return '';
+                    return `<tr class="bg-slate-50 border-t-2 border-slate-200"><td colspan="7" class="p-2">
+                        <span class="text-[11px] font-black text-slate-600">Attributs propres à ${escapeHTML(bo.name)}</span>
+                        <span class="text-[10px] text-slate-400 ml-2">une occurrence unique par ${escapeHTML(bo.name)}</span></td></tr>`;
+                }
+                const st = sec.st, card = st.cardinality || '1–N', multi = /[–-]\s*N$/.test(card);
+                const phrase = multi
+                    ? `C'est ce <b>groupe</b> qui se répète : un(e) ${escapeHTML(bo.name)} peut avoir plusieurs « ${escapeHTML(st.name)} ». Ses ${sec.rows.length} attributs vont ensemble — une occurrence, c'est le bloc entier, pas un attribut isolé.`
+                    : `Une seule occurrence de ce groupe par ${escapeHTML(bo.name)} : ses ${sec.rows.length} attributs sont renseignés une fois.`;
+                return `<tr class="${multi ? 'bg-amber-50/70 border-amber-200' : 'bg-emerald-50/60 border-emerald-200'} border-t-2"><td colspan="7" class="p-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-[11px] font-black text-emerald-800">◆ ${escapeHTML(st.name)}</span>
+                        <span class="text-[10px] text-slate-500">groupe de ${sec.rows.length} attribut(s)</span>
+                        ${boFacetCardBadgeHtml(st)}
+                        <select onchange="updateBoFacet('${bo.id}','${st.id}','cardinality',this.value); renderGovernance()" class="border border-slate-300 rounded text-[10px] p-0.5 bg-white" title="Combien d'occurrences de ce groupe par ${escapeHTML(bo.name)} — la cardinalité est une propriété du groupe">${CARD_OPTS.map(o => `<option ${o === card ? 'selected' : ''}>${o}</option>`).join('')}</select>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-0.5">${phrase}</div></td></tr>`;
+            };
+            const grpHtml = (g) => {
+                const stId = g.stId || '', r0 = g.members[0], ids = boFoldIds(g), one = !g.fold;
+                const m = one ? (r0.mappings || r0.el.mappings || [])[0] : null;
+                const cols = boFoldCols(bo, g);
+                const wr = one
+                    ? (f) => `boAttrWrite('${bo.id}','${stId}','${r0.el.id}','${f}',this.value); renderGovernance()`
+                    : (f) => `boFoldWrite('${bo.id}','${stId}','${ids}','${f}',this.value)`;
+                const val = f => one ? (r0.el[f] || '') : boFoldField(g, f);
+                const auto = one ? r0.el.examplesAuto : g.members.every(x => x.el.examplesAuto);
+                const nameOn = one
+                    ? `boAttrWrite('${bo.id}','${stId}','${r0.el.id}','name',this.value); renderGovernance()`
+                    : `boFoldRename('${bo.id}','${stId}','${ids}',this.value)`;
+                const prov = one
+                    ? (m ? escapeHTML(m.table + '.' + m.col) : '<span class="italic text-amber-500">non rattaché à une colonne</span>')
+                    : escapeHTML(cols.join(' · ')) || '<span class="italic text-amber-500">colonnes non rattachées</span>';
+                const sampleBtn = one
+                    ? (m ? `<button onclick="boAttrSampleOne('${bo.id}','${r0.el.id}')" class="text-[11px] px-1.5 py-1 rounded border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 shrink-0" title="Prendre de vrais exemples dans ${escapeHTML(m.table + '.' + m.col)}">⟳</button>` : '')
+                    : (cols.length ? `<button onclick="boFoldSample('${bo.id}','${ids}')" class="text-[11px] px-1.5 py-1 rounded border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 shrink-0" title="Prendre de vrais exemples dans les ${cols.length} colonnes repliées">⟳</button>` : '');
+                const vlCell = one
+                    ? (m ? vlSelectHtml(m.table, m.col, (((state.governance.dictionary[m.table] || {}).columns || {})[m.col] || {}).valueListId) : '<span class="text-[10px] text-slate-300 italic">rattachez une colonne</span>')
+                    : `<span class="text-[10px] text-slate-400 italic" title="Attribut replié sur ${g.members.length} colonnes — la liste de valeurs se règle en Vue technique">voir en Vue technique</span>`;
+                return `<tr class="hover:bg-slate-50 align-top">
                     <td class="p-2">
-                        <input type="text" value="${escapeHTML(r.el.name)}" onchange="${wr('name')}; renderGovernance()"
-                               class="font-bold text-xs border border-slate-300 p-1.5 rounded w-full bg-white" title="Nom métier de l'attribut — modifiable ici">
-                        ${r.facet ? `<div class="text-[9px] text-emerald-600 font-bold mt-0.5">◆ ${escapeHTML(r.facet)}</div>` : ''}
-                        <div class="text-[9px] font-mono text-slate-300 mt-0.5" title="Colonne source qui alimente cet attribut">${m ? escapeHTML(m.table + '.' + m.col) : '<span class="italic text-amber-500">non rattaché à une colonne</span>'}</div>
+                        <input type="text" value="${escapeHTML(one ? r0.el.name : g.base)}" onchange="${nameOn}"
+                               class="font-bold text-xs border ${g.fold ? 'border-amber-300' : 'border-slate-300'} p-1.5 rounded w-full bg-white"
+                               title="${g.fold ? 'Nom métier de cet attribut multivalué — le renommer renumérote automatiquement les ' + g.members.length + ' colonnes repliées' : 'Nom métier de cet attribut — modifiable ici'}">
+                        ${g.fold ? `<div class="text-[9px] text-amber-700 font-bold mt-0.5">↻ ${g.members.length} colonnes repliées en un attribut</div>` : ''}
+                        <div class="text-[9px] font-mono text-slate-300 mt-0.5" title="Colonne(s) source qui alimente(nt) cet attribut">${prov}</div>
                     </td>
-                    <td class="p-2 whitespace-nowrap">${boCardBadgeHtml(bo, r)}${r.stId ? `<div class="mt-1"><select onchange="updateBoFacet('${bo.id}','${r.stId}','cardinality',this.value); renderGovernance()" class="border border-slate-200 rounded text-[10px] p-0.5 bg-white" title="Cardinalité du composant « ${escapeHTML(r.facet)} » — s'applique à TOUS ses attributs, pas seulement à celui-ci">${CARD_OPTS.map(o => `<option ${o === boAttrCardinality(bo, r).card ? 'selected' : ''}>${o}</option>`).join('')}</select></div>` : ''}</td>
+                    <td class="p-2 whitespace-nowrap">${boValueCountBadgeHtml(bo, g)}</td>
                     <td class="p-2"><textarea rows="2" placeholder="Ce que désigne cet attribut, en langage métier…" onchange="${wr('definition')}"
-                        class="w-full min-w-[220px] border border-slate-200 p-1.5 rounded text-xs">${escapeHTML(r.el.definition || '')}</textarea></td>
+                        class="w-full min-w-[220px] border border-slate-200 p-1.5 rounded text-xs">${escapeHTML(val('definition'))}</textarea></td>
                     <td class="p-2"><div class="flex items-center gap-1">
-                        <input type="text" value="${escapeHTML(r.el.examples || '')}" placeholder="ex : PARIS ; LYON" onchange="${wr('examples')}"
-                            class="w-32 border border-slate-200 p-1.5 rounded text-xs ${r.el.examplesAuto ? 'bg-indigo-50/60' : ''}"
-                            title="${r.el.examplesAuto ? 'Valeurs prises dans la source rattachée' : 'Saisie manuelle'}">
-                        ${m ? `<button onclick="boAttrSampleOne('${bo.id}','${r.el.id}')" class="text-[11px] px-1.5 py-1 rounded border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 shrink-0"
-                            title="Prendre de vrais exemples dans ${escapeHTML(m.table + '.' + m.col)}">⟳</button>` : ''}
+                        <input type="text" value="${escapeHTML(val('examples'))}" placeholder="ex : PARIS ; LYON" onchange="${wr('examples')}"
+                            class="w-32 border border-slate-200 p-1.5 rounded text-xs ${auto ? 'bg-indigo-50/60' : ''}"
+                            title="${auto ? 'Valeurs prises dans la source rattachée' : 'Saisie manuelle'}">
+                        ${sampleBtn}
                     </div></td>
-                    <td class="p-2"><select onchange="${wr('sensitivity')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, r.el.sensitivity)}</select></td>
-                    <td class="p-2"><select onchange="${wr('term')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(r.el.term)}</select></td>
-                    <td class="p-2">${m ? vlSelectHtml(m.table, m.col, (((state.governance.dictionary[m.table] || {}).columns || {})[m.col] || {}).valueListId) : '<span class="text-[10px] text-slate-300 italic">rattachez une colonne</span>'}</td>
+                    <td class="p-2"><select onchange="${wr('sensitivity')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, val('sensitivity'))}</select></td>
+                    <td class="p-2"><select onchange="${wr('term')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(val('term'))}</select></td>
+                    <td class="p-2">${vlCell}</td>
                 </tr>`;
+            };
+            let rowsHtml = '', nShown = 0, nFolded = 0;
+            sections.forEach(sec => {
+                if (!sec.rows.length) return;
+                rowsHtml += secHeadHtml(sec);
+                const groups = fold ? boFoldRows(sec.rows)
+                    : sec.rows.map(r => ({ fold: false, base: r.el.name, members: [r], idx: [], stId: r.stId || '', facet: r.facet }));
+                groups.forEach(g => { nShown++; if (g.fold) nFolded += g.members.length; rowsHtml += grpHtml(g); });
             });
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
                     <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité et termes par fichier CSV ou Excel">⬆ Remplir par fichier</button>
                     <button onclick="boAttrSampleAll('${bo.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Prendre de vrais exemples dans les sources rattachées, pour tous les attributs — les exemples saisis à la main ne sont pas touchés">⟳ Échantillonner les exemples</button>
+                    <button onclick="boToggleFold()" class="text-xs px-3 py-1.5 rounded-lg font-bold border ${fold ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}" title="${fold ? 'Vue métier : les colonnes numérotées (TEL_1, TEL_2…) sont repliées en un seul attribut « 1 à n valeurs ». Cliquer pour voir chaque colonne.' : 'Vue technique : chaque colonne numérotée est un attribut distinct. Cliquer pour revenir à la lecture métier.'}">${fold ? '◉ Vue métier' : '○ Vue technique'}</button>
                     ${master ? `<span class="text-[11px] text-slate-400">Table maître : <strong>${escapeHTML(master.name)}</strong></span>` : '<span class="text-[11px] text-amber-600 font-bold">⚠️ pas de table maître chargée</span>'}
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -2935,9 +2989,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     ${md ? `<div><label class="text-xs font-bold text-slate-500 block mb-1">Référent (Data Steward)</label><input type="text" value="${escapeHTML(md.steward || '')}" placeholder="Personne référente" onchange="updateDictField('${escapeHTML(master.name)}','steward',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white"></div>
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Statut de la fiche</label><select onchange="updateDictField('${escapeHTML(master.name)}','status',this.value); renderGovernance()" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">${selOpts(STATUS_OPTS, md.status)}</select></div>` : ''}
                 </div>
-                <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${rows.length}) <span class="text-slate-400 font-medium text-xs">— le sens est porté par l'<b>objet métier</b> : définition, exemples, sensibilité et terme s'enregistrent sur l'attribut, pas sur la colonne source. Un attribut sans colonne rattachée se documente quand même.</span></h3>
+                <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${nShown}) <span class="text-slate-400 font-medium text-xs">— le sens est porté par l'<b>objet métier</b> : définition, exemples, sensibilité et terme s'enregistrent sur l'attribut, pas sur la colonne source. Un attribut sans colonne rattachée se documente quand même.</span></h3>
+                ${nFolded ? `<p class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">↻ <b>${nFolded} colonnes numérotées</b> ont été repliées en attributs multivalués : côté technique la donnée est étalée (TEL_1, TEL_2…), côté métier c'est <b>un seul attribut qui peut avoir plusieurs valeurs</b>. Ce que vous saisissez sur un attribut replié s'applique à toutes ses colonnes.</p>` : ''}
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2">Cardinalité</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2" title="Combien de valeurs cet attribut peut prendre dans une occurrence. La répétition du GROUPE, elle, est indiquée sur la ligne du composant.">Nombre de valeurs</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
         }
         function ensureDictEntry(tableName) {
@@ -3616,6 +3671,102 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return c.multi
                 ? `<span class="text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">plusieurs valeurs</span>`
                 : `<span class="text-[10px] font-bold bg-slate-50 border border-slate-200 text-slate-500 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">1 valeur</span>`;
+        }
+
+        /* ---- Côté technique « TEL_1, TEL_2, TEL_3 » ; côté métier « Téléphone : 1 à 3 valeurs » ----
+           Une base étale presque toujours une donnée multivaluée en colonnes numérotées. Cette mise
+           à plat est un choix d'implémentation : le métier, lui, ne connaît qu'UN attribut
+           « Téléphone » qui peut prendre 1, 2, 3… n valeurs. Les afficher comme trois attributs
+           distincts fait documenter trois fois la même chose et masque la seule information qui
+           compte ici — combien de valeurs sont possibles. On les replie donc en un attribut unique,
+           et la bascule « Vue technique » redonne les colonnes une à une : rien n'est masqué de force. */
+        function boRepeatSplit(name) {
+            const s = String(name || '').trim();
+            const m = s.match(/^(.*?)[ _\-.]*\(?(\d{1,2})\)?$/);
+            if (!m) return null;
+            const base = m[1].replace(/[ _\-.]+$/, '').trim();
+            if (base.length < 2 || /\d$/.test(base)) return null;   // « V1_2 », « CA_2024 » : on ne devine pas
+            const idx = parseInt(m[2], 10);
+            if (!isFinite(idx) || idx < 1) return null;
+            return { base, idx };
+        }
+        function boFoldRows(rows) {
+            const out = [], byKey = new Map();
+            (rows || []).forEach(r => {
+                const sp = boRepeatSplit(r.el.name);
+                const plain = { fold: false, base: r.el.name, members: [r], idx: [], stId: r.stId || '', facet: r.facet };
+                if (!sp) { out.push(plain); return; }
+                const key = (r.stId || '') + '|' + sp.base.toLowerCase();
+                let g = byKey.get(key);
+                if (!g) { g = { fold: true, base: sp.base, members: [], idx: [], stId: r.stId || '', facet: r.facet }; byKey.set(key, g); out.push(g); }
+                g.members.push(r); g.idx.push(sp.idx);
+            });
+            // Une colonne numérotée toute seule n'est pas une répétition : on la rend telle quelle.
+            return out.map(g => (g.fold && g.members.length < 2)
+                ? { fold: false, base: g.members[0].el.name, members: g.members, idx: [], stId: g.stId, facet: g.facet } : g);
+        }
+        function boFoldMax(g) { return Math.max(g.members.length, ...(g.idx.length ? g.idx : [1])); }
+        function boFoldIds(g) { return g.members.map(m => m.el.id).join(','); }
+        function boFoldField(g, f) { for (const m of g.members) if (m.el[f]) return m.el[f]; return ''; }
+        function boFoldCols(bo, g) {
+            const out = [];
+            g.members.forEach(m => { const mp = (m.mappings || m.el.mappings || [])[0]; if (mp) out.push(mp.table + '.' + mp.col); });
+            return out;
+        }
+        // Écrire sur l'attribut replié = écrire sur TOUTES les colonnes qu'il recouvre : une seule
+        // saisie, et aucune divergence possible entre TEL_1 et TEL_2.
+        function boFoldWrite(boId, stId, ids, f, v) {
+            String(ids).split(',').filter(Boolean).forEach(id => boAttrWrite(boId, stId, id, f, v));
+            renderGovernance();
+        }
+        // Renommer l'attribut métier renomme chaque colonne repliée en conservant son numéro.
+        function boFoldRename(boId, stId, ids, v) {
+            const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!bo) return;
+            const nb = String(v || '').trim(); if (!nb) return renderGovernance();
+            String(ids).split(',').filter(Boolean).forEach(id => {
+                const f = boAttrMapOf(bo, id); if (!f) return;
+                const nm = String(f.el.name || '').trim(), sp = boRepeatSplit(nm);
+                boAttrWrite(boId, stId, id, 'name', nb + (sp ? nm.slice(sp.base.length) : ''));
+            });
+            renderGovernance();
+        }
+        // Combien de valeurs pour CET attribut, à l'intérieur d'UNE occurrence de son groupe.
+        function boValueCountBadgeHtml(bo, g) {
+            if (!g.fold) return `<span class="text-[10px] font-bold bg-slate-50 border border-slate-200 text-slate-500 rounded-full px-2 py-0.5 whitespace-nowrap" title="Une seule valeur par occurrence.">1 valeur</span>`;
+            const n = boFoldMax(g), cols = boFoldCols(bo, g);
+            const t = `Multivalué : jusqu'à ${n} valeurs, étalées côté technique sur ${g.members.length} colonne(s)`
+                + (cols.length ? ' — ' + cols.join(', ') : '') + '.';
+            return `<span class="text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">1 à ${n} valeurs</span>`;
+        }
+        // Le GROUPE (la facette) se répète — ce n'est pas une propriété de chacun de ses attributs.
+        function boFacetCardBadgeHtml(st) {
+            const card = (st && st.cardinality) || '1–N';
+            return /[–-]\s*N$/.test(card)
+                ? `<span class="text-[10px] font-bold bg-amber-100 border border-amber-300 text-amber-900 rounded-full px-2 py-0.5 whitespace-nowrap" title="Cardinalité ${escapeHTML(card)} : plusieurs occurrences de ce groupe par objet.">groupe répétable</span>`
+                : `<span class="text-[10px] font-bold bg-slate-100 border border-slate-300 text-slate-600 rounded-full px-2 py-0.5 whitespace-nowrap" title="Cardinalité ${escapeHTML(card)} : une seule occurrence de ce groupe par objet.">groupe unique</span>`;
+        }
+        function boToggleFold() { govState.dictFold = (govState.dictFold === false); renderGovernance(); }
+        // Échantillonner un attribut replié : on balaie toutes ses colonnes et on dédoublonne, sinon
+        // « Téléphone » n'illustrerait que TEL_1 alors qu'il en recouvre trois.
+        async function boFoldSample(boId, ids) {
+            const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!bo) return;
+            const list = String(ids).split(',').filter(Boolean);
+            const cols = [], vals = [];
+            try {
+                const { conn } = await getDB();
+                for (const id of list) {
+                    const f = boAttrMapOf(bo, id); if (!f || !f.map) continue;
+                    cols.push(f.map.table + '.' + f.map.col);
+                    let v = []; try { v = await boSampleValues(conn, f.map.table, f.map.col, 3); } catch (e) { continue; }
+                    v.forEach(x => { if (!vals.includes(x)) vals.push(x); });
+                }
+            } catch (e) { return showError('Échantillonnage impossible : ' + e.message); }
+            if (!cols.length) return showError("Aucune des colonnes de cet attribut n'est rattachée à une source chargée.");
+            if (!vals.length) return showError(`Les colonnes ${cols.join(', ')} ne contiennent aucune valeur renseignée.`);
+            const val = vals.slice(0, 4).join(' ; ');
+            list.forEach(id => { const f = boAttrMapOf(bo, id); if (f) { f.el.examples = val; f.el.examplesAuto = true; } });
+            persistAppState(); renderGovernance();
+            showSuccess(`${vals.length} exemple(s) pris dans ${cols.length} colonne(s) : ${cols.join(', ')}.`);
         }
 
         function boAttrMapOf(bo, elId) {
@@ -11192,8 +11343,16 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.12.0';
+        const APP_VERSION = '7.13.0';
         const APP_CHANGELOG = [
+            { v: '7.13.0', d: '2026-07-31', t: 'Le multivalué au bon niveau : le groupe se répète, l\'attribut porte n valeurs', items: [
+                '<b>La cardinalité était affichée attribut par attribut, ce qui était faux.</b> Quand un composant est en <code>1–N</code>, ce n\'est pas « la ville » qui est multivaluée : c\'est le <b>groupe d\'attributs</b> entier qui se répète. Répéter le badge sur chaque ligne laissait croire à une propriété de l\'attribut.',
+                'Les attributs sont désormais <b>groupés par composant</b>, avec une ligne d\'en-tête qui porte la cardinalité, son sélecteur unique et la phrase qui l\'explique : <i>« un(e) Client peut avoir plusieurs Adresse ; ses 4 attributs vont ensemble — une occurrence, c\'est le bloc entier »</i>. Un groupe répétable est teinté d\'ambre, un groupe unique reste neutre.',
+                '<b>Les colonnes numérotées deviennent un seul attribut métier.</b> <code>TEL_1, TEL_2, TEL_3</code> est un choix d\'implémentation ; le métier ne connaît qu\'un attribut <b>Téléphone</b> pouvant prendre <b>1 à 3 valeurs</b>. La colonne « Nombre de valeurs » l\'indique, et les colonnes d\'origine restent lisibles sous le nom.',
+                'Ce qui est saisi sur un attribut replié — définition, exemples, sensibilité, terme — <b>s\'applique à toutes ses colonnes</b> : une seule saisie, aucune divergence possible entre <code>TEL_1</code> et <code>TEL_2</code>. Le renommer <b>renumérote</b> automatiquement chaque colonne.',
+                'L\'échantillonnage d\'un attribut replié <b>balaie toutes ses colonnes</b> et dédoublonne, au lieu de n\'illustrer que la première.',
+                'La bascule <b>Vue métier / Vue technique</b> rend à tout moment les colonnes une à une : le repliement est une lecture, il ne masque rien de force et ne modifie pas le modèle.',
+                'Le repliement est <b>prudent</b> : il faut au moins deux colonnes de même base, un numéro de 1 à 99, et une base qui ne finit pas déjà par un chiffre — <code>CA_2024</code> ou <code>V1_2</code> ne sont pas repliés.'] },
             { v: '7.12.0', d: '2026-07-29', t: 'Le caractère multivalué d\'un attribut devient visible', items: [
                 '<b>La vue ne disait pas si un attribut peut avoir plusieurs valeurs.</b> L\'information existait pourtant : elle est portée par la <b>cardinalité du composant</b>, mais n\'apparaissait que dans la fiche de l\'objet. On documentait donc « la ville de facturation » comme s\'il n\'y en avait qu\'une, alors que l\'objet peut en porter dix.',
                 'Une colonne <b>Cardinalité</b> affiche pour chaque attribut <b>« 1 valeur »</b> ou <b>« plusieurs valeurs »</b>, ce dernier mis en évidence. Un attribut central vaut une fois par objet ; un attribut de composant suit la cardinalité de son composant — <code>1–N</code> et <code>N–N</code> sont multivalués, <code>1–1</code> et <code>N–1</code> ne le sont pas.',
