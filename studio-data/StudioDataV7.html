@@ -2953,7 +2953,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         ${g.fold ? `<div class="text-[9px] text-amber-700 font-bold mt-0.5">↻ ${g.members.length} colonnes repliées en un attribut</div>` : ''}
                         <div class="text-[9px] font-mono text-slate-300 mt-0.5" title="Colonne(s) source qui alimente(nt) cet attribut">${prov}</div>
                     </td>
-                    <td class="p-2 whitespace-nowrap">${boValueCountBadgeHtml(bo, g)}</td>
+                    <td class="p-2 whitespace-nowrap">${boValueCountBadgeHtml(bo, g)}
+                        <div class="mt-1">${boMultiSelectHtml(boAttrMulti(bo, g).decl, one
+                            ? `boAttrWrite('${bo.id}','${stId}','${r0.el.id}','multi',this.value); renderGovernance()`
+                            : `boFoldWrite('${bo.id}','${stId}','${ids}','multi',this.value)`,
+                            one ? 'Déclarez ici combien de valeurs cet attribut peut prendre pour un(e) ' + bo.name
+                                : 'Déclaration appliquée aux ' + g.members.length + ' colonnes repliées de cet attribut')}</div></td>
                     <td class="p-2"><textarea rows="2" placeholder="Ce que désigne cet attribut, en langage métier…" onchange="${wr('definition')}"
                         class="w-full min-w-[220px] border border-slate-200 p-1.5 rounded text-xs">${escapeHTML(val('definition'))}</textarea></td>
                     <td class="p-2"><div class="flex items-center gap-1">
@@ -2978,7 +2983,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
                     <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
-                    <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité et termes par fichier CSV ou Excel">⬆ Remplir par fichier</button>
+                    <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité, termes et nombre de valeurs par fichier CSV ou Excel">⬆ Remplir par fichier</button>
                     <button onclick="boAttrSampleAll('${bo.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Prendre de vrais exemples dans les sources rattachées, pour tous les attributs — les exemples saisis à la main ne sont pas touchés">⟳ Échantillonner les exemples</button>
                     <button onclick="boToggleFold()" class="text-xs px-3 py-1.5 rounded-lg font-bold border ${fold ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}" title="${fold ? 'Vue métier : les colonnes numérotées (TEL_1, TEL_2…) sont repliées en un seul attribut « 1 à n valeurs ». Cliquer pour voir chaque colonne.' : 'Vue technique : chaque colonne numérotée est un attribut distinct. Cliquer pour revenir à la lecture métier.'}">${fold ? '◉ Vue métier' : '○ Vue technique'}</button>
                     ${master ? `<span class="text-[11px] text-slate-400">Table maître : <strong>${escapeHTML(master.name)}</strong></span>` : '<span class="text-[11px] text-amber-600 font-bold">⚠️ pas de table maître chargée</span>'}
@@ -2992,7 +2997,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${nShown}) <span class="text-slate-400 font-medium text-xs">— le sens est porté par l'<b>objet métier</b> : définition, exemples, sensibilité et terme s'enregistrent sur l'attribut, pas sur la colonne source. Un attribut sans colonne rattachée se documente quand même.</span></h3>
                 ${nFolded ? `<p class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">↻ <b>${nFolded} colonnes numérotées</b> ont été repliées en attributs multivalués : côté technique la donnée est étalée (TEL_1, TEL_2…), côté métier c'est <b>un seul attribut qui peut avoir plusieurs valeurs</b>. Ce que vous saisissez sur un attribut replié s'applique à toutes ses colonnes.</p>` : ''}
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2" title="Combien de valeurs cet attribut peut prendre dans une occurrence. La répétition du GROUPE, elle, est indiquée sur la ligne du composant.">Nombre de valeurs</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2" title="Combien de valeurs cet attribut peut prendre dans une occurrence — déclarable ici. La répétition du GROUPE, elle, est indiquée sur la ligne du composant.">Nombre de valeurs</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
         }
         function ensureDictEntry(tableName) {
@@ -3730,13 +3735,59 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
             renderGovernance();
         }
+        /* ---- Déclarer un attribut multivalué, sans attendre que la technique le trahisse ----
+           Le repliement des colonnes numérotées ne couvre qu'un cas : celui où la source a déjà
+           étalé la donnée. Or le métier sait souvent AVANT la source qu'un client peut avoir
+           plusieurs adresses de courriel — parfois même sans qu'aucune source ne soit rattachée.
+           La multiplicité devient donc une propriété que l'on DÉCLARE sur l'attribut de l'objet :
+             '1'  → une seule valeur, affirmé
+             'n'  → plusieurs valeurs, sans limite connue
+             '3'  → plusieurs valeurs, trois au maximum
+             ''   → non déclaré : on retombe sur ce que la structure technique laisse déduire.
+           Une déclaration l'emporte toujours sur la déduction : c'est le métier qui tranche. */
+        const MULTI_OPTS = [['', '— déduit —'], ['1', '1 valeur'], ['n', 'plusieurs, sans limite'],
+            ['2', 'jusqu’à 2'], ['3', 'jusqu’à 3'], ['4', 'jusqu’à 4'], ['5', 'jusqu’à 5'],
+            ['6', 'jusqu’à 6'], ['8', 'jusqu’à 8'], ['10', 'jusqu’à 10'], ['12', 'jusqu’à 12'], ['20', 'jusqu’à 20']];
+        function boMultiNorm(v) {
+            const s = String(v == null ? '' : v).trim().toLowerCase();
+            if (!s) return '';
+            if (['n', '*', 'oui', 'plusieurs', 'multi', 'multivalue', 'multivalué', 'n valeurs'].includes(s)) return 'n';
+            if (['1', 'non', 'unique', 'mono', '1 valeur'].includes(s)) return '1';
+            const k = parseInt(s, 10);
+            if (isFinite(k) && k >= 1 && k <= 999 && String(k) === s.replace(/\s/g, '')) return String(k);
+            return null;   // valeur non interprétable : on préfère le dire que l'enregistrer
+        }
+        function boAttrMulti(bo, g) {
+            const decl = boMultiNorm(g.fold ? boFoldField(g, 'multi') : ((g.members[0].el || {}).multi || '')) || '';
+            const det = g.fold ? boFoldMax(g) : 0;
+            let multi = false, max = 0, from = '';
+            if (decl === 'n') { multi = true; from = 'déclaré'; }
+            else if (decl === '1') { from = 'déclaré'; }
+            else if (decl) { multi = true; max = parseInt(decl, 10); from = 'déclaré'; }
+            else if (det >= 2) { multi = true; max = det; from = 'déduit'; }
+            return { multi, max, from, decl, label: !multi ? '1 valeur' : (max ? '1 à ' + max + ' valeurs' : 'plusieurs valeurs') };
+        }
         // Combien de valeurs pour CET attribut, à l'intérieur d'UNE occurrence de son groupe.
         function boValueCountBadgeHtml(bo, g) {
-            if (!g.fold) return `<span class="text-[10px] font-bold bg-slate-50 border border-slate-200 text-slate-500 rounded-full px-2 py-0.5 whitespace-nowrap" title="Une seule valeur par occurrence.">1 valeur</span>`;
-            const n = boFoldMax(g), cols = boFoldCols(bo, g);
-            const t = `Multivalué : jusqu'à ${n} valeurs, étalées côté technique sur ${g.members.length} colonne(s)`
-                + (cols.length ? ' — ' + cols.join(', ') : '') + '.';
-            return `<span class="text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">1 à ${n} valeurs</span>`;
+            const c = boAttrMulti(bo, g), cols = boFoldCols(bo, g);
+            const why = c.from === 'déclaré' ? 'Déclaré sur l’objet métier.'
+                : (g.fold ? `Déduit de la structure technique : ${g.members.length} colonnes numérotées${cols.length ? ' (' + cols.join(', ') + ')' : ''}.`
+                          : 'Aucune déclaration et aucune répétition détectée : une seule valeur.');
+            const t = (c.multi ? 'Multivalué — ' + c.label : 'Monovalué — une seule valeur par occurrence') + '. ' + why;
+            return c.multi
+                ? `<span class="text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">${c.label}</span>${c.from === 'déduit' ? '<span class="text-[9px] text-slate-400 ml-1" title="Déduit des colonnes numérotées — déclarez-le pour l’affirmer">déduit</span>' : ''}`
+                : `<span class="text-[10px] font-bold bg-slate-50 border border-slate-200 text-slate-500 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">1 valeur</span>`;
+        }
+        function boMultiSelectHtml(cur, onch, title) {
+            return `<select onchange="${onch}" class="border border-slate-200 rounded text-[10px] p-0.5 bg-white" title="${escapeHTML(title || 'Combien de valeurs cet attribut peut prendre pour une occurrence de son objet')}">`
+                + MULTI_OPTS.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('') + '</select>';
+        }
+        // Déclaration depuis la fiche de l'objet (onglet Structure), cœur ou composant.
+        function boSetMulti(boId, stId, elId, v) {
+            const n = boMultiNorm(v);
+            if (n === null) return showError('Valeur de multiplicité non reconnue : utilisez « 1 », « n » ou un nombre.');
+            boAttrWrite(boId, stId || '', elId, 'multi', n);
+            renderGovernance();
         }
         // Le GROUPE (la facette) se répète — ce n'est pas une propriété de chacun de ses attributs.
         function boFacetCardBadgeHtml(st) {
@@ -3881,13 +3932,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <select id="bo-col-${elm.id}" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${names[0] ? (tableByName(names[0]) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
                     <button onclick="addBoMapping('${bo.id}','${elm.id}')" class="text-[11px] bg-white border border-slate-300 px-1.5 py-0.5 rounded font-medium hover:bg-slate-50">+</button>
                 </div></td>
+                <td class="p-2 whitespace-nowrap">${boValueCountBadgeHtml(bo, { fold: false, members: [{ el: elm, stId: '' }], idx: [], stId: '' })}<div class="mt-1">${boMultiSelectHtml(boMultiNorm(elm.multi) || '', `boSetMulti('${bo.id}','','${elm.id}',this.value)`, 'Combien de valeurs cet attribut peut prendre pour un(e) ' + bo.name)}</div></td>
                 <td class="p-2">${boUsageBadgeHtml(bo, elm)}</td>
                 <td class="p-2 text-right"><button onclick="removeBoElement('${bo.id}','${elm.id}')" class="text-red-400 hover:text-red-600 p-1"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>
             </tr>`;
         }
         function boElementsTableHtml(bo, elems, names, emptyMsg) {
             if (!elems.length) return `<p class="text-xs text-slate-400 italic">${emptyMsg || 'Aucun attribut.'}</p>`;
-            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-20">🔌</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
+            return `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-6" title="Glisser pour ordonner">↕</th><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Alimenté par</th><th class="p-2 w-32" title="Combien de valeurs cet attribut peut prendre pour une occurrence de l'objet">Nb de valeurs</th><th class="p-2 w-20">🔌</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${elems.map(e => boElementRowHtml(bo, e, names)).join('')}</tbody></table></div>`;
         }
         const CARD_OPTS = ['1–1', '1–N', 'N–1', 'N–N'];
         function facetScopeLabel(sc) { return `${sc.col} ${SCOPE_OPS[sc.op] || sc.op}${sc.op === 'empty' || sc.op === 'notempty' ? '' : ' "' + sc.val + '"'}`; }
@@ -3899,6 +3951,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <td class="p-2"><input type="text" value="${escapeHTML(fe.name)}" onchange="updateFacetElement('${bo.id}','${st.id}','${fe.id}','name',this.value)" class="font-bold text-xs border border-slate-300 p-1.5 rounded w-full bg-white" title="Nom métier — renommable"></td>
                 <td class="p-2"><input type="text" value="${escapeHTML(fe.owner || '')}" onchange="updateFacetElement('${bo.id}','${st.id}','${fe.id}','owner',this.value)" class="text-xs border border-slate-200 p-1.5 rounded w-full" placeholder="hérite du global"></td>
                 <td class="p-2"><select onchange="updateFacetElement('${bo.id}','${st.id}','${fe.id}','col',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white font-mono">${cols.map(h => `<option ${h === fe.col ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select></td>
+                <td class="p-2 whitespace-nowrap">${boValueCountBadgeHtml(bo, { fold: false, members: [{ el: fe, stId: st.id }], idx: [], stId: st.id })}<div class="mt-1">${boMultiSelectHtml(boMultiNorm(fe.multi) || '', `boSetMulti('${bo.id}','${st.id}','${fe.id}',this.value)`, 'Combien de valeurs cet attribut peut prendre DANS UNE occurrence de « ' + st.name + ' »')}</div></td>
                 <td class="p-2">${boUsageBadgeHtml(bo, fe)}</td>
                 <td class="p-2 text-right"><button onclick="removeFacetElement('${bo.id}','${st.id}','${fe.id}')" class="text-red-400 hover:text-red-600 p-1"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>
             </tr>`;
@@ -3912,7 +3965,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 : '<span class="text-[11px] text-slate-400 italic">Toute la table (aucun filtre) — pensez à filtrer si cette table porte plusieurs objets fonctionnels.</span>';
             const attrs = Array.isArray(st.elements) ? st.elements : [];
             const attrTable = attrs.length
-                ? `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Colonne technique</th><th class="p-2 w-20">🔌</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${attrs.map(fe => facetElementRowHtml(bo, st, fe)).join('')}</tbody></table></div>`
+                ? `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-48">Nom métier</th><th class="p-2 w-40">Propriétaire</th><th class="p-2">Colonne technique</th><th class="p-2 w-32" title="Combien de valeurs cet attribut peut prendre dans une occurrence du composant">Nb de valeurs</th><th class="p-2 w-20">🔌</th><th class="p-2 w-8"></th></tr></thead><tbody class="divide-y divide-slate-100">${attrs.map(fe => facetElementRowHtml(bo, st, fe)).join('')}</tbody></table></div>`
                 : '<p class="text-xs text-slate-400 italic">Aucun attribut.</p>';
             const filterSummary = (st.scope || []).length ? (st.scope || []).map(facetScopeLabel).join(' · ') : 'toute la table';
             const appliesSummary = (st.applies || []).length ? ` · <span class="text-purple-600">si ${(st.applies || []).map(facetScopeLabel).map(escapeHTML).join(' et ')}</span>` : '';
@@ -7441,10 +7494,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             assets: { label: '🖥 Applications & processus', fields: [
                 ['name', 'Nom (clé)', true], ['kind', 'Type (application / processus)', false], ['criticality', 'Criticité', false], ['description', 'Description', false],
                 ['owner', 'Responsable', false], ['domain', 'Domaine métier', false], ['apps', 'Applications du processus (séparées par ;)', false]] },
-            boattr: { label: '🏷 Attributs des objets métier (définitions, exemples, sensibilité, terme)', fields: [
+            boattr: { label: '🏷 Attributs des objets métier (définitions, exemples, sensibilité, terme, nombre de valeurs)', fields: [
                 ['bo', 'Objet métier (clé)', true], ['attr', 'Attribut (clé)', true], ['definition', 'Définition', false],
                 ['examples', 'Exemples', false], ['sensitivity', 'Sensibilité', false], ['term', 'Terme de glossaire', false],
-                ['owner', 'Propriétaire', false], ['rename', 'Renommer en', false]] },
+                ['owner', 'Propriétaire', false], ['multi', 'Nombre de valeurs (1 / n / un nombre)', false],
+                ['rename', 'Renommer en', false]] },
             usage: { label: '🔌 Usages attribut ↔ application', fields: [
                 ['bo', 'Objet métier (clé)', true], ['attr', 'Attribut (clé)', true], ['app', 'Application / processus (clé)', true]] },
             bo: { label: '🏛 Objets métier', fields: [
@@ -7488,13 +7542,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             }
             if (target === 'boattr') {
                 // Gabarit aller-retour : on exporte l'état courant, l'utilisateur complète, il réimporte.
-                const out = [['Objet métier', 'Attribut', 'Définition', 'Exemples', 'Sensibilité', 'Terme de glossaire', 'Propriétaire', 'Renommer en']];
+                const out = [['Objet métier', 'Attribut', 'Définition', 'Exemples', 'Sensibilité', 'Terme de glossaire', 'Propriétaire', 'Nombre de valeurs', 'Renommer en']];
                 (g.businessObjects || []).forEach(bo => boAllAttrRows(bo).forEach(r => {
                     const e2 = r.el;
                     const term = (g.glossary || []).find(t2 => t2.id === e2.term);
-                    out.push([bo.name, e2.name, e2.definition || '', e2.examples || '', e2.sensitivity || '', term ? term.term : '', e2.owner || '', '']);
+                    out.push([bo.name, e2.name, e2.definition || '', e2.examples || '', e2.sensitivity || '', term ? term.term : '', e2.owner || '', e2.multi || '', '']);
                 }));
-                if (out.length === 1) out.push(['Client', 'Adresse de facturation', 'Adresse où est envoyée la facture', '12 rue X, 75001 PARIS', 'Personnel (RGPD)', 'Adresse', 'DSI', '']);
+                if (out.length === 1) out.push(['Client', 'Adresse de facturation', 'Adresse où est envoyée la facture', '12 rue X, 75001 PARIS', 'Personnel (RGPD)', 'Adresse', 'DSI', 'n', '']);
                 return out;
             }
             if (target === 'usage') {
@@ -7673,6 +7727,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                             const gt = (g.glossary || []).find(t2 => giNorm(t2.term) === giNorm(tv));
                             if (gt) ch = setIf(e2, 'term', gt.id) || ch;
                             else skip('Terme de glossaire introuvable — ajoutez-le d\'abord (cible « 📖 Glossaire »)', boN + ' · ' + attrN + ' → ' + tv);
+                        }
+                        // Multiplicité : « 1 », « n » ou un nombre. Une valeur illisible est signalée
+                        // plutôt qu'enregistrée — sinon l'attribut porterait une multiplicité fantôme.
+                        const mv = giVal(row, 'multi');
+                        if (mv) {
+                            const mn = boMultiNorm(mv);
+                            if (mn === null) skip('Nombre de valeurs non reconnu — attendu « 1 », « n » ou un nombre', boN + ' · ' + attrN + ' → ' + mv);
+                            else ch = setIf(e2, 'multi', mn) || ch;
                         }
                         // Renommage explicite : jamais implicite, pour ne pas casser les rattachements.
                         const rn = giVal(row, 'rename');
@@ -11343,8 +11405,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.13.0';
+        const APP_VERSION = '7.14.0';
         const APP_CHANGELOG = [
+            { v: '7.14.0', d: '2026-07-31', t: 'Un attribut multivalué se DÉCLARE sur l\'objet métier', items: [
+                '<b>La multiplicité ne pouvait être que subie.</b> Elle se déduisait de la structure technique — cardinalité du composant, colonnes numérotées — mais rien ne permettait de l\'<b>affirmer</b>. Or le métier sait souvent avant la source qu\'un client peut avoir plusieurs adresses de courriel, y compris quand <b>aucune source n\'est encore rattachée</b>.',
+                'Chaque attribut porte désormais une multiplicité déclarée : <b>1 valeur</b>, <b>plusieurs sans limite</b>, ou <b>jusqu\'à n</b>. Elle se règle depuis le <b>dictionnaire par objet métier</b> et depuis la <b>fiche de l\'objet</b> (attributs du noyau comme attributs de composant), une nouvelle colonne « Nb de valeurs » dans les deux cas.',
+                '<b>La déclaration l\'emporte sur la déduction</b> — c\'est le métier qui tranche — et le badge indique laquelle des deux s\'applique : une multiplicité seulement déduite est marquée « déduit », tant que personne ne l\'a confirmée.',
+                'Sur un attribut replié (TEL_1, TEL_2…), la déclaration s\'applique à <b>toutes ses colonnes</b> d\'un coup.',
+                'La multiplicité entre dans l\'<b>import en masse</b> : colonne « Nombre de valeurs » du gabarit, qui accepte <code>1</code>, <code>n</code>, <code>oui</code>, <code>non</code> ou un nombre. Une valeur illisible est <b>signalée ligne par ligne</b> au lieu d\'être enregistrée, et le gabarit exporte l\'existant pour l\'aller-retour.'] },
             { v: '7.13.0', d: '2026-07-31', t: 'Le multivalué au bon niveau : le groupe se répète, l\'attribut porte n valeurs', items: [
                 '<b>La cardinalité était affichée attribut par attribut, ce qui était faux.</b> Quand un composant est en <code>1–N</code>, ce n\'est pas « la ville » qui est multivaluée : c\'est le <b>groupe d\'attributs</b> entier qui se répète. Répéter le badge sur chaque ligne laissait croire à une propriété de l\'attribut.',
                 'Les attributs sont désormais <b>groupés par composant</b>, avec une ligne d\'en-tête qui porte la cardinalité, son sélecteur unique et la phrase qui l\'explique : <i>« un(e) Client peut avoir plusieurs Adresse ; ses 4 attributs vont ensemble — une occurrence, c\'est le bloc entier »</i>. Un groupe répétable est teinté d\'ambre, un groupe unique reste neutre.',
