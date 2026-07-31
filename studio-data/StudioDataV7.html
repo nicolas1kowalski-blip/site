@@ -2907,6 +2907,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         ${r.facet ? `<div class="text-[9px] text-emerald-600 font-bold mt-0.5">◆ ${escapeHTML(r.facet)}</div>` : ''}
                         <div class="text-[9px] font-mono text-slate-300 mt-0.5" title="Colonne source qui alimente cet attribut">${m ? escapeHTML(m.table + '.' + m.col) : '<span class="italic text-amber-500">non rattaché à une colonne</span>'}</div>
                     </td>
+                    <td class="p-2 whitespace-nowrap">${boCardBadgeHtml(bo, r)}${r.stId ? `<div class="mt-1"><select onchange="updateBoFacet('${bo.id}','${r.stId}','cardinality',this.value); renderGovernance()" class="border border-slate-200 rounded text-[10px] p-0.5 bg-white" title="Cardinalité du composant « ${escapeHTML(r.facet)} » — s'applique à TOUS ses attributs, pas seulement à celui-ci">${CARD_OPTS.map(o => `<option ${o === boAttrCardinality(bo, r).card ? 'selected' : ''}>${o}</option>`).join('')}</select></div>` : ''}</td>
                     <td class="p-2"><textarea rows="2" placeholder="Ce que désigne cet attribut, en langage métier…" onchange="${wr('definition')}"
                         class="w-full min-w-[220px] border border-slate-200 p-1.5 rounded text-xs">${escapeHTML(r.el.definition || '')}</textarea></td>
                     <td class="p-2"><div class="flex items-center gap-1">
@@ -2936,8 +2937,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 </div>
                 <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${rows.length}) <span class="text-slate-400 font-medium text-xs">— le sens est porté par l'<b>objet métier</b> : définition, exemples, sensibilité et terme s'enregistrent sur l'attribut, pas sur la colonne source. Un attribut sans colonne rattachée se documente quand même.</span></h3>
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="6" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2">Cardinalité</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
         }
         function ensureDictEntry(tableName) {
             const d = state.governance.dictionary;
@@ -3595,6 +3596,28 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
            rattaché à une colonne, on va y chercher les valeurs les plus FRÉQUENTES — un exemple
            doit être typique, pas tiré au hasard — en écartant les vides. Le balayage est borné
            par un échantillon pour rester instantané même sur une grosse source. */
+        /* ---- Un attribut est-il multivalué ? ----
+           L'information existait déjà, mais seulement dans la fiche de l'objet : elle est portée
+           par la CARDINALITÉ du composant. « 1–N » ou « N–N » veut dire que l'objet peut avoir
+           plusieurs occurrences du composant, donc que ses attributs sont multivalués. Un attribut
+           central, lui, vaut une fois par objet. Ne pas le voir dans le dictionnaire conduit à
+           documenter « la ville » comme s'il n'y en avait qu'une, alors qu'il peut y en avoir dix. */
+        function boAttrCardinality(bo, row) {
+            if (!row.stId) return { multi: false, card: '1–1', via: null };
+            const st = getBoFacets(bo).find(x => x.id === row.stId);
+            const card = (st && st.cardinality) || '1–N';
+            return { multi: /[–-]\s*N$/.test(card), card, via: st ? st.name : null };
+        }
+        function boCardBadgeHtml(bo, row) {
+            const c = boAttrCardinality(bo, row);
+            const t = c.via
+                ? `Via le composant « ${c.via} » (${c.card}) — la cardinalité se règle sur le composant, elle vaut pour tous ses attributs.`
+                : 'Attribut porté directement par l\'objet : une valeur par occurrence.';
+            return c.multi
+                ? `<span class="text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">plusieurs valeurs</span>`
+                : `<span class="text-[10px] font-bold bg-slate-50 border border-slate-200 text-slate-500 rounded-full px-2 py-0.5 whitespace-nowrap" title="${escapeHTML(t)}">1 valeur</span>`;
+        }
+
         function boAttrMapOf(bo, elId) {
             for (const e2 of (boCoreElements(bo) || []))
                 if (e2.id === elId) return { el: e2, stId: '', map: (e2.mappings || [])[0] || null };
@@ -11169,8 +11192,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.11.0';
+        const APP_VERSION = '7.12.0';
         const APP_CHANGELOG = [
+            { v: '7.12.0', d: '2026-07-29', t: 'Le caractère multivalué d\'un attribut devient visible', items: [
+                '<b>La vue ne disait pas si un attribut peut avoir plusieurs valeurs.</b> L\'information existait pourtant : elle est portée par la <b>cardinalité du composant</b>, mais n\'apparaissait que dans la fiche de l\'objet. On documentait donc « la ville de facturation » comme s\'il n\'y en avait qu\'une, alors que l\'objet peut en porter dix.',
+                'Une colonne <b>Cardinalité</b> affiche pour chaque attribut <b>« 1 valeur »</b> ou <b>« plusieurs valeurs »</b>, ce dernier mis en évidence. Un attribut central vaut une fois par objet ; un attribut de composant suit la cardinalité de son composant — <code>1–N</code> et <code>N–N</code> sont multivalués, <code>1–1</code> et <code>N–1</code> ne le sont pas.',
+                'L\'infobulle nomme le <b>composant d\'origine</b> et rappelle que le réglage lui appartient.',
+                'La cardinalité du composant se règle <b>directement depuis la ligne</b>, sans passer par la fiche. Le sélecteur avertit explicitement qu\'il s\'applique à <b>tous</b> les attributs du composant, pas seulement à celui de la ligne.'] },
             { v: '7.11.0', d: '2026-07-29', t: 'Exemples échantillonnés depuis la source rattachée', items: [
                 'Quand un attribut est rattaché à une colonne, un bouton <b>⟳</b> à côté du champ « Exemples » va chercher de <b>vraies valeurs</b> dans la donnée. Un bouton global fait la même chose pour tous les attributs de l\'objet d\'un coup.',
                 '<b>Les valeurs retenues sont les plus fréquentes</b>, pas les premières venues : un exemple doit être représentatif. Les valeurs vides et les cellules ne contenant que des espaces sont écartées.',
