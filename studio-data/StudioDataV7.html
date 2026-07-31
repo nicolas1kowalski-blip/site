@@ -324,6 +324,20 @@
        donc du côté sûr. Un conteneur marqué protège toute sa descendance. */
     [data-gov-ro="1"] :is(input,select,textarea,button,a[onclick],[contenteditable="true"]):not([data-ro="keep"]):not([data-ro="keep"] *),
     [data-gov-ro="1"] [draggable="true"]:not([data-ro="keep"]):not([data-ro="keep"] *){display:none !important}
+    /* ---- Guide pas à pas : voile en 4 panneaux + anneau + bulle ---- */
+    .gd-blk{position:fixed;background:rgba(15,23,42,.55);z-index:80}
+    .gd-ring{position:fixed;z-index:81;pointer-events:none;border:3px solid #6366f1;border-radius:12px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.35);animation:gdPulse 1.6s ease-in-out infinite}
+    @keyframes gdPulse{0%,100%{box-shadow:0 0 0 4px rgba(99,102,241,.35)}50%{box-shadow:0 0 0 9px rgba(99,102,241,.15)}}
+    .gd-tip{position:fixed;z-index:82;background:#fff;border:1px solid #c7d2fe;border-radius:14px;
+      box-shadow:0 12px 40px rgba(15,23,42,.25);padding:12px 14px;font-size:12.5px;line-height:1.45;color:#0f172a}
+    .gd-tip-head{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6366f1;margin-bottom:4px}
+    .gd-tip-foot{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .gd-btn-main{background:#4f46e5 !important;color:#fff !important;font-weight:700;font-size:12px;padding:6px 12px;border-radius:8px}
+    .gd-btn-skip{background:#fff;border:1px solid #cbd5e1 !important;color:#64748b;font-size:11px;padding:5px 10px;border-radius:8px}
+    .gd-btn-quit{margin-left:auto;background:transparent;color:#94a3b8;font-size:11px;text-decoration:underline}
+    .gd-wait{font-size:11px;color:#64748b}
+    html[data-theme="dark"] .gd-tip{background:#1e293b;color:#e2e8f0;border-color:#4338ca}
     .gov-ro-val{display:inline-block;font-size:12px;line-height:1.4;color:var(--v7-txt,#0f172a);
       white-space:pre-wrap;word-break:break-word;max-width:100%}
     .gov-ro-band{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
@@ -3021,7 +3035,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select data-ro="keep" onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
-                    <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
+                    <button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité, termes et nombre de valeurs par fichier CSV ou Excel">⬆ Remplir par fichier</button>
                     <button onclick="boAttrSampleAll('${bo.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Prendre de vrais exemples dans les sources rattachées, pour tous les attributs — les exemples saisis à la main ne sont pas touchés">⟳ Échantillonner les exemples</button>
                     <button data-ro="keep" onclick="boToggleFold()" class="text-xs px-3 py-1.5 rounded-lg font-bold border ${fold ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}" title="${fold ? 'Vue métier : les colonnes numérotées (TEL_1, TEL_2…) sont repliées en un seul attribut « 1 à n valeurs ». Cliquer pour voir chaque colonne.' : 'Vue technique : chaque colonne numérotée est un attribut distinct. Cliquer pour revenir à la lecture métier.'}">${fold ? '◉ Vue métier' : '○ Vue technique'}</button>
@@ -3189,7 +3203,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // dans la fiche d'audit d'une colonne et dans l'écran des listes.
         function vlSelectHtml(tableName, col, cur) {
             const T = escapeHTML(String(tableName).replace(/'/g, "\\'")), C = escapeHTML(String(col).replace(/'/g, "\\'"));
-            if (!vlList().length) return `<a onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
+            if (!vlList().length) return `<a data-ro="keep" onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
             return `<select onchange="vlBind('${T}','${C}', this.value)" title="Rattacher cet attribut à une liste de valeurs : l'audit contrôlera l'appartenance au référentiel au lieu de signaler les valeurs rares." class="border p-1.5 rounded text-xs bg-white max-w-[160px] ${cur ? 'border-indigo-400 bg-indigo-50/60 font-bold text-indigo-800' : 'border-slate-200'}"><option value="">— aucune —</option>${vlList().map(L => `<option value="${L.id}" ${cur === L.id ? 'selected' : ''}>${escapeHTML(L.name)}</option>`).join('')}</select>`;
         }
         function vlBindPickTable(id) {
@@ -5411,7 +5425,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                             return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>
                         ${(() => { const objs = appBusinessObjects(a); return objs.length ? `<div class="text-[10px] uppercase font-bold text-emerald-600 mb-1">🏛️ Objets métier alimentés <span class="text-slate-300 normal-case font-normal">— déduits des sources ci-dessus (l'application y est rattachée automatiquement)</span></div>
                         <div class="flex flex-wrap gap-1.5 mb-2">${objs.map(bo => { const isProd = (bo.producedBy || []).includes(a.id), isCons = (bo.consumedBy || []).includes(a.id);
-                            return `<button onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
+                            return `<button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
                         ${(() => { const d = appDownstream(a); return (d.srcs.length && (d.bos.length || d.consumers.length)) ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>` : ''; })()}` : ''}
                         ${kind === 'process' ? `
                         <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -5550,7 +5564,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const bos = state.governance.businessObjects || [];
             const ids = ent.boIds || [];
             const chips = ids.map(id => { const bo = bos.find(b => b.id === id); if (!bo) return '';
-                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
             const remain = bos.filter(b => !ids.includes(b.id));
             return `<div class="flex flex-wrap items-center gap-1.5 mb-2">
                 <span class="text-[10px] uppercase font-bold text-emerald-600">🏛️ Objets métier</span>
@@ -11464,14 +11478,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
            Portée : la Gouvernance seulement. Charger une source, extraire, analyser restent
            disponibles ; ces écrans ne touchent pas au référentiel. */
         const GOV_RO_SCOPE = ['step-9', 'uxDrawer'];
-        /* En consultation, on ne montre que les écrans qui PRÉSENTENT le référentiel. Le catalogue
-           est la porte d'entrée (il indexe tables, colonnes, objets, termes, applications et règles,
-           avec sa fiche de détail) ; le dictionnaire donne le détail attribut par attribut, par objet
-           métier ou par table. Les autres écrans de la Gouvernance servent à ADMINISTRER — composer
-           un objet, tenir le glossaire, classer la sensibilité, surveiller les sources : sans leurs
-           commandes ils ne diraient plus rien, et leur seule présence dans le menu ferait chercher
-           au lecteur des choses qu'il ne peut pas faire. */
-        const GOV_RO_TABS = ['catalog', 'dictionary'];
+        /* En consultation, restent tous les écrans qui PRÉSENTENT le référentiel : catalogue,
+           dictionnaire, modèle de données, objets métier, applications & processus, glossaire,
+           listes de valeurs, lineage, historique — leurs commandes d'écriture sont masquées mais
+           leur contenu se lit. Sont retirés les seuls écrans d'ADMINISTRATION, qui ne sont que des
+           postes de travail : Périmètres, Sensibilité (classification/anonymisation) et
+           Surveillance des sources — privés de leurs commandes ils ne disent plus rien, et leur
+           présence ferait chercher au lecteur des choses qu'il ne peut pas faire. */
+        const GOV_RO_TABS = ['catalog', 'dictionary', 'model', 'objects', 'assets', 'glossary', 'vlists', 'flow', 'lineage', 'history'];
         function govTabAllowed(g) { return !govIsReadOnly() || GOV_RO_TABS.includes(g); }
         function govVisibleTabs(tabs) { return (tabs || []).filter(t => !t.hidden && govTabAllowed(t.g)); }
         function govIsReadOnly() { return !!govState.readOnly; }
@@ -11522,389 +11536,219 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 band.classList.toggle('hidden', !on);
                 band.innerHTML = on ? `<div class="gov-ro-band">
                     <span class="font-black">👁 Mode consultation</span>
-                    <span>Seuls le <b>Catalogue</b> et le <b>Dictionnaire</b> sont proposés — les écrans qui présentent le référentiel. Les commandes de modification sont masquées ; la recherche, les aperçus et les exports restent disponibles.</span>
+                    <span>Les écrans qui présentent le référentiel restent consultables, commandes de modification masquées. Trois écrans d'administration sont retirés : <b>Périmètres</b>, <b>Sensibilité</b> et <b>Surveillance des sources</b>.</span>
                     <span class="text-indigo-500">Ce n’est pas une sécurité — la case se décoche.</span>
                     <button data-ro="keep" onclick="govSetReadOnly(false)" style="background:#4f46e5;color:#fff" class="ml-auto text-[11px] font-bold px-3 py-1.5 rounded-lg">Reprendre la main</button>
                 </div>` : '';
             }
         }
 
-        /* ==================== ASSISTANT GUIDÉ (mode wizard) ====================
-           Les deux fonctions les plus utiles de l'outil — extraire et contrôler — sont aussi les
-           plus intimidantes : l'écran d'extraction offre colonnes calculées, synthèses de tables
-           liées, hiérarchies aplaties et agrégats ; celui des règles propose vingt types de
-           contrôles. Un nouvel utilisateur ne sait pas par où commencer, et abandonne avant
-           d'avoir produit quoi que ce soit.
-           L'assistant réduit chacune à une suite de questions simples, avec un résultat à la fin.
-           Principe de conception : il n'a AUCUN moteur à lui. Il écrit dans le même modèle que les
-           écrans complets (state.advExtract, state.governance.qualityRules) puis y renvoie
-           l'utilisateur, configuration en place. Rien de ce qu'il produit n'est un cas particulier,
-           et il enseigne où se trouvent les commandes au lieu de les remplacer. */
-        const WIZ_DEF = {
+        /* ==================== GUIDE PAS À PAS SUR L'ÉCRAN RÉEL ====================
+           Première version de l'assistant : un formulaire dans une fenêtre, qui refaisait les
+           écrans en plus simple. Verdict de l'utilisateur : inutile — et il avait raison, car en
+           sortant de la fenêtre on n'avait toujours pas appris où sont les commandes.
+           Le guide fait l'inverse : il se déroule SUR les écrans eux-mêmes. À chaque étape, il
+           surligne l'endroit précis où cliquer, dit quoi faire, et rend TOUT LE RESTE de
+           l'application non cliquable (quatre panneaux sombres autour de la zone active). Il
+           observe l'état réel — table choisie, colonne ajoutée, règle créée, exécution faite —
+           et n'avance que quand l'action est réellement accomplie. À la fin, l'utilisateur a
+           produit un vrai résultat avec les vraies commandes, qu'il saura retrouver seul. */
+        let guideState = null;
+        const GUIDE_Z = 80;
+        function guideRail(phase, idx) {
+            const g = document.querySelector(`.v7-grp[data-phase="${phase}"]`);
+            if (g) g.classList.add('open');
+            const its = g ? g.querySelectorAll('.v7-it') : [];
+            return its[idx] || null;
+        }
+        const GUIDE_FLOWS = {
             extract: {
-                title: '⚗️ Assistant Extraction', icon: '⚗️',
-                sub: 'Sortir un fichier à partir d’une source, en quatre questions.',
-                steps: ['Source', 'Colonnes', 'Filtres', 'Vérifier & lancer'] },
+                done: 'Guide terminé : votre extraction est lancée. Vous venez d’utiliser les vraies commandes de l’écran « Extraire » — elles seront au même endroit la prochaine fois.',
+                steps: [
+                    { skipIf: () => wizReadyTables().length > 0,
+                      target: () => guideRail('data', 1),
+                      text: 'Tout part d’une source. Cliquez sur <b>📥 Sources</b> pour ouvrir l’écran de chargement.',
+                      until: () => currentTab === 1 },
+                    { skipIf: () => wizReadyTables().length > 0,
+                      target: () => el('step-1'),
+                      text: 'Déposez un fichier <b>CSV ou Excel</b> dans la zone de chargement (ou cliquez-la pour choisir un fichier). Tout reste sur votre poste : aucune donnée ne quitte votre machine.',
+                      until: () => wizReadyTables().length > 0 },
+                    { target: () => guideRail('etl', 0),
+                      text: 'Ouvrez maintenant l’écran <b>⚗️ Extraire</b> : cliquez ici.',
+                      until: () => currentTab === 3 },
+                    { target: () => el('baseTableSelect'),
+                      text: 'Choisissez ici la <b>table de départ</b> : celle dont les lignes formeront votre fichier de sortie.',
+                      next: true },
+                    { target: () => { const n = el('adv-col-tbl'); return n ? n.closest('div') : null; },
+                      text: 'Ajoutez les <b>colonnes</b> à sortir : choisissez une colonne puis cliquez <b>+ Ajouter</b> — ou <b>Tout ajouter</b> pour prendre toute la table. J’attends qu’au moins une colonne soit ajoutée.',
+                      until: () => (state.advExtract.columns || []).length > 0 },
+                    { target: () => { const n = el('adv-flt-tbl'); return n ? n.closest('div') : null; },
+                      text: 'Facultatif : posez un <b>filtre</b> pour ne garder qu’une partie des lignes (ex. VILLE = PARIS). Sans filtre, tout est extrait. Cliquez « Étape suivante » quand c’est bon.',
+                      next: true },
+                    { target: () => el('step-3') && el('step-3').querySelector('[onclick="advPreview()"]'),
+                      text: 'Avant de lancer : cliquez <b>👁️ Prévisualiser</b> pour voir les 20 premières lignes réelles du résultat. « Compter » donne le nombre de lignes exact.',
+                      until: () => { const b = el('adv-preview'); return !!(b && b.children.length); } },
+                    { target: () => el('adv-generate'),
+                      text: 'Tout est prêt : cliquez <b>Générer</b> pour produire le fichier complet. Vous pourrez aussi enregistrer cette configuration comme <b>paramétrage</b> pour la rejouer plus tard.',
+                      next: true, nextLabel: 'Terminer le guide' },
+                ] },
             quality: {
-                title: '✅ Assistant Qualité', icon: '✅',
-                sub: 'Mettre en place vos premiers contrôles de qualité, proposés d’après vos données.',
-                steps: ['Source', 'Contrôles proposés', 'Vérifier', 'Résultat'] },
+                done: 'Guide terminé : votre premier contrôle tourne. Créez-en d’autres de la même façon — chaque type de règle est expliqué par l’aide « ? » de la colonne Type.',
+                steps: [
+                    { skipIf: () => wizReadyTables().length > 0,
+                      target: () => guideRail('data', 1),
+                      text: 'Un contrôle s’exécute sur une source. Cliquez sur <b>📥 Sources</b> pour en charger une.',
+                      until: () => currentTab === 1 },
+                    { skipIf: () => wizReadyTables().length > 0,
+                      target: () => el('step-1'),
+                      text: 'Déposez un fichier <b>CSV ou Excel</b> dans la zone de chargement. Tout reste sur votre poste.',
+                      until: () => wizReadyTables().length > 0 },
+                    { target: () => guideRail('quality', 1),
+                      text: 'Ouvrez l’écran <b>📏 Règles &amp; score</b> : cliquez ici.',
+                      until: () => currentTab === 12 },
+                    { pre: (d) => { d.n0 = qrRules().length; },
+                      target: () => el('step-12') && el('step-12').querySelector('[onclick="qrAdd()"]'),
+                      text: 'Créez votre première règle : cliquez <b>+ Règle</b>. Une ligne vide apparaîtra dans le tableau.',
+                      until: (d) => { if (qrRules().length > d.n0) { d.newId = qrRules()[qrRules().length - 1].id; return true; } return false; } },
+                    { target: (d) => { const n = el('qrContent') && el('qrContent').querySelector(`[onchange*="${d.newId}"]`); return n ? n.closest('tr') : null; },
+                      text: 'Voici votre règle. Sur cette ligne : donnez-lui un <b>nom</b>, choisissez la <b>table</b> (ou un objet métier), la <b>colonne</b> à contrôler, puis le <b>type</b> de contrôle — « Non vide » est le plus simple pour commencer. Le « ? » explique chaque type. J’attends que la table soit choisie.',
+                      until: (d) => { const r = qrRules().find(x => x.id === d.newId); return !!(r && (r.table || r.bo)); } },
+                    { target: (d) => { const n = el('qrContent') && el('qrContent').querySelector(`[onchange*="${d.newId}"]`); return n ? n.closest('tr') : null; },
+                      text: 'Réglez la <b>criticité</b> : c’est le poids de cette règle dans le score global (une règle Critique pèse 5 fois plus qu’une Faible). Cliquez « Étape suivante » quand la ligne vous convient.',
+                      next: true },
+                    { target: () => el('step-12') && el('step-12').querySelector('[onclick="qrRun(this)"]'),
+                      text: 'Cliquez <b>▶ Exécuter</b> : la règle est évaluée sur vos données réelles, ligne par ligne.',
+                      until: (d) => { const r = qrRules().find(x => x.id === d.newId); return !!(r && r.last); } },
+                    { target: () => el('qrContent'),
+                      text: 'Résultat : le <b>score</b> pondéré par la criticité, et pour chaque règle son taux de conformité. Un échec n’est pas forcément une erreur de donnée — c’est un écart entre la règle et la réalité ; « 🔍 inspecter » montre les lignes fautives une à une.',
+                      next: true, nextLabel: 'Terminer le guide' },
+                ] },
         };
-        let wizState = { kind: '', step: 0, tableId: '', cols: [], filters: [], sugg: null, busy: '', err: '', count: null, preview: '', result: null };
+        function guideStart(kind) {
+            const ov = el('wizOverlay'); if (ov) ov.classList.add('hidden');
+            guideStop();
+            guideState = { kind, idx: -1, data: {} };
+            guideNext();
+            guideState.timer = setInterval(guideTick, 300);
+        }
+        function guideStop(msg) {
+            if (guideState && guideState.timer) clearInterval(guideState.timer);
+            guideState = null;
+            ['gdB0', 'gdB1', 'gdB2', 'gdB3', 'gdRing', 'gdTip'].forEach(id => { const n = el(id); if (n) n.remove(); });
+            if (msg) showSuccess(msg);
+        }
+        function guideFlowSteps() { return GUIDE_FLOWS[guideState.kind].steps; }
+        function guideNext() {
+            if (!guideState) return;
+            const steps = guideFlowSteps();
+            let i = guideState.idx + 1;
+            while (i < steps.length && steps[i].skipIf && steps[i].skipIf()) i++;
+            if (i >= steps.length) { const m = GUIDE_FLOWS[guideState.kind].done; return guideStop(m); }
+            guideState.idx = i;
+            try { if (steps[i].pre) steps[i].pre(guideState.data); } catch (e) { }
+            guidePlace(true);
+        }
+        function guideTick() {
+            if (!guideState) return;
+            const st = guideFlowSteps()[guideState.idx];
+            if (st.until) {
+                let done = false;
+                try { done = !!st.until(guideState.data); } catch (e) { }
+                if (done) return guideNext();
+            }
+            guidePlace(false);
+        }
+        function guideEls() {
+            const mk = (id, cls) => {
+                let n = el(id);
+                if (!n) { n = document.createElement('div'); n.id = id; n.className = cls; document.body.appendChild(n); }
+                return n;
+            };
+            return {
+                b: [mk('gdB0', 'gd-blk'), mk('gdB1', 'gd-blk'), mk('gdB2', 'gd-blk'), mk('gdB3', 'gd-blk')],
+                ring: mk('gdRing', 'gd-ring'), tip: mk('gdTip', 'gd-tip'),
+            };
+        }
+        function guidePlace(fresh) {
+            if (!guideState) return;
+            const steps = guideFlowSteps(), st = steps[guideState.idx];
+            let t = null; try { t = st.target ? st.target(guideState.data) : null; } catch (e) { }
+            const { b, ring, tip } = guideEls();
+            const W = window.innerWidth, H = window.innerHeight, PAD = 6;
+            let r = null;
+            if (t && t.getBoundingClientRect) {
+                r = t.getBoundingClientRect();
+                // cible hors de vue : on l'y amène (une seule fois par étape, pas à chaque tic)
+                if (fresh && (r.top < 0 || r.bottom > H)) { try { t.scrollIntoView({ block: 'center' }); } catch (e) { } r = t.getBoundingClientRect(); }
+            }
+            const set = (n, x, y, w, h) => { n.style.left = x + 'px'; n.style.top = y + 'px'; n.style.width = Math.max(0, w) + 'px'; n.style.height = Math.max(0, h) + 'px'; n.style.display = 'block'; };
+            if (r && r.width > 0) {
+                const x0 = Math.max(0, r.left - PAD), y0 = Math.max(0, r.top - PAD),
+                      x1 = Math.min(W, r.right + PAD), y1 = Math.min(H, r.bottom + PAD);
+                set(b[0], 0, 0, W, y0);                    // dessus
+                set(b[1], 0, y1, W, H - y1);               // dessous
+                set(b[2], 0, y0, x0, y1 - y0);             // gauche
+                set(b[3], x1, y0, W - x1, y1 - y0);        // droite
+                set(ring, x0, y0, x1 - x0, y1 - y0);
+                // bulle : sous la cible si la place y est, sinon au-dessus
+                tip.style.display = 'block';
+                const tw = Math.min(380, W - 24);
+                tip.style.width = tw + 'px';
+                tip.style.left = Math.max(12, Math.min(W - tw - 12, x0)) + 'px';
+                if (fresh || !tip.dataset.step || tip.dataset.step !== String(guideState.idx)) guideTipFill(tip, st, steps);
+                const th = tip.offsetHeight;
+                tip.style.top = (y1 + 10 + th <= H ? y1 + 10 : Math.max(12, y0 - th - 10)) + 'px';
+            } else {
+                // cible introuvable : voile complet + bulle centrée, avec de quoi avancer quand même
+                set(b[0], 0, 0, W, H); [b[1], b[2], b[3], ring].forEach(n => n.style.display = 'none');
+                tip.style.display = 'block';
+                const tw = Math.min(380, W - 24);
+                tip.style.width = tw + 'px';
+                if (fresh || tip.dataset.step !== String(guideState.idx)) guideTipFill(tip, st, steps);
+                tip.style.left = (W - tw) / 2 + 'px';
+                tip.style.top = Math.max(12, (H - tip.offsetHeight) / 2) + 'px';
+            }
+        }
+        function guideTipFill(tip, st, steps) {
+            tip.dataset.step = String(guideState.idx);
+            const visible = steps.filter(s2 => !(s2.skipIf && s2.skipIf()));
+            const pos = visible.indexOf(st) + 1 || guideState.idx + 1;
+            tip.innerHTML = `
+                <div class="gd-tip-head">Étape ${pos} / ${visible.length}</div>
+                <div class="gd-tip-body">${st.text}</div>
+                <div class="gd-tip-foot">
+                    ${st.next ? `<button onclick="guideNext()" class="gd-btn-main">${st.nextLabel || 'Étape suivante →'}</button>`
+                              : `<span class="gd-wait">⏳ j’attends votre action…</span><button onclick="guideNext()" class="gd-btn-skip" title="Avancer sans faire cette étape">Passer</button>`}
+                    <button onclick="guideStop()" class="gd-btn-quit">Quitter le guide</button>
+                </div>`;
+        }
+
+        // ---- Point d'entrée : le petit menu de l'assistant lance les guides ----
         function wizReadyTables() { return Object.values(state.tables).filter(t => t.status === 'ready'); }
         function wizOpen(kind) {
-            wizState = { kind, step: 0, tableId: '', cols: [], filters: [], sugg: null, busy: '', err: '', count: null, preview: '', result: null };
             state.wizSeen = true; try { persistAppState(); } catch (e) { }
-            const ov = el('wizOverlay'); if (ov) ov.classList.remove('hidden');
-            wizRender();
-        }
-        function wizClose() { const ov = el('wizOverlay'); if (ov) ov.classList.add('hidden'); }
-        function wizPick(id) { wizState.tableId = id; wizState.cols = []; wizState.filters = []; wizState.sugg = null; wizRender(); }
-        function wizToggleCol(h) {
-            const i = wizState.cols.indexOf(h);
-            if (i < 0) wizState.cols.push(h); else wizState.cols.splice(i, 1);
-            wizRender();
-        }
-        function wizAllCols(on) {
-            const t = state.tables[wizState.tableId];
-            wizState.cols = on && t ? (t.headers || []).slice() : [];
-            wizRender();
-        }
-        function wizAddFilter() {
-            const col = el('wiz-f-col').value, op = el('wiz-f-op').value;
-            const val = (op === 'empty' || op === 'notempty') ? '' : String(el('wiz-f-val').value || '').trim();
-            if (!col) return;
-            if (op !== 'empty' && op !== 'notempty' && !val) return showError('Indiquez la valeur à comparer.');
-            wizState.filters.push({ col, op, val });
-            wizRender();
-        }
-        function wizDelFilter(i) { wizState.filters.splice(i, 1); wizRender(); }
-        // Ce que l'assistant s'apprête à faire, dit en français — c'est ce que l'utilisateur relit
-        // avant de lancer, et c'est ce qui lui apprend le vocabulaire de l'écran complet.
-        function wizExtractRecap() {
-            const t = state.tables[wizState.tableId];
-            const f = wizState.filters.map(x => `<b>${escapeHTML(x.col)}</b> ${ADV_OPS[x.op] || x.op}${x.op === 'empty' || x.op === 'notempty' ? '' : ' « ' + escapeHTML(x.val) + ' »'}`);
-            return `Extraire <b>${wizState.cols.length} colonne(s)</b> de <b>${escapeHTML(t ? t.name : '?')}</b>`
-                + (f.length ? `, en ne gardant que les lignes où ${f.join(' <span class="text-slate-400">et</span> ')}` : ', sans aucun filtre (toutes les lignes)') + '.';
-        }
-        function wizApplyExtract() {
-            const id = wizState.tableId;
-            state.advExtract = {
-                from: 'table', objectId: '', baseId: id, customSql: false, joinType: 'left', limit500: false, migrated: true,
-                dedup: { on: false, keys: [], keep: 'first' }, group: { on: false, aggs: [] },
-                columns: wizState.cols.map(h => ({ id: 'ac_' + generateId(), tableId: id, col: h, via: '', alias: h, transform: 'none' })),
-                filters: wizState.filters.map(f => ({ id: 'af_' + generateId(), tableId: id, col: f.col, op: f.op, val: f.val, via: '' })),
-            };
-            try { persistAppState(); } catch (e) { }
-        }
-        async function wizCount() {
-            wizApplyExtract(); wizState.busy = 'count'; wizState.err = ''; wizRender();
-            try {
-                const r = advCurrentSql();
-                if (r.err) throw new Error(r.err);
-                const { conn } = await getDB();
-                const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM (${r.sql}) q`))[0];
-                wizState.count = Number(res.n);
-                const rows = arrowResultToObjects(await conn.query(`SELECT * FROM (${r.sql}) q LIMIT 8`));
-                wizState.preview = rows.length ? wizTableHtml(rows) : '<p class="text-xs text-amber-700">Aucune ligne ne correspond : vos filtres sont peut-être trop restrictifs.</p>';
-            } catch (e) { wizState.err = e.message; wizState.count = null; wizState.preview = ''; }
-            wizState.busy = ''; wizRender();
-        }
-        function wizTableHtml(rows) {
-            const cols = Object.keys(rows[0]);
-            return `<div class="overflow-x-auto border border-slate-200 rounded-lg"><table class="w-full text-left text-[11px]">
-                <thead class="bg-slate-100 text-slate-600 font-bold"><tr>${cols.map(c => `<th class="p-1.5 whitespace-nowrap">${escapeHTML(c)}</th>`).join('')}</tr></thead>
-                <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr>${cols.map(c => `<td class="p-1.5 whitespace-nowrap">${escapeHTML(r[c] == null ? '' : String(r[c]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-        }
-        // Fin de parcours : on dépose la configuration dans l'écran complet et on y emmène
-        // l'utilisateur. Il voit ainsi OÙ vit ce qu'il vient de construire.
-        async function wizFinishExtract(run) {
-            wizApplyExtract();
-            wizClose();
-            switchTab(3);
-            try { renderAdvExtract(); } catch (e) { }
-            showSuccess('Votre extraction est prête dans l’écran « ⚗️ Extraire » : vous pouvez la modifier, l’enregistrer comme paramétrage, ou la relancer.');
-            if (run) { try { await advGenerate(); } catch (e) { showError('Génération impossible : ' + e.message); } }
-        }
-
-        /* ---- Assistant Qualité : les contrôles sont PROPOSÉS d'après les données réelles ----
-           Demander à un débutant quels contrôles poser, c'est lui demander la réponse avant la
-           question. On mesure donc d'abord la source — remplissage, unicité, cardinalité, nature
-           numérique — et on propose des contrôles dont chacun affiche la mesure qui le justifie.
-           Rien n'est créé sans que l'utilisateur ait coché ; et il voit toujours POURQUOI. */
-        const WIZ_MAX_COLS = 40;
-        async function wizProfile() {
-            const t = state.tables[wizState.tableId];
-            if (!t) return;
-            wizState.busy = 'profile'; wizState.err = ''; wizState.sugg = null; wizRender();
-            try {
-                const { conn } = await getDB();
-                const T = sqlIdent(duckTableName(t.id));
-                const hs = (t.headers || []).slice(0, WIZ_MAX_COLS);
-                const txt = h => `NULLIF(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), '')`;
-                const num = h => `TRY_CAST(REPLACE(REPLACE(${txt(h)}, ' ', ''), ',', '.') AS DOUBLE)`;
-                const sel = ['COUNT(*)::BIGINT AS n'];
-                hs.forEach((h, i) => {
-                    sel.push(`COUNT(${txt(h)})::BIGINT AS f${i}`);
-                    sel.push(`COUNT(DISTINCT ${txt(h)})::BIGINT AS d${i}`);
-                    sel.push(`COUNT(${num(h)})::BIGINT AS m${i}`);
-                    sel.push(`MIN(${num(h)}) AS mn${i}`);
-                    sel.push(`MAX(${num(h)}) AS mx${i}`);
-                });
-                const row = arrowResultToObjects(await conn.query(`SELECT ${sel.join(', ')} FROM ${T}`))[0];
-                const n = Number(row.n);
-                const sugg = [];
-                for (let i = 0; i < hs.length; i++) {
-                    const h = hs[i], f = Number(row['f' + i]), d = Number(row['d' + i]), m = Number(row['m' + i]);
-                    const fill = n ? f / n : 0;
-                    const pct = (100 * fill).toFixed(fill === 1 || fill === 0 ? 0 : 1).replace('.', ',');
-                    if (!n || !f) continue;   // colonne entièrement vide : rien à contrôler, on le dira plus bas
-                    // Une colonne ENTIÈREMENT NUMÉRIQUE dont les valeurs sont toutes différentes est
-                    // ambiguë : identifiant, ou simple mesure (un montant est rarement répété). On
-                    // propose alors l'unicité DÉCOCHÉE, en disant l'ambiguïté, et on ne propose pas
-                    // d'intervalle en plus — deux contrôles contradictoires sur la même colonne
-                    // n'aideraient personne.
-                    const allNum = m === f && f > 0;
-                    if (fill === 1 && d === n && n > 1) {
-                        sugg.push({ on: !allNum, col: h, type: 'unique', crit: allNum ? 'Haute' : 'Critique', numAmbig: allNum,
-                            why: allNum
-                                ? `${n.toLocaleString('fr-FR')} valeurs numériques, toutes différentes — cela peut être un identifiant, mais un montant ou une mesure l’est souvent aussi par hasard.`
-                                : `${n.toLocaleString('fr-FR')} valeurs, toutes différentes et toutes renseignées — cette colonne se comporte comme un identifiant.`,
-                            what: allNum ? 'Vérifier qu’aucun doublon n’apparaît — à ne cocher que s’il s’agit vraiment d’une clé.' : 'Vérifier qu’aucun doublon n’apparaît.' });
-                    } else if (fill >= 0.99 && n >= 20) {
-                        sugg.push({ on: true, col: h, type: 'notnull', crit: fill === 1 ? 'Haute' : 'Moyenne',
-                            why: `${pct} % des lignes sont renseignées aujourd’hui${fill === 1 ? '' : ` (${(n - f).toLocaleString('fr-FR')} vide(s))`}.`,
-                            what: 'Alerter si des valeurs vides apparaissent.' });
-                    }
-                    if (d >= 2 && d <= 15 && n >= 50 && fill >= 0.9) {
-                        sugg.push({ on: true, col: h, type: 'inlist', crit: 'Moyenne', needVals: true,
-                            why: `Seulement ${d} valeurs distinctes sur ${n.toLocaleString('fr-FR')} lignes — c’est un code, pas un texte libre.`,
-                            what: 'Refuser toute valeur hors de la liste observée.' });
-                    } else if (allNum && f >= 20 && d > 2 && d < n && row['mn' + i] != null && Number(row['mn' + i]) !== Number(row['mx' + i])) {
-                        const mn = Number(row['mn' + i]), mx = Number(row['mx' + i]);
-                        sugg.push({ on: false, col: h, type: 'range', crit: 'Moyenne', min: mn, max: mx,
-                            why: `Toutes les valeurs renseignées sont numériques, entre ${mn.toLocaleString('fr-FR')} et ${mx.toLocaleString('fr-FR')}.`,
-                            what: `Alerter en dehors de l’intervalle observé — à ajuster si la plage métier est plus large.` });
-                    }
-                }
-                // Les listes de valeurs demandent les valeurs elles-mêmes : une requête par candidat,
-                // bornée, pour que le contrôle porte sur ce qui existe vraiment.
-                for (const s2 of sugg.filter(x => x.needVals).slice(0, 8)) {
-                    const vals = arrowResultToObjects(await conn.query(
-                        `SELECT ${txt(s2.col)} AS v FROM ${T} WHERE ${txt(s2.col)} IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 15`))
-                        .map(r => String(r.v));
-                    s2.vals = vals;
-                    s2.what = `Refuser toute valeur hors de : ${vals.join(' ; ')}.`;
-                }
-                wizState.sugg = sugg.filter(x => !x.needVals || (x.vals && x.vals.length));
-                wizState.profN = n; wizState.profCols = hs.length; wizState.profAll = (t.headers || []).length;
-            } catch (e) { wizState.err = e.message; wizState.sugg = []; }
-            wizState.busy = ''; wizRender();
-        }
-        function wizToggleSugg(i) { const s2 = (wizState.sugg || [])[i]; if (s2) { s2.on = !s2.on; wizRender(); } }
-        function wizSuggCrit(i, v) { const s2 = (wizState.sugg || [])[i]; if (s2) { s2.crit = v; wizRender(); } }
-        function wizSuggChosen() { return (wizState.sugg || []).filter(s2 => s2.on); }
-        function wizRuleFrom(s2, tableName) {
-            const r = { id: 'qr_' + generateId(), name: '', table: tableName, col: s2.col, type: s2.type, p: {}, crit: s2.crit, enabled: true };
-            if (s2.type === 'unique') { r.p.cols = s2.col; r.name = `${s2.col} : pas de doublon`; }
-            else if (s2.type === 'notnull') { r.name = `${s2.col} : toujours renseigné`; }
-            else if (s2.type === 'inlist') { r.p.list = (s2.vals || []).join(';'); r.name = `${s2.col} : valeur attendue`; }
-            else if (s2.type === 'range') { r.p.min = String(s2.min); r.p.max = String(s2.max); r.name = `${s2.col} : dans l’intervalle`; }
-            return r;
-        }
-        async function wizCreateRules() {
-            const t = state.tables[wizState.tableId]; if (!t) return;
-            const chosen = wizSuggChosen(); if (!chosen.length) return;
-            wizState.busy = 'run'; wizState.err = ''; wizRender();
-            const made = chosen.map(s2 => wizRuleFrom(s2, t.name));
-            qrRules().push(...made);
-            try { persistAppState(); } catch (e) { }
-            const out = [];
-            try {
-                const { conn } = await getDB();
-                for (const r of made) {
-                    let ev = null;
-                    try { ev = await qrEvalRule(r, conn); } catch (e) { ev = { ran: false, err: e.message }; }
-                    out.push({ r, ev });
-                }
-                try { persistAppState(); } catch (e) { }
-            } catch (e) { wizState.err = e.message; }
-            wizState.result = { rows: out, score: qrScore(made) };
-            wizState.busy = ''; wizState.step = 3; wizRender();
-        }
-        function wizFinishQuality() {
-            wizClose();
-            switchTab(12);
-            showSuccess('Vos contrôles sont dans l’écran « 📏 Règles & score » : vous pouvez les modifier, en ajouter, et les relancer quand vos données changent.');
-        }
-
-        // ---------------- Rendu commun ----------------
-        function wizBlock() {
-            const w = wizState;
-            if (w.step === 0 && !w.tableId) return 'Choisissez une source pour continuer.';
-            if (w.kind === 'extract' && w.step === 1 && !w.cols.length) return 'Cochez au moins une colonne.';
-            if (w.kind === 'quality' && w.step === 1) {
-                if (w.busy === 'profile') return 'Analyse des données en cours…';
-                if (!wizSuggChosen().length) return 'Cochez au moins un contrôle.';
-            }
-            return '';
-        }
-        async function wizNext() {
-            if (wizBlock()) return;
-            const w = wizState;
-            if (w.step >= 3) return;
-            w.step++;
-            // Entrées d'étape qui déclenchent une mesure sur les données réelles.
-            if (w.kind === 'quality' && w.step === 1 && !w.sugg) return wizProfile();
-            if (w.kind === 'extract' && w.step === 3) return wizCount();
-            wizRender();
-        }
-        function wizPrev() { if (wizState.step > 0) { wizState.step--; wizRender(); } }
-        function wizRender() {
-            const ov = el('wizOverlay'); if (!ov || ov.classList.contains('hidden')) return '';
-            const w = wizState;
-            if (w.kind === 'menu') return wizRenderMenu();
-            const def = WIZ_DEF[w.kind]; if (!def) return '';
-            el('wizTitle').textContent = def.title;
-            el('wizSub').textContent = def.sub;
-            el('wizSteps').innerHTML = `<ol class="flex items-center gap-1.5 flex-wrap text-[11px]">${def.steps.map((s2, i) => {
-                const st = i === w.step ? 'bg-indigo-600 text-white border-indigo-600' : (i < w.step ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-slate-400 border-slate-200');
-                return `<li class="flex items-center gap-1.5"><span class="inline-flex items-center gap-1 border ${st} rounded-full px-2 py-0.5 font-bold">${i < w.step ? '✓' : (i + 1) + '.'} ${escapeHTML(s2)}</span>${i < def.steps.length - 1 ? '<span class="text-slate-300">›</span>' : ''}</li>`;
-            }).join('')}</ol>`;
-            const body = (w.kind === 'extract' ? wizExtractBody() : wizQualityBody());
-            el('wizBody').innerHTML = (w.err ? `<div class="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">${escapeHTML(w.err)}</div>` : '') + body;
-            const blocked = wizBlock();
-            const last = w.step === 3;
-            const finish = w.kind === 'extract'
-                ? `<button onclick="wizFinishExtract(true)" class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">⬇️ Générer le fichier</button>
-                   <button onclick="wizFinishExtract(false)" class="text-sm bg-white border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg font-bold">Ouvrir l’écran Extraire</button>`
-                : `<button onclick="wizFinishQuality()" class="text-sm bg-amber-500 text-white px-4 py-2 rounded-lg font-bold">Ouvrir « Règles &amp; score »</button>`;
-            el('wizFoot').innerHTML = `
-                <button onclick="wizPrev()" class="text-sm bg-white border border-slate-300 px-3 py-2 rounded-lg font-bold ${w.step ? '' : 'opacity-40 pointer-events-none'}">← Précédent</button>
-                ${last ? finish : `<button onclick="wizNext()" class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold ${blocked ? 'opacity-40 pointer-events-none' : ''}">Continuer →</button>`}
-                <span class="text-[11px] text-slate-500">${blocked ? escapeHTML(blocked) : ''}</span>
-                <button onclick="wizClose()" class="ml-auto text-[11px] text-slate-400 hover:text-slate-600 underline">Quitter l’assistant</button>`;
-            try { v7WatchIcons(); } catch (e) { }
-            return el('wizBody').innerHTML;
-        }
-        function wizRenderMenu() {
+            if (kind === 'extract' || kind === 'quality') return guideStart(kind);
+            const ov = el('wizOverlay'); if (!ov) return;
+            ov.classList.remove('hidden');
             el('wizTitle').textContent = '🧭 Par où commencer ?';
-            el('wizSub').textContent = 'Deux parcours guidés, du chargement au résultat. Vous pouvez en sortir à tout moment : rien n’est perdu.';
+            el('wizSub').textContent = 'Deux guides pas à pas, sur les écrans réels : le guide surligne où cliquer, le reste devient non cliquable, et il avance quand l’action est faite.';
             el('wizSteps').innerHTML = '';
-            const n = wizReadyTables().length;
             el('wizBody').innerHTML = `
-                ${n ? '' : `<div class="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">Aucune source n’est chargée pour l’instant. Commencez par en charger une dans <b>📥 Sources</b> — un fichier CSV ou Excel suffit — puis revenez ici.</div>`}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <button onclick="wizOpen('extract')" class="text-left border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 rounded-xl p-4">
                         <div class="text-sm font-black text-indigo-800 mb-1">⚗️ Extraire des données</div>
-                        <p class="text-[11.5px] text-slate-600">Choisir une source, cocher les colonnes voulues, poser un filtre si besoin, et obtenir un fichier. L’assistant construit la configuration puis vous la montre dans l’écran complet.</p>
+                        <p class="text-[11.5px] text-slate-600">De la source au fichier de sortie : table de départ, colonnes, filtre, aperçu réel, génération — chaque étape montrée à l’endroit exact où elle se fait.</p>
                     </button>
                     <button onclick="wizOpen('quality')" class="text-left border border-amber-200 bg-amber-50/40 hover:bg-amber-50 rounded-xl p-4">
                         <div class="text-sm font-black text-amber-800 mb-1">✅ Contrôler la qualité</div>
-                        <p class="text-[11.5px] text-slate-600">L’assistant mesure votre source et vous <b>propose</b> des contrôles — colonne obligatoire, identifiant sans doublon, liste de valeurs — en montrant la mesure qui justifie chacun. Vous cochez, il les crée et les exécute.</p>
+                        <p class="text-[11.5px] text-slate-600">Créer une première règle, la régler, l’exécuter sur les données réelles et lire le score — directement dans l’écran « Règles &amp; score ».</p>
                     </button>
                 </div>
-                <p class="text-[11px] text-slate-400 mt-3">L’assistant n’a pas de moteur à lui : il remplit les mêmes écrans que ceux du menu, avec le même vocabulaire. Ce qu’il produit reste entièrement modifiable ensuite.</p>`;
+                <p class="text-[11px] text-slate-400 mt-3">Le guide n’a pas d’écran à lui : il vous fait utiliser les vraies commandes, que vous saurez retrouver seul ensuite. Quittable à tout moment, rien n’est perdu.</p>`;
             el('wizFoot').innerHTML = `<button onclick="wizClose()" class="ml-auto text-sm bg-white border border-slate-300 px-3 py-2 rounded-lg font-bold">Fermer</button>`;
             try { v7WatchIcons(); } catch (e) { }
-            return el('wizBody').innerHTML;
         }
-        function wizTablePickHtml() {
-            const ts = wizReadyTables();
-            if (!ts.length) return `<div class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                Aucune source chargée. Fermez l’assistant, ouvrez <b>📥 Sources</b> et déposez un fichier CSV ou Excel : tout se passe sur votre poste, aucune donnée ne sort de votre machine.</div>`;
-            return `<p class="text-xs text-slate-500 mb-2">Sur quelle source voulez-vous travailler ?</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${ts.map(t => `
-                <button onclick="wizPick('${t.id}')" class="text-left border rounded-xl p-3 ${wizState.tableId === t.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}">
-                    <div class="text-sm font-bold text-slate-800 truncate" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</div>
-                    <div class="text-[11px] text-slate-500">${(t.headers || []).length} colonne(s)${t.rowCount != null ? ' · ' + Number(t.rowCount).toLocaleString('fr-FR') + ' ligne(s)' : ''}</div>
-                </button>`).join('')}</div>`;
-        }
-        function wizExtractBody() {
-            const w = wizState, t = state.tables[w.tableId];
-            if (w.step === 0) return wizTablePickHtml();
-            if (w.step === 1) {
-                const hs = (t && t.headers) || [];
-                return `<p class="text-xs text-slate-500 mb-2">Quelles colonnes voulez-vous dans le fichier de sortie ? <span class="text-slate-400">${w.cols.length} sur ${hs.length} cochée(s).</span></p>
-                    <div class="flex gap-2 mb-2">
-                        <button onclick="wizAllCols(true)" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold">Tout cocher</button>
-                        <button onclick="wizAllCols(false)" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold">Tout décocher</button>
-                    </div>
-                    <div class="border border-slate-200 rounded-lg p-2 max-h-64 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
-                    ${hs.map(h => `<label class="flex items-center gap-2 text-xs px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" ${w.cols.includes(h) ? 'checked' : ''} onchange="wizToggleCol(${JSON.stringify(h).replace(/"/g, '&quot;')})">
-                        <span class="truncate" title="${escapeHTML(h)}">${escapeHTML(h)}</span></label>`).join('')}</div>`;
-            }
-            if (w.step === 2) {
-                const hs = (t && t.headers) || [];
-                return `<p class="text-xs text-slate-500 mb-2">Voulez-vous ne garder qu’une partie des lignes ? <b>Cette étape est facultative</b> — sans filtre, tout est extrait.</p>
-                    <div class="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-2 mb-2">
-                        <select id="wiz-f-col" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${hs.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
-                        <select id="wiz-f-op" onchange="el('wiz-f-val').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(ADV_OPS).map(([v, l]) => `<option value="${v}">${escapeHTML(l)}</option>`).join('')}</select>
-                        <input id="wiz-f-val" class="border border-slate-300 p-1.5 rounded text-xs w-40" placeholder="valeur">
-                        <button onclick="wizAddFilter()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2 py-1.5 rounded font-bold">+ Ajouter</button>
-                    </div>
-                    ${w.filters.length ? `<div class="space-y-1">${w.filters.map((f, i) => `<div class="flex items-center gap-2 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
-                        <span><b>${escapeHTML(f.col)}</b> ${escapeHTML(ADV_OPS[f.op] || f.op)}${f.op === 'empty' || f.op === 'notempty' ? '' : ' « ' + escapeHTML(f.val) + ' »'}</span>
-                        <button onclick="wizDelFilter(${i})" class="ml-auto text-slate-300 hover:text-red-500 font-bold">✕</button></div>`).join('')}
-                        <p class="text-[11px] text-slate-400 mt-1">Plusieurs filtres se cumulent : une ligne doit satisfaire <b>tous</b> les critères.</p></div>`
-                        : '<p class="text-xs text-slate-400 italic">Aucun filtre — toutes les lignes seront extraites.</p>'}`;
-            }
-            return `<div class="text-sm bg-indigo-50/50 border border-indigo-200 rounded-lg p-3 mb-3">${wizExtractRecap()}</div>
-                ${w.busy === 'count' ? '<p class="text-xs text-slate-500">Comptage et aperçu en cours…</p>' : `
-                <div class="text-sm font-bold text-slate-700 mb-2">${w.count == null ? '' : w.count.toLocaleString('fr-FR') + ' ligne(s) en sortie'}</div>
-                ${w.preview || ''}
-                <p class="text-[11px] text-slate-400 mt-2">Aperçu des 8 premières lignes. « Générer le fichier » produit le résultat complet et vous emmène dans l’écran <b>⚗️ Extraire</b>, où la configuration reste modifiable.</p>`}`;
-        }
-        function wizQualityBody() {
-            const w = wizState, t = state.tables[w.tableId];
-            if (w.step === 0) return wizTablePickHtml();
-            if (w.step === 1) {
-                if (w.busy === 'profile') return '<p class="text-xs text-slate-500">Mesure de la source en cours — remplissage, unicité, nombre de valeurs distinctes…</p>';
-                const sg = w.sugg || [];
-                if (!sg.length) return `<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">Aucun contrôle évident à proposer sur cette source : ses colonnes sont trop peu remplies, ou trop variées, pour qu’une règle se déduise sans risque de faux positifs. Vous pouvez en créer manuellement dans <b>📏 Règles &amp; score</b>.</p>`;
-                return `<p class="text-xs text-slate-500 mb-2">Voici ce que <b>${escapeHTML(t ? t.name : '')}</b> laisse deviner — ${Number(w.profN || 0).toLocaleString('fr-FR')} ligne(s) mesurée(s)${w.profAll > w.profCols ? `, ${w.profCols} premières colonnes sur ${w.profAll}` : ''}. Décochez ce qui ne correspond pas à votre réalité métier : <b>une mesure n’est pas une règle</b>, c’est vous qui décidez.</p>
-                    <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">${sg.map((s2, i) => `
-                        <div class="border rounded-lg p-2.5 ${s2.on ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white'}">
-                            <label class="flex items-start gap-2 cursor-pointer">
-                                <input type="checkbox" ${s2.on ? 'checked' : ''} onchange="wizToggleSugg(${i})" class="mt-0.5">
-                                <span class="min-w-0">
-                                    <span class="text-xs font-bold text-slate-800">${escapeHTML(s2.col)}</span>
-                                    <span class="text-[10px] font-bold bg-white border border-slate-200 text-slate-500 rounded-full px-1.5 py-0.5 ml-1">${escapeHTML(QR_TYPES[s2.type] || s2.type)}</span>
-                                    <span class="block text-[11.5px] text-slate-700 mt-0.5">${escapeHTML(s2.what)}</span>
-                                    <span class="block text-[11px] text-slate-500 mt-0.5">📏 ${escapeHTML(s2.why)}</span>
-                                </span>
-                            </label>
-                            <div class="mt-1.5 pl-6 flex items-center gap-1.5">
-                                <span class="text-[10px] uppercase font-bold text-slate-400">Criticité</span>
-                                <select onchange="wizSuggCrit(${i}, this.value)" class="border border-slate-200 rounded text-[10px] p-0.5 bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === s2.crit ? 'selected' : ''}>${o}</option>`).join('')}</select>
-                                <span class="text-[10px] text-slate-400">pèse dans le score global</span>
-                            </div>
-                        </div>`).join('')}</div>`;
-            }
-            if (w.step === 2) {
-                const ch = wizSuggChosen();
-                return `<p class="text-xs text-slate-500 mb-2">L’assistant va créer ces <b>${ch.length} contrôle(s)</b> sur <b>${escapeHTML(t ? t.name : '')}</b> puis les exécuter immédiatement sur vos données.</p>
-                    <ul class="text-xs space-y-1 mb-3">${ch.map(s2 => `<li class="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"><b>${escapeHTML(s2.col)}</b> — ${escapeHTML(QR_TYPES[s2.type] || s2.type)} <span class="text-slate-400">· criticité ${escapeHTML(s2.crit)}</span></li>`).join('')}</ul>
-                    ${w.busy === 'run' ? '<p class="text-xs text-slate-500">Création et exécution en cours…</p>'
-                        : `<button onclick="wizCreateRules()" class="text-sm bg-amber-500 text-white px-4 py-2 rounded-lg font-bold">Créer et exécuter les contrôles</button>`}
-                    <p class="text-[11px] text-slate-400 mt-2">Ces contrôles seront enregistrés dans <b>📏 Règles &amp; score</b> : modifiables, désactivables, supprimables, et rejouables à chaque nouvelle version de la source.</p>`;
-            }
-            const res = w.result || { rows: [], score: null };
-            const sc = res.score;
-            return `<div class="flex items-center gap-3 mb-3">
-                    <div class="text-3xl font-black ${qrScoreColor(sc)}">${sc == null ? '—' : sc + ' %'}</div>
-                    <div class="text-xs text-slate-500">Score de qualité pondéré par la criticité des contrôles.<br>${res.rows.length} contrôle(s) créé(s) et exécuté(s) sur <b>${escapeHTML(t ? t.name : '')}</b>.</div>
-                </div>
-                <div class="space-y-1">${res.rows.map(({ r, ev }) => {
-                    if (!ev || !ev.ran) return `<div class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-500">❔ ${escapeHTML(r.name)} — non évaluée${ev && ev.err ? ' : ' + escapeHTML(ev.err) : ''}</div>`;
-                    const bad = ev.fails > 0;
-                    return `<div class="text-xs border rounded-lg px-2.5 py-1.5 ${bad ? 'border-red-200 bg-red-50/50' : 'border-emerald-200 bg-emerald-50/40'}">
-                        ${bad ? '❌' : '✅'} <b>${escapeHTML(r.name)}</b>
-                        <span class="text-slate-500">— ${bad ? `${ev.fails.toLocaleString('fr-FR')} échec(s) sur ${ev.total.toLocaleString('fr-FR')} ligne(s)` : `conforme sur ${ev.total.toLocaleString('fr-FR')} ligne(s)`} (${Math.round(100 * ev.rate)} %)</span></div>`;
-                }).join('')}</div>
-                <p class="text-[11px] text-slate-400 mt-3">Un échec n’est pas forcément une erreur : c’est un écart entre la règle que vous avez posée et la donnée réelle. L’écran <b>📏 Règles &amp; score</b> permet d’inspecter les lignes fautives une par une.</p>`;
-        }
+        function wizClose() { const ov = el('wizOverlay'); if (ov) ov.classList.add('hidden'); }
         // Amorce : sur un outil vide, l'assistant se propose de lui-même — une seule fois.
         function wizMaybeAutoOpen() {
             if (state.wizSeen) return false;
@@ -11912,8 +11756,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.1.1';
+        const APP_VERSION = '8.2.0';
         const APP_CHANGELOG = [
+            { v: '8.2.0', d: '2026-07-31', t: 'L\'assistant devient un guide SUR l\'écran réel + consultation élargie', items: [
+                '<b>L\'assistant en fenêtre est remplacé.</b> Il refaisait les écrans en plus simple dans une fenêtre à part : en sortant, on n\'avait toujours pas appris où sont les commandes. Le guide se déroule désormais <b>sur les écrans eux-mêmes</b> : il surligne l\'endroit précis où cliquer, explique quoi faire, et rend <b>tout le reste de l\'application non cliquable</b> (voile sombre autour de la zone active).',
+                'Il <b>observe l\'état réel</b> et n\'avance que quand l\'action est accomplie : source chargée, écran ouvert, colonne ajoutée, règle créée, exécution faite. Les étapes facultatives ont un bouton « Étape suivante » ; toutes peuvent être passées, et « Quitter le guide » est toujours là — rien n\'est perdu.',
+                'Deux parcours : <b>⚗️ Extraction</b> (charger une source si besoin, table de départ, colonnes, filtre facultatif, aperçu réel, génération) et <b>✅ Qualité</b> (créer une règle, la régler ligne par ligne, l\'exécuter sur les vraies données, lire le score). À la fin, l\'utilisateur a produit un vrai résultat <b>avec les vraies commandes</b>, qu\'il saura retrouver seul.',
+                'Si la cible d\'une étape est introuvable, le guide le dit et propose de passer — jamais d\'écran figé.',
+                '<b>Mode consultation élargi.</b> La coupe à deux écrans était trop stricte : restent consultables tous les écrans qui <b>présentent</b> le référentiel — Catalogue, Dictionnaire, Modèle de données, Objets métier, Applications &amp; processus, Glossaire, Listes de valeurs, Lineage, Historique. Seuls les trois postes d\'<b>administration</b> sont retirés : Périmètres, Sensibilité, Surveillance des sources.'] },
             { v: '8.1.1', d: '2026-07-31', t: 'Consultation : le menu se réduit aux écrans qui présentent le référentiel', items: [
                 '<b>Masquer les commandes ne suffisait pas.</b> Les 13 écrans de la Gouvernance restaient au menu ; or, privés de leurs commandes, ceux qui servent à <b>administrer</b> — composer un objet, tenir le glossaire, classer la sensibilité, surveiller les sources — ne disaient plus grand-chose, et leur seule présence faisait chercher au lecteur des choses qu’il ne peut pas faire.',
                 'En mode consultation, la Gouvernance ne propose plus que le <b>Catalogue</b> — la porte d’entrée, qui indexe tables, colonnes, objets métier, termes, applications et règles avec sa fiche de détail — et le <b>Dictionnaire</b>, qui donne le détail attribut par attribut, par objet métier ou par table.',
