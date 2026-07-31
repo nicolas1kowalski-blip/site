@@ -236,7 +236,7 @@
         .cat-tag{font-size:10px;color:var(--data);background:#eff6ff;border:1px solid #dbeafe;border-radius:6px;padding:2px 7px}
         /* Badges de format (écran Sources) */
         .fmt-ux{font-size:9px;font-weight:800;color:#fff;border-radius:5px;padding:2px 6px;letter-spacing:.3px}
-        .fmt-csv{background:#0ea5e9}.fmt-xlsx{background:#16a34a}.fmt-api{background:#8b5cf6}.fmt-extr{background:#9333ea}.fmt-built{background:#2563eb}.fmt-txt{background:#64748b}.fmt-json{background:#d97706}
+        .fmt-csv{background:#0369a1}.fmt-xlsx{background:#15803d}.fmt-api{background:#6d28d9}.fmt-extr{background:#7e22ce}.fmt-built{background:#1d4ed8}.fmt-txt{background:#475569}.fmt-json{background:#92400e}
         .drawer-ux.wide{width:760px}
         .empty-ux{grid-column:1/-1;text-align:center;background:var(--panel);border:1px dashed var(--border-strong);border-radius:var(--radius);padding:34px 20px}
         .empty-ux .em{font-size:34px}
@@ -331,12 +331,15 @@
     @keyframes gdPulse{0%,100%{box-shadow:0 0 0 4px rgba(99,102,241,.35)}50%{box-shadow:0 0 0 9px rgba(99,102,241,.15)}}
     .gd-tip{position:fixed;z-index:82;background:#fff;border:1px solid #c7d2fe;border-radius:14px;
       box-shadow:0 12px 40px rgba(15,23,42,.25);padding:12px 14px;font-size:12.5px;line-height:1.45;color:#0f172a}
-    .gd-tip-head{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6366f1;margin-bottom:4px}
+    .gd-tip-head{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#4f46e5;margin-bottom:4px}
+    html[data-theme="dark"] .gd-tip-head{color:#a5b4fc}
     .gd-tip-foot{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
     .gd-btn-main{background:#4f46e5 !important;color:#fff !important;font-weight:700;font-size:12px;padding:6px 12px;border-radius:8px}
     .gd-btn-skip{background:#fff;border:1px solid #cbd5e1 !important;color:#64748b;font-size:11px;padding:5px 10px;border-radius:8px}
-    .gd-btn-quit{margin-left:auto;background:transparent;color:#94a3b8;font-size:11px;text-decoration:underline}
-    .gd-wait{font-size:11px;color:#64748b}
+    .gd-btn-quit{margin-left:auto;background:transparent;color:#64748b;font-size:11px;text-decoration:underline}
+    html[data-theme="dark"] .gd-btn-quit{color:#94a3b8}
+    .gd-wait{font-size:11px;color:#57657c}
+    html[data-theme="dark"] .gd-wait{color:#a7b4c6}
     html[data-theme="dark"] .gd-tip{background:#1e293b;color:#e2e8f0;border-color:#4338ca}
     .gov-ro-val{display:inline-block;font-size:12px;line-height:1.4;color:var(--v7-txt,#0f172a);
       white-space:pre-wrap;word-break:break-word;max-width:100%}
@@ -485,15 +488,14 @@
       outline:none;box-shadow:0 0 0 3.5px color-mix(in srgb,var(--v7-accent) 32%,transparent) !important}
 
     /* Plein : l'accent unique, sans dégradé ni ombre portée colorée. */
-    button[class^="bg-indigo-6"],button[class*=" bg-indigo-6"],button[class^="bg-indigo-5"],button[class*=" bg-indigo-5"],
-    button[class^="bg-blue-6"],button[class*=" bg-blue-6"],
-    a[class^="bg-indigo-6"],a[class*=" bg-indigo-6"]{background-color:var(--v7-accent) !important;color:#fff !important;
+    button[class~="bg-indigo-600"],button[class~="bg-indigo-500"],button[class~="bg-blue-600"],
+    a[class~="bg-indigo-600"]{background-color:var(--v7-accent) !important;color:#fff !important;
       border:none !important;box-shadow:none !important;font-weight:560 !important}
-    button[class^="bg-indigo-6"]:hover,button[class*=" bg-indigo-6"]:hover,button[class^="bg-blue-6"]:hover,button[class*=" bg-blue-6"]:hover{
+    button[class~="bg-indigo-600"]:hover,button[class~="bg-indigo-500"]:hover,button[class~="bg-blue-600"]:hover,a[class~="bg-indigo-600"]:hover{
       background-color:color-mix(in srgb,var(--v7-accent) 86%,#000) !important}
-    button[class^="bg-emerald-6"],button[class*=" bg-emerald-6"],button[class^="bg-green-6"],button[class*=" bg-green-6"]{background-color:#047857 !important;border:none !important}
-    button[class^="bg-red-6"],button[class*=" bg-red-6"],button[class^="bg-rose-6"],button[class*=" bg-rose-6"]{background-color:#b91c1c !important;border:none !important}
-    button[class^="bg-amber-6"],button[class*=" bg-amber-6"],button[class^="bg-amber-5"],button[class*=" bg-amber-5"]{background-color:#92400e !important;border:none !important}
+    button[class~="bg-emerald-600"],button[class~="bg-emerald-500"],button[class~="bg-green-600"]{background-color:#047857 !important;border:none !important}
+    button[class~="bg-red-600"],button[class~="bg-rose-600"]{background-color:#b91c1c !important;border:none !important}
+    button[class~="bg-amber-600"],button[class~="bg-amber-500"]{background-color:#92400e !important;border:none !important}
 
     /* Nu : le bouton secondaire perd son cadre et gagne un fond au survol. */
     button.bg-white{box-shadow:0 0 0 1px var(--v7-hair) !important;background-color:transparent !important}
@@ -703,9 +705,8 @@
     html[data-theme="light"] .text-indigo-300,
     html[data-theme="light"] .text-indigo-400{color:#4f46e5 !important}
     html[data-theme="light"] .text-amber-800{color:#78350f !important}
-    button[class^="bg-amber-5"] .text-amber-800,button[class*=" bg-amber-5"] .text-amber-800,
-    button[class^="bg-amber-5"].text-amber-800,button[class*=" bg-amber-5"].text-amber-800,
-    button[class^="bg-amber-6"].text-amber-800{color:#fff7ed !important}
+    button[class~="bg-amber-500"] .text-amber-800,button[class~="bg-amber-600"] .text-amber-800,
+    button[class~="bg-amber-500"].text-amber-800,button[class~="bg-amber-600"].text-amber-800{color:#fff7ed !important}
     /* badge « n sans usage » ambre posé sur un plein vert : on le rend porteur partout */
     .text-amber-700.bg-amber-50{color:#92400e !important;background:#fef3c7 !important}
     html[data-theme="light"] .text-blue-400,html[data-theme="light"] .text-blue-500{color:#1d4ed8 !important}
@@ -756,7 +757,7 @@
     html[data-theme="light"] .text-purple-300{color:#7e22ce !important}
     /* pastille de format (CSV/XLSX/JSON) : blanc sur couleurs vives 9px — trop faible.
        Les fonds passent en teintes porteuses, la taille remonte à 10px. */
-    .fmt-ux{font-size:10px !important;filter:brightness(.72) saturate(1.15)}
+    .fmt-ux{font-size:10px !important}
     /* etiquettes d'aretes des graphes SVG : halo assorti au theme, masquees en zoom lointain */
     .usvg-lbl{fill:#475569;paint-order:stroke;stroke:#fff;stroke-width:3px}
     html[data-theme="dark"] .usvg-lbl{fill:#c3cede;stroke:#0e131c}
@@ -1004,6 +1005,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
           </div>
           <div class="ml-auto flex items-center gap-2 flex-wrap">
             <button onclick="wizOpen('menu')" id="wizTopBtn" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100" title="Assistant guidé : extraire des données ou contrôler leur qualité, pas à pas">🧭 Assistant</button>
+
             <div id="v7FamNav" class="v7-seg"></div>
             <div class="v7-seg" role="group" aria-label="Thème">
               <button onclick="v7SetTheme('light')" id="v7ThLight" title="Thème clair">☀︎</button>
@@ -8558,6 +8560,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
             ['light', 'dark', 'auto'].forEach(k => { const b = el('v7Th' + k[0].toUpperCase() + k.slice(1)); if (b) b.classList.toggle('on', pref === k); });
+            // Le bouton Assistant de l'en-tête : couleur posée en inline (l'audit a montré que les
+            // règles sombres le perdaient par intermittence dans la cascade — l'inline est imbattable).
+            const wb = el('wizTopBtn');
+            if (wb) { wb.style.setProperty('color', dark ? '#c7d2fe' : '#4338ca', 'important');
+                      wb.style.setProperty('border-color', dark ? '#3b4a6b' : '#a5b4fc', 'important'); }
         }
         function v7SetTheme(v) {
             try { localStorage.setItem('sd_v7_theme', v); } catch (e) {}
@@ -11878,8 +11885,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.4.0';
+        const APP_VERSION = '8.4.1';
         const APP_CHANGELOG = [
+            { v: '8.4.1', d: '2026-07-31', t: 'Correctif définitif des pavés bleu/brun de l\'assistant', items: [
+                '<b>La photo de l\'utilisateur montrait le défaut encore présent dans la 8.4.0</b> : les deux cartes de l\'assistant en pavés pleins bleu et brun, texte illisible. Le correctif 8.3.0 était incomplet : le sélecteur réparé attrapait encore <code>bg-indigo-50/40</code>, car « bg-indigo-5 » est un préfixe de « bg-indigo-50 ».',
+                'Les sélecteurs des boutons pleins passent en <b>correspondance exacte de jeton</b> (<code>[class~="bg-indigo-600"]</code>) : ils ne peuvent plus attraper une nuance voisine ni une variante hover.',
+                '<b>Pourquoi les tests ne l\'avaient pas vu</b> : l\'audit de contraste n\'ouvrait jamais la fenêtre de l\'assistant, et injectait Tailwind AVANT les styles de l\'application alors qu\'en réel il s\'injecte APRÈS. L\'audit couvre désormais l\'assistant et la bulle du guide, reproduit la cascade réelle, et désactive les transitions pendant la mesure (elles faisaient photographier des couleurs interpolées à mi-course).',
+                'Au passage : en-tête de la bulle du guide, « j\'attends votre action… », « Quitter le guide » et le bouton 🧭 Assistant relevés au seuil AA dans les deux thèmes.'] },
             { v: '8.4.0', d: '2026-07-31', t: 'Des graphes lisibles — disposition, éventails, mode sombre', items: [
                 '<b>Les captures de l\'utilisateur montraient des cartes illisibles</b> : nœuds empilés dans un coin, éventail de vingt arêtes « consommé par » convergeant vers un point, vingt étiquettes superposées au même endroit, cartes qui se recouvraient, violet sombre invisible sur fond nuit.',
                 '<b>Disposition refaite</b> (graphe « bout en bout », modèle objet, fiche catalogue) : ordre <b>barycentrique</b> dans chaque colonne — un nœud se place en face de la moyenne de ses voisins, ce qui démêle les croisements ; une colonne de plus de 12 nœuds est <b>repliée en sous-colonnes</b> au lieu d\'une pile infinie ; chaque colonne est <b>centrée verticalement</b>.',
