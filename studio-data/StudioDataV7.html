@@ -901,6 +901,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             <div class="sub" id="v7Sub"></div>
           </div>
           <div class="ml-auto flex items-center gap-2 flex-wrap">
+            <button onclick="wizOpen('menu')" id="wizTopBtn" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100" title="Assistant guidé : extraire des données ou contrôler leur qualité, pas à pas">🧭 Assistant</button>
             <div id="v7FamNav" class="v7-seg"></div>
             <div class="v7-seg" role="group" aria-label="Thème">
               <button onclick="v7SetTheme('light')" id="v7ThLight" title="Thème clair">☀︎</button>
@@ -954,6 +955,22 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 </div>
                 <label class="flex items-center gap-2 text-sm mb-4 cursor-pointer"><input type="checkbox" id="boWizGenElements" checked class="text-emerald-600 rounded"> Générer / mapper automatiquement les sous-éléments depuis les colonnes de la source</label>
                 <div class="flex justify-end gap-2"><button onclick="el('boWizardModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 rounded text-sm font-bold">Annuler</button><button onclick="confirmBoWizard()" class="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-bold">Valider</button></div>
+            </div>
+        </div>
+
+        <!-- ============ ASSISTANT GUIDÉ (mode wizard) ============ -->
+        <div id="wizOverlay" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-6 flex flex-col" role="dialog" aria-modal="true" aria-labelledby="wizTitle">
+                <div class="px-5 py-4 border-b border-slate-100 flex items-start gap-3">
+                    <div class="min-w-0">
+                        <h3 id="wizTitle" class="text-base font-black text-slate-800">Assistant</h3>
+                        <p id="wizSub" class="text-[11.5px] text-slate-500 mt-0.5"></p>
+                    </div>
+                    <button onclick="wizClose()" class="ml-auto text-slate-300 hover:text-slate-600 text-lg font-bold px-2" title="Fermer l'assistant">✕</button>
+                </div>
+                <div id="wizSteps" class="px-5 pt-3"></div>
+                <div id="wizBody" class="px-5 py-4 min-h-[16rem]"></div>
+                <div id="wizFoot" class="px-5 py-3 border-t border-slate-100 flex items-center gap-2 flex-wrap bg-slate-50/60 rounded-b-2xl"></div>
             </div>
         </div>
 
@@ -1086,6 +1103,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <div class="px-6 py-4 bg-indigo-50/50 flex flex-col md:flex-row md:items-end gap-3 justify-between">
                     <div>
                         <h2 class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="database-zap" class="w-5 h-5"></i> Extraction</h2>
+                        <button onclick="wizOpen('extract')" class="mt-2 text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Parcours guidé : source, colonnes, filtres, résultat">🧭 Mode assistant — première extraction en 4 étapes</button>
                         <p class="text-[11px] text-indigo-400 font-medium mt-0.5">Colonnes de tout le modèle · calculées · synthèses de tables liées · hiérarchies aplaties · filtres · dédoublonnage · agrégats — une seule configuration, un seul SQL, aperçu avant de lancer.</p>
                     </div>
                     <div class="min-w-[260px]">
@@ -2839,6 +2857,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             renderNav();
             restoreSession();
             restoreUpdateConfig();
+            // L'assistant se propose de lui-même sur un outil vide — une seule fois, jamais ensuite.
+            setTimeout(() => { try { wizMaybeAutoOpen(); } catch (e) { } }, 1200);
         });
 
         // ==========================================
@@ -11405,8 +11425,398 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.14.0';
+        /* ==================== ASSISTANT GUIDÉ (mode wizard) ====================
+           Les deux fonctions les plus utiles de l'outil — extraire et contrôler — sont aussi les
+           plus intimidantes : l'écran d'extraction offre colonnes calculées, synthèses de tables
+           liées, hiérarchies aplaties et agrégats ; celui des règles propose vingt types de
+           contrôles. Un nouvel utilisateur ne sait pas par où commencer, et abandonne avant
+           d'avoir produit quoi que ce soit.
+           L'assistant réduit chacune à une suite de questions simples, avec un résultat à la fin.
+           Principe de conception : il n'a AUCUN moteur à lui. Il écrit dans le même modèle que les
+           écrans complets (state.advExtract, state.governance.qualityRules) puis y renvoie
+           l'utilisateur, configuration en place. Rien de ce qu'il produit n'est un cas particulier,
+           et il enseigne où se trouvent les commandes au lieu de les remplacer. */
+        const WIZ_DEF = {
+            extract: {
+                title: '⚗️ Assistant Extraction', icon: '⚗️',
+                sub: 'Sortir un fichier à partir d’une source, en quatre questions.',
+                steps: ['Source', 'Colonnes', 'Filtres', 'Vérifier & lancer'] },
+            quality: {
+                title: '✅ Assistant Qualité', icon: '✅',
+                sub: 'Mettre en place vos premiers contrôles de qualité, proposés d’après vos données.',
+                steps: ['Source', 'Contrôles proposés', 'Vérifier', 'Résultat'] },
+        };
+        let wizState = { kind: '', step: 0, tableId: '', cols: [], filters: [], sugg: null, busy: '', err: '', count: null, preview: '', result: null };
+        function wizReadyTables() { return Object.values(state.tables).filter(t => t.status === 'ready'); }
+        function wizOpen(kind) {
+            wizState = { kind, step: 0, tableId: '', cols: [], filters: [], sugg: null, busy: '', err: '', count: null, preview: '', result: null };
+            state.wizSeen = true; try { persistAppState(); } catch (e) { }
+            const ov = el('wizOverlay'); if (ov) ov.classList.remove('hidden');
+            wizRender();
+        }
+        function wizClose() { const ov = el('wizOverlay'); if (ov) ov.classList.add('hidden'); }
+        function wizPick(id) { wizState.tableId = id; wizState.cols = []; wizState.filters = []; wizState.sugg = null; wizRender(); }
+        function wizToggleCol(h) {
+            const i = wizState.cols.indexOf(h);
+            if (i < 0) wizState.cols.push(h); else wizState.cols.splice(i, 1);
+            wizRender();
+        }
+        function wizAllCols(on) {
+            const t = state.tables[wizState.tableId];
+            wizState.cols = on && t ? (t.headers || []).slice() : [];
+            wizRender();
+        }
+        function wizAddFilter() {
+            const col = el('wiz-f-col').value, op = el('wiz-f-op').value;
+            const val = (op === 'empty' || op === 'notempty') ? '' : String(el('wiz-f-val').value || '').trim();
+            if (!col) return;
+            if (op !== 'empty' && op !== 'notempty' && !val) return showError('Indiquez la valeur à comparer.');
+            wizState.filters.push({ col, op, val });
+            wizRender();
+        }
+        function wizDelFilter(i) { wizState.filters.splice(i, 1); wizRender(); }
+        // Ce que l'assistant s'apprête à faire, dit en français — c'est ce que l'utilisateur relit
+        // avant de lancer, et c'est ce qui lui apprend le vocabulaire de l'écran complet.
+        function wizExtractRecap() {
+            const t = state.tables[wizState.tableId];
+            const f = wizState.filters.map(x => `<b>${escapeHTML(x.col)}</b> ${ADV_OPS[x.op] || x.op}${x.op === 'empty' || x.op === 'notempty' ? '' : ' « ' + escapeHTML(x.val) + ' »'}`);
+            return `Extraire <b>${wizState.cols.length} colonne(s)</b> de <b>${escapeHTML(t ? t.name : '?')}</b>`
+                + (f.length ? `, en ne gardant que les lignes où ${f.join(' <span class="text-slate-400">et</span> ')}` : ', sans aucun filtre (toutes les lignes)') + '.';
+        }
+        function wizApplyExtract() {
+            const id = wizState.tableId;
+            state.advExtract = {
+                from: 'table', objectId: '', baseId: id, customSql: false, joinType: 'left', limit500: false, migrated: true,
+                dedup: { on: false, keys: [], keep: 'first' }, group: { on: false, aggs: [] },
+                columns: wizState.cols.map(h => ({ id: 'ac_' + generateId(), tableId: id, col: h, via: '', alias: h, transform: 'none' })),
+                filters: wizState.filters.map(f => ({ id: 'af_' + generateId(), tableId: id, col: f.col, op: f.op, val: f.val, via: '' })),
+            };
+            try { persistAppState(); } catch (e) { }
+        }
+        async function wizCount() {
+            wizApplyExtract(); wizState.busy = 'count'; wizState.err = ''; wizRender();
+            try {
+                const r = advCurrentSql();
+                if (r.err) throw new Error(r.err);
+                const { conn } = await getDB();
+                const res = arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM (${r.sql}) q`))[0];
+                wizState.count = Number(res.n);
+                const rows = arrowResultToObjects(await conn.query(`SELECT * FROM (${r.sql}) q LIMIT 8`));
+                wizState.preview = rows.length ? wizTableHtml(rows) : '<p class="text-xs text-amber-700">Aucune ligne ne correspond : vos filtres sont peut-être trop restrictifs.</p>';
+            } catch (e) { wizState.err = e.message; wizState.count = null; wizState.preview = ''; }
+            wizState.busy = ''; wizRender();
+        }
+        function wizTableHtml(rows) {
+            const cols = Object.keys(rows[0]);
+            return `<div class="overflow-x-auto border border-slate-200 rounded-lg"><table class="w-full text-left text-[11px]">
+                <thead class="bg-slate-100 text-slate-600 font-bold"><tr>${cols.map(c => `<th class="p-1.5 whitespace-nowrap">${escapeHTML(c)}</th>`).join('')}</tr></thead>
+                <tbody class="divide-y divide-slate-100">${rows.map(r => `<tr>${cols.map(c => `<td class="p-1.5 whitespace-nowrap">${escapeHTML(r[c] == null ? '' : String(r[c]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+        }
+        // Fin de parcours : on dépose la configuration dans l'écran complet et on y emmène
+        // l'utilisateur. Il voit ainsi OÙ vit ce qu'il vient de construire.
+        async function wizFinishExtract(run) {
+            wizApplyExtract();
+            wizClose();
+            switchTab(3);
+            try { renderAdvExtract(); } catch (e) { }
+            showSuccess('Votre extraction est prête dans l’écran « ⚗️ Extraire » : vous pouvez la modifier, l’enregistrer comme paramétrage, ou la relancer.');
+            if (run) { try { await advGenerate(); } catch (e) { showError('Génération impossible : ' + e.message); } }
+        }
+
+        /* ---- Assistant Qualité : les contrôles sont PROPOSÉS d'après les données réelles ----
+           Demander à un débutant quels contrôles poser, c'est lui demander la réponse avant la
+           question. On mesure donc d'abord la source — remplissage, unicité, cardinalité, nature
+           numérique — et on propose des contrôles dont chacun affiche la mesure qui le justifie.
+           Rien n'est créé sans que l'utilisateur ait coché ; et il voit toujours POURQUOI. */
+        const WIZ_MAX_COLS = 40;
+        async function wizProfile() {
+            const t = state.tables[wizState.tableId];
+            if (!t) return;
+            wizState.busy = 'profile'; wizState.err = ''; wizState.sugg = null; wizRender();
+            try {
+                const { conn } = await getDB();
+                const T = sqlIdent(duckTableName(t.id));
+                const hs = (t.headers || []).slice(0, WIZ_MAX_COLS);
+                const txt = h => `NULLIF(TRIM(CAST(${sqlIdent(h)} AS VARCHAR)), '')`;
+                const num = h => `TRY_CAST(REPLACE(REPLACE(${txt(h)}, ' ', ''), ',', '.') AS DOUBLE)`;
+                const sel = ['COUNT(*)::BIGINT AS n'];
+                hs.forEach((h, i) => {
+                    sel.push(`COUNT(${txt(h)})::BIGINT AS f${i}`);
+                    sel.push(`COUNT(DISTINCT ${txt(h)})::BIGINT AS d${i}`);
+                    sel.push(`COUNT(${num(h)})::BIGINT AS m${i}`);
+                    sel.push(`MIN(${num(h)}) AS mn${i}`);
+                    sel.push(`MAX(${num(h)}) AS mx${i}`);
+                });
+                const row = arrowResultToObjects(await conn.query(`SELECT ${sel.join(', ')} FROM ${T}`))[0];
+                const n = Number(row.n);
+                const sugg = [];
+                for (let i = 0; i < hs.length; i++) {
+                    const h = hs[i], f = Number(row['f' + i]), d = Number(row['d' + i]), m = Number(row['m' + i]);
+                    const fill = n ? f / n : 0;
+                    const pct = (100 * fill).toFixed(fill === 1 || fill === 0 ? 0 : 1).replace('.', ',');
+                    if (!n || !f) continue;   // colonne entièrement vide : rien à contrôler, on le dira plus bas
+                    // Une colonne ENTIÈREMENT NUMÉRIQUE dont les valeurs sont toutes différentes est
+                    // ambiguë : identifiant, ou simple mesure (un montant est rarement répété). On
+                    // propose alors l'unicité DÉCOCHÉE, en disant l'ambiguïté, et on ne propose pas
+                    // d'intervalle en plus — deux contrôles contradictoires sur la même colonne
+                    // n'aideraient personne.
+                    const allNum = m === f && f > 0;
+                    if (fill === 1 && d === n && n > 1) {
+                        sugg.push({ on: !allNum, col: h, type: 'unique', crit: allNum ? 'Haute' : 'Critique', numAmbig: allNum,
+                            why: allNum
+                                ? `${n.toLocaleString('fr-FR')} valeurs numériques, toutes différentes — cela peut être un identifiant, mais un montant ou une mesure l’est souvent aussi par hasard.`
+                                : `${n.toLocaleString('fr-FR')} valeurs, toutes différentes et toutes renseignées — cette colonne se comporte comme un identifiant.`,
+                            what: allNum ? 'Vérifier qu’aucun doublon n’apparaît — à ne cocher que s’il s’agit vraiment d’une clé.' : 'Vérifier qu’aucun doublon n’apparaît.' });
+                    } else if (fill >= 0.99 && n >= 20) {
+                        sugg.push({ on: true, col: h, type: 'notnull', crit: fill === 1 ? 'Haute' : 'Moyenne',
+                            why: `${pct} % des lignes sont renseignées aujourd’hui${fill === 1 ? '' : ` (${(n - f).toLocaleString('fr-FR')} vide(s))`}.`,
+                            what: 'Alerter si des valeurs vides apparaissent.' });
+                    }
+                    if (d >= 2 && d <= 15 && n >= 50 && fill >= 0.9) {
+                        sugg.push({ on: true, col: h, type: 'inlist', crit: 'Moyenne', needVals: true,
+                            why: `Seulement ${d} valeurs distinctes sur ${n.toLocaleString('fr-FR')} lignes — c’est un code, pas un texte libre.`,
+                            what: 'Refuser toute valeur hors de la liste observée.' });
+                    } else if (allNum && f >= 20 && d > 2 && d < n && row['mn' + i] != null && Number(row['mn' + i]) !== Number(row['mx' + i])) {
+                        const mn = Number(row['mn' + i]), mx = Number(row['mx' + i]);
+                        sugg.push({ on: false, col: h, type: 'range', crit: 'Moyenne', min: mn, max: mx,
+                            why: `Toutes les valeurs renseignées sont numériques, entre ${mn.toLocaleString('fr-FR')} et ${mx.toLocaleString('fr-FR')}.`,
+                            what: `Alerter en dehors de l’intervalle observé — à ajuster si la plage métier est plus large.` });
+                    }
+                }
+                // Les listes de valeurs demandent les valeurs elles-mêmes : une requête par candidat,
+                // bornée, pour que le contrôle porte sur ce qui existe vraiment.
+                for (const s2 of sugg.filter(x => x.needVals).slice(0, 8)) {
+                    const vals = arrowResultToObjects(await conn.query(
+                        `SELECT ${txt(s2.col)} AS v FROM ${T} WHERE ${txt(s2.col)} IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 15`))
+                        .map(r => String(r.v));
+                    s2.vals = vals;
+                    s2.what = `Refuser toute valeur hors de : ${vals.join(' ; ')}.`;
+                }
+                wizState.sugg = sugg.filter(x => !x.needVals || (x.vals && x.vals.length));
+                wizState.profN = n; wizState.profCols = hs.length; wizState.profAll = (t.headers || []).length;
+            } catch (e) { wizState.err = e.message; wizState.sugg = []; }
+            wizState.busy = ''; wizRender();
+        }
+        function wizToggleSugg(i) { const s2 = (wizState.sugg || [])[i]; if (s2) { s2.on = !s2.on; wizRender(); } }
+        function wizSuggCrit(i, v) { const s2 = (wizState.sugg || [])[i]; if (s2) { s2.crit = v; wizRender(); } }
+        function wizSuggChosen() { return (wizState.sugg || []).filter(s2 => s2.on); }
+        function wizRuleFrom(s2, tableName) {
+            const r = { id: 'qr_' + generateId(), name: '', table: tableName, col: s2.col, type: s2.type, p: {}, crit: s2.crit, enabled: true };
+            if (s2.type === 'unique') { r.p.cols = s2.col; r.name = `${s2.col} : pas de doublon`; }
+            else if (s2.type === 'notnull') { r.name = `${s2.col} : toujours renseigné`; }
+            else if (s2.type === 'inlist') { r.p.list = (s2.vals || []).join(';'); r.name = `${s2.col} : valeur attendue`; }
+            else if (s2.type === 'range') { r.p.min = String(s2.min); r.p.max = String(s2.max); r.name = `${s2.col} : dans l’intervalle`; }
+            return r;
+        }
+        async function wizCreateRules() {
+            const t = state.tables[wizState.tableId]; if (!t) return;
+            const chosen = wizSuggChosen(); if (!chosen.length) return;
+            wizState.busy = 'run'; wizState.err = ''; wizRender();
+            const made = chosen.map(s2 => wizRuleFrom(s2, t.name));
+            qrRules().push(...made);
+            try { persistAppState(); } catch (e) { }
+            const out = [];
+            try {
+                const { conn } = await getDB();
+                for (const r of made) {
+                    let ev = null;
+                    try { ev = await qrEvalRule(r, conn); } catch (e) { ev = { ran: false, err: e.message }; }
+                    out.push({ r, ev });
+                }
+                try { persistAppState(); } catch (e) { }
+            } catch (e) { wizState.err = e.message; }
+            wizState.result = { rows: out, score: qrScore(made) };
+            wizState.busy = ''; wizState.step = 3; wizRender();
+        }
+        function wizFinishQuality() {
+            wizClose();
+            switchTab(12);
+            showSuccess('Vos contrôles sont dans l’écran « 📏 Règles & score » : vous pouvez les modifier, en ajouter, et les relancer quand vos données changent.');
+        }
+
+        // ---------------- Rendu commun ----------------
+        function wizBlock() {
+            const w = wizState;
+            if (w.step === 0 && !w.tableId) return 'Choisissez une source pour continuer.';
+            if (w.kind === 'extract' && w.step === 1 && !w.cols.length) return 'Cochez au moins une colonne.';
+            if (w.kind === 'quality' && w.step === 1) {
+                if (w.busy === 'profile') return 'Analyse des données en cours…';
+                if (!wizSuggChosen().length) return 'Cochez au moins un contrôle.';
+            }
+            return '';
+        }
+        async function wizNext() {
+            if (wizBlock()) return;
+            const w = wizState;
+            if (w.step >= 3) return;
+            w.step++;
+            // Entrées d'étape qui déclenchent une mesure sur les données réelles.
+            if (w.kind === 'quality' && w.step === 1 && !w.sugg) return wizProfile();
+            if (w.kind === 'extract' && w.step === 3) return wizCount();
+            wizRender();
+        }
+        function wizPrev() { if (wizState.step > 0) { wizState.step--; wizRender(); } }
+        function wizRender() {
+            const ov = el('wizOverlay'); if (!ov || ov.classList.contains('hidden')) return '';
+            const w = wizState;
+            if (w.kind === 'menu') return wizRenderMenu();
+            const def = WIZ_DEF[w.kind]; if (!def) return '';
+            el('wizTitle').textContent = def.title;
+            el('wizSub').textContent = def.sub;
+            el('wizSteps').innerHTML = `<ol class="flex items-center gap-1.5 flex-wrap text-[11px]">${def.steps.map((s2, i) => {
+                const st = i === w.step ? 'bg-indigo-600 text-white border-indigo-600' : (i < w.step ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-slate-400 border-slate-200');
+                return `<li class="flex items-center gap-1.5"><span class="inline-flex items-center gap-1 border ${st} rounded-full px-2 py-0.5 font-bold">${i < w.step ? '✓' : (i + 1) + '.'} ${escapeHTML(s2)}</span>${i < def.steps.length - 1 ? '<span class="text-slate-300">›</span>' : ''}</li>`;
+            }).join('')}</ol>`;
+            const body = (w.kind === 'extract' ? wizExtractBody() : wizQualityBody());
+            el('wizBody').innerHTML = (w.err ? `<div class="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">${escapeHTML(w.err)}</div>` : '') + body;
+            const blocked = wizBlock();
+            const last = w.step === 3;
+            const finish = w.kind === 'extract'
+                ? `<button onclick="wizFinishExtract(true)" class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">⬇️ Générer le fichier</button>
+                   <button onclick="wizFinishExtract(false)" class="text-sm bg-white border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg font-bold">Ouvrir l’écran Extraire</button>`
+                : `<button onclick="wizFinishQuality()" class="text-sm bg-amber-500 text-white px-4 py-2 rounded-lg font-bold">Ouvrir « Règles &amp; score »</button>`;
+            el('wizFoot').innerHTML = `
+                <button onclick="wizPrev()" class="text-sm bg-white border border-slate-300 px-3 py-2 rounded-lg font-bold ${w.step ? '' : 'opacity-40 pointer-events-none'}">← Précédent</button>
+                ${last ? finish : `<button onclick="wizNext()" class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold ${blocked ? 'opacity-40 pointer-events-none' : ''}">Continuer →</button>`}
+                <span class="text-[11px] text-slate-500">${blocked ? escapeHTML(blocked) : ''}</span>
+                <button onclick="wizClose()" class="ml-auto text-[11px] text-slate-400 hover:text-slate-600 underline">Quitter l’assistant</button>`;
+            try { v7WatchIcons(); } catch (e) { }
+            return el('wizBody').innerHTML;
+        }
+        function wizRenderMenu() {
+            el('wizTitle').textContent = '🧭 Par où commencer ?';
+            el('wizSub').textContent = 'Deux parcours guidés, du chargement au résultat. Vous pouvez en sortir à tout moment : rien n’est perdu.';
+            el('wizSteps').innerHTML = '';
+            const n = wizReadyTables().length;
+            el('wizBody').innerHTML = `
+                ${n ? '' : `<div class="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">Aucune source n’est chargée pour l’instant. Commencez par en charger une dans <b>📥 Sources</b> — un fichier CSV ou Excel suffit — puis revenez ici.</div>`}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button onclick="wizOpen('extract')" class="text-left border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 rounded-xl p-4">
+                        <div class="text-sm font-black text-indigo-800 mb-1">⚗️ Extraire des données</div>
+                        <p class="text-[11.5px] text-slate-600">Choisir une source, cocher les colonnes voulues, poser un filtre si besoin, et obtenir un fichier. L’assistant construit la configuration puis vous la montre dans l’écran complet.</p>
+                    </button>
+                    <button onclick="wizOpen('quality')" class="text-left border border-amber-200 bg-amber-50/40 hover:bg-amber-50 rounded-xl p-4">
+                        <div class="text-sm font-black text-amber-800 mb-1">✅ Contrôler la qualité</div>
+                        <p class="text-[11.5px] text-slate-600">L’assistant mesure votre source et vous <b>propose</b> des contrôles — colonne obligatoire, identifiant sans doublon, liste de valeurs — en montrant la mesure qui justifie chacun. Vous cochez, il les crée et les exécute.</p>
+                    </button>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-3">L’assistant n’a pas de moteur à lui : il remplit les mêmes écrans que ceux du menu, avec le même vocabulaire. Ce qu’il produit reste entièrement modifiable ensuite.</p>`;
+            el('wizFoot').innerHTML = `<button onclick="wizClose()" class="ml-auto text-sm bg-white border border-slate-300 px-3 py-2 rounded-lg font-bold">Fermer</button>`;
+            try { v7WatchIcons(); } catch (e) { }
+            return el('wizBody').innerHTML;
+        }
+        function wizTablePickHtml() {
+            const ts = wizReadyTables();
+            if (!ts.length) return `<div class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                Aucune source chargée. Fermez l’assistant, ouvrez <b>📥 Sources</b> et déposez un fichier CSV ou Excel : tout se passe sur votre poste, aucune donnée ne sort de votre machine.</div>`;
+            return `<p class="text-xs text-slate-500 mb-2">Sur quelle source voulez-vous travailler ?</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${ts.map(t => `
+                <button onclick="wizPick('${t.id}')" class="text-left border rounded-xl p-3 ${wizState.tableId === t.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}">
+                    <div class="text-sm font-bold text-slate-800 truncate" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</div>
+                    <div class="text-[11px] text-slate-500">${(t.headers || []).length} colonne(s)${t.rowCount != null ? ' · ' + Number(t.rowCount).toLocaleString('fr-FR') + ' ligne(s)' : ''}</div>
+                </button>`).join('')}</div>`;
+        }
+        function wizExtractBody() {
+            const w = wizState, t = state.tables[w.tableId];
+            if (w.step === 0) return wizTablePickHtml();
+            if (w.step === 1) {
+                const hs = (t && t.headers) || [];
+                return `<p class="text-xs text-slate-500 mb-2">Quelles colonnes voulez-vous dans le fichier de sortie ? <span class="text-slate-400">${w.cols.length} sur ${hs.length} cochée(s).</span></p>
+                    <div class="flex gap-2 mb-2">
+                        <button onclick="wizAllCols(true)" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold">Tout cocher</button>
+                        <button onclick="wizAllCols(false)" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold">Tout décocher</button>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg p-2 max-h-64 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    ${hs.map(h => `<label class="flex items-center gap-2 text-xs px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" ${w.cols.includes(h) ? 'checked' : ''} onchange="wizToggleCol(${JSON.stringify(h).replace(/"/g, '&quot;')})">
+                        <span class="truncate" title="${escapeHTML(h)}">${escapeHTML(h)}</span></label>`).join('')}</div>`;
+            }
+            if (w.step === 2) {
+                const hs = (t && t.headers) || [];
+                return `<p class="text-xs text-slate-500 mb-2">Voulez-vous ne garder qu’une partie des lignes ? <b>Cette étape est facultative</b> — sans filtre, tout est extrait.</p>
+                    <div class="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-2 mb-2">
+                        <select id="wiz-f-col" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${hs.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                        <select id="wiz-f-op" onchange="el('wiz-f-val').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(ADV_OPS).map(([v, l]) => `<option value="${v}">${escapeHTML(l)}</option>`).join('')}</select>
+                        <input id="wiz-f-val" class="border border-slate-300 p-1.5 rounded text-xs w-40" placeholder="valeur">
+                        <button onclick="wizAddFilter()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2 py-1.5 rounded font-bold">+ Ajouter</button>
+                    </div>
+                    ${w.filters.length ? `<div class="space-y-1">${w.filters.map((f, i) => `<div class="flex items-center gap-2 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                        <span><b>${escapeHTML(f.col)}</b> ${escapeHTML(ADV_OPS[f.op] || f.op)}${f.op === 'empty' || f.op === 'notempty' ? '' : ' « ' + escapeHTML(f.val) + ' »'}</span>
+                        <button onclick="wizDelFilter(${i})" class="ml-auto text-slate-300 hover:text-red-500 font-bold">✕</button></div>`).join('')}
+                        <p class="text-[11px] text-slate-400 mt-1">Plusieurs filtres se cumulent : une ligne doit satisfaire <b>tous</b> les critères.</p></div>`
+                        : '<p class="text-xs text-slate-400 italic">Aucun filtre — toutes les lignes seront extraites.</p>'}`;
+            }
+            return `<div class="text-sm bg-indigo-50/50 border border-indigo-200 rounded-lg p-3 mb-3">${wizExtractRecap()}</div>
+                ${w.busy === 'count' ? '<p class="text-xs text-slate-500">Comptage et aperçu en cours…</p>' : `
+                <div class="text-sm font-bold text-slate-700 mb-2">${w.count == null ? '' : w.count.toLocaleString('fr-FR') + ' ligne(s) en sortie'}</div>
+                ${w.preview || ''}
+                <p class="text-[11px] text-slate-400 mt-2">Aperçu des 8 premières lignes. « Générer le fichier » produit le résultat complet et vous emmène dans l’écran <b>⚗️ Extraire</b>, où la configuration reste modifiable.</p>`}`;
+        }
+        function wizQualityBody() {
+            const w = wizState, t = state.tables[w.tableId];
+            if (w.step === 0) return wizTablePickHtml();
+            if (w.step === 1) {
+                if (w.busy === 'profile') return '<p class="text-xs text-slate-500">Mesure de la source en cours — remplissage, unicité, nombre de valeurs distinctes…</p>';
+                const sg = w.sugg || [];
+                if (!sg.length) return `<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">Aucun contrôle évident à proposer sur cette source : ses colonnes sont trop peu remplies, ou trop variées, pour qu’une règle se déduise sans risque de faux positifs. Vous pouvez en créer manuellement dans <b>📏 Règles &amp; score</b>.</p>`;
+                return `<p class="text-xs text-slate-500 mb-2">Voici ce que <b>${escapeHTML(t ? t.name : '')}</b> laisse deviner — ${Number(w.profN || 0).toLocaleString('fr-FR')} ligne(s) mesurée(s)${w.profAll > w.profCols ? `, ${w.profCols} premières colonnes sur ${w.profAll}` : ''}. Décochez ce qui ne correspond pas à votre réalité métier : <b>une mesure n’est pas une règle</b>, c’est vous qui décidez.</p>
+                    <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">${sg.map((s2, i) => `
+                        <div class="border rounded-lg p-2.5 ${s2.on ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white'}">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" ${s2.on ? 'checked' : ''} onchange="wizToggleSugg(${i})" class="mt-0.5">
+                                <span class="min-w-0">
+                                    <span class="text-xs font-bold text-slate-800">${escapeHTML(s2.col)}</span>
+                                    <span class="text-[10px] font-bold bg-white border border-slate-200 text-slate-500 rounded-full px-1.5 py-0.5 ml-1">${escapeHTML(QR_TYPES[s2.type] || s2.type)}</span>
+                                    <span class="block text-[11.5px] text-slate-700 mt-0.5">${escapeHTML(s2.what)}</span>
+                                    <span class="block text-[11px] text-slate-500 mt-0.5">📏 ${escapeHTML(s2.why)}</span>
+                                </span>
+                            </label>
+                            <div class="mt-1.5 pl-6 flex items-center gap-1.5">
+                                <span class="text-[10px] uppercase font-bold text-slate-400">Criticité</span>
+                                <select onchange="wizSuggCrit(${i}, this.value)" class="border border-slate-200 rounded text-[10px] p-0.5 bg-white">${CRITICALITY_OPTS.map(o => `<option ${o === s2.crit ? 'selected' : ''}>${o}</option>`).join('')}</select>
+                                <span class="text-[10px] text-slate-400">pèse dans le score global</span>
+                            </div>
+                        </div>`).join('')}</div>`;
+            }
+            if (w.step === 2) {
+                const ch = wizSuggChosen();
+                return `<p class="text-xs text-slate-500 mb-2">L’assistant va créer ces <b>${ch.length} contrôle(s)</b> sur <b>${escapeHTML(t ? t.name : '')}</b> puis les exécuter immédiatement sur vos données.</p>
+                    <ul class="text-xs space-y-1 mb-3">${ch.map(s2 => `<li class="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"><b>${escapeHTML(s2.col)}</b> — ${escapeHTML(QR_TYPES[s2.type] || s2.type)} <span class="text-slate-400">· criticité ${escapeHTML(s2.crit)}</span></li>`).join('')}</ul>
+                    ${w.busy === 'run' ? '<p class="text-xs text-slate-500">Création et exécution en cours…</p>'
+                        : `<button onclick="wizCreateRules()" class="text-sm bg-amber-500 text-white px-4 py-2 rounded-lg font-bold">Créer et exécuter les contrôles</button>`}
+                    <p class="text-[11px] text-slate-400 mt-2">Ces contrôles seront enregistrés dans <b>📏 Règles &amp; score</b> : modifiables, désactivables, supprimables, et rejouables à chaque nouvelle version de la source.</p>`;
+            }
+            const res = w.result || { rows: [], score: null };
+            const sc = res.score;
+            return `<div class="flex items-center gap-3 mb-3">
+                    <div class="text-3xl font-black ${qrScoreColor(sc)}">${sc == null ? '—' : sc + ' %'}</div>
+                    <div class="text-xs text-slate-500">Score de qualité pondéré par la criticité des contrôles.<br>${res.rows.length} contrôle(s) créé(s) et exécuté(s) sur <b>${escapeHTML(t ? t.name : '')}</b>.</div>
+                </div>
+                <div class="space-y-1">${res.rows.map(({ r, ev }) => {
+                    if (!ev || !ev.ran) return `<div class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-500">❔ ${escapeHTML(r.name)} — non évaluée${ev && ev.err ? ' : ' + escapeHTML(ev.err) : ''}</div>`;
+                    const bad = ev.fails > 0;
+                    return `<div class="text-xs border rounded-lg px-2.5 py-1.5 ${bad ? 'border-red-200 bg-red-50/50' : 'border-emerald-200 bg-emerald-50/40'}">
+                        ${bad ? '❌' : '✅'} <b>${escapeHTML(r.name)}</b>
+                        <span class="text-slate-500">— ${bad ? `${ev.fails.toLocaleString('fr-FR')} échec(s) sur ${ev.total.toLocaleString('fr-FR')} ligne(s)` : `conforme sur ${ev.total.toLocaleString('fr-FR')} ligne(s)`} (${Math.round(100 * ev.rate)} %)</span></div>`;
+                }).join('')}</div>
+                <p class="text-[11px] text-slate-400 mt-3">Un échec n’est pas forcément une erreur : c’est un écart entre la règle que vous avez posée et la donnée réelle. L’écran <b>📏 Règles &amp; score</b> permet d’inspecter les lignes fautives une par une.</p>`;
+        }
+        // Amorce : sur un outil vide, l'assistant se propose de lui-même — une seule fois.
+        function wizMaybeAutoOpen() {
+            if (state.wizSeen) return false;
+            if (wizReadyTables().length || (state.governance.qualityRules || []).length) return false;
+            wizOpen('menu'); return true;
+        }
+
+        const APP_VERSION = '8.0.0';
         const APP_CHANGELOG = [
+            { v: '8.0.0', d: '2026-07-31', t: 'Mode assistant : extraire et contrôler, guidé pas à pas', items: [
+                '<b>Les deux fonctions les plus utiles étaient les plus intimidantes.</b> L\'écran d\'extraction offre colonnes calculées, synthèses de tables liées, hiérarchies aplaties et agrégats ; celui des règles propose vingt types de contrôles. Un nouvel utilisateur ne savait pas par où commencer et abandonnait avant d\'avoir produit quoi que ce soit.',
+                'Un bouton <b>🧭 Assistant</b> dans l\'en-tête ouvre deux parcours guidés, également accessibles depuis <b>⚗️ Extraire</b> et <b>📏 Règles &amp; score</b>. Sur un outil vide, l\'assistant se propose <b>de lui-même, une seule fois</b>.',
+                '<b>Assistant Extraction</b> — quatre questions : la source, les colonnes à sortir, un filtre facultatif, puis une vérification qui affiche le <b>nombre de lignes en sortie et un aperçu réel</b> avant de lancer. Le récapitulatif est écrit en français : « extraire 6 colonnes de CLIENT.csv, en ne gardant que les lignes où VILLE = PARIS ».',
+                '<b>Assistant Qualité</b> — l\'outil <b>mesure la source</b> (remplissage, unicité, nombre de valeurs distinctes, nature numérique) et <b>propose</b> des contrôles : colonne obligatoire, identifiant sans doublon, liste de valeurs observée, intervalle numérique. Chaque proposition affiche <b>la mesure qui la justifie</b> — « 12 340 valeurs, toutes différentes et toutes renseignées ». Vous cochez, ajustez la criticité, et l\'assistant crée les règles puis les exécute et affiche le score.',
+                'La proposition est <b>prudente</b> : une colonne vide, trop peu remplie ou trop variée ne déclenche rien plutôt que de produire des faux positifs, et l\'intervalle numérique est proposé <b>décoché</b> — une plage observée n\'est pas une plage métier.',
+                '<b>L\'assistant n\'a aucun moteur à lui</b> : il écrit dans les mêmes structures que les écrans complets, puis y emmène l\'utilisateur, configuration en place. Rien de ce qu\'il produit n\'est un cas particulier — tout reste modifiable, enregistrable et rejouable, et il enseigne où vivent les commandes au lieu de les remplacer.'] },
             { v: '7.14.0', d: '2026-07-31', t: 'Un attribut multivalué se DÉCLARE sur l\'objet métier', items: [
                 '<b>La multiplicité ne pouvait être que subie.</b> Elle se déduisait de la structure technique — cardinalité du composant, colonnes numérotées — mais rien ne permettait de l\'<b>affirmer</b>. Or le métier sait souvent avant la source qu\'un client peut avoir plusieurs adresses de courriel, y compris quand <b>aucune source n\'est encore rattachée</b>.',
                 'Chaque attribut porte désormais une multiplicité déclarée : <b>1 valeur</b>, <b>plusieurs sans limite</b>, ou <b>jusqu\'à n</b>. Elle se règle depuis le <b>dictionnaire par objet métier</b> et depuis la <b>fiche de l\'objet</b> (attributs du noyau comme attributs de composant), une nouvelle colonne « Nb de valeurs » dans les deux cas.',
@@ -12853,6 +13263,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             qualInspectRegistry = qualInspectRegistry || [];
             let html = `<div class="flex items-center gap-3 flex-wrap mb-4">
                 <button onclick="qrRun(this)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-5 rounded-lg text-sm">▶ Exécuter</button>
+                <button onclick="wizOpen('quality')" class="text-sm bg-white border border-amber-300 text-amber-700 px-3 py-2 rounded-lg font-bold hover:bg-amber-50" title="Parcours guidé : l'assistant mesure une source et propose des contrôles">🧭 Mode assistant</button>
                 <select id="qrScope" class="border border-slate-300 rounded-lg p-2 text-sm bg-white">
                     <option value="">Toutes les tables</option>
                     ${tables.map(t => `<option value="t:${escapeHTML(t.name)}">Table : ${escapeHTML(t.name)}</option>`).join('')}
