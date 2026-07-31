@@ -10488,6 +10488,37 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const lq = lastAuditFor(tableName);
             return lq && lq.avgCompleteness != null ? Math.round(lq.avgCompleteness) : null;
         }
+        /* ---- Un terme du glossaire est un SYNONYME métier d'une donnée ----
+           Le modèle relie déjà un terme de trois façons : liens directs vers des colonnes
+           (glossaire), rattachement à des objets métier, et référence posée SUR un attribut ou
+           une colonne (champ « Terme »). Mais le catalogue n'en restituait aucune : la fiche du
+           terme ne listait rien, la colonne affichait l'identifiant brut du terme, et chercher
+           le terme ne trouvait pas la donnée — l'inverse d'un synonyme. Ces fonctions résolvent
+           tout ce qu'un terme désigne, dans les deux sens. */
+        function termById(id) { return (state.governance.glossary || []).find(t => t.id === id) || null; }
+        function termNameOf(id) { const t = termById(id); return t ? t.term : ''; }
+        function termTargets(t2) {
+            const out = [];
+            (t2.links || []).forEach(l => out.push({ kind: 'col', table: l.table, col: l.col, label: l.table + '.' + l.col, via: 'lié dans le glossaire' }));
+            (t2.boIds || []).forEach(id => { const bo = (state.governance.businessObjects || []).find(b => b.id === id); if (bo) out.push({ kind: 'bo', boId: bo.id, label: bo.name, via: 'objet métier rattaché' }); });
+            (state.governance.businessObjects || []).forEach(bo => (boAllAttrRows(bo) || []).forEach(r => {
+                if (r.el.term === t2.id) out.push({ kind: 'attr', boId: bo.id, label: bo.name + ' · ' + r.el.name, via: 'attribut portant ce terme' });
+            }));
+            Object.entries(state.governance.dictionary || {}).forEach(([tn, d]) => Object.entries(d.columns || {}).forEach(([cn, cm]) => {
+                if (cm.term === t2.id && !out.some(x => x.kind === 'col' && x.table === tn && x.col === cn))
+                    out.push({ kind: 'col', table: tn, col: cn, label: tn + '.' + cn, via: 'colonne portant ce terme' });
+            }));
+            return out;
+        }
+        // Tous les termes qui désignent UNE colonne donnée (pour la recherche-synonyme et la fiche).
+        function termsOfColumn(tn, cn) {
+            const cm = (((state.governance.dictionary || {})[tn] || {}).columns || {})[cn] || {};
+            const out = [];
+            (state.governance.glossary || []).forEach(t2 => {
+                if ((t2.links || []).some(l => l.table === tn && l.col === cn) || cm.term === t2.id) out.push(t2);
+            });
+            return out;
+        }
         function catBuildIndex() {
             const g = state.governance; const ix = [];
             const push = e2 => { e2.blob = catNorm([e2.title, e2.sub, e2.desc, e2.dom, e2.own, (e2.tags || []).join(' ')].join(' ')); ix.push(e2); };
@@ -10503,15 +10534,20 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const cm = ((d.columns || {})[h]) || {};
                     const def = cm.definition || (colDefFor(t.name, h) || {}).def || '';
                     const comp = lq && lq.columnsSummary && lq.columnsSummary[h] ? Math.round(lq.columnsSummary[h].comp) : null;
+                    // Les termes qui désignent cette colonne : affichés en clair (plus d'identifiant
+                    // brut) et versés dans le texte de recherche — chercher le terme trouve la colonne.
+                    const syns = termsOfColumn(t.name, h).map(x => x.term);
                     push({ type: 'column', id: t.id + '\u0001' + h, title: h, sub: 'dans ' + t.name, desc: def, dom: String(t.theme || '').trim() || '—',
                         own: d.owner || '', q: comp, sens: catSensOf(pvLevelOf(t.name, h)), val: cm.term || def ? 'ok' : null,
-                        fresh: t.lastRefresh || null, tags: [cm.term, cm.technicalType].filter(Boolean), tbl: t.name, col: h });
+                        fresh: t.lastRefresh || null, tags: [...syns.map(x => '📖 ' + x), cm.technicalType].filter(Boolean), tbl: t.name, col: h, syns });
                 });
             });
             (g.businessObjects || []).forEach(bo => push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
                 desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
                 tags: ['objet métier'], bo: bo.id }));
-            (g.glossary || []).forEach(t2 => push({ type: 'term', id: t2.id, title: t2.term, sub: (t2.links || []).length + ' colonne(s) liée(s)', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null, tags: ['glossaire'] }));
+            (g.glossary || []).forEach(t2 => { const tg = termTargets(t2);
+                push({ type: 'term', id: t2.id, title: t2.term, sub: tg.length ? 'désigne ' + tg.length + ' donnée(s)' : 'aucune donnée désignée', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null,
+                    tags: ['glossaire', ...tg.slice(0, 6).map(x => x.label)], termId: t2.id }); });
             (g.perimeters || []).forEach(p2 => push({ type: 'perimeter', id: p2.id, title: p2.name, sub: (p2.tables || []).length + ' table(s)', desc: p2.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [] }));
             (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' + ((a.appIds || []).length ? ' · ' + (a.appIds || []).length + ' appli(s)' : '') : 'Application', desc: a.description || '', dom: assetDomainEff(a) || '—', own: a.owner || '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
             (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.bo ? '🏛 ' + ((qrBoById(r.bo) || {}).name || '?') : (r.table || '')) + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
@@ -10709,7 +10745,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         ${(() => { const cm = (((state.governance.dictionary[e2.tbl] || {}).columns) || {})[e2.col] || {};
                             return (cm.technicalType ? `<div class="cell"><div class="k">Type déclaré</div><div class="v" style="font-size:12.5px">${escapeHTML(cm.technicalType)}</div></div>` : '')
                                 + (e2.q != null ? `<div class="cell"><div class="k">Complétude</div><div class="v" style="font-size:12.5px">${e2.q} %</div></div>` : '')
-                                + (cm.term ? `<div class="cell"><div class="k">Terme de glossaire</div><div class="v" style="font-size:12.5px">📖 ${escapeHTML(cm.term)}</div></div>` : '')
+                                + (cm.term && termNameOf(cm.term) ? `<div class="cell"><div class="k">Terme de glossaire</div><div class="v" style="font-size:12.5px">📖 ${escapeHTML(termNameOf(cm.term))}</div></div>` : '')
                                 + `<div class="cell"><div class="k">Colonne dans</div><div class="v" style="font-size:12.5px">${escapeHTML(e2.tbl)}</div></div>`; })()}
                         </div></div>`
                     : `<div class="dsect"><h4>Structure (${(t.headers || []).length} colonnes — types réels)</h4><div id="catSchemaBox"><p class="text-[11px] text-slate-300 italic">Lecture des types…</p></div></div>`) : ''}
@@ -10720,6 +10756,21 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <span class="text-slate-300" aria-hidden="true">→</span>
                     <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2"><div class="text-base font-black">${down}</div><div class="text-[10px] text-slate-400">usage(s) aval</div></div>
                 </div></div>
+                ${e2.type === 'term' ? (() => { const t2 = termById(e2.termId || e2.id); if (!t2) return '';
+                    const tg = termTargets(t2);
+                    if (!tg.length) return `<div class="dsect"><h4>Ce terme désigne</h4><p class="text-[11.5px] text-slate-400 italic">Aucune donnée pour l'instant. Reliez-le : dans le <b>Glossaire</b> (colonnes), ou en choisissant ce terme dans la colonne « Terme » du <b>Dictionnaire</b>.</p></div>`;
+                    return `<div class="dsect"><h4>Ce terme désigne (${tg.length})</h4>${tg.map(x => {
+                        const target = x.kind === 'bo' || x.kind === 'attr'
+                            ? catRes.find(r2 => r2.type === 'bo' && r2.bo === x.boId)
+                            : catRes.find(r2 => r2.type === 'column' && r2.tbl === x.table && r2.col === x.col);
+                        const ic = x.kind === 'col' ? '▦' : (x.kind === 'attr' ? '🔹' : '🏛️');
+                        const inner = `<span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(x.label)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(x.via)}</span></span>`;
+                        return target
+                            ? `<button data-ro="keep" onclick="catOpenFiche(${catRes.indexOf(target)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`
+                            : `<div class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5">${inner}</div>`;
+                    }).join('')}</div>`; })() : ''}
+                ${e2.type === 'column' && (e2.syns || []).length ? `<div class="dsect"><h4>Termes du glossaire (synonymes métier)</h4><div class="flex gap-1.5 flex-wrap">${(e2.syns || []).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn); const tr2 = tt && catRes.find(r2 => r2.type === 'term' && (r2.termId || r2.id) === tt.id);
+                    return tr2 ? `<button data-ro="keep" onclick="catOpenFiche(${catRes.indexOf(tr2)})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold hover:bg-indigo-100">📖 ${escapeHTML(sn)}</button>` : `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold">📖 ${escapeHTML(sn)}</span>`; }).join('')}</div></div>` : ''}
                 ${rel.length ? `<div class="dsect"><h4>Actifs liés (${escapeHTML(e2.dom)})</h4>${rel.map(x => { const [xc, xi, xl] = CAT_TYPES[x.type];
                     return `<button data-ro="keep" onclick="catOpenFiche(${relIdx(x)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="cat-tico ${xc}" style="width:26px;height:26px;font-size:12px">${xi}</span><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${escapeHTML(x.title)}</span><span class="block text-[10px] text-slate-400">${xl}</span></span><span class="ml-auto text-slate-300">›</span></button>`; }).join('')}</div>` : ''}`;
             _catFicheCtx = e2;
@@ -11885,8 +11936,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.4.1';
+        const APP_VERSION = '8.5.0';
         const APP_CHANGELOG = [
+            { v: '8.5.0', d: '2026-07-31', t: 'Les termes du glossaire deviennent de vrais synonymes dans le catalogue', items: [
+                '<b>Un terme est le nom métier d\'une donnée</b> — « Chiffre d\'affaires » pour la colonne <code>CA_HT</code>. Le modèle savait déjà relier un terme de trois façons (liens du glossaire vers des colonnes, rattachement à des objets métier, champ « Terme » posé sur un attribut ou une colonne), mais le catalogue n\'en restituait <b>aucune</b>.',
+                '<b>Chercher le terme trouve maintenant la donnée</b> : les noms de termes entrent dans le texte de recherche des colonnes qu\'ils désignent, et réciproquement les données désignées rendent le terme trouvable. C\'est le comportement de synonyme attendu.',
+                'La <b>fiche d\'un terme</b> liste tout ce qu\'il désigne — colonnes, objets métier, attributs — avec la provenance du lien, et chaque entrée est <b>cliquable</b> vers la fiche correspondante.',
+                'La <b>fiche d\'une colonne</b> affiche ses termes en pastilles « 📖 synonymes métier » cliquables — et plus jamais l\'identifiant brut <code>gl_…</code> qui s\'affichait à la place du nom.',
+                'La carte du terme dans le catalogue compte désormais <b>tout</b> ce qu\'il désigne (« désigne 4 donnée(s) »), pas seulement les liens directs du glossaire.'] },
             { v: '8.4.1', d: '2026-07-31', t: 'Correctif définitif des pavés bleu/brun de l\'assistant', items: [
                 '<b>La photo de l\'utilisateur montrait le défaut encore présent dans la 8.4.0</b> : les deux cartes de l\'assistant en pavés pleins bleu et brun, texte illisible. Le correctif 8.3.0 était incomplet : le sélecteur réparé attrapait encore <code>bg-indigo-50/40</code>, car « bg-indigo-5 » est un préfixe de « bg-indigo-50 ».',
                 'Les sélecteurs des boutons pleins passent en <b>correspondance exacte de jeton</b> (<code>[class~="bg-indigo-600"]</code>) : ils ne peuvent plus attraper une nuance voisine ni une variante hover.',
