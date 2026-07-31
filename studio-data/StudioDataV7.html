@@ -2909,8 +2909,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     </td>
                     <td class="p-2"><textarea rows="2" placeholder="Ce que désigne cet attribut, en langage métier…" onchange="${wr('definition')}"
                         class="w-full min-w-[220px] border border-slate-200 p-1.5 rounded text-xs">${escapeHTML(r.el.definition || '')}</textarea></td>
-                    <td class="p-2"><input type="text" value="${escapeHTML(r.el.examples || '')}" placeholder="ex : PARIS ; LYON" onchange="${wr('examples')}"
-                        class="w-36 border border-slate-200 p-1.5 rounded text-xs"></td>
+                    <td class="p-2"><div class="flex items-center gap-1">
+                        <input type="text" value="${escapeHTML(r.el.examples || '')}" placeholder="ex : PARIS ; LYON" onchange="${wr('examples')}"
+                            class="w-32 border border-slate-200 p-1.5 rounded text-xs ${r.el.examplesAuto ? 'bg-indigo-50/60' : ''}"
+                            title="${r.el.examplesAuto ? 'Valeurs prises dans la source rattachée' : 'Saisie manuelle'}">
+                        ${m ? `<button onclick="boAttrSampleOne('${bo.id}','${r.el.id}')" class="text-[11px] px-1.5 py-1 rounded border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 shrink-0"
+                            title="Prendre de vrais exemples dans ${escapeHTML(m.table + '.' + m.col)}">⟳</button>` : ''}
+                    </div></td>
                     <td class="p-2"><select onchange="${wr('sensitivity')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, r.el.sensitivity)}</select></td>
                     <td class="p-2"><select onchange="${wr('term')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(r.el.term)}</select></td>
                     <td class="p-2">${m ? vlSelectHtml(m.table, m.col, (((state.governance.dictionary[m.table] || {}).columns || {})[m.col] || {}).valueListId) : '<span class="text-[10px] text-slate-300 italic">rattachez une colonne</span>'}</td>
@@ -2920,6 +2925,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <select onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
                     <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité et termes par fichier CSV ou Excel">⬆ Remplir par fichier</button>
+                    <button onclick="boAttrSampleAll('${bo.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Prendre de vrais exemples dans les sources rattachées, pour tous les attributs — les exemples saisis à la main ne sont pas touchés">⟳ Échantillonner les exemples</button>
                     ${master ? `<span class="text-[11px] text-slate-400">Table maître : <strong>${escapeHTML(master.name)}</strong></span>` : '<span class="text-[11px] text-amber-600 font-bold">⚠️ pas de table maître chargée</span>'}
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -3584,9 +3590,77 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
            de l'objet, et la colonne technique n'est plus qu'une provenance, affichée discrètement.
            La colonne conserve ses propres champs : ils l'emportent si quelqu'un les a remplis,
            sinon elle hérite de l'objet — rien de ce qui a été saisi n'est perdu. */
+        /* ---- Échantillonner de vrais exemples depuis la source rattachée ----
+           Un exemple inventé ne sert à rien : il doit venir de la donnée. Quand l'attribut est
+           rattaché à une colonne, on va y chercher les valeurs les plus FRÉQUENTES — un exemple
+           doit être typique, pas tiré au hasard — en écartant les vides. Le balayage est borné
+           par un échantillon pour rester instantané même sur une grosse source. */
+        function boAttrMapOf(bo, elId) {
+            for (const e2 of (boCoreElements(bo) || []))
+                if (e2.id === elId) return { el: e2, stId: '', map: (e2.mappings || [])[0] || null };
+            for (const st of getBoFacets(bo))
+                for (const fe of (st.elements || []))
+                    if (fe.id === elId) return { el: fe, stId: st.id, map: fe.col ? { table: st.table, col: fe.col } : null };
+            return null;
+        }
+        async function boSampleValues(conn, tableName, col, n) {
+            const t = tableByName(tableName);
+            if (!t || t.status !== 'ready') throw new Error(`source « ${tableName} » non chargée`);
+            const raw = `TRIM(CAST(${sqlIdent(col)} AS VARCHAR))`;
+            const sql = `SELECT v FROM (SELECT ${raw} AS v FROM ${sqlIdent(duckTableName(t.id))}
+                WHERE ${sqlIdent(col)} IS NOT NULL AND ${raw} <> '' USING SAMPLE 20000 ROWS)
+                GROUP BY v ORDER BY COUNT(*) DESC, v LIMIT ${Number(n) || 4}`;
+            return arrowResultToObjects(await conn.query(sql)).map(r => String(r.v).slice(0, 40));
+        }
+        async function boAttrSampleOne(boId, elId) {
+            const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!bo) return;
+            const found = boAttrMapOf(bo, elId); if (!found) return;
+            if (!found.map) return showError("Cet attribut n'est rattaché à aucune colonne : rattachez-le d'abord dans la fiche de l'objet (Structure).");
+            try {
+                const { conn } = await getDB();
+                const vals = await boSampleValues(conn, found.map.table, found.map.col, 4);
+                if (!vals.length) return showError(`« ${found.el.name} » : la colonne ${found.map.table}.${found.map.col} ne contient aucune valeur renseignée.`);
+                found.el.examples = vals.join(' ; ');
+                found.el.examplesAuto = true;
+                persistAppState(); renderGovernance();
+                showSuccess(`« ${found.el.name} » : ${vals.length} exemple(s) pris dans ${found.map.table}.${found.map.col}.`);
+            } catch (e) { showError('Échantillonnage impossible : ' + e.message); }
+        }
+        async function boAttrSampleAll(boId) {
+            const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!bo) return;
+            const rows = boAllAttrRows(bo);
+            let done = 0, kept = 0, none = 0, unmapped = 0;
+            try {
+                const { conn } = await getDB();
+                for (const r of rows) {
+                    const found = boAttrMapOf(bo, r.el.id);
+                    if (!found || !found.map) { unmapped++; continue; }
+                    // On ne remplace jamais un exemple saisi à la main : ce serait détruire du travail.
+                    if (found.el.examples && !found.el.examplesAuto) { kept++; continue; }
+                    let vals = [];
+                    try { vals = await boSampleValues(conn, found.map.table, found.map.col, 4); } catch (e) { none++; continue; }
+                    if (!vals.length) { none++; continue; }
+                    found.el.examples = vals.join(' ; '); found.el.examplesAuto = true; done++;
+                }
+                persistAppState(); renderGovernance();
+                const parts = [`${done} attribut(s) complété(s)`];
+                if (kept) parts.push(`${kept} laissé(s) intact(s) car saisi(s) à la main`);
+                if (unmapped) parts.push(`${unmapped} sans colonne rattachée`);
+                if (none) parts.push(`${none} sans valeur exploitable`);
+                showSuccess('Échantillonnage : ' + parts.join(', ') + '.');
+            } catch (e) { showError('Échantillonnage impossible : ' + e.message); }
+        }
+
         function boAttrWrite(boId, stId, elId, f, v) {
             if (stId) updateFacetElement(boId, stId, elId, f, v);
             else updateBoElement(boId, elId, f, v);
+            // Un exemple retouché à la main cesse d'être « échantillonné » : il ne doit plus être
+            // écrasé par un échantillonnage global.
+            if (f === 'examples') {
+                const bo = (state.governance.businessObjects || []).find(x => x.id === boId);
+                const found = bo && boAttrMapOf(bo, elId);
+                if (found) { found.el.examplesAuto = false; persistAppState(); }
+            }
         }
         // Reprise unique de l'existant : ce qui avait été saisi sur la colonne remonte sur
         // l'attribut, pour que la bascule ne fasse pas disparaître le travail déjà fait.
@@ -11095,8 +11169,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.10.0';
+        const APP_VERSION = '7.11.0';
         const APP_CHANGELOG = [
+            { v: '7.11.0', d: '2026-07-29', t: 'Exemples échantillonnés depuis la source rattachée', items: [
+                'Quand un attribut est rattaché à une colonne, un bouton <b>⟳</b> à côté du champ « Exemples » va chercher de <b>vraies valeurs</b> dans la donnée. Un bouton global fait la même chose pour tous les attributs de l\'objet d\'un coup.',
+                '<b>Les valeurs retenues sont les plus fréquentes</b>, pas les premières venues : un exemple doit être représentatif. Les valeurs vides et les cellules ne contenant que des espaces sont écartées.',
+                '<b>Une saisie manuelle n\'est jamais écrasée</b> par l\'échantillonnage global : dès qu\'un exemple est retouché à la main, il cesse d\'être considéré comme échantillonné et devient intouchable. Le compte rendu indique combien d\'attributs ont été complétés, combien ont été laissés intacts, combien n\'ont pas de colonne rattachée et combien n\'ont aucune valeur exploitable.',
+                'Un attribut <b>sans colonne rattachée</b> le dit clairement au lieu d\'échouer, et une colonne <b>entièrement vide</b> est signalée plutôt que d\'inscrire un exemple vide.',
+                'Les exemples issus de la source sont <b>reconnaissables d\'un coup d\'œil</b> (fond bleuté) et le message indique la colonne d\'où ils proviennent.',
+                'Le balayage est <b>borné par un échantillon</b> : la commande reste instantanée même sur une source volumineuse.'] },
             { v: '7.10.0', d: '2026-07-29', t: 'Import en masse des attributs d\'objet métier', items: [
                 'Nouvelle cible d\'import <b>« Attributs des objets métier »</b> : définition, exemples, sensibilité, terme de glossaire et propriétaire se chargent par fichier CSV ou Excel, pour tous les objets d\'un coup.',
                 '<b>Le modèle est pré-rempli avec vos attributs existants</b> — objets centraux comme attributs de composants. On le télécharge, on complète les colonnes vides, on le réimporte : pas de saisie de la clé, pas de risque de faute de frappe sur les noms.',
