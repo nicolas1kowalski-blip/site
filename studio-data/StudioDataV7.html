@@ -2919,6 +2919,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
                     <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
+                    <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité et termes par fichier CSV ou Excel">⬆ Remplir par fichier</button>
                     ${master ? `<span class="text-[11px] text-slate-400">Table maître : <strong>${escapeHTML(master.name)}</strong></span>` : '<span class="text-[11px] text-amber-600 font-bold">⚠️ pas de table maître chargée</span>'}
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -7192,6 +7193,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             assets: { label: '🖥 Applications & processus', fields: [
                 ['name', 'Nom (clé)', true], ['kind', 'Type (application / processus)', false], ['criticality', 'Criticité', false], ['description', 'Description', false],
                 ['owner', 'Responsable', false], ['domain', 'Domaine métier', false], ['apps', 'Applications du processus (séparées par ;)', false]] },
+            boattr: { label: '🏷 Attributs des objets métier (définitions, exemples, sensibilité, terme)', fields: [
+                ['bo', 'Objet métier (clé)', true], ['attr', 'Attribut (clé)', true], ['definition', 'Définition', false],
+                ['examples', 'Exemples', false], ['sensitivity', 'Sensibilité', false], ['term', 'Terme de glossaire', false],
+                ['owner', 'Propriétaire', false], ['rename', 'Renommer en', false]] },
             usage: { label: '🔌 Usages attribut ↔ application', fields: [
                 ['bo', 'Objet métier (clé)', true], ['attr', 'Attribut (clé)', true], ['app', 'Application / processus (clé)', true]] },
             bo: { label: '🏛 Objets métier', fields: [
@@ -7201,7 +7206,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 ['bo', 'Objet métier (clé)', true], ['app', 'Application / processus (clé)', true], ['role', 'Rôle (utilise / produit)', false]] },
         };
         let giState = { target: 'dict', cols: [], rows: [], map: {}, fileName: '' };
-        function giOpen() {
+        function giOpen(target) {
+            if (target && GI_TARGETS[target]) giState.target = target;
             giState = { target: giState.target || 'dict', cols: [], rows: [], map: {}, fileName: '' };
             el('uxDrawer').classList.add('wide');
             openUxDrawer({ sem: '', title: '⬆ Import en masse — gouvernance', sub: 'Choisissez la cible, chargez votre fichier, mappez ses colonnes sur les attributs voulus, vérifiez l\'aperçu, importez. Tout reste local.',
@@ -7230,6 +7236,17 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const out = [['Nom', 'Type', 'Criticité', 'Description', 'Responsable', 'Domaine', 'Applications']];
                 (g.assets || []).forEach(a => out.push([a.name, a.kind === 'process' ? 'processus' : 'application', a.criticality || '', a.description || '', a.owner || '', a.domain || '', (a.appIds || []).map(id => (assetById(id) || {}).name).filter(Boolean).join(';')]));
                 if (out.length === 1) out.push(['SAP', 'application', 'Haute', '', '', 'Finance', ''], ['Clôture mensuelle', 'processus', '', '', '', '', 'SAP']);
+                return out;
+            }
+            if (target === 'boattr') {
+                // Gabarit aller-retour : on exporte l'état courant, l'utilisateur complète, il réimporte.
+                const out = [['Objet métier', 'Attribut', 'Définition', 'Exemples', 'Sensibilité', 'Terme de glossaire', 'Propriétaire', 'Renommer en']];
+                (g.businessObjects || []).forEach(bo => boAllAttrRows(bo).forEach(r => {
+                    const e2 = r.el;
+                    const term = (g.glossary || []).find(t2 => t2.id === e2.term);
+                    out.push([bo.name, e2.name, e2.definition || '', e2.examples || '', e2.sensitivity || '', term ? term.term : '', e2.owner || '', '']);
+                }));
+                if (out.length === 1) out.push(['Client', 'Adresse de facturation', 'Adresse où est envoyée la facture', '12 rue X, 75001 PARIS', 'Personnel (RGPD)', 'Adresse', 'DSI', '']);
                 return out;
             }
             if (target === 'usage') {
@@ -7276,6 +7293,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 name: ['nom', 'name', 'application', 'appli', 'processus'], kind: ['type', 'kind', 'nature'], criticality: ['criticite', 'criticality'],
                 description: ['description', 'commentaire'], bo: ['objet', 'objetmetier', 'bo', 'entite'], attr: ['attribut', 'attr', 'element', 'champ'], app: ['application', 'appli', 'app', 'processus', 'systeme'],
                 owner: ['responsable', 'proprietaire', 'owner'], domain: ['domaine', 'domain'], apps: ['applications', 'applis', 'apps'],
+                examples: ['exemples', 'examples', 'exemple', 'example', 'valeursexemples'], rename: ['renommeren', 'renommer', 'nouveaunom', 'rename'],
                 boname: ['objetmetier', 'objet', 'bo', 'nomobjet', 'nom', 'entite'], attrs: ['attributs', 'attrs', 'elements', 'champs', 'attribut'], srctable: ['tablesourcemaitre', 'tablesource', 'tablemaitre', 'source', 'table'], role: ['role', 'sens', 'nature'] };
             T.fields.forEach(([f]) => {
                 const hs = hints[f] || [f];
@@ -7380,6 +7398,38 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                                 if (!ap) { ap = { id: 'as_' + generateId(), kind: 'app', name: nm2, criticality: '', description: '', domain: '', appIds: [] }; g.assets.push(ap); created++; }
                                 if (!a.appIds.includes(ap.id)) a.appIds.push(ap.id); });
                         }
+                    } else if (giState.target === 'boattr') {
+                        const boN = giVal(row, 'bo'), attrN = giVal(row, 'attr');
+                        if (!boN || !attrN) { skip('Objet métier ou attribut vide dans le fichier'); return; }
+                        const bo = (g.businessObjects || []).find(x => giNorm(x.name) === giNorm(boN));
+                        if (!bo) { skip('Objet métier introuvable — créez-le d\'abord (cible « 🏛 Objets métier »)', boN); return; }
+                        const r2 = boAllAttrRows(bo).find(x => giNorm(x.el.name) === giNorm(attrN));
+                        if (!r2) { skip('Attribut introuvable dans cet objet métier', boN + ' · ' + attrN); return; }
+                        const e2 = r2.el;
+                        const isNew = !e2.definition && !e2.examples && !e2.sensitivity && !e2.term;
+                        let ch = false;
+                        ch = setIf(e2, 'definition', giVal(row, 'definition')) || ch;
+                        ch = setIf(e2, 'examples', giVal(row, 'examples')) || ch;
+                        ch = setIf(e2, 'owner', giVal(row, 'owner')) || ch;
+                        // La sensibilité doit rester dans la liste connue, sinon on le dit plutôt que
+                        // d'enregistrer une valeur que plus rien ne saura interpréter.
+                        const sv = giVal(row, 'sensitivity');
+                        if (sv) {
+                            const m2 = SENSITIVITY_OPTS.find(o => giNorm(o) === giNorm(sv));
+                            if (m2) ch = setIf(e2, 'sensitivity', m2) || ch;
+                            else skip('Sensibilité inconnue — valeurs admises : ' + SENSITIVITY_OPTS.join(', '), boN + ' · ' + attrN + ' → ' + sv);
+                        }
+                        // Le terme est saisi en clair dans le fichier ; on le résout vers le glossaire.
+                        const tv = giVal(row, 'term');
+                        if (tv) {
+                            const gt = (g.glossary || []).find(t2 => giNorm(t2.term) === giNorm(tv));
+                            if (gt) ch = setIf(e2, 'term', gt.id) || ch;
+                            else skip('Terme de glossaire introuvable — ajoutez-le d\'abord (cible « 📖 Glossaire »)', boN + ' · ' + attrN + ' → ' + tv);
+                        }
+                        // Renommage explicite : jamais implicite, pour ne pas casser les rattachements.
+                        const rn = giVal(row, 'rename');
+                        if (rn && giNorm(rn) !== giNorm(e2.name)) { e2.name = rn; ch = true; }
+                        ch ? (isNew ? created++ : updated++) : skip('Déjà identique — aucune valeur à changer', boN + ' · ' + attrN);
                     } else if (giState.target === 'usage') {
                         const boN = giVal(row, 'bo'), attrN = giVal(row, 'attr'), appN = giVal(row, 'app');
                         if (!boN || !attrN || !appN) { skip('Clé obligatoire vide (objet, attribut ou application)'); return; }
@@ -11045,8 +11095,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.9.0';
+        const APP_VERSION = '7.10.0';
         const APP_CHANGELOG = [
+            { v: '7.10.0', d: '2026-07-29', t: 'Import en masse des attributs d\'objet métier', items: [
+                'Nouvelle cible d\'import <b>« Attributs des objets métier »</b> : définition, exemples, sensibilité, terme de glossaire et propriétaire se chargent par fichier CSV ou Excel, pour tous les objets d\'un coup.',
+                '<b>Le modèle est pré-rempli avec vos attributs existants</b> — objets centraux comme attributs de composants. On le télécharge, on complète les colonnes vides, on le réimporte : pas de saisie de la clé, pas de risque de faute de frappe sur les noms.',
+                'Les colonnes du fichier sont <b>reconnues automatiquement</b> (Objet métier, Attribut, Définition, Exemples, Sensibilité, Terme, Propriétaire, Renommer en), et restent remappables à la main.',
+                '<b>Les valeurs contrôlées le restent.</b> Une sensibilité hors liste est refusée avec l\'énumération des valeurs admises ; un terme absent du glossaire est refusé en invitant à le créer d\'abord. Rien n\'est enregistré à l\'aveugle.',
+                '<b>Aucune création implicite</b> : un objet ou un attribut inconnu est signalé, jamais fabriqué à la volée — sans quoi une faute de frappe créerait un doublon silencieux. Le renommage d\'un attribut existe, mais uniquement via la colonne dédiée « Renommer en ».',
+                'Un bouton <b>« Remplir par fichier »</b> ouvre directement cette cible depuis la vue Dictionnaire par objet métier.'] },
             { v: '7.9.0', d: '2026-07-29', t: 'Le sens appartient à l\'objet métier, plus à la colonne source', items: [
                 '<b>Définition, exemples, sensibilité et terme du glossaire s\'enregistrent désormais sur l\'attribut de l\'objet métier</b>, et non plus sur la colonne mappée. On documente le concept, pas un détail technique — et un même concept alimenté par deux colonnes ne se saisit plus deux fois.',
                 '<b>Le nom de l\'attribut devient modifiable dans cette vue.</b> Il n\'y était affiché qu\'en texte figé : impossible de corriger un libellé sans passer par la fiche de l\'objet.',
