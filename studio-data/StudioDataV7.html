@@ -3021,7 +3021,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select data-ro="keep" onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
-                    <button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
+                    <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité, termes et nombre de valeurs par fichier CSV ou Excel">⬆ Remplir par fichier</button>
                     <button onclick="boAttrSampleAll('${bo.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Prendre de vrais exemples dans les sources rattachées, pour tous les attributs — les exemples saisis à la main ne sont pas touchés">⟳ Échantillonner les exemples</button>
                     <button data-ro="keep" onclick="boToggleFold()" class="text-xs px-3 py-1.5 rounded-lg font-bold border ${fold ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}" title="${fold ? 'Vue métier : les colonnes numérotées (TEL_1, TEL_2…) sont repliées en un seul attribut « 1 à n valeurs ». Cliquer pour voir chaque colonne.' : 'Vue technique : chaque colonne numérotée est un attribut distinct. Cliquer pour revenir à la lecture métier.'}">${fold ? '◉ Vue métier' : '○ Vue technique'}</button>
@@ -3061,9 +3061,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 // Le graphe « bout en bout » (legacy) est une VUE de l'onglet Lineage (g:'flow'),
                 // pas un onglet séparé : quand on y est, on garde la puce « Lineage » active.
                 const activeG = govState.tab === 'lineage' ? 'flow' : govState.tab;
-                const cur = govTabs.find(t => t.g === govState.tab) || govTabs[0];
-                const sibl = govTabs.filter(t => t.fam === cur.fam && !t.hidden);
-                famBar.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">${escapeHTML(cur.fam || '')}</span>` + sibl.map(t =>
+                const cur = govTabs.find(t => t.g === govState.tab) || govVisibleTabs(govTabs)[0] || govTabs[0];
+                const sibl = govIsReadOnly() ? govVisibleTabs(govTabs) : govTabs.filter(t => t.fam === cur.fam && !t.hidden);
+                famBar.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">${govIsReadOnly() ? 'Consultation' : escapeHTML(cur.fam || '')}</span>` + sibl.map(t =>
                     `<button data-ro="keep" onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === activeG ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('')
                     + `<span class="flex-grow"></span><button onclick="giOpen()" aria-label="Import en masse de la gouvernance" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">⬆ Import en masse</button>`;
             }
@@ -3189,7 +3189,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // dans la fiche d'audit d'une colonne et dans l'écran des listes.
         function vlSelectHtml(tableName, col, cur) {
             const T = escapeHTML(String(tableName).replace(/'/g, "\\'")), C = escapeHTML(String(col).replace(/'/g, "\\'"));
-            if (!vlList().length) return `<a data-ro="keep" onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
+            if (!vlList().length) return `<a onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
             return `<select onchange="vlBind('${T}','${C}', this.value)" title="Rattacher cet attribut à une liste de valeurs : l'audit contrôlera l'appartenance au référentiel au lieu de signaler les valeurs rares." class="border p-1.5 rounded text-xs bg-white max-w-[160px] ${cur ? 'border-indigo-400 bg-indigo-50/60 font-bold text-indigo-800' : 'border-slate-200'}"><option value="">— aucune —</option>${vlList().map(L => `<option value="${L.id}" ${cur === L.id ? 'selected' : ''}>${escapeHTML(L.name)}</option>`).join('')}</select>`;
         }
         function vlBindPickTable(id) {
@@ -5411,7 +5411,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                             return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>
                         ${(() => { const objs = appBusinessObjects(a); return objs.length ? `<div class="text-[10px] uppercase font-bold text-emerald-600 mb-1">🏛️ Objets métier alimentés <span class="text-slate-300 normal-case font-normal">— déduits des sources ci-dessus (l'application y est rattachée automatiquement)</span></div>
                         <div class="flex flex-wrap gap-1.5 mb-2">${objs.map(bo => { const isProd = (bo.producedBy || []).includes(a.id), isCons = (bo.consumedBy || []).includes(a.id);
-                            return `<button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
+                            return `<button onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
                         ${(() => { const d = appDownstream(a); return (d.srcs.length && (d.bos.length || d.consumers.length)) ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>` : ''; })()}` : ''}
                         ${kind === 'process' ? `
                         <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -5550,7 +5550,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const bos = state.governance.businessObjects || [];
             const ids = ent.boIds || [];
             const chips = ids.map(id => { const bo = bos.find(b => b.id === id); if (!bo) return '';
-                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
             const remain = bos.filter(b => !ids.includes(b.id));
             return `<div class="flex flex-wrap items-center gap-1.5 mb-2">
                 <span class="text-[10px] uppercase font-bold text-emerald-600">🏛️ Objets métier</span>
@@ -8164,6 +8164,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function switchPhase(pid) { const p = NAV_PHASES.find(x => x.id === pid); if (!p) return; const f = p.tabs[0]; if (f.n) switchTab(f.n); else openGovTab(f.g); }
         // Ouvre un sous-onglet Gouvernance depuis la barre de navigation commune.
         function openGovTab(g) {
+            if (!govTabAllowed(g)) g = GOV_RO_TABS[0];
             govState.tab = g;
             // À l'ouverture du Lineage, la carte « Vue systèmes » est resynchronisée en silence avec les
             // données (tables conçues + applications) — comme la vue « Bout en bout » l'est en direct —
@@ -8351,7 +8352,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (nav) {
                 nav.innerHTML = NAV_PHASES.map(p => {
                     const on = p.id === activePhase.id;
-                    const items = p.tabs.filter(t => !t.hidden);
+                    const items = p.id === 'gov' ? govVisibleTabs(p.tabs) : p.tabs.filter(t => !t.hidden);
                     const itemsHtml = items.map(t => {
                         const isOn = on && (t.n === currentTab || (p.id === 'gov' && govState.tab === t.g));
                         const act = p.id === 'gov' ? `openGovTab('${t.g}')` : `switchTab(${t.n})`;
@@ -8368,7 +8369,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 }).join('');
             }
             // Titre de l'écran courant
-            const cur = activePhase.tabs.find(t => (activePhase.id === 'gov' ? t.g === govState.tab : t.n === currentTab)) || activePhase.tabs[0];
+            const cur = activePhase.tabs.find(t => (activePhase.id === 'gov' ? t.g === govState.tab : t.n === currentTab))
+                || (activePhase.id === 'gov' ? govVisibleTabs(activePhase.tabs)[0] : null) || activePhase.tabs[0];
             if (el('v7Title')) el('v7Title').textContent = (cur ? cur.label : activePhase.label);
             if (el('v7Sub')) el('v7Sub').textContent = activePhase.label + (activePhase.desc ? ' · ' + activePhase.desc : '');
             // Familles de la gouvernance : segments dans la barre du haut
@@ -8378,7 +8380,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 else {
                     fam.style.display = '';
                     const fams = [];
-                    activePhase.tabs.filter(t => !t.hidden).forEach(t => { if (!fams.some(f => f.name === t.fam)) fams.push({ name: t.fam, first: t.g, icon: t.icon }); });
+                    govVisibleTabs(activePhase.tabs).forEach(t => { if (!fams.some(f => f.name === t.fam)) fams.push({ name: t.fam, first: t.g, icon: t.icon }); });
                     const curFam = (activePhase.tabs.find(t => t.g === govState.tab) || {}).fam;
                     fam.innerHTML = fams.map(f => `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${v7Ico(f.icon)}${escapeHTML(f.name)}</button>`).join('');
                 }
@@ -11462,10 +11464,22 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
            Portée : la Gouvernance seulement. Charger une source, extraire, analyser restent
            disponibles ; ces écrans ne touchent pas au référentiel. */
         const GOV_RO_SCOPE = ['step-9', 'uxDrawer'];
+        /* En consultation, on ne montre que les écrans qui PRÉSENTENT le référentiel. Le catalogue
+           est la porte d'entrée (il indexe tables, colonnes, objets, termes, applications et règles,
+           avec sa fiche de détail) ; le dictionnaire donne le détail attribut par attribut, par objet
+           métier ou par table. Les autres écrans de la Gouvernance servent à ADMINISTRER — composer
+           un objet, tenir le glossaire, classer la sensibilité, surveiller les sources : sans leurs
+           commandes ils ne diraient plus rien, et leur seule présence dans le menu ferait chercher
+           au lecteur des choses qu'il ne peut pas faire. */
+        const GOV_RO_TABS = ['catalog', 'dictionary'];
+        function govTabAllowed(g) { return !govIsReadOnly() || GOV_RO_TABS.includes(g); }
+        function govVisibleTabs(tabs) { return (tabs || []).filter(t => !t.hidden && govTabAllowed(t.g)); }
         function govIsReadOnly() { return !!govState.readOnly; }
         function govSetReadOnly(on) {
             govState.readOnly = !!on;
+            if (!govTabAllowed(govState.tab)) govState.tab = GOV_RO_TABS[0];
             govApplyReadOnly();
+            renderNav();
             renderGovernance();
             govProjectValues();
         }
@@ -11508,7 +11522,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 band.classList.toggle('hidden', !on);
                 band.innerHTML = on ? `<div class="gov-ro-band">
                     <span class="font-black">👁 Mode consultation</span>
-                    <span>Les commandes de modification de la Gouvernance sont masquées : lecture, navigation, recherche, aperçus et exports restent disponibles.</span>
+                    <span>Seuls le <b>Catalogue</b> et le <b>Dictionnaire</b> sont proposés — les écrans qui présentent le référentiel. Les commandes de modification sont masquées ; la recherche, les aperçus et les exports restent disponibles.</span>
                     <span class="text-indigo-500">Ce n’est pas une sécurité — la case se décoche.</span>
                     <button data-ro="keep" onclick="govSetReadOnly(false)" style="background:#4f46e5;color:#fff" class="ml-auto text-[11px] font-bold px-3 py-1.5 rounded-lg">Reprendre la main</button>
                 </div>` : '';
@@ -11898,8 +11912,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.1.0';
+        const APP_VERSION = '8.1.1';
         const APP_CHANGELOG = [
+            { v: '8.1.1', d: '2026-07-31', t: 'Consultation : le menu se réduit aux écrans qui présentent le référentiel', items: [
+                '<b>Masquer les commandes ne suffisait pas.</b> Les 13 écrans de la Gouvernance restaient au menu ; or, privés de leurs commandes, ceux qui servent à <b>administrer</b> — composer un objet, tenir le glossaire, classer la sensibilité, surveiller les sources — ne disaient plus grand-chose, et leur seule présence faisait chercher au lecteur des choses qu’il ne peut pas faire.',
+                'En mode consultation, la Gouvernance ne propose plus que le <b>Catalogue</b> — la porte d’entrée, qui indexe tables, colonnes, objets métier, termes, applications et règles avec sa fiche de détail — et le <b>Dictionnaire</b>, qui donne le détail attribut par attribut, par objet métier ou par table.',
+                'La réduction s’applique aux <b>trois endroits</b> où ces écrans apparaissent : le rail de gauche, les familles de la barre du haut, et les puces de l’écran.',
+                'Aucune <b>impasse</b> : les raccourcis qui menaient à un écran retiré (« Ouvrir la fiche complète », « créer une liste ») disparaissent aussi, et ouvrir un écran retiré par un autre chemin ramène au Catalogue. Si le lecteur active le mode depuis un écran non consultable, il est déposé sur le Catalogue.',
+                'Décocher la case rend l’intégralité du menu.'] },
             { v: '8.1.0', d: '2026-07-31', t: 'Mode consultation de la Gouvernance', items: [
                 '<b>Beaucoup de gens ouvrent la gouvernance pour LIRE</b> : comprendre ce qui a été défini, relire des définitions, préparer un avis. Chaque champ de saisie les invitait pourtant à écrire, et une modification par mégarde ne se voyait pas.',
                 'Une case <b>👁 Mode consultation</b> en haut de la Gouvernance masque <b>toutes les commandes de modification</b> de ses 13 écrans. Ce qui sert à lire reste intact : navigation entre écrans, recherche et facettes du catalogue, choix de l’objet ou de la table, onglets d’une fiche, audit d’objet, zoom et recentrage des graphes, aperçus, exports.',
