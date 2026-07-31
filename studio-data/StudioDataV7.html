@@ -2891,23 +2891,29 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const md = master ? ensureDictEntry(master.name) : null;
             const rows = [];
             (boCoreElements(bo) || []).forEach(e2 => rows.push({ el: e2, facet: '' }));
-            getBoFacets(bo).forEach(st => (st.elements || []).forEach(fe => rows.push({ el: { ...fe, mappings: fe.col ? [{ table: st.table, col: fe.col }] : [] }, facet: st.name })));
+            getBoFacets(bo).forEach(st => (st.elements || []).forEach(fe => rows.push({ el: fe, mappings: fe.col ? [{ table: st.table, col: fe.col }] : [], facet: st.name, stId: st.id })));
+            boAttrLiftFromColumn(bo);   // reprise unique de ce qui avait été saisi sur les colonnes
             const selOpts = (opts, cur) => opts.map(o => `<option ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
             const glossOpts = cur => '<option value="">— Aucun terme —</option>' + state.governance.glossary.map(g => `<option value="${g.id}" ${g.id === cur ? 'selected' : ''}>${escapeHTML(g.term)}</option>`).join('');
             let rowsHtml = '';
             rows.forEach(r => {
-                const m = (r.el.mappings || [])[0];
-                const dc = m ? (ensureDictEntry(m.table).columns[m.col] = ensureDictEntry(m.table).columns[m.col] || {}) : null;
-                const T = m ? escapeHTML(m.table) : '', C = m ? escapeHTML(String(m.col).replace(/'/g, "\\'")) : '';
-                rowsHtml += `<tr class="hover:bg-slate-50">
-                    <td class="p-2 font-semibold text-slate-700 text-xs whitespace-nowrap">${escapeHTML(r.el.name)}${r.facet ? `<br><span class="text-[9px] text-emerald-600 font-bold">◆ ${escapeHTML(r.facet)}</span>` : ''}</td>
-                    <td class="p-2 text-[10px] font-mono text-slate-400 whitespace-nowrap">${m ? escapeHTML(m.table + '.' + m.col) : '<span class="italic">non mappé</span>'}</td>
-                    ${dc ? `<td class="p-2"><input type="text" value="${escapeHTML(dc.definition || '')}" placeholder="Définition métier..." onchange="updateDictColField('${T}','${C}','definition',this.value)" class="w-full border border-slate-200 p-1.5 rounded text-xs"></td>
-                    <td class="p-2"><input type="text" value="${escapeHTML(dc.examples || '')}" placeholder="exemples..." onchange="updateDictColField('${T}','${C}','examples',this.value)" class="w-36 border border-slate-200 p-1.5 rounded text-xs"></td>
-                    <td class="p-2"><select onchange="updateDictColField('${T}','${C}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, dc.sensitivity)}</select></td>
-                    <td class="p-2"><select onchange="updateDictColField('${T}','${C}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(dc.term)}</select></td>
-                    <td class="p-2">${vlSelectHtml(m.table, m.col, dc.valueListId)}</td>`
-                    : '<td class="p-2 text-xs text-slate-300 italic" colspan="5">Mappez cet attribut à une colonne (fiche objet ▸ Structure) pour le documenter.</td>'}
+                const m = (r.mappings || r.el.mappings || [])[0];
+                const stId = r.stId || '';
+                const wr = (f) => `boAttrWrite('${bo.id}','${stId}','${r.el.id}','${f}',this.value)`;
+                rowsHtml += `<tr class="hover:bg-slate-50 align-top">
+                    <td class="p-2">
+                        <input type="text" value="${escapeHTML(r.el.name)}" onchange="${wr('name')}; renderGovernance()"
+                               class="font-bold text-xs border border-slate-300 p-1.5 rounded w-full bg-white" title="Nom métier de l'attribut — modifiable ici">
+                        ${r.facet ? `<div class="text-[9px] text-emerald-600 font-bold mt-0.5">◆ ${escapeHTML(r.facet)}</div>` : ''}
+                        <div class="text-[9px] font-mono text-slate-300 mt-0.5" title="Colonne source qui alimente cet attribut">${m ? escapeHTML(m.table + '.' + m.col) : '<span class="italic text-amber-500">non rattaché à une colonne</span>'}</div>
+                    </td>
+                    <td class="p-2"><textarea rows="2" placeholder="Ce que désigne cet attribut, en langage métier…" onchange="${wr('definition')}"
+                        class="w-full min-w-[220px] border border-slate-200 p-1.5 rounded text-xs">${escapeHTML(r.el.definition || '')}</textarea></td>
+                    <td class="p-2"><input type="text" value="${escapeHTML(r.el.examples || '')}" placeholder="ex : PARIS ; LYON" onchange="${wr('examples')}"
+                        class="w-36 border border-slate-200 p-1.5 rounded text-xs"></td>
+                    <td class="p-2"><select onchange="${wr('sensitivity')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, r.el.sensitivity)}</select></td>
+                    <td class="p-2"><select onchange="${wr('term')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(r.el.term)}</select></td>
+                    <td class="p-2">${m ? vlSelectHtml(m.table, m.col, (((state.governance.dictionary[m.table] || {}).columns || {})[m.col] || {}).valueListId) : '<span class="text-[10px] text-slate-300 italic">rattachez une colonne</span>'}</td>
                 </tr>`;
             });
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
@@ -2921,9 +2927,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     ${md ? `<div><label class="text-xs font-bold text-slate-500 block mb-1">Référent (Data Steward)</label><input type="text" value="${escapeHTML(md.steward || '')}" placeholder="Personne référente" onchange="updateDictField('${escapeHTML(master.name)}','steward',this.value)" class="w-full border border-slate-300 p-2 rounded text-sm bg-white"></div>
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Statut de la fiche</label><select onchange="updateDictField('${escapeHTML(master.name)}','status',this.value); renderGovernance()" class="w-full border border-slate-300 p-2 rounded text-sm bg-white">${selOpts(STATUS_OPTS, md.status)}</select></div>` : ''}
                 </div>
-                <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${rows.length}) <span class="text-slate-400 font-medium text-xs">— les définitions s'enregistrent sur la colonne mappée (partagées avec la vue par table)</span></h3>
+                <h3 class="text-sm font-bold text-slate-700 mb-2">Attributs métier (${rows.length}) <span class="text-slate-400 font-medium text-xs">— le sens est porté par l'<b>objet métier</b> : définition, exemples, sensibilité et terme s'enregistrent sur l'attribut, pas sur la colonne source. Un attribut sans colonne rattachée se documente quand même.</span></h3>
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier</th><th class="p-2">Colonne</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
+                    <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="6" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
         }
         function ensureDictEntry(tableName) {
@@ -3027,10 +3033,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const c = d.columns[h] || {};
                 colRows += `<tr class="hover:bg-slate-50">
                     <td class="p-2 font-semibold text-slate-700 text-xs whitespace-nowrap">${escapeHTML(h)}</td>
-                    <td class="p-2"><input type="text" value="${escapeHTML(c.definition || '')}" placeholder="Définition métier..." onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','definition',this.value)" class="w-full border border-slate-200 p-1.5 rounded text-xs"></td>
+                    <td class="p-2"><input type="text" value="${escapeHTML(c.definition || '')}" placeholder="${(() => { const r = dictColResolved(tn, h, 'definition'); return r.from ? escapeHTML(r.value).replace(/"/g, '&quot;') : 'D\u00e9finition m\u00e9tier...'; })()}" onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','definition',this.value)" class="w-full border border-slate-200 p-1.5 rounded text-xs">${(() => { const r = dictColResolved(tn, h, 'definition'); return (!c.definition && r.from) ? `<div class="text-[9px] text-emerald-600 mt-0.5">d\u00e9fini sur l'objet <b>${escapeHTML(r.from)}</b> - ${escapeHTML(r.attr)}</div>` : ''; })()}</td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.technicalType || '')}" placeholder="ex: VARCHAR(10)" onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','technicalType',this.value)" class="w-28 border border-slate-200 p-1.5 rounded text-xs font-mono"></td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.examples || '')}" placeholder="ex: PAR01 ; LYO02..." onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','examples',this.value)" class="w-44 border border-slate-200 p-1.5 rounded text-xs ${c.examplesAuto ? 'bg-indigo-50/50' : ''}" title="${c.examplesAuto ? 'Échantillonné automatiquement depuis la source' : 'Saisie manuelle'}"></td>
-                    <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, c.sensitivity)}</select></td>
+                    <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, c.sensitivity)}</select>${(() => { const r = dictColResolved(tn, h, 'sensitivity'); return (!c.sensitivity && r.from) ? `<div class="text-[9px] text-emerald-600 mt-0.5" title="Défini sur l'objet métier — c'est là qu'il faut le modifier">hérite : ${escapeHTML(r.value)}</div>` : ''; })()}</td>
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select></td>
                     <td class="p-2">${vlSelectHtml(tn, h, c.valueListId)}</td>
                 </tr>`;
@@ -3569,6 +3575,52 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const fe = (st.elements || []).find(e => e.id === feId); if (!fe) return;
             fe[f] = v; persistAppState(); renderGovernance();
         }
+        /* ---- Le SENS appartient à l'objet métier, pas à la colonne source ----
+           Jusqu'ici cette vue écrivait définition, exemples, sensibilité et terme sur la COLONNE
+           mappée. Trois conséquences : on documentait un détail technique au lieu du concept, un
+           attribut non mappé n'était pas documentable du tout, et le même concept alimenté par
+           deux colonnes devait être saisi deux fois. On porte donc ces informations sur l'attribut
+           de l'objet, et la colonne technique n'est plus qu'une provenance, affichée discrètement.
+           La colonne conserve ses propres champs : ils l'emportent si quelqu'un les a remplis,
+           sinon elle hérite de l'objet — rien de ce qui a été saisi n'est perdu. */
+        function boAttrWrite(boId, stId, elId, f, v) {
+            if (stId) updateFacetElement(boId, stId, elId, f, v);
+            else updateBoElement(boId, elId, f, v);
+        }
+        // Reprise unique de l'existant : ce qui avait été saisi sur la colonne remonte sur
+        // l'attribut, pour que la bascule ne fasse pas disparaître le travail déjà fait.
+        function boAttrLiftFromColumn(bo) {
+            let moved = 0;
+            const lift = (elm, mp) => {
+                if (!mp) return;
+                const dc = ((state.governance.dictionary[mp.table] || {}).columns || {})[mp.col];
+                if (!dc) return;
+                ['definition', 'examples', 'sensitivity', 'term'].forEach(f => {
+                    if (!elm[f] && dc[f]) { elm[f] = dc[f]; moved++; }
+                });
+            };
+            (boCoreElements(bo) || []).forEach(e2 => lift(e2, (e2.mappings || [])[0]));
+            getBoFacets(bo).forEach(st => (st.elements || []).forEach(fe => lift(fe, fe.col ? { table: st.table, col: fe.col } : null)));
+            if (moved) persistAppState();
+            return moved;
+        }
+        // Ce que voit le reste de l'application pour une colonne : sa valeur propre, sinon celle
+        // de l'attribut métier qu'elle alimente.
+        function dictColResolved(tableName, col, field) {
+            const own = (((state.governance.dictionary[tableName] || {}).columns || {})[col] || {})[field];
+            if (own) return { value: own, from: null };
+            for (const bo of (state.governance.businessObjects || [])) {
+                for (const e2 of (boCoreElements(bo) || []))
+                    if ((e2.mappings || []).some(m => m.table === tableName && m.col === col) && e2[field])
+                        return { value: e2[field], from: bo.name, attr: e2.name };
+                for (const st of getBoFacets(bo))
+                    for (const fe of (st.elements || []))
+                        if (st.table === tableName && fe.col === col && fe[field])
+                            return { value: fe[field], from: bo.name, attr: fe.name };
+            }
+            return { value: '', from: null };
+        }
+
         function boElementRowHtml(bo, elm, names) {
             return `<tr class="hover:bg-slate-50 align-top" ondragover="reorderDragOver(event,'boel')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'boel','${elm.id}',(f,t)=>boElReorder('${bo.id}',f,t))">
                 <td class="p-2 text-center align-middle whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'boel','${elm.id}')" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-emerald-600 select-none" title="Glisser pour ordonner par importance">⠿</span><br><span class="inline-flex leading-none">${[['top','⤒','Tout en haut'],['up','▲','Monter'],['down','▼','Descendre'],['bottom','⤓','Tout en bas']].map(([w,ic,ti])=>`<button onclick="boMoveEl('${bo.id}','${elm.id}','${w}')" class="text-slate-300 hover:text-emerald-600 text-[10px] font-black px-0.5" title="${ti}">${ic}</button>`).join('')}</span></td>
@@ -10993,8 +11045,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '7.8.0';
+        const APP_VERSION = '7.9.0';
         const APP_CHANGELOG = [
+            { v: '7.9.0', d: '2026-07-29', t: 'Le sens appartient à l\'objet métier, plus à la colonne source', items: [
+                '<b>Définition, exemples, sensibilité et terme du glossaire s\'enregistrent désormais sur l\'attribut de l\'objet métier</b>, et non plus sur la colonne mappée. On documente le concept, pas un détail technique — et un même concept alimenté par deux colonnes ne se saisit plus deux fois.',
+                '<b>Le nom de l\'attribut devient modifiable dans cette vue.</b> Il n\'y était affiché qu\'en texte figé : impossible de corriger un libellé sans passer par la fiche de l\'objet.',
+                '<b>Un attribut sans colonne rattachée se documente maintenant aussi.</b> Auparavant la ligne entière était grisée avec « mappez cet attribut pour le documenter » — on ne pouvait donc pas décrire un concept avant de savoir d\'où il viendrait.',
+                '<b>La colonne technique passe au second plan</b> : elle n\'occupe plus une colonne du tableau mais s\'affiche en petit sous le nom de l\'attribut, comme une simple provenance. Les attributs des sources cessent ainsi d\'occuper le premier plan.',
+                '<b>Rien de ce qui a été saisi n\'est perdu.</b> À l\'ouverture, ce qui existait sur les colonnes remonte une fois sur les attributs correspondants — sans jamais écraser une valeur déjà présente sur l\'attribut.',
+                '<b>Le dictionnaire technique hérite.</b> Une colonne sans définition propre affiche celle de l\'objet métier en filigrane, avec la mention de l\'objet et de l\'attribut d\'origine. Une valeur saisie directement sur la colonne reste prioritaire.'] },
             { v: '7.8.0', d: '2026-07-29', t: 'Robustesse d\'ingestion : encodages, lectures fausses refusées, feuille Excel', items: [
                 '<b>L\'encodage est maintenant tranché sur les octets AVANT la lecture</b> — marque d\'ordre, présence d\'octets nuls, puis validation UTF-8 stricte — au lieu d\'être deviné par essais après un échec. Un fichier Windows/ANSI ou UTF-16 est reconnu du premier coup, et l\'application dit lequel elle a détecté et pourquoi.',
                 '<b>Deux corruptions silencieuses corrigées</b>, mesurées sur le moteur réel : un fichier <b>UTF-16 relu en Latin-1 ne provoquait aucune erreur</b> — on obtenait une unique colonne nommée « ÿþI » et des octets nuls partout, source marquée prête ; et la réparation « ignorer les lignes fautives » appliquée à un fichier ANSI <b>ne conservait aucune ligne</b> — une table vide, marquée prête elle aussi.',
