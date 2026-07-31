@@ -316,6 +316,19 @@
     .v7-fbtn:hover{background:rgba(255,255,255,.06);color:var(--v7-side-txt)}
     body.v7-collapsed .v7-fbtn{justify-content:center}
     .v7-main{flex:1;min-width:0;display:flex;flex-direction:column}
+    /* ---- Mode consultation de la Gouvernance ----
+       Choix de conception : on INTERDIT PAR DÉFAUT et on autorise par marquage explicite
+       (data-ro="keep"). Oublier un marquage rend une commande de LECTURE invisible — visible,
+       signalable, sans conséquence. L'inverse — oublier d'interdire une commande d'écriture —
+       laisserait un lecteur modifier la gouvernance sans s'en rendre compte. La règle échoue
+       donc du côté sûr. Un conteneur marqué protège toute sa descendance. */
+    [data-gov-ro="1"] :is(input,select,textarea,button,a[onclick],[contenteditable="true"]):not([data-ro="keep"]):not([data-ro="keep"] *),
+    [data-gov-ro="1"] [draggable="true"]:not([data-ro="keep"]):not([data-ro="keep"] *){display:none !important}
+    .gov-ro-val{display:inline-block;font-size:12px;line-height:1.4;color:var(--v7-txt,#0f172a);
+      white-space:pre-wrap;word-break:break-word;max-width:100%}
+    .gov-ro-band{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+      background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;border-radius:12px;
+      padding:.55rem .8rem;margin-bottom:1rem;font-size:11.5px;line-height:1.35}
     .v7-top{position:sticky;top:0;z-index:30;background:var(--v7-surface);border-bottom:1px solid var(--v7-border);
             display:flex;align-items:center;gap:12px;padding:11px 20px;box-shadow:var(--v7-sh)}
     .v7-top h1{font-size:16px;font-weight:800;color:var(--v7-txt);letter-spacing:-.3px;line-height:1.15;margin:0}
@@ -1488,9 +1501,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="landmark" class="w-5 h-5"></i> Gouvernance des données</h2>
-                    <span id="persistStatus" class="text-xs text-slate-400"></span>
+                    <div class="flex items-center gap-3">
+                        <label data-ro="keep" class="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer select-none border border-slate-200 rounded-lg px-2.5 py-1.5 hover:border-indigo-300" title="Masquer toutes les commandes de modification de la Gouvernance : on ne peut plus que consulter. Le reste de l'outil n'est pas affecté.">
+                            <input type="checkbox" id="govRoChk" data-ro="keep" onchange="govSetReadOnly(this.checked)"> 👁 Mode consultation
+                        </label>
+                        <span id="persistStatus" class="text-xs text-slate-400"></span>
+                    </div>
                 </div>
                 <div id="govFamTabs" class="flex items-center gap-1.5 flex-wrap mb-4"></div>
+                <div id="govRoBand" class="hidden"></div>
                 <div id="govContent"></div>
             </div>
             <input type="file" id="govImportFile" accept=".json" class="hidden" onchange="importGovernanceBundle(event)">
@@ -2098,7 +2117,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function graphZoom(which, f) { if (which === 'mcd' && mcdIsSvg()) { const svg = el('mcdSvg'); if (!svg) return; const r = svg.getBoundingClientRect(), mx = r.width / 2, my = r.height / 2, nk = Math.max(0.15, Math.min(3, svgG.k * f)); svgG.tx = mx - (mx - svgG.tx) * (nk / svgG.k); svgG.ty = my - (my - svgG.ty) * (nk / svgG.k); svgG.k = nk; svgApplyTransform(); return; } const g = graphInstanceOf(which); if (g) g.zoom(f, { x: g.getWidth() / 2, y: g.getHeight() / 2 }); }
         function graphFit(which) { if (which === 'mcd' && mcdIsSvg()) { svgFitAll(); return; } const g = graphInstanceOf(which); if (g) g.fitView(20); }
         function graphToolbarHtml(which) {
-            return `<span class="inline-flex gap-1">
+            return `<span class="inline-flex gap-1" data-ro="keep">
                 <button onclick="graphZoom('${which}', 1.25)" class="text-[11px] bg-white border border-slate-300 w-6 h-6 rounded font-black text-slate-600 hover:bg-slate-100" title="Zoom avant">+</button>
                 <button onclick="graphZoom('${which}', 0.8)" class="text-[11px] bg-white border border-slate-300 w-6 h-6 rounded font-black text-slate-600 hover:bg-slate-100" title="Zoom arrière">−</button>
                 <button onclick="graphFit('${which}')" class="text-[11px] bg-white border border-slate-300 px-2 h-6 rounded font-bold text-slate-600 hover:bg-slate-100" title="Recentrer">⤢</button>
@@ -3001,11 +3020,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 groups.forEach(g => { nShown++; if (g.fold) nFolded += g.members.length; rowsHtml += grpHtml(g); });
             });
             return `<div class="flex items-center gap-3 mb-4 flex-wrap">
-                    <select onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
-                    <button onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
+                    <select data-ro="keep" onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
+                    <button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité, termes et nombre de valeurs par fichier CSV ou Excel">⬆ Remplir par fichier</button>
                     <button onclick="boAttrSampleAll('${bo.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Prendre de vrais exemples dans les sources rattachées, pour tous les attributs — les exemples saisis à la main ne sont pas touchés">⟳ Échantillonner les exemples</button>
-                    <button onclick="boToggleFold()" class="text-xs px-3 py-1.5 rounded-lg font-bold border ${fold ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}" title="${fold ? 'Vue métier : les colonnes numérotées (TEL_1, TEL_2…) sont repliées en un seul attribut « 1 à n valeurs ». Cliquer pour voir chaque colonne.' : 'Vue technique : chaque colonne numérotée est un attribut distinct. Cliquer pour revenir à la lecture métier.'}">${fold ? '◉ Vue métier' : '○ Vue technique'}</button>
+                    <button data-ro="keep" onclick="boToggleFold()" class="text-xs px-3 py-1.5 rounded-lg font-bold border ${fold ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}" title="${fold ? 'Vue métier : les colonnes numérotées (TEL_1, TEL_2…) sont repliées en un seul attribut « 1 à n valeurs ». Cliquer pour voir chaque colonne.' : 'Vue technique : chaque colonne numérotée est un attribut distinct. Cliquer pour revenir à la lecture métier.'}">${fold ? '◉ Vue métier' : '○ Vue technique'}</button>
                     ${master ? `<span class="text-[11px] text-slate-400">Table maître : <strong>${escapeHTML(master.name)}</strong></span>` : '<span class="text-[11px] text-amber-600 font-bold">⚠️ pas de table maître chargée</span>'}
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -3034,6 +3053,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function switchGovTab(tab) { govState.tab = tab; renderGovernance(); renderNav(); }
 
         function renderGovernance() {
+            govApplyReadOnly();
             // Chips de la famille active (2 à 4 écrans) — le détail sous la famille, jamais 12 onglets d'un coup.
             const famBar = el('govFamTabs');
             if (famBar) {
@@ -3044,7 +3064,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const cur = govTabs.find(t => t.g === govState.tab) || govTabs[0];
                 const sibl = govTabs.filter(t => t.fam === cur.fam && !t.hidden);
                 famBar.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">${escapeHTML(cur.fam || '')}</span>` + sibl.map(t =>
-                    `<button onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === activeG ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('')
+                    `<button data-ro="keep" onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === activeG ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('')
                     + `<span class="flex-grow"></span><button onclick="giOpen()" aria-label="Import en masse de la gouvernance" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">⬆ Import en masse</button>`;
             }
             const c = el('govContent');
@@ -3056,7 +3076,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 if (selBo) getBoHierarchies(selBo).forEach(h2 => { if (h2.typeCol) fillBoHierLevelValues(selBo.id, h2.id); });
                 if (selBo) fillBoVolumetry(selBo.id, 'bo-vol-' + selBo.id);
             }
-            else if (govState.tab === 'model') { c.innerHTML = '<div class="flex justify-end gap-2 mb-2">' + graphToolbarHtml('model') + '<button onclick="exportGraphImage(\'model\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l\'image</button></div><div id="modelGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Diagramme du modèle métier : 🏛️ objets (vert), ◆ compositions (ce qui fait partie de l\'objet), → références entre objets, cardinalités sur les liens. Construit via l\'assistant "Concevoir depuis le modèle de données".</p>'; renderObjectModelDiagram(); requestAnimationFrame(() => reflowGraph('model')); }
+            else if (govState.tab === 'model') { c.innerHTML = '<div class="flex justify-end gap-2 mb-2">' + graphToolbarHtml('model') + '<button data-ro="keep" onclick="exportGraphImage(\'model\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l\'image</button></div><div id="modelGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Diagramme du modèle métier : 🏛️ objets (vert), ◆ compositions (ce qui fait partie de l\'objet), → références entre objets, cardinalités sur les liens. Construit via l\'assistant "Concevoir depuis le modèle de données".</p>'; renderObjectModelDiagram(); requestAnimationFrame(() => reflowGraph('model')); }
             else if (govState.tab === 'perimeters') c.innerHTML = renderGovPerimeters();
             else if (govState.tab === 'glossary') c.innerHTML = renderGovGlossary();
             else if (govState.tab === 'vlists') c.innerHTML = renderValueLists();
@@ -3079,6 +3099,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 + '</div>'
                 + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer" title="Par défaut, un fichier source est intégré à l\'application qui le produit. Décochez pour afficher chaque fichier séparément."><input type="checkbox" ' + (govState.lineageFoldSrc !== false ? 'checked' : '') + ' onchange="govState.lineageFoldSrc=this.checked; renderLineageGraph()"> 📦 Sources dans l\'appli</label>' + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
+            govProjectValues();
         }
 
         // ---- Dictionnaire (définition fonctionnelle + technique, source de la donnée) ----
@@ -3088,7 +3109,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             // Mode PAR OBJET MÉTIER (référence) ou par table technique (détail).
             const bos = state.governance.businessObjects || [];
             if (govState.dictMode === undefined) govState.dictMode = bos.length ? 'bo' : 'table';
-            const modeBar = `<div class="flex items-center gap-1.5 mb-4">
+            const modeBar = `<div class="flex items-center gap-1.5 mb-4" data-ro="keep">
                 <button onclick="govState.dictMode='bo'; renderGovernance()" class="text-xs font-bold px-3 py-1.5 rounded-lg border ${govState.dictMode === 'bo' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}">🏛️ Par objet métier</button>
                 <button onclick="govState.dictMode='table'; renderGovernance()" class="text-xs font-bold px-3 py-1.5 rounded-lg border ${govState.dictMode !== 'bo' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}">📄 Par table technique</button>
             </div>`;
@@ -3131,7 +3152,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
             return modeBar + wfBar + `
                 <div class="flex items-center gap-4 mb-5">
-                    <select onchange="govState.dictTable=this.value; renderGovernance()" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-bold text-sm">${names.map(n => `<option ${n === tn ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
+                    <select data-ro="keep" onchange="govState.dictTable=this.value; renderGovernance()" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-bold text-sm">${names.map(n => `<option ${n === tn ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
                     <span class="text-xs px-2 py-1 rounded font-bold ${d.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${d.status}</span>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -3168,7 +3189,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // dans la fiche d'audit d'une colonne et dans l'écran des listes.
         function vlSelectHtml(tableName, col, cur) {
             const T = escapeHTML(String(tableName).replace(/'/g, "\\'")), C = escapeHTML(String(col).replace(/'/g, "\\'"));
-            if (!vlList().length) return `<a onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
+            if (!vlList().length) return `<a data-ro="keep" onclick="openGovTab('vlists')" class="text-[10px] text-indigo-600 font-bold cursor-pointer underline">créer une liste →</a>`;
             return `<select onchange="vlBind('${T}','${C}', this.value)" title="Rattacher cet attribut à une liste de valeurs : l'audit contrôlera l'appartenance au référentiel au lieu de signaler les valeurs rares." class="border p-1.5 rounded text-xs bg-white max-w-[160px] ${cur ? 'border-indigo-400 bg-indigo-50/60 font-bold text-indigo-800' : 'border-slate-200'}"><option value="">— aucune —</option>${vlList().map(L => `<option value="${L.id}" ${cur === L.id ? 'selected' : ''}>${escapeHTML(L.name)}</option>`).join('')}</select>`;
         }
         function vlBindPickTable(id) {
@@ -3315,7 +3336,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <div class="flex items-end gap-2 flex-wrap mt-2">
                         <div><label class="text-[9px] uppercase font-bold text-slate-400 block" title="Ne retenir que les codes portant ce statut. Laisser vide pour accepter tous les codes de la liste.">Statut « actif »</label>
                         <input type="text" value="${escapeHTML(L.activeStatus || '')}" onchange="vlSet('${L.id}','activeStatus',this.value)" placeholder="ex: ACTIF (facultatif)" class="border border-slate-300 rounded p-1.5 text-[11px] w-40"></div>
-                        <button onclick="vlPreview('${L.id}', this)" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1.5 rounded font-bold text-slate-600">👁 Aperçu des codes</button>
+                        <button data-ro="keep" onclick="vlPreview('${L.id}', this)" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1.5 rounded font-bold text-slate-600">👁 Aperçu des codes</button>
                         <div id="vl-prev-${L.id}" class="flex-grow"></div>
                     </div>
                     <div class="mt-2 flex items-end gap-2 flex-wrap border-t border-slate-100 pt-2">
@@ -3433,7 +3454,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 else if (hasCtxRules) badge = '<span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">maîtrise contextuelle</span>';
                 else badge = '<span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">ok</span>';
                 const active = bo.id === govState.selectedBoId;
-                return `<button onclick="govState.selectedBoId='${bo.id}'; renderGovernance()" class="w-full text-left p-3 rounded-lg border mb-2 transition-colors ${active ? 'bg-emerald-50 border-emerald-300 shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-200'}">
+                return `<button data-ro="keep" onclick="govState.selectedBoId='${bo.id}'; renderGovernance()" class="w-full text-left p-3 rounded-lg border mb-2 transition-colors ${active ? 'bg-emerald-50 border-emerald-300 shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-200'}">
                     <div class="flex items-center gap-1.5 mb-1"><span>🏛️</span><span class="font-bold text-sm text-slate-800 truncate">${escapeHTML(bo.name)}</span></div>
                     <div class="flex items-center gap-1.5 flex-wrap">${badge}<span class="text-[10px] text-slate-400">${sources.length} source(s) · ${(bo.elements || []).length} attribut(s)</span></div>
                 </button>`;
@@ -3505,7 +3526,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (!(state.governance.assets || []).length) return '<span class="text-[10px] text-slate-200">—</span>';
             const n = (elm.usedBy || []).length;
             const diff = elm.sourceApp && elm.sourceApp !== ((bo.producedBy || [])[0] || '');
-            return `<button onclick="setBoTab('usage')" class="text-[10px] font-bold rounded-full px-1.5 py-0.5 border ${n ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400'}" title="${n ? n + ' utilisateur(s) déclaré(s)' : 'Aucun usage déclaré'} — cliquer pour ouvrir Applis & usages">${n ? '🔌 ' + n : '😴'}</button>${diff ? `<button onclick="setBoTab('usage')" class="text-[10px] font-black text-amber-600 ml-0.5" title="Source différente de celle de l'objet — cliquer pour ouvrir Applis & usages">≠</button>` : ''}`;
+            return `<button data-ro="keep" onclick="setBoTab('usage')" class="text-[10px] font-bold rounded-full px-1.5 py-0.5 border ${n ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400'}" title="${n ? n + ' utilisateur(s) déclaré(s)' : 'Aucun usage déclaré'} — cliquer pour ouvrir Applis & usages">${n ? '🔌 ' + n : '😴'}</button>${diff ? `<button data-ro="keep" onclick="setBoTab('usage')" class="text-[10px] font-black text-amber-600 ml-0.5" title="Source différente de celle de l'objet — cliquer pour ouvrir Applis & usages">≠</button>` : ''}`;
         }
         // Tous les attributs (cœur + facettes) sous forme de lignes homogènes.
         function boAllAttrRows(bo) {
@@ -4238,7 +4259,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <div class="flex items-center gap-2 flex-wrap mb-2">
                         <span class="text-xl">🏛️</span>
                         <input type="text" value="${escapeHTML(bo.name)}" onchange="updateBusinessObject('${bo.id}','name',this.value)" class="font-black text-base border border-slate-300 p-1.5 rounded w-64 bg-white">
-                        <button onclick="openBoAudit('${bo.id}')" class="ml-auto text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm" title="Auditer l'objet dans sa globalité : gouvernance, hiérarchies, règles métier">🔎 Audit global</button>
+                        <button data-ro="keep" onclick="openBoAudit('${bo.id}')" class="ml-auto text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm" title="Auditer l'objet dans sa globalité : gouvernance, hiérarchies, règles métier">🔎 Audit global</button>
                         <button onclick="removeBusinessObject('${bo.id}')" class="text-red-500 hover:text-red-700 p-1" title="Supprimer l'objet"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -4263,7 +4284,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             html += `<div class="border-b border-slate-200 px-4 flex gap-1 flex-wrap bg-slate-50/60">`;
             tabs.forEach(([id, lbl, n]) => {
                 const active = id === cur;
-                html += `<button onclick="setBoTab('${id}')" class="px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors ${active ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}">${lbl}${n != null && n > 0 ? ` <span class="ml-0.5 text-[10px] ${active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'} rounded-full px-1.5 py-0.5">${n}</span>` : ''}</button>`;
+                html += `<button data-ro="keep" onclick="setBoTab('${id}')" class="px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors ${active ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}">${lbl}${n != null && n > 0 ? ` <span class="ml-0.5 text-[10px] ${active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'} rounded-full px-1.5 py-0.5">${n}</span>` : ''}</button>`;
             });
             html += `</div><div class="p-4">`;
 
@@ -5354,7 +5375,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             </div>
             <div class="bg-indigo-50/60 border border-indigo-200 rounded-xl p-4 mb-6">
                 <h3 class="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Analyse d'impact — "si cette donnée a un problème, qui est touché ?"</h3>
-                <div class="flex flex-wrap gap-3 items-end">
+                <div class="flex flex-wrap gap-3 items-end" data-ro="keep">
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Table</label><select id="impactTable" onchange="populateImpactCols()" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Choisir...</option>${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select></div>
                     <div><label class="text-xs font-bold text-slate-500 block mb-1">Colonne (optionnel)</label><select id="impactCol" class="border border-slate-300 p-2 rounded text-sm bg-white"><option value="">Toute la table</option></select></div>
                     <button onclick="runImpactAnalysis()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">Analyser l'impact</button>
@@ -5390,7 +5411,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                             return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>
                         ${(() => { const objs = appBusinessObjects(a); return objs.length ? `<div class="text-[10px] uppercase font-bold text-emerald-600 mb-1">🏛️ Objets métier alimentés <span class="text-slate-300 normal-case font-normal">— déduits des sources ci-dessus (l'application y est rattachée automatiquement)</span></div>
                         <div class="flex flex-wrap gap-1.5 mb-2">${objs.map(bo => { const isProd = (bo.producedBy || []).includes(a.id), isCons = (bo.consumedBy || []).includes(a.id);
-                            return `<button onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
+                            return `<button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
                         ${(() => { const d = appDownstream(a); return (d.srcs.length && (d.bos.length || d.consumers.length)) ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>` : ''; })()}` : ''}
                         ${kind === 'process' ? `
                         <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -5529,7 +5550,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const bos = state.governance.businessObjects || [];
             const ids = ent.boIds || [];
             const chips = ids.map(id => { const bo = bos.find(b => b.id === id); if (!bo) return '';
-                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
             const remain = bos.filter(b => !ids.includes(b.id));
             return `<div class="flex flex-wrap items-center gap-1.5 mb-2">
                 <span class="text-[10px] uppercase font-bold text-emerald-600">🏛️ Objets métier</span>
@@ -6423,13 +6444,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <span class="text-xs text-slate-500">La carte du flux (maître → référentiel → consommateurs), enrichie de la fraîcheur et de la distorsion mesurées. Elle lit <b>les mêmes données</b> que « Bout en bout » (resynchronisée à l'ouverture) ; ici, centrée sur les <b>tables &amp; applications mesurables</b>.</span>
                 <div class="ml-auto flex items-center gap-2">
                     <div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">
-                        <button onclick="lfSetView('systems')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-slate-800 text-white'}">Vue systèmes</button>
-                        <button onclick="lfSetView('attrs')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">Vue attributs</button>
-                        <button onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
+                        <button data-ro="keep" onclick="lfSetView('systems')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-slate-800 text-white'}">Vue systèmes</button>
+                        <button data-ro="keep" onclick="lfSetView('attrs')" class="px-3 py-1.5 ${lfView === 'attrs' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">Vue attributs</button>
+                        <button data-ro="keep" onclick="openGovTab('lineage')" title="Graphe de bout en bout : sources ↔ tables ↔ objets métier ↔ applications" class="px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border-l border-slate-300">🕸️ Bout en bout</button>
                     </div>
                     <div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold" title="Le flux se lit en OBJETS MÉTIER : les tables techniques sont absorbées par l'objet qu'elles composent. La vue technique les détaille.">
-                        <button onclick="lfSetGrain('bo')" class="px-3 py-1.5 ${m.grain === 'table' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-emerald-600 text-white'}">🏛️ Vue métier</button>
-                        <button onclick="lfSetGrain('table')" class="px-3 py-1.5 ${m.grain === 'table' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">📄 Vue technique</button>
+                        <button data-ro="keep" onclick="lfSetGrain('bo')" class="px-3 py-1.5 ${m.grain === 'table' ? 'bg-white text-slate-500 hover:bg-slate-50' : 'bg-emerald-600 text-white'}">🏛️ Vue métier</button>
+                        <button data-ro="keep" onclick="lfSetGrain('table')" class="px-3 py-1.5 ${m.grain === 'table' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">📄 Vue technique</button>
                     </div>
                     ${m.grain === 'table' ? `<label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Afficher les objets métier (vues) et leurs sources sur la carte"><input type="checkbox" ${m.showObjects ? 'checked' : ''} onchange="lfToggleObjects(this.checked)"> 🏛️ Objets métier</label>
                     <label class="text-[11px] font-semibold text-slate-600 flex items-center gap-1 cursor-pointer" title="Par défaut, les fichiers sources sont INTÉGRÉS à l'application qui les produit (c'est elle le maître). Cochez pour afficher chaque fichier comme une case distincte."><input type="checkbox" ${m.hideSources === false ? 'checked' : ''} onchange="lfToggleSources(this.checked)"> 📄 Détailler les sources</label>` : ''}
@@ -6437,7 +6458,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         if (!bos.length) return '';
                         const cur = m.focusBo || '';
                         return `<label class="text-[11px] font-semibold ${cur ? 'text-emerald-700' : 'text-slate-600'} flex items-center gap-1" title="N'afficher que ce référentiel et son voisinage : qui l'alimente, qui le consomme.">🏛️ Objet métier
-                            <select onchange="lfSetFocusBo(this.value)" class="border ${cur ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 bg-white'} rounded p-1 text-[11px] ml-1 max-w-[14rem]">
+                            <select data-ro="keep" onchange="lfSetFocusBo(this.value)" class="border ${cur ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 bg-white'} rounded p-1 text-[11px] ml-1 max-w-[14rem]">
                                 <option value="">— tous les objets —</option>
                                 ${bos.map(b2 => `<option value="${b2.id}" ${cur === b2.id ? 'selected' : ''}>${escapeHTML(b2.name)}</option>`).join('')}
                             </select></label>
@@ -6449,7 +6470,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <button onclick="lfResetLayout()" title="Réorganiser automatiquement (efface les déplacements manuels)" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">⇄ Réorganiser</button>
                     ${gfxFullBtn('lfWrap', 'lfDrawGraph')}
                     <label class="text-[11px] text-slate-500 font-semibold">Seuil de distorsion (%)
-                    <input type="number" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
+                    <input type="number" data-ro="keep" step="0.1" min="0" value="${m.threshold}" onchange="lfSetThreshold(this.value)" class="w-16 border border-slate-300 rounded p-1 text-xs ml-1"></label>
                 </div>
             </div>`;
             html += `<div class="gfx-hide-full grid grid-cols-2 md:grid-cols-4 gap-3 my-3">
@@ -7370,7 +7391,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function renderSrcWatch() {
             const tables = swReadyTables();
             if (!tables.length) return emptyStateHtml('🛰️', 'Aucune source à surveiller', 'Chargez au moins une source (onglet Sources) pour suivre sa fraîcheur, sa dérive, son contrat et ses changements.', '', '');
-            const tabBtn = (k, lbl) => `<button onclick="swSet('tool','${k}')" class="px-3 py-1.5 text-xs font-bold rounded-lg border ${swState.tool === k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}">${lbl}</button>`;
+            const tabBtn = (k, lbl) => `<button data-ro="keep" onclick="swSet('tool','${k}')" class="px-3 py-1.5 text-xs font-bold rounded-lg border ${swState.tool === k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}">${lbl}</button>`;
             let html = `<p class="text-sm text-slate-500 mb-3">Surveillez les sources reçues d'applications amont : fraîcheur, dérive, conformité au schéma attendu, changements entre chargements, cohérence entre sources.</p>
                 <div class="flex gap-2 mb-4 flex-wrap">${tabBtn('monitor', '📡 Moniteur & fraîcheur')}${tabBtn('contract', '📜 Contrat de données')}${tabBtn('delta', '🔁 Changements (delta)')}${tabBtn('recon', '🔗 Réconciliation')}</div>`;
 
@@ -10407,6 +10428,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             </div>`;
         }
         function renderGovCatalog() {
+            // Le catalogue est un écran de CONSULTATION de bout en bout : recherche, facettes,
+            // tri, bascule liste/grille. Rien n'y écrit, tout y reste donc actif.
             const ix = catBuildIndex();
             const g = state.governance;
             const tablesN = Object.values(state.tables).filter(t => t.status === 'ready');
@@ -10415,14 +10438,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const list = catSort(ix.filter(e2 => catMatch(e2)));
             catRes = list;
             const chip = [];
-            CAT_FACETS.forEach(f => catState.f[f.key].forEach(v => chip.push(`<button onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="achip-ux" aria-label="Retirer le filtre ${escapeHTML(f.lab(v))}">${escapeHTML(f.lab(v))} ✕</button>`)));
+            CAT_FACETS.forEach(f => catState.f[f.key].forEach(v => chip.push(`<button data-ro="keep" onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="achip-ux" aria-label="Retirer le filtre ${escapeHTML(f.lab(v))}">${escapeHTML(f.lab(v))} ✕</button>`)));
             const facetsHtml = CAT_FACETS.map(f => {
                 const opts = f.opts(ix).filter(v => v != null && v !== '');
                 const rows = opts.map(v => {
                     const on = catState.f[f.key].includes(v);
                     const c2 = ix.filter(e2 => catMatch(e2, f.key) && f.of(e2) === v).length;
                     if (!c2 && !on) return '';
-                    return `<button onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="cat-fitem ${on ? 'on' : ''}" role="checkbox" aria-checked="${on}">
+                    return `<button data-ro="keep" onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="cat-fitem ${on ? 'on' : ''}" role="checkbox" aria-checked="${on}">
                         <span class="w-3.5 h-3.5 rounded border ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'} text-[9px] flex items-center justify-center">${on ? '✓' : ''}</span>
                         <span class="truncate">${escapeHTML(f.lab(v))}</span><span class="cnt">${c2}</span></button>`;
                 }).join('');
@@ -10434,10 +10457,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <h2 class="text-lg font-black flex items-center gap-2 m-0">🔎 Catalogue de données</h2>
                 <p class="text-[12px] text-slate-300 mt-0.5 mb-3">Trouvez la donnée dont vous avez besoin, vérifiez si vous pouvez lui faire confiance, comprenez comment l'utiliser.</p>
                 <div class="cat-bigsearch"><span class="text-lg text-slate-400" aria-hidden="true">🔍</span>
-                    <input id="catQ" value="${escapeHTML(catState.q)}" oninput="catSet('q', this.value)" placeholder="Rechercher une table, une donnée, un domaine, un propriétaire…" aria-label="Rechercher dans le catalogue">
+                    <input data-ro="keep" id="catQ" value="${escapeHTML(catState.q)}" oninput="catSet('q', this.value)" placeholder="Rechercher une table, une donnée, un domaine, un propriétaire…" aria-label="Rechercher dans le catalogue">
                     <span class="text-[11px] text-slate-400 border-l border-slate-200 pl-3 whitespace-nowrap hidden sm:inline">dans tout le catalogue</span></div>
                 <div class="flex items-center gap-2 mt-2.5 flex-wrap"><span class="text-[11px] text-slate-400">Essayez :</span>
-                    ${exs.map(x => `<button onclick="catSet('q', ${JSON.stringify(String(x)).replace(/"/g, '&quot;')})" class="cat-ex">${escapeHTML(x)}</button>`).join('')}</div>
+                    ${exs.map(x => `<button data-ro="keep" onclick="catSet('q', ${JSON.stringify(String(x)).replace(/"/g, '&quot;')})" class="cat-ex">${escapeHTML(x)}</button>`).join('')}</div>
                 <div class="flex gap-7 mt-3.5 flex-wrap">
                     <span class="cat-hs"><b>${ix.length.toLocaleString('fr-FR')}</b>actifs catalogués</span>
                     <span class="cat-hs"><b>${themeList().length}</b>domaines métier</span>
@@ -10448,7 +10471,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             <div class="flex gap-4 items-start">
                 <div class="w-[220px] shrink-0 bg-white border border-slate-200 rounded-xl p-3 sticky top-4 max-h-[70vh] overflow-auto">
                     <div class="flex items-center justify-between mb-2"><span class="text-[11px] font-black uppercase tracking-wide text-slate-400">Affiner</span>
-                    ${chip.length || catState.q ? `<button onclick="catClearFacets()" class="text-[11px] font-bold text-blue-600">Tout effacer</button>` : ''}</div>
+                    ${chip.length || catState.q ? `<button data-ro="keep" onclick="catClearFacets()" class="text-[11px] font-bold text-blue-600">Tout effacer</button>` : ''}</div>
                     ${facetsHtml || '<p class="text-[11px] text-slate-300 italic">Chargez des sources pour peupler le catalogue.</p>'}
                 </div>
                 <div class="flex-1 min-w-0">
@@ -10457,9 +10480,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         ${chip.join('')}
                         <span class="flex-grow"></span>
                         <label class="text-[11px] text-slate-400">Trier</label>
-                        <select onchange="catSet('sort', this.value)" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white" aria-label="Tri des résultats">
+                        <select data-ro="keep" onchange="catSet('sort', this.value)" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white" aria-label="Tri des résultats">
                             ${[['pertinence', 'Pertinence'], ['qualite', 'Qualité'], ['fraicheur', 'Fraîcheur'], ['alpha', 'A → Z']].map(([v, l]) => `<option value="${v}" ${catState.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-                        <div class="seg-ux" role="group" aria-label="Affichage"><button class="${catState.view === 'list' ? 'on' : ''}" onclick="catSet('view','list')" aria-label="Vue liste">▤</button><button class="${catState.view === 'grid' ? 'on' : ''}" onclick="catSet('view','grid')" aria-label="Vue grille">▦</button></div>
+                        <div class="seg-ux" role="group" aria-label="Affichage"><button data-ro="keep" class="${catState.view === 'list' ? 'on' : ''}" onclick="catSet('view','list')" aria-label="Vue liste">▤</button><button data-ro="keep" class="${catState.view === 'grid' ? 'on' : ''}" onclick="catSet('view','grid')" aria-label="Vue grille">▦</button></div>
                     </div>
                     ${list.length ? `<div class="grid gap-3 ${catState.view === 'grid' ? 'md:grid-cols-2' : 'grid-cols-1'}">${list.slice(0, 60).map((e2, i) => catCardHtml(e2, i)).join('')}</div>
                         ${list.length > 60 ? `<p class="text-[11px] text-slate-400 italic mt-2">… ${list.length - 60} autre(s) — précisez la recherche.</p>` : ''}`
@@ -10553,11 +10576,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2"><div class="text-base font-black">${down}</div><div class="text-[10px] text-slate-400">usage(s) aval</div></div>
                 </div></div>
                 ${rel.length ? `<div class="dsect"><h4>Actifs liés (${escapeHTML(e2.dom)})</h4>${rel.map(x => { const [xc, xi, xl] = CAT_TYPES[x.type];
-                    return `<button onclick="catOpenFiche(${relIdx(x)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="cat-tico ${xc}" style="width:26px;height:26px;font-size:12px">${xi}</span><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${escapeHTML(x.title)}</span><span class="block text-[10px] text-slate-400">${xl}</span></span><span class="ml-auto text-slate-300">›</span></button>`; }).join('')}</div>` : ''}`;
+                    return `<button data-ro="keep" onclick="catOpenFiche(${relIdx(x)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="cat-tico ${xc}" style="width:26px;height:26px;font-size:12px">${xi}</span><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${escapeHTML(x.title)}</span><span class="block text-[10px] text-slate-400">${xl}</span></span><span class="ml-auto text-slate-300">›</span></button>`; }).join('')}</div>` : ''}`;
             _catFicheCtx = e2;
             openUxDrawer({ sem: '', title: e2.title, sub: tl + (e2.dom !== '—' ? ' · Domaine ' + e2.dom : '') + (e2.own ? ' · propriétaire ' + e2.own : ''), body, foot: `
-                <button onclick="catGoLineage()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">🕸️ Voir le lineage</button>
-                <button onclick="catUseData()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">➜ Utiliser cette donnée</button>` });
+                <button data-ro="keep" onclick="catGoLineage()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">🕸️ Voir le lineage</button>
+                <button data-ro="keep" onclick="catUseData()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">➜ Utiliser cette donnée</button>` });
             el('uxDrawerTyp').className = 'cat-tico ' + tc; el('uxDrawerTyp').textContent = ti;
             if (t && e2.type === 'column') catFillColType(t.id, t.name, e2.col);
             else if (t) catFillRealTypes(t.id, t.name);
@@ -10594,8 +10617,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             box.innerHTML = `<div class="flex items-center justify-between mb-2">
                 <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »</span>
                 <span class="flex items-center gap-1.5">
-                    <button onclick="catLineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Afficher en plein écran">⛶ Agrandir</button>
-                    <button onclick="catCloseLineage()" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
+                    <button data-ro="keep" onclick="catLineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Afficher en plein écran">⛶ Agrandir</button>
+                    <button data-ro="keep" onclick="catCloseLineage()" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
                 <div id="catLineageWrap" class="h-[460px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
             try {
                 if (catAttrLineageGraph) { try { catAttrLineageGraph.destroy(); } catch (e3) {} catAttrLineageGraph = null; }
@@ -10848,10 +10871,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <select onchange="pvSetAction('${k}',this.value)" class="w-full border border-slate-300 rounded p-1.5 text-[11px] bg-white">${Object.entries(PV_ACTIONS).map(([a2, l2]) => `<option value="${a2}" ${acts[k] === a2 ? 'selected' : ''}>${l2}</option>`).join('')}</select></div>`).join('')}
             </div>
             <div class="flex items-center gap-3 mb-3 flex-wrap">
-                <select id="pvTable" onchange="govState.pvTable=this.value; renderGovernance()" class="border border-slate-300 p-2 rounded-lg bg-white font-bold text-sm">${tables.map(t => `<option ${t.name === tn ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select>
+                <select id="pvTable" data-ro="keep" onchange="govState.pvTable=this.value; renderGovernance()" class="border border-slate-300 p-2 rounded-lg bg-white font-bold text-sm">${tables.map(t => `<option ${t.name === tn ? 'selected' : ''}>${escapeHTML(t.name)}</option>`).join('')}</select>
                 ${nPerso ? `<span class="text-xs bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 font-bold">🔴 ${nPerso} colonne(s) personnelle(s)</span>` : ''}
                 <span class="flex-grow"></span>
-                <button onclick="pvExport(this)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 rounded-lg">🔐 Exporter le jeu anonymisé + rapport</button>
+                <button data-ro="keep" onclick="pvExport(this)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 rounded-lg">🔐 Exporter le jeu anonymisé + rapport</button>
             </div>
             <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2 w-56">Classification</th><th class="p-2">Règle qui s'appliquera à l'export</th></tr></thead>
@@ -11425,6 +11448,73 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
+        /* ==================== MODE CONSULTATION DE LA GOUVERNANCE ====================
+           Beaucoup de gens ouvrent la gouvernance pour LIRE : comprendre ce qui a été défini,
+           relire des définitions, préparer un avis. Aujourd'hui chaque champ de saisie les invite
+           à écrire, et une modification par mégarde ne se voit pas.
+           Cette bascule masque toutes les commandes de modification de la Gouvernance. Elle laisse
+           intactes celles qui servent à LIRE : navigation entre écrans, recherche du catalogue,
+           choix de l'objet ou de la table, onglets d'une fiche, zoom et recentrage des graphes,
+           aperçus et exports.
+           Ce que ce n'est PAS : une sécurité. N'importe qui peut décocher la case, et l'application
+           est un fichier unique lisible. C'est un garde-fou contre la modification accidentelle,
+           et un mode de démonstration — rien de plus, et le bandeau le dit.
+           Portée : la Gouvernance seulement. Charger une source, extraire, analyser restent
+           disponibles ; ces écrans ne touchent pas au référentiel. */
+        const GOV_RO_SCOPE = ['step-9', 'uxDrawer'];
+        function govIsReadOnly() { return !!govState.readOnly; }
+        function govSetReadOnly(on) {
+            govState.readOnly = !!on;
+            govApplyReadOnly();
+            renderGovernance();
+            govProjectValues();
+        }
+        /* Masquer une commande de saisie masque aussi SA VALEUR — or le lecteur vient
+           précisément pour lire ce qui a été renseigné. On projette donc, pour chaque champ
+           masqué qui porte une valeur, un texte à sa place. Un champ vide ne produit rien :
+           inutile d'encombrer la lecture avec ce qui n'a pas été rempli. */
+        function govRoDisplayValue(n) {
+            if (n.tagName.toLowerCase() === 'select') {
+                const o = n.options[n.selectedIndex]; const t = o ? (o.textContent || '').trim() : '';
+                return (!t || t.charAt(0) === '\u2014' || t.charAt(0) === '(') ? '' : t;
+            }
+            if (n.type === 'checkbox' || n.type === 'radio') return n.checked ? '\u2713' : '';
+            if (n.type === 'file') return '';
+            return String(n.value || '').trim();
+        }
+        function govProjectValues() {
+            document.querySelectorAll('.gov-ro-val').forEach(x => x.remove());
+            if (!govIsReadOnly()) return;
+            GOV_RO_SCOPE.forEach(id => {
+                const root = el(id); if (!root || !root.hasAttribute('data-gov-ro')) return;
+                root.querySelectorAll('input,select,textarea').forEach(n => {
+                    if (n.closest('[data-ro="keep"]')) return;
+                    if (getComputedStyle(n).display !== 'none') return;
+                    const v = govRoDisplayValue(n); if (!v) return;
+                    const sp = document.createElement('span');
+                    sp.className = 'gov-ro-val';
+                    sp.textContent = v;
+                    n.insertAdjacentElement('afterend', sp);
+                });
+            });
+        }
+        function govApplyReadOnly() {
+            const on = govIsReadOnly();
+            GOV_RO_SCOPE.forEach(id => { const n = el(id); if (!n) return;
+                if (on) n.setAttribute('data-gov-ro', '1'); else n.removeAttribute('data-gov-ro'); });
+            const chk = el('govRoChk'); if (chk) chk.checked = on;
+            const band = el('govRoBand');
+            if (band) {
+                band.classList.toggle('hidden', !on);
+                band.innerHTML = on ? `<div class="gov-ro-band">
+                    <span class="font-black">👁 Mode consultation</span>
+                    <span>Les commandes de modification de la Gouvernance sont masquées : lecture, navigation, recherche, aperçus et exports restent disponibles.</span>
+                    <span class="text-indigo-500">Ce n’est pas une sécurité — la case se décoche.</span>
+                    <button data-ro="keep" onclick="govSetReadOnly(false)" style="background:#4f46e5;color:#fff" class="ml-auto text-[11px] font-bold px-3 py-1.5 rounded-lg">Reprendre la main</button>
+                </div>` : '';
+            }
+        }
+
         /* ==================== ASSISTANT GUIDÉ (mode wizard) ====================
            Les deux fonctions les plus utiles de l'outil — extraire et contrôler — sont aussi les
            plus intimidantes : l'écran d'extraction offre colonnes calculées, synthèses de tables
@@ -11808,8 +11898,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.0.0';
+        const APP_VERSION = '8.1.0';
         const APP_CHANGELOG = [
+            { v: '8.1.0', d: '2026-07-31', t: 'Mode consultation de la Gouvernance', items: [
+                '<b>Beaucoup de gens ouvrent la gouvernance pour LIRE</b> : comprendre ce qui a été défini, relire des définitions, préparer un avis. Chaque champ de saisie les invitait pourtant à écrire, et une modification par mégarde ne se voyait pas.',
+                'Une case <b>👁 Mode consultation</b> en haut de la Gouvernance masque <b>toutes les commandes de modification</b> de ses 13 écrans. Ce qui sert à lire reste intact : navigation entre écrans, recherche et facettes du catalogue, choix de l’objet ou de la table, onglets d’une fiche, audit d’objet, zoom et recentrage des graphes, aperçus, exports.',
+                '<b>Ce n’est pas une sécurité, et le bandeau le dit</b> : la case se décoche, et l’application reste un fichier unique lisible. C’est un garde-fou contre la modification accidentelle, et un mode de démonstration.',
+                'La règle est <b>« interdit par défaut »</b> : une commande n’est laissée active que si elle est explicitement marquée comme servant à lire. Oublier un marquage rend une commande de lecture invisible — visible et sans conséquence ; l’inverse laisserait un lecteur modifier le référentiel sans s’en apercevoir. La protection échoue du côté sûr.',
+                '<b>Portée : la Gouvernance seulement.</b> Charger une source, extraire, analyser restent disponibles — ces écrans ne touchent pas au référentiel. La bascule vaut pour la session et ne modifie rien de ce qui est enregistré.'] },
             { v: '8.0.0', d: '2026-07-31', t: 'Mode assistant : extraire et contrôler, guidé pas à pas', items: [
                 '<b>Les deux fonctions les plus utiles étaient les plus intimidantes.</b> L\'écran d\'extraction offre colonnes calculées, synthèses de tables liées, hiérarchies aplaties et agrégats ; celui des règles propose vingt types de contrôles. Un nouvel utilisateur ne savait pas par où commencer et abandonnait avant d\'avoir produit quoi que ce soit.',
                 'Un bouton <b>🧭 Assistant</b> dans l\'en-tête ouvre deux parcours guidés, également accessibles depuis <b>⚗️ Extraire</b> et <b>📏 Règles &amp; score</b>. Sur un outil vide, l\'assistant se propose <b>de lui-même, une seule fois</b>.',
