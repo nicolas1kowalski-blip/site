@@ -89,6 +89,84 @@ namespace MesPremiersJeux.Gaze
         private readonly Border _highlight;      // halo posé sur la cible visée
         private readonly Canvas _layer;          // calque des indicateurs
 
+        // --- MÉMOIRE DE PROGRESSION (secousses de tête, clignements longs) ---
+        // Quand le regard quitte une cible, sa progression n'est pas jetée : elle
+        // DÉCROÎT. Si le regard revient sur la MÊME cible dans la foulée, on
+        // repart de ce qui reste au lieu de zéro — décisif quand la tête bouge.
+        private FrameworkElement _memTargetEl;
+        private double _memProgress;
+        private double _memAt = -10;
+        private const double MemWindowSec = 1.6;   // durée de validité de la mémoire
+        private const double MemDecayPerSec = 0.9; // fraction de fixation perdue par seconde
+
+        // --- BRUIT MESURÉ + FIXATION ADAPTATIVE ---
+        // On mesure en continu l'agitation du regard (px par tic, après médiane).
+        // Quand ça tremble, le temps de fixation s'allonge automatiquement (jusqu'à
+        // +60 %) pour éviter les clics accidentels ; quand c'est calme, il revient
+        // à la valeur réglée. C'est ce que font les systèmes pro.
+        private double _jitterEma;
+        private Point _prevMed;
+        private bool _hasPrevMed;
+        private const double JitterCalmPx = 7;   // en deçà : aucun rallongement
+
+        /// <summary>Rallonge la fixation quand le regard tremble (activé par défaut).</summary>
+        public bool AdaptiveDwell { get; set; } = true;
+
+        /// <summary>Agitation mesurée du regard (px par tic, lissée).</summary>
+        public double JitterPx => _jitterEma;
+
+        /// <summary>Temps de fixation réellement appliqué (ms), bruit compris.</summary>
+        public double EffectiveDwellMs
+        {
+            get
+            {
+                if (!AdaptiveDwell) return DwellTime;
+                double over = Math.Max(0, _jitterEma - JitterCalmPx);
+                return DwellTime * (1 + Math.Min(0.6, over / 40.0));
+            }
+        }
+
+        // --- PUITS DE GRAVITÉ : une cible ENGAGÉE (progression entamée) retient
+        // le regard plus fort — rayon d'accroche élargi et hystérésis renforcée —
+        // pour que les secousses ne la fassent pas lâcher. ---
+        private const double EngagedSnapBoost = 1.5;   // rayon d'accroche ×1,5
+        private const double EngagedStickyBoost = 1.8; // hystérésis voisine ×1,8
+
+        // --- RÉGLAGE ÉCLAIR (1 point) : décalage global appliqué avant tout le
+        // reste, mesuré en ~3 s sur une seule étoile centrale. Recale le regard
+        // sans refaire les 9 points. ---
+        private Vector _quickOffset;
+
+        /// <summary>Ajoute le décalage mesuré par le réglage éclair (plafonné).</summary>
+        public void NudgeQuickOffset(Vector v)
+        {
+            _quickOffset += v;
+            if (_quickOffset.Length > 160) _quickOffset = _quickOffset / _quickOffset.Length * 160;
+            Lib.Log.Write("dwell", FormattableString.Invariant(
+                $"Réglage éclair : +({v.X:0};{v.Y:0}) → total ({_quickOffset.X:0};{_quickOffset.Y:0})"));
+        }
+
+        public string QuickOffsetToString() => string.Format(CultureInfo.InvariantCulture,
+            "{0:0.#};{1:0.#}", _quickOffset.X, _quickOffset.Y);
+
+        public void SetQuickOffsetFromString(string s)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(s)) { _quickOffset = new Vector(0, 0); return; }
+                var v = s.Split(';');
+                if (v.Length == 2)
+                    _quickOffset = new Vector(
+                        double.Parse(v[0], CultureInfo.InvariantCulture),
+                        double.Parse(v[1], CultureInfo.InvariantCulture));
+            }
+            catch { _quickOffset = new Vector(0, 0); }
+        }
+
+        /// <summary>Résumé de l'état de précision (affiché dans les réglages).</summary>
+        public string PrecisionInfo => FormattableString.Invariant(
+            $"bruit {_jitterEma:0.0} px · fixation {EffectiveDwellMs:0} ms · dérive ({_drift.X:0};{_drift.Y:0}) · éclair ({_quickOffset.X:0};{_quickOffset.Y:0})");
+
         /// <summary>Vrai : le dwell ne se déclenche que sur des cibles (jeux d'exploration).</summary>
         public bool TargetsOnly { get; set; }
 
@@ -277,6 +355,7 @@ namespace MesPremiersJeux.Gaze
             _headRef = _bias == null ? null : headRef;
             _drift = new Vector(0, 0);              // la dérive apprise repart de zéro
             _gxx = _gxz = _gyy = _gyz = 0;          // les gains « tête » aussi
+            _quickOffset = new Vector(0, 0);        // une vraie étoile remplace l'éclair
             Lib.Log.Write("dwell", _bias == null
                 ? "Correction de précision effacée"
                 : "Correction de précision appliquée (" + _bias.Length + " points"
@@ -331,6 +410,9 @@ namespace MesPremiersJeux.Gaze
 
         private Point ApplyBias(Point raw)
         {
+            // Réglage éclair (1 point) : décalage global, appliqué en premier.
+            raw = new Point(raw.X + _quickOffset.X, raw.Y + _quickOffset.Y);
+
             // Dérive apprise (toujours appliquée, même sans étoile).
             raw = new Point(raw.X + _drift.X, raw.Y + _drift.Y);
 
@@ -435,6 +517,10 @@ namespace MesPremiersJeux.Gaze
 
             // 2) Médiane courte (rejette les à-coups de tête) puis filtre 1 €.
             var med = Median(raw);
+            // Bruit mesuré (px par tic, lissé) : pilote la fixation adaptative.
+            if (_hasPrevMed)
+                _jitterEma += (Distance(med, _prevMed) - _jitterEma) * 0.05;
+            _prevMed = med; _hasPrevMed = true;
             var filtered = new Point(_fx.Filter(med.X, t), _fy.Filter(med.Y, t));
 
             // 3) Zone morte : on ne déplace le point que si le regard s'est vraiment
@@ -505,12 +591,17 @@ namespace MesPremiersJeux.Gaze
             if (tgt != null && _curTargetEl != null && !ReferenceEquals(tgt.Element, _curTargetEl))
             {
                 var cur = _targets.FirstOrDefault(x => ReferenceEquals(x.Element, _curTargetEl));
-                if (cur != null && RectDistance(cur.ScreenRect, screen) <= SnapRadius)
+                // PUITS DE GRAVITÉ : plus la fixation est engagée, plus la cible
+                // en cours retient le regard (rayon élargi, hystérésis renforcée).
+                bool engaged = _progressSec * 1000.0 > EffectiveDwellMs * 0.15;
+                double keepRadius = SnapRadius * (engaged ? EngagedSnapBoost : 1.0);
+                double sticky = StickyMargin * (engaged ? EngagedStickyBoost : 1.0);
+                if (cur != null && RectDistance(cur.ScreenRect, screen) <= keepRadius)
                 {
                     bool insideNew = tgt.ScreenRect.Contains(screen);
                     double dNew = Distance(screen, RectCenter(tgt.ScreenRect));
                     double dCur = Distance(screen, RectCenter(cur.ScreenRect));
-                    if (!insideNew || dNew > dCur - StickyMargin)
+                    if (!insideNew || dNew > dCur - sticky)
                         tgt = cur; // on reste sur la cible engagée
                 }
             }
@@ -519,16 +610,24 @@ namespace MesPremiersJeux.Gaze
             {
                 if (!ReferenceEquals(tgt.Element, _curTargetEl))
                 {
-                    // Nouvelle cible : la progression repart (et le dwell libre s'arrête).
+                    // Nouvelle cible : la progression repart — SAUF si c'est la même
+                    // cible qu'il y a un instant (secousse de tête, clignement) :
+                    // on reprend alors ce qui reste de la progression décrue.
                     _curTargetEl = tgt.Element;
-                    _progressSec = 0;
                     _holdActive = false;
+                    if (ReferenceEquals(tgt.Element, _memTargetEl) && (t - _memAt) < MemWindowSec)
+                    {
+                        double kept = _memProgress - (t - _memAt) * MemDecayPerSec * (EffectiveDwellMs / 1000.0);
+                        _progressSec = Math.Max(0, kept);
+                    }
+                    else _progressSec = 0;
+                    _memTargetEl = null;
                 }
                 _curTargetRect = tgt.ScreenRect;
                 _outSince = -1;
                 if (!saccade) _progressSec += dt;
                 ShowTargetVisuals();
-                if (_progressSec * 1000.0 >= DwellTime)
+                if (_progressSec * 1000.0 >= EffectiveDwellMs)
                 {
                     var c = RectCenter(_curTargetRect);
 
@@ -591,7 +690,7 @@ namespace MesPremiersJeux.Gaze
 
             PlaceIndicator(_holdLocal);
             if (_indicator.Visibility != Visibility.Visible) _indicator.Visibility = Visibility.Visible;
-            double frac = Math.Min(1.0, _progressSec * 1000.0 / DwellTime);
+            double frac = Math.Min(1.0, _progressSec * 1000.0 / EffectiveDwellMs);
             UpdateProgress(frac);
             if (frac >= 1.0) Click(screen, t);
         }
@@ -655,11 +754,19 @@ namespace MesPremiersJeux.Gaze
             var center = new Point((tl.X + br.X) / 2, (tl.Y + br.Y) / 2);
             PlaceIndicator(center);
             if (_indicator.Visibility != Visibility.Visible) _indicator.Visibility = Visibility.Visible;
-            UpdateProgress(Math.Min(1.0, _progressSec * 1000.0 / DwellTime));
+            UpdateProgress(Math.Min(1.0, _progressSec * 1000.0 / EffectiveDwellMs));
         }
 
         private void ClearTarget()
         {
+            // La progression n'est pas jetée : on la mémorise (décroissante) pour
+            // la rendre si le regard revient vite sur la même cible.
+            if (_curTargetEl != null && _progressSec > 0)
+            {
+                _memTargetEl = _curTargetEl;
+                _memProgress = _progressSec;
+                _memAt = _clock.Elapsed.TotalSeconds;
+            }
             _curTargetEl = null;
             _progressSec = 0;
             _outSince = -1;
@@ -702,6 +809,7 @@ namespace MesPremiersJeux.Gaze
         private void Click(Point screen, double t)
         {
             ResetHold();
+            _memTargetEl = null; // pas de reprise de progression après un clic
             _cooldownUntil = t + CooldownSeconds;
             _hasLastClick = true;
             _lastClickScreen = screen;

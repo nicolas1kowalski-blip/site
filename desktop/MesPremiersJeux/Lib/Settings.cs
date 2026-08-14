@@ -23,7 +23,9 @@ namespace MesPremiersJeux.Lib
         public string SupabaseUrl = "";  // sauvegarde en ligne du contenu
         public string SupabaseKey = "";
         public string BiasMap = "";      // correction de précision (« étoile »)
-        public bool PreferCursor;        // pointer via le curseur TD Control
+        public bool PreferCursor;        // (hérité) pointer via le curseur TD Control
+        public string GazeDriver = "";   // pilote du regard : auto | direct | pro | curseur
+        public string QuickOffset = "";  // décalage du « réglage éclair » (x;y)
         public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
         public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
 
@@ -57,12 +59,17 @@ namespace MesPremiersJeux.Lib
                         case "SupabaseKey": s.SupabaseKey = val; break;
                         case "BiasMap": s.BiasMap = val; break;
                         case "PreferCursor": s.PreferCursor = val == "1" || val.ToLowerInvariant() == "true"; break;
+                        case "GazeDriver": s.GazeDriver = val; break;
+                        case "QuickOffset": s.QuickOffset = val; break;
                         case "SpotifyClientId": s.SpotifyClientId = val; break;
                         case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
                     }
                 }
             }
             catch { /* réglages par défaut */ }
+            // Migration : l'ancienne case « curseur TD Control » devient un pilote.
+            if (string.IsNullOrWhiteSpace(s.GazeDriver))
+                s.GazeDriver = s.PreferCursor ? "curseur" : "auto";
             return s;
         }
 
@@ -87,6 +94,8 @@ namespace MesPremiersJeux.Lib
                     "SpotifyRefreshToken=" + (SpotifyRefreshToken ?? ""),
                     "BiasMap=" + (BiasMap ?? ""),
                     "PreferCursor=" + (PreferCursor ? "1" : "0"),
+                    "GazeDriver=" + (GazeDriver ?? "auto"),
+                    "QuickOffset=" + (QuickOffset ?? ""),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

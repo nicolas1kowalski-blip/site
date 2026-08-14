@@ -11,8 +11,11 @@ namespace MesPremiersJeux
 {
     public partial class MainWindow : Window
     {
-        private readonly GazeService _gaze = new GazeService();
-        private readonly ProGazeSource _pro = new ProGazeSource();
+        // Sources du regard : créées/détruites par StartGazeSources() selon le
+        // PILOTE choisi dans les réglages (auto / direct / pro / curseur).
+        private GazeService _gaze;
+        private ProGazeSource _pro;
+        private System.Windows.Threading.DispatcherTimer _fallbackWatch;
         private string _srcName = "Regard";
         private int _clicks;
         private DwellController _dwell;
@@ -36,7 +39,7 @@ namespace MesPremiersJeux
                 TopBar.Visibility = Chrome.Immersive ? Visibility.Collapsed : Visibility.Visible);
             BuildViews();
             Loaded += OnLoaded;
-            Closed += (s, e) => { _gaze.Dispose(); _pro.Dispose(); };
+            Closed += (s, e) => StopGazeSources();
         }
 
         private void BuildViews()
@@ -73,27 +76,8 @@ namespace MesPremiersJeux
 
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
 
-            // Source DIRECTE (Tobii Pro SDK) : on lui donne le tracker POUR LUI SEUL
-            // d'abord. Les deux moteurs (Pro et grand public) se disputent le même
-            // flux de regard de l'appareil : si le SDK grand public s'abonne en même
-            // temps, le flux de regard du Pro SDK reste muet (abonnement accepté mais
-            // aucun échantillon). On démarre donc le Pro seul, et on ne réveille le
-            // SDK grand public QUE s'il n'a pas fourni de regard direct (repli).
-            _pro.Gaze += p => _dwell.PushGaze(p);
-            _pro.Presence += v => _dwell.PushEye(v);
-            _pro.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); };
-            _pro.Connected += name => Dispatcher.Invoke(() =>
-            {
-                _srcName = "Tobii";
-                GazeStatus.Text = $"👁  Tobii : {name}";
-                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name} — on attend son flux de regard avant tout repli");
-            });
-            _pro.Start();
-
-            // Repli SDK grand public : préparé mais PAS démarré tout de suite.
-            _gaze.Gaze += p => _dwell.PushGaze(p);
-            _gaze.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); }; // présence + tête
-            StartConsumerFallbackWatch();
+            // Sources du regard : démarrées selon le PILOTE choisi (réglages).
+            StartGazeSources();
             GazeStatus.Text = "👁  Regard actif";
             _dwell.Clicked += p => Dispatcher.Invoke(() => _clicks++);
 
@@ -103,6 +87,13 @@ namespace MesPremiersJeux
             { Interval = TimeSpan.FromMilliseconds(700) };
             statusTimer.Tick += (s2, e2) =>
             {
+                // État détaillé des sources, visible dans le panneau de réglages.
+                if (SettingsPopup.IsOpen && DriverStatus != null)
+                    DriverStatus.Text =
+                        "Pro : " + (_pro?.IsAvailable == true ? _pro.Stats : "—")
+                        + " · Direct : " + (_gaze?.IsAvailable == true ? _gaze.Samples + " pts" : "—")
+                        + "\n" + _dwell.PrecisionInfo;
+
                 if (AdminCheck?.IsChecked == true || GazeGate.IsPaused) return; // texte « pause » prioritaire
                 // La vérité vient du moteur : quelle source pilote le point, là,
                 // maintenant (« Regard direct » via SDK, ou « Curseur »). Le 🧭
@@ -150,8 +141,8 @@ namespace MesPremiersJeux
             ApplySmoothing(_settings.Smoothing);
             _dwell.SetIndicatorSize(_settings.CircleSize);
             _dwell.SetBiasFromString(_settings.BiasMap);   // correction « étoile »
-            _dwell.PreferCursor = _settings.PreferCursor;
-            PreferCursorCheck.IsChecked = _settings.PreferCursor;
+            _dwell.SetQuickOffsetFromString(_settings.QuickOffset); // réglage éclair
+            SyncDriverCombo(); // reflète le pilote choisi dans la liste
 
             // Bilan de session (carte de chaleur + compteurs).
             SessionLog.Init();
@@ -169,41 +160,152 @@ namespace MesPremiersJeux
             ApplyGazeMode();
         }
 
+        // ------------------------------------------------------------------
+        // GESTION DES SOURCES DU REGARD — le « pilote » choisi dans les réglages
+        // décide quel moteur possède le tracker. Compatible avec le maximum
+        // d'appareils Tobii :
+        //   auto    : Pro SDK seul d'abord ; s'il ne donne pas de regard en 6 s,
+        //             repli sur le SDK grand public ; sinon curseur (TD Control).
+        //   direct  : SDK grand public (Tobii Experience) uniquement.
+        //   pro     : Pro SDK uniquement (jamais de concurrent).
+        //   curseur : le point suit la souris (TD Control, Computer Control,
+        //             Windows Eye Control… — toute commande oculaire) ; le Pro
+        //             SDK reste ouvert pour la présence/position des yeux.
+        // La bascule se fait À CHAUD, sans redémarrer l'application.
+        // ------------------------------------------------------------------
+
+        private GazeService NewConsumer()
+        {
+            var g = new GazeService();
+            g.Gaze += p => _dwell.PushGaze(p);
+            g.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); }; // présence + tête
+            return g;
+        }
+
+        private ProGazeSource NewPro()
+        {
+            var p = new ProGazeSource();
+            p.Gaze += q => _dwell.PushGaze(q);
+            p.Presence += v => _dwell.PushEye(v);
+            p.Eyes += s => { _dwell.PushEye(s.AnyValid); _dwell.PushHead(s); };
+            p.Connected += name => Dispatcher.Invoke(() =>
+            {
+                _srcName = "Tobii";
+                GazeStatus.Text = $"👁  Tobii : {name}";
+                Lib.Log.Write("app", $"Tracker connecté (Pro SDK) : {name}");
+            });
+            return p;
+        }
+
+        private void StartGazeSources()
+        {
+            StopGazeSources();
+            string driver = _settings?.GazeDriver;
+            if (string.IsNullOrWhiteSpace(driver)) driver = "auto";
+            _dwell.PreferCursor = driver == "curseur";
+            Lib.Log.Write("app", "Pilote du regard : " + driver);
+
+            try
+            {
+                switch (driver)
+                {
+                    case "direct":
+                        _gaze = NewConsumer();
+                        _gaze.Start();
+                        break;
+
+                    case "pro":
+                        _pro = NewPro();
+                        _pro.Start();
+                        break;
+
+                    case "curseur":
+                        // Le pointage vient du curseur ; le Pro SDK (flux « guide »)
+                        // fournit quand même présence + position des yeux.
+                        _pro = NewPro();
+                        _pro.Start();
+                        break;
+
+                    default: // auto
+                        _pro = NewPro();
+                        _pro.Start();
+                        StartConsumerFallbackWatch();
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Lib.Log.Write("app", "Démarrage des sources : " + ex.Message);
+            }
+        }
+
+        private void StopGazeSources()
+        {
+            _fallbackWatch?.Stop();
+            _fallbackWatch = null;
+            try { _gaze?.Dispose(); } catch { }
+            try { _pro?.Dispose(); } catch { }
+            _gaze = null;
+            _pro = null;
+        }
+
         /// <summary>
-        /// On laisse au Pro SDK sa chance d'ouvrir SEUL le flux de regard direct :
-        /// tant qu'il produit des échantillons valides, on ne démarre PAS le SDK
-        /// grand public (les deux se disputeraient le flux de regard de l'appareil).
-        /// Si au bout de ~6 s le Pro n'a toujours rien donné, on réveille le SDK
+        /// Mode AUTO : on laisse au Pro SDK sa chance d'ouvrir SEUL le flux de
+        /// regard direct. S'il n'a rien donné après ~6 s, on réveille le SDK
         /// grand public en repli (comportement historique de la I-13).
         /// </summary>
         private void StartConsumerFallbackWatch()
         {
-            bool started = false;
             var t0 = DateTime.UtcNow;
             var w = new System.Windows.Threading.DispatcherTimer
             { Interval = TimeSpan.FromMilliseconds(600) };
+            _fallbackWatch = w;
             w.Tick += (s, e) =>
             {
-                if (started) { w.Stop(); return; }
+                if (!ReferenceEquals(_fallbackWatch, w)) { w.Stop(); return; } // pilote changé
 
-                // Le Pro SDK délivre un vrai regard direct : parfait, on reste dessus
-                // et on ne démarre jamais le concurrent grand public.
-                if (_pro.HasGaze)
+                if (_pro?.HasGaze == true)
                 {
-                    started = true; w.Stop();
+                    w.Stop();
+                    _fallbackWatch = null;
                     Lib.Log.Write("app", $"Regard direct du Pro SDK confirmé ({_pro.Stats}) — SDK grand public NON démarré (pas de concurrence)");
                     return;
                 }
 
-                // Fenêtre d'attente écoulée sans regard Pro : on passe au repli.
                 if ((DateTime.UtcNow - t0).TotalSeconds >= 6.0)
                 {
-                    started = true; w.Stop();
-                    Lib.Log.Write("app", $"Pas de regard direct du Pro SDK après 6 s ({_pro.Stats}) — démarrage du SDK grand public (repli)");
-                    _gaze.Start();
+                    w.Stop();
+                    _fallbackWatch = null;
+                    Lib.Log.Write("app", $"Pas de regard direct du Pro SDK après 6 s ({_pro?.Stats ?? "—"}) — démarrage du SDK grand public (repli)");
+                    try
+                    {
+                        _gaze = NewConsumer();
+                        _gaze.Start();
+                    }
+                    catch (Exception ex) { Lib.Log.Write("app", "Repli grand public : " + ex.Message); }
                 }
             };
             w.Start();
+        }
+
+        private void SyncDriverCombo()
+        {
+            foreach (var item in DriverCombo.Items)
+                if (item is ComboBoxItem it && (string)it.Tag == _settings.GazeDriver)
+                { DriverCombo.SelectedItem = it; return; }
+            DriverCombo.SelectedIndex = 0; // auto
+        }
+
+        private void Driver_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_dwell == null || _settings == null) return; // encore en chargement
+            var tag = (DriverCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+            if (string.IsNullOrEmpty(tag) || tag == _settings.GazeDriver) return;
+            _settings.GazeDriver = tag;
+            _settings.PreferCursor = tag == "curseur"; // compat anciennes versions
+            _settings.Save();
+            Lib.Log.Write("app", "Pilote du regard changé par le parent : " + tag);
+            StartGazeSources();
         }
 
         private void ApplySmoothing(double s)
@@ -235,16 +337,18 @@ namespace MesPremiersJeux
             var win = new CalibrationWindow { Owner = this };
             if (win.ShowDialog() == true && win.Result.Count > 0)
             {
-                _dwell.SetBias(win.Result, win.HeadRef);
+                _dwell.SetBias(win.Result, win.HeadRef); // remet aussi l'éclair à zéro
                 _settings.BiasMap = DwellController.BiasToString(win.Result, win.HeadRef);
+                _settings.QuickOffset = "";
                 _settings.Save();
             }
         }
 
         private void ClearBias_Click(object sender, RoutedEventArgs e)
         {
-            _dwell.SetBias(null);
+            _dwell.SetBias(null); // efface étoile + dérive + tête + éclair
             _settings.BiasMap = "";
+            _settings.QuickOffset = "";
             _settings.Save();
             Speech.Say("Correction annulée.");
         }
@@ -255,13 +359,17 @@ namespace MesPremiersJeux
             new SessionWindow { Owner = this }.ShowDialog();
         }
 
-        private void PreferCursor_Changed(object sender, RoutedEventArgs e)
+        // « Réglage éclair » : une étoile, 3 secondes, recale tout le regard.
+        private void QuickFix_Click(object sender, RoutedEventArgs e)
         {
-            if (_dwell == null || _settings == null) return;
-            _dwell.PreferCursor = PreferCursorCheck.IsChecked == true;
-            _settings.PreferCursor = _dwell.PreferCursor;
-            _settings.Save();
-            Lib.Log.Write("app", "Pointage via curseur : " + _dwell.PreferCursor);
+            SettingsPopup.IsOpen = false;
+            var win = new QuickFixWindow { Owner = this };
+            if (win.ShowDialog() == true && win.Measured)
+            {
+                _dwell.NudgeQuickOffset(win.Offset);
+                _settings.QuickOffset = _dwell.QuickOffsetToString();
+                _settings.Save();
+            }
         }
 
         private void EyeTrack_Click(object sender, RoutedEventArgs e)
@@ -269,9 +377,17 @@ namespace MesPremiersJeux
             SettingsPopup.IsOpen = false;
             // La fenêtre des yeux utilise la meilleure source disponible, et affiche
             // la fiche technique du tracker (diagnostic licence/capacités).
-            new EyeTrackWindow(
-                _pro.IsAvailable ? (IEyeStream)_pro : _gaze,
-                _pro.IsAvailable ? _pro.Diagnostic + "\nFlux de regard : " + _pro.Stats : null)
+            IEyeStream src = _pro?.IsAvailable == true ? (IEyeStream)_pro : _gaze;
+            if (src == null)
+            {
+                MessageBox.Show(this,
+                    "Aucune source de position des yeux n'est active avec ce pilote.\n" +
+                    "Choisis « Auto », « Regard direct » ou « Pro SDK » dans les réglages.",
+                    "Position des yeux");
+                return;
+            }
+            new EyeTrackWindow(src,
+                _pro?.IsAvailable == true ? _pro.Diagnostic + "\nFlux de regard : " + _pro.Stats : null)
             { Owner = this }.ShowDialog();
         }
 

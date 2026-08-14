@@ -47,6 +47,9 @@ namespace MesPremiersJeux.Gaze
 
         private long _samples;
 
+        /// <summary>Nombre de points de regard reçus (diagnostic).</summary>
+        public long Samples => _samples;
+
         public void Start()
         {
             try
