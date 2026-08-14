@@ -1,0 +1,52 @@
+<UserControl x:Class="MesPremiersJeux.Views.ColoringView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="#FFFBF3FF">
+
+        <!-- Galerie de dessins (comme la bibliothèque de livres) -->
+        <Grid x:Name="MenuRoot">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <WrapPanel x:Name="Gallery" HorizontalAlignment="Center" Margin="20" />
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Écran de coloriage : palette + retour (gauche), dessin en grand (centre),
+             outils (droite). Les deux bandes latérales servent aux commandes, le
+             dessin occupe toute la hauteur au milieu. -->
+        <Grid x:Name="ColorRoot" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Gauche : bouton retour (en haut) puis la palette -->
+            <DockPanel Grid.Column="0" Margin="10,8">
+                <Button x:Name="BackBtn" DockPanel.Dock="Top" Style="{StaticResource BackButton}"
+                        Content="🎨  Dessins" HorizontalAlignment="Left" Margin="0,0,0,10"
+                        Click="Back_Click" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
+                </ScrollViewer>
+            </DockPanel>
+
+            <!-- Centre : le dessin (plein hauteur) -->
+            <Viewbox Grid.Column="1" Margin="2" Stretch="Uniform">
+                <Border x:Name="StageBorder" Background="White" CornerRadius="12"
+                        BorderBrush="#FFE4CCF2" BorderThickness="2">
+                    <Image x:Name="Img" Width="800" Height="800" Stretch="Fill"
+                           SnapsToDevicePixels="True"
+                           MouseLeftButtonDown="Img_MouseLeftButtonDown" />
+                </Border>
+            </Viewbox>
+
+            <!-- Droite (haut) : réglages de la couleur -->
+            <StackPanel x:Name="TopTools" Grid.Column="2" Orientation="Vertical"
+                        VerticalAlignment="Top" Margin="6,8,10,8" />
+
+            <!-- Droite (bas) : recommencer / plein écran / supprimer -->
+            <StackPanel x:Name="BottomTools" Grid.Column="2" Orientation="Vertical"
+                        VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="6,8,10,10" />
+        </Grid>
+    </Grid>
+</UserControl>

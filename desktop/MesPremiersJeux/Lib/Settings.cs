@@ -1,0 +1,105 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+
+namespace MesPremiersJeux.Lib
+{
+    /// <summary>
+    /// Réglages du pilotage au regard, sauvegardés sur le disque pour être
+    /// conservés d'une session à l'autre (utile sur la TD I-13).
+    /// Fichier : %AppData%\MesPremiersJeux\settings.ini
+    /// </summary>
+    public sealed class Settings
+    {
+        public int DwellTime = 900;      // ms
+        public double Smoothing = 0.8;   // 0 = réactif … 1 = très lissé/stable
+        public double CircleSize = 90;   // diamètre du cercle de progression (px)
+        public string VoiceName = "";    // voix Windows choisie (vide = par défaut)
+        public double VoicePitch = 25;   // hauteur (%) : +25 ≈ voix enfantine
+        public string AzureKey = "";     // clé Azure Speech (vide = voix Windows)
+        public string AzureRegion = "francecentral";
+        public string AzureVoice = "fr-FR-EloiseNeural";
+        public string SupabaseUrl = "";  // sauvegarde en ligne du contenu
+        public string SupabaseKey = "";
+        public string BiasMap = "";      // correction de précision (« étoile »)
+        public bool PreferCursor;        // (hérité) pointer via le curseur TD Control
+        public string GazeDriver = "";   // pilote du regard : auto | direct | pro | curseur
+        public string QuickOffset = "";  // décalage du « réglage éclair » (x;y)
+        public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
+        public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
+
+        private static string Dir =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux");
+        private static string FilePath => Path.Combine(Dir, "settings.ini");
+
+        public static Settings Load()
+        {
+            var s = new Settings();
+            try
+            {
+                if (!File.Exists(FilePath)) return s;
+                foreach (var line in File.ReadAllLines(FilePath))
+                {
+                    int eq = line.IndexOf('=');
+                    if (eq <= 0) continue;
+                    var key = line.Substring(0, eq).Trim();
+                    var val = line.Substring(eq + 1).Trim();
+                    switch (key)
+                    {
+                        case "DwellTime": if (int.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d)) s.DwellTime = d; break;
+                        case "Smoothing": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var sm)) s.Smoothing = sm; break;
+                        case "CircleSize": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var c)) s.CircleSize = c; break;
+                        case "VoiceName": s.VoiceName = val; break;
+                        case "VoicePitch": if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var vp)) s.VoicePitch = vp; break;
+                        case "AzureKey": s.AzureKey = val; break;
+                        case "AzureRegion": if (val.Length > 0) s.AzureRegion = val; break;
+                        case "AzureVoice": if (val.Length > 0) s.AzureVoice = val; break;
+                        case "SupabaseUrl": s.SupabaseUrl = val; break;
+                        case "SupabaseKey": s.SupabaseKey = val; break;
+                        case "BiasMap": s.BiasMap = val; break;
+                        case "PreferCursor": s.PreferCursor = val == "1" || val.ToLowerInvariant() == "true"; break;
+                        case "GazeDriver": s.GazeDriver = val; break;
+                        case "QuickOffset": s.QuickOffset = val; break;
+                        case "SpotifyClientId": s.SpotifyClientId = val; break;
+                        case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
+                    }
+                }
+            }
+            catch { /* réglages par défaut */ }
+            // Migration : l'ancienne case « curseur TD Control » devient un pilote.
+            if (string.IsNullOrWhiteSpace(s.GazeDriver))
+                s.GazeDriver = s.PreferCursor ? "curseur" : "auto";
+            return s;
+        }
+
+        public void Save()
+        {
+            try
+            {
+                Directory.CreateDirectory(Dir);
+                var lines = new List<string>
+                {
+                    "DwellTime=" + DwellTime.ToString(CultureInfo.InvariantCulture),
+                    "Smoothing=" + Smoothing.ToString(CultureInfo.InvariantCulture),
+                    "CircleSize=" + CircleSize.ToString(CultureInfo.InvariantCulture),
+                    "VoiceName=" + (VoiceName ?? ""),
+                    "VoicePitch=" + VoicePitch.ToString(CultureInfo.InvariantCulture),
+                    "AzureKey=" + (AzureKey ?? ""),
+                    "AzureRegion=" + (AzureRegion ?? ""),
+                    "AzureVoice=" + (AzureVoice ?? ""),
+                    "SupabaseUrl=" + (SupabaseUrl ?? ""),
+                    "SupabaseKey=" + (SupabaseKey ?? ""),
+                    "SpotifyClientId=" + (SpotifyClientId ?? ""),
+                    "SpotifyRefreshToken=" + (SpotifyRefreshToken ?? ""),
+                    "BiasMap=" + (BiasMap ?? ""),
+                    "PreferCursor=" + (PreferCursor ? "1" : "0"),
+                    "GazeDriver=" + (GazeDriver ?? "auto"),
+                    "QuickOffset=" + (QuickOffset ?? ""),
+                };
+                File.WriteAllLines(FilePath, lines);
+            }
+            catch { /* ignore */ }
+        }
+    }
+}

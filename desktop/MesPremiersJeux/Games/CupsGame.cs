@@ -1,0 +1,210 @@
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
+using MesPremiersJeux.Lib;
+
+namespace MesPremiersJeux.Games
+{
+    /// <summary>
+    /// Les gobelets (bonneteau) : la balle est montrée sous un gobelet, les
+    /// gobelets se mélangent sous les yeux de l'enfant, puis il doit retrouver
+    /// la balle en fixant le bon gobelet.
+    /// </summary>
+    public sealed class CupsGame : GameControl
+    {
+        private const double W = 1300, H = 560;
+        private static readonly double[] SlotX = { 110, 530, 950 }; // gauche des gobelets
+        private const double CupW = 240, CupH = 260;
+        private const double UpY = 40, DownY = 170;                 // gobelet levé / posé
+        private const double BallY = 300;
+
+        private static readonly Color[] CupColors =
+        {
+            Color.FromRgb(0xFF, 0x5F, 0x6D), Color.FromRgb(0x3B, 0x9B, 0xFF), Color.FromRgb(0xFF, 0xC1, 0x07),
+        };
+
+        private enum Phase { Show, Shuffle, Guess, Done }
+
+        private Canvas _canvas;
+        private Button[] _cups;      // par identité de gobelet
+        private int[] _cupSlot;      // gobelet → case (0..2)
+        private int _ballCup;        // gobelet qui cache la balle
+        private Ellipse _ball;
+        private Phase _phase;
+        private int _swapsLeft;
+
+        public CupsGame(Action celebrate) : base(celebrate) { }
+
+        // Gobelet RETOURNÉ (ouverture vers le bas) qui recouvre la balle : étroit
+        // en haut, large en bas, avec un rebord d'ouverture en bas.
+        private static UIElement CupVisual(Color c)
+        {
+            var g = new Grid { Width = CupW, Height = CupH };
+            var ink = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42));
+
+            // Corps.
+            g.Children.Add(new Path
+            {
+                Fill = new LinearGradientBrush(Lighten(c), c, 90),
+                Stroke = ink,
+                StrokeThickness = 5,
+                StrokeLineJoin = PenLineJoin.Round,
+                Data = Geometry.Parse("M 58,12 L 182,12 L 220,244 L 20,244 Z"),
+            });
+            // Bande décorative (près du haut).
+            g.Children.Add(new Path
+            {
+                Fill = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
+                Data = Geometry.Parse("M 62,44 L 178,44 L 184,82 L 56,82 Z"),
+            });
+            // Dessus arrondi (fond fermé du gobelet).
+            g.Children.Add(Ell(120, 12, 62, 12, new SolidColorBrush(Lighten(c)), ink, 4));
+            // Ouverture en bas (rebord qui recouvre la balle).
+            g.Children.Add(Ell(120, 244, 102, 22, new SolidColorBrush(Darken(c)), ink, 5));
+            return g;
+        }
+
+        private static Path Ell(double cx, double cy, double rx, double ry, Brush fill, Brush stroke, double sw)
+            => new Path { Fill = fill, Stroke = stroke, StrokeThickness = sw, Data = new EllipseGeometry(new Point(cx, cy), rx, ry) };
+
+        private static Color Lighten(Color c) => Color.FromRgb(
+            (byte)(c.R + (255 - c.R) * 0.45), (byte)(c.G + (255 - c.G) * 0.45), (byte)(c.B + (255 - c.B) * 0.45));
+
+        private static Color Darken(Color c) => Color.FromRgb((byte)(c.R * 0.68), (byte)(c.G * 0.68), (byte)(c.B * 0.68));
+
+        protected override void NewRound()
+        {
+            Locked = false;
+            _phase = Phase.Show;
+            Question.Text = "Regarde bien la balle !";
+
+            _canvas = new Canvas { Width = W, Height = H };
+
+            // La balle (dessinée sous les gobelets).
+            _ball = new Ellipse
+            {
+                Width = 90,
+                Height = 90,
+                Fill = new RadialGradientBrush(Color.FromRgb(0xFF, 0x8F, 0xD3), Color.FromRgb(0xE9, 0x1E, 0x63)),
+                Stroke = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42)),
+                StrokeThickness = 4,
+            };
+            _ballCup = GameKit.RandInt(3);
+            Canvas.SetTop(_ball, BallY);
+            _canvas.Children.Add(_ball);
+
+            // Les trois gobelets, TOUS IDENTIQUES (même couleur) : impossible de
+            // suivre la couleur, il faut suivre le mouvement. Levés au départ.
+            var cupColor = CupColors[GameKit.RandInt(CupColors.Length)];
+            _cups = new Button[3];
+            _cupSlot = new int[3];
+            for (int i = 0; i < 3; i++)
+            {
+                _cupSlot[i] = i;
+                var btn = new Button
+                {
+                    Style = (Style)Application.Current.Resources["BalloonButton"],
+                    Width = CupW,
+                    Height = CupH,
+                    Content = CupVisual(cupColor),
+                };
+                int cup = i;
+                btn.Click += (s, e) => Guess(cup);
+                Canvas.SetLeft(btn, SlotX[i]);
+                Canvas.SetTop(btn, UpY);
+                _canvas.Children.Add(btn);
+                _cups[i] = btn;
+            }
+            PlaceBall();
+
+            SetBody(_canvas);
+            Schedule(350, () => Speak("Regarde bien où est la balle !"));
+
+            // 1) On laisse regarder, 2) les gobelets descendent EN RECOUVRANT la
+            // balle (elle disparaît progressivement, cachée par le gobelet), 3) mélange.
+            Schedule(2600, () =>
+            {
+                foreach (var c in _cups) AnimateTop(c, DownY);
+                Schedule(800, () =>
+                {
+                    _ball.Visibility = Visibility.Hidden; // désormais totalement recouverte
+                    _phase = Phase.Shuffle;
+                    Question.Text = "Les gobelets se mélangent…";
+                    _swapsLeft = 5;
+                    DoNextSwap();
+                });
+            });
+        }
+
+        private void PlaceBall()
+        {
+            Canvas.SetLeft(_ball, SlotX[_cupSlot[_ballCup]] + (CupW - _ball.Width) / 2);
+        }
+
+        private void DoNextSwap()
+        {
+            if (_swapsLeft-- <= 0)
+            {
+                _phase = Phase.Guess;
+                Question.Text = "Où est la balle ?";
+                Speak("Où est la balle ?");
+                return;
+            }
+
+            // Échange deux gobelets au hasard.
+            int a = GameKit.RandInt(3);
+            int b;
+            do { b = GameKit.RandInt(3); } while (b == a);
+            int sa = _cupSlot[a], sb = _cupSlot[b];
+            _cupSlot[a] = sb;
+            _cupSlot[b] = sa;
+            AnimateLeft(_cups[a], SlotX[sb]);
+            AnimateLeft(_cups[b], SlotX[sa]);
+
+            Schedule(640, DoNextSwap);
+        }
+
+        private void Guess(int cup)
+        {
+            if (_phase != Phase.Guess || Locked) return;
+
+            AnimateTop(_cups[cup], UpY);
+            if (cup == _ballCup)
+            {
+                _phase = Phase.Done;
+                Locked = true;
+                PlaceBall();
+                _ball.Visibility = Visibility.Visible;
+                GameKit.Success();
+                Celebrate();
+                Speak("Bravo ! Tu as trouvé la balle !");
+                ScheduleNext(2800);
+            }
+            else
+            {
+                GameKit.Wrong();
+                Speak("Non, pas là ! Essaie encore !");
+                Schedule(900, () => { if (_phase == Phase.Guess) AnimateTop(_cups[cup], DownY); });
+            }
+        }
+
+        private static void AnimateLeft(UIElement el, double to)
+        {
+            var from = Canvas.GetLeft(el);
+            el.BeginAnimation(Canvas.LeftProperty,
+                new DoubleAnimation(from, to, TimeSpan.FromMilliseconds(520))
+                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } });
+        }
+
+        private static void AnimateTop(UIElement el, double to)
+        {
+            var from = Canvas.GetTop(el);
+            el.BeginAnimation(Canvas.TopProperty,
+                new DoubleAnimation(from, to, TimeSpan.FromMilliseconds(420))
+                { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } });
+        }
+    }
+}
