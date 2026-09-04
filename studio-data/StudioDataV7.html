@@ -425,6 +425,14 @@
     .v7-side{width:var(--v7-side-w);flex:0 0 var(--v7-side-w);background:var(--v7-side);color:var(--v7-side-txt);
              display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;
              transition:width .18s ease,flex-basis .18s ease;z-index:40}
+    /* V9.4 — Une seule navigation visible : le menu latéral. Les familles de l'en-tête ne
+       servent que lorsque le menu est réduit (icônes seules). */
+    body:not(.v7-collapsed) #v7FamNav{display:none !important}
+    .gov-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;min-height:34px}
+    .gov-bar .crumb{font-size:12px;color:#57657c;font-weight:600}
+    .gov-bar .crumb b{color:#1e293b;font-weight:800}
+    html[data-theme="dark"] .gov-bar .crumb{color:#a7b4c6}
+    html[data-theme="dark"] .gov-bar .crumb b{color:#e2e8f0}
     body.v7-collapsed .v7-side{--v7-side-w:70px}
     .v7-brand{display:flex;align-items:center;gap:10px;padding:16px 14px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
     .v7-mark{width:32px;height:32px;flex:0 0 32px;border-radius:9px;background:var(--v7-accent);
@@ -1733,8 +1741,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
 
         <div id="step-9" class="animate-fade-in hidden">
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="landmark" class="w-5 h-5"></i> Gouvernance des données</h2>
+                <div class="gov-bar">
+                    <span class="crumb" id="govCrumb"></span>
+                    <span class="flex-grow"></span>
+                    <span id="govActions"></span>
                     <div class="flex items-center gap-3">
                         <label data-ro="keep" class="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer select-none border border-slate-200 rounded-lg px-2.5 py-1.5 hover:border-indigo-300" title="Masquer toutes les commandes de modification de la Gouvernance : on ne peut plus que consulter. Le reste de l'outil n'est pas affecté.">
                             <input type="checkbox" id="govRoChk" data-ro="keep" onchange="govSetReadOnly(this.checked)"> 👁 Mode consultation
@@ -1742,7 +1752,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         <span id="persistStatus" class="text-xs text-slate-400"></span>
                     </div>
                 </div>
-                <div id="govFamTabs" class="flex items-center gap-1.5 flex-wrap mb-4"></div>
+                <div id="govFamTabs" class="hidden" aria-hidden="true"></div>
                 <div id="govRoBand" class="hidden"></div>
                 <div id="govContent"></div>
             </div>
@@ -3288,19 +3298,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
 
         function renderGovernance() {
             govApplyReadOnly();
-            // Chips de la famille active (2 à 4 écrans) — le détail sous la famille, jamais 12 onglets d'un coup.
-            const famBar = el('govFamTabs');
-            if (famBar) {
-                const govTabs = (NAV_PHASES.find(p => p.id === 'gov') || { tabs: [] }).tabs;
-                // Le graphe « bout en bout » (legacy) est une VUE de l'onglet Lineage (g:'flow'),
-                // pas un onglet séparé : quand on y est, on garde la puce « Lineage » active.
-                const activeG = govState.tab === 'lineage' ? 'flow' : govState.tab;
-                const cur = govTabs.find(t => t.g === govState.tab) || govVisibleTabs(govTabs)[0] || govTabs[0];
-                const sibl = govIsReadOnly() ? govVisibleTabs(govTabs) : govTabs.filter(t => t.fam === cur.fam && !t.hidden);
-                famBar.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">${govIsReadOnly() ? 'Consultation' : escapeHTML(cur.fam || '')}</span>` + sibl.map(t =>
-                    `<button data-ro="keep" onclick="openGovTab('${t.g}')" aria-label="${escapeHTML(t.label)}" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border transition-colors ${t.g === activeG ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}">${t.icon} ${escapeHTML(t.label)}</button>`).join('')
-                    + `<span class="flex-grow"></span><button onclick="giOpen()" aria-label="Import en masse de la gouvernance" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">⬆ Import en masse</button>`;
-            }
+            // V9.4 — Plus de rangée de familles dans le panneau : le menu latéral est LA navigation.
+            // Le panneau n'affiche qu'un fil d'Ariane (famille › écran) et ses actions.
+            const crumb = el('govCrumb'), acts = el('govActions');
+            const govTabs = (NAV_PHASES.find(p => p.id === 'gov') || { tabs: [] }).tabs;
+            const curT = govTabs.find(t => t.g === (govState.tab === 'flow' ? 'lineage' : govState.tab)) || govTabs.find(t => t.g === govState.tab) || null;
+            if (crumb) crumb.innerHTML = curT ? `${govIsReadOnly() ? '👁 Consultation' : escapeHTML(curT.fam || 'Gouvernance')} › <b>${v7Ico(curT.icon)} ${escapeHTML(curT.label)}</b>` : '';
+            if (acts) acts.innerHTML = `<button onclick="giOpen()" aria-label="Import en masse de la gouvernance" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Importer en masse définitions, propriétaires, termes… depuis un fichier">⬆ Import en masse</button>`;
+            const famBar = el('govFamTabs'); if (famBar) famBar.innerHTML = '';
             const c = el('govContent');
             if (govState.tab === 'dictionary') c.innerHTML = renderGovDictionary();
             else if (govState.tab === 'objects') {
@@ -12726,10 +12731,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.3.3';
+        const APP_VERSION = '9.4.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.4.0', d: '2026-09-04', t: 'Gouvernance : une seule navigation', items: [
+                'Trois menus se répétaient : le menu latéral, les familles dans l\'en-tête (Découvrir, Patrimoine, Acteurs, Sens métier…) et une rangée de puces dans le panneau. Le <b>menu latéral</b> devient l\'unique navigation.',
+                'L\'en-tête n\'affiche plus les familles que lorsque le menu latéral est <b>réduit</b> (icônes seules) : elles prennent alors le relais, sinon elles disparaissent.',
+                'Le panneau de gouvernance perd son titre redondant et sa rangée de puces ; il garde un fil d\'Ariane discret (« Sens métier › Objets métier »), le <b>Mode consultation</b> et <b>Import en masse</b>.',
+                'Rien n\'est perdu : tous les écrans restent accessibles par le menu latéral ; en consultation, seuls les écrans autorisés y figurent, comme avant.'] },
             { v: '9.3.3', d: '2026-09-04', t: 'Créer un terme inconnu : un bouton explicite, plus seulement la touche Entrée', items: [
                 'Dans le champ « ＋ Ajouter un terme… », dès que vous tapez, un bouton apparaît : <b>« ＋ Créer « votre texte » »</b> (vert) si le terme n\'existe pas encore, <b>« ↵ Relier »</b> (bleu) s\'il existe déjà. Un clic suffit ; la touche Entrée fonctionne aussi. Il n\'était pas évident qu\'il fallait valider par Entrée, et quitter le champ ne créait rien.',
                 'Le champ est un peu plus large et son libellé n\'est plus tronqué.'] },
