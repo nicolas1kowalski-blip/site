@@ -3663,8 +3663,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const viewBar = `<div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold mb-3" role="group" aria-label="Mode d'affichage des usages">
                 <button onclick="govState.usageView='byapp'; renderGovernance()" class="px-3 py-1.5 ${govState.usageView === 'byapp' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">🖥 Par application</button>
                 <button onclick="govState.usageView='matrix'; renderGovernance()" class="px-3 py-1.5 ${govState.usageView === 'matrix' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}">▦ Matrice complète</button>
-            </div>`;
-            if (govState.usageView === 'byapp') return viewBar + renderBoUsageByApp(bo, rows, assets);
+            </div>
+            <button data-ro="keep" onclick="openBoLineage('${bo.id}')" class="ml-2 mb-3 inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-800 hover:bg-indigo-100" title="Graphe amont → objet → aval, comme pour un attribut">🕸 Lineage de l'objet</button>`;
+            if (govState.usageView === 'byapp') return viewBar + renderBoUsageByApp(bo, rows, assets) + `<div id="attrLineageBox" class="hidden mt-3 border-2 border-indigo-200 rounded-xl bg-white p-3"></div>`;
             const apps = assets.filter(a => a.kind === 'app');
             const globalSrc = (bo.producedBy || [])[0] || '';
             const globalA = assetById(globalSrc);
@@ -3760,6 +3761,60 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             (g.assets || []).filter(a => a.kind === 'process' && ((a.tables || []).includes(tbl) || (a.columns || []).some(c => c.table === tbl && c.col === col))).forEach(a => { nodes.push({ id: 'use:' + a.id, type: 'studio-rich-node', title: '⚙️ ' + a.name, content: a.criticality || '', fill: '#ffedd5', stroke: '#ea580c' }); edges.push({ id: 'eu' + a.id, source: cid, target: 'use:' + a.id, label: 'utilisé par', style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
             if (nodes.length === 1) { nodes.push({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: '', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: cid, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
             return { nodes, edges };
+        }
+        // V8.6 — Graphe de lineage d'un OBJET MÉTIER entier, présenté comme celui d'un attribut :
+        // applications productrices → sources techniques (maître / contributeur) → objet →
+        // consommateurs (applications, processus, tables destinataires, usages des attributs).
+        // Tout est déduit des rattachements déjà saisis : rien à ressaisir.
+        function buildBoLineageGraph(bo) {
+            const g = state.governance; const nodes = [], edges = []; const seen = new Set();
+            const add = n => { if (!seen.has(n.id)) { seen.add(n.id); nodes.push(n); } };
+            const boId = 'bo:' + bo.id;
+            const nAttr = (boAllAttrRows(bo) || []).length;
+            add({ id: boId, type: 'studio-rich-node', title: '🏛️ ' + bo.name, content: nAttr + ' attribut(s)' + (bo.globalOwner ? ' · ' + bo.globalOwner : ''), fill: '#dcfce7', stroke: '#16a34a' });
+            const appNode = a => ({ id: 'as:' + a.id, type: 'studio-rich-node', title: (a.kind === 'process' ? '⚙️ ' : '🖥 ') + a.name, content: a.kind === 'process' ? 'processus' : (a.criticality || 'application'), fill: a.kind === 'process' ? '#ffedd5' : '#e2e8f0', stroke: a.kind === 'process' ? '#ea580c' : '#334155' });
+            const ROLE = { maitre: 'alimente (maître)', contributeur: 'contribue', destinataire: 'diffusé vers' };
+            const producers = new Set(bo.producedBy || []);
+            // 1. Sources amont (maître / contributeur) et l'application qui les produit
+            (bo.sources || []).filter(s2 => s2 && s2.table && s2.role !== 'destinataire').forEach((s2, i) => {
+                const tid = 'tbl:' + s2.table;
+                add({ id: tid, type: 'studio-rich-node', title: '▦ ' + s2.table, content: s2.role === 'maitre' ? 'source maître' : 'source contributrice', fill: '#dbeafe', stroke: '#2563eb' });
+                edges.push({ id: 'es' + i, source: tid, target: boId, label: ROLE[s2.role] || 'alimente', style: { stroke: '#2563eb', lineWidth: s2.role === 'maitre' ? 2 : 1, endArrow: { path: '', fill: '#2563eb' } } });
+                const own = appOwnerOfSource(s2.table);
+                if (own) { add(appNode(own)); producers.delete(own.id); edges.push({ id: 'ep' + i, source: 'as:' + own.id, target: tid, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } }); }
+            });
+            // 2. Applications productrices sans source technique identifiée : lien direct
+            producers.forEach(id => { const a = assetById(id); if (!a) return; add(appNode(a)); edges.push({ id: 'epd' + id, source: 'as:' + id, target: boId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } }); });
+            // 3. Aval : consommateurs déclarés sur l'objet, tables destinataires, rattachements « boIds »
+            const cons = new Map(); // assetId -> label d'arête
+            (bo.consumedBy || []).forEach(id => cons.set(id, 'consommé par'));
+            (g.assets || []).forEach(a => { if ((a.boIds || []).includes(bo.id) && !cons.has(a.id) && !seen.has('as:' + a.id)) cons.set(a.id, 'rattaché à'); });
+            const useCnt = {};
+            (boAllAttrRows(bo) || []).forEach(r => (r.el.usedBy || []).forEach(id => useCnt[id] = (useCnt[id] || 0) + 1));
+            Object.keys(useCnt).forEach(id => { if (!cons.has(id)) cons.set(id, 'utilise ' + useCnt[id] + ' attribut(s)'); });
+            cons.forEach((lbl, id) => { const a = assetById(id); if (!a) return; add(appNode(a));
+                edges.push({ id: 'eu' + id, source: boId, target: 'as:' + id, label: lbl, style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
+            (bo.sources || []).filter(s2 => s2 && s2.table && s2.role === 'destinataire').forEach((s2, i) => {
+                const tid = 'tbl:' + s2.table;
+                add({ id: tid, type: 'studio-rich-node', title: '▦ ' + s2.table, content: 'table destinataire', fill: '#dbeafe', stroke: '#2563eb' });
+                edges.push({ id: 'ed' + i, source: boId, target: tid, label: ROLE.destinataire, style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } });
+            });
+            if (!edges.some(e => e.source === boId)) { add({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: 'consommateurs à renseigner', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: boId, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
+            if (!edges.some(e => e.target === boId)) { add({ id: 'nosrc', type: 'studio-rich-node', title: '❔ aucune source déclarée', content: 'fiche ▸ Sources', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'ens', source: 'nosrc', target: boId, label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
+            return { nodes, edges };
+        }
+        // Lineage de l'objet entier, dans le même encart que celui d'un attribut (onglet Objets).
+        function openBoLineage(boId) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
+            const box = el('attrLineageBox'); if (!box) return;
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'objet « ${escapeHTML(bo.name)} »</span><button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="attrLineageWrap" class="h-[340px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            if (attrLineageGraph) { try { attrLineageGraph.destroy(); } catch (e3) {} attrLineageGraph = null; }
+            attrLineageGraph = createSvgGraph(el('attrLineageWrap'));
+            attrLineageGraph.data(buildBoLineageGraph(bo));
+            attrLineageGraph.render();
+            attrLineageGraph.fitView(20);
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
         function boFacetElToggleUsedBy(boId, stId, feId, assetId, on) {
             const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo || !assetId) return;
@@ -10472,8 +10527,30 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // facettes vivantes, cartes de confiance, fiche en panneau latéral. 100 % local,
         // métadonnées uniquement — les signaux (qualité, sensibilité, validation, types de
         // colonnes) sont branchés sur les VRAIES données de l'application.
-        let catState = { q: '', f: { type: [], dom: [], sens: [], qb: [], val: [], own: [] }, sort: 'pertinence', view: 'list' };
+        let catState = { q: '', f: { type: [], dom: [], sens: [], qb: [], val: [], own: [] }, sort: 'pertinence', view: 'list', layer: 'metier' };
         let catRes = [];
+        // V8.6 — Deux couches de lecture. Par défaut le catalogue parle MÉTIER : objets, applications,
+        // processus, termes, règles, rapports. Ce qui vient des sources (tables, colonnes, vues
+        // dérivées, préparations, rapprochements) reste indexé — donc trouvable — mais n'apparaît
+        // qu'à la demande : bascule « Tout », clic sur un type technique dans la facette, ou
+        // indication « n donnée(s) technique(s) masquée(s) » sous le compteur de résultats.
+        const CAT_TECH_TYPES = ['table', 'view', 'column', 'recipe', 'linkage'];
+        function catLayerOk(e2) {
+            if (catState.layer === 'tout') return true;
+            if ((catState.f.type || []).some(v => CAT_TECH_TYPES.includes(v))) return true;
+            return !CAT_TECH_TYPES.includes(e2.type);
+        }
+        // Ouvre la fiche d'un actif par sa clé (type + table/colonne/objet/terme), en basculant sur la
+        // couche « Tout » si l'actif est technique et masqué — un lien vers une colonne ne peut pas
+        // tomber dans le vide.
+        function catOpenByKey(k) {
+            const find = () => catRes.findIndex(r => r.type === k.type && (k.type === 'column' ? (r.tbl === k.tbl && r.col === k.col) : (k.type === 'bo' ? r.bo === k.bo : (k.type === 'term' ? (r.termId || r.id) === k.id : (k.tbl ? r.tbl === k.tbl : r.id === k.id)))));
+            let i = find();
+            if (i < 0 && CAT_TECH_TYPES.includes(k.type) && catState.layer !== 'tout') { catState.layer = 'tout'; renderGovernance(); i = find(); }
+            if (i < 0) { CAT_FACETS.forEach(f => catState.f[f.key] = []); catState.q = ''; renderGovernance(); i = find(); }
+            if (i >= 0) catOpenFiche(i);
+        }
+        function catKeyAttr(k) { return JSON.stringify(k).replace(/"/g, '&quot;'); }
         const CAT_TYPES = { table: ['t-table', '▦', 'Table'], view: ['t-view', '◧', 'Vue dérivée'], column: ['t-attr', '◈', 'Attribut'], bo: ['t-obj', '🏛', 'Objet métier'], report: ['t-report', '📊', 'Rapport'], term: ['t-ref', '📖', 'Terme'], perimeter: ['t-ref', '🧩', 'Périmètre'], usecase: ['t-report', '🎯', 'Cas d\'usage'], asset: ['t-ref', '🖥', 'Appli / processus'], rule: ['t-ref', '📏', 'Règle qualité'], recipe: ['t-view', '🧹', 'Préparation'], linkage: ['t-ref', '🤝', 'Rapprochement'] };
         const CAT_SENS = { perso: ['s-perso', '🛡 Personnelle'], conf: ['s-conf', '🔒 Confidentiel'], non: ['s-non', 'Non sensible'] };
         const CAT_VAL = { ok: ['v-ok', '✓ Validé'], todo: ['v-todo', '◷ À valider'], draft: ['v-draft', '◌ Brouillon'] };
@@ -10564,7 +10641,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             { key: 'val', title: 'Validation', of: e2 => e2.val, opts: () => ['ok', 'todo', 'draft'], lab: v => CAT_VAL[v][1] },
             { key: 'own', title: 'Propriétaire', of: e2 => e2.own || null, opts: ix => Array.from(new Set(ix.map(e2 => e2.own).filter(Boolean))).sort(), lab: v => v },
         ];
-        function catMatch(e2, skipKey) {
+        function catMatch(e2, skipKey, ignoreLayer) {
+            if (!ignoreLayer && skipKey !== 'type' && !catLayerOk(e2)) return false;
             if (catState.q) { const toks = catNorm(catState.q).split(/\s+/).filter(Boolean); if (!toks.every(tk => e2.blob.includes(tk))) return false; }
             for (const f of CAT_FACETS) { if (f.key === skipKey) continue; const sel2 = catState.f[f.key]; if (!sel2.length) continue; if (!sel2.includes(f.of(e2))) return false; }
             return true;
@@ -10618,6 +10696,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const wf = (typeof wfStats === 'function') ? wfStats() : { all: [], validated: [] };
             const list = catSort(ix.filter(e2 => catMatch(e2)));
             catRes = list;
+            const techHidden = ix.filter(e2 => !catLayerOk(e2) && catMatch(e2, null, true)).length;
+            const techAll = ix.filter(e2 => CAT_TECH_TYPES.includes(e2.type)).length;
+            const layerBar = `<div class="seg-ux" role="group" aria-label="Couche du catalogue" title="Métier : objets, applications, processus, termes… · Tout : ajoute les tables, colonnes et vues issues des sources">
+                <button data-ro="keep" id="catLayerMetier" class="${catState.layer !== 'tout' ? 'on' : ''}" onclick="catSet('layer','metier')">🏛 Métier</button>
+                <button data-ro="keep" id="catLayerTout" class="${catState.layer === 'tout' ? 'on' : ''}" onclick="catSet('layer','tout')">▦ Tout</button></div>`;
+            const techHint = catState.layer !== 'tout' && techHidden
+                ? `<button data-ro="keep" id="catTechHint" onclick="catSet('layer','tout')" class="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2.5 py-0.5 hover:bg-indigo-100" title="Afficher aussi les tables, colonnes et vues issues des sources">+ ${techHidden} donnée(s) technique(s) masquée(s)</button>` : '';
             const chip = [];
             CAT_FACETS.forEach(f => catState.f[f.key].forEach(v => chip.push(`<button data-ro="keep" onclick="catToggleFacet('${f.key}',${JSON.stringify(String(v)).replace(/"/g, '&quot;')})" class="achip-ux" aria-label="Retirer le filtre ${escapeHTML(f.lab(v))}">${escapeHTML(f.lab(v))} ✕</button>`)));
             const facetsHtml = CAT_FACETS.map(f => {
@@ -10639,7 +10724,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <p class="text-[12px] text-slate-300 mt-0.5 mb-3">Trouvez la donnée dont vous avez besoin, vérifiez si vous pouvez lui faire confiance, comprenez comment l'utiliser.</p>
                 <div class="cat-bigsearch"><span class="text-lg text-slate-400" aria-hidden="true">🔍</span>
                     <input data-ro="keep" id="catQ" value="${escapeHTML(catState.q)}" oninput="catSet('q', this.value)" placeholder="Rechercher une table, une donnée, un domaine, un propriétaire…" aria-label="Rechercher dans le catalogue">
-                    <span class="text-[11px] text-slate-400 border-l border-slate-200 pl-3 whitespace-nowrap hidden sm:inline">dans tout le catalogue</span></div>
+                    <span class="text-[11px] text-slate-400 border-l border-slate-200 pl-3 whitespace-nowrap hidden sm:inline">${catState.layer === 'tout' ? 'dans tout le catalogue' : 'vue métier'}</span></div>
                 <div class="flex items-center gap-2 mt-2.5 flex-wrap"><span class="text-[11px] text-slate-400">Essayez :</span>
                     ${exs.map(x => `<button data-ro="keep" onclick="catSet('q', ${JSON.stringify(String(x)).replace(/"/g, '&quot;')})" class="cat-ex">${escapeHTML(x)}</button>`).join('')}</div>
                 <div class="flex gap-7 mt-3.5 flex-wrap">
@@ -10658,8 +10743,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-2.5 flex-wrap">
                         <span class="text-[13px] font-bold"><b class="text-emerald-600">${list.length}</b> résultat(s)</span>
+                        ${techHint}
                         ${chip.join('')}
                         <span class="flex-grow"></span>
+                        ${layerBar}
                         <label class="text-[11px] text-slate-400">Trier</label>
                         <select data-ro="keep" onchange="catSet('sort', this.value)" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white" aria-label="Tri des résultats">
                             ${[['pertinence', 'Pertinence'], ['qualite', 'Qualité'], ['fraicheur', 'Fraîcheur'], ['alpha', 'A → Z']].map(([v, l]) => `<option value="${v}" ${catState.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -10667,7 +10754,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     </div>
                     ${list.length ? `<div class="grid gap-3 ${catState.view === 'grid' ? 'md:grid-cols-2' : 'grid-cols-1'}">${list.slice(0, 60).map((e2, i) => catCardHtml(e2, i)).join('')}</div>
                         ${list.length > 60 ? `<p class="text-[11px] text-slate-400 italic mt-2">… ${list.length - 60} autre(s) — précisez la recherche.</p>` : ''}`
-                        : emptyStateHtml('🔍', 'Aucun actif ne correspond', 'Essayez d\'élargir vos filtres ou une autre recherche — ou chargez des sources et documentez-les pour peupler le catalogue.', chip.length || catState.q ? 'Tout effacer' : '', 'catClearFacets()')}
+                        : (techHidden && catState.layer !== 'tout'
+                            ? emptyStateHtml('🏛', 'Rien côté métier — mais ' + techHidden + ' donnée(s) technique(s) correspondent', 'La vue métier ne montre que les objets, applications, processus, termes et règles. Les tables et colonnes issues des sources sont masquées par défaut.', 'Afficher les données techniques', "catSet('layer','tout')")
+                            : emptyStateHtml('🔍', 'Aucun actif ne correspond', 'Essayez d\'élargir vos filtres ou une autre recherche — ou chargez des sources et documentez-les pour peupler le catalogue.', chip.length || catState.q ? 'Tout effacer' : '', 'catClearFacets()'))}
                 </div>
             </div>`;
             return html;
@@ -10760,17 +10849,24 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const tg = termTargets(t2);
                     if (!tg.length) return `<div class="dsect"><h4>Ce terme désigne</h4><p class="text-[11.5px] text-slate-400 italic">Aucune donnée pour l'instant. Reliez-le : dans le <b>Glossaire</b> (colonnes), ou en choisissant ce terme dans la colonne « Terme » du <b>Dictionnaire</b>.</p></div>`;
                     return `<div class="dsect"><h4>Ce terme désigne (${tg.length})</h4>${tg.map(x => {
-                        const target = x.kind === 'bo' || x.kind === 'attr'
-                            ? catRes.find(r2 => r2.type === 'bo' && r2.bo === x.boId)
-                            : catRes.find(r2 => r2.type === 'column' && r2.tbl === x.table && r2.col === x.col);
+                        const key = x.kind === 'bo' || x.kind === 'attr' ? { type: 'bo', bo: x.boId } : { type: 'column', tbl: x.table, col: x.col };
                         const ic = x.kind === 'col' ? '▦' : (x.kind === 'attr' ? '🔹' : '🏛️');
                         const inner = `<span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(x.label)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(x.via)}</span></span>`;
-                        return target
-                            ? `<button data-ro="keep" onclick="catOpenFiche(${catRes.indexOf(target)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`
-                            : `<div class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5">${inner}</div>`;
+                        return `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`;
                     }).join('')}</div>`; })() : ''}
-                ${e2.type === 'column' && (e2.syns || []).length ? `<div class="dsect"><h4>Termes du glossaire (synonymes métier)</h4><div class="flex gap-1.5 flex-wrap">${(e2.syns || []).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn); const tr2 = tt && catRes.find(r2 => r2.type === 'term' && (r2.termId || r2.id) === tt.id);
-                    return tr2 ? `<button data-ro="keep" onclick="catOpenFiche(${catRes.indexOf(tr2)})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold hover:bg-indigo-100">📖 ${escapeHTML(sn)}</button>` : `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold">📖 ${escapeHTML(sn)}</span>`; }).join('')}</div></div>` : ''}
+                ${e2.type === 'column' && (e2.syns || []).length ? `<div class="dsect"><h4>Termes du glossaire (synonymes métier)</h4><div class="flex gap-1.5 flex-wrap">${(e2.syns || []).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn);
+                    return tt ? `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'term', id: tt.id })})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold hover:bg-indigo-100">📖 ${escapeHTML(sn)}</button>` : `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold">📖 ${escapeHTML(sn)}</span>`; }).join('')}</div></div>` : ''}
+                ${e2.type === 'bo' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
+                    const prod = (bo.producedBy || []).map(assetById).filter(Boolean), cons = (bo.consumedBy || []).map(assetById).filter(Boolean);
+                    const srcs = (bo.sources || []).filter(s2 => s2 && s2.table);
+                    const ROLE2 = { maitre: 'maître', contributeur: 'contributeur', destinataire: 'destinataire' };
+                    const row = (ic, lbl, sub, key) => `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(lbl)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(sub)}</span></span><span class="ml-auto text-slate-300">›</span></button>`;
+                    if (!prod.length && !cons.length && !srcs.length) return `<div class="dsect"><h4>Chaîne de l'objet</h4><p class="text-[11.5px] text-slate-400 italic">Aucune source ni application rattachée. Complétez la fiche de l'objet (onglet <b>Sources</b>) pour voir sa chaîne amont → aval.</p></div>`;
+                    return `<div class="dsect"><h4>Chaîne de l'objet</h4>
+                        ${prod.map(a => row(a.kind === 'process' ? '⚙️' : '🖥', a.name, 'produit l\'objet', { type: 'asset', id: a.id })).join('')}
+                        ${srcs.map(s2 => row('▦', s2.table, 'source ' + (ROLE2[s2.role] || s2.role || '') + ' (donnée technique)', { type: tableByName(s2.table) && tableByName(s2.table).type === 'extraction' ? 'view' : 'table', tbl: s2.table })).join('')}
+                        ${cons.map(a => row(a.kind === 'process' ? '⚙️' : '🖥', a.name, 'consomme l\'objet', { type: 'asset', id: a.id })).join('')}
+                    </div>`; })() : ''}
                 ${rel.length ? `<div class="dsect"><h4>Actifs liés (${escapeHTML(e2.dom)})</h4>${rel.map(x => { const [xc, xi, xl] = CAT_TYPES[x.type];
                     return `<button data-ro="keep" onclick="catOpenFiche(${relIdx(x)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="cat-tico ${xc}" style="width:26px;height:26px;font-size:12px">${xi}</span><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${escapeHTML(x.title)}</span><span class="block text-[10px] text-slate-400">${xl}</span></span><span class="ml-auto text-slate-300">›</span></button>`; }).join('')}</div>` : ''}`;
             _catFicheCtx = e2;
@@ -10801,18 +10897,28 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const e2 = _catFicheCtx; if (!e2) return;
             // Attribut/colonne : le lineage nœuds-liens s'affiche DANS la fiche, sans la quitter.
             if (e2.type === 'column' && e2.tbl && e2.col) { catShowAttrLineage(e2); return; }
+            // V8.6 — Objet métier : même présentation que pour un attribut, dans la fiche.
+            if (e2.type === 'bo' && (state.governance.businessObjects || []).some(x => x.id === e2.bo)) { catShowAttrLineage(e2); return; }
+            closeUxDrawer();
+            openGovTab('lineage');
+        }
+        // Ouvre l'onglet Lineage (vue par attribut) sur l'objet de la fiche courante.
+        function catGoLineageTab() {
+            const e2 = _catFicheCtx; if (!e2) return;
             closeUxDrawer();
             if (e2.type === 'bo') { govState.lineageView = 'attr'; govState.lineageAttrBo = e2.bo; }
             openGovTab('lineage');
         }
         function catShowAttrLineage(e2) {
             const box = el('catLineageBox'); if (!box) return;
-            const data = buildColumnLineageGraph(e2.tbl, e2.col);
+            const isBo = e2.type === 'bo';
+            const data = isBo ? buildBoLineageGraph((state.governance.businessObjects || []).find(x => x.id === e2.bo)) : buildColumnLineageGraph(e2.tbl, e2.col);
             el('uxDrawer').classList.add('wide'); // plus de place horizontale pour le graphe
             box.classList.remove('hidden');
             box.innerHTML = `<div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »</span>
+                <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »${isBo ? ' <span class="font-normal text-slate-500">— sources → objet → usages</span>' : ''}</span>
                 <span class="flex items-center gap-1.5">
+                    ${isBo ? `<button data-ro="keep" onclick="catGoLineageTab()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Ouvrir la vue par attribut de l'onglet Lineage">↗ Par attribut</button>` : ''}
                     <button data-ro="keep" onclick="catLineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Afficher en plein écran">⛶ Agrandir</button>
                     <button data-ro="keep" onclick="catCloseLineage()" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
                 <div id="catLineageWrap" class="h-[460px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
@@ -11936,8 +12042,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.5.0';
+        const APP_VERSION = '8.6.0';
         const APP_CHANGELOG = [
+            { v: '8.6.0', d: '2026-09-04', t: 'Le catalogue parle métier — et le lineage d\'un objet s\'affiche comme celui d\'un attribut', items: [
+                '<b>Vue métier par défaut</b> : le catalogue présente d\'abord les <b>objets métier, applications, processus</b>, termes, règles et rapports. Les tables, colonnes et vues issues des sources restent indexées (chercher « CA_HT » les trouve) mais n\'apparaissent plus par défaut.',
+                'Bascule <b>🏛 Métier / ▦ Tout</b> dans la barre des résultats ; sous le compteur, « + n donnée(s) technique(s) masquée(s) » indique ce que la recherche trouverait en couche technique, en un clic. Cocher un type technique dans la facette (Table, Attribut…) l\'inclut aussi.',
+                'Un état vide honnête : « Rien côté métier — mais n donnée(s) technique(s) correspondent » avec le bouton pour les afficher, au lieu d\'un « aucun actif » trompeur.',
+                '<b>Lineage d\'un objet métier dans sa fiche</b> : « 🕸 Voir le lineage » ouvre désormais le graphe <b>dans la fiche</b>, comme pour un attribut — applications productrices → sources maître / contributrices → objet → applications, processus et tables destinataires, avec le nombre d\'attributs utilisés par consommateur. Un lien « ↗ Par attribut » conduit à la vue détaillée de l\'onglet Lineage.',
+                'Le même graphe est disponible dans <b>Objets métier ▸ Applis & usages</b> via le bouton « 🕸 Lineage de l\'objet », dans l\'encart déjà utilisé pour le lineage d\'attribut.',
+                'La fiche d\'un objet liste sa <b>chaîne</b> (applications productrices, sources techniques avec leur rôle, consommateurs), chaque entrée cliquable. Les liens vers une donnée technique masquée basculent automatiquement la couche « Tout » : un lien ne tombe jamais dans le vide.'] },
             { v: '8.5.0', d: '2026-07-31', t: 'Les termes du glossaire deviennent de vrais synonymes dans le catalogue', items: [
                 '<b>Un terme est le nom métier d\'une donnée</b> — « Chiffre d\'affaires » pour la colonne <code>CA_HT</code>. Le modèle savait déjà relier un terme de trois façons (liens du glossaire vers des colonnes, rattachement à des objets métier, champ « Terme » posé sur un attribut ou une colonne), mais le catalogue n\'en restituait <b>aucune</b>.',
                 '<b>Chercher le terme trouve maintenant la donnée</b> : les noms de termes entrent dans le texte de recherche des colonnes qu\'ils désignent, et réciproquement les données désignées rendent le terme trouvable. C\'est le comportement de synonyme attendu.',
