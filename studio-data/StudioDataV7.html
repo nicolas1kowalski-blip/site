@@ -265,6 +265,81 @@
         html[data-theme="dark"] .bo-map-none{background:#3b2a08;border-color:#7c5a12;color:#fcd34d}
         html[data-theme="dark"] .bo-attr-tbl .bo-handle button:hover{background:#243049;color:#6ee7b7}
         html[data-theme="dark"] .bo-attr-tbl .bo-multi-note{color:#a7b4c6}
+        /* V9.0 — Fiche objet métier repensée : carte d'identité + complétude, espace maître-détail */
+        .bo-tabn-on{background:#d1fae5;color:#065f46;font-weight:800}
+        html[data-theme="dark"] .bo-tabn-on{background:#1f6b52;color:#d1fae5}
+        .bo-prog{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden;flex:1 1 0;min-width:120px}
+        .bo-prog>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#059669,#10b981)}
+        .bo-prog.lo>span{background:linear-gradient(90deg,#dc2626,#f59e0b)}.bo-prog.mid>span{background:linear-gradient(90deg,#d97706,#fbbf24)}
+        .bo-todo{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#9a3412;background:#fff7ed;border:1px solid #fdba74;border-radius:999px;padding:3px 10px;cursor:pointer;white-space:nowrap}
+        .bo-todo:hover{background:#ffedd5}
+        .bo-todo.ok{color:#065f46;background:#ecfdf5;border-color:#a7f3d0;cursor:default}
+        .bo-ws{display:flex;gap:14px;align-items:flex-start}
+        .bo-list{width:300px;flex-shrink:0;border:1px solid #e2e8f0;border-radius:12px;background:#fff;overflow:hidden;max-height:72vh;overflow-y:auto;outline:none}
+        .bo-list:focus-visible{box-shadow:0 0 0 2px #a7f3d0}
+        .bo-lhead{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:6px;padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748b;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+        .bo-lhead.fac{color:#047857;background:#ecfdf5;border-color:#d1fae5;cursor:pointer}
+        .bo-lhead.fac:hover{background:#d1fae5}.bo-lhead.fac.on{background:#a7f3d0}
+        .bo-lhead .n{margin-left:auto;font-weight:700;background:#e2e8f0;color:#475569;border-radius:999px;padding:0 6px;font-size:10px;letter-spacing:0}
+        .bo-item{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;border-left:3px solid transparent}
+        .bo-item:hover{background:#f8fafc}
+        .bo-item.on{background:#ecfdf5;border-left-color:#059669}
+        .bo-item.sub{padding-left:22px}
+        .bo-item .nm{font-size:13px;font-weight:700;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .bo-item .prov{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .bo-item .prov.warn{color:#b45309;font-family:inherit;font-weight:700}
+        .bo-dots{display:inline-flex;gap:3px;flex-shrink:0}
+        .bo-dot{width:8px;height:8px;border-radius:999px;background:#e2e8f0}
+        .bo-dot.ok{background:#10b981}.bo-dot.ko{background:#fbbf24}
+        .bo-detail{flex:1 1 0;min-width:0;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+        .bo-dhead{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc;border-radius:12px 12px 0 0}
+        .bo-dhead h3{margin:0;font-size:15px;font-weight:800;color:#1e293b}
+        .bo-dhead .sub{font-size:11px;color:#64748b}
+        .bo-sect{padding:12px 16px;border-bottom:1px solid #f1f5f9}
+        .bo-sect:last-child{border-bottom:0}
+        .bo-sect>h4{margin:0 0 8px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748b}
+        .bo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+        .bo-fld label{display:block;font-size:10.5px;font-weight:700;color:#475569;margin-bottom:3px}
+        .bo-fld input[type=text],.bo-fld select,.bo-fld textarea{width:100%;font-size:12.5px;padding:7px 9px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;min-height:34px}
+        .bo-fld textarea{min-height:64px;resize:vertical;line-height:1.4}
+        .bo-fld .hint{font-size:10.5px;color:#64748b;margin-top:3px}
+        .bo-use{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px;background:#fff;cursor:pointer;user-select:none}
+        .bo-use.on{background:#ecfdf5;border-color:#6ee7b7;color:#065f46}
+        .bo-use input{width:14px;height:14px}
+        .bo-filt{display:inline-flex;border:1px solid #cbd5e1;border-radius:9px;overflow:hidden;background:#fff}
+        .bo-filt button{font-size:11px;font-weight:700;padding:5px 10px;color:#475569;border-right:1px solid #e2e8f0;white-space:nowrap}
+        .bo-filt button:last-child{border-right:0}
+        .bo-filt button.on{background:#0f172a;color:#fff}
+        .bo-empty{padding:40px 20px;text-align:center;color:#64748b;font-size:13px}
+        html[data-theme="dark"] .bo-prog{background:#2c3550}
+        html[data-theme="dark"] .bo-todo{color:#fdba74;background:#3b2a08;border-color:#7c5a12}
+        html[data-theme="dark"] .bo-todo:hover{background:#4a3410}
+        html[data-theme="dark"] .bo-todo.ok{color:#a7f3d0;background:#0f2e26;border-color:#1f6b52}
+        html[data-theme="dark"] .bo-list,html[data-theme="dark"] .bo-detail{background:#141827;border-color:#2c3550}
+        html[data-theme="dark"] .bo-lhead{background:#1a2036;border-color:#2c3550;color:#a7b4c6}
+        html[data-theme="dark"] .bo-lhead.fac{background:#0f2e26;border-color:#1f6b52;color:#a7f3d0}
+        html[data-theme="dark"] .bo-lhead.fac:hover,html[data-theme="dark"] .bo-lhead.fac.on{background:#1f6b52}
+        html[data-theme="dark"] .bo-lhead .n{background:#2c3550;color:#c7d2fe}
+        html[data-theme="dark"] .bo-item{border-color:#1f2540}
+        html[data-theme="dark"] .bo-item:hover{background:#1a2036}
+        html[data-theme="dark"] .bo-item.on{background:#0f2e26;border-left-color:#34d399}
+        html[data-theme="dark"] .bo-item .nm{color:#e2e8f0}
+        html[data-theme="dark"] .bo-item .prov{color:#94a3b8}
+        html[data-theme="dark"] .bo-item .prov.warn{color:#fcd34d}
+        html[data-theme="dark"] .bo-dot{background:#2c3550}
+        html[data-theme="dark"] .bo-dot.ok{background:#34d399}html[data-theme="dark"] .bo-dot.ko{background:#fbbf24}
+        html[data-theme="dark"] .bo-dhead{background:#1a2036;border-color:#2c3550}
+        html[data-theme="dark"] .bo-dhead h3{color:#e2e8f0}
+        html[data-theme="dark"] .bo-dhead .sub,html[data-theme="dark"] .bo-sect>h4,html[data-theme="dark"] .bo-fld .hint{color:#a7b4c6}
+        html[data-theme="dark"] .bo-sect{border-color:#1f2540}
+        html[data-theme="dark"] .bo-fld label{color:#c7d2fe}
+        html[data-theme="dark"] .bo-fld input[type=text],html[data-theme="dark"] .bo-fld select,html[data-theme="dark"] .bo-fld textarea{background:#0f1320;border-color:#3b4a6b;color:#e2e8f0}
+        html[data-theme="dark"] .bo-use{background:#0f1320;border-color:#3b4a6b;color:#e2e8f0}
+        html[data-theme="dark"] .bo-use.on{background:#0f2e26;border-color:#1f6b52;color:#a7f3d0}
+        html[data-theme="dark"] .bo-filt{background:#0f1320;border-color:#3b4a6b}
+        html[data-theme="dark"] .bo-filt button{color:#c7d2fe;border-color:#2c3550}
+        html[data-theme="dark"] .bo-filt button.on{background:#6366f1;color:#fff}
+        html[data-theme="dark"] .bo-empty{color:#a7b4c6}
         .cat-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;box-shadow:var(--shadow);cursor:pointer;transition:.1s}
         .cat-card:hover{border-color:#a7f3d0;box-shadow:0 4px 16px rgba(5,150,105,.12);transform:translateY(-1px)}
         .cat-tico{width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:#fff}
@@ -4473,27 +4548,259 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
 
         // Fiche détaillée d'un objet métier : identité, sources & rôles, attributs, règles contextuelles.
+        // ======================= V9.0 : FICHE OBJET MÉTIER REPENSÉE =======================
+        // Voir, modifier et ENRICHIR un objet en un seul endroit : une carte d'identité avec un
+        // score de complétude et ses actions, puis un espace maître-détail — la liste des attributs
+        // (cœur + facettes) à gauche, un vrai formulaire pour l'attribut sélectionné à droite :
+        // sens métier (définition, exemples, sensibilité, terme), provenance, usages, ordre, lineage.
+        // La vue « Tableau » historique reste disponible d'un clic.
+        const BO_FILTERS = [['all', 'Tous'], ['nomap', '⚠ Non alimentés'], ['nodef', '✎ Sans définition'], ['nouse', '😴 Sans usage']];
+        function boAttrHasMap(r) { return r.stId ? !!r.el.col : (r.el.mappings || []).length > 0; }
+        function boAttrProv(r) { return r.stId ? (r.el.col ? r.facet + '.' + r.el.col : '') : (r.el.mappings || []).map(m => m.table + '.' + m.col).join(' · '); }
+        function boFilterOk(bo, r) {
+            const f = govState.boFilter || 'all';
+            if (f === 'nomap' && boAttrHasMap(r)) return false;
+            if (f === 'nodef' && r.el.definition) return false;
+            if (f === 'nouse' && ((r.el.usedBy || []).length || !(state.governance.assets || []).length)) return false;
+            const q = catNorm(govState.boQ || '');
+            if (q && !catNorm([r.el.name, boAttrProv(r), r.el.definition || ''].join(' ')).includes(q)) return false;
+            return true;
+        }
+        // Complétude de la fiche : ce qui manque, avec l'action qui y mène.
+        function boCompleteness(bo) {
+            const rows = boAllAttrRows(bo) || [];
+            const hasAssets = (state.governance.assets || []).length > 0;
+            const noMap = rows.filter(r => !boAttrHasMap(r)).length, noDef = rows.filter(r => !r.el.definition).length, noUse = rows.filter(r => !(r.el.usedBy || []).length).length;
+            const checks = [
+                { w: 15, ok: !!(bo.definition || '').trim(), lbl: 'Écrire la définition', act: `boFocus('bo-def-${bo.id}')` },
+                { w: 15, ok: !!(bo.globalOwner || '').trim(), lbl: 'Désigner un propriétaire', act: `boFocus('bo-own-${bo.id}')` },
+                { w: 15, ok: (bo.sources || []).some(x => x.role === 'maitre'), lbl: 'Désigner une source maître', act: `setBoTab('sources')` },
+                { w: 10, ok: rows.length > 0, lbl: 'Ajouter des attributs', act: `setBoTab('structure')` },
+                { w: 15, ok: rows.length > 0 && noMap === 0, lbl: noMap + ' attribut(s) non alimenté(s)', act: `boGoFilter('nomap')` },
+                { w: 15, ok: rows.length > 0 && noDef === 0, lbl: noDef + ' attribut(s) sans définition', act: `boGoFilter('nodef')` },
+                ...(hasAssets ? [{ w: 10, ok: rows.length > 0 && noUse === 0, lbl: noUse + ' attribut(s) sans usage', act: `boGoFilter('nouse')` }] : []),
+                { w: 5, ok: bo.status === 'Validé', lbl: 'Faire valider l\'objet', act: `boFocus('bo-status-${bo.id}')` },
+            ];
+            const tot = checks.reduce((a, c) => a + c.w, 0), got = checks.filter(c => c.ok).reduce((a, c) => a + c.w, 0);
+            return { score: Math.round(100 * got / tot), todos: checks.filter(c => !c.ok), done: checks.filter(c => c.ok).length, all: checks.length };
+        }
+        function boFocus(id) { const e2 = el(id); if (!e2) return; e2.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => { try { e2.focus(); } catch (er) {} }, 250); }
+        function boGoFilter(f) { govState.boTab = 'structure'; govState.structView = 'fiche'; govState.boFilter = f; govState.boQ = ''; govState.boSel = null; renderGovernance(); }
+        function boSetFilter(f) { govState.boFilter = f; renderGovernance(); }
+        function boSetQ(v) { govState.boQ = v; renderGovernance(); const i = el('boQ'); if (i) { i.focus(); const n = i.value.length; i.setSelectionRange(n, n); } }
+        function boSetStructView(v) { govState.structView = v; renderGovernance(); }
+        function boSelect(kind, stId, elId) { govState.boSel = { kind, stId: stId || '', elId: elId || '' }; renderGovernance(); const d = el('boDetail'); if (d && window.innerWidth < 1100) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        // Navigation clavier dans la liste : ↑ ↓ changent la sélection, Entrée ouvre le formulaire.
+        function boListKey(ev, boId) {
+            if (!['ArrowUp', 'ArrowDown'].includes(ev.key)) return;
+            ev.preventDefault();
+            const items = Array.from(document.querySelectorAll('#boList [data-sel]'));
+            const cur = items.findIndex(x => x.classList.contains('on'));
+            const nx = ev.key === 'ArrowDown' ? Math.min(items.length - 1, cur + 1) : Math.max(0, cur - 1);
+            if (items[nx]) { const k = JSON.parse(items[nx].getAttribute('data-sel')); boSelect(k.kind, k.stId, k.elId); requestAnimationFrame(() => { const l = el('boList'); if (l) l.focus(); }); }
+        }
+        function boCompletenessHtml(bo) {
+            const c = boCompleteness(bo);
+            const cls = c.score < 40 ? 'lo' : (c.score < 75 ? 'mid' : '');
+            return `<div class="flex items-center gap-3 flex-wrap mt-3">
+                <span class="text-[11px] font-black uppercase tracking-wide text-slate-500 whitespace-nowrap">Fiche complète à</span>
+                <b class="text-base ${c.score < 40 ? 'text-red-600' : (c.score < 75 ? 'text-amber-700' : 'text-emerald-700')}">${c.score} %</b>
+                <div class="bo-prog ${cls}" role="progressbar" aria-valuenow="${c.score}" aria-valuemin="0" aria-valuemax="100"><span style="width:${c.score}%"></span></div>
+                <span class="text-[11px] text-slate-500 whitespace-nowrap">${c.done}/${c.all} critères</span></div>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2">${c.todos.length
+                    ? c.todos.map(t => `<button data-ro="keep" onclick="${t.act}" class="bo-todo" title="Cliquer pour y aller">→ ${escapeHTML(t.lbl)}</button>`).join('')
+                    : '<span class="bo-todo ok">✓ Rien ne manque — la fiche est complète</span>'}</div>`;
+        }
+        // ---- Espace « Attributs & composition » ----
+        function renderBoWorkspace(bo, names) {
+            if (govState.structView === undefined) govState.structView = 'fiche';
+            const toolbar = `<div class="flex items-center gap-2 flex-wrap mb-3">
+                <input data-ro="keep" id="boQ" type="text" value="${escapeHTML(govState.boQ || '')}" oninput="boSetQ(this.value)" placeholder="Filtrer les attributs…" aria-label="Filtrer les attributs" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs w-52 bg-white">
+                <div class="bo-filt" role="group" aria-label="Filtre">${BO_FILTERS.map(([k, l]) => `<button data-ro="keep" class="${(govState.boFilter || 'all') === k ? 'on' : ''}" onclick="boSetFilter('${k}')">${l}</button>`).join('')}</div>
+                <span class="flex-grow"></span>
+                <button onclick="boAddAttrAndSelect('${bo.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-bold">+ Attribut</button>
+                <button onclick="boSelect('newfacet')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">+ Facette</button>
+                <div class="seg-ux" role="group" aria-label="Affichage"><button data-ro="keep" class="${govState.structView !== 'table' ? 'on' : ''}" onclick="boSetStructView('fiche')" title="Liste + formulaire">▤ Fiche</button><button data-ro="keep" class="${govState.structView === 'table' ? 'on' : ''}" onclick="boSetStructView('table')" title="Tableau complet (vue historique)">▦ Tableau</button></div>
+            </div>`;
+            if (govState.structView === 'table') return toolbar + renderBoStructure(bo, names);
+            const rows = boAllAttrRows(bo) || [];
+            const shown = rows.filter(r => boFilterOk(bo, r));
+            const sel = govState.boSel || null;
+            // sélection par défaut : premier attribut visible
+            let cur = sel;
+            const exists = k => !k ? false : (k.kind === 'attr' ? rows.some(r => r.el.id === k.elId) : (k.kind === 'facet' ? getBoFacets(bo).some(st => st.id === k.stId) : true));
+            if (!exists(cur)) cur = shown.length ? { kind: 'attr', stId: shown[0].stId || '', elId: shown[0].el.id } : { kind: 'none' };
+            const isOn = (kind, stId, elId) => cur.kind === kind && (cur.stId || '') === (stId || '') && (cur.elId || '') === (elId || '');
+            const hasAssets = (state.governance.assets || []).length > 0;
+            const item = r => { const on = isOn('attr', r.stId, r.el.id); const map = boAttrHasMap(r);
+                const dots = `<span class="bo-dots" aria-hidden="true"><span class="bo-dot ${map ? 'ok' : 'ko'}" title="${map ? 'Alimenté' : 'Non alimenté'}"></span><span class="bo-dot ${r.el.definition ? 'ok' : ''}" title="${r.el.definition ? 'Défini' : 'Sans définition'}"></span>${hasAssets ? `<span class="bo-dot ${(r.el.usedBy || []).length ? 'ok' : ''}" title="${(r.el.usedBy || []).length ? 'Usages déclarés' : 'Sans usage'}"></span>` : ''}</span>`;
+                return `<div class="bo-item ${r.stId ? 'sub' : ''} ${on ? 'on' : ''}" data-sel='${JSON.stringify({ kind: 'attr', stId: r.stId || '', elId: r.el.id })}' onclick="boSelect('attr','${r.stId || ''}','${r.el.id}')" role="option" aria-selected="${on}">
+                    <span class="min-w-0 flex-1"><span class="nm block">${escapeHTML(r.el.name)}</span><span class="prov block ${map ? '' : 'warn'}">${map ? escapeHTML(boAttrProv(r)) : '⚠ non alimenté'}</span></span>${dots}</div>`; };
+            const core = shown.filter(r => !r.stId);
+            let list = `<div class="bo-lhead">🏛️ Attributs propres <span class="n">${core.length}${core.length !== rows.filter(r => !r.stId).length ? '/' + rows.filter(r => !r.stId).length : ''}</span></div>`;
+            list += core.length ? core.map(item).join('') : `<div class="text-[11px] text-slate-400 italic px-3 py-2">${rows.some(r => !r.stId) ? 'Aucun attribut ne correspond au filtre.' : 'Aucun attribut propre — « + Attribut ».'}</div>`;
+            getBoFacets(bo).forEach(st => {
+                const fr = shown.filter(r => r.stId === st.id);
+                list += `<div class="bo-lhead fac ${isOn('facet', st.id, '') ? 'on' : ''}" data-sel='${JSON.stringify({ kind: 'facet', stId: st.id, elId: '' })}' onclick="boSelect('facet','${st.id}','')" title="Ouvrir la définition du composant (table, filtre, cardinalité)">◆ ${escapeHTML(st.name)} <span class="normal-case font-medium text-[10px] opacity-80">${escapeHTML(st.cardinality || '')}</span><span class="n">${(st.elements || []).length}</span></div>`;
+                list += fr.map(item).join('');
+            });
+            list += `<div class="bo-lhead ${isOn('refs', '', '') ? 'fac on' : ''}" data-sel='{"kind":"refs","stId":"","elId":""}' onclick="boSelect('refs','','')" style="cursor:pointer">🔗 Objets référencés <span class="n">${(bo.references || []).length}</span></div>`;
+            let detail = '';
+            if (cur.kind === 'attr') { const r = rows.find(x => x.el.id === cur.elId); detail = r ? boAttrFormHtml(bo, r, names) : ''; }
+            else if (cur.kind === 'facet') { const st = getBoFacets(bo).find(x => x.id === cur.stId); detail = st ? boFacetFormHtml(bo, st, names) : ''; }
+            else if (cur.kind === 'refs') detail = boRefsFormHtml(bo);
+            else if (cur.kind === 'newfacet') detail = boNewFacetFormHtml(bo, names);
+            else detail = `<div class="bo-empty">🧩 Aucun attribut pour l'instant.<br><span class="text-[12px]">Cliquez sur <b>+ Attribut</b> pour créer le premier, ou sur <b>+ Facette</b> pour rattacher un composant (adresse, contact…).</span></div>`;
+            return toolbar + `<div class="bo-ws">
+                <div id="boList" class="bo-list" tabindex="0" role="listbox" aria-label="Attributs de l'objet" onkeydown="boListKey(event,'${bo.id}')">${list}</div>
+                <div id="boDetail" class="bo-detail">${detail}</div>
+            </div>
+            <div id="attrLineageBox" class="hidden mt-3 border-2 border-indigo-200 rounded-xl bg-white p-3"></div>`;
+        }
+        function boAddAttrAndSelect(boId) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
+            bo.elements = bo.elements || [];
+            const e2 = { id: 'be_' + generateId(), name: 'Nouvel attribut', owner: '', mappings: [] };
+            bo.elements.push(e2); persistAppState();
+            govState.boFilter = 'all'; govState.boQ = ''; govState.boSel = { kind: 'attr', stId: '', elId: e2.id };
+            renderGovernance(); boFocus('boF-name');
+        }
+        function boAttrWriteR(boId, stId, elId, f, v, rerender) { boAttrWrite(boId, stId, elId, f, v); if (rerender) renderGovernance(); }
+        // Formulaire d'un attribut : tout ce qui le décrit, en sections lisibles.
+        function boAttrFormHtml(bo, r, names) {
+            const e2 = r.el, stId = r.stId || '';
+            const st = stId ? getBoFacets(bo).find(x => x.id === stId) : null;
+            const W = (f, rer) => `boAttrWriteR('${bo.id}','${stId}','${e2.id}','${f}',this.value,${rer ? 'true' : 'false'})`;
+            const assets = state.governance.assets || [];
+            const apps = assets.filter(a => a.kind === 'app');
+            const globalSrc = (bo.producedBy || [])[0] || '';
+            const multi = boMultiNorm(e2.multi) || '';
+            const cnt = boAttrMulti(bo, { fold: false, members: [{ el: e2, stId }], idx: [], stId });
+            const hasMap = boAttrHasMap(r);
+            const glossOpts = cur => '<option value="">— Aucun terme —</option>' + (state.governance.glossary || []).map(g => `<option value="${g.id}" ${g.id === cur ? 'selected' : ''}>${escapeHTML(g.term)}</option>`).join('');
+            const sensOpts = cur => '<option value="">—</option>' + SENSITIVITY_OPTS.map(o => `<option ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
+            // provenance
+            let prov = '';
+            if (st) {
+                const cols = (tableByName(st.table) || { headers: [] }).headers;
+                prov = `<div class="flex items-center gap-2 flex-wrap"><span class="bo-map-chip" title="${escapeHTML(st.table)}"><span class="tb">${escapeHTML(st.table)}</span></span><span class="text-slate-400">▸</span>
+                    <select onchange="${W('col', true)}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white font-mono" aria-label="Colonne technique"><option value="">— aucune —</option>${cols.map(h => `<option ${h === e2.col ? 'selected' : ''}>${escapeHTML(h)}</option>`).join('')}</select>
+                    <span class="text-[11px] text-slate-500">colonne de la facette « ${escapeHTML(st.name)} »</span></div>`;
+            } else {
+                const maps = e2.mappings || [];
+                const master = boMasterTable(bo); const defTbl = master && names.includes(master.name) ? master.name : names[0];
+                const cols = defTbl ? (tableByName(defTbl) || { headers: [] }).headers : [];
+                prov = `<div class="flex items-center gap-1.5 flex-wrap mb-2">${maps.map((m, i) => boMapChipHtml(m, `removeBoMapping('${bo.id}','${e2.id}',${i})`)).join('')}${maps.length ? '' : '<span class="bo-map-none">⚠ non alimenté — choisissez la colonne technique ci-dessous</span>'}</div>
+                    <div class="bo-map-pick"><span class="lbl">Ajouter une colonne</span>
+                        <select id="bo-tbl-${e2.id}" onchange="populateBoMapCols('${e2.id}',this.value)" class="border border-slate-300 bg-white" aria-label="Table">${names.map(n => `<option ${n === defTbl ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
+                        <span class="text-slate-400 text-xs">▸</span>
+                        <select id="bo-col-${e2.id}" class="border border-slate-300 bg-white" aria-label="Colonne">${cols.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                        <button onclick="addBoMapping('${bo.id}','${e2.id}')" class="bg-emerald-600 text-white">Ajouter</button></div>
+                    <div class="text-[10.5px] text-slate-500 mt-1.5">Plusieurs colonnes = le même concept présent dans plusieurs sources (consolidation).</div>`;
+            }
+            const tgl = aid => stId ? `boFacetElToggleUsedBy('${bo.id}','${stId}','${e2.id}','${aid}',this.checked)` : `boElToggleUsedBy('${bo.id}','${e2.id}','${aid}',this.checked)`;
+            const used = e2.usedBy || [];
+            const usage = assets.length ? `<div class="flex gap-1.5 flex-wrap">${assets.map(a => `<label class="bo-use ${used.includes(a.id) ? 'on' : ''}"><input type="checkbox" ${used.includes(a.id) ? 'checked' : ''} onchange="${tgl(a.id)}">${ASSET_KINDS[a.kind] ? ASSET_KINDS[a.kind][0] : ''} ${escapeHTML(a.name)}</label>`).join('')}</div>
+                <div class="bo-grid mt-3"><div class="bo-fld"><label>Source spécifique de cet attribut</label><select onchange="${W('sourceApp', true)}"><option value="">${globalSrc && assetById(globalSrc) ? '= objet (' + escapeHTML(assetById(globalSrc).name) + ')' : '= source de l\'objet'}</option>${apps.map(a => `<option value="${a.id}" ${e2.sourceApp === a.id ? 'selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select><div class="hint">À renseigner seulement si cet attribut vient d'une autre application que l'objet.</div></div></div>`
+                : `<p class="text-[12px] text-slate-500 italic">Aucune application ni processus déclaré — <button data-ro="keep" onclick="openGovTab('assets')" class="text-indigo-600 font-bold underline">déclarez-les</button> pour tracer qui utilise cet attribut.</p>`;
+            const order = stId ? '' : `<span class="bo-handle ml-auto">${[['top', '⤒', 'Tout en haut'], ['up', '▲', 'Monter'], ['down', '▼', 'Descendre'], ['bottom', '⤓', 'Tout en bas']].map(([w, ic, ti]) => `<button onclick="boMoveEl('${bo.id}','${e2.id}','${w}')" class="text-slate-500 hover:text-emerald-700 px-1.5 py-1 rounded border border-slate-200 bg-white text-xs" title="${ti}">${ic}</button>`).join(' ')}</span>`;
+            const del = stId ? `removeFacetElement('${bo.id}','${stId}','${e2.id}')` : `removeBoElement('${bo.id}','${e2.id}')`;
+            return `<div class="bo-dhead"><span class="text-lg" aria-hidden="true">${stId ? '◆' : '🔹'}</span><div class="min-w-0"><h3 class="truncate">${escapeHTML(e2.name)}</h3><div class="sub">${stId ? 'Attribut du composant « ' + escapeHTML(st.name) + ' »' : 'Attribut propre de « ' + escapeHTML(bo.name) + ' »'}${hasMap ? ' · alimenté par ' + escapeHTML(boAttrProv(r)) : ' · <b class="text-amber-700">non alimenté</b>'}</div></div>${order}
+                <button onclick="openAttrLineage('${bo.id}','${stId}','${e2.id}')" class="text-xs bg-indigo-50 border border-indigo-300 text-indigo-800 px-2.5 py-1.5 rounded-lg font-bold hover:bg-indigo-100 whitespace-nowrap" title="Graphe source → colonne → attribut → usages">🕸 Lineage</button>
+                <button onclick="${del}" class="text-xs text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg border border-red-200 bg-white font-bold" title="Supprimer cet attribut">✕</button></div>
+            <div class="bo-sect"><h4>Identité</h4><div class="bo-grid">
+                <div class="bo-fld" style="grid-column:span 2"><label for="boF-name">Nom métier</label><input id="boF-name" type="text" value="${escapeHTML(e2.name)}" onchange="${W('name', true)}" placeholder="ex : Date de fin de construction"></div>
+                <div class="bo-fld"><label>Propriétaire</label><input type="text" value="${escapeHTML(e2.owner || '')}" onchange="${W('owner', false)}" placeholder="${escapeHTML(bo.globalOwner ? '= ' + bo.globalOwner : '— celui de l\'objet —')}"></div>
+                <div class="bo-fld"><label>Nombre de valeurs</label>${boMultiSelectHtml(multi, `boSetMulti('${bo.id}','${stId}','${e2.id}',this.value)`, 'Combien de valeurs cet attribut peut prendre pour un(e) ' + bo.name).replace('class="', 'style="width:100%;min-height:34px;font-size:12.5px;padding:7px 9px;border-radius:8px" class="')}${!multi && cnt.multi ? `<div class="hint">Observé : ${escapeHTML(cnt.label)} (colonnes numérotées) — déclarez-le pour le figer.</div>` : ''}</div>
+            </div></div>
+            <div class="bo-sect"><h4>Sens métier</h4><div class="bo-grid">
+                <div class="bo-fld" style="grid-column:1/-1"><label>Définition</label><textarea onchange="${W('definition', true)}" placeholder="Ce que désigne cet attribut, en langage métier — ce que verra un consommateur de la donnée dans le catalogue.">${escapeHTML(e2.definition || '')}</textarea></div>
+                <div class="bo-fld" style="grid-column:span 2"><label>Exemples de valeurs</label><div class="flex gap-1.5"><input type="text" value="${escapeHTML(e2.examples || '')}" onchange="${W('examples', false)}" placeholder="ex : PARIS ; LYON" ${e2.examplesAuto ? 'title="Valeurs prises dans la source rattachée"' : ''}>${hasMap ? `<button onclick="boAttrSampleOne('${bo.id}','${e2.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2.5 rounded-lg font-bold hover:bg-indigo-50 whitespace-nowrap" title="Prendre les valeurs les plus fréquentes dans la source">🎲 Échantillonner</button>` : ''}</div>${e2.examplesAuto ? '<div class="hint">Échantillonnés automatiquement depuis la source.</div>' : ''}</div>
+                <div class="bo-fld"><label>Sensibilité</label><select onchange="${W('sensitivity', false)}">${sensOpts(e2.sensitivity || '')}</select></div>
+                <div class="bo-fld"><label>Terme du glossaire</label><select onchange="${W('term', false)}">${glossOpts(e2.term || '')}</select><div class="hint">Le terme devient un synonyme cherchable dans le catalogue.</div></div>
+            </div></div>
+            <div class="bo-sect"><h4>Provenance (alimenté par)</h4>${prov}</div>
+            <div class="bo-sect"><h4>Usages — qui utilise cet attribut</h4>${usage}</div>`;
+        }
+        // Formulaire d'une facette (composant) : définition, filtre, applicabilité, attributs.
+        function boFacetFormHtml(bo, st, names) {
+            const t = tableByName(st.table); const cols = t ? t.headers : [];
+            const cardSel = CARD_OPTS.map(o => `<option ${o === st.cardinality ? 'selected' : ''}>${o}</option>`).join('');
+            const scopeChips = (st.scope || []).length ? (st.scope || []).map((sc, ci) => `<span class="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-full px-2 py-0.5 inline-flex items-center gap-1"><strong>${escapeHTML(sc.col)}</strong> ${SCOPE_OPS[sc.op] || sc.op}${sc.op === 'empty' || sc.op === 'notempty' ? '' : ` <strong>"${escapeHTML(sc.val)}"</strong>`} <button onclick="removeFacetScope('${bo.id}','${st.id}',${ci})" class="text-amber-400 hover:text-red-500">✕</button></span>`).join('') : '<span class="text-[11px] text-slate-500 italic">Toute la table — filtrez si cette table porte plusieurs composants (ex : TYPE = PRINCIPALE).</span>';
+            const appChips = (st.applies || []).length ? (st.applies || []).map((sc, ci) => `<span class="text-[11px] bg-purple-50 border border-purple-200 text-purple-800 rounded-full px-2 py-0.5 inline-flex items-center gap-1"><strong>${escapeHTML(sc.col)}</strong> ${SCOPE_OPS[sc.op] || sc.op}${sc.op === 'empty' || sc.op === 'notempty' ? '' : ` <strong>"${escapeHTML(sc.val)}"</strong>`} <button onclick="removeFacetApplies('${bo.id}','${st.id}',${ci})" class="text-purple-400 hover:text-red-500">✕</button></span>`).join('') : '<span class="text-[11px] text-slate-500 italic">Vaut pour tous les ' + escapeHTML(boMasterTable(bo) ? boMasterTable(bo).name : 'objets') + '.</span>';
+            const mh = boMasterTable(bo) ? boMasterTable(bo).headers : [];
+            return `<div class="bo-dhead"><span class="text-lg" aria-hidden="true">◆</span><div class="min-w-0"><h3 class="truncate">${escapeHTML(st.name)}</h3><div class="sub">Composant de « ${escapeHTML(bo.name)} » · ${(st.elements || []).length} attribut(s) · vue de ${escapeHTML(st.table)}</div></div>
+                <button onclick="addFacetElement('${bo.id}','${st.id}')" class="ml-auto text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold">+ Attribut</button>
+                <button onclick="removeBoStructure('${bo.id}','${st.id}')" class="text-xs text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg border border-red-200 bg-white font-bold" title="Détacher ce composant">🗑</button></div>
+            <div class="bo-sect"><h4>Définition du composant</h4><div class="bo-grid">
+                <div class="bo-fld"><label>Nom fonctionnel</label><input type="text" value="${escapeHTML(st.name)}" onchange="updateBoFacet('${bo.id}','${st.id}','name',this.value)"></div>
+                <div class="bo-fld"><label>Cardinalité — 1 ${escapeHTML(bo.name)} contient…</label><select onchange="updateBoFacet('${bo.id}','${st.id}','cardinality',this.value)">${cardSel}</select></div>
+                <div class="bo-fld"><label>Table technique</label><select onchange="updateBoFacet('${bo.id}','${st.id}','table',this.value)" class="font-mono">${names.map(n => `<option ${n === st.table ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select></div>
+            </div></div>
+            <div class="bo-sect"><h4>Filtre fonctionnel — ce qui définit la facette</h4>
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">${scopeChips}</div>
+                <div class="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                    <select id="fac-col-${st.id}" onchange="fillFacetScopeVals('${bo.id}','${st.id}')" class="border border-slate-300 p-1.5 rounded text-xs bg-white font-mono">${cols.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                    <select id="fac-op-${st.id}" onchange="el('fac-val-${st.id}').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(SCOPE_OPS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+                    <input type="text" id="fac-val-${st.id}" list="fac-vals-${st.id}" onfocus="fillFacetScopeVals('${bo.id}','${st.id}')" class="border border-slate-300 p-1.5 rounded text-xs w-36" placeholder="choisir ou saisir…"><datalist id="fac-vals-${st.id}"></datalist>
+                    <button onclick="addFacetScope('${bo.id}','${st.id}')" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold">+ Filtre</button></div></div>
+            <div class="bo-sect"><h4>S'applique uniquement si (objet principal)</h4>
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">${appChips}</div>
+                <div class="flex flex-wrap items-center gap-1.5 bg-purple-50/40 border border-purple-100 rounded-lg p-2">
+                    <select id="fac-app-col-${st.id}" onchange="fillFacetAppliesVals('${bo.id}','${st.id}')" class="border border-slate-300 p-1.5 rounded text-xs bg-white font-mono">${mh.map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
+                    <select id="fac-app-op-${st.id}" onchange="el('fac-app-val-${st.id}').classList.toggle('hidden', this.value==='empty'||this.value==='notempty')" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${Object.entries(SCOPE_OPS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+                    <input type="text" id="fac-app-val-${st.id}" list="fac-app-vals-${st.id}" onfocus="fillFacetAppliesVals('${bo.id}','${st.id}')" class="border border-slate-300 p-1.5 rounded text-xs w-36" placeholder="ex : ENTREPOT"><datalist id="fac-app-vals-${st.id}"></datalist>
+                    <button onclick="addFacetApplies('${bo.id}','${st.id}')" class="text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg font-bold">+ Applicabilité</button></div></div>
+            <div class="bo-sect"><h4>Attributs du composant (${(st.elements || []).length})</h4>${(st.elements || []).length ? `<div class="flex flex-wrap gap-1.5">${(st.elements || []).map(fe => `<button onclick="boSelect('attr','${st.id}','${fe.id}')" class="text-xs bg-white border border-slate-300 rounded-full px-3 py-1 font-bold hover:bg-emerald-50">${escapeHTML(fe.name)}${fe.col ? '' : ' <span class="text-amber-600">⚠</span>'}</button>`).join('')}</div>` : '<p class="text-[12px] text-slate-500 italic">Aucun attribut — « + Attribut » ci-dessus.</p>'}</div>`;
+        }
+        function boNewFacetFormHtml(bo, names) {
+            return `<div class="bo-dhead"><span class="text-lg" aria-hidden="true">◆</span><div><h3>Nouveau composant (facette)</h3><div class="sub">Une facette = une table technique filtrée + un nom métier + une cardinalité (ex : « Adresse principale » = ADRESSE où TYPE = PRINCIPALE, 1–1).</div></div></div>
+            <div class="bo-sect"><div class="bo-grid">
+                <div class="bo-fld"><label>Nom métier du composant</label><input type="text" id="bo-comp-name-${bo.id}" placeholder="ex : Adresse principale"></div>
+                <div class="bo-fld"><label>Table technique</label><select id="bo-comp-tbl-${bo.id}" class="font-mono">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select></div>
+                <div class="bo-fld"><label>Cardinalité — 1 ${escapeHTML(bo.name)} contient…</label><select id="bo-comp-card-${bo.id}">${CARD_OPTS.map(o => `<option ${o === '1–N' ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
+            </div><div class="mt-3 flex gap-2"><button onclick="boAddFacetAndSelect('${bo.id}')" class="text-xs bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold">+ Créer la facette</button><button onclick="boSelect('none')" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded-lg font-bold">Annuler</button></div></div>`;
+        }
+        function boAddFacetAndSelect(boId) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
+            const before = getBoFacets(bo).map(x => x.id);
+            addBoStructure(boId);
+            const nw = getBoFacets(bo).find(x => !before.includes(x.id));
+            if (nw) { govState.boSel = { kind: 'facet', stId: nw.id, elId: '' }; renderGovernance(); }
+        }
+        function boRefsFormHtml(bo) {
+            bo.references = Array.isArray(bo.references) ? bo.references : [];
+            const otherBos = state.governance.businessObjects.filter(b => b.id !== bo.id);
+            return `<div class="bo-dhead"><span class="text-lg" aria-hidden="true">🔗</span><div><h3>Objets référencés</h3><div class="sub">Objets métier séparés liés à « ${escapeHTML(bo.name)} » (ex : un Emplacement référence un Site).</div></div></div>
+            <div class="bo-sect">${bo.references.length ? `<div class="flex flex-wrap gap-1.5 mb-3">${bo.references.map((rf, i) => { const target = state.governance.businessObjects.find(b => b.id === rf.boId);
+                return `<span class="text-xs bg-teal-50 border border-teal-200 text-teal-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5">→ <strong>${escapeHTML(target ? target.name : '(objet supprimé)')}</strong> <span class="text-teal-500">${escapeHTML(rf.cardinality || '')}</span>${rf.viaLabel ? `<span class="text-teal-400 font-mono text-[10px]">${escapeHTML(rf.viaLabel)}</span>` : ''} <button onclick="removeBoReference('${bo.id}',${i})" class="text-teal-400 hover:text-red-500">✕</button></span>`; }).join('')}</div>` : '<p class="text-[12px] text-slate-500 italic mb-3">Aucune référence.</p>'}
+                ${otherBos.length ? `<div class="bo-grid"><div class="bo-fld"><label>Référencer un objet</label><select id="bo-ref-tgt-${bo.id}">${otherBos.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select></div>
+                <div class="bo-fld"><label>Cardinalité</label><select id="bo-ref-card-${bo.id}">${CARD_OPTS.map(o => `<option ${o === 'N–1' ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
+                <div class="bo-fld"><label>&nbsp;</label><button onclick="addBoReference('${bo.id}')" class="text-xs bg-teal-600 text-white px-3 py-2 rounded-lg font-bold w-full">+ Référence</button></div></div>` : '<p class="text-[12px] text-slate-500 italic">Créez un second objet métier pour pouvoir le référencer.</p>'}</div>`;
+        }
         function renderBoDetail(bo, names) {
-            // -- 1. Identité --
+            // -- 1. Carte d'identité + complétude (V9.0) --
             let html = `<div class="border-2 border-emerald-200 rounded-xl bg-white overflow-hidden">
                 <div class="bg-emerald-50/70 border-b border-emerald-100 p-4">
-                    <div class="flex items-center gap-2 flex-wrap mb-2">
-                        <span class="text-xl">🏛️</span>
-                        <input type="text" value="${escapeHTML(bo.name)}" onchange="updateBusinessObject('${bo.id}','name',this.value)" class="font-black text-base border border-slate-300 p-1.5 rounded w-64 bg-white">
-                        <button data-ro="keep" onclick="openBoAudit('${bo.id}')" class="ml-auto text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm" title="Auditer l'objet dans sa globalité : gouvernance, hiérarchies, règles métier">🔎 Audit global</button>
-                        <button onclick="removeBusinessObject('${bo.id}')" class="text-red-500 hover:text-red-700 p-1" title="Supprimer l'objet"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <div class="flex items-center gap-2 flex-wrap mb-3">
+                        <span class="text-xl" aria-hidden="true">🏛️</span>
+                        <input type="text" value="${escapeHTML(bo.name)}" onchange="updateBusinessObject('${bo.id}','name',this.value); renderGovernance()" class="font-black text-lg border border-slate-300 px-2.5 py-1.5 rounded-lg w-72 bg-white" aria-label="Nom de l'objet métier">
+                        ${wfBadge(bo)}<select id="bo-status-${bo.id}" onchange="wfSetBoStatus('${bo.id}',this.value)" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white font-bold" aria-label="Statut">${STATUS_OPTS.map(o => `<option ${o === (bo.status || 'Brouillon') ? 'selected' : ''}>${o}</option>`).join('')}</select>
+                        <button data-ro="keep" onclick="openBoAudit('${bo.id}')" class="ml-auto text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm" title="Auditer l'objet dans sa globalité : gouvernance, hiérarchies, qualité">🔎 Audit global</button>
+                        <button onclick="removeBusinessObject('${bo.id}')" class="text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg border border-red-200 bg-white text-xs font-bold" title="Supprimer l'objet">🗑</button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Propriétaire global</label><input type="text" value="${escapeHTML(bo.globalOwner || '')}" onchange="updateBusinessObject('${bo.id}','globalOwner',this.value); renderGovernance()" class="w-full border p-2 rounded text-sm font-bold ${bo.globalOwner ? 'border-slate-300 bg-white' : 'border-red-300 bg-red-50'}" placeholder="⚠️ À nommer"></div>
-                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Contributeurs (virgules)</label><input type="text" value="${escapeHTML((bo.contributors || []).join(', '))}" onchange="updateBusinessObject('${bo.id}','contributors',this.value.split(',').map(s=>s.trim()).filter(Boolean))" placeholder="ex: DSI, BU Sud" class="w-full border border-slate-300 p-2 rounded text-sm bg-white"></div>
-                        <div><label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Définition</label><input type="text" value="${escapeHTML(bo.definition || '')}" onchange="updateBusinessObject('${bo.id}','definition',this.value)" placeholder="Ce que représente cet objet..." class="w-full border border-slate-300 p-2 rounded text-sm bg-white"></div>
+                        <div class="bo-fld"><label for="bo-own-${bo.id}">Propriétaire global</label><input id="bo-own-${bo.id}" type="text" value="${escapeHTML(bo.globalOwner || '')}" onchange="updateBusinessObject('${bo.id}','globalOwner',this.value); renderGovernance()" placeholder="ex : Direction immobilière"></div>
+                        <div class="bo-fld"><label>Contributeurs (virgules)</label><input type="text" value="${escapeHTML((bo.contributors || []).join(', '))}" onchange="updateBusinessObject('${bo.id}','contributors',this.value.split(',').map(x=>x.trim()).filter(Boolean))" placeholder="ex : DSI, BU Sud"></div>
+                        <div class="bo-fld"><label for="bo-def-${bo.id}">Définition</label><textarea id="bo-def-${bo.id}" rows="2" onchange="updateBusinessObject('${bo.id}','definition',this.value); renderGovernance()" placeholder="Ce qu'est cet objet pour le métier, en une ou deux phrases." style="min-height:38px">${escapeHTML(bo.definition || '')}</textarea></div>
                     </div>
+                    ${boCompletenessHtml(bo)}
                     <div id="bo-vol-${bo.id}" class="mt-3"></div>
                 </div>`;
 
             // -- Sous-onglets : on n'affiche qu'une section à la fois pour une lecture claire --
             const tabs = [
-                ['structure', '🧩 Structure', (bo.structure || []).length + (bo.elements || []).length],
+                ['structure', '🧩 Attributs & composition', (bo.structure || []).length + (bo.elements || []).length],
                 ['sources', '🔗 Sources', (bo.sources || []).length],
                 ['hierarchies', '🌳 Hiérarchies', getBoHierarchies(bo).length],
                 ['mastery', '⚖️ Maîtrise', ((bo.contextRules || {}).rules || []).length],
@@ -4501,15 +4808,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 ['audit', '🔎 Audit', null],
             ];
             const cur = govState.boTab && tabs.some(t => t[0] === govState.boTab) ? govState.boTab : 'structure';
-            html += `<div class="px-4 pt-2 flex items-center gap-2 bg-slate-50/60 text-xs">${wfBadge(bo)}<select onchange="wfSetBoStatus('${bo.id}',this.value)" class="border border-slate-200 rounded p-1 text-[11px] bg-white">${STATUS_OPTS.map(o => `<option ${o === (bo.status || 'Brouillon') ? 'selected' : ''}>${o}</option>`).join('')}</select><span class="text-[10px] text-slate-400">cycle : Brouillon → Proposé → Validé → Obsolète</span></div>`;
             html += `<div class="border-b border-slate-200 px-4 flex gap-1 flex-wrap bg-slate-50/60">`;
             tabs.forEach(([id, lbl, n]) => {
                 const active = id === cur;
-                html += `<button data-ro="keep" onclick="setBoTab('${id}')" class="px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors ${active ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}">${lbl}${n != null && n > 0 ? ` <span class="ml-0.5 text-[10px] ${active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'} rounded-full px-1.5 py-0.5">${n}</span>` : ''}</button>`;
+                html += `<button data-ro="keep" onclick="setBoTab('${id}')" class="px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors ${active ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-400 hover:text-slate-600'}">${lbl}${n != null && n > 0 ? ` <span class="ml-0.5 text-[10px] ${active ? 'bo-tabn-on' : 'bg-slate-100 text-slate-500'} rounded-full px-1.5 py-0.5">${n}</span>` : ''}</button>`;
             });
             html += `</div><div class="p-4">`;
 
-            if (cur === 'structure') html += renderBoStructure(bo, names);
+            if (cur === 'structure') html += renderBoWorkspace(bo, names);
             else if (cur === 'sources') html += renderBoSourcesBlock(bo, names);
             else if (cur === 'hierarchies') html += renderBoHierarchy(bo);
             else if (cur === 'mastery') html += renderBoContextRules(bo, names);
@@ -12117,8 +12423,16 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '8.7.0';
+        const APP_VERSION = '9.0.0';
         const APP_CHANGELOG = [
+            { v: '9.0.0', d: '2026-09-04', t: 'La fiche d\'un objet métier, repensée pour voir, modifier et enrichir', items: [
+                '<b>Carte d\'identité</b> : nom, statut, propriétaire, contributeurs et définition (sur deux lignes) en tête, et surtout un <b>score de complétude</b> (« fiche complète à 62 % ») avec la liste de ce qui manque — chaque manque est un bouton qui mène directement au champ ou au filtre concerné (définition, propriétaire, source maître, attributs non alimentés, sans définition, sans usage, validation).',
+                '<b>Espace « Attributs & composition » en maître-détail</b> : à gauche la liste de tous les attributs (propres et par facette) avec leur provenance et trois voyants (alimenté, défini, utilisé) ; à droite un <b>vrai formulaire</b> pour l\'attribut sélectionné : identité, <b>sens métier</b> (définition, exemples avec échantillonnage depuis la source, sensibilité, terme du glossaire), provenance (colonnes techniques), usages (applications et processus à cocher, source spécifique), ordre, lineage, suppression.',
+                'Ces champs de sens n\'étaient jusqu\'ici accessibles que dans le dictionnaire par objet : on enrichit désormais un attribut là où on le structure.',
+                'Recherche et <b>filtres</b> (Tous / Non alimentés / Sans définition / Sans usage), navigation au clavier ↑ ↓ dans la liste, sélection automatique du nouvel attribut après « + Attribut ».',
+                'Les <b>facettes</b> s\'ouvrent comme des fiches : nom, cardinalité, table, filtre fonctionnel, applicabilité, attributs ; « + Facette » propose un petit formulaire de création. Les objets référencés ont leur propre fiche.',
+                'La <b>vue Tableau</b> historique reste disponible d\'un clic (▤ Fiche / ▦ Tableau) : rien n\'est perdu, y compris le glisser-déposer.',
+                'Mode sombre et contrastes vérifiés sur l\'ensemble du nouvel espace.'] },
             { v: '8.7.0', d: '2026-09-04', t: 'Structure d\'un objet métier : un tableau d\'attributs enfin lisible', items: [
                 '<b>La photo de l\'utilisateur montrait des noms rognés</b> (« ANNEE_ », « BASE_DI », « COMME ») : les deux sélecteurs « table ▸ colonne », affichés en permanence sur chaque ligne, écrasaient la colonne du nom. Le tableau passe en <b>largeurs fixes</b> — le nom métier dispose de 230 px garantis, quoi qu\'il y ait à côté.',
                 '<b>Une ligne par attribut</b> : le sélecteur de colonne technique est masqué et n\'apparaît que sur « + colonne », pré-positionné sur la table maître de l\'objet. Il reste ouvert d\'office quand l\'attribut n\'est alimenté par rien, avec l\'alerte « ⚠ non alimenté ».',
