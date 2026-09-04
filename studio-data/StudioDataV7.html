@@ -266,6 +266,8 @@
         html[data-theme="dark"] .bo-attr-tbl .bo-handle button:hover{background:#243049;color:#6ee7b7}
         html[data-theme="dark"] .bo-attr-tbl .bo-multi-note{color:#a7b4c6}
         /* V9.0 — Fiche objet métier repensée : carte d'identité + complétude, espace maître-détail */
+        .gl-attr-chip{background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a}
+        html[data-theme="dark"] .gl-attr-chip{background:#172554;border-color:#3b82f6;color:#dbeafe}
         .bo-tabn-on{background:#d1fae5;color:#065f46;font-weight:800}
         html[data-theme="dark"] .bo-tabn-on{background:#1f6b52;color:#d1fae5}
         .bo-prog{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden;flex:1 1 0;min-width:120px}
@@ -4766,7 +4768,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <div class="bo-fld" style="grid-column:1/-1"><label>Définition</label><textarea onchange="${W('definition', true)}" placeholder="Ce que désigne cet attribut, en langage métier — ce que verra un consommateur de la donnée dans le catalogue.">${escapeHTML(e2.definition || '')}</textarea></div>
                 <div class="bo-fld" style="grid-column:span 2"><label>Exemples de valeurs</label><div class="flex gap-1.5"><input type="text" value="${escapeHTML(e2.examples || '')}" onchange="${W('examples', false)}" placeholder="ex : PARIS ; LYON" ${e2.examplesAuto ? 'title="Valeurs prises dans la source rattachée"' : ''}>${hasMap ? `<button onclick="boAttrSampleOne('${bo.id}','${e2.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2.5 rounded-lg font-bold hover:bg-indigo-50 whitespace-nowrap" title="Prendre les valeurs les plus fréquentes dans la source">🎲 Échantillonner</button>` : ''}</div>${e2.examplesAuto ? '<div class="hint">Échantillonnés automatiquement depuis la source.</div>' : ''}</div>
                 <div class="bo-fld"><label>Sensibilité</label><select onchange="${W('sensitivity', false)}">${sensOpts(e2.sensitivity || '')}</select></div>
-                <div class="bo-fld"><label>Terme du glossaire</label><select onchange="${W('term', false)}">${glossOpts(e2.term || '')}</select><div class="hint">Le terme devient un synonyme cherchable dans le catalogue.</div></div>
+                <div class="bo-fld"><label>Terme du glossaire</label><select onchange="boAttrSetTerm('${bo.id}','${stId}','${e2.id}',this.value)">${glossOpts(e2.term || '')}</select>${(() => { const others = termsOfAttr(bo.id, e2.id).filter(t2 => t2.id !== e2.term); return others.length ? `<div class="flex gap-1 flex-wrap mt-1.5">${others.map(t2 => `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2 py-0.5 font-bold" title="Autre terme posé depuis le glossaire">📖 ${escapeHTML(t2.term)}</span>`).join('')}</div>` : ''; })()}<div class="hint">Le terme devient un synonyme cherchable dans le catalogue. D'autres termes peuvent être posés depuis le <b>Glossaire</b>.</div></div>
             </div></div>
             <div class="bo-sect"><h4>Provenance (alimenté par)</h4>${prov}</div>
             <div class="bo-sect"><h4>Usages — qui utilise cet attribut</h4>${usage}</div>`;
@@ -5981,6 +5983,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                             <input type="text" value="${escapeHTML(a.domain || '')}" list="assetDomList" placeholder="${kind === 'process' && domEff && !(a.domain || '').trim() ? 'Domaine hérité : ' + domEff : 'Domaine métier'}" onchange="updateGovAsset('${a.id}','domain',this.value)" title="Domaine métier${kind === 'process' ? ' — laissé vide, il est hérité des applications liées' : ''}" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-40 ${kind === 'process' && domEff && !(a.domain || '').trim() ? 'placeholder-emerald-600' : ''}">
                             <input type="text" value="${escapeHTML(a.description || '')}" placeholder="Description…" onchange="updateGovAsset('${a.id}','description',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white flex-grow min-w-[140px]">
                         </div>
+                        ${(() => { const ts = termsOfAsset(a.id); return ts.length ? `<div class="flex flex-wrap items-center gap-1.5 mb-2"><span class="text-[10px] uppercase font-bold text-indigo-600">📖 Termes du glossaire</span>${ts.map(t2 => `<button data-ro="keep" onclick="openGovTab('glossary')" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2 py-0.5 font-bold hover:bg-indigo-100" title="Voir dans le glossaire">${escapeHTML(t2.term)}</button>`).join('')}</div>` : ''; })()}
                         ${kind === 'app' ? `
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">📄 Sources produites <span class="text-slate-300 normal-case font-normal">— fichiers dont cette application est maître</span></div>
                         <div class="flex flex-wrap gap-1.5 mb-2">${srcNames.length ? srcNames.map(n => { const owner = appOwnerOfSource(n); const mine = owner && owner.id === a.id; const other = owner && owner.id !== a.id;
@@ -6148,32 +6151,125 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function togglePerimeterTable(id, name, checked) { const p = state.governance.perimeters.find(x => x.id === id); if (!p) return; p.tables = p.tables || []; if (checked) { if (!p.tables.includes(name)) p.tables.push(name); } else p.tables = p.tables.filter(t => t !== name); persistAppState(); renderGovernance(); }
 
         // ---- Glossaire métier ----
+        // ======================= V9.2 : LE GLOSSAIRE PARLE MÉTIER =======================
+        // Un terme est un nom métier. Il se pose sur ce qui a un sens pour le métier : un ATTRIBUT
+        // d'objet, un OBJET métier, une APPLICATION ou un PROCESSUS — jamais sur une colonne de
+        // fichier, qui n'est qu'une provenance technique. Les anciens liens « colonne » sont
+        // convertis automatiquement vers l'attribut que la colonne alimente ; ceux qui n'alimentent
+        // aucun attribut restent visibles comme héritage, à reporter ou à retirer.
+        function termAttrLinks(t2) { return Array.isArray(t2.attrLinks) ? t2.attrLinks : (t2.attrLinks = []); }
+        function termAssetIds(t2) { return Array.isArray(t2.assetIds) ? t2.assetIds : (t2.assetIds = []); }
+        function termAttrRow(l) { const bo = (state.governance.businessObjects || []).find(b => b.id === l.boId); if (!bo) return null; const r = (boAllAttrRows(bo) || []).find(x => x.el.id === l.elId); return r ? { bo, r } : null; }
+        // Colonne -> attribut(s) d'objet qu'elle alimente.
+        function attrsOfColumn(tn, cn) {
+            const out = [];
+            (state.governance.businessObjects || []).forEach(bo => (boAllAttrRows(bo) || []).forEach(r => {
+                const hit = r.stId ? (r.facet && r.el.col === cn && (getBoFacets(bo).find(x => x.id === r.stId) || {}).table === tn) : (r.el.mappings || []).some(m => m.table === tn && m.col === cn);
+                if (hit) out.push({ boId: bo.id, elId: r.el.id, bo, r });
+            }));
+            return out;
+        }
+        // Migration : chaque lien colonne qui alimente un attribut devient un lien d'attribut.
+        function glossaryMigrateLinks() {
+            let changed = false;
+            (state.governance.glossary || []).forEach(t2 => {
+                const keep = [];
+                (t2.links || []).forEach(l => {
+                    const hits = attrsOfColumn(l.table, l.col);
+                    if (!hits.length) { keep.push(l); return; }
+                    hits.forEach(h => { if (!termAttrLinks(t2).some(x => x.boId === h.boId && x.elId === h.elId)) { termAttrLinks(t2).push({ boId: h.boId, elId: h.elId }); changed = true; } if (!h.r.el.term) { h.r.el.term = t2.id; changed = true; } });
+                    changed = true;
+                });
+                if ((t2.links || []).length !== keep.length) t2.links = keep;
+            });
+            return changed;
+        }
         function renderGovGlossary() {
-            const names = readyTableNames();
-            let html = `<div class="flex justify-between items-center mb-4"><p class="text-sm text-slate-500">Termes métier officiels, reliés aux colonnes techniques via le Dictionnaire ou ci-dessous.</p><button onclick="addGlossaryTerm()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> Nouveau terme</button></div>`;
-            if (!state.governance.glossary.length) html += '<p class="text-sm text-slate-400 italic py-8 text-center">Aucun terme défini.</p>';
+            if (glossaryMigrateLinks()) persistAppState();
+            const bos = state.governance.businessObjects || [];
+            const assets = state.governance.assets || [];
+            let html = `<div class="flex justify-between items-center mb-4 gap-3 flex-wrap"><p class="text-sm text-slate-600">Termes métier officiels. Un terme se pose sur un <b>attribut d'objet</b>, un <b>objet métier</b>, une <b>application</b> ou un <b>processus</b> — jamais sur un fichier : la colonne technique n'est qu'une provenance, elle hérite du terme de l'attribut qu'elle alimente.</p><button onclick="addGlossaryTerm()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2 whitespace-nowrap"><i data-lucide="plus" class="w-4 h-4"></i> Nouveau terme</button></div>`;
+            if (!state.governance.glossary.length) html += emptyStateHtml('📖', 'Aucun terme défini', 'Créez le vocabulaire métier officiel, puis reliez chaque terme aux attributs et objets qu\'il désigne : il devient un synonyme cherchable dans le catalogue.', 'Nouveau terme', 'addGlossaryTerm()');
             state.governance.glossary.forEach(g => {
-                const firstTable = names[0] || '';
-                html += `<div class="border border-slate-200 rounded-xl p-4 mb-3 bg-slate-50/50">
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="text" value="${escapeHTML(g.term)}" onchange="updateGlossaryTerm('${g.id}','term',this.value)" class="font-bold text-sm border border-slate-300 p-1.5 rounded w-64 bg-white">
-                        <button onclick="removeGlossaryTerm('${g.id}')" class="text-red-500 hover:text-red-700 p-1 ml-auto"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                const tg = termTargets(g);
+                // attributs
+                const aChips = termAttrLinks(g).map((l, i) => { const h = termAttrRow(l); if (!h) return '';
+                    return `<span class="gl-attr-chip text-xs rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button data-ro="keep" onclick="openBoFiche('${h.bo.id}'); govState.boTab='structure'; govState.structView='fiche'; govState.boSel={kind:'attr',stId:'${h.r.stId || ''}',elId:'${h.r.el.id}'}; renderGovernance()" class="hover:underline" title="Ouvrir l'attribut">🔹 ${escapeHTML(h.r.el.name)} <span class="font-normal opacity-80">· ${escapeHTML(h.bo.name)}${h.r.facet ? ' ◆ ' + escapeHTML(h.r.facet) : ''}</span></button><button onclick="removeGlossaryAttr('${g.id}',${i})" class="text-sky-400 hover:text-red-500" title="Retirer">✕</button></span>`; }).join('');
+                const firstBo = bos[0];
+                const attrOpts = bo => (boAllAttrRows(bo) || []).filter(r => !termAttrLinks(g).some(x => x.boId === bo.id && x.elId === r.el.id)).map(r => `<option value="${r.el.id}">${escapeHTML(r.el.name)}${r.facet ? ' ◆ ' + escapeHTML(r.facet) : ''}</option>`).join('');
+                // applications / processus
+                const asChips = termAssetIds(g).map((id, i) => { const a = assetById(id); if (!a) return '';
+                    return `<span class="text-xs bg-slate-100 border border-slate-300 text-slate-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold">${ASSET_KINDS[a.kind] ? ASSET_KINDS[a.kind][0] : ''} ${escapeHTML(a.name)}<button onclick="removeGlossaryAsset('${g.id}',${i})" class="text-slate-400 hover:text-red-500" title="Retirer">✕</button></span>`; }).join('');
+                const asRemain = assets.filter(a => !termAssetIds(g).includes(a.id));
+                // héritage : liens colonne sans attribut
+                const legacy = (g.links || []).map((l, i) => `<span class="text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5" title="Ancien lien vers une colonne de fichier. Rattachez cette colonne à un attribut d'objet métier : le terme suivra automatiquement."><span class="font-mono">${escapeHTML(l.table)}.${escapeHTML(l.col)}</span><span class="text-[10px] uppercase font-bold">héritage</span><button onclick="removeGlossaryLink('${g.id}',${i})" class="text-amber-400 hover:text-red-500" title="Retirer">✕</button></span>`).join('');
+                html += `<div class="border border-slate-200 rounded-xl p-4 mb-3 bg-white">
+                    <div class="flex items-center gap-2 mb-2 flex-wrap">
+                        <span class="text-lg" aria-hidden="true">📖</span>
+                        <input type="text" value="${escapeHTML(g.term)}" onchange="updateGlossaryTerm('${g.id}','term',this.value); renderGovernance()" class="font-bold text-sm border border-slate-300 px-2.5 py-1.5 rounded-lg w-72 bg-white" aria-label="Terme">
+                        <span class="text-[11px] text-slate-500">${tg.length ? 'désigne ' + tg.length + ' élément(s)' : '<span class="text-amber-700 font-bold">ne désigne rien pour l\'instant</span>'}</span>
+                        <button onclick="removeGlossaryTerm('${g.id}')" class="text-red-500 hover:text-red-700 px-2 py-1 rounded-lg border border-red-200 bg-white text-xs font-bold ml-auto" title="Supprimer le terme">🗑</button>
                     </div>
-                    <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme..." class="w-full border border-slate-200 p-2 rounded text-xs mb-2 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>
+                    <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme, en langage métier…" class="w-full border border-slate-200 p-2 rounded-lg text-xs mb-3 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>
+                    <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                        <span class="text-[10px] uppercase font-bold text-sky-700 w-40">🔹 Attributs d'objet</span>
+                        ${aChips || '<span class="text-xs text-slate-400 italic">aucun attribut</span>'}
+                        ${bos.length ? `<select id="gl-bo-${g.id}" onchange="glossaryFillAttrs('${g.id}',this.value)" class="border border-slate-300 p-1 rounded text-xs bg-white" aria-label="Objet">${bos.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select><span class="text-slate-400 text-xs">▸</span><select id="gl-attr-${g.id}" class="border border-slate-300 p-1 rounded text-xs bg-white" aria-label="Attribut">${firstBo ? attrOpts(firstBo) : ''}</select><button onclick="addGlossaryAttr('${g.id}')" class="text-xs bg-sky-600 text-white px-2.5 py-1 rounded font-bold">+ Attribut</button>` : '<span class="text-xs text-slate-400 italic">— créez d\'abord un objet métier</span>'}
+                    </div>
                     ${boAttachHtml('gl', g)}
-                    <div class="flex flex-wrap items-center gap-2">
-                        ${(g.links || []).map((l, i) => `<span class="text-xs bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full px-2 py-0.5 flex items-center gap-1">${escapeHTML(l.table)}.${escapeHTML(l.col)} <button onclick="removeGlossaryLink('${g.id}',${i})" class="text-indigo-400 hover:text-red-500">✕</button></span>`).join('')}
-                        <select id="gl-tbl-${g.id}" onchange="populateGlossLinkCols('${g.id}',this.value)" class="border border-slate-200 p-1 rounded text-xs bg-white">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select>
-                        <select id="gl-col-${g.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${firstTable ? (tableByName(firstTable) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
-                        <button onclick="addGlossaryLink('${g.id}')" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-medium hover:bg-slate-50">Lier colonne</button>
+                    <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span class="text-[10px] uppercase font-bold text-slate-600 w-44">🖥 Applis · ⚙️ Processus</span>
+                        ${asChips || '<span class="text-xs text-slate-400 italic">aucune</span>'}
+                        ${asRemain.length ? `<select id="gl-as-${g.id}" class="border border-slate-300 p-1 rounded text-xs bg-white" aria-label="Application ou processus">${asRemain.map(a => `<option value="${a.id}">${ASSET_KINDS[a.kind] ? ASSET_KINDS[a.kind][0] : ''} ${escapeHTML(a.name)}</option>`).join('')}</select><button onclick="addGlossaryAsset('${g.id}')" class="text-xs bg-white border border-slate-300 px-2.5 py-1 rounded font-bold hover:bg-slate-50">+ Lier</button>` : (assets.length ? '' : '<span class="text-xs text-slate-400 italic">— aucune application déclarée</span>')}
                     </div>
+                    ${legacy ? `<div class="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-amber-100"><span class="text-[10px] uppercase font-bold text-amber-700 w-40">📄 Anciens liens fichier</span>${legacy}<span class="text-[11px] text-amber-800">Ces colonnes n'alimentent encore aucun attribut d'objet : rattachez-les dans la fiche de l'objet, le terme suivra.</span></div>` : ''}
                 </div>`;
             });
             return html;
         }
-        function addGlossaryTerm() { state.governance.glossary.push({ id: 'gl_' + generateId(), term: 'Nouveau terme', definition: '', links: [] }); persistAppState(); renderGovernance(); }
+        function addGlossaryTerm() { state.governance.glossary.push({ id: 'gl_' + generateId(), term: 'Nouveau terme', definition: '', links: [], attrLinks: [], assetIds: [] }); persistAppState(); renderGovernance(); }
         function updateGlossaryTerm(id, f, v) { const g = state.governance.glossary.find(x => x.id === id); if (g) { g[f] = v; persistAppState(); } }
-        function removeGlossaryTerm(id) { state.governance.glossary = state.governance.glossary.filter(x => x.id !== id); persistAppState(); renderGovernance(); }
+        function removeGlossaryTerm(id) {
+            state.governance.glossary = state.governance.glossary.filter(x => x.id !== id);
+            // l'attribut ne doit pas garder l'identifiant d'un terme disparu
+            (state.governance.businessObjects || []).forEach(bo => (boAllAttrRows(bo) || []).forEach(r => { if (r.el.term === id) r.el.term = ''; }));
+            persistAppState(); renderGovernance();
+        }
+        function glossaryFillAttrs(id, boId) {
+            const g = state.governance.glossary.find(x => x.id === id); const bo = (state.governance.businessObjects || []).find(b => b.id === boId); const sel2 = el('gl-attr-' + id); if (!g || !bo || !sel2) return;
+            sel2.innerHTML = (boAllAttrRows(bo) || []).filter(r => !termAttrLinks(g).some(x => x.boId === bo.id && x.elId === r.el.id)).map(r => `<option value="${r.el.id}">${escapeHTML(r.el.name)}${r.facet ? ' ◆ ' + escapeHTML(r.facet) : ''}</option>`).join('');
+        }
+        // Lier un terme à un attribut : le lien est porté des deux côtés (glossaire + « Terme » de l'attribut).
+        function glossaryLinkAttr(termId, boId, elId) {
+            const g = state.governance.glossary.find(x => x.id === termId); if (!g) return false;
+            const bo = (state.governance.businessObjects || []).find(b => b.id === boId); if (!bo) return false;
+            const r = (boAllAttrRows(bo) || []).find(x => x.el.id === elId); if (!r) return false;
+            if (!termAttrLinks(g).some(x => x.boId === boId && x.elId === elId)) termAttrLinks(g).push({ boId, elId });
+            if (!r.el.term) r.el.term = termId;
+            persistAppState(); return true;
+        }
+        // Depuis le formulaire d'attribut : changer de terme retire le lien de l'ancien, pose le nouveau.
+        function boAttrSetTerm(boId, stId, elId, termId) {
+            const bo = (state.governance.businessObjects || []).find(b => b.id === boId); if (!bo) return;
+            const r = (boAllAttrRows(bo) || []).find(x => x.el.id === elId); if (!r) return;
+            const prev = r.el.term || '';
+            if (prev && prev !== termId) { const pg = state.governance.glossary.find(x => x.id === prev); if (pg) pg.attrLinks = termAttrLinks(pg).filter(x => !(x.boId === boId && x.elId === elId)); }
+            r.el.term = termId || '';
+            if (termId) glossaryLinkAttr(termId, boId, elId);
+            persistAppState(); renderGovernance();
+        }
+        function addGlossaryAttr(id) { const boId = (el('gl-bo-' + id) || {}).value, elId = (el('gl-attr-' + id) || {}).value; if (!boId || !elId) return; if (glossaryLinkAttr(id, boId, elId)) renderGovernance(); }
+        function removeGlossaryAttr(id, idx) {
+            const g = state.governance.glossary.find(x => x.id === id); if (!g) return;
+            const l = termAttrLinks(g)[idx]; if (!l) return;
+            termAttrLinks(g).splice(idx, 1);
+            const h = termAttrRow(l); if (h && h.r.el.term === id) h.r.el.term = '';
+            persistAppState(); renderGovernance();
+        }
+        function addGlossaryAsset(id) { const g = state.governance.glossary.find(x => x.id === id); const aid = (el('gl-as-' + id) || {}).value; if (!g || !aid) return; if (!termAssetIds(g).includes(aid)) termAssetIds(g).push(aid); persistAppState(); renderGovernance(); }
+        function removeGlossaryAsset(id, idx) { const g = state.governance.glossary.find(x => x.id === id); if (!g) return; termAssetIds(g).splice(idx, 1); persistAppState(); renderGovernance(); }
+        function termsOfAsset(aid) { return (state.governance.glossary || []).filter(t2 => termAssetIds(t2).includes(aid)); }
+        function termsOfAttr(boId, elId) { return (state.governance.glossary || []).filter(t2 => termAttrLinks(t2).some(x => x.boId === boId && x.elId === elId) || (() => { const h = termAttrRow({ boId, elId }); return h && h.r.el.term === t2.id; })()); }
         function populateGlossLinkCols(id, tableName) { const t = tableByName(tableName); const s = el('gl-col-' + id); if (s) s.innerHTML = (t ? t.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
         function addGlossaryLink(id) { const g = state.governance.glossary.find(x => x.id === id); if (!g) return; const tbl = el('gl-tbl-' + id).value, col = el('gl-col-' + id).value; if (!tbl || !col) return; g.links = g.links || []; if (!g.links.some(l => l.table === tbl && l.col === col)) g.links.push({ table: tbl, col }); persistAppState(); renderGovernance(); }
         function removeGlossaryLink(id, idx) { const g = state.governance.glossary.find(x => x.id === id); if (g && g.links) { g.links.splice(idx, 1); persistAppState(); renderGovernance(); } }
@@ -11006,11 +11102,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function termNameOf(id) { const t = termById(id); return t ? t.term : ''; }
         function termTargets(t2) {
             const out = [];
-            (t2.links || []).forEach(l => out.push({ kind: 'col', table: l.table, col: l.col, label: l.table + '.' + l.col, via: 'lié dans le glossaire' }));
             (t2.boIds || []).forEach(id => { const bo = (state.governance.businessObjects || []).find(b => b.id === id); if (bo) out.push({ kind: 'bo', boId: bo.id, label: bo.name, via: 'objet métier rattaché' }); });
+            // V9.2 : attributs — liens du glossaire ET champ « Terme » de l'attribut, dédoublonnés
+            const seenAttr = new Set();
+            (t2.attrLinks || []).forEach(l => { const h = termAttrRow(l); if (h && !seenAttr.has(l.elId)) { seenAttr.add(l.elId); out.push({ kind: 'attr', boId: h.bo.id, elId: l.elId, stId: h.r.stId || '', label: h.bo.name + ' · ' + h.r.el.name, via: 'attribut désigné par ce terme' }); } });
             (state.governance.businessObjects || []).forEach(bo => (boAllAttrRows(bo) || []).forEach(r => {
-                if (r.el.term === t2.id) out.push({ kind: 'attr', boId: bo.id, label: bo.name + ' · ' + r.el.name, via: 'attribut portant ce terme' });
+                if (r.el.term === t2.id && !seenAttr.has(r.el.id)) { seenAttr.add(r.el.id); out.push({ kind: 'attr', boId: bo.id, elId: r.el.id, stId: r.stId || '', label: bo.name + ' · ' + r.el.name, via: 'attribut portant ce terme' }); }
             }));
+            (t2.assetIds || []).forEach(id => { const a = assetById(id); if (a) out.push({ kind: 'asset', assetId: a.id, label: (ASSET_KINDS[a.kind] ? ASSET_KINDS[a.kind][0] + ' ' : '') + a.name, via: a.kind === 'process' ? 'processus rattaché' : 'application rattachée' }); });
+            (t2.links || []).forEach(l => out.push({ kind: 'col', table: l.table, col: l.col, label: l.table + '.' + l.col, via: 'ancien lien fichier (héritage)' }));
             Object.entries(state.governance.dictionary || {}).forEach(([tn, d]) => Object.entries(d.columns || {}).forEach(([cn, cm]) => {
                 if (cm.term === t2.id && !out.some(x => x.kind === 'col' && x.table === tn && x.col === cn))
                     out.push({ kind: 'col', table: tn, col: cn, label: tn + '.' + cn, via: 'colonne portant ce terme' });
@@ -11021,8 +11121,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function termsOfColumn(tn, cn) {
             const cm = (((state.governance.dictionary || {})[tn] || {}).columns || {})[cn] || {};
             const out = [];
+            // V9.2 : une colonne hérite des termes des attributs qu'elle alimente (le terme est métier,
+            // la colonne n'est qu'une provenance) ; les anciens liens fichier restent honorés.
+            const attrs = attrsOfColumn(tn, cn);
             (state.governance.glossary || []).forEach(t2 => {
-                if ((t2.links || []).some(l => l.table === tn && l.col === cn) || cm.term === t2.id) out.push(t2);
+                if ((t2.links || []).some(l => l.table === tn && l.col === cn) || cm.term === t2.id
+                    || attrs.some(a => a.r.el.term === t2.id || (t2.attrLinks || []).some(x => x.boId === a.boId && x.elId === a.elId))) out.push(t2);
             });
             return out;
         }
@@ -11049,14 +11153,17 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         fresh: t.lastRefresh || null, tags: [...syns.map(x => '📖 ' + x), cm.technicalType].filter(Boolean), tbl: t.name, col: h, syns });
                 });
             });
-            (g.businessObjects || []).forEach(bo => push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
+            (g.businessObjects || []).forEach(bo => { const syns = (g.glossary || []).filter(t2 => (t2.boIds || []).includes(bo.id)).map(x => x.term);
+                const attrTerms = Array.from(new Set((boAllAttrRows(bo) || []).flatMap(r => termsOfAttr(bo.id, r.el.id).map(x => x.term))));
+                push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
                 desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
-                tags: ['objet métier'], bo: bo.id }));
+                tags: ['objet métier', ...syns.map(x => '📖 ' + x), ...attrTerms.map(x => '📖 ' + x)], bo: bo.id, syns, attrTerms }); });
             (g.glossary || []).forEach(t2 => { const tg = termTargets(t2);
                 push({ type: 'term', id: t2.id, title: t2.term, sub: tg.length ? 'désigne ' + tg.length + ' donnée(s)' : 'aucune donnée désignée', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null,
                     tags: ['glossaire', ...tg.slice(0, 6).map(x => x.label)], termId: t2.id }); });
             (g.perimeters || []).forEach(p2 => push({ type: 'perimeter', id: p2.id, title: p2.name, sub: (p2.tables || []).length + ' table(s)', desc: p2.description || '', dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: [] }));
-            (g.assets || []).forEach(a => push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' + ((a.appIds || []).length ? ' · ' + (a.appIds || []).length + ' appli(s)' : '') : 'Application', desc: a.description || '', dom: assetDomainEff(a) || '—', own: a.owner || '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application'] }));
+            (g.assets || []).forEach(a => { const syns = termsOfAsset(a.id).map(x => x.term);
+                push({ type: 'asset', id: a.id, title: a.name, sub: a.kind === 'process' ? 'Processus' + ((a.appIds || []).length ? ' · ' + (a.appIds || []).length + ' appli(s)' : '') : 'Application', desc: a.description || '', dom: assetDomainEff(a) || '—', own: a.owner || '', q: null, sens: null, val: null, fresh: null, tags: [a.kind === 'process' ? 'processus' : 'application', ...syns.map(x => '📖 ' + x)], syns }); });
             (g.qualityRules || []).forEach(r => push({ type: 'rule', id: r.id, title: r.name, sub: (r.bo ? '🏛 ' + ((qrBoById(r.bo) || {}).name || '?') : (r.table || '')) + (r.col ? ' · ' + r.col : ''), desc: (QR_TYPES[r.type] || r.type) + ' — criticité ' + (r.crit || '—'), dom: '—', own: '', q: r.last ? Math.round(100 * r.last.rate) : null, sens: null, val: null, fresh: r.last ? r.last.at : null, tags: ['règle'], tbl: r.table }));
             (state.recipes || []).forEach(r => push({ type: 'recipe', id: r.id, title: r.name, sub: (r.src || '?') + ' → ' + (r.out || '?'), desc: (r.steps || []).length + ' étape(s) de nettoyage, rejouées automatiquement à chaque mise à jour de la source.', dom: '—', own: '', q: null, sens: null, val: null, fresh: r.lastAt || null, tags: ['préparation'] }));
             (state.dashboards || []).forEach(d2 => push({ type: 'report', id: d2.id, title: d2.name, sub: (d2.tiles || []).length + ' tuile(s)', desc: 'Tableau de bord composable : ' + (d2.tiles || []).map(t2 => t2.title).filter(Boolean).slice(0, 4).join(', '), dom: '—', own: '', q: null, sens: null, val: null, fresh: null, tags: ['dashboard'] }));
@@ -11279,12 +11386,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const tg = termTargets(t2);
                     if (!tg.length) return `<div class="dsect"><h4>Ce terme désigne</h4><p class="text-[11.5px] text-slate-400 italic">Aucune donnée pour l'instant. Reliez-le : dans le <b>Glossaire</b> (colonnes), ou en choisissant ce terme dans la colonne « Terme » du <b>Dictionnaire</b>.</p></div>`;
                     return `<div class="dsect"><h4>Ce terme désigne (${tg.length})</h4>${tg.map(x => {
-                        const key = x.kind === 'bo' || x.kind === 'attr' ? { type: 'bo', bo: x.boId } : { type: 'column', tbl: x.table, col: x.col };
-                        const ic = x.kind === 'col' ? '▦' : (x.kind === 'attr' ? '🔹' : '🏛️');
+                        const key = x.kind === 'bo' || x.kind === 'attr' ? { type: 'bo', bo: x.boId } : (x.kind === 'asset' ? { type: 'asset', id: x.assetId } : { type: 'column', tbl: x.table, col: x.col });
+                        const ic = x.kind === 'col' ? '▦' : (x.kind === 'attr' ? '🔹' : (x.kind === 'asset' ? '' : '🏛️'));
                         const inner = `<span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(x.label)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(x.via)}</span></span>`;
                         return `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`;
                     }).join('')}</div>`; })() : ''}
-                ${e2.type === 'column' && (e2.syns || []).length ? `<div class="dsect"><h4>Termes du glossaire (synonymes métier)</h4><div class="flex gap-1.5 flex-wrap">${(e2.syns || []).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn);
+                ${(e2.type === 'column' || e2.type === 'asset' || e2.type === 'bo') && [...(e2.syns || []), ...(e2.attrTerms || [])].length ? `<div class="dsect"><h4>${e2.type === 'column' ? 'Termes du glossaire (hérités de l\'attribut alimenté)' : 'Termes du glossaire (synonymes métier)'}</h4><div class="flex gap-1.5 flex-wrap">${Array.from(new Set([...(e2.syns || []), ...(e2.attrTerms || [])])).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn);
                     return tt ? `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'term', id: tt.id })})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold hover:bg-indigo-100">📖 ${escapeHTML(sn)}</button>` : `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold">📖 ${escapeHTML(sn)}</span>`; }).join('')}</div></div>` : ''}
                 ${e2.type === 'bo' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
                     const prod = (bo.producedBy || []).map(assetById).filter(Boolean), cons = (bo.consumedBy || []).map(assetById).filter(Boolean);
@@ -12474,8 +12581,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.1.1';
+        const APP_VERSION = '9.2.0';
         const APP_CHANGELOG = [
+            { v: '9.2.0', d: '2026-09-04', t: 'Le glossaire parle métier : un terme se pose sur un attribut, un objet, une application ou un processus', items: [
+                'Fini le « Lier colonne » : un terme est un nom métier, il se pose sur ce qui a un sens pour le métier — un <b>attribut d\'objet</b> (sélecteur objet ▸ attribut), un <b>objet métier</b>, une <b>application</b> ou un <b>processus</b>. Une colonne de fichier n\'est qu\'une provenance : elle <b>hérite</b> du terme de l\'attribut qu\'elle alimente.',
+                'Le lien est porté des deux côtés : lier un attribut depuis le glossaire remplit son champ « Terme », et choisir un terme dans le formulaire de l\'attribut le fait apparaître dans le glossaire. Un attribut peut porter plusieurs termes.',
+                '<b>Migration automatique</b> : chaque ancien lien vers une colonne qui alimente un attribut devient un lien vers cet attribut. Les colonnes qui n\'alimentent encore aucun attribut restent visibles comme « ancien lien fichier », à reporter ou à retirer — rien n\'est perdu.',
+                'Catalogue : les applications, processus et objets portent leurs termes (recherche par synonyme, pastilles dans la fiche) ; la fiche d\'un terme liste attributs, objets, applications et processus désignés, tous cliquables. Une colonne affiche les termes hérités de son attribut.',
+                'La fiche d\'une application ou d\'un processus affiche ses termes ; supprimer un terme nettoie les attributs qui le portaient.'] },
             { v: '9.1.1', d: '2026-09-04', t: 'Correctif : « variantes de casse » fantômes à l\'audit', items: [
                 '<b>Le symptôme</b> : l\'audit affichait par exemple 26 variantes de casse sur un attribut, et le détail répondait « aucune ligne en anomalie ».',
                 '<b>La cause</b> : le compteur était la différence de deux <i>estimations</i> approchées (nombre de valeurs distinctes, et nombre de valeurs distinctes une fois en majuscules). Sur une colonne à forte cardinalité, le bruit de ces estimations fabriquait un écart qui n\'existait pas, alors que la consultation du détail, elle, est exacte.',
