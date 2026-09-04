@@ -12474,8 +12474,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.1.0';
+        const APP_VERSION = '9.1.1';
         const APP_CHANGELOG = [
+            { v: '9.1.1', d: '2026-09-04', t: 'Correctif : « variantes de casse » fantômes à l\'audit', items: [
+                '<b>Le symptôme</b> : l\'audit affichait par exemple 26 variantes de casse sur un attribut, et le détail répondait « aucune ligne en anomalie ».',
+                '<b>La cause</b> : le compteur était la différence de deux <i>estimations</i> approchées (nombre de valeurs distinctes, et nombre de valeurs distinctes une fois en majuscules). Sur une colonne à forte cardinalité, le bruit de ces estimations fabriquait un écart qui n\'existait pas, alors que la consultation du détail, elle, est exacte.',
+                '<b>La correction</b> : le nombre de variantes est recompté <b>exactement</b> (COUNT DISTINCT) sur toutes les colonnes, dans une passe dédiée par lots. Vérifié sur un vrai DuckDB : 200 000 identifiants sans variante → 0 (l\'ancien calcul donnait un écart de plusieurs milliers) ; Paris / PARIS + lyon / Lyon → 2, et le détail liste exactement les lignes concernées. Une colonne sans variante affiche 0 et n\'est plus cliquable.'] },
             { v: '9.1.0', d: '2026-09-04', t: 'Lineage métier : applications → objet → usages, sans les fichiers', items: [
                 'Le graphe de lineage d\'un <b>objet métier</b> et celui d\'un <b>attribut</b> ne passent plus par les fichiers : on lit directement <b>quelle(s) application(s) produisent</b> l\'objet, l\'objet, et <b>qui l\'utilise</b> (applications, processus). La table de provenance reste rappelée en sous-titre du nœud application (« via CLIENTS »).',
                 'Une table destinataire est remplacée par l\'application qui la lit (« diffusé vers »). Une source sans application rattachée reste affichée, signalée « sans application », pour ne rien cacher.',
@@ -17859,6 +17863,24 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const res = await conn.query(`SELECT ${colExprs.join(', ')} FROM (SELECT ${proj.join(', ')} FROM ${sourceExpr} AS src) q`);
                 Object.assign(colRow, arrowResultToObjects(res)[0]);
             }
+            // V9.1.1 — Variantes de casse : le compteur était la différence de DEUX estimations
+            // approchées (approx_count_distinct de la valeur et de sa majuscule). Sur une colonne
+            // à forte cardinalité, le bruit des deux estimations fabriquait des variantes fantômes
+            // (« 26 » à l'audit, « aucune ligne » à la consultation, qui est exacte). Le test sur un
+            // vrai DuckDB a montré que le bruit peut aller dans les deux sens (jusqu'à -34 000 sur
+            // 200 000 identifiants) : on ne peut donc même pas s'en servir pour présélectionner.
+            // On recompte EXACTEMENT sur toutes les colonnes, par lots : le chiffre affiché est
+            // désormais celui que retrouve le détail.
+            try {
+                const cands = targetHeaders.map((h, i) => i);
+                for (let start = 0; start < cands.length; start += BATCH) {
+                    const slice = cands.slice(start, start + BATCH);
+                    const ex = slice.map(i => { const t2 = `TRIM(CAST(${sqlIdent(targetHeaders[i])} AS VARCHAR))`; const nb = `(${t2} IS NOT NULL AND ${t2} <> '')`;
+                        return `(COUNT(DISTINCT CASE WHEN ${nb} THEN ${t2} END) - COUNT(DISTINCT CASE WHEN ${nb} THEN UPPER(${t2}) END))::BIGINT AS x${i}`; });
+                    const r = arrowResultToObjects(await conn.query(`SELECT ${ex.join(', ')} FROM ${sourceExpr} AS src`))[0];
+                    slice.forEach(i => { colRow[`c${i}_casex`] = Math.max(0, Number(r[`x${i}`] || 0)); });
+                }
+            } catch (eC) { console.warn('Recompte exact des variantes de casse ignoré :', eC); }
 
             const stats = { tableName: table.name, totalRows, emptyRows: Number(g.empty_rows), duplicateRows: Number(g.duplicate_rows), duplicatesApprox, funcDupCols, funcDuplicateRows, funcDuplicatesApprox, totalCells: totalRows * targetHeaders.length, filledCells: 0, completnessRate: 0, columns: {} };
 
@@ -17889,7 +17911,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     mean, stdDev, min: minVal, max: maxVal, sum: mean * numNum,
                     spaceIssues: Number(colRow[`c${i}_sp`] || 0), multiSpace: Number(colRow[`c${i}_msp`] || 0),
                     placeholders: Number(colRow[`c${i}_ph`] || 0),
-                    caseDupGroups: Math.max(0, Number(colRow[`c${i}_distinct`]) - Number(colRow[`c${i}_ucnt`] || colRow[`c${i}_distinct`])),
+                    caseDupGroups: colRow[`c${i}_casex`] !== undefined ? colRow[`c${i}_casex`] : 0,
                     outliers: 0, outliersIqr: 0,
                     // V6.21 : distribution (quantiles approchés), profil de date, forme de la colonne
                     p05: null, p25: null, median: null, p75: null, p95: null,
