@@ -3834,7 +3834,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (!e2) return;
             const box = el('attrLineageBox'); if (!box) return;
             box.classList.remove('hidden');
-            box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'attribut « ${escapeHTML(e2.name)} »${st ? ' <span class="text-emerald-600">◆ ' + escapeHTML(st.name) + '</span>' : ''}</span><button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="attrLineageWrap" class="h-[300px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            _lineageRedraw = () => openAttrLineage(boId, stId, elId);
+            box.innerHTML = `<div class="flex items-center justify-between gap-2 flex-wrap mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'attribut « ${escapeHTML(e2.name)} »${st ? ' <span class="text-emerald-600">◆ ' + escapeHTML(st.name) + '</span>' : ''}</span><span class="flex items-center gap-3">${lineageFilesToggleHtml()}<button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div><div id="attrLineageWrap" class="h-[300px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
             const { nodes, edges } = buildAttrLineageGraph(bo, st, e2);
             if (attrLineageGraph) { try { attrLineageGraph.destroy(); } catch (e3) {} attrLineageGraph = null; }
             attrLineageGraph = createSvgGraph(el('attrLineageWrap'));
@@ -3851,12 +3852,25 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const srcA = assetById(e2.sourceApp) || assetById((bo.producedBy || [])[0]);
             if (srcA) { nodes.push({ id: 'as:' + srcA.id, type: 'studio-rich-node', title: '🖥 ' + srcA.name, content: e2.sourceApp && e2.sourceApp !== ((bo.producedBy || [])[0] || '') ? '≠ source de l\'objet' : 'source de l\'objet', fill: '#e2e8f0', stroke: '#334155' }); }
             const maps = st ? (e2.col ? [{ table: st.table, col: e2.col }] : []) : (e2.mappings || []);
+            if (!lineageFilesOn()) {
+                // V9.1 — sans fichiers : application(s) → attribut → usages ; la colonne est rappelée sur l'application.
+                const owners = new Map();
+                maps.forEach(m => { const own = appOwnerOfSource(m.table) || srcA; if (own) { if (!owners.has(own.id)) owners.set(own.id, { a: own, via: [] }); owners.get(own.id).via.push(m.table + '.' + m.col); } });
+                if (!owners.size && srcA) owners.set(srcA.id, { a: srcA, via: [] });
+                owners.forEach(({ a, via }) => {
+                    const id = 'as:' + a.id;
+                    if (!nodes.some(n => n.id === id)) nodes.push({ id, type: 'studio-rich-node', title: '🖥 ' + a.name, content: via.length ? 'via ' + via.join(', ') : 'source de l\'objet', fill: '#e2e8f0', stroke: '#334155' });
+                    else { const n = nodes.find(x => x.id === id); if (via.length) n.content = 'via ' + via.join(', '); }
+                    edges.push({ id: 'ep' + a.id, source: id, target: attrId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
+                });
+                if (!owners.size) { nodes.push({ id: 'nosrc', type: 'studio-rich-node', title: '❔ aucune application source', content: maps.length ? maps.map(m => m.table + '.' + m.col).join(', ') : 'attribut non alimenté', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'ens', source: 'nosrc', target: attrId, label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
+            } else
             maps.forEach((m, i) => {
                 nodes.push({ id: 'col:' + i, type: 'studio-rich-node', title: m.table, content: m.col, fill: '#dbeafe', stroke: '#2563eb' });
                 if (srcA) edges.push({ id: 'e1' + i, source: 'as:' + srcA.id, target: 'col:' + i, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
                 edges.push({ id: 'e2' + i, source: 'col:' + i, target: attrId, label: 'alimente', style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } });
             });
-            if (!maps.length && srcA) edges.push({ id: 'e0', source: 'as:' + srcA.id, target: attrId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
+            if (lineageFilesOn() && !maps.length && srcA) edges.push({ id: 'e0', source: 'as:' + srcA.id, target: attrId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } });
             (e2.usedBy || []).forEach(id => { const a = assetById(id); if (!a) return;
                 nodes.push({ id: 'use:' + id, type: 'studio-rich-node', title: assetLabel(a), content: a.criticality || '', fill: a.kind === 'app' ? '#e2e8f0' : '#ffedd5', stroke: a.kind === 'app' ? '#334155' : '#ea580c' });
                 edges.push({ id: 'eu' + id, source: attrId, target: 'use:' + id, label: 'utilisé par', style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
@@ -3868,9 +3882,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // colonne → objets métier & processus qui l'exploitent).
         function buildColumnLineageGraph(tbl, col) {
             const g = state.governance;
+            buildColumnLineageGraph._viaAttr = false;
             for (const bo of (g.businessObjects || [])) {
-                for (const e2 of (bo.elements || [])) { if ((e2.mappings || []).some(m => m.table === tbl && m.col === col)) return buildAttrLineageGraph(bo, null, e2); }
-                for (const st of getBoFacets(bo)) { for (const fe of (st.elements || [])) { if (st.table === tbl && fe.col === col) return buildAttrLineageGraph(bo, st, fe); } }
+                for (const e2 of (bo.elements || [])) { if ((e2.mappings || []).some(m => m.table === tbl && m.col === col)) { buildColumnLineageGraph._viaAttr = true; return buildAttrLineageGraph(bo, null, e2); } }
+                for (const st of getBoFacets(bo)) { for (const fe of (st.elements || [])) { if (st.table === tbl && fe.col === col) { buildColumnLineageGraph._viaAttr = true; return buildAttrLineageGraph(bo, st, fe); } } }
             }
             const nodes = [], edges = []; const cid = 'col:main';
             nodes.push({ id: cid, type: 'studio-rich-node', title: '🔹 ' + col, content: 'Table ' + tbl, fill: '#dcfce7', stroke: '#16a34a' });
@@ -3882,11 +3897,30 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (nodes.length === 1) { nodes.push({ id: 'nouse', type: 'studio-rich-node', title: '😴 aucun usage déclaré', content: '', fill: '#fef9c3', stroke: '#ca8a04' }); edges.push({ id: 'enu', source: cid, target: 'nouse', label: '', style: { stroke: '#eab308', lineDash: [3, 3] } }); }
             return { nodes, edges };
         }
+        // V9.1 — Lineage « métier » : par défaut les FICHIERS (tables) n'apparaissent plus dans
+        // le graphe d'un objet ou d'un attribut. On lit : application(s) qui produisent → objet
+        // (ou attribut) → applications / processus qui l'utilisent. La provenance technique reste
+        // indiquée en sous-titre du nœud application (« via CLIENTS »), et une case
+        // « Afficher les fichiers » rétablit le détail table par table. Préférence mémorisée.
+        function lineageFilesOn() {
+            if (govState.lineageFiles === undefined) { try { govState.lineageFiles = localStorage.getItem('sd_lineage_files') === '1'; } catch (e) { govState.lineageFiles = false; } }
+            return !!govState.lineageFiles;
+        }
+        let _lineageRedraw = null;
+        function lineageFilesSet(on) {
+            govState.lineageFiles = !!on;
+            try { localStorage.setItem('sd_lineage_files', on ? '1' : '0'); } catch (e) {}
+            if (typeof _lineageRedraw === 'function') _lineageRedraw();
+        }
+        function lineageFilesToggleHtml() {
+            return `<label data-ro="keep" class="text-[11px] font-semibold text-slate-600 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap" title="Par défaut, le graphe va de l'application à l'objet sans passer par les fichiers. Cochez pour afficher chaque table / colonne."><input type="checkbox" ${lineageFilesOn() ? 'checked' : ''} onchange="lineageFilesSet(this.checked)"> 📄 Afficher les fichiers</label>`;
+        }
         // V8.6 — Graphe de lineage d'un OBJET MÉTIER entier, présenté comme celui d'un attribut :
         // applications productrices → sources techniques (maître / contributeur) → objet →
         // consommateurs (applications, processus, tables destinataires, usages des attributs).
         // Tout est déduit des rattachements déjà saisis : rien à ressaisir.
-        function buildBoLineageGraph(bo) {
+        function buildBoLineageGraph(bo, opts) {
+            const files = opts && opts.files !== undefined ? !!opts.files : lineageFilesOn();
             const g = state.governance; const nodes = [], edges = []; const seen = new Set();
             const add = n => { if (!seen.has(n.id)) { seen.add(n.id); nodes.push(n); } };
             const boId = 'bo:' + bo.id;
@@ -3896,13 +3930,22 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const ROLE = { maitre: 'alimente (maître)', contributeur: 'contribue', destinataire: 'diffusé vers' };
             const producers = new Set(bo.producedBy || []);
             // 1. Sources amont (maître / contributeur) et l'application qui les produit
+            const via = {}; // appId -> tables (mode sans fichiers : rappel de la provenance sur le nœud appli)
             (bo.sources || []).filter(s2 => s2 && s2.table && s2.role !== 'destinataire').forEach((s2, i) => {
-                const tid = 'tbl:' + s2.table;
-                add({ id: tid, type: 'studio-rich-node', title: '▦ ' + s2.table, content: s2.role === 'maitre' ? 'source maître' : 'source contributrice', fill: '#dbeafe', stroke: '#2563eb' });
-                edges.push({ id: 'es' + i, source: tid, target: boId, label: ROLE[s2.role] || 'alimente', style: { stroke: '#2563eb', lineWidth: s2.role === 'maitre' ? 2 : 1, endArrow: { path: '', fill: '#2563eb' } } });
                 const own = appOwnerOfSource(s2.table);
+                if (!files && own) {
+                    // Sans fichiers : l'application produit directement l'objet ; la table est citée sur le nœud.
+                    add(appNode(own)); producers.delete(own.id); (via[own.id] = via[own.id] || []).push(s2.table);
+                    if (!edges.some(e => e.source === 'as:' + own.id && e.target === boId))
+                        edges.push({ id: 'epb' + own.id, source: 'as:' + own.id, target: boId, label: s2.role === 'maitre' ? 'produit (maître)' : 'contribue', style: { stroke: '#334155', lineWidth: s2.role === 'maitre' ? 2 : 1, endArrow: { path: '', fill: '#334155' } } });
+                    return;
+                }
+                const tid = 'tbl:' + s2.table;
+                add({ id: tid, type: 'studio-rich-node', title: '▦ ' + s2.table, content: (s2.role === 'maitre' ? 'source maître' : 'source contributrice') + (!files ? ' · sans application' : ''), fill: '#dbeafe', stroke: '#2563eb' });
+                edges.push({ id: 'es' + i, source: tid, target: boId, label: ROLE[s2.role] || 'alimente', style: { stroke: '#2563eb', lineWidth: s2.role === 'maitre' ? 2 : 1, endArrow: { path: '', fill: '#2563eb' } } });
                 if (own) { add(appNode(own)); producers.delete(own.id); edges.push({ id: 'ep' + i, source: 'as:' + own.id, target: tid, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } }); }
             });
+            Object.keys(via).forEach(id => { const n = nodes.find(x => x.id === 'as:' + id); if (n) n.content = 'via ' + via[id].join(', '); });
             // 2. Applications productrices sans source technique identifiée : lien direct
             producers.forEach(id => { const a = assetById(id); if (!a) return; add(appNode(a)); edges.push({ id: 'epd' + id, source: 'as:' + id, target: boId, label: 'produit', style: { stroke: '#334155', lineWidth: 2, endArrow: { path: '', fill: '#334155' } } }); });
             // 3. Aval : consommateurs déclarés sur l'objet, tables destinataires, rattachements « boIds »
@@ -3915,6 +3958,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             cons.forEach((lbl, id) => { const a = assetById(id); if (!a) return; add(appNode(a));
                 edges.push({ id: 'eu' + id, source: boId, target: 'as:' + id, label: lbl, style: { stroke: '#ea580c', endArrow: { path: '', fill: '#ea580c' } } }); });
             (bo.sources || []).filter(s2 => s2 && s2.table && s2.role === 'destinataire').forEach((s2, i) => {
+                if (!files) {
+                    // Sans fichiers : la table destinataire est remplacée par l'application qui la lit.
+                    const own = appOwnerOfSource(s2.table);
+                    if (own) { if (!cons.has(own.id) && !edges.some(e => e.source === boId && e.target === 'as:' + own.id)) { add(appNode(own)); edges.push({ id: 'ed' + i, source: boId, target: 'as:' + own.id, label: 'diffusé vers', style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } }); } const n = nodes.find(x => x.id === 'as:' + own.id); if (n && !/via /.test(n.content || '')) n.content = 'via ' + s2.table; return; }
+                }
                 const tid = 'tbl:' + s2.table;
                 add({ id: tid, type: 'studio-rich-node', title: '▦ ' + s2.table, content: 'table destinataire', fill: '#dbeafe', stroke: '#2563eb' });
                 edges.push({ id: 'ed' + i, source: boId, target: tid, label: ROLE.destinataire, style: { stroke: '#2563eb', endArrow: { path: '', fill: '#2563eb' } } });
@@ -3928,7 +3976,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return;
             const box = el('attrLineageBox'); if (!box) return;
             box.classList.remove('hidden');
-            box.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'objet « ${escapeHTML(bo.name)} »</span><button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold">✕ fermer</button></div><div id="attrLineageWrap" class="h-[340px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
+            _lineageRedraw = () => openBoLineage(boId);
+            box.innerHTML = `<div class="flex items-center justify-between gap-2 flex-wrap mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'objet « ${escapeHTML(bo.name)} » <span class="font-normal text-slate-500">— ${lineageFilesOn() ? 'applications → fichiers → objet → usages' : 'applications → objet → usages'}</span></span><span class="flex items-center gap-3">${lineageFilesToggleHtml()}<button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div><div id="attrLineageWrap" class="h-[340px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
             if (attrLineageGraph) { try { attrLineageGraph.destroy(); } catch (e3) {} attrLineageGraph = null; }
             attrLineageGraph = createSvgGraph(el('attrLineageWrap'));
             attrLineageGraph.data(buildBoLineageGraph(bo));
@@ -11292,13 +11341,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         function catShowAttrLineage(e2) {
             const box = el('catLineageBox'); if (!box) return;
+            _lineageRedraw = () => catShowAttrLineage(e2);
             const isBo = e2.type === 'bo';
             const data = isBo ? buildBoLineageGraph((state.governance.businessObjects || []).find(x => x.id === e2.bo)) : buildColumnLineageGraph(e2.tbl, e2.col);
             el('uxDrawer').classList.add('wide'); // plus de place horizontale pour le graphe
             box.classList.remove('hidden');
             box.innerHTML = `<div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »${isBo ? ' <span class="font-normal text-slate-500">— sources → objet → usages</span>' : ''}</span>
-                <span class="flex items-center gap-1.5">
+                <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »${isBo ? ' <span class="font-normal text-slate-500">— ' + (lineageFilesOn() ? 'applications → fichiers → objet → usages' : 'applications → objet → usages') + '</span>' : ''}</span>
+                <span class="flex items-center gap-2.5">
+                    ${isBo || (e2.type === 'column' && buildColumnLineageGraph._viaAttr) ? lineageFilesToggleHtml() : ''}
                     ${isBo ? `<button data-ro="keep" onclick="catGoLineageTab()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Ouvrir la vue par attribut de l'onglet Lineage">↗ Par attribut</button>` : ''}
                     <button data-ro="keep" onclick="catLineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Afficher en plein écran">⛶ Agrandir</button>
                     <button data-ro="keep" onclick="catCloseLineage()" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
@@ -12423,8 +12474,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.0.0';
+        const APP_VERSION = '9.1.0';
         const APP_CHANGELOG = [
+            { v: '9.1.0', d: '2026-09-04', t: 'Lineage métier : applications → objet → usages, sans les fichiers', items: [
+                'Le graphe de lineage d\'un <b>objet métier</b> et celui d\'un <b>attribut</b> ne passent plus par les fichiers : on lit directement <b>quelle(s) application(s) produisent</b> l\'objet, l\'objet, et <b>qui l\'utilise</b> (applications, processus). La table de provenance reste rappelée en sous-titre du nœud application (« via CLIENTS »).',
+                'Une table destinataire est remplacée par l\'application qui la lit (« diffusé vers »). Une source sans application rattachée reste affichée, signalée « sans application », pour ne rien cacher.',
+                'Case <b>« 📄 Afficher les fichiers »</b> dans l\'en-tête de chaque graphe (fiche catalogue, fiche objet, formulaire d\'attribut) pour rétablir le détail table par table. Le choix est mémorisé.',
+                'L\'onglet Lineage (vue systèmes, bout en bout) intégrait déjà les fichiers aux applications par défaut : les trois graphes racontent maintenant la même histoire.'] },
             { v: '9.0.0', d: '2026-09-04', t: 'La fiche d\'un objet métier, repensée pour voir, modifier et enrichir', items: [
                 '<b>Carte d\'identité</b> : nom, statut, propriétaire, contributeurs et définition (sur deux lignes) en tête, et surtout un <b>score de complétude</b> (« fiche complète à 62 % ») avec la liste de ce qui manque — chaque manque est un bouton qui mène directement au champ ou au filtre concerné (définition, propriétaire, source maître, attributs non alimentés, sans définition, sans usage, validation).',
                 '<b>Espace « Attributs & composition » en maître-détail</b> : à gauche la liste de tous les attributs (propres et par facette) avec leur provenance et trois voyants (alimenté, défini, utilisé) ; à droite un <b>vrai formulaire</b> pour l\'attribut sélectionné : identité, <b>sens métier</b> (définition, exemples avec échantillonnage depuis la source, sensibilité, terme du glossaire), provenance (colonnes techniques), usages (applications et processus à cocher, source spécifique), ordre, lineage, suppression.',
