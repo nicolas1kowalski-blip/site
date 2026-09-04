@@ -429,7 +429,7 @@
        servent que lorsque le menu est réduit (icônes seules). */
     body:not(.v7-collapsed) #v7FamNav{display:none !important}
     .gov-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;min-height:34px}
-    .gov-bar .crumb{font-size:12px;color:#57657c;font-weight:600}
+    .gov-bar .crumb{font-size:12px;color:#57657c;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
     .gov-bar .crumb b{color:#1e293b;font-weight:800}
     html[data-theme="dark"] .gov-bar .crumb{color:#a7b4c6}
     html[data-theme="dark"] .gov-bar .crumb b{color:#e2e8f0}
@@ -3303,7 +3303,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const crumb = el('govCrumb'), acts = el('govActions');
             const govTabs = (NAV_PHASES.find(p => p.id === 'gov') || { tabs: [] }).tabs;
             const curT = govTabs.find(t => t.g === (govState.tab === 'flow' ? 'lineage' : govState.tab)) || govTabs.find(t => t.g === govState.tab) || null;
-            if (crumb) crumb.innerHTML = curT ? `${govIsReadOnly() ? '👁 Consultation' : escapeHTML(curT.fam || 'Gouvernance')} › <b>${v7Ico(curT.icon)} ${escapeHTML(curT.label)}</b>` : '';
+            if (crumb) crumb.innerHTML = curT ? `${govIsReadOnly() ? '👁 Consultation' : escapeHTML(curT.fam || 'Gouvernance')} › <b>${escapeHTML(curT.label)}</b>` : '';
             if (acts) acts.innerHTML = `<button onclick="giOpen()" aria-label="Import en masse de la gouvernance" class="text-[11.5px] font-bold px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Importer en masse définitions, propriétaires, termes… depuis un fichier">⬆ Import en masse</button>`;
             const famBar = el('govFamTabs'); if (famBar) famBar.innerHTML = '';
             const c = el('govContent');
