@@ -718,6 +718,24 @@
     .v7-ic{width:17px;height:17px;flex:0 0 17px;stroke:currentColor;fill:none;
            stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.92}
     .v7-it .v7-ic{width:15px;height:15px;flex:0 0 15px;stroke-width:1.7}
+    /* V9.4.1 — Rail réduit PROPRE : icônes centrées dans une colonne de 64 px, sous-écrans du
+       groupe ouvert sous forme d'icônes alignées, plus rien de rogné ni décalé. */
+    body.v7-collapsed .v7-side{--v7-side-w:64px}
+    body.v7-collapsed .v7-brand{justify-content:center !important;padding:14px 0 10px !important;gap:0 !important}
+    body.v7-collapsed .v7-nav{padding:8px 6px !important}
+    body.v7-collapsed .v7-grp>.hd{justify-content:center !important;padding:0 !important;width:44px;height:40px;margin:2px auto;gap:0 !important;border-radius:10px !important}
+    body.v7-collapsed .v7-grp>.hd .lbl,body.v7-collapsed .v7-grp>.hd .ch,body.v7-collapsed .v7-grp>.hd .bd{display:none !important}
+    body.v7-collapsed .v7-grp>.hd .v7-ic{width:19px;height:19px;flex:0 0 19px}
+    body.v7-collapsed .v7-grp>.hd .ic{width:auto;flex:0 0 auto}
+    body.v7-collapsed .v7-items{display:none;margin:2px 0 6px !important;padding:4px 0 0 !important;border-left:0 !important;border-top:1px solid rgba(255,255,255,.08)}
+    body.v7-collapsed .v7-grp.open .v7-items{display:block}
+    body.v7-collapsed .v7-it{justify-content:center !important;width:36px;height:32px;padding:0 !important;margin:1px auto;gap:0 !important;border-radius:8px !important}
+    body.v7-collapsed .v7-it .lbl{display:none !important}
+    body.v7-collapsed .v7-it .v7-ic{width:16px;height:16px;flex:0 0 16px}
+    body.v7-collapsed .v7-it .ic{width:auto;flex:0 0 auto}
+    body.v7-collapsed .v7-foot{padding:8px 6px !important}
+    body.v7-collapsed .v7-fbtn{justify-content:center !important;padding:8px 0 !important;gap:0 !important;width:44px;margin:0 auto}
+    body.v7-collapsed .v7-fbtn .lbl{display:none !important}
     .v7-seg{background:color-mix(in srgb,var(--v7-txt) 5%,transparent) !important;border:none !important;
             border-radius:9px !important;padding:2px !important}
     .v7-seg button{font-size:12px !important;font-weight:530 !important;border-radius:7px !important;
@@ -12731,10 +12749,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.4.0';
+        const APP_VERSION = '9.4.1';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.4.1', d: '2026-09-04', t: 'Menu latéral réduit : un vrai rail d\'icônes', items: [
+                'Réduit, le menu latéral affichait des icônes décalées et rognées. Il devient un <b>rail de 64 px</b> : logo, phases et sous-écrans du groupe ouvert en icônes <b>centrées</b>, alignées, sans bordure ni retrait ; l\'écran actif reste surligné ; les libellés apparaissent au survol.',
+                'Les boutons du pied (Sauvegarde, Importer, Exporter, Déployer) sont centrés de la même façon.'] },
             { v: '9.4.0', d: '2026-09-04', t: 'Gouvernance : une seule navigation', items: [
                 'Trois menus se répétaient : le menu latéral, les familles dans l\'en-tête (Découvrir, Patrimoine, Acteurs, Sens métier…) et une rangée de puces dans le panneau. Le <b>menu latéral</b> devient l\'unique navigation.',
                 'L\'en-tête n\'affiche plus les familles que lorsque le menu latéral est <b>réduit</b> (icônes seules) : elles prennent alors le relais, sinon elles disparaissent.',
