@@ -6193,7 +6193,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const ctxJson = JSON.stringify(ctx).replace(/"/g, '&quot;');
             const tags = terms.map(t2 => `<span class="term-tag" title="${escapeHTML(t2.definition || t2.term)}"><span class="lb" data-ro="keep" onclick="termTagOpen('${t2.id}')" title="Voir dans le glossaire">📖 ${escapeHTML(t2.term)}</span><button class="x" onclick="termTagRemove('${kind}',${ctxJson},'${t2.id}')" title="Retirer ce terme">✕</button></span>`).join('');
             const inh = (opts.inherited || []).map(t2 => `<span class="term-tag inh" title="Hérité de l'attribut d'objet métier que cette colonne alimente"><span class="lb" data-ro="keep" onclick="termTagOpen('${t2.id}')">📖 ${escapeHTML(t2.term)}</span></span>`).join('');
-            const add = opts.readOnly ? '' : `<input class="term-add" list="${uid}" placeholder="+ terme" aria-label="Ajouter un terme" title="Tapez un terme existant ou un nouveau, puis Entrée" onkeydown="if(event.key==='Enter'){event.preventDefault();termTagAdd('${kind}',${ctxJson},this.value);}" onchange="if(this.value && Array.from(this.list.options).some(o=>o.value===this.value)) termTagAdd('${kind}',${ctxJson},this.value)"><datalist id="${uid}">${remain.map(t2 => `<option value="${escapeHTML(t2.term)}"></option>`).join('')}</datalist>`;
+            const add = opts.readOnly ? '' : `<input class="term-add" list="${uid}" placeholder="＋ Ajouter un terme…" aria-label="Ajouter un terme" title="Tapez un terme existant (suggestions) ou un NOUVEAU terme, puis Entrée : il est créé dans le glossaire et relié ici" onkeydown="if(event.key==='Enter'){event.preventDefault();termTagAdd('${kind}',${ctxJson},this.value);}" onchange="if(this.value && Array.from(this.list.options).some(o=>o.value===this.value)) termTagAdd('${kind}',${ctxJson},this.value)"><datalist id="${uid}">${remain.map(t2 => `<option value="${escapeHTML(t2.term)}"></option>`).join('')}</datalist>`;
             return `<div class="term-tags">${tags}${inh}${!tags && !inh && opts.readOnly ? '<span class="term-none">aucun terme</span>' : ''}${add}</div>`;
         }
         function termTagOpen(id) { govState.glossView = 'terms'; govState.glossFocus = id; openGovTab('glossary'); setTimeout(() => { const e2 = el('gl-card-' + id); if (e2) e2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80); }
@@ -6205,14 +6205,23 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (kind === 'attr') glossaryLinkAttr(t2.id, ctx.boId, ctx.elId);
             else if (kind === 'bo') { t2.boIds = t2.boIds || []; if (!t2.boIds.includes(ctx.boId)) t2.boIds.push(ctx.boId); }
             else if (kind === 'asset') { if (!termAssetIds(t2).includes(ctx.assetId)) termAssetIds(t2).push(ctx.assetId); }
-            persistAppState(); renderGovernance();
+            persistAppState(); renderGovernance(); catRefreshFiche();
+        }
+        // Depuis le catalogue : la fiche ouverte est reconstruite après un ajout / retrait de terme.
+        function catRefreshFiche() {
+            const e2 = _catFicheCtx; const d = el('uxDrawer');
+            if (!e2 || !d || d.classList.contains('hidden') || govState.tab !== 'catalog') return;
+            const key = e2.type === 'bo' ? { type: 'bo', bo: e2.bo } : (e2.type === 'column' ? { type: 'column', tbl: e2.tbl, col: e2.col } : (e2.type === 'term' ? { type: 'term', id: e2.termId || e2.id } : { type: e2.type, id: e2.id, tbl: e2.tbl }));
+            const box = el('catLineageBox'); const lineageOpen = box && !box.classList.contains('hidden');
+            catOpenByKey(key);
+            if (lineageOpen && typeof _lineageRedraw === 'function') _lineageRedraw();
         }
         function termTagRemove(kind, ctx, termId) {
             const t2 = (state.governance.glossary || []).find(x => x.id === termId); if (!t2) return;
-            if (kind === 'attr') { attrTermUnlink(termId, ctx.boId, ctx.elId); return; }
+            if (kind === 'attr') { attrTermUnlink(termId, ctx.boId, ctx.elId); catRefreshFiche(); return; }
             if (kind === 'bo') t2.boIds = (t2.boIds || []).filter(x => x !== ctx.boId);
             else if (kind === 'asset') t2.assetIds = termAssetIds(t2).filter(x => x !== ctx.assetId);
-            persistAppState(); renderGovernance();
+            persistAppState(); renderGovernance(); catRefreshFiche();
         }
         // ---- Glossaire : vues par objet & attribut / par application & processus ----
         function glossViewBar() {
@@ -11504,10 +11513,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         return `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`;
                     }).join('')}</div>`; })() : ''}
                 ${e2.type === 'bo' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
-                    const rows = (boAllAttrRows(bo) || []).map(r => ({ r, ts: termsOfAttr(bo.id, r.el.id) })).filter(x => x.ts.length);
-                    return rows.length ? `<div class="dsect"><h4>Termes portés par ses attributs (${rows.length})</h4>${rows.map(x => `<div class="flex items-start gap-2 py-1 border-b border-slate-50 text-[12px]"><span class="font-semibold text-slate-700 whitespace-nowrap">🔹 ${escapeHTML(x.r.el.name)}</span><span class="flex gap-1 flex-wrap">${x.ts.map(t2 => `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'term', id: t2.id })})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2 py-0.5 font-bold hover:bg-indigo-100">📖 ${escapeHTML(t2.term)}</button>`).join('')}</span></div>`).join('')}</div>` : ''; })() : ''}
-                ${(e2.type === 'column' || e2.type === 'asset' || e2.type === 'bo') && [...(e2.syns || []), ...(e2.attrTerms || [])].length ? `<div class="dsect"><h4>${e2.type === 'column' ? 'Termes du glossaire (hérités de l\'attribut alimenté)' : (e2.type === 'bo' ? 'Termes de l\'objet lui-même' : 'Termes du glossaire (synonymes métier)')}</h4><div class="flex gap-1.5 flex-wrap">${Array.from(new Set([...(e2.syns || []), ...(e2.attrTerms || [])])).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn);
-                    return tt ? `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'term', id: tt.id })})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold hover:bg-indigo-100">📖 ${escapeHTML(sn)}</button>` : `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold">📖 ${escapeHTML(sn)}</span>`; }).join('')}</div></div>` : ''}
+                    // V9.3.2 : les termes se posent DEPUIS le catalogue — sur l'objet et sur chacun de ses attributs.
+                    const rows = boAllAttrRows(bo) || [];
+                    return `<div class="dsect"><h4>Termes de l'objet</h4>${termTagsHtml('bo', { boId: bo.id })}</div>
+                        <div class="dsect"><h4>Attributs et leurs termes (${rows.length})</h4>${rows.length ? rows.map(r => `<div class="flex items-start gap-2 py-1.5 border-b border-slate-50"><span class="text-[12px] font-semibold text-slate-700 whitespace-nowrap min-w-[140px] pt-1" title="${escapeHTML(r.facet ? 'Composant ' + r.facet : 'Attribut propre')}">${r.facet ? '◆' : '🔹'} ${escapeHTML(r.el.name)}</span>${termTagsHtml('attr', { boId: bo.id, elId: r.el.id })}</div>`).join('') : '<p class="text-[11.5px] text-slate-400 italic">Aucun attribut.</p>'}</div>`; })() : ''}
+                ${e2.type === 'asset' ? `<div class="dsect"><h4>Termes du glossaire (synonymes métier)</h4>${termTagsHtml('asset', { assetId: e2.id })}</div>` : ''}
+                ${e2.type === 'column' ? (() => { const hits = attrsOfColumn(e2.tbl, e2.col);
+                    return hits.length
+                        ? `<div class="dsect"><h4>Termes de l'attribut que cette colonne alimente</h4>${hits.map(h => `<div class="flex items-start gap-2 py-1.5"><span class="text-[12px] font-semibold text-slate-700 whitespace-nowrap min-w-[140px] pt-1">🔹 ${escapeHTML(h.r.el.name)} <span class="font-normal text-slate-400">· ${escapeHTML(h.bo.name)}</span></span>${termTagsHtml('attr', { boId: h.boId, elId: h.r.el.id })}</div>`).join('')}<p class="text-[10.5px] text-slate-500 mt-1">Le terme est métier : il se pose sur l'attribut, la colonne en hérite.</p></div>`
+                        : `<div class="dsect"><h4>Termes du glossaire</h4><p class="text-[11.5px] text-slate-400 italic">Cette colonne n'alimente aucun attribut d'objet métier. Rattachez-la à un attribut (fiche de l'objet ▸ Attributs & composition) pour lui donner un nom métier.</p>${(e2.syns || []).length ? termTagsHtml('col', {}, { readOnly: true, inherited: termsOfColumn(e2.tbl, e2.col) }) : ''}</div>`; })() : ''}
                 ${e2.type === 'bo' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
                     const prod = (bo.producedBy || []).map(assetById).filter(Boolean), cons = (bo.consumedBy || []).map(assetById).filter(Boolean);
                     const srcs = (bo.sources || []).filter(s2 => s2 && s2.table);
@@ -12696,10 +12710,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.3.1';
+        const APP_VERSION = '9.3.2';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.3.2', d: '2026-09-04', t: 'Ajouter un terme depuis le catalogue, sur l\'objet, l\'attribut, l\'application', items: [
+                'La fiche du catalogue devient un point d\'entrée pour poser un terme : sur un <b>objet métier</b> (« Termes de l\'objet ») et sur <b>chacun de ses attributs</b> (« Attributs et leurs termes »), sur une <b>application</b> ou un <b>processus</b>, et depuis une <b>colonne</b> sur l\'attribut qu\'elle alimente. La fiche se reconstruit aussitôt.',
+                'Le champ d\'ajout s\'annonce clairement : « ＋ Ajouter un terme… ». Tapez un terme existant (suggestions) ou un nouveau, puis Entrée : il est créé dans le glossaire et relié sur place. Même composant dans le dictionnaire, la fiche de l\'objet, le formulaire d\'attribut, la fiche application et le glossaire par objet.'] },
             { v: '9.3.1', d: '2026-09-04', t: 'Catalogue : les termes des attributs ne sont plus affichés comme ceux de l\'objet', items: [
                 'La carte et la fiche d\'un objet métier n\'affichent plus, en tags, les termes qui sont en réalité posés sur ses <b>attributs</b> — seuls les termes de l\'objet lui-même apparaissent.',
                 'Ces termes d\'attributs restent <b>cherchables</b> (chercher « Revenu » trouve toujours l\'objet Client) et la fiche les liste à part, attribut par attribut : « 🔹 Chiffre d\'affaires → 📖 Revenu », chaque terme cliquable.'] },
