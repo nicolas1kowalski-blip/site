@@ -11242,7 +11242,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         function catBuildIndex() {
             const g = state.governance; const ix = [];
-            const push = e2 => { e2.blob = catNorm([e2.title, e2.sub, e2.desc, e2.dom, e2.own, (e2.tags || []).join(' ')].join(' ')); ix.push(e2); };
+            const push = e2 => { e2.blob = catNorm([e2.title, e2.sub, e2.desc, e2.dom, e2.own, (e2.tags || []).join(' '), (e2.kw || []).join(' ')].join(' ')); ix.push(e2); };
             Object.values(state.tables).filter(t => t.status === 'ready').forEach(t => {
                 const d = g.dictionary[t.name] || {};
                 let worst = null; (t.headers || []).forEach(h => { const lv = pvLevelOf(t.name, h); if (lv === 'personnel') worst = 'personnel'; else if (lv === 'confidentiel' && worst !== 'personnel') worst = 'confidentiel'; else if (!worst) worst = lv; });
@@ -11264,10 +11264,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 });
             });
             (g.businessObjects || []).forEach(bo => { const syns = (g.glossary || []).filter(t2 => (t2.boIds || []).includes(bo.id)).map(x => x.term);
+                // V9.3.1 : les termes des ATTRIBUTS ne sont plus affichés comme ceux de l'objet — ils
+                // restent cherchables (mots-clés) et sont listés à part dans la fiche, attribut par attribut.
                 const attrTerms = Array.from(new Set((boAllAttrRows(bo) || []).flatMap(r => termsOfAttr(bo.id, r.el.id).map(x => x.term))));
                 push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
                 desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
-                tags: ['objet métier', ...syns.map(x => '📖 ' + x), ...attrTerms.map(x => '📖 ' + x)], bo: bo.id, syns, attrTerms }); });
+                tags: ['objet métier', ...syns.map(x => '📖 ' + x)], kw: attrTerms, bo: bo.id, syns }); });
             (g.glossary || []).forEach(t2 => { const tg = termTargets(t2);
                 push({ type: 'term', id: t2.id, title: t2.term, sub: tg.length ? 'désigne ' + tg.length + ' donnée(s)' : 'aucune donnée désignée', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null,
                     tags: ['glossaire', ...tg.slice(0, 6).map(x => x.label)], termId: t2.id }); });
@@ -11501,7 +11503,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         const inner = `<span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(x.label)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(x.via)}</span></span>`;
                         return `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`;
                     }).join('')}</div>`; })() : ''}
-                ${(e2.type === 'column' || e2.type === 'asset' || e2.type === 'bo') && [...(e2.syns || []), ...(e2.attrTerms || [])].length ? `<div class="dsect"><h4>${e2.type === 'column' ? 'Termes du glossaire (hérités de l\'attribut alimenté)' : 'Termes du glossaire (synonymes métier)'}</h4><div class="flex gap-1.5 flex-wrap">${Array.from(new Set([...(e2.syns || []), ...(e2.attrTerms || [])])).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn);
+                ${e2.type === 'bo' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
+                    const rows = (boAllAttrRows(bo) || []).map(r => ({ r, ts: termsOfAttr(bo.id, r.el.id) })).filter(x => x.ts.length);
+                    return rows.length ? `<div class="dsect"><h4>Termes portés par ses attributs (${rows.length})</h4>${rows.map(x => `<div class="flex items-start gap-2 py-1 border-b border-slate-50 text-[12px]"><span class="font-semibold text-slate-700 whitespace-nowrap">🔹 ${escapeHTML(x.r.el.name)}</span><span class="flex gap-1 flex-wrap">${x.ts.map(t2 => `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'term', id: t2.id })})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2 py-0.5 font-bold hover:bg-indigo-100">📖 ${escapeHTML(t2.term)}</button>`).join('')}</span></div>`).join('')}</div>` : ''; })() : ''}
+                ${(e2.type === 'column' || e2.type === 'asset' || e2.type === 'bo') && [...(e2.syns || []), ...(e2.attrTerms || [])].length ? `<div class="dsect"><h4>${e2.type === 'column' ? 'Termes du glossaire (hérités de l\'attribut alimenté)' : (e2.type === 'bo' ? 'Termes de l\'objet lui-même' : 'Termes du glossaire (synonymes métier)')}</h4><div class="flex gap-1.5 flex-wrap">${Array.from(new Set([...(e2.syns || []), ...(e2.attrTerms || [])])).map(sn => { const tt = (state.governance.glossary || []).find(x2 => x2.term === sn);
                     return tt ? `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'term', id: tt.id })})" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold hover:bg-indigo-100">📖 ${escapeHTML(sn)}</button>` : `<span class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2.5 py-1 font-bold">📖 ${escapeHTML(sn)}</span>`; }).join('')}</div></div>` : ''}
                 ${e2.type === 'bo' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
                     const prod = (bo.producedBy || []).map(assetById).filter(Boolean), cons = (bo.consumedBy || []).map(assetById).filter(Boolean);
@@ -12691,10 +12696,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.3.0';
+        const APP_VERSION = '9.3.1';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.3.1', d: '2026-09-04', t: 'Catalogue : les termes des attributs ne sont plus affichés comme ceux de l\'objet', items: [
+                'La carte et la fiche d\'un objet métier n\'affichent plus, en tags, les termes qui sont en réalité posés sur ses <b>attributs</b> — seuls les termes de l\'objet lui-même apparaissent.',
+                'Ces termes d\'attributs restent <b>cherchables</b> (chercher « Revenu » trouve toujours l\'objet Client) et la fiche les liste à part, attribut par attribut : « 🔹 Chiffre d\'affaires → 📖 Revenu », chaque terme cliquable.'] },
             { v: '9.3.0', d: '2026-09-04', t: 'Les termes deviennent des tags, partout, avec ajout direct', items: [
                 'Fini le mélange liste déroulante + pastilles : les termes d\'un <b>attribut</b>, d\'un <b>objet métier</b>, d\'une <b>application</b> ou d\'un <b>processus</b> s\'affichent en <b>tags</b>, tous au même niveau, chacun avec ✕ pour le retirer et un clic pour l\'ouvrir dans le glossaire.',
                 'Champ <b>« + terme »</b> à côté des tags : tapez un terme existant (suggestions) ou un nouveau, puis Entrée — il est créé dans le glossaire et relié dans la foulée. Disponible dans le <b>dictionnaire par objet</b>, la <b>fiche de l\'objet</b> (carte d\'identité et formulaire d\'attribut) et la fiche <b>application / processus</b>.',
