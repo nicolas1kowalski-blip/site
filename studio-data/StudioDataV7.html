@@ -3216,7 +3216,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         ${sampleBtn}
                     </div></td>
                     <td class="p-2"><select onchange="${wr('sensitivity')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, val('sensitivity'))}</select></td>
-                    <td class="p-2"><select onchange="${wr('term')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]">${glossOpts(val('term'))}</select></td>
+                    <td class="p-2">${one ? attrTermsCellHtml(bo, stId, r0.el.id) : `<select onchange="${wr('term')}" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[130px]" title="Terme appliqué aux ${g.members.length} colonnes repliées">${glossOpts(val('term'))}</select>${(() => { const oth = Array.from(new Set(g.members.flatMap(mm => termsOfAttr(bo.id, mm.el.id).filter(t2 => t2.id !== val('term')).map(t2 => t2.term)))); return oth.length ? `<div class="flex flex-wrap gap-1 mt-1">${oth.map(x => `<span class="text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-1.5 py-0.5 font-bold">📖 ${escapeHTML(x)}</span>`).join('')}</div>` : ''; })()}`}</td>
                     <td class="p-2">${vlCell}</td>
                 </tr>`;
             };
@@ -3355,7 +3355,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <td class="p-2"><input type="text" value="${escapeHTML(c.technicalType || '')}" placeholder="ex: VARCHAR(10)" onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','technicalType',this.value)" class="w-28 border border-slate-200 p-1.5 rounded text-xs font-mono"></td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.examples || '')}" placeholder="ex: PAR01 ; LYO02..." onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','examples',this.value)" class="w-44 border border-slate-200 p-1.5 rounded text-xs ${c.examplesAuto ? 'bg-indigo-50/50' : ''}" title="${c.examplesAuto ? 'Échantillonné automatiquement depuis la source' : 'Saisie manuelle'}"></td>
                     <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','sensitivity',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white"><option value="">—</option>${selOpts(SENSITIVITY_OPTS, c.sensitivity)}</select>${(() => { const r = dictColResolved(tn, h, 'sensitivity'); return (!c.sensitivity && r.from) ? `<div class="text-[9px] text-emerald-600 mt-0.5" title="Défini sur l'objet métier — c'est là qu'il faut le modifier">hérite : ${escapeHTML(r.value)}</div>` : ''; })()}</td>
-                    <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select></td>
+                    <td class="p-2"><select onchange="updateDictColField('${escapeHTML(tn)}','${escapeHTML(h.replace(/'/g, "\\'"))}','term',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[140px]">${glossOpts(c.term)}</select>${colTermsPillsHtml(tn, h, c.term)}</td>
                     <td class="p-2">${vlSelectHtml(tn, h, c.valueListId)}</td>
                 </tr>`;
             });
@@ -6268,6 +6268,36 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         function addGlossaryAsset(id) { const g = state.governance.glossary.find(x => x.id === id); const aid = (el('gl-as-' + id) || {}).value; if (!g || !aid) return; if (!termAssetIds(g).includes(aid)) termAssetIds(g).push(aid); persistAppState(); renderGovernance(); }
         function removeGlossaryAsset(id, idx) { const g = state.governance.glossary.find(x => x.id === id); if (!g) return; termAssetIds(g).splice(idx, 1); persistAppState(); renderGovernance(); }
+        // V9.2.2 — Cellule « Terme(s) » du dictionnaire : le terme principal (champ « Terme » de
+        // l'attribut) ET tous les autres termes posés depuis le glossaire, avec ajout / retrait sur
+        // place. Un attribut peut porter plusieurs noms métier ; le dictionnaire les montre tous.
+        function attrTermsCellHtml(bo, stId, elId) {
+            const bo2 = typeof bo === 'string' ? (state.governance.businessObjects || []).find(b => b.id === bo) : bo; if (!bo2) return '';
+            const r = (boAllAttrRows(bo2) || []).find(x => x.el.id === elId); if (!r) return '';
+            const gl = state.governance.glossary || [];
+            const all = termsOfAttr(bo2.id, elId);
+            const main = r.el.term || '';
+            const others = all.filter(t2 => t2.id !== main);
+            const remain = gl.filter(t2 => !all.some(x => x.id === t2.id));
+            const opts = '<option value="">— Aucun terme —</option>' + gl.map(t2 => `<option value="${t2.id}" ${t2.id === main ? 'selected' : ''}>${escapeHTML(t2.term)}</option>`).join('');
+            return `<div class="flex flex-col gap-1 min-w-[150px]">
+                <select onchange="boAttrSetTerm('${bo2.id}','${stId || ''}','${elId}',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white max-w-[170px]" title="Terme principal de l'attribut">${opts}</select>
+                ${others.length ? `<div class="flex flex-wrap gap-1">${others.map(t2 => `<span class="text-[10.5px] bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-2 py-0.5 font-bold inline-flex items-center gap-1" title="Autre terme posé sur cet attribut">📖 ${escapeHTML(t2.term)}<button onclick="attrTermUnlink('${t2.id}','${bo2.id}','${elId}')" class="text-indigo-400 hover:text-red-500" title="Retirer ce terme">✕</button></span>`).join('')}</div>` : ''}
+                ${remain.length && main ? `<select onchange="if(this.value){glossaryLinkAttr(this.value,'${bo2.id}','${elId}'); renderGovernance();}" class="border border-dashed border-indigo-300 p-0.5 rounded text-[10.5px] bg-white text-indigo-700 max-w-[170px]" title="Poser un terme supplémentaire (synonyme)"><option value="">+ autre terme…</option>${remain.map(t2 => `<option value="${t2.id}">${escapeHTML(t2.term)}</option>`).join('')}</select>` : ''}
+            </div>`;
+        }
+        function attrTermUnlink(termId, boId, elId) {
+            const g = state.governance.glossary.find(x => x.id === termId); if (!g) return;
+            g.attrLinks = termAttrLinks(g).filter(x => !(x.boId === boId && x.elId === elId));
+            const bo = (state.governance.businessObjects || []).find(b => b.id === boId); const r = bo && (boAllAttrRows(bo) || []).find(x => x.el.id === elId);
+            if (r && r.el.term === termId) r.el.term = '';
+            persistAppState(); renderGovernance();
+        }
+        // Termes d'une COLONNE technique : le sien (dictionnaire) + ceux hérités de l'attribut alimenté.
+        function colTermsPillsHtml(tn, cn, ownTerm) {
+            const inh = termsOfColumn(tn, cn).filter(t2 => t2.id !== ownTerm);
+            return inh.length ? `<div class="flex flex-wrap gap-1 mt-1">${inh.map(t2 => `<span class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-1.5 py-0.5 font-bold" title="Hérité de l'attribut d'objet métier que cette colonne alimente — se modifie sur l'attribut ou dans le glossaire">📖 ${escapeHTML(t2.term)}</span>`).join('')}</div>` : '';
+        }
         function termsOfAsset(aid) { return (state.governance.glossary || []).filter(t2 => termAssetIds(t2).includes(aid)); }
         function termsOfAttr(boId, elId) { return (state.governance.glossary || []).filter(t2 => termAttrLinks(t2).some(x => x.boId === boId && x.elId === elId) || (() => { const h = termAttrRow({ boId, elId }); return h && h.r.el.term === t2.id; })()); }
         function populateGlossLinkCols(id, tableName) { const t = tableByName(tableName); const s = el('gl-col-' + id); if (s) s.innerHTML = (t ? t.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
@@ -12581,10 +12611,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.2.1';
+        const APP_VERSION = '9.2.2';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.2.2', d: '2026-09-04', t: 'Le dictionnaire montre tous les termes d\'une donnée', items: [
+                'Depuis la 9.2.0 un attribut peut porter plusieurs termes, mais le dictionnaire n\'en affichait qu\'un. La colonne « Terme » du <b>dictionnaire par objet</b> montre désormais le terme principal <b>et</b> tous les autres termes posés depuis le glossaire, en pastilles, avec retrait ✕ et un sélecteur « + autre terme… » pour en poser un de plus sans quitter le dictionnaire.',
+                'En <b>vue technique</b> (colonnes), la colonne affiche en plus les termes hérités de l\'attribut d\'objet qu\'elle alimente, marqués comme hérités.',
+                'Un attribut replié (colonnes numérotées) affiche l\'union des termes de ses membres.'] },
             { v: '9.2.1', d: '2026-09-04', t: 'Titre de l\'onglet aligné sur la version', items: [
                 'L\'onglet du navigateur affichait « Studio Data V5 - Qualité & BI », un numéro figé depuis longtemps. Il affiche désormais <b>« Studio Data 9.2.1 »</b>, calculé depuis la version de l\'application : il restera juste à chaque mise à jour.'] },
             { v: '9.2.0', d: '2026-09-04', t: 'Le glossaire parle métier : un terme se pose sur un attribut, un objet, une application ou un processus', items: [
