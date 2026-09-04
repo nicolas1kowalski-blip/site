@@ -10,7 +10,7 @@
          l'application repose dessus. connect-src reste large : les sources API sont saisies par
          l'utilisateur et le moteur télécharge son WASM. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; worker-src blob:; child-src blob:; img-src 'self' data: blob:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https: data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
-    <title>Studio Data V5 - Qualité & BI</title>
+    <title>Studio Data</title>
     <script>
         const _ResizeObserver = window.ResizeObserver;
         window.ResizeObserver = class ResizeObserver extends _ResizeObserver {
@@ -12581,8 +12581,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.2.0';
+        const APP_VERSION = '9.2.1';
+        // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
+        try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.2.1', d: '2026-09-04', t: 'Titre de l\'onglet aligné sur la version', items: [
+                'L\'onglet du navigateur affichait « Studio Data V5 - Qualité & BI », un numéro figé depuis longtemps. Il affiche désormais <b>« Studio Data 9.2.1 »</b>, calculé depuis la version de l\'application : il restera juste à chaque mise à jour.'] },
             { v: '9.2.0', d: '2026-09-04', t: 'Le glossaire parle métier : un terme se pose sur un attribut, un objet, une application ou un processus', items: [
                 'Fini le « Lier colonne » : un terme est un nom métier, il se pose sur ce qui a un sens pour le métier — un <b>attribut d\'objet</b> (sélecteur objet ▸ attribut), un <b>objet métier</b>, une <b>application</b> ou un <b>processus</b>. Une colonne de fichier n\'est qu\'une provenance : elle <b>hérite</b> du terme de l\'attribut qu\'elle alimente.',
                 'Le lien est porté des deux côtés : lier un attribut depuis le glossaire remplit son champ « Terme », et choisir un terme dans le formulaire de l\'attribut le fait apparaître dans le glossaire. Un attribut peut porter plusieurs termes.',
