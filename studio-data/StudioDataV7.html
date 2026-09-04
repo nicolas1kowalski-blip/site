@@ -278,6 +278,12 @@
         .term-add{font-size:11.5px;border:1px dashed #a5b4fc;border-radius:999px;padding:3px 10px;background:#fff;color:#3730a3;min-width:175px;width:175px;outline:none}
         .term-add::placeholder{color:#6366f1;font-weight:700}
         .term-add:focus{border-style:solid;box-shadow:0 0 0 2px #c7d2fe}
+        .term-addwrap{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+        .term-go{font-size:11px;font-weight:800;border-radius:999px;padding:4px 10px;background:#4338ca;color:#fff;border:1px solid #4338ca;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+        .term-go.new{background:#047857;border-color:#047857}
+        .term-go:hover{filter:brightness(1.1)}
+        html[data-theme="dark"] .term-go{background:#6366f1;border-color:#6366f1}
+        html[data-theme="dark"] .term-go.new{background:#059669;border-color:#059669}
         .term-none{font-size:11px;color:#94a3b8;font-style:italic}
         html[data-theme="dark"] .term-tag{background:#1e1b4b;border-color:#4338ca;color:#c7d2fe}
         html[data-theme="dark"] .term-tag .x{color:#a5b4fc}
@@ -6193,8 +6199,18 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const ctxJson = JSON.stringify(ctx).replace(/"/g, '&quot;');
             const tags = terms.map(t2 => `<span class="term-tag" title="${escapeHTML(t2.definition || t2.term)}"><span class="lb" data-ro="keep" onclick="termTagOpen('${t2.id}')" title="Voir dans le glossaire">📖 ${escapeHTML(t2.term)}</span><button class="x" onclick="termTagRemove('${kind}',${ctxJson},'${t2.id}')" title="Retirer ce terme">✕</button></span>`).join('');
             const inh = (opts.inherited || []).map(t2 => `<span class="term-tag inh" title="Hérité de l'attribut d'objet métier que cette colonne alimente"><span class="lb" data-ro="keep" onclick="termTagOpen('${t2.id}')">📖 ${escapeHTML(t2.term)}</span></span>`).join('');
-            const add = opts.readOnly ? '' : `<input class="term-add" list="${uid}" placeholder="＋ Ajouter un terme…" aria-label="Ajouter un terme" title="Tapez un terme existant (suggestions) ou un NOUVEAU terme, puis Entrée : il est créé dans le glossaire et relié ici" onkeydown="if(event.key==='Enter'){event.preventDefault();termTagAdd('${kind}',${ctxJson},this.value);}" onchange="if(this.value && Array.from(this.list.options).some(o=>o.value===this.value)) termTagAdd('${kind}',${ctxJson},this.value)"><datalist id="${uid}">${remain.map(t2 => `<option value="${escapeHTML(t2.term)}"></option>`).join('')}</datalist>`;
+            // V9.3.3 : Entrée OU bouton. Dès qu'on tape, un bouton « ＋ Créer « … » » (terme inconnu)
+            // ou « Relier » (terme existant) apparaît : plus besoin de deviner qu'il faut valider.
+            const add = opts.readOnly ? '' : `<span class="term-addwrap"><input id="${uid}i" class="term-add" list="${uid}" placeholder="＋ Ajouter un terme…" aria-label="Ajouter un terme" title="Tapez un terme existant (suggestions) ou un NOUVEAU terme, puis Entrée ou le bouton : il est créé dans le glossaire et relié ici" oninput="termTagHint(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();termTagAdd('${kind}',${ctxJson},this.value);}" onkeyup="if(event.key==='Enter'){event.preventDefault();}"><button type="button" id="${uid}b" class="term-go" hidden onclick="termTagAdd('${kind}',${ctxJson},el('${uid}i').value)">＋ Créer</button></span><datalist id="${uid}">${remain.map(t2 => `<option value="${escapeHTML(t2.term)}"></option>`).join('')}</datalist>`;
             return `<div class="term-tags">${tags}${inh}${!tags && !inh && opts.readOnly ? '<span class="term-none">aucun terme</span>' : ''}${add}</div>`;
+        }
+        function termTagHint(inp) {
+            const b = el(inp.id.replace(/i$/, 'b')); if (!b) return;
+            const v = String(inp.value || '').trim();
+            if (!v) { b.hidden = true; return; }
+            const ex = termByName(v);
+            b.hidden = false; b.textContent = ex ? '↵ Relier « ' + ex.term + ' »' : '＋ Créer « ' + v + ' »';
+            b.classList.toggle('new', !ex);
         }
         function termTagOpen(id) { govState.glossView = 'terms'; govState.glossFocus = id; openGovTab('glossary'); setTimeout(() => { const e2 = el('gl-card-' + id); if (e2) e2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80); }
         function termByName(name) { const n = catNorm(String(name || '').trim()); return n ? (state.governance.glossary || []).find(t2 => catNorm(t2.term) === n) : null; }
@@ -12710,10 +12726,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.3.2';
+        const APP_VERSION = '9.3.3';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.3.3', d: '2026-09-04', t: 'Créer un terme inconnu : un bouton explicite, plus seulement la touche Entrée', items: [
+                'Dans le champ « ＋ Ajouter un terme… », dès que vous tapez, un bouton apparaît : <b>« ＋ Créer « votre texte » »</b> (vert) si le terme n\'existe pas encore, <b>« ↵ Relier »</b> (bleu) s\'il existe déjà. Un clic suffit ; la touche Entrée fonctionne aussi. Il n\'était pas évident qu\'il fallait valider par Entrée, et quitter le champ ne créait rien.',
+                'Le champ est un peu plus large et son libellé n\'est plus tronqué.'] },
             { v: '9.3.2', d: '2026-09-04', t: 'Ajouter un terme depuis le catalogue, sur l\'objet, l\'attribut, l\'application', items: [
                 'La fiche du catalogue devient un point d\'entrée pour poser un terme : sur un <b>objet métier</b> (« Termes de l\'objet ») et sur <b>chacun de ses attributs</b> (« Attributs et leurs termes »), sur une <b>application</b> ou un <b>processus</b>, et depuis une <b>colonne</b> sur l\'attribut qu\'elle alimente. La fiche se reconstruit aussitôt.',
                 'Le champ d\'ajout s\'annonce clairement : « ＋ Ajouter un terme… ». Tapez un terme existant (suggestions) ou un nouveau, puis Entrée : il est créé dans le glossaire et relié sur place. Même composant dans le dictionnaire, la fiche de l\'objet, le formulaire d\'attribut, la fiche application et le glossaire par objet.'] },
