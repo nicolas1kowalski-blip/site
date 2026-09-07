@@ -284,6 +284,23 @@
         .term-go:hover{filter:brightness(1.1)}
         html[data-theme="dark"] .term-go{background:#6366f1;border-color:#6366f1}
         html[data-theme="dark"] .term-go.new{background:#059669;border-color:#059669}
+        /* V9.5 — Fiche catalogue navigable : retour, fil d'Ariane, liens */
+        .cat-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 10px;padding-bottom:8px;border-bottom:1px dashed #e2e8f0}
+        .cat-back{font-size:12px;font-weight:800;color:#3730a3;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:4px 11px;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+        .cat-back:hover{background:#e0e7ff}
+        .cat-nav .crumb{font-size:11px;color:#64748b;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+        .cat-nav .crumb button{color:#4338ca;font-weight:700}
+        .cat-nav .crumb button:hover{text-decoration:underline}
+        .cat-nav .crumb b{color:#1e293b}
+        .cat-link{color:#1e293b}
+        .cat-link:hover{color:#4338ca;text-decoration:underline}
+        .cat-link .chev{color:#94a3b8;font-weight:400}
+        html[data-theme="dark"] .cat-nav{border-color:#2c3550}
+        html[data-theme="dark"] .cat-back{color:#c7d2fe;background:#1e1b4b;border-color:#4338ca}
+        html[data-theme="dark"] .cat-nav .crumb{color:#a7b4c6}
+        html[data-theme="dark"] .cat-nav .crumb button{color:#a5b4fc}
+        html[data-theme="dark"] .cat-nav .crumb b,html[data-theme="dark"] .cat-link{color:#e2e8f0}
+        html[data-theme="dark"] .cat-link:hover{color:#a5b4fc}
         .term-none{font-size:11px;color:#94a3b8;font-style:italic}
         html[data-theme="dark"] .term-tag{background:#1e1b4b;border-color:#4338ca;color:#c7d2fe}
         html[data-theme="dark"] .term-tag .x{color:#a5b4fc}
@@ -6249,9 +6266,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // Depuis le catalogue : la fiche ouverte est reconstruite après un ajout / retrait de terme.
         function catRefreshFiche() {
             const e2 = _catFicheCtx; const d = el('uxDrawer');
-            if (!e2 || !d || d.classList.contains('hidden') || govState.tab !== 'catalog') return;
-            const key = e2.type === 'bo' ? { type: 'bo', bo: e2.bo } : (e2.type === 'column' ? { type: 'column', tbl: e2.tbl, col: e2.col } : (e2.type === 'term' ? { type: 'term', id: e2.termId || e2.id } : { type: e2.type, id: e2.id, tbl: e2.tbl }));
+            if (!e2 || !d || !d.classList.contains('on') || govState.tab !== 'catalog') return;
+            const key = catKeyOf(e2);
             const box = el('catLineageBox'); const lineageOpen = box && !box.classList.contains('hidden');
+            if (_catHist.length && catSameKey(_catHist[_catHist.length - 1], key)) _catHist.pop();
             catOpenByKey(key);
             if (lineageOpen && typeof _lineageRedraw === 'function') _lineageRedraw();
         }
@@ -11228,14 +11246,16 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // couche « Tout » si l'actif est technique et masqué — un lien vers une colonne ne peut pas
         // tomber dans le vide.
         function catOpenByKey(k) {
-            const find = () => catRes.findIndex(r => r.type === k.type && (k.type === 'column' ? (r.tbl === k.tbl && r.col === k.col) : (k.type === 'bo' ? r.bo === k.bo : (k.type === 'term' ? (r.termId || r.id) === k.id : (k.tbl ? r.tbl === k.tbl : r.id === k.id)))));
+            const find = () => catRes.findIndex(r => r.type === k.type && (k.type === 'column' ? (r.tbl === k.tbl && r.col === k.col) : (k.type === 'bo' ? r.bo === k.bo : (k.type === 'attr' ? (r.bo === k.bo && r.elId === k.elId) : (k.type === 'term' ? (r.termId || r.id) === k.id : (k.tbl ? r.tbl === k.tbl : r.id === k.id))))));
             let i = find();
+            // Un attribut métier n'est listé que sur recherche : on le cherche dans l'index complet.
+            if (i < 0 && k.type === 'attr') { const ix = catBuildIndex(); const e2 = ix.find(r => r.type === 'attr' && r.bo === k.bo && r.elId === k.elId); if (e2) { catRes.push(e2); i = catRes.length - 1; } }
             if (i < 0 && CAT_TECH_TYPES.includes(k.type) && catState.layer !== 'tout') { catState.layer = 'tout'; renderGovernance(); i = find(); }
             if (i < 0) { CAT_FACETS.forEach(f => catState.f[f.key] = []); catState.q = ''; renderGovernance(); i = find(); }
             if (i >= 0) catOpenFiche(i);
         }
         function catKeyAttr(k) { return JSON.stringify(k).replace(/"/g, '&quot;'); }
-        const CAT_TYPES = { table: ['t-table', '▦', 'Table'], view: ['t-view', '◧', 'Vue dérivée'], column: ['t-attr', '◈', 'Attribut'], bo: ['t-obj', '🏛', 'Objet métier'], report: ['t-report', '📊', 'Rapport'], term: ['t-ref', '📖', 'Terme'], perimeter: ['t-ref', '🧩', 'Périmètre'], usecase: ['t-report', '🎯', 'Cas d\'usage'], asset: ['t-ref', '🖥', 'Appli / processus'], rule: ['t-ref', '📏', 'Règle qualité'], recipe: ['t-view', '🧹', 'Préparation'], linkage: ['t-ref', '🤝', 'Rapprochement'] };
+        const CAT_TYPES = { table: ['t-table', '▦', 'Table'], view: ['t-view', '◧', 'Vue dérivée'], column: ['t-attr', '◈', 'Colonne'], attr: ['t-obj', '🔹', 'Attribut métier'], bo: ['t-obj', '🏛', 'Objet métier'], report: ['t-report', '📊', 'Rapport'], term: ['t-ref', '📖', 'Terme'], perimeter: ['t-ref', '🧩', 'Périmètre'], usecase: ['t-report', '🎯', 'Cas d\'usage'], asset: ['t-ref', '🖥', 'Appli / processus'], rule: ['t-ref', '📏', 'Règle qualité'], recipe: ['t-view', '🧹', 'Préparation'], linkage: ['t-ref', '🤝', 'Rapprochement'] };
         const CAT_SENS = { perso: ['s-perso', '🛡 Personnelle'], conf: ['s-conf', '🔒 Confidentiel'], non: ['s-non', 'Non sensible'] };
         const CAT_VAL = { ok: ['v-ok', '✓ Validé'], todo: ['v-todo', '◷ À valider'], draft: ['v-draft', '◌ Brouillon'] };
         function catNorm(s2) { return String(s2 == null ? '' : s2).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
@@ -11317,7 +11337,14 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const attrTerms = Array.from(new Set((boAllAttrRows(bo) || []).flatMap(r => termsOfAttr(bo.id, r.el.id).map(x => x.term))));
                 push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
                 desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
-                tags: ['objet métier', ...syns.map(x => '📖 ' + x)], kw: attrTerms, bo: bo.id, syns }); });
+                tags: ['objet métier', ...syns.map(x => '📖 ' + x)], kw: attrTerms, bo: bo.id, syns });
+                // V9.5 : chaque attribut métier est une fiche du catalogue (navigable depuis l'objet,
+                // trouvable par recherche). Il n'encombre pas la liste par défaut : il n'apparaît
+                // que sur recherche ou si le type « Attribut métier » est coché.
+                (boAllAttrRows(bo) || []).forEach(r => { const ts = termsOfAttr(bo.id, r.el.id).map(x => x.term); const prov = boAttrProv(r);
+                    push({ type: 'attr', id: bo.id + '\u0001' + r.el.id, title: r.el.name, sub: 'attribut de ' + bo.name + (r.facet ? ' ◆ ' + r.facet : ''), desc: r.el.definition || '', dom: '—', own: r.el.owner || bo.globalOwner || '', q: null,
+                        sens: r.el.sensitivity ? (/personnel/i.test(r.el.sensitivity) ? 'perso' : (/sensible|confid/i.test(r.el.sensitivity) ? 'conf' : 'non')) : null, val: r.el.definition ? 'ok' : null, fresh: null,
+                        tags: ['attribut métier', ...ts.map(x => '📖 ' + x)], kw: [prov, bo.name], bo: bo.id, elId: r.el.id, stId: r.stId || '', syns: ts }); }); });
             (g.glossary || []).forEach(t2 => { const tg = termTargets(t2);
                 push({ type: 'term', id: t2.id, title: t2.term, sub: tg.length ? 'désigne ' + tg.length + ' donnée(s)' : 'aucune donnée désignée', desc: t2.definition || '', dom: '—', own: '', q: null, sens: null, val: t2.definition ? 'ok' : null, fresh: null,
                     tags: ['glossaire', ...tg.slice(0, 6).map(x => x.label)], termId: t2.id }); });
@@ -11340,6 +11367,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         ];
         function catMatch(e2, skipKey, ignoreLayer) {
             if (!ignoreLayer && skipKey !== 'type' && !catLayerOk(e2)) return false;
+            if (e2.type === 'attr' && skipKey !== 'type' && !catState.q && !(catState.f.type || []).includes('attr')) return false;
             if (catState.q) { const toks = catNorm(catState.q).split(/\s+/).filter(Boolean); if (!toks.every(tk => e2.blob.includes(tk))) return false; }
             for (const f of CAT_FACETS) { if (f.key === skipKey) continue; const sel2 = catState.f[f.key]; if (!sel2.length) continue; if (!sel2.includes(f.of(e2))) return false; }
             return true;
@@ -11501,16 +11529,38 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 (g.assets || []).forEach(a2 => { if (a2.kind === 'process' && ((a2.tables || []).includes(e2.tbl) || (a2.columns || []).some(c2 => c2.table === e2.tbl))) down++; });
             } else if (e2.type === 'column' && typeof modelImpact === 'function') down = modelImpact(e2.tbl, e2.col).length;
             else if (e2.type === 'bo') { const bo = g.businessObjects.find(x => x.id === e2.bo); if (bo) { up = (bo.sources || []).length; down = new Set(boAllAttrRows(bo).flatMap(r => r.el.usedBy || [])).size; } }
+            else if (e2.type === 'attr') { const bo = g.businessObjects.find(x => x.id === e2.bo); const r = bo && boAllAttrRows(bo).find(x => x.el.id === e2.elId); if (r) { up = r.stId ? (r.el.col ? 1 : 0) : (r.el.mappings || []).length; down = (r.el.usedBy || []).length; } }
             return [up, down];
+        }
+        // V9.5 — Historique de navigation de la fiche : chaque fiche ouverte depuis une autre
+        // s'empile, « ← Retour » revient à la précédente, le fil d'Ariane montre d'où l'on vient.
+        let _catHist = [];
+        function catKeyOf(e2) {
+            if (!e2) return null;
+            return e2.type === 'bo' ? { type: 'bo', bo: e2.bo } : (e2.type === 'attr' ? { type: 'attr', bo: e2.bo, elId: e2.elId } : (e2.type === 'column' ? { type: 'column', tbl: e2.tbl, col: e2.col } : (e2.type === 'term' ? { type: 'term', id: e2.termId || e2.id } : { type: e2.type, id: e2.id, tbl: e2.tbl })));
+        }
+        function catSameKey(a, b2) { return JSON.stringify(a) === JSON.stringify(b2); }
+        function catBack() {
+            _catHist.pop(); // fiche courante
+            const prev = _catHist.pop(); // celle d'avant (sera ré-empilée à l'ouverture)
+            if (prev) catOpenByKey(prev); else closeUxDrawer();
         }
         function catOpenFiche(i) {
             const e2 = catRes[i]; if (!e2) return;
             const [tc, ti, tl] = CAT_TYPES[e2.type] || CAT_TYPES.table;
+            const drawerOpen = el('uxDrawer') && el('uxDrawer').classList.contains('on');
+            const key = catKeyOf(e2);
+            if (!drawerOpen) _catHist = [];
+            if (!_catHist.length || !catSameKey(_catHist[_catHist.length - 1], key)) _catHist.push(key);
+            if (_catHist.length > 30) _catHist.shift();
+            const prevKey = _catHist.length > 1 ? _catHist[_catHist.length - 2] : null;
+            const prevLabel = (() => { if (!prevKey) return ''; const ix = catBuildIndex(); const pe = ix.find(r => catSameKey(catKeyOf(r), prevKey)); return pe ? pe.title : ''; })();
+            const navBar = prevKey ? `<div class="cat-nav"><button data-ro="keep" onclick="catBack()" class="cat-back" title="Revenir à la fiche précédente">← ${escapeHTML(prevLabel || 'Retour')}</button><span class="crumb">${_catHist.slice(-3).map((k2, j, arr) => { const ix2 = catBuildIndex(); const pe = ix2.find(r => catSameKey(catKeyOf(r), k2)); const lb = pe ? pe.title : '…'; return j === arr.length - 1 ? `<b>${escapeHTML(lb)}</b>` : `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(k2)})">${escapeHTML(lb)}</button> ›`; }).join(' ')}</span></div>` : '';
             const [up, down] = catLineageCounts(e2);
             const rel = catRes.filter(x => x !== e2 && x.dom === e2.dom && e2.dom !== '—' && (x.type === 'table' || x.type === 'view' || x.type === 'bo')).slice(0, 3);
             const relIdx = x => catRes.indexOf(x);
             const t = e2.tbl ? tableByName(e2.tbl) : null;
-            const body = `
+            const body = navBar + `
                 <div id="catLineageBox" class="hidden mb-3 border-2 border-indigo-200 rounded-xl bg-white p-3"></div>
                 <div class="dsect"><div class="flex items-center gap-1.5 flex-wrap">
                     ${e2.q != null ? `<span class="qual ${e2.q >= 90 ? 'q-ok' : (e2.q >= 70 ? 'q-warn' : 'q-bad')}">◆ Qualité ${e2.q}/100</span>` : ''}
@@ -11546,7 +11596,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const tg = termTargets(t2);
                     if (!tg.length) return `<div class="dsect"><h4>Ce terme désigne</h4><p class="text-[11.5px] text-slate-400 italic">Aucune donnée pour l'instant. Reliez-le : dans le <b>Glossaire</b> (colonnes), ou en choisissant ce terme dans la colonne « Terme » du <b>Dictionnaire</b>.</p></div>`;
                     return `<div class="dsect"><h4>Ce terme désigne (${tg.length})</h4>${tg.map(x => {
-                        const key = x.kind === 'bo' || x.kind === 'attr' ? { type: 'bo', bo: x.boId } : (x.kind === 'asset' ? { type: 'asset', id: x.assetId } : { type: 'column', tbl: x.table, col: x.col });
+                        const key = x.kind === 'attr' ? { type: 'attr', bo: x.boId, elId: x.elId } : (x.kind === 'bo' ? { type: 'bo', bo: x.boId } : (x.kind === 'asset' ? { type: 'asset', id: x.assetId } : { type: 'column', tbl: x.table, col: x.col }));
                         const ic = x.kind === 'col' ? '▦' : (x.kind === 'attr' ? '🔹' : (x.kind === 'asset' ? '' : '🏛️'));
                         const inner = `<span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(x.label)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(x.via)}</span></span>`;
                         return `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50">${inner}<span class="ml-auto text-slate-300">›</span></button>`;
@@ -11555,7 +11605,23 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     // V9.3.2 : les termes se posent DEPUIS le catalogue — sur l'objet et sur chacun de ses attributs.
                     const rows = boAllAttrRows(bo) || [];
                     return `<div class="dsect"><h4>Termes de l'objet</h4>${termTagsHtml('bo', { boId: bo.id })}</div>
-                        <div class="dsect"><h4>Attributs et leurs termes (${rows.length})</h4>${rows.length ? rows.map(r => `<div class="flex items-start gap-2 py-1.5 border-b border-slate-50"><span class="text-[12px] font-semibold text-slate-700 whitespace-nowrap min-w-[140px] pt-1" title="${escapeHTML(r.facet ? 'Composant ' + r.facet : 'Attribut propre')}">${r.facet ? '◆' : '🔹'} ${escapeHTML(r.el.name)}</span>${termTagsHtml('attr', { boId: bo.id, elId: r.el.id })}</div>`).join('') : '<p class="text-[11.5px] text-slate-400 italic">Aucun attribut.</p>'}</div>`; })() : ''}
+                        <div class="dsect"><h4>Attributs et leurs termes (${rows.length})</h4>${rows.length ? rows.map(r => `<div class="flex items-start gap-2 py-1.5 border-b border-slate-50"><button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'attr', bo: bo.id, elId: r.el.id })})" class="cat-link text-[12px] font-semibold whitespace-nowrap min-w-[140px] text-left pt-1" title="${escapeHTML((r.facet ? 'Composant ' + r.facet : 'Attribut propre') + ' — ouvrir la fiche de l\'attribut')}">${r.facet ? '◆' : '🔹'} ${escapeHTML(r.el.name)} <span class="chev">›</span></button>${termTagsHtml('attr', { boId: bo.id, elId: r.el.id })}</div>`).join('') : '<p class="text-[11.5px] text-slate-400 italic">Aucun attribut.</p>'}</div>`; })() : ''}
+                ${e2.type === 'attr' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); if (!bo) return '';
+                    const r = (boAllAttrRows(bo) || []).find(x => x.el.id === e2.elId); if (!r) return '';
+                    const st = r.stId ? getBoFacets(bo).find(x => x.id === r.stId) : null;
+                    const maps = st ? (r.el.col ? [{ table: st.table, col: r.el.col }] : []) : (r.el.mappings || []);
+                    const cnt = boAttrMulti(bo, { fold: false, members: [{ el: r.el, stId: r.stId || '' }], idx: [], stId: r.stId || '' });
+                    const link = (ic, lbl, sub, key) => `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr(key)})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">${ic} ${escapeHTML(lbl)}</span><span class="block text-[10px] text-slate-400">${escapeHTML(sub)}</span></span><span class="ml-auto text-slate-300">›</span></button>`;
+                    return `<div class="dsect"><h4>Appartient à</h4>${link('🏛️', bo.name, 'objet métier' + (st ? ' · composant « ' + st.name + ' »' : ''), { type: 'bo', bo: bo.id })}</div>
+                        <div class="dsect"><h4>Détail de l'attribut</h4><div class="kv-ux">
+                            <div class="cell"><div class="k">Nombre de valeurs</div><div class="v" style="font-size:12.5px">${escapeHTML(cnt.multi ? cnt.label : '1 valeur')}${cnt.from === 'déclaré' ? '' : ' <span class="text-slate-400">(observé)</span>'}</div></div>
+                            <div class="cell"><div class="k">Sensibilité</div><div class="v" style="font-size:12.5px">${escapeHTML(r.el.sensitivity || '—')}</div></div>
+                            ${r.el.examples ? `<div class="cell" style="grid-column:1/-1"><div class="k">Exemples</div><div class="v" style="font-size:12.5px">${escapeHTML(r.el.examples)}</div></div>` : ''}
+                        </div></div>
+                        <div class="dsect"><h4>Termes du glossaire</h4>${termTagsHtml('attr', { boId: bo.id, elId: r.el.id })}</div>
+                        <div class="dsect"><h4>Alimenté par (provenance technique)</h4>${maps.length ? maps.map(m => link('▦', m.table + '.' + m.col, 'colonne technique', { type: 'column', tbl: m.table, col: m.col })).join('') : '<p class="text-[11.5px] text-amber-700 font-bold">⚠ non alimenté — aucune colonne technique rattachée</p>'}</div>
+                        <div class="dsect"><h4>Utilisé par</h4>${(r.el.usedBy || []).length ? (r.el.usedBy || []).map(id => { const a = assetById(id); return a ? link(a.kind === 'process' ? '⚙️' : '🖥', a.name, a.kind === 'process' ? 'processus' : 'application', { type: 'asset', id: a.id }) : ''; }).join('') : '<p class="text-[11.5px] text-slate-400 italic">Aucun usage déclaré.</p>'}</div>`; })() : ''}
+                ${e2.type === 'column' ? (() => { const hits = attrsOfColumn(e2.tbl, e2.col); return hits.length ? `<div class="dsect"><h4>Alimente l'attribut métier</h4>${hits.map(h => `<button data-ro="keep" onclick="catOpenByKey(${catKeyAttr({ type: 'attr', bo: h.boId, elId: h.r.el.id })})" class="w-full flex items-center gap-2.5 border border-slate-100 rounded-lg px-2.5 py-2 mb-1.5 text-left hover:bg-slate-50"><span class="min-w-0"><span class="block text-[12px] font-semibold truncate">🔹 ${escapeHTML(h.r.el.name)}</span><span class="block text-[10px] text-slate-400">attribut de ${escapeHTML(h.bo.name)}</span></span><span class="ml-auto text-slate-300">›</span></button>`).join('')}</div>` : ''; })() : ''}
                 ${e2.type === 'asset' ? `<div class="dsect"><h4>Termes du glossaire (synonymes métier)</h4>${termTagsHtml('asset', { assetId: e2.id })}</div>` : ''}
                 ${e2.type === 'column' ? (() => { const hits = attrsOfColumn(e2.tbl, e2.col);
                     return hits.length
@@ -11577,6 +11643,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             _catFicheCtx = e2;
             openUxDrawer({ sem: '', title: e2.title, sub: tl + (e2.dom !== '—' ? ' · Domaine ' + e2.dom : '') + (e2.own ? ' · propriétaire ' + e2.own : ''), body, foot: `
                 <button data-ro="keep" onclick="catGoLineage()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">🕸️ Voir le lineage</button>
+                ${e2.type === 'attr' || e2.type === 'bo' ? `<button data-ro="keep" onclick="catEditInObject()" class="flex-1 bg-white border border-indigo-300 rounded-lg py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">✎ Modifier dans l'objet</button>` : ''}
                 <button data-ro="keep" onclick="catUseData()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">➜ Utiliser cette donnée</button>` });
             el('uxDrawerTyp').className = 'cat-tico ' + tc; el('uxDrawerTyp').textContent = ti;
             if (t && e2.type === 'column') catFillColType(t.id, t.name, e2.col);
@@ -11604,8 +11671,16 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (e2.type === 'column' && e2.tbl && e2.col) { catShowAttrLineage(e2); return; }
             // V8.6 — Objet métier : même présentation que pour un attribut, dans la fiche.
             if (e2.type === 'bo' && (state.governance.businessObjects || []).some(x => x.id === e2.bo)) { catShowAttrLineage(e2); return; }
+            if (e2.type === 'attr') { catShowAttrLineage(e2); return; }
             closeUxDrawer();
             openGovTab('lineage');
+        }
+        // Ouvrir l'attribut (ou l'objet) de la fiche courante dans la fiche d'édition de l'objet.
+        function catEditInObject() {
+            const e2 = _catFicheCtx; if (!e2 || !e2.bo) return;
+            closeUxDrawer(); govState.selectedBoId = e2.bo; govState.boTab = 'structure'; govState.structView = 'fiche';
+            if (e2.type === 'attr') govState.boSel = { kind: 'attr', stId: e2.stId || '', elId: e2.elId };
+            openGovTab('objects');
         }
         // Ouvre l'onglet Lineage (vue par attribut) sur l'objet de la fiche courante.
         function catGoLineageTab() {
@@ -11618,7 +11693,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const box = el('catLineageBox'); if (!box) return;
             _lineageRedraw = () => catShowAttrLineage(e2);
             const isBo = e2.type === 'bo';
-            const data = isBo ? buildBoLineageGraph((state.governance.businessObjects || []).find(x => x.id === e2.bo)) : buildColumnLineageGraph(e2.tbl, e2.col);
+            const data = isBo ? buildBoLineageGraph((state.governance.businessObjects || []).find(x => x.id === e2.bo))
+                : (e2.type === 'attr' ? (() => { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); const r = bo && boAllAttrRows(bo).find(x => x.el.id === e2.elId); const st = r && r.stId ? getBoFacets(bo).find(x => x.id === r.stId) : null; return r ? buildAttrLineageGraph(bo, st, r.el) : { nodes: [], edges: [] }; })() : buildColumnLineageGraph(e2.tbl, e2.col));
             el('uxDrawer').classList.add('wide'); // plus de place horizontale pour le graphe
             box.classList.remove('hidden');
             box.innerHTML = `<div class="flex items-center justify-between mb-2">
@@ -11647,7 +11723,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         document.addEventListener('fullscreenchange', () => { if (el('catLineageWrap') && catAttrLineageGraph) catFitLineage(160); });
         function catUseData() {
             const e2 = _catFicheCtx; closeUxDrawer(); if (!e2) return;
-            const t = e2.tbl ? tableByName(e2.tbl) : null;
+            let tblName = e2.tbl;
+            if (e2.type === 'attr' && !tblName) { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); const r = bo && boAllAttrRows(bo).find(x => x.el.id === e2.elId); const st = r && r.stId ? getBoFacets(bo).find(x => x.id === r.stId) : null; tblName = st ? st.table : (r && (r.el.mappings || [])[0] ? r.el.mappings[0].table : null); }
+            if (e2.type === 'bo' && !tblName) { const bo = (state.governance.businessObjects || []).find(x => x.id === e2.bo); const m = bo && boMasterTable(bo); tblName = m ? m.name : null; }
+            const t = tblName ? tableByName(tblName) : null;
             switchTab(3);
             if (t) { const sel2 = el('baseTableSelect'); if (sel2) { sel2.value = t.id; try { handleBaseTableChange(); } catch (er) {} } }
         }
@@ -12749,10 +12828,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.4.1';
+        const APP_VERSION = '9.5.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.5.0', d: '2026-09-07', t: 'Catalogue navigable : fiche d\'attribut, retour, fil d\'Ariane', items: [
+                'Chaque <b>attribut métier</b> a sa fiche dans le catalogue : cliquez un attribut dans la fiche de l\'objet pour l\'ouvrir — appartenance à l\'objet (cliquable pour remonter), nombre de valeurs, sensibilité, exemples, termes (modifiables), colonnes techniques qui l\'alimentent, applications et processus qui l\'utilisent, lineage dans la fiche, bouton « ✎ Modifier dans l\'objet ».',
+                '<b>← Retour</b> et fil d\'Ariane en tête de chaque fiche ouverte depuis une autre (objet › attribut › colonne…) : on navigue et on remonte sans fermer le panneau.',
+                'Des liens partout : depuis une colonne vers l\'attribut qu\'elle alimente, depuis un terme vers l\'attribut précis (et plus seulement l\'objet), depuis un attribut vers ses colonnes et ses applications.',
+                'Les attributs sont trouvables par la recherche (nom, définition, provenance, objet) et par le type « Attribut métier » de la facette, sans encombrer la liste par défaut. Le type « Attribut » technique s\'appelle désormais « Colonne » pour lever l\'ambiguïté.'] },
             { v: '9.4.1', d: '2026-09-04', t: 'Menu latéral réduit : un vrai rail d\'icônes', items: [
                 'Réduit, le menu latéral affichait des icônes décalées et rognées. Il devient un <b>rail de 64 px</b> : logo, phases et sous-écrans du groupe ouvert en icônes <b>centrées</b>, alignées, sans bordure ni retrait ; l\'écran actif reste surligné ; les libellés apparaissent au survol.',
                 'Les boutons du pied (Sauvegarde, Importer, Exporter, Déployer) sont centrés de la même façon.'] },
