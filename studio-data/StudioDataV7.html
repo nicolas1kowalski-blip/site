@@ -1672,12 +1672,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <div id="qual-sub-profiling" class="block space-y-6">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="profilingGlobalKpis"></div>
                         <div class="flex justify-end -mb-3"><button onclick="toggleQualSections(this)" class="text-[11px] bg-white border border-slate-300 rounded px-2.5 py-1 font-bold text-slate-500 hover:bg-slate-50">⊟ Tout replier</button></div>
-                        <details open class="bg-slate-50 rounded-xl border border-slate-200 group">
-                            <summary class="cursor-pointer select-none p-5 pb-4 list-none flex items-center gap-2"><span class="text-slate-400 text-xs transition-transform group-open:rotate-90">▶</span><h3 class="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider"><i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i> Alertes Sémantiques</h3></summary>
+                        <details id="qualAlertsDet" class="bg-slate-50 rounded-xl border border-slate-200 group">
+                            <summary class="cursor-pointer select-none p-5 pb-4 list-none flex items-center gap-2"><span class="text-slate-400 text-xs transition-transform group-open:rotate-90">▶</span><h3 class="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider"><i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i> Alertes Sémantiques</h3><span id="qualAlertsCount" class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-slate-200 text-slate-600"></span><span class="ml-auto text-[11px] text-slate-400 normal-case">cliquer pour déplier</span></summary>
                             <div id="profilingAlerts" class="space-y-2 text-sm text-slate-600 px-5 pb-5"></div>
                         </details>
-                        <details open class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm group">
-                            <summary class="cursor-pointer select-none bg-amber-50 border-b border-amber-100 p-4 list-none flex justify-between items-center"><span class="text-sm font-bold text-amber-800 uppercase flex items-center gap-2"><span class="text-amber-400 text-xs transition-transform group-open:rotate-90">▶</span>🔍 Inspecteur d'anomalies — voir & extraire les lignes en défaut</span><span class="text-[11px] text-amber-600">recherche sur la table complète</span></summary>
+                        <details id="qualInspDet" class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm group">
+                            <summary class="cursor-pointer select-none bg-amber-50 border-b border-amber-100 p-4 list-none flex justify-between items-center gap-2 flex-wrap"><span class="text-sm font-bold text-amber-800 uppercase flex items-center gap-2"><span class="text-amber-400 text-xs transition-transform group-open:rotate-90">▶</span>🔍 Inspecteur d'anomalies — voir & extraire les lignes en défaut <span id="qualInspCount" class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-amber-200 text-amber-900 normal-case"></span></span><span class="text-[11px] text-amber-600">recherche sur la table complète · cliquer pour déplier</span></summary>
                             <div id="qualAnomalyList" class="p-4"></div>
                         </details>
                         <div id="qualTilesUx" class="tiles-ux hidden"></div>
@@ -12828,10 +12828,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.5.0';
+        const APP_VERSION = '9.5.1';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.5.1', d: '2026-09-07', t: 'Qualité & Audit : alertes sémantiques et inspecteur repliés par défaut', items: [
+                'Sur l\'écran Qualité & Audit, les sections <b>Alertes sémantiques</b> et <b>Inspecteur d\'anomalies</b> sont désormais <b>repliées</b> à l\'ouverture : le tableau des colonnes arrive plus vite à l\'écran.',
+                'Chaque titre replié porte un <b>compteur</b> (« 4 alerte(s) », « 12 anomalie(s) », ou « aucune » en vert) pour savoir ce qu\'il contient sans l\'ouvrir. Un clic déplie ; « Tout déplier / replier » reste disponible.'] },
             { v: '9.5.0', d: '2026-09-07', t: 'Catalogue navigable : fiche d\'attribut, retour, fil d\'Ariane', items: [
                 'Chaque <b>attribut métier</b> a sa fiche dans le catalogue : cliquez un attribut dans la fiche de l\'objet pour l\'ouvrir — appartenance à l\'objet (cliquable pour remonter), nombre de valeurs, sensibilité, exemples, termes (modifiables), colonnes techniques qui l\'alimentent, applications et processus qui l\'utilisent, lineage dans la fiche, bouton « ✎ Modifier dans l\'objet ».',
                 '<b>← Retour</b> et fil d\'Ariane en tête de chaque fiche ouverte depuis une autre (objet › attribut › colonne…) : on navigue et on remonte sans fermer le panneau.',
@@ -18087,6 +18090,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function renderQualAnomalyInspector(stats, tId) {
             const box = el('qualAnomalyList'); if (!box) return;
             const entries = qualAnomalyEntries(stats, tId);
+            const ic = el('qualInspCount'); if (ic) { ic.textContent = entries.length ? entries.length + ' anomalie(s)' : 'aucune'; ic.className = 'text-[11px] font-bold rounded-full px-2 py-0.5 normal-case ' + (entries.length ? 'bg-amber-200 text-amber-900' : 'bg-emerald-100 text-emerald-800'); }
             if (!entries.length) { box.innerHTML = '<p class="text-xs text-emerald-700">✔ Aucune anomalie d\'hygiène ou de format détectée.</p>'; return; }
             box.innerHTML = `<div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Anomalie</th><th class="p-2 text-right">Lignes (échantillon audité)</th><th class="p-2">Actions</th></tr></thead><tbody class="divide-y divide-slate-100">` +
                 entries.map(e => { const esql = currentProfilingWhere ? `SELECT * FROM (${e.sql}) __flt WHERE ${currentProfilingWhere}` : e.sql; const idx = registerQualInspect(`${e.col} — ${e.kind}`, esql); return `<tr class="hover:bg-amber-50/40"><td class="p-2 font-bold">${escapeHTML(e.col)}</td><td class="p-2">${escapeHTML(e.kind)}</td><td class="p-2 text-right font-black text-amber-700">${e.n == null ? '—' : e.n.toLocaleString('fr-FR')}</td><td class="p-2"><div>${qualInspectButtons(idx)}</div></td></tr>`; }).join('') +
@@ -19294,6 +19298,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
 
             if (alertsList.length === 0) { alertsDiv.innerHTML = `<p class="text-xs text-green-700 italic">Aucune alerte sémantique détectée sur cet échantillon.</p>`; } 
             else { alertsDiv.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${alertsList.join('')}</div>`; }
+            // V9.5.1 : section repliée par défaut — le compteur dit ce qu'elle contient sans l'ouvrir.
+            const ac = el('qualAlertsCount'); if (ac) { ac.textContent = alertsList.length ? alertsList.length + ' alerte(s)' : 'aucune'; ac.className = 'text-[11px] font-bold rounded-full px-2 py-0.5 normal-case ' + (alertsList.length ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'); }
 
             const tbody = el('profilingColumnsTableBody');
             const tName2 = state.tables[currentProfilingTableId] ? state.tables[currentProfilingTableId].name : (stats.tableName || '');
