@@ -1,10 +1,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '10.0.0';
+        const APP_VERSION = '10.1.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.1.0', d: '2026-09-08', t: 'Rôles et validation appliqués à vos données, plus seulement à un scénario', items: [
+                'Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global », désormais relié aux personnes déclarées) <b>valide cet objet</b>, quel que soit son rôle sur le domaine : la fiche indique « 👑 personne reconnue : elle valide cet objet ».',
+                'Le <b>dictionnaire par table technique</b> passe aussi par les propositions : définition, exemples, sensibilité, terme d\'une colonne, description et propriétaire d\'une source. Le domaine d\'une source est son thème ; les propositions se groupent par table dans « À valider » et « Voir » ouvre le dictionnaire sur la bonne table.',
+                'L\'exemple de rôles (bouton « Exemple de rôles ») crée quatre personnes sur tous les domaines <b>sans toucher à vos objets, termes ou sources</b> — renommez-les ou remplacez-les par les vôtres. Le vocabulaire « démonstrateur » disparaît de l\'interface.'] },
             { v: '10.0.0', d: '2026-09-08', t: 'Personnes, rôles par domaine et circuit de validation (démonstrateur)', items: [
                 'Nouvel écran <b>Personnes & rôles</b> : chaque personne reçoit un ou plusieurs couples <b>domaine métier → rôle</b> — <b>Propriétaire</b> (modifie et valide), <b>Contributeur</b> (propose), <b>Lecteur</b> (consulte), plus un administrateur « tous domaines ». Un bouton <b>🎬 Jeu de démonstration</b> crée Alice, Bob, Chloé et un admin sur le premier domaine.',
                 'Sélecteur <b>« Vous êtes »</b> dans l\'en-tête : on change de personne d\'un clic (profil actif déclaratif, mono-poste — pas une authentification). Un lecteur passe automatiquement en mode consultation.',

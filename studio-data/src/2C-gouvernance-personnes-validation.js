@@ -1,6 +1,6 @@
         // ======================= V10 : PERSONNES, RÔLES & VALIDATION DES PROPOSITIONS =======================
-        // Démonstrateur mono-poste : on choisit « qui on est » dans l'en-tête (profil actif,
-        // déclaratif). Une personne a un ou plusieurs couples (domaine métier, rôle).
+        // Mono-poste : on choisit « qui on est » dans l'en-tête (profil actif, déclaratif) ; les
+        // rôles et les décisions s'appliquent aux données réellement saisies. Une personne a un ou plusieurs couples (domaine métier, rôle).
         //   • Propriétaire : modifie directement et VALIDE les propositions de son domaine.
         //   • Contributeur : ses modifications deviennent des PROPOSITIONS (rien n'est écrasé).
         //   • Lecteur      : consultation seule.
@@ -46,9 +46,18 @@
         }
         function govCanEdit(domain) { const r = govRoleIn(domain); return r === 'admin' || r === 'owner'; }
         function govCanPropose(domain) { return govRoleIn(domain) === 'contrib'; }
+        // V10.1 — Le PROPRIÉTAIRE nommé sur un objet (champ « Propriétaire global », relié à une
+        // personne) valide cet objet, quel que soit son rôle sur le domaine : ce sont vos données
+        // qui décident, pas seulement la grille des rôles.
+        function govIsOwnerOfBo(bo) { const u = curUser(); if (!u || !bo) return false; if (bo.ownerId && bo.ownerId === u.id) return true; return !!(bo.globalOwner && catNorm(bo.globalOwner) === catNorm(u.name)); }
+        function govCanEditBo(bo) { return govCanEdit(boDomainOf(bo)) || govIsOwnerOfBo(bo); }
+        function govCanProposeBo(bo) { return !govCanEditBo(bo) && (govCanPropose(boDomainOf(bo)) || (curUser() && (curUser().roles || []).some(r => r.role === 'contrib'))); }
+        function govLinkOwner(bo) { if (!bo) return; const p = govPeople().find(x => catNorm(x.name) === catNorm(bo.globalOwner || '')); bo.ownerId = p ? p.id : ''; }
+        function propTargetBo(p) { const t = p.target || {}; const id = t.boId || (t.ctx || {}).boId; return id ? (state.governance.businessObjects || []).find(b => b.id === id) : null; }
+        function propCanDecide(p) { const bo = propTargetBo(p); return bo ? govCanEditBo(bo) : govCanEdit(p.domain); }
         // Garde des opérations de STRUCTURE (réservées aux propriétaires) : renvoie true si autorisé.
-        function govGuard(domain, what) {
-            if (_govBypass || govCanEdit(domain)) return true;
+        function govGuard(domain, what, bo) {
+            if (_govBypass || (bo ? govCanEditBo(bo) : govCanEdit(domain))) return true;
             showError((what || 'Cette opération') + ' est réservée au propriétaire du domaine' + (domain ? ' « ' + domain + ' »' : '') + '. Les contributeurs proposent des modifications de sens (définition, exemples, sensibilité, termes…).');
             return false;
         }
@@ -66,7 +75,7 @@
             renderNav(); renderGovernance(); catRefreshFiche();
         }
         function propPending(kind, target, field) { return govProposals().filter(x => x.status === 'pending' && x.kind === kind && (!field || x.field === field) && JSON.stringify(x.target) === JSON.stringify(target)); }
-        function propCountPendingFor(u) { u = u || curUser(); return govProposals().filter(x => x.status === 'pending' && (!u || govRoleIn(x.domain) === 'owner' || govRoleIn(x.domain) === 'admin')).length; }
+        function propCountPendingFor(u) { u = u || curUser(); return govProposals().filter(x => x.status === 'pending' && (!u || propCanDecide(x))).length; }
         function propFmt(v) { if (v === '' || v == null) return '<i class="text-slate-400">vide</i>'; return escapeHTML(String(v)); }
         function propApply(p) {
             _govBypass = true;
@@ -76,10 +85,13 @@
                 else if (p.kind === 'term') updateGlossaryTerm(p.target.termId, p.field, p.after);
                 else if (p.kind === 'asset') updateGovAsset(p.target.assetId, p.field, p.after);
                 else if (p.kind === 'termlink') { if (p.field === 'add') termTagAdd(p.target.tk, p.target.ctx, p.after); else termTagRemove(p.target.tk, p.target.ctx, p.after); }
+                else if (p.kind === 'dictcol') updateDictColField(p.target.tn, p.target.col, p.field, p.raw !== undefined ? p.raw : p.after);
+                else if (p.kind === 'dict') updateDictField(p.target.tn, p.field, p.after);
             } finally { _govBypass = false; }
         }
         function propTraceOn(p, verdict) {
             const g = state.governance; let ent = null;
+            if (p.kind === 'dictcol' || p.kind === 'dict') ent = ensureDictEntry(p.target.tn);
             if (p.kind === 'attr' || p.kind === 'bo' || (p.kind === 'termlink' && (p.target.tk === 'attr' || p.target.tk === 'bo'))) ent = (g.businessObjects || []).find(b => b.id === (p.target.boId || (p.target.ctx || {}).boId));
             else if (p.kind === 'term') ent = (g.glossary || []).find(t2 => t2.id === p.target.termId);
             else if (p.kind === 'asset' || p.kind === 'termlink') ent = assetById(p.target.assetId || (p.target.ctx || {}).assetId);
@@ -90,7 +102,7 @@
         }
         function propDecide(id, verdict, comment) {
             const p = govProposals().find(x => x.id === id); if (!p || p.status !== 'pending') return;
-            if (!govCanEdit(p.domain)) return showError('Seul un propriétaire du domaine' + (p.domain ? ' « ' + p.domain + ' »' : '') + ' peut décider.');
+            if (!propCanDecide(p)) return showError('Seul le propriétaire de la fiche ou du domaine' + (p.domain ? ' « ' + p.domain + ' »' : '') + ' peut décider.');
             p.status = verdict; p.decidedAt = new Date().toISOString(); p.decidedBy = (curUser() || {}).id || ''; p.comment = comment || '';
             if (verdict === 'accepted') propApply(p);
             propTraceOn(p, verdict);
@@ -99,13 +111,14 @@
         }
         function propAccept(id) { propDecide(id, 'accepted', ''); }
         function propReject(id) { const c = prompt('Motif du refus (optionnel) :') || ''; propDecide(id, 'rejected', c); }
-        function propWithdraw(id) { const p = govProposals().find(x => x.id === id); if (!p) return; const u = curUser(); if (u && p.by !== u.id && !govCanEdit(p.domain)) return showError('Seul l\'auteur peut retirer sa proposition.'); state.governance.proposals = govProposals().filter(x => x.id !== id); persistAppState(); renderNav(); renderGovernance(); catRefreshFiche(); }
-        function propAcceptAll(keyJson) { const key = JSON.parse(keyJson); govProposals().filter(x => x.status === 'pending' && propGroupKey(x) === key).forEach(x => { if (govCanEdit(x.domain)) { x.status = 'accepted'; x.decidedAt = new Date().toISOString(); x.decidedBy = (curUser() || {}).id || ''; propApply(x); propTraceOn(x, 'accepted'); } }); persistAppState(); renderNav(); renderGovernance(); showSuccess('Propositions de la fiche validées.'); }
-        function propGroupKey(p) { const t = p.target || {}; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
-        function propGroupLabel(key) { const [k, id] = key.split(':'); const g = state.governance; if (k === 'bo') { const bo = (g.businessObjects || []).find(b => b.id === id); return bo ? '🏛️ ' + bo.name : id; } if (k === 'term') { const t2 = (g.glossary || []).find(x => x.id === id); return t2 ? '📖 ' + t2.term : id; } const a = assetById(id); return a ? (a.kind === 'process' ? '⚙️ ' : '🖥 ') + a.name : id; }
+        function propWithdraw(id) { const p = govProposals().find(x => x.id === id); if (!p) return; const u = curUser(); if (u && p.by !== u.id && !propCanDecide(p)) return showError('Seul l\'auteur peut retirer sa proposition.'); state.governance.proposals = govProposals().filter(x => x.id !== id); persistAppState(); renderNav(); renderGovernance(); catRefreshFiche(); }
+        function propAcceptAll(keyJson) { const key = JSON.parse(keyJson); govProposals().filter(x => x.status === 'pending' && propGroupKey(x) === key).forEach(x => { if (propCanDecide(x)) { x.status = 'accepted'; x.decidedAt = new Date().toISOString(); x.decidedBy = (curUser() || {}).id || ''; propApply(x); propTraceOn(x, 'accepted'); } }); persistAppState(); renderNav(); renderGovernance(); showSuccess('Propositions de la fiche validées.'); }
+        function propGroupKey(p) { const t = p.target || {}; if (p.kind === 'dictcol' || p.kind === 'dict') return 'tbl:' + t.tn; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
+        function propGroupLabel(key) { const [k, id] = key.split(':'); const g = state.governance; if (k === 'tbl') return '▦ ' + id; if (k === 'bo') { const bo = (g.businessObjects || []).find(b => b.id === id); return bo ? '🏛️ ' + bo.name : id; } if (k === 'term') { const t2 = (g.glossary || []).find(x => x.id === id); return t2 ? '📖 ' + t2.term : id; } const a = assetById(id); return a ? (a.kind === 'process' ? '⚙️ ' : '🖥 ') + a.name : id; }
         function propOpenTarget(id) {
             const p = govProposals().find(x => x.id === id); if (!p) return;
             const key = propGroupKey(p); const [k, tid] = key.split(':');
+            if (k === 'tbl') { govState.dictMode = 'table'; govState.dictTable = tid; openGovTab('dictionary'); return; }
             if (k === 'bo') { govState.selectedBoId = tid; govState.boTab = 'structure'; govState.structView = 'fiche'; const elId = p.target.elId || (p.target.ctx || {}).elId; if (elId) govState.boSel = { kind: 'attr', stId: p.target.stId || '', elId }; openGovTab('objects'); }
             else if (k === 'term') { termTagOpen(tid); }
             else openGovTab('assets');
@@ -113,18 +126,18 @@
         // Pastille « proposition en attente » à côté d'un champ (avec décision si on est propriétaire).
         function propBadgeHtml(kind, target, field) {
             const ps = propPending(kind, target, field); if (!ps.length) return '';
-            return ps.map(p => `<div class="prop-badge" title="Proposé le ${new Date(p.at).toLocaleString('fr-FR')}"><span class="who">⏳ ${escapeHTML(govPersonName(p.by))} propose :</span> <span class="val">${propFmt(p.after)}</span>${govCanEdit(p.domain) ? `<span class="acts"><button data-ro="keep" onclick="propAccept('${p.id}')" class="ok" title="Valider et appliquer">✓ Valider</button><button data-ro="keep" onclick="propReject('${p.id}')" class="ko" title="Refuser">✕</button></span>` : ((curUser() || {}).id === p.by ? `<span class="acts"><button data-ro="keep" onclick="propWithdraw('${p.id}')" class="ko" title="Retirer ma proposition">retirer</button></span>` : '')}</div>`).join('');
+            return ps.map(p => `<div class="prop-badge" title="Proposé le ${new Date(p.at).toLocaleString('fr-FR')}"><span class="who">⏳ ${escapeHTML(govPersonName(p.by))} propose :</span> <span class="val">${propFmt(p.after)}</span>${propCanDecide(p) ? `<span class="acts"><button data-ro="keep" onclick="propAccept('${p.id}')" class="ok" title="Valider et appliquer">✓ Valider</button><button data-ro="keep" onclick="propReject('${p.id}')" class="ko" title="Refuser">✕</button></span>` : ((curUser() || {}).id === p.by ? `<span class="acts"><button data-ro="keep" onclick="propWithdraw('${p.id}')" class="ko" title="Retirer ma proposition">retirer</button></span>` : '')}</div>`).join('');
         }
         // ---- Interception des écritures : un contributeur PROPOSE au lieu d'écrire ----
         const _w_boAttrWrite = boAttrWrite;
         boAttrWrite = function (boId, stId, elId, f, v) {
             const bo = (state.governance.businessObjects || []).find(x => x.id === boId);
             const dom = boDomainOf(bo);
-            if (!_govBypass && bo && govFeatureOn() && !govCanEdit(dom)) {
-                if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+            if (!_govBypass && bo && govFeatureOn() && !govCanEditBo(bo)) {
+                if (!govCanProposeBo(bo)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
                 const r = (boAllAttrRows(bo) || []).find(x => x.el.id === elId); const before = r ? (r.el[f] || '') : '';
                 if (String(before) === String(v)) return;
-                if (f === 'name' || f === 'col') return govGuard(dom, 'Renommer ou rattacher un attribut'); // structure
+                if (f === 'name' || f === 'col') return govGuard(dom, 'Renommer ou rattacher un attribut', bo); // structure
                 return govPropose({ kind: 'attr', domain: dom, target: { boId, stId: stId || '', elId }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + (r ? r.el.name : elId) + ' » (' + bo.name + ')', before, after: v });
             }
             return _w_boAttrWrite(boId, stId, elId, f, v);
@@ -132,14 +145,16 @@
         const _w_updateBusinessObject = updateBusinessObject;
         updateBusinessObject = function (id, f, v) {
             const bo = (state.governance.businessObjects || []).find(x => x.id === id); const dom = boDomainOf(bo);
-            if (!_govBypass && bo && govFeatureOn() && !govCanEdit(dom)) {
-                if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
-                if (f === 'name' || f === 'domain') return govGuard(dom, 'Renommer l\'objet ou changer son domaine');
+            if (!_govBypass && bo && govFeatureOn() && !govCanEditBo(bo)) {
+                if (!govCanProposeBo(bo)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+                if (f === 'name' || f === 'domain' || f === 'globalOwner') return govGuard(dom, 'Renommer l\'objet, changer son domaine ou son propriétaire', bo);
                 const before = Array.isArray(bo[f]) ? bo[f].join(', ') : (bo[f] || ''); const after = Array.isArray(v) ? v.join(', ') : v;
                 if (String(before) === String(after)) return;
                 return govPropose({ kind: 'bo', domain: dom, target: { boId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de l\'objet « ' + bo.name + ' »', before, after });
             }
-            return _w_updateBusinessObject(id, f, v);
+            const r2 = _w_updateBusinessObject(id, f, v);
+            if (f === 'globalOwner' && bo) { govLinkOwner(bo); persistAppState(); }
+            return r2;
         };
         const _w_updateGlossaryTerm = updateGlossaryTerm;
         updateGlossaryTerm = function (id, f, v) {
@@ -164,12 +179,14 @@
             return _w_updateGovAsset(id, f, v);
         };
         function termCtxDomain(tk, ctx) { if (tk === 'asset') { const a = assetById(ctx.assetId); return a ? String(a.domain || '').trim() : ''; } const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return boDomainOf(bo); }
+        function termCtxCanEdit(tk, ctx) { if (tk === 'asset') return govCanEdit(termCtxDomain(tk, ctx)); const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return bo ? govCanEditBo(bo) : govCanEdit(''); }
+        function termCtxCanPropose(tk, ctx) { if (tk === 'asset') return govCanPropose(termCtxDomain(tk, ctx)); const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return bo ? govCanProposeBo(bo) : govCanPropose(''); }
         const _w_termTagAdd = termTagAdd;
         termTagAdd = function (kind, ctx, name) {
             name = String(name || '').trim(); if (!name) return;
             const dom = termCtxDomain(kind, ctx);
-            if (!_govBypass && govFeatureOn() && !govCanEdit(dom)) {
-                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+            if (!_govBypass && govFeatureOn() && !termCtxCanEdit(kind, ctx)) {
+                if (!termCtxCanPropose(kind, ctx)) return showError('Lecture seule sur ce domaine.');
                 const t2 = termByName(name);
                 return govPropose({ kind: 'termlink', domain: dom, target: { tk: kind, ctx }, field: 'add', label: 'Poser le terme « ' + (t2 ? t2.term : name) + ' »' + (t2 ? '' : ' (nouveau)') + ' sur ' + govTermCtxLabel(kind, ctx), before: '', after: name });
             }
@@ -178,8 +195,8 @@
         const _w_termTagRemove = termTagRemove;
         termTagRemove = function (kind, ctx, termId) {
             const dom = termCtxDomain(kind, ctx);
-            if (!_govBypass && govFeatureOn() && !govCanEdit(dom)) {
-                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+            if (!_govBypass && govFeatureOn() && !termCtxCanEdit(kind, ctx)) {
+                if (!termCtxCanPropose(kind, ctx)) return showError('Lecture seule sur ce domaine.');
                 return govPropose({ kind: 'termlink', domain: dom, target: { tk: kind, ctx }, field: 'remove', label: 'Retirer le terme « ' + termNameOf(termId) + ' » de ' + govTermCtxLabel(kind, ctx), before: termNameOf(termId), after: termId });
             }
             return _w_termTagRemove(kind, ctx, termId);
@@ -188,15 +205,38 @@
         // Structure : réservée aux propriétaires
         [['addBoElement', 'Ajouter un attribut'], ['boAddAttrAndSelect', 'Ajouter un attribut'], ['removeBoElement', 'Supprimer un attribut'], ['addBoMapping', 'Rattacher une colonne'], ['removeBoMapping', 'Détacher une colonne'], ['addBoStructure', 'Créer une facette'], ['removeBoStructure', 'Supprimer une facette'], ['addFacetElement', 'Ajouter un attribut de facette'], ['removeFacetElement', 'Supprimer un attribut de facette'], ['removeBusinessObject', 'Supprimer un objet'], ['boMoveEl', 'Réordonner les attributs']].forEach(([nm, what]) => {
             const orig = window[nm]; if (typeof orig !== 'function') return;
-            window[nm] = function (boId) { const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!_govBypass && govFeatureOn() && bo && !govGuard(boDomainOf(bo), what)) return; return orig.apply(this, arguments); };
+            window[nm] = function (boId) { const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!_govBypass && govFeatureOn() && bo && !govGuard(boDomainOf(bo), what, bo)) return; return orig.apply(this, arguments); };
         });
+        // Dictionnaire par table technique : le domaine d'une source est son « thème ».
+        function tableDomainOf(tn) { const t = tableByName(tn); return t ? String(t.theme || '').trim() : ''; }
+        const _w_updateDictColField = updateDictColField;
+        updateDictColField = function (tn, col, f, v) {
+            const dom = tableDomainOf(tn);
+            if (!_govBypass && govFeatureOn() && !govCanEdit(dom) && ['definition', 'examples', 'sensitivity', 'term', 'technicalType'].includes(f)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+                const cur = ((ensureDictEntry(tn).columns || {})[col] || {})[f] || '';
+                if (String(cur) === String(v)) return;
+                return govPropose({ kind: 'dictcol', domain: dom, target: { tn, col }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de la colonne ' + tn + '.' + col, before: f === 'term' ? termNameOf(cur) : cur, after: f === 'term' ? termNameOf(v) : v, raw: v });
+            }
+            return _w_updateDictColField(tn, col, f, v);
+        };
+        const _w_updateDictField = updateDictField;
+        updateDictField = function (tn, f, v) {
+            const dom = tableDomainOf(tn);
+            if (!_govBypass && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'steward', 'sensitivity'].includes(f)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+                const cur = ensureDictEntry(tn)[f] || ''; if (String(cur) === String(v)) return;
+                return govPropose({ kind: 'dict', domain: dom, target: { tn }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de la source ' + tn, before: cur, after: v });
+            }
+            return _w_updateDictField(tn, f, v);
+        };
         // ---- Sélecteur « Vous êtes » (en-tête) ----
         function renderUserSwitch() {
             const box = el('v7UserSwitch'); if (!box) return;
             if (!govFeatureOn()) { box.innerHTML = ''; box.style.display = 'none'; return; }
             box.style.display = '';
             const u = curUser(); const n = u ? propCountPendingFor(u) : 0;
-            box.innerHTML = `<span class="usw-lbl">Vous êtes</span><select data-ro="keep" onchange="govSetUser(this.value)" aria-label="Profil actif" title="Profil actif (déclaratif : démonstrateur mono-poste)"><option value="">— choisir —</option>${govPeople().map(p => `<option value="${p.id}" ${u && u.id === p.id ? 'selected' : ''}>${escapeHTML(p.name)}</option>`).join('')}</select>${u ? `<span class="usw-role" title="${escapeHTML(govRoleSummary(u))}">${(u.roles || []).slice(0, 2).map(r => (GOV_ROLES[r.role] || ['', r.role])[0]).join('')}</span>` : ''}${n ? `<button data-ro="keep" onclick="openGovTab('review')" class="usw-todo" title="Propositions à valider dans vos domaines">${n} à valider</button>` : ''}`;
+            box.innerHTML = `<span class="usw-lbl">Vous êtes</span><select data-ro="keep" onchange="govSetUser(this.value)" aria-label="Profil actif" title="Profil actif sur ce poste (choix déclaratif)"><option value="">— choisir —</option>${govPeople().map(p => `<option value="${p.id}" ${u && u.id === p.id ? 'selected' : ''}>${escapeHTML(p.name)}</option>`).join('')}</select>${u ? `<span class="usw-role" title="${escapeHTML(govRoleSummary(u))}">${(u.roles || []).slice(0, 2).map(r => (GOV_ROLES[r.role] || ['', r.role])[0]).join('')}</span>` : ''}${n ? `<button data-ro="keep" onclick="openGovTab('review')" class="usw-todo" title="Propositions à valider dans vos domaines">${n} à valider</button>` : ''}`;
         }
         // ---- Écran Personnes & rôles ----
         function govAddPerson() { govPeople().push({ id: 'pe_' + generateId(), name: 'Nouvelle personne', email: '', roles: [] }); persistAppState(); renderGovernance(); }
@@ -205,25 +245,22 @@
         function govAddRole(id) { const p = govPeople().find(x => x.id === id); if (!p) return; const dom = (el('pe-dom-' + id) || {}).value || '', role = (el('pe-role-' + id) || {}).value || 'contrib'; p.roles = p.roles || []; if (!p.roles.some(r => r.domain === dom && r.role === role)) p.roles.push({ domain: dom, role }); persistAppState(); renderNav(); renderGovernance(); }
         function govRemoveRole(id, i) { const p = govPeople().find(x => x.id === id); if (!p) return; (p.roles || []).splice(i, 1); persistAppState(); renderNav(); renderGovernance(); }
         function govDemoPeople() {
-            const doms = govDomains(); const d0 = doms[0] || 'Patrimoine';
-            if (!doms.length) govAddDomain(d0);
-            const g = state.governance;
-            (g.businessObjects || []).forEach(bo => { if (!bo.domain) bo.domain = d0; });
-            (g.glossary || []).forEach(t2 => { if (!t2.domain) t2.domain = d0; });
+            // Exemple de jeu de rôles : quatre personnes, rôles sur TOUS les domaines. Vos objets,
+            // termes et sources ne sont pas modifiés.
             const mk = (name, email, roles) => { if (!govPeople().some(p => p.name === name)) govPeople().push({ id: 'pe_' + generateId(), name, email, roles }); };
-            mk('Alice Martin', 'alice@exemple.fr', [{ domain: d0, role: 'owner' }]);
-            mk('Bob Durand', 'bob@exemple.fr', [{ domain: d0, role: 'contrib' }]);
-            mk('Chloé Petit', 'chloe@exemple.fr', [{ domain: d0, role: 'reader' }]);
+            mk('Alice Martin', 'alice@exemple.fr', [{ domain: '', role: 'owner' }]);
+            mk('Bob Durand', 'bob@exemple.fr', [{ domain: '', role: 'contrib' }]);
+            mk('Chloé Petit', 'chloe@exemple.fr', [{ domain: '', role: 'reader' }]);
             mk('Admin gouvernance', 'admin@exemple.fr', [{ domain: '', role: 'admin' }]);
             persistAppState(); govSetUser(govPeople().find(p => p.name === 'Bob Durand').id);
-            showSuccess(`Jeu de démonstration créé sur le domaine « ${d0} » : Alice (propriétaire), Bob (contributeur), Chloé (lectrice), Admin. Vous êtes Bob : modifiez une définition, puis passez en Alice pour la valider.`);
+            showSuccess('Exemple créé : Alice (propriétaire), Bob (contributeur), Chloé (lectrice), Admin — sur tous vos domaines, sans toucher à vos données. Vous êtes Bob : modifiez une définition, puis passez en Alice pour la valider. Renommez ou remplacez ces personnes par les vôtres.');
         }
         function renderGovPeople() {
             const doms = govDomains(); const u = curUser();
-            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes ») — démonstrateur mono-poste, sans authentification.</p>
-                <div class="flex gap-2"><button onclick="govDemoPeople()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-50" title="Crée Alice (propriétaire), Bob (contributeur), Chloé (lectrice) et un administrateur sur le premier domaine">🎬 Jeu de démonstration</button><button onclick="govAddPerson()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">+ Personne</button></div></div>`;
+            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes »). Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global ») valide aussi cet objet, quel que soit son rôle sur le domaine. Toutes les décisions s'appliquent à vos données et sont tracées.</p>
+                <div class="flex gap-2"><button onclick="govDemoPeople()" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded-lg font-bold hover:bg-slate-50" title="Crée quatre personnes d'exemple (propriétaire, contributeur, lectrice, administrateur) sur tous les domaines, sans modifier vos données">Exemple de rôles</button><button onclick="govAddPerson()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">+ Personne</button></div></div>`;
             html += `<div class="flex items-center gap-2 flex-wrap mb-4 bg-white border border-slate-200 rounded-xl p-3"><span class="text-[10px] uppercase font-bold text-slate-500">Domaines métier</span>${doms.length ? doms.map(d => `<span class="text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 font-bold">${escapeHTML(d)}</span>`).join('') : '<span class="text-xs text-slate-400 italic">aucun — ajoutez-en un, ou renseignez le domaine des sources, objets, applications</span>'}<input type="text" id="govNewDom" placeholder="＋ nouveau domaine…" class="border border-dashed border-emerald-300 rounded-full px-3 py-1 text-xs w-44" onkeydown="if(event.key==='Enter'){govAddDomain(this.value); this.value='';}"><button onclick="govAddDomain(el('govNewDom').value); el('govNewDom').value=''" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full font-bold">Ajouter</button></div>`;
-            if (!govPeople().length) return html + emptyStateHtml('👥', 'Aucune personne', 'Créez les personnes et affectez-leur un rôle par domaine — ou chargez le jeu de démonstration pour voir le circuit de validation en action.', '🎬 Jeu de démonstration', 'govDemoPeople()');
+            if (!govPeople().length) return html + emptyStateHtml('👥', 'Aucune personne', 'Créez les personnes de votre organisation et affectez-leur un rôle par domaine ; le propriétaire nommé sur un objet valide cet objet. Un exemple de rôles peut aussi être créé pour essayer le circuit.', '+ Personne', 'govAddPerson()');
             html += govPeople().map(p => `<div class="border ${u && u.id === p.id ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'} rounded-xl p-4 mb-3 bg-white">
                 <div class="flex items-center gap-2 flex-wrap mb-2">
                     <span class="cat-oav" style="background:${catOwnColor(p.name)}">${escapeHTML(p.name.split(/\s+/).map(x => x[0] || '').join('').toUpperCase().slice(0, 2))}</span>
