@@ -1,8 +1,15 @@
         // ======================= V11 : VERSION ET JOURNAL DE LA COUCHE ERGONOMIQUE =======================
         // Ce fichier n'est assemblé que dans StudioDataV11.html (manifest-v11.json). Il est chargé avant
         // le noyau : 1A-noyau-version-changelog.js reprend V11_VERSION et place V11_CHANGELOG en tête.
-        const V11_VERSION = '11.0.1';
+        const V11_VERSION = '11.1.0';
         const V11_CHANGELOG = [
+            { v: '11.1.0', d: '2026-09-08', t: 'Troisième passe : moins à lire, moins de clics, plus de repères', items: [
+                '<b>Glossaire et applications en maître / détail</b> : une liste de lignes compactes avec filtre, une seule fiche ouverte à la fois (clic sur une ligne). Fini les pages de cartes empilées. Le bloc « Analyse d\'impact » se replie.',
+                '<b>Définition et sensibilité des attributs modifiables sur place</b> dans le tableau de la fiche objet, sans ouvrir le formulaire.',
+                '<b>Mode concentration</b> : pendant la modification d\'un objet, la liste des objets et les bandeaux disparaissent, la barre « Modification » reste visible en haut. Un filtre apparaît sur la liste des objets dès qu\'ils sont nombreux.',
+                '<b>Reprendre où vous en étiez</b> : les fiches récemment consultées sur l\'accueil et en tête de la recherche Ctrl+K. Fil d\'Ariane jusqu\'au terme ou à l\'application ouverte.',
+                '<b>Suppression sûre</b> : confirmation avant de supprimer un objet, un terme ou une application, puis notification avec « ⟲ Annuler ».',
+                'Fiche du catalogue : bouton <b>« Fiche complète »</b> qui ouvre la fiche en lecture ; un attribut ouvert depuis la recherche ou une fiche arrive directement sur son formulaire.'] },
             { v: '11.0.1', d: '2026-09-08', t: 'Deuxième passe V11', items: [
                 'Fiche objet : le <b>lineage s\'affiche dans la fiche</b> en lecture (bouton 🕸), l\'audit ouvre bien le formulaire, le fil d\'Ariane reste cliquable en consultation et en présentation.',
                 'En <b>consultation</b> ou en <b>présentation</b>, les fiches sont toujours en lecture : plus de bouton Modifier, Dupliquer ni Actions groupées, valeurs non éditables ; le menu ne se replie qu\'en modification ou en plein écran.',

@@ -5,7 +5,7 @@
         //   • enregistrement visible + annulation (Ctrl+Z), raccourcis clavier, aide « ? »
         //   • menu en trois familles, accueil, historique de navigation, fil d'Ariane cliquable
         //   • plein écran des fiches / tableaux / graphes, tri des tableaux, vocabulaire, infobulles
-        const v11State = { edit: {}, lineage: {}, fs: null, hist: { stack: [], i: -1, nav: false }, undo: [], lastGov: null, toasts: [], toastOn: null, prevCollapsed: null, tour: null };
+        const v11State = { edit: {}, lineage: {}, selTerm: null, selAsset: null, termQ: '', assetQ: '', boQ2: '', impactOpen: false, fs: null, hist: { stack: [], i: -1, nav: false }, undo: [], lastGov: null, toasts: [], toastOn: null, prevCollapsed: null, tour: null };
         const V11_PREF_DEFAULT = { density: 'comfy', autoCollapse: true, readDefault: true, present: false, tourDone: false, screens: {} };
         let v11Prefs = Object.assign({}, V11_PREF_DEFAULT);
         function v11LoadPrefs() { try { const j = localStorage.getItem('sd_v11_prefs'); if (j) v11Prefs = Object.assign({}, V11_PREF_DEFAULT, JSON.parse(j)); } catch (e) {} }
@@ -65,7 +65,7 @@
             const j = v11State.undo.pop(); if (!j) return v11Toast('Rien à annuler.', 'info');
             let snap; try { snap = JSON.parse(j); } catch (e) { return; }
             v11State.undoing = true;
-            try { state.governance = snap.g; Object.values(state.tables).forEach(t => { if (snap.th && snap.th[t.id] !== undefined) t.theme = snap.th[t.id]; }); v11State.lastGov = v11GovJson(); persistAppState(); }
+            try { const G = state.governance; Object.keys(G).forEach(k => { delete G[k]; }); Object.assign(G, snap.g); Object.values(state.tables).forEach(t => { if (snap.th && snap.th[t.id] !== undefined) t.theme = snap.th[t.id]; }); v11State.lastGov = v11GovJson(); persistAppState(); }
             finally { v11State.undoing = false; }
             if (currentTab === 9) { renderGovernance(); renderNav(); }
             v11Toast('Dernière modification annulée.', 'info');
@@ -142,7 +142,9 @@
                     if (r && govState.boTab === 'structure') { parts.push(A('govState.boSel=null; renderGovernance()', escapeHTML(bo.name))); leaf = escapeHTML(r.el.name); }
                     else leaf = escapeHTML(bo.name);
                 }
-            } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(govState.dictTable); }
+            } else if (govState.tab === 'glossary' && v11State.selTerm && (govState.glossView || 'terms') === 'terms') { const t2 = (state.governance.glossary || []).find(x => x.id === v11State.selTerm); if (t2) { parts.push(A("openGovTab('glossary')", leaf)); leaf = escapeHTML(t2.term); } }
+            else if (govState.tab === 'assets' && v11State.selAsset) { const a2 = assetById(v11State.selAsset); if (a2) { parts.push(A("openGovTab('assets')", leaf)); leaf = escapeHTML(a2.name); } }
+            else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(govState.dictTable); }
             else if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) { const bo = (state.governance.businessObjects || []).find(b => b.id === govState.dictBoId); if (bo) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(bo.name); } }
             c.innerHTML = parts.join('<span class="sep">›</span>') + '<span class="sep">›</span><span class="cur">' + leaf + '</span>';
         }
@@ -237,6 +239,23 @@
             block.dataset.v11init = '1'; if (!v11State.initOpen) block.style.display = 'none';
             block.insertAdjacentHTML('beforebegin', `<div class="flex items-center gap-2 flex-wrap mb-3"><button class="v11-btn pri" onclick="v11WizardOpen()">＋ Nouvel objet métier</button><button class="v11-btn sm" onclick="v11State.initOpen=!v11State.initOpen; renderGovernance()">${v11State.initOpen ? '▾ Masquer' : '▸ Autres façons de créer un objet'}</button><span class="text-[11px] text-slate-500">depuis une source, depuis le modèle de données, objet vierge</span></div>`);
         }
+        // Mode « concentration » : pendant la modification d'un objet, seuls le formulaire et sa barre restent.
+        function v11FocusMode() {
+            if (govState.tab !== 'objects' || !govState.selectedBoId) return; const c = el('govContent'); if (!c) return;
+            const editing = v11Editing('bo:' + govState.selectedBoId);
+            const list = el('boListCol'); if (list) list.style.display = editing ? 'none' : '';
+            Array.from(c.children).forEach(n => { if (n.querySelector && (n.querySelector('[data-v11init]') || /Attributs présents dans plusieurs sources|Nouvel objet métier/.test(n.textContent.slice(0, 200))) && !n.contains(list)) n.style.display = editing ? 'none' : ''; });
+            // liste des objets : filtre dès qu'ils sont nombreux
+            if (list && !editing && (state.governance.businessObjects || []).length > 8 && !list.previousElementSibling?.classList?.contains('v11-attrfilter')) {
+                list.insertAdjacentHTML('beforebegin', `<div class="v11-attrfilter" data-ro="keep"><input type="text" value="${escapeHTML(v11State.boQ2 || '')}" placeholder="Filtrer les objets…" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white w-56" oninput="v11State.boQ2=this.value; v11BoListFilter(this.value)"></div>`);
+                v11BoListFilter(v11State.boQ2);
+            }
+        }
+        function v11BoListFilter(q) { q = catNorm(q || ''); const list = el('boListCol'); if (!list) return; Array.from(list.children).forEach(card => { card.style.display = (!q || catNorm(card.textContent).includes(q)) ? '' : 'none'; }); }
+        // Récemment consultés (mémorisés dans les préférences)
+        function v11Recent(kind, id, name) { const r = (v11Prefs.recent = v11Prefs.recent || []).filter(x => !(x.kind === kind && x.id === id)); r.unshift({ kind, id, name, at: Date.now() }); v11Prefs.recent = r.slice(0, 8); v11SavePrefs(); }
+        function v11RecentGo(kind, id) { if (kind === 'bo') v11GoBo(id); else if (kind === 'term') termTagOpen(id); else if (kind === 'asset') v11GoAsset(id); else if (kind === 'table') v11GoTable(id); }
+        function v11RecentList() { const g = state.governance; return (v11Prefs.recent || []).filter(x => (x.kind === 'bo' && (g.businessObjects || []).some(b => b.id === x.id)) || (x.kind === 'term' && (g.glossary || []).some(t => t.id === x.id)) || (x.kind === 'asset' && (g.assets || []).some(a => a.id === x.id)) || (x.kind === 'table' && !!tableByName(x.id))); }
         // ---- Après chaque rendu de la gouvernance ----
         const _v11_renderGovernance = renderGovernance;
         renderGovernance = function () {
@@ -246,7 +265,7 @@
             if (home && c && typeof v11HomeHtml === 'function') { c.innerHTML = v11HomeHtml(); }
             const acts = el('govActions'); if (acts && !acts.querySelector('.v11-acts')) acts.insertAdjacentHTML('afterbegin', `<span class="v11-acts inline-flex items-center gap-1.5 mr-2" data-ro="keep"><button class="v11-btn sm" onclick="v11WizardOpen()" title="Créer un objet métier en trois étapes">＋ Objet</button><button class="v11-btn sm" onclick="v11PaletteOpen()" title="Rechercher (Ctrl+K)">🔍</button></span>`);
             try { if (typeof v11ApplyReadMode === 'function') v11ApplyReadMode(); } catch (e) { console.error(e); }
-            try { v11CompactInit(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
+            try { v11CompactInit(); v11FocusMode(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
         };
         // ---- Raccourcis clavier + aide ----
         const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['N', 'Nouvel objet (assistant)'], ['Maj P', 'Mode présentation']];

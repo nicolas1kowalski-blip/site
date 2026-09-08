@@ -1240,6 +1240,20 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
     .v11-bar>i{display:block;height:100%;background:var(--v11-acc)}
     .v11-editbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--v11-acc-bd);background:var(--v11-acc-soft);color:var(--v7-txt);border-radius:12px;padding:8px 12px;margin-bottom:12px;font-size:12.5px}
     .v11-editbar b{color:var(--v11-acc)}
+    .v11-editbar{position:sticky;top:8px;z-index:6;box-shadow:0 6px 20px rgba(15,23,42,.08)}
+    /* ---- listes maître / détail (termes, applications) ---- */
+    .v11-listbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .v11-listbar input{flex:1;max-width:340px;font-size:12.5px;border:1px solid var(--v11-line);border-radius:9px;padding:7px 10px;background:var(--v7-surface);color:var(--v7-txt)}
+    .v11-listbar .n{font-size:11px;color:var(--v7-muted)}
+    .v11-rowcard{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--v11-line);border-radius:10px;background:var(--v7-surface);cursor:pointer;font-size:13px;color:var(--v7-txt);margin-bottom:6px}
+    .v11-rowcard:hover{border-color:var(--v11-acc-bd);background:var(--v11-acc-soft)}
+    .v11-rowcard .nm{font-weight:700}
+    .v11-rowcard .sub{color:var(--v7-muted);font-size:11.5px;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+    .v11-rowcard .ar{color:var(--v7-muted)}
+    .v11-fiche.narrow .bd .v11-sec{grid-column:span 12}
+    .v11-collapse>.hd2{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--v7-txt);cursor:pointer;padding:8px 12px;border:1px solid var(--v11-line);border-radius:10px;background:var(--v7-surface);margin-bottom:10px}
+    .v11-collapse>.hd2 .ch{color:var(--v7-muted);font-size:11px}
+    .v11-attrfilter{display:flex;align-items:center;gap:8px;margin-bottom:8px}
     /* ---- tableaux ---- */
     .v11-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
     .v11-tbl th{position:sticky;top:0;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--v7-muted);background:var(--v7-surface-2);padding:8px 10px;border-bottom:1px solid var(--v11-line);white-space:nowrap}
@@ -2030,8 +2044,15 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= V11 : VERSION ET JOURNAL DE LA COUCHE ERGONOMIQUE =======================
         // Ce fichier n'est assemblé que dans StudioDataV11.html (manifest-v11.json). Il est chargé avant
         // le noyau : 1A-noyau-version-changelog.js reprend V11_VERSION et place V11_CHANGELOG en tête.
-        const V11_VERSION = '11.0.1';
+        const V11_VERSION = '11.1.0';
         const V11_CHANGELOG = [
+            { v: '11.1.0', d: '2026-09-08', t: 'Troisième passe : moins à lire, moins de clics, plus de repères', items: [
+                '<b>Glossaire et applications en maître / détail</b> : une liste de lignes compactes avec filtre, une seule fiche ouverte à la fois (clic sur une ligne). Fini les pages de cartes empilées. Le bloc « Analyse d\'impact » se replie.',
+                '<b>Définition et sensibilité des attributs modifiables sur place</b> dans le tableau de la fiche objet, sans ouvrir le formulaire.',
+                '<b>Mode concentration</b> : pendant la modification d\'un objet, la liste des objets et les bandeaux disparaissent, la barre « Modification » reste visible en haut. Un filtre apparaît sur la liste des objets dès qu\'ils sont nombreux.',
+                '<b>Reprendre où vous en étiez</b> : les fiches récemment consultées sur l\'accueil et en tête de la recherche Ctrl+K. Fil d\'Ariane jusqu\'au terme ou à l\'application ouverte.',
+                '<b>Suppression sûre</b> : confirmation avant de supprimer un objet, un terme ou une application, puis notification avec « ⟲ Annuler ».',
+                'Fiche du catalogue : bouton <b>« Fiche complète »</b> qui ouvre la fiche en lecture ; un attribut ouvert depuis la recherche ou une fiche arrive directement sur son formulaire.'] },
             { v: '11.0.1', d: '2026-09-08', t: 'Deuxième passe V11', items: [
                 'Fiche objet : le <b>lineage s\'affiche dans la fiche</b> en lecture (bouton 🕸), l\'audit ouvre bien le formulaire, le fil d\'Ariane reste cliquable en consultation et en présentation.',
                 'En <b>consultation</b> ou en <b>présentation</b>, les fiches sont toujours en lecture : plus de bouton Modifier, Dupliquer ni Actions groupées, valeurs non éditables ; le menu ne se replie qu\'en modification ou en plein écran.',
@@ -20597,7 +20618,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         //   • enregistrement visible + annulation (Ctrl+Z), raccourcis clavier, aide « ? »
         //   • menu en trois familles, accueil, historique de navigation, fil d'Ariane cliquable
         //   • plein écran des fiches / tableaux / graphes, tri des tableaux, vocabulaire, infobulles
-        const v11State = { edit: {}, lineage: {}, fs: null, hist: { stack: [], i: -1, nav: false }, undo: [], lastGov: null, toasts: [], toastOn: null, prevCollapsed: null, tour: null };
+        const v11State = { edit: {}, lineage: {}, selTerm: null, selAsset: null, termQ: '', assetQ: '', boQ2: '', impactOpen: false, fs: null, hist: { stack: [], i: -1, nav: false }, undo: [], lastGov: null, toasts: [], toastOn: null, prevCollapsed: null, tour: null };
         const V11_PREF_DEFAULT = { density: 'comfy', autoCollapse: true, readDefault: true, present: false, tourDone: false, screens: {} };
         let v11Prefs = Object.assign({}, V11_PREF_DEFAULT);
         function v11LoadPrefs() { try { const j = localStorage.getItem('sd_v11_prefs'); if (j) v11Prefs = Object.assign({}, V11_PREF_DEFAULT, JSON.parse(j)); } catch (e) {} }
@@ -20657,7 +20678,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const j = v11State.undo.pop(); if (!j) return v11Toast('Rien à annuler.', 'info');
             let snap; try { snap = JSON.parse(j); } catch (e) { return; }
             v11State.undoing = true;
-            try { state.governance = snap.g; Object.values(state.tables).forEach(t => { if (snap.th && snap.th[t.id] !== undefined) t.theme = snap.th[t.id]; }); v11State.lastGov = v11GovJson(); persistAppState(); }
+            try { const G = state.governance; Object.keys(G).forEach(k => { delete G[k]; }); Object.assign(G, snap.g); Object.values(state.tables).forEach(t => { if (snap.th && snap.th[t.id] !== undefined) t.theme = snap.th[t.id]; }); v11State.lastGov = v11GovJson(); persistAppState(); }
             finally { v11State.undoing = false; }
             if (currentTab === 9) { renderGovernance(); renderNav(); }
             v11Toast('Dernière modification annulée.', 'info');
@@ -20734,7 +20755,9 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     if (r && govState.boTab === 'structure') { parts.push(A('govState.boSel=null; renderGovernance()', escapeHTML(bo.name))); leaf = escapeHTML(r.el.name); }
                     else leaf = escapeHTML(bo.name);
                 }
-            } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(govState.dictTable); }
+            } else if (govState.tab === 'glossary' && v11State.selTerm && (govState.glossView || 'terms') === 'terms') { const t2 = (state.governance.glossary || []).find(x => x.id === v11State.selTerm); if (t2) { parts.push(A("openGovTab('glossary')", leaf)); leaf = escapeHTML(t2.term); } }
+            else if (govState.tab === 'assets' && v11State.selAsset) { const a2 = assetById(v11State.selAsset); if (a2) { parts.push(A("openGovTab('assets')", leaf)); leaf = escapeHTML(a2.name); } }
+            else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(govState.dictTable); }
             else if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) { const bo = (state.governance.businessObjects || []).find(b => b.id === govState.dictBoId); if (bo) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(bo.name); } }
             c.innerHTML = parts.join('<span class="sep">›</span>') + '<span class="sep">›</span><span class="cur">' + leaf + '</span>';
         }
@@ -20829,6 +20852,23 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             block.dataset.v11init = '1'; if (!v11State.initOpen) block.style.display = 'none';
             block.insertAdjacentHTML('beforebegin', `<div class="flex items-center gap-2 flex-wrap mb-3"><button class="v11-btn pri" onclick="v11WizardOpen()">＋ Nouvel objet métier</button><button class="v11-btn sm" onclick="v11State.initOpen=!v11State.initOpen; renderGovernance()">${v11State.initOpen ? '▾ Masquer' : '▸ Autres façons de créer un objet'}</button><span class="text-[11px] text-slate-500">depuis une source, depuis le modèle de données, objet vierge</span></div>`);
         }
+        // Mode « concentration » : pendant la modification d'un objet, seuls le formulaire et sa barre restent.
+        function v11FocusMode() {
+            if (govState.tab !== 'objects' || !govState.selectedBoId) return; const c = el('govContent'); if (!c) return;
+            const editing = v11Editing('bo:' + govState.selectedBoId);
+            const list = el('boListCol'); if (list) list.style.display = editing ? 'none' : '';
+            Array.from(c.children).forEach(n => { if (n.querySelector && (n.querySelector('[data-v11init]') || /Attributs présents dans plusieurs sources|Nouvel objet métier/.test(n.textContent.slice(0, 200))) && !n.contains(list)) n.style.display = editing ? 'none' : ''; });
+            // liste des objets : filtre dès qu'ils sont nombreux
+            if (list && !editing && (state.governance.businessObjects || []).length > 8 && !list.previousElementSibling?.classList?.contains('v11-attrfilter')) {
+                list.insertAdjacentHTML('beforebegin', `<div class="v11-attrfilter" data-ro="keep"><input type="text" value="${escapeHTML(v11State.boQ2 || '')}" placeholder="Filtrer les objets…" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white w-56" oninput="v11State.boQ2=this.value; v11BoListFilter(this.value)"></div>`);
+                v11BoListFilter(v11State.boQ2);
+            }
+        }
+        function v11BoListFilter(q) { q = catNorm(q || ''); const list = el('boListCol'); if (!list) return; Array.from(list.children).forEach(card => { card.style.display = (!q || catNorm(card.textContent).includes(q)) ? '' : 'none'; }); }
+        // Récemment consultés (mémorisés dans les préférences)
+        function v11Recent(kind, id, name) { const r = (v11Prefs.recent = v11Prefs.recent || []).filter(x => !(x.kind === kind && x.id === id)); r.unshift({ kind, id, name, at: Date.now() }); v11Prefs.recent = r.slice(0, 8); v11SavePrefs(); }
+        function v11RecentGo(kind, id) { if (kind === 'bo') v11GoBo(id); else if (kind === 'term') termTagOpen(id); else if (kind === 'asset') v11GoAsset(id); else if (kind === 'table') v11GoTable(id); }
+        function v11RecentList() { const g = state.governance; return (v11Prefs.recent || []).filter(x => (x.kind === 'bo' && (g.businessObjects || []).some(b => b.id === x.id)) || (x.kind === 'term' && (g.glossary || []).some(t => t.id === x.id)) || (x.kind === 'asset' && (g.assets || []).some(a => a.id === x.id)) || (x.kind === 'table' && !!tableByName(x.id))); }
         // ---- Après chaque rendu de la gouvernance ----
         const _v11_renderGovernance = renderGovernance;
         renderGovernance = function () {
@@ -20838,7 +20878,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (home && c && typeof v11HomeHtml === 'function') { c.innerHTML = v11HomeHtml(); }
             const acts = el('govActions'); if (acts && !acts.querySelector('.v11-acts')) acts.insertAdjacentHTML('afterbegin', `<span class="v11-acts inline-flex items-center gap-1.5 mr-2" data-ro="keep"><button class="v11-btn sm" onclick="v11WizardOpen()" title="Créer un objet métier en trois étapes">＋ Objet</button><button class="v11-btn sm" onclick="v11PaletteOpen()" title="Rechercher (Ctrl+K)">🔍</button></span>`);
             try { if (typeof v11ApplyReadMode === 'function') v11ApplyReadMode(); } catch (e) { console.error(e); }
-            try { v11CompactInit(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
+            try { v11CompactInit(); v11FocusMode(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
         };
         // ---- Raccourcis clavier + aide ----
         const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['N', 'Nouvel objet (assistant)'], ['Maj P', 'Mode présentation']];
@@ -20898,9 +20938,10 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function v11ToggleEdit(kind, id) { const k = kind + ':' + id; v11SetEditing(k, !v11Editing(k)); }
         // 7. « Modifier dans l'objet » (fiche du catalogue) ouvre bien le formulaire.
         if (typeof catEditInObject === 'function') { const _v11_cat = catEditInObject; catEditInObject = function () { const e2 = _catFicheCtx; if (e2 && e2.bo) v11State.edit['bo:' + e2.bo] = true; return _v11_cat.apply(this, arguments); }; }
-        function v11GoBo(id, elId, stId) { govState.selectedBoId = id; govState.boSel = elId ? { kind: 'attr', stId: stId || '', elId } : null; if (elId) { govState.boTab = 'structure'; govState.structView = 'fiche'; } openGovTab('objects'); }
-        function v11GoAsset(id) { openGovTab('assets'); setTimeout(() => { const n = el('v11-as-' + id) || document.querySelector(`input[onchange^="updateGovAsset('${id}','name'"]`); if (n) { (n.closest('.rounded-xl') || n).scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 50); }
-        function v11GoTable(tn) { govState.dictMode = 'table'; govState.dictTable = tn; openGovTab('dictionary'); }
+        function v11GoBo(id, elId, stId) { govState.selectedBoId = id; govState.boSel = elId ? { kind: 'attr', stId: stId || '', elId } : null; if (elId) { govState.boTab = 'structure'; govState.structView = 'fiche'; v11State.edit['bo:' + id] = true; } const bo = (state.governance.businessObjects || []).find(b => b.id === id); if (bo) v11Recent('bo', id, bo.name); openGovTab('objects'); }
+        function v11GoAsset(id) { v11State.selAsset = id; const a = assetById(id); if (a) v11Recent('asset', id, a.name); openGovTab('assets'); setTimeout(() => { const n = el('v11-as-' + id) || document.querySelector(`input[onchange^="updateGovAsset('${id}','name'"]`); if (n) { (n.closest('.rounded-xl') || n).scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 50); }
+        function v11GoTable(tn) { govState.dictMode = 'table'; govState.dictTable = tn; v11Recent('table', tn, tn); openGovTab('dictionary'); }
+        const _v11_termTagOpen = termTagOpen; termTagOpen = function (id) { v11State.selTerm = id; const t = (state.governance.glossary || []).find(x => x.id === id); if (t) v11Recent('term', id, t.term); return _v11_termTagOpen.apply(this, arguments); };
         function v11EditAttr(boId, stId, elId) { v11State.edit['bo:' + boId] = true; govState.selectedBoId = boId; govState.boTab = 'structure'; govState.structView = 'fiche'; govState.boSel = { kind: 'attr', stId: stId || '', elId }; openGovTab('objects'); }
         // Droits : peut-on modifier (ou proposer) cette fiche ? ce champ réservé ?
         function v11Can(kind, ent) {
@@ -20930,7 +20971,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         // ---- Valeur modifiable en place ----
         function v11IE(kind, id, field, value, opts) {
             opts = opts || {}; const ro = !!opts.ro || (typeof govIsReadOnly === 'function' && govIsReadOnly()); const empty = value === undefined || value === null || String(value).trim() === '';
-            return `<div class="v11-val v11-ie ${ro ? 'ro' : ''} ${empty ? 'empty' : ''}" ${ro ? '' : `onclick="v11InlineEdit(this)"`} data-kind="${kind}" data-id="${escapeHTML(id)}" data-field="${field}" data-type="${opts.type || 'text'}" ${opts.options ? `data-options="${escapeHTML(JSON.stringify(opts.options))}"` : ''} title="${ro ? (opts.roTitle || 'Réservé au propriétaire') : 'Cliquer pour modifier · Entrée valide · Échap annule'}">${empty ? escapeHTML(opts.placeholder || '—') : escapeHTML(String(value))}</div>`;
+            return `<div class="v11-val v11-ie ${ro ? 'ro' : ''} ${empty ? 'empty' : ''}" ${ro ? '' : `onclick="event.stopPropagation(); v11InlineEdit(this)"`} data-kind="${kind}" data-id="${escapeHTML(id)}" data-field="${field}" data-type="${opts.type || 'text'}" ${opts.options ? `data-options="${escapeHTML(JSON.stringify(opts.options))}"` : ''} title="${ro ? (opts.roTitle || 'Réservé au propriétaire') : 'Cliquer pour modifier · Entrée valide · Échap annule'}">${empty ? escapeHTML(opts.placeholder || '—') : escapeHTML(String(value))}</div>`;
         }
         function v11InlineEdit(node) {
             if (node.querySelector('.v11-ie-in')) return;
@@ -20952,6 +20993,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             else if (kind === 'term') updateGlossaryTerm(id, field, v);
             else if (kind === 'asset') updateGovAsset(id, field, v);
             else if (kind === 'table') { if (field === 'theme') { const t = tableByName(id); if (t) updateTableTheme(t.id, v); } else updateDictField(id, field, v); }
+            else if (kind === 'attr') { const [boId, stId, elId] = id.split('|'); boAttrWrite(boId, stId || '', elId, field, v); }
             renderGovernance();
         }
         function v11EditBar(kind, id, name, hint) { return `<div class="v11-editbar" data-ro="keep"><span>✎ <b>Modification</b> ${escapeHTML(name)}${hint ? ' · ' + escapeHTML(hint) : ''}</span><span class="flex-grow"></span><button class="v11-btn sm" onclick="v11Fs('#boDetail','Attributs')" title="Plein écran des attributs">⛶ Attributs</button><button class="v11-btn pri sm" onclick="v11ToggleEdit('${kind}','${id}')" title="Revenir à la fiche en lecture (E)">✓ Terminer</button></div>`; }
@@ -20970,7 +21012,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const maps = r.stId ? (r.el.col ? [r.el.col] : []) : (r.el.mappings || []).map(m => m.table + '.' + m.col);
                 const tt = typeof termsOfAttr === 'function' ? termsOfAttr(bo.id, r.el.id).map(t => t.term) : [];
                 const use = (r.el.usedBy || []).map(asName);
-                return `<tr class="click" onclick="v11EditAttr('${bo.id}','${r.stId || ''}','${r.el.id}')" title="Ouvrir cet attribut"><td><b>${escapeHTML(r.el.name)}</b></td><td class="dim">${r.facet ? escapeHTML(r.facet) : '—'}</td><td>${maps.length ? maps.map(escapeHTML).join('<br>') : '<span class="dim">non alimenté</span>'}</td><td>${v11Dash(r.el.definition)}</td><td>${v11Dash(r.el.sensitivity)}</td><td>${tt.length ? tt.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td><td>${use.length ? use.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>` : v11Empty('Aucun attribut. « Modifier » puis « + Attribut », ou glissez des colonnes de source.');
+                const aid = bo.id + '|' + (r.stId || '') + '|' + r.el.id;
+                return `<tr class="click" onclick="v11EditAttr('${bo.id}','${r.stId || ''}','${r.el.id}')" title="Ouvrir cet attribut (les cellules Définition et Sensibilité se modifient sur place)"><td><b>${escapeHTML(r.el.name)}</b></td><td class="dim">${r.facet ? escapeHTML(r.facet) : '—'}</td><td>${maps.length ? maps.map(escapeHTML).join('<br>') : '<span class="dim">non alimenté</span>'}</td><td>${v11IE('attr', aid, 'definition', r.el.definition, { type: 'multi', ro: !can.any, placeholder: '—' })}</td><td>${v11IE('attr', aid, 'sensitivity', r.el.sensitivity, { type: 'select', options: SENSITIVITY_OPTS, ro: !can.any, placeholder: '—' })}</td><td>${tt.length ? tt.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td><td>${use.length ? use.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>` : v11Empty('Aucun attribut. « Modifier » puis « + Attribut », ou glissez des colonnes de source.');
             const todos = comp.todos.map(t => `<span class="v11-chip" onclick="v11State.edit['bo:${bo.id}']=true; ${t.act.replace(/"/g, '&quot;')}">→ ${escapeHTML(t.lbl)}</span>`).join('');
             const props = typeof govProposals === 'function' ? govProposals().filter(p => p.status === 'pending' && ((p.target || {}).boId === bo.id || ((p.target || {}).ctx || {}).boId === bo.id)) : [];
             return v11Fiche({
@@ -21069,10 +21112,32 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const c = el('govContent'); if (!c) return;
             if (govState.tab === 'objects' && govState.selectedBoId && v11State.lineage[govState.selectedBoId] && !v11Editing('bo:' + govState.selectedBoId) && el('attrLineageBox') && !el('attrLineageBox').querySelector('svg')) { try { openBoLineage(govState.selectedBoId); } catch (e) {} }
             if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) v11ReadifyDictBo(c);
-            if (govState.tab === 'glossary') {
-                (state.governance.glossary || []).forEach(g => { const card = el('gl-card-' + g.id); if (!card) return; if (v11Editing('term:' + g.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('term', g.id, 'du terme « ' + g.term + ' »')); return; } card.className = 'mb-3'; card.removeAttribute('data-gov-lock'); card.innerHTML = v11TermRead(g); });
+            if (govState.tab === 'glossary' && (govState.glossView || 'terms') === 'terms') {
+                const terms = state.governance.glossary || []; const cards = terms.map(g => el('gl-card-' + g.id)).filter(Boolean); if (!cards.length) return;
+                if (govState.glossFocus && terms.some(t => t.id === govState.glossFocus)) v11State.selTerm = govState.glossFocus;
+                if (!v11State.selTerm || !terms.some(t => t.id === v11State.selTerm)) v11State.selTerm = terms[0].id;
+                cards[0].insertAdjacentHTML('beforebegin', v11ListBarHtml('termQ', 'gl-card-', terms.length, 'Filtrer les termes…'));
+                terms.forEach(g => { const card = el('gl-card-' + g.id); if (!card) return; card.dataset.q = catNorm(g.term + ' ' + (g.definition || '') + ' ' + (g.domain || ''));
+                    if (v11Editing('term:' + g.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('term', g.id, 'du terme « ' + g.term + ' »')); return; }
+                    card.removeAttribute('data-gov-lock');
+                    if (g.id === v11State.selTerm) { card.className = 'mb-3'; card.innerHTML = v11TermRead(g); }
+                    else { card.className = 'v11-rowcard'; card.setAttribute('onclick', `v11State.selTerm='${g.id}'; govState.glossFocus='${g.id}'; renderGovernance()`); const n = ((g.attrLinks || []).length) + ((g.boIds || []).length) + ((g.assetIds || []).length); card.innerHTML = `<span>📖</span><span class="nm">${escapeHTML(g.term)}</span><span class="sub">${escapeHTML([g.domain, n ? 'désigne ' + n + ' élément(s)' : 'ne désigne rien', (g.definition || '').slice(0, 60)].filter(Boolean).join(' · '))}</span><span class="ar">›</span>`; } });
+                v11ListFilter('gl-card-', v11State.termQ);
             } else if (govState.tab === 'assets') {
-                (state.governance.assets || []).forEach(a => { const inp = c.querySelector(`input[onchange^="updateGovAsset('${a.id}','name'"]`); if (!inp) return; const card = inp.closest('.rounded-xl'); if (!card) return; if (v11Editing('asset:' + a.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('asset', a.id, (a.kind === 'process' ? 'du processus « ' : 'de l\'application « ') + a.name + ' »')); return; } card.className = 'mb-3'; card.id = 'v11-as-' + a.id; card.removeAttribute('data-gov-lock'); card.innerHTML = v11AssetRead(a); });
+                const assets = state.governance.assets || []; if (!assets.length) return;
+                if (!v11State.selAsset || !assets.some(a => a.id === v11State.selAsset)) v11State.selAsset = assets[0].id;
+                let first = null;
+                assets.forEach(a => { const inp = c.querySelector(`input[onchange^="updateGovAsset('${a.id}','name'"]`); if (!inp) return; const card = inp.closest('.rounded-xl'); if (!card) return; if (!first) first = card;
+                    card.id = 'v11-as-' + a.id; card.dataset.q = catNorm(a.name + ' ' + (a.description || '') + ' ' + (a.domain || ''));
+                    if (v11Editing('asset:' + a.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('asset', a.id, (a.kind === 'process' ? 'du processus « ' : 'de l\'application « ') + a.name + ' »')); return; }
+                    card.removeAttribute('data-gov-lock');
+                    if (a.id === v11State.selAsset) { card.className = 'mb-3'; card.innerHTML = v11AssetRead(a).replace('class="v11-fiche"', 'class="v11-fiche narrow"'); }
+                    else { card.className = 'v11-rowcard'; card.setAttribute('onclick', `v11State.selAsset='${a.id}'; renderGovernance()`); const u = typeof assetUsage === 'function' ? assetUsage(a) : { srcs: [], bos: [], procs: [] }; card.innerHTML = `<span>${a.kind === 'process' ? '⚙️' : '🖥'}</span><span class="nm">${escapeHTML(a.name)}</span><span class="sub">${escapeHTML([a.domain, a.criticality, (u.srcs.length ? u.srcs.length + ' source(s)' : ''), (u.bos.length ? u.bos.length + ' objet(s)' : '')].filter(Boolean).join(' · '))}</span><span class="ar">›</span>`; } });
+                const grid = first ? first.closest('.grid') : null; if (grid && !grid.previousElementSibling?.classList?.contains('v11-listbar')) grid.insertAdjacentHTML('beforebegin', v11ListBarHtml('assetQ', 'v11-as-', assets.length, 'Filtrer les applications et processus…'));
+                v11ListFilter('v11-as-', v11State.assetQ);
+                const imp = el('impactResult'); const impBlock = imp ? imp.parentElement : null;
+                if (impBlock && !impBlock.dataset.v11c) { impBlock.dataset.v11c = '1'; impBlock.style.display = v11State.impactOpen ? '' : 'none'; impBlock.insertAdjacentHTML('beforebegin', `<div class="v11-collapse"><div class="hd2" data-ro="keep" onclick="v11State.impactOpen=!v11State.impactOpen; renderGovernance()"><span>🚨 Analyse d'impact</span><span class="ch">${v11State.impactOpen ? '▾ masquer' : '▸ « si cette donnée a un problème, qui est touché ? »'}</span></div></div>`); }
+                const para = Array.from(c.children).find(n => n.tagName === 'P' && /Le socle du modèle/.test(n.textContent)); if (para) para.style.display = 'none';
             } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) {
                 const sel = el('dict-domain'); const wrap = sel ? sel.closest('#govContent > div') : null; if (!wrap) return;
                 const tn = govState.dictTable;
@@ -21080,6 +21145,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 wrap.removeAttribute('data-gov-lock'); wrap.innerHTML = v11TableRead(tn);
             }
         }
+        function v11ListBarHtml(qKey, prefix, n, ph) { return `<div class="v11-listbar" data-ro="keep"><input type="text" value="${escapeHTML(v11State[qKey] || '')}" placeholder="${ph}" oninput="v11State['${qKey}']=this.value; v11ListFilter('${prefix}', this.value)" aria-label="Filtrer"><span class="n">${n} au total · cliquez une ligne pour ouvrir sa fiche</span></div>`; }
+        function v11ListFilter(prefix, q) { q = catNorm(q || ''); document.querySelectorAll('[id^="' + prefix + '"]').forEach(card => { if (card.dataset.q === undefined) return; card.style.display = (!q || card.dataset.q.includes(q)) ? '' : 'none'; }); }
         // Lecture générique d'un formulaire V7 : chaque champ devient sa valeur (ou « — »), les boutons
         // d'écriture disparaissent ; une barre propose « Modifier ». Utilisé pour le dictionnaire par objet.
         function v11Readify(root, key, label, canEdit) {
@@ -21098,6 +21165,13 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (v11Editing(key)) { if (!wrap.querySelector('.v11-editbar')) wrap.insertAdjacentHTML('afterbegin', v11EditBar('dictbo', bo.id, 'du dictionnaire de « ' + bo.name + ' »')); return; }
             v11Readify(wrap, key, 'du dictionnaire de « ' + bo.name + ' »', v11Can('bo', bo).any);
         }
+        // ---- Suppression : confirmation puis notification avec « Annuler » ----
+        [['removeBusinessObject', id => ((state.governance.businessObjects || []).find(b => b.id === id) || {}).name, 'l\'objet', () => state.governance.businessObjects], ['removeGlossaryTerm', id => ((state.governance.glossary || []).find(t => t.id === id) || {}).term, 'le terme', () => state.governance.glossary], ['removeGovAsset', id => (assetById(id) || {}).name, 'l\'application ou le processus', () => state.governance.assets]].forEach(([nm, nameOf, what, coll]) => {
+            const o = window[nm]; if (typeof o !== 'function') return;
+            window[nm] = function (id) { const name = nameOf(id); if (name && !_govBypass && !confirm('Supprimer ' + what + ' « ' + name + ' » ?')) return; const before = (coll() || []).length; const r = o.apply(this, arguments); if (name && (coll() || []).length < before) v11Toast('« ' + name + ' » supprimé(e).', 'info', { action: () => v11Undo(), actionLabel: '⟲ Annuler' }); return r; };
+        });
+        // ---- Fiche complète depuis le catalogue ----
+        if (typeof catOpenFiche === 'function') { const _v11_cof = catOpenFiche; catOpenFiche = function () { const r = _v11_cof.apply(this, arguments); const e2 = _catFicheCtx; const foot = el('uxDrawerFoot'); if (e2 && e2.bo && foot && !foot.querySelector('.v11-fullbtn')) foot.insertAdjacentHTML('afterbegin', `<button data-ro="keep" class="v11-fullbtn flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50" onclick="closeUxDrawer(); v11State.edit['bo:${e2.bo}']=false; v11GoBo('${e2.bo}')">📄 Fiche complète</button>`); return r; }; }
         // ---- Dupliquer ----
         function v11Duplicate(kind, id) {
             const g = state.governance; const clone = o => JSON.parse(JSON.stringify(o));
@@ -21136,6 +21210,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function v11Index() {
             const g = state.governance; const out = [];
             const gov = NAV_PHASES.find(p => p.id === 'gov');
+            v11RecentList().forEach(x => out.push({ grp: 'Récents', ic: x.kind === 'bo' ? '🏛️' : (x.kind === 'term' ? '📖' : (x.kind === 'asset' ? '🖥' : '▦')), label: x.name, sub: 'récemment consulté', key: x.name, recent: true, go: () => v11RecentGo(x.kind, x.id) }));
             gov.tabs.filter(t => !t.hidden).forEach(t => out.push({ grp: 'Écrans', ic: t.icon, label: t.label, sub: t.fam, key: t.label, go: () => openGovTab(t.g) }));
             out.push({ grp: 'Actions', ic: '＋', label: 'Nouvel objet métier (assistant en 3 étapes)', key: 'nouvel objet créer assistant', go: () => v11WizardOpen() });
             out.push({ grp: 'Actions', ic: '⛶', label: 'Plein écran de la fiche courante', key: 'plein écran', go: () => { const n = document.querySelector('.v11-fiche') || el('boDetail'); if (n) v11Fs(n.id ? '#' + n.id : n); } });
@@ -21157,7 +21232,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         }
         function v11Score(it, q) {
             const n = catNorm(it.label), k = catNorm(it.key || it.label); const words = q.split(/\s+/).filter(Boolean);
-            if (!words.length) return it.grp === 'Écrans' || it.grp === 'Actions' ? 1 : 0;
+            if (!words.length) return it.recent ? 2 : (it.grp === 'Écrans' || it.grp === 'Actions' ? 1 : 0);
             let s = 0; for (const w of words) { if (n === w) s += 40; else if (n.startsWith(w)) s += 25; else if (n.includes(w)) s += 14; else if (k.includes(w)) s += 5; else return 0; }
             return s;
         }
@@ -21207,6 +21282,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (typeof govFeatureOn === 'function' && govFeatureOn()) html += `<div class="v11-card third"><div class="t">✅ À valider <span class="n">${pend}</span></div>${pend ? `<div class="v11-val">${pend} proposition(s) attendent votre décision.</div><button class="v11-btn pri mt-2" onclick="openGovTab('review')">Ouvrir « À valider »</button>` : '<div class="v11-val empty">Rien à valider pour vous.</div>'}</div>`;
             html += `<div class="v11-card ${govFeatureOn && govFeatureOn() ? 'third' : 'half'}"><div class="t">🧭 Fiches à compléter <span class="n">${todo.length}</span></div>${todo.length ? todo.map(x => `<div class="v11-row" onclick="v11GoBo('${x.bo.id}')"><span>🏛️ ${escapeHTML(x.bo.name)}</span><span class="v11-bar" style="width:90px;margin-left:auto"><i style="width:${x.c.score}%"></i></span><span class="sub">${x.c.score} % · ${escapeHTML(x.c.todos[0] ? x.c.todos[0].lbl : '')}</span></div>`).join('') : '<div class="v11-val empty">Toutes vos fiches sont complètes.</div>'}</div>`;
             html += `<div class="v11-card ${govFeatureOn && govFeatureOn() ? 'third' : 'half'}"><div class="t">🕓 Derniers changements</div>${changes.length ? changes.slice(0, 8).map(c => `<div class="v11-row" onclick="${c.go}"><span>${escapeHTML(c.what)}</span><span class="sub">${fmt(c.at)}</span></div>`).join('') : '<div class="v11-val empty">Aucun changement tracé pour l\'instant.</div>'}</div>`;
+            const rec = v11RecentList();
+            if (rec.length) html += `<div class="v11-card full"><div class="t">🕘 Reprendre où vous en étiez</div><div class="v11-chips">${rec.map(x => `<span class="v11-chip" onclick="v11RecentGo('${x.kind}','${escapeHTML(String(x.id)).replace(/'/g, '&#39;')}')"><span class="k">${x.kind === 'bo' ? 'objet' : (x.kind === 'term' ? 'terme' : (x.kind === 'asset' ? 'appli' : 'source'))}</span>${escapeHTML(x.name)}</span>`).join('')}</div></div>`;
             html += `<div class="v11-card"><div class="t">🏛️ Objets métier <span class="n">${bos.length}</span></div>${bos.length ? bos.slice(0, 12).map(bo => `<div class="v11-row" onclick="v11GoBo('${bo.id}')"><span>${escapeHTML(bo.name)}</span><span class="sub">${escapeHTML([bo.domain, bo.globalOwner, (boAllAttrRows(bo) || []).length + ' attr.'].filter(Boolean).join(' · '))}</span></div>`).join('') + (bos.length > 12 ? `<div class="v11-row" onclick="openGovTab('objects')"><span>… et ${bos.length - 12} autre(s)</span></div>` : '') : '<div class="v11-val empty">Aucun objet. Utilisez « Nouvel objet métier ».</div>'}</div>`;
             html += `<div class="v11-card"><div class="t">📊 Chiffres clés</div><div class="v11-kpi"><div class="k" onclick="openGovTab('objects')"><div class="v">${bos.length}</div><div class="l">objets</div></div><div class="k"><div class="v">${nAttr}</div><div class="l">attributs</div></div><div class="k" onclick="openGovTab('glossary')"><div class="v">${(g.glossary || []).length}</div><div class="l">termes</div></div><div class="k" onclick="openGovTab('assets')"><div class="v">${(g.assets || []).length}</div><div class="l">applis · processus</div></div><div class="k" onclick="openGovTab('dictionary')"><div class="v">${tables.length}</div><div class="l">sources</div></div><div class="k" onclick="openGovTab('people')"><div class="v">${(g.people || []).length}</div><div class="l">acteurs</div></div></div>
                 <div class="text-[11px] text-slate-500 mt-3">Raccourcis : <span class="v11-kbd">G</span> puis <span class="v11-kbd">O</span> objets, <span class="v11-kbd">C</span> catalogue, <span class="v11-kbd">D</span> dictionnaire, <span class="v11-kbd">T</span> termes, <span class="v11-kbd">A</span> applications, <span class="v11-kbd">V</span> à valider.</div></div>`;

@@ -6,9 +6,10 @@
         function v11ToggleEdit(kind, id) { const k = kind + ':' + id; v11SetEditing(k, !v11Editing(k)); }
         // 7. « Modifier dans l'objet » (fiche du catalogue) ouvre bien le formulaire.
         if (typeof catEditInObject === 'function') { const _v11_cat = catEditInObject; catEditInObject = function () { const e2 = _catFicheCtx; if (e2 && e2.bo) v11State.edit['bo:' + e2.bo] = true; return _v11_cat.apply(this, arguments); }; }
-        function v11GoBo(id, elId, stId) { govState.selectedBoId = id; govState.boSel = elId ? { kind: 'attr', stId: stId || '', elId } : null; if (elId) { govState.boTab = 'structure'; govState.structView = 'fiche'; } openGovTab('objects'); }
-        function v11GoAsset(id) { openGovTab('assets'); setTimeout(() => { const n = el('v11-as-' + id) || document.querySelector(`input[onchange^="updateGovAsset('${id}','name'"]`); if (n) { (n.closest('.rounded-xl') || n).scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 50); }
-        function v11GoTable(tn) { govState.dictMode = 'table'; govState.dictTable = tn; openGovTab('dictionary'); }
+        function v11GoBo(id, elId, stId) { govState.selectedBoId = id; govState.boSel = elId ? { kind: 'attr', stId: stId || '', elId } : null; if (elId) { govState.boTab = 'structure'; govState.structView = 'fiche'; v11State.edit['bo:' + id] = true; } const bo = (state.governance.businessObjects || []).find(b => b.id === id); if (bo) v11Recent('bo', id, bo.name); openGovTab('objects'); }
+        function v11GoAsset(id) { v11State.selAsset = id; const a = assetById(id); if (a) v11Recent('asset', id, a.name); openGovTab('assets'); setTimeout(() => { const n = el('v11-as-' + id) || document.querySelector(`input[onchange^="updateGovAsset('${id}','name'"]`); if (n) { (n.closest('.rounded-xl') || n).scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 50); }
+        function v11GoTable(tn) { govState.dictMode = 'table'; govState.dictTable = tn; v11Recent('table', tn, tn); openGovTab('dictionary'); }
+        const _v11_termTagOpen = termTagOpen; termTagOpen = function (id) { v11State.selTerm = id; const t = (state.governance.glossary || []).find(x => x.id === id); if (t) v11Recent('term', id, t.term); return _v11_termTagOpen.apply(this, arguments); };
         function v11EditAttr(boId, stId, elId) { v11State.edit['bo:' + boId] = true; govState.selectedBoId = boId; govState.boTab = 'structure'; govState.structView = 'fiche'; govState.boSel = { kind: 'attr', stId: stId || '', elId }; openGovTab('objects'); }
         // Droits : peut-on modifier (ou proposer) cette fiche ? ce champ réservé ?
         function v11Can(kind, ent) {
@@ -38,7 +39,7 @@
         // ---- Valeur modifiable en place ----
         function v11IE(kind, id, field, value, opts) {
             opts = opts || {}; const ro = !!opts.ro || (typeof govIsReadOnly === 'function' && govIsReadOnly()); const empty = value === undefined || value === null || String(value).trim() === '';
-            return `<div class="v11-val v11-ie ${ro ? 'ro' : ''} ${empty ? 'empty' : ''}" ${ro ? '' : `onclick="v11InlineEdit(this)"`} data-kind="${kind}" data-id="${escapeHTML(id)}" data-field="${field}" data-type="${opts.type || 'text'}" ${opts.options ? `data-options="${escapeHTML(JSON.stringify(opts.options))}"` : ''} title="${ro ? (opts.roTitle || 'Réservé au propriétaire') : 'Cliquer pour modifier · Entrée valide · Échap annule'}">${empty ? escapeHTML(opts.placeholder || '—') : escapeHTML(String(value))}</div>`;
+            return `<div class="v11-val v11-ie ${ro ? 'ro' : ''} ${empty ? 'empty' : ''}" ${ro ? '' : `onclick="event.stopPropagation(); v11InlineEdit(this)"`} data-kind="${kind}" data-id="${escapeHTML(id)}" data-field="${field}" data-type="${opts.type || 'text'}" ${opts.options ? `data-options="${escapeHTML(JSON.stringify(opts.options))}"` : ''} title="${ro ? (opts.roTitle || 'Réservé au propriétaire') : 'Cliquer pour modifier · Entrée valide · Échap annule'}">${empty ? escapeHTML(opts.placeholder || '—') : escapeHTML(String(value))}</div>`;
         }
         function v11InlineEdit(node) {
             if (node.querySelector('.v11-ie-in')) return;
@@ -60,6 +61,7 @@
             else if (kind === 'term') updateGlossaryTerm(id, field, v);
             else if (kind === 'asset') updateGovAsset(id, field, v);
             else if (kind === 'table') { if (field === 'theme') { const t = tableByName(id); if (t) updateTableTheme(t.id, v); } else updateDictField(id, field, v); }
+            else if (kind === 'attr') { const [boId, stId, elId] = id.split('|'); boAttrWrite(boId, stId || '', elId, field, v); }
             renderGovernance();
         }
         function v11EditBar(kind, id, name, hint) { return `<div class="v11-editbar" data-ro="keep"><span>✎ <b>Modification</b> ${escapeHTML(name)}${hint ? ' · ' + escapeHTML(hint) : ''}</span><span class="flex-grow"></span><button class="v11-btn sm" onclick="v11Fs('#boDetail','Attributs')" title="Plein écran des attributs">⛶ Attributs</button><button class="v11-btn pri sm" onclick="v11ToggleEdit('${kind}','${id}')" title="Revenir à la fiche en lecture (E)">✓ Terminer</button></div>`; }
@@ -78,7 +80,8 @@
                 const maps = r.stId ? (r.el.col ? [r.el.col] : []) : (r.el.mappings || []).map(m => m.table + '.' + m.col);
                 const tt = typeof termsOfAttr === 'function' ? termsOfAttr(bo.id, r.el.id).map(t => t.term) : [];
                 const use = (r.el.usedBy || []).map(asName);
-                return `<tr class="click" onclick="v11EditAttr('${bo.id}','${r.stId || ''}','${r.el.id}')" title="Ouvrir cet attribut"><td><b>${escapeHTML(r.el.name)}</b></td><td class="dim">${r.facet ? escapeHTML(r.facet) : '—'}</td><td>${maps.length ? maps.map(escapeHTML).join('<br>') : '<span class="dim">non alimenté</span>'}</td><td>${v11Dash(r.el.definition)}</td><td>${v11Dash(r.el.sensitivity)}</td><td>${tt.length ? tt.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td><td>${use.length ? use.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>` : v11Empty('Aucun attribut. « Modifier » puis « + Attribut », ou glissez des colonnes de source.');
+                const aid = bo.id + '|' + (r.stId || '') + '|' + r.el.id;
+                return `<tr class="click" onclick="v11EditAttr('${bo.id}','${r.stId || ''}','${r.el.id}')" title="Ouvrir cet attribut (les cellules Définition et Sensibilité se modifient sur place)"><td><b>${escapeHTML(r.el.name)}</b></td><td class="dim">${r.facet ? escapeHTML(r.facet) : '—'}</td><td>${maps.length ? maps.map(escapeHTML).join('<br>') : '<span class="dim">non alimenté</span>'}</td><td>${v11IE('attr', aid, 'definition', r.el.definition, { type: 'multi', ro: !can.any, placeholder: '—' })}</td><td>${v11IE('attr', aid, 'sensitivity', r.el.sensitivity, { type: 'select', options: SENSITIVITY_OPTS, ro: !can.any, placeholder: '—' })}</td><td>${tt.length ? tt.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td><td>${use.length ? use.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>` : v11Empty('Aucun attribut. « Modifier » puis « + Attribut », ou glissez des colonnes de source.');
             const todos = comp.todos.map(t => `<span class="v11-chip" onclick="v11State.edit['bo:${bo.id}']=true; ${t.act.replace(/"/g, '&quot;')}">→ ${escapeHTML(t.lbl)}</span>`).join('');
             const props = typeof govProposals === 'function' ? govProposals().filter(p => p.status === 'pending' && ((p.target || {}).boId === bo.id || ((p.target || {}).ctx || {}).boId === bo.id)) : [];
             return v11Fiche({
@@ -177,10 +180,32 @@
             const c = el('govContent'); if (!c) return;
             if (govState.tab === 'objects' && govState.selectedBoId && v11State.lineage[govState.selectedBoId] && !v11Editing('bo:' + govState.selectedBoId) && el('attrLineageBox') && !el('attrLineageBox').querySelector('svg')) { try { openBoLineage(govState.selectedBoId); } catch (e) {} }
             if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) v11ReadifyDictBo(c);
-            if (govState.tab === 'glossary') {
-                (state.governance.glossary || []).forEach(g => { const card = el('gl-card-' + g.id); if (!card) return; if (v11Editing('term:' + g.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('term', g.id, 'du terme « ' + g.term + ' »')); return; } card.className = 'mb-3'; card.removeAttribute('data-gov-lock'); card.innerHTML = v11TermRead(g); });
+            if (govState.tab === 'glossary' && (govState.glossView || 'terms') === 'terms') {
+                const terms = state.governance.glossary || []; const cards = terms.map(g => el('gl-card-' + g.id)).filter(Boolean); if (!cards.length) return;
+                if (govState.glossFocus && terms.some(t => t.id === govState.glossFocus)) v11State.selTerm = govState.glossFocus;
+                if (!v11State.selTerm || !terms.some(t => t.id === v11State.selTerm)) v11State.selTerm = terms[0].id;
+                cards[0].insertAdjacentHTML('beforebegin', v11ListBarHtml('termQ', 'gl-card-', terms.length, 'Filtrer les termes…'));
+                terms.forEach(g => { const card = el('gl-card-' + g.id); if (!card) return; card.dataset.q = catNorm(g.term + ' ' + (g.definition || '') + ' ' + (g.domain || ''));
+                    if (v11Editing('term:' + g.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('term', g.id, 'du terme « ' + g.term + ' »')); return; }
+                    card.removeAttribute('data-gov-lock');
+                    if (g.id === v11State.selTerm) { card.className = 'mb-3'; card.innerHTML = v11TermRead(g); }
+                    else { card.className = 'v11-rowcard'; card.setAttribute('onclick', `v11State.selTerm='${g.id}'; govState.glossFocus='${g.id}'; renderGovernance()`); const n = ((g.attrLinks || []).length) + ((g.boIds || []).length) + ((g.assetIds || []).length); card.innerHTML = `<span>📖</span><span class="nm">${escapeHTML(g.term)}</span><span class="sub">${escapeHTML([g.domain, n ? 'désigne ' + n + ' élément(s)' : 'ne désigne rien', (g.definition || '').slice(0, 60)].filter(Boolean).join(' · '))}</span><span class="ar">›</span>`; } });
+                v11ListFilter('gl-card-', v11State.termQ);
             } else if (govState.tab === 'assets') {
-                (state.governance.assets || []).forEach(a => { const inp = c.querySelector(`input[onchange^="updateGovAsset('${a.id}','name'"]`); if (!inp) return; const card = inp.closest('.rounded-xl'); if (!card) return; if (v11Editing('asset:' + a.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('asset', a.id, (a.kind === 'process' ? 'du processus « ' : 'de l\'application « ') + a.name + ' »')); return; } card.className = 'mb-3'; card.id = 'v11-as-' + a.id; card.removeAttribute('data-gov-lock'); card.innerHTML = v11AssetRead(a); });
+                const assets = state.governance.assets || []; if (!assets.length) return;
+                if (!v11State.selAsset || !assets.some(a => a.id === v11State.selAsset)) v11State.selAsset = assets[0].id;
+                let first = null;
+                assets.forEach(a => { const inp = c.querySelector(`input[onchange^="updateGovAsset('${a.id}','name'"]`); if (!inp) return; const card = inp.closest('.rounded-xl'); if (!card) return; if (!first) first = card;
+                    card.id = 'v11-as-' + a.id; card.dataset.q = catNorm(a.name + ' ' + (a.description || '') + ' ' + (a.domain || ''));
+                    if (v11Editing('asset:' + a.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('asset', a.id, (a.kind === 'process' ? 'du processus « ' : 'de l\'application « ') + a.name + ' »')); return; }
+                    card.removeAttribute('data-gov-lock');
+                    if (a.id === v11State.selAsset) { card.className = 'mb-3'; card.innerHTML = v11AssetRead(a).replace('class="v11-fiche"', 'class="v11-fiche narrow"'); }
+                    else { card.className = 'v11-rowcard'; card.setAttribute('onclick', `v11State.selAsset='${a.id}'; renderGovernance()`); const u = typeof assetUsage === 'function' ? assetUsage(a) : { srcs: [], bos: [], procs: [] }; card.innerHTML = `<span>${a.kind === 'process' ? '⚙️' : '🖥'}</span><span class="nm">${escapeHTML(a.name)}</span><span class="sub">${escapeHTML([a.domain, a.criticality, (u.srcs.length ? u.srcs.length + ' source(s)' : ''), (u.bos.length ? u.bos.length + ' objet(s)' : '')].filter(Boolean).join(' · '))}</span><span class="ar">›</span>`; } });
+                const grid = first ? first.closest('.grid') : null; if (grid && !grid.previousElementSibling?.classList?.contains('v11-listbar')) grid.insertAdjacentHTML('beforebegin', v11ListBarHtml('assetQ', 'v11-as-', assets.length, 'Filtrer les applications et processus…'));
+                v11ListFilter('v11-as-', v11State.assetQ);
+                const imp = el('impactResult'); const impBlock = imp ? imp.parentElement : null;
+                if (impBlock && !impBlock.dataset.v11c) { impBlock.dataset.v11c = '1'; impBlock.style.display = v11State.impactOpen ? '' : 'none'; impBlock.insertAdjacentHTML('beforebegin', `<div class="v11-collapse"><div class="hd2" data-ro="keep" onclick="v11State.impactOpen=!v11State.impactOpen; renderGovernance()"><span>🚨 Analyse d'impact</span><span class="ch">${v11State.impactOpen ? '▾ masquer' : '▸ « si cette donnée a un problème, qui est touché ? »'}</span></div></div>`); }
+                const para = Array.from(c.children).find(n => n.tagName === 'P' && /Le socle du modèle/.test(n.textContent)); if (para) para.style.display = 'none';
             } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) {
                 const sel = el('dict-domain'); const wrap = sel ? sel.closest('#govContent > div') : null; if (!wrap) return;
                 const tn = govState.dictTable;
@@ -188,6 +213,8 @@
                 wrap.removeAttribute('data-gov-lock'); wrap.innerHTML = v11TableRead(tn);
             }
         }
+        function v11ListBarHtml(qKey, prefix, n, ph) { return `<div class="v11-listbar" data-ro="keep"><input type="text" value="${escapeHTML(v11State[qKey] || '')}" placeholder="${ph}" oninput="v11State['${qKey}']=this.value; v11ListFilter('${prefix}', this.value)" aria-label="Filtrer"><span class="n">${n} au total · cliquez une ligne pour ouvrir sa fiche</span></div>`; }
+        function v11ListFilter(prefix, q) { q = catNorm(q || ''); document.querySelectorAll('[id^="' + prefix + '"]').forEach(card => { if (card.dataset.q === undefined) return; card.style.display = (!q || card.dataset.q.includes(q)) ? '' : 'none'; }); }
         // Lecture générique d'un formulaire V7 : chaque champ devient sa valeur (ou « — »), les boutons
         // d'écriture disparaissent ; une barre propose « Modifier ». Utilisé pour le dictionnaire par objet.
         function v11Readify(root, key, label, canEdit) {
@@ -206,6 +233,13 @@
             if (v11Editing(key)) { if (!wrap.querySelector('.v11-editbar')) wrap.insertAdjacentHTML('afterbegin', v11EditBar('dictbo', bo.id, 'du dictionnaire de « ' + bo.name + ' »')); return; }
             v11Readify(wrap, key, 'du dictionnaire de « ' + bo.name + ' »', v11Can('bo', bo).any);
         }
+        // ---- Suppression : confirmation puis notification avec « Annuler » ----
+        [['removeBusinessObject', id => ((state.governance.businessObjects || []).find(b => b.id === id) || {}).name, 'l\'objet', () => state.governance.businessObjects], ['removeGlossaryTerm', id => ((state.governance.glossary || []).find(t => t.id === id) || {}).term, 'le terme', () => state.governance.glossary], ['removeGovAsset', id => (assetById(id) || {}).name, 'l\'application ou le processus', () => state.governance.assets]].forEach(([nm, nameOf, what, coll]) => {
+            const o = window[nm]; if (typeof o !== 'function') return;
+            window[nm] = function (id) { const name = nameOf(id); if (name && !_govBypass && !confirm('Supprimer ' + what + ' « ' + name + ' » ?')) return; const before = (coll() || []).length; const r = o.apply(this, arguments); if (name && (coll() || []).length < before) v11Toast('« ' + name + ' » supprimé(e).', 'info', { action: () => v11Undo(), actionLabel: '⟲ Annuler' }); return r; };
+        });
+        // ---- Fiche complète depuis le catalogue ----
+        if (typeof catOpenFiche === 'function') { const _v11_cof = catOpenFiche; catOpenFiche = function () { const r = _v11_cof.apply(this, arguments); const e2 = _catFicheCtx; const foot = el('uxDrawerFoot'); if (e2 && e2.bo && foot && !foot.querySelector('.v11-fullbtn')) foot.insertAdjacentHTML('afterbegin', `<button data-ro="keep" class="v11-fullbtn flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50" onclick="closeUxDrawer(); v11State.edit['bo:${e2.bo}']=false; v11GoBo('${e2.bo}')">📄 Fiche complète</button>`); return r; }; }
         // ---- Dupliquer ----
         function v11Duplicate(kind, id) {
             const g = state.governance; const clone = o => JSON.parse(JSON.stringify(o));

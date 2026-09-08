@@ -49,6 +49,20 @@
     .v11-bar>i{display:block;height:100%;background:var(--v11-acc)}
     .v11-editbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--v11-acc-bd);background:var(--v11-acc-soft);color:var(--v7-txt);border-radius:12px;padding:8px 12px;margin-bottom:12px;font-size:12.5px}
     .v11-editbar b{color:var(--v11-acc)}
+    .v11-editbar{position:sticky;top:8px;z-index:6;box-shadow:0 6px 20px rgba(15,23,42,.08)}
+    /* ---- listes maître / détail (termes, applications) ---- */
+    .v11-listbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .v11-listbar input{flex:1;max-width:340px;font-size:12.5px;border:1px solid var(--v11-line);border-radius:9px;padding:7px 10px;background:var(--v7-surface);color:var(--v7-txt)}
+    .v11-listbar .n{font-size:11px;color:var(--v7-muted)}
+    .v11-rowcard{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--v11-line);border-radius:10px;background:var(--v7-surface);cursor:pointer;font-size:13px;color:var(--v7-txt);margin-bottom:6px}
+    .v11-rowcard:hover{border-color:var(--v11-acc-bd);background:var(--v11-acc-soft)}
+    .v11-rowcard .nm{font-weight:700}
+    .v11-rowcard .sub{color:var(--v7-muted);font-size:11.5px;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+    .v11-rowcard .ar{color:var(--v7-muted)}
+    .v11-fiche.narrow .bd .v11-sec{grid-column:span 12}
+    .v11-collapse>.hd2{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--v7-txt);cursor:pointer;padding:8px 12px;border:1px solid var(--v11-line);border-radius:10px;background:var(--v7-surface);margin-bottom:10px}
+    .v11-collapse>.hd2 .ch{color:var(--v7-muted);font-size:11px}
+    .v11-attrfilter{display:flex;align-items:center;gap:8px;margin-bottom:8px}
     /* ---- tableaux ---- */
     .v11-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
     .v11-tbl th{position:sticky;top:0;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--v7-muted);background:var(--v7-surface-2);padding:8px 10px;border-bottom:1px solid var(--v11-line);white-space:nowrap}
