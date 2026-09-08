@@ -1,10 +1,15 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '10.1.1';
+        const APP_VERSION = '10.2.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.2.0', d: '2026-09-08', t: 'Le contributeur peut tout proposer, sauf le propriétaire et le domaine', items: [
+                'Un contributeur propose désormais aussi la <b>structure</b> : nom d\'un attribut, colonne rattachée, ajout ou suppression d\'attributs, facettes, sources et leurs rôles, applications, hiérarchies, règles, statut, suppression de l\'objet… L\'opération est exécutée sur une copie, la différence est enregistrée comme proposition, l\'objet reste intact jusqu\'à la validation.',
+                'Les propositions de structure apparaissent dans la fiche de l\'objet (« Propositions de structure en attente ») avec ce qui change (+ ajouts, − retraits) et dans « À valider », où le propriétaire valide ou refuse ; l\'application d\'une validation est tracée dans l\'historique.',
+                'Seuls le <b>propriétaire</b> et le <b>domaine métier</b> restent réservés au propriétaire : ces champs sont verrouillés (🔒) pour un contributeur au lieu de rebondir. Cela vaut pour les objets, les termes, les applications (responsable, domaine) et les sources (propriétaire, domaine).',
+                'Applications et processus : description, criticité, sources, colonnes et liens passent par les propositions au lieu d\'être refusés.'] },
             { v: '10.1.1', d: '2026-09-08', t: 'Domaines métier : choix possible par tous, suppression propre', items: [
                 'Choisir un <b>domaine</b> sur un objet, un terme, une application ou une source ne « rebondit » plus : quand le profil actif est contributeur, le changement devient une <b>proposition</b> (pastille ⏳ à côté du sélecteur), validée par le propriétaire du domaine actuel. Auparavant il était refusé avec un simple message.',
                 'Écran Acteurs : chaque domaine affiche ce qui l\'utilise (sources, objets, termes, applis, rôles) et un <b>✕ pour le supprimer</b> partout après confirmation.',

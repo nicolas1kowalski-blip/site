@@ -2,11 +2,12 @@
         // Mono-poste : on choisit « qui on est » dans l'en-tête (profil actif, déclaratif) ; les
         // rôles et les décisions s'appliquent aux données réellement saisies. Une personne a un ou plusieurs couples (domaine métier, rôle).
         //   • Propriétaire : modifie directement et VALIDE les propositions de son domaine.
-        //   • Contributeur : ses modifications deviennent des PROPOSITIONS (rien n'est écrasé).
+        //   • Contributeur : ses modifications deviennent des PROPOSITIONS (rien n'est écrasé) — sens ET structure ;
+        //                    seuls le PROPRIÉTAIRE et le DOMAINE MÉTIER d'un élément lui sont réservés (V10.2).
         //   • Lecteur      : consultation seule.
         // Tant qu'aucune personne n'est déclarée, l'application se comporte comme avant.
         const GOV_ROLES = { owner: ['👑', 'Propriétaire'], contrib: ['✍️', 'Contributeur'], reader: ['👁', 'Lecteur'] };
-        const PROP_FIELD_LABELS = { definition: 'Définition', examples: 'Exemples', sensitivity: 'Sensibilité', owner: 'Propriétaire', multi: 'Nombre de valeurs', name: 'Nom', globalOwner: 'Propriétaire global', domain: 'Domaine métier', description: 'Description', term: 'Terme', contributors: 'Contributeurs' };
+        const PROP_FIELD_LABELS = { definition: 'Définition', examples: 'Exemples', sensitivity: 'Sensibilité', owner: 'Propriétaire', multi: 'Nombre de valeurs', name: 'Nom', globalOwner: 'Propriétaire global', domain: 'Domaine métier', col: 'Colonne', description: 'Description', steward: 'Référent', sourceSystem: 'Système source', status: 'Statut', term: 'Terme', contributors: 'Contributeurs' };
         let _govBypass = false;
         function govPeople() { const g = state.governance; if (!Array.isArray(g.people)) g.people = []; return g.people; }
         function govProposals() { const g = state.governance; if (!Array.isArray(g.proposals)) g.proposals = []; return g.proposals; }
@@ -79,7 +80,7 @@
         // Garde des opérations de STRUCTURE (réservées aux propriétaires) : renvoie true si autorisé.
         function govGuard(domain, what, bo) {
             if (_govBypass || (bo ? govCanEditBo(bo) : govCanEdit(domain))) return true;
-            showError((what || 'Cette opération') + ' est réservée au propriétaire du domaine' + (domain ? ' « ' + domain + ' »' : '') + '. Les contributeurs proposent des modifications de sens (définition, exemples, sensibilité, termes…).');
+            showError((what || 'Cette opération') + ' est réservé(e) au propriétaire' + (domain ? ' du domaine « ' + domain + ' »' : '') + '. Un contributeur peut proposer tout le reste (définitions, attributs, colonnes, facettes, sources, applications…).');
             return false;
         }
         function boDomainOf(bo) { return bo ? String(bo.domain || '').trim() : ''; }
@@ -104,7 +105,8 @@
                 if (p.kind === 'attr') boAttrWrite(p.target.boId, p.target.stId || '', p.target.elId, p.field, p.after);
                 else if (p.kind === 'bo') updateBusinessObject(p.target.boId, p.field, p.after);
                 else if (p.kind === 'term') updateGlossaryTerm(p.target.termId, p.field, p.after);
-                else if (p.kind === 'asset') updateGovAsset(p.target.assetId, p.field, p.after);
+                else if (p.kind === 'asset') updateGovAsset(p.target.assetId, p.field, p.raw !== undefined ? p.raw : p.after);
+                else if (p.kind === 'action') propApplyAction(p);
                 else if (p.kind === 'termlink') { if (p.field === 'add') termTagAdd(p.target.tk, p.target.ctx, p.after); else termTagRemove(p.target.tk, p.target.ctx, p.after); }
                 else if (p.kind === 'dictcol') updateDictColField(p.target.tn, p.target.col, p.field, p.raw !== undefined ? p.raw : p.after);
                 else if (p.kind === 'dict') updateDictField(p.target.tn, p.field, p.after);
@@ -115,9 +117,9 @@
             const g = state.governance; let ent = null;
             if (p.kind === 'dictcol' || p.kind === 'dict') ent = ensureDictEntry(p.target.tn);
             else if (p.kind === 'table') { const t = state.tables[p.target.tableId]; ent = t ? ensureDictEntry(t.name) : null; }
-            if (p.kind === 'attr' || p.kind === 'bo' || (p.kind === 'termlink' && (p.target.tk === 'attr' || p.target.tk === 'bo'))) ent = (g.businessObjects || []).find(b => b.id === (p.target.boId || (p.target.ctx || {}).boId));
+            if (p.kind === 'attr' || p.kind === 'bo' || (p.kind === 'action' && p.target.boId) || (p.kind === 'termlink' && (p.target.tk === 'attr' || p.target.tk === 'bo'))) ent = (g.businessObjects || []).find(b => b.id === (p.target.boId || (p.target.ctx || {}).boId));
             else if (p.kind === 'term') ent = (g.glossary || []).find(t2 => t2.id === p.target.termId);
-            else if (p.kind === 'asset' || p.kind === 'termlink') ent = assetById(p.target.assetId || (p.target.ctx || {}).assetId);
+            else if (p.kind === 'asset' || p.kind === 'termlink' || (p.kind === 'action' && p.target.assetId)) ent = assetById(p.target.assetId || (p.target.ctx || {}).assetId);
             if (!ent) return;
             ent.history = ent.history || [];
             ent.history.push({ at: new Date().toISOString(), from: 'Proposé', to: verdict === 'accepted' ? 'Validé' : 'Refusé', by: govPersonName(p.decidedBy), comment: `${p.label} — proposé par ${govPersonName(p.by)}${p.comment ? ' · ' + p.comment : ''}` });
@@ -136,7 +138,7 @@
         function propReject(id) { const c = prompt('Motif du refus (optionnel) :') || ''; propDecide(id, 'rejected', c); }
         function propWithdraw(id) { const p = govProposals().find(x => x.id === id); if (!p) return; const u = curUser(); if (u && p.by !== u.id && !propCanDecide(p)) return showError('Seul l\'auteur peut retirer sa proposition.'); state.governance.proposals = govProposals().filter(x => x.id !== id); persistAppState(); renderNav(); renderGovernance(); catRefreshFiche(); }
         function propAcceptAll(keyJson) { const key = JSON.parse(keyJson); govProposals().filter(x => x.status === 'pending' && propGroupKey(x) === key).forEach(x => { if (propCanDecide(x)) { x.status = 'accepted'; x.decidedAt = new Date().toISOString(); x.decidedBy = (curUser() || {}).id || ''; propApply(x); propTraceOn(x, 'accepted'); } }); persistAppState(); renderNav(); renderGovernance(); showSuccess('Propositions de la fiche validées.'); }
-        function propGroupKey(p) { const t = p.target || {}; if (p.kind === 'table') return 'tbl:' + ((state.tables[t.tableId] || {}).name || t.tableId); if (p.kind === 'dictcol' || p.kind === 'dict') return 'tbl:' + t.tn; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
+        function propGroupKey(p) { const t = p.target || {}; if (p.kind === 'action' && t.assetId) return 'asset:' + t.assetId; if (p.kind === 'table') return 'tbl:' + ((state.tables[t.tableId] || {}).name || t.tableId); if (p.kind === 'dictcol' || p.kind === 'dict') return 'tbl:' + t.tn; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
         function propGroupLabel(key) { const [k, id] = key.split(':'); const g = state.governance; if (k === 'tbl') return '▦ ' + id; if (k === 'bo') { const bo = (g.businessObjects || []).find(b => b.id === id); return bo ? '🏛️ ' + bo.name : id; } if (k === 'term') { const t2 = (g.glossary || []).find(x => x.id === id); return t2 ? '📖 ' + t2.term : id; } const a = assetById(id); return a ? (a.kind === 'process' ? '⚙️ ' : '🖥 ') + a.name : id; }
         function propOpenTarget(id) {
             const p = govProposals().find(x => x.id === id); if (!p) return;
@@ -160,7 +162,6 @@
                 if (!govCanProposeBo(bo)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
                 const r = (boAllAttrRows(bo) || []).find(x => x.el.id === elId); const before = r ? (r.el[f] || '') : '';
                 if (String(before) === String(v)) return;
-                if (f === 'name' || f === 'col') return govGuard(dom, 'Renommer ou rattacher un attribut', bo); // structure
                 return govPropose({ kind: 'attr', domain: dom, target: { boId, stId: stId || '', elId }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + (r ? r.el.name : elId) + ' » (' + bo.name + ')', before, after: v });
             }
             return _w_boAttrWrite(boId, stId, elId, f, v);
@@ -170,7 +171,7 @@
             const bo = (state.governance.businessObjects || []).find(x => x.id === id); const dom = boDomainOf(bo);
             if (!_govBypass && bo && govFeatureOn() && !govCanEditBo(bo)) {
                 if (!govCanProposeBo(bo)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
-                if (f === 'name' || f === 'globalOwner') return govGuard(dom, 'Renommer l\'objet ou changer son propriétaire', bo);
+                if (f === 'globalOwner' || f === 'ownerId' || f === 'domain') return govGuard(dom, f === 'domain' ? 'Le domaine métier' : 'Le propriétaire', bo);
                 const before = Array.isArray(bo[f]) ? bo[f].join(', ') : (bo[f] || ''); const after = Array.isArray(v) ? v.join(', ') : v;
                 if (String(before) === String(after)) return;
                 return govPropose({ kind: 'bo', domain: dom, target: { boId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de l\'objet « ' + bo.name + ' »', before, after });
@@ -184,31 +185,32 @@
             const t2 = (state.governance.glossary || []).find(x => x.id === id); const dom = t2 ? String(t2.domain || '').trim() : '';
             if (!_govBypass && t2 && govFeatureOn() && !govCanEdit(dom)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+                if (f === 'domain') return govGuard(dom, 'Le domaine métier d\'un terme');
                 if (String(t2[f] || '') === String(v)) return;
                 return govPropose({ kind: 'term', domain: dom, target: { termId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' du terme « ' + t2.term + ' »', before: t2[f] || '', after: v });
             }
             return _w_updateGlossaryTerm(id, f, v);
         };
-        // V10.1.1 — le domaine d'une SOURCE (thème de la table) suit le même circuit : un contributeur le propose.
+        // V10.2 — le domaine d'une SOURCE (thème de la table) est réservé au propriétaire, comme tout domaine.
         const _w_updateTableTheme = updateTableTheme;
         updateTableTheme = function (tId, v) {
             const t = state.tables[tId]; const dom = t ? String(t.theme || '').trim() : '';
             if (!_govBypass && t && govFeatureOn() && !govCanEdit(dom)) {
-                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
                 if (dom === String(v || '').trim()) return;
-                return govPropose({ kind: 'table', domain: dom, target: { tableId: tId }, field: 'domain', label: 'Domaine métier de la source « ' + t.name + ' »', before: dom, after: String(v || '').trim() });
+                return govGuard(dom, 'Le domaine métier d\'une source');
             }
             return _w_updateTableTheme(tId, v);
         };
         const _w_updateGovAsset = updateGovAsset;
         updateGovAsset = function (id, f, v) {
             const a = assetById(id); const dom = a ? String(a.domain || '').trim() : '';
-            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'criticality', 'domain'].includes(f)) {
+            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
-                if (String(a[f] || '') === String(v)) return;
-                return govPropose({ kind: 'asset', domain: dom, target: { assetId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + a.name + ' »', before: a[f] || '', after: v });
+                if (f === 'owner' || f === 'domain') return govGuard(dom, f === 'domain' ? 'Le domaine métier' : 'Le responsable');
+                const before = Array.isArray(a[f]) ? a[f].join(', ') : (a[f] || ''); const after = Array.isArray(v) ? v.join(', ') : v;
+                if (String(before) === String(after)) return;
+                return govPropose({ kind: 'asset', domain: dom, target: { assetId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + a.name + ' »', before, after, raw: v });
             }
-            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom)) return govGuard(dom, 'Modifier la structure d\'une application');
             return _w_updateGovAsset(id, f, v);
         };
         function termCtxDomain(tk, ctx) { if (tk === 'asset') { const a = assetById(ctx.assetId); return a ? String(a.domain || '').trim() : ''; } const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return boDomainOf(bo); }
@@ -235,11 +237,127 @@
             return _w_termTagRemove(kind, ctx, termId);
         };
         function govTermCtxLabel(kind, ctx) { const g = state.governance; if (kind === 'asset') { const a = assetById(ctx.assetId); return a ? a.name : '?'; } const bo = (g.businessObjects || []).find(x => x.id === ctx.boId); if (!bo) return '?'; if (kind === 'bo') return 'l\'objet « ' + bo.name + ' »'; const r = (boAllAttrRows(bo) || []).find(x => x.el.id === ctx.elId); return '« ' + (r ? r.el.name : '?') + ' » (' + bo.name + ')'; }
-        // Structure : réservée aux propriétaires
-        [['addBoElement', 'Ajouter un attribut'], ['boAddAttrAndSelect', 'Ajouter un attribut'], ['removeBoElement', 'Supprimer un attribut'], ['addBoMapping', 'Rattacher une colonne'], ['removeBoMapping', 'Détacher une colonne'], ['addBoStructure', 'Créer une facette'], ['removeBoStructure', 'Supprimer une facette'], ['addFacetElement', 'Ajouter un attribut de facette'], ['removeFacetElement', 'Supprimer un attribut de facette'], ['removeBusinessObject', 'Supprimer un objet'], ['boMoveEl', 'Réordonner les attributs']].forEach(([nm, what]) => {
+        // ---- V10.2 : STRUCTURE d'un objet proposée par un contributeur ----
+        // Principe « exécuter, comparer, annuler, proposer » : l'opération s'exécute réellement sur une copie
+        // de travail (elle peut lire l'écran), on calcule ce qui a changé sur l'objet, on remet l'objet
+        // dans son état d'avant et on enregistre la différence comme proposition. À la validation, la
+        // différence est réappliquée sur l'objet. Rien n'est jamais écrasé sans l'accord du propriétaire.
+        const BO_KEY_LABELS = { sources: 'sources', tables: 'tables', columns: 'colonnes', appIds: 'applications', elements: 'attributs', structure: 'facettes', sources: 'sources', references: 'références', hierarchies: 'hiérarchies', contextRules: 'règles de contexte', bizRules: 'règles métier', producedBy: 'produit par', consumedBy: 'consommé par', name: 'nom', status: 'statut', definition: 'définition', contributors: 'contributeurs', usedBy: 'utilisé par', history: 'historique' };
+        function govValNames(v) { if (!Array.isArray(v)) return null; return v.map(x => (x && typeof x === 'object') ? (x.name || x.table || x.term || x.label || x.id || '') : (typeof assetById === 'function' && assetById(x) ? assetById(x).name : String(x))).filter(Boolean); }
+        function govDescribeVal(v) { if (v == null || v === '') return 'vide'; if (Array.isArray(v)) return v.length + ' élément(s)'; if (typeof v === 'object') return 'renseigné'; return String(v); }
+        function govDescribeChange(before, after) {
+            if (after && after.__delta) {
+                if (after.replace) return govDescribeChange(before, after.replace);
+                const nm = x => (x && typeof x === 'object') ? (x.name || x.table || x.term || x.label || x.id || '') : (typeof assetById === 'function' && assetById(x) ? assetById(x).name : String(x));
+                const parts = []; if (after.add.length) parts.push('+ ' + after.add.map(nm).join(', ')); if (after.rem.length) parts.push('− ' + after.rem.map(k => { const o = (before || []).find(x => x && x[after.key] === k); return o ? nm(o) : String(k); }).join(', '));
+                if (after.mod && after.mod.length) parts.push('modifié : ' + after.mod.map(nm).join(', ')); if (after.order) parts.push('réordonné');
+                return parts.join(' · ') || 'inchangé';
+            }
+            if (Array.isArray(before) || Array.isArray(after)) return govDescribeChange(before, govDelta(before, after));
+            return govDescribeVal(after);
+        }
+        function govBoPatch(before, after) {
+            const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]); const patch = {};
+            keys.forEach(k => { if (k === 'history') return; const a = JSON.stringify(before[k] === undefined ? null : before[k]), b = JSON.stringify(after[k] === undefined ? null : after[k]); if (a !== b) patch[k] = after[k] === undefined ? null : after[k]; });
+            return patch;
+        }
+        // Différence « par élément » sur une liste (attributs, sources, facettes…) : à la validation on
+        // ajoute / retire / remplace seulement les éléments concernés, sans écraser ce qui a bougé entre-temps.
+        function govDeltaKey(arr) { const objs = (arr || []).filter(x => x && typeof x === 'object'); if (!objs.length) return null; if (objs.every(x => x.id)) return 'id'; if (objs.every(x => x.table)) return 'table'; if (objs.every(x => x.name)) return 'name'; return null; }
+        function govDelta(before, after) {
+            before = Array.isArray(before) ? before : []; after = Array.isArray(after) ? after : [];
+            const prim = [...before, ...after].every(x => !x || typeof x !== 'object');
+            if (prim) return { __delta: true, key: null, add: after.filter(x => !before.includes(x)), rem: before.filter(x => !after.includes(x)), mod: [], order: null };
+            const key = govDeltaKey([...before, ...after]); if (!key) return { __delta: true, key: null, replace: after };
+            const bk = new Map(before.map(x => [x[key], x])), ak = new Map(after.map(x => [x[key], x]));
+            const add = after.filter(x => !bk.has(x[key])), rem = before.filter(x => !ak.has(x[key])).map(x => x[key]);
+            const mod = after.filter(x => bk.has(x[key]) && JSON.stringify(bk.get(x[key])) !== JSON.stringify(x));
+            const ob = before.filter(x => ak.has(x[key])).map(x => x[key]), oa = after.filter(x => bk.has(x[key])).map(x => x[key]);
+            return { __delta: true, key, add, rem, mod, order: JSON.stringify(ob) !== JSON.stringify(oa) ? after.map(x => x[key]) : null };
+        }
+        function govApplyDelta(cur, d) {
+            if (!d || !d.__delta) return d; if (d.replace) return JSON.parse(JSON.stringify(d.replace));
+            let arr = Array.isArray(cur) ? cur.slice() : [];
+            if (!d.key) { arr = arr.filter(x => !d.rem.includes(x)); d.add.forEach(x => { if (!arr.includes(x)) arr.push(x); }); return arr; }
+            arr = arr.filter(x => !d.rem.includes(x[d.key]));
+            d.mod.forEach(m => { const i = arr.findIndex(x => x[d.key] === m[d.key]); if (i >= 0) arr[i] = JSON.parse(JSON.stringify(m)); });
+            d.add.forEach(m => { if (!arr.some(x => x[d.key] === m[d.key])) arr.push(JSON.parse(JSON.stringify(m))); });
+            if (d.order) { const pos = new Map(d.order.map((k, i) => [k, i])); arr.sort((a, b) => (pos.has(a[d.key]) ? pos.get(a[d.key]) : 1e9) - (pos.has(b[d.key]) ? pos.get(b[d.key]) : 1e9)); }
+            return arr;
+        }
+        function govPatchToDeltas(snap, patch) { Object.keys(patch).forEach(k => { if (Array.isArray(patch[k]) || Array.isArray(snap[k])) patch[k] = govDelta(snap[k], patch[k]); }); return patch; }
+        function govApplyPatch(obj, patch) { Object.keys(patch || {}).forEach(k => { const v = patch[k]; if (v === null) delete obj[k]; else if (v && v.__delta) obj[k] = govApplyDelta(obj[k], v); else obj[k] = JSON.parse(JSON.stringify(v)); }); }
+        function govWrapBoAction(nm, what, boIdIndex, onlyIf) {
             const orig = window[nm]; if (typeof orig !== 'function') return;
-            window[nm] = function (boId) { const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!_govBypass && govFeatureOn() && bo && !govGuard(boDomainOf(bo), what, bo)) return; return orig.apply(this, arguments); };
-        });
+            window[nm] = function () {
+                const args = Array.prototype.slice.call(arguments); const boId = args[boIdIndex || 0];
+                const list = state.governance.businessObjects || []; const bo = list.find(x => x.id === boId);
+                if (_govBypass || !govFeatureOn() || !bo || govCanEditBo(bo) || (onlyIf && !onlyIf(args))) return orig.apply(this, arguments);
+                const dom = boDomainOf(bo);
+                if (!govCanProposeBo(bo)) { showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.'); return; }
+                const snap = JSON.parse(JSON.stringify(bo)); const idx = list.indexOf(bo);
+                _govBypass = true; let r; try { r = orig.apply(this, arguments); } finally { _govBypass = false; }
+                const now = (state.governance.businessObjects || []).find(x => x.id === boId);
+                let patch = null, del = false;
+                if (!now) del = true;
+                else { patch = govBoPatch(snap, now); ['domain', 'globalOwner', 'ownerId'].forEach(k => delete patch[k]); govPatchToDeltas(snap, patch); }
+                // remise à l'état d'avant
+                if (del) state.governance.businessObjects.splice(Math.min(idx, state.governance.businessObjects.length), 0, snap);
+                else state.governance.businessObjects[state.governance.businessObjects.indexOf(now)] = snap;
+                persistAppState();
+                if (!del && !Object.keys(patch).length) { renderGovernance(); return r; }
+                const before = del ? 'objet présent' : Object.keys(patch).map(k => (BO_KEY_LABELS[k] || k) + ' : ' + govDescribeVal(snap[k])).join(' ; ');
+                const after = del ? 'objet supprimé' : Object.keys(patch).map(k => (BO_KEY_LABELS[k] || k) + ' : ' + govDescribeChange(snap[k], patch[k])).join(' ; ');
+                govPropose({ kind: 'action', domain: dom, target: { boId, fn: nm, sig: del ? 'del' : JSON.stringify(patch) }, field: nm, label: what + ' — objet « ' + snap.name + ' »', before, after, patch, del });
+                return r;
+            };
+        }
+        function propApplyAction(p) {
+            if (p.target.assetId) { const a2 = assetById(p.target.assetId); if (!a2) return; if (Array.isArray(p.args) && _govAssetOrig[p.target.fn]) { _govAssetOrig[p.target.fn].apply(null, p.args); return; } govApplyPatch(a2, p.patch); persistAppState(); return; }
+            const list = state.governance.businessObjects || []; const bo = list.find(x => x.id === p.target.boId); if (!bo) return;
+            if (p.del) { removeBusinessObject(bo.id); return; }
+            govApplyPatch(bo, p.patch);
+            persistAppState();
+        }
+        [['addBoElement', 'Ajouter un attribut'], ['boAddAttrAndSelect', 'Ajouter un attribut'], ['removeBoElement', 'Supprimer un attribut'], ['updateBoElement', 'Modifier un attribut'], ['boMoveEl', 'Réordonner les attributs'],
+         ['addBoMapping', 'Rattacher une colonne'], ['removeBoMapping', 'Détacher une colonne'],
+         ['addBoStructure', 'Créer une facette'], ['boAddFacetAndSelect', 'Créer une facette'], ['removeBoStructure', 'Supprimer une facette'], ['updateBoFacet', 'Modifier une facette'], ['addFacetElement', 'Ajouter un attribut de facette'], ['removeFacetElement', 'Supprimer un attribut de facette'], ['updateFacetElement', 'Modifier un attribut de facette'], ['addFacetScope', 'Ajouter un périmètre de facette'], ['removeFacetScope', 'Retirer un périmètre de facette'], ['addFacetApplies', 'Ajouter une application de facette'], ['removeFacetApplies', 'Retirer une application de facette'],
+         ['addBoReference', 'Ajouter une référence'], ['removeBoReference', 'Retirer une référence'],
+         ['addBoHierarchy', 'Ajouter une hiérarchie'], ['removeBoHierarchy', 'Supprimer une hiérarchie'], ['updateBoHier', 'Modifier une hiérarchie'], ['addBoHierLevel', 'Ajouter un niveau de hiérarchie'], ['removeBoHierLevel', 'Retirer un niveau de hiérarchie'], ['toggleBoHierLevelParent', 'Modifier un niveau de hiérarchie'],
+         ['updateBoContext', 'Changer l\'attribut de contexte'], ['addBoContextRule', 'Ajouter une règle de contexte'], ['updateBoContextRule', 'Modifier une règle de contexte'], ['removeBoContextRule', 'Supprimer une règle de contexte'],
+         ['addBoSource', 'Ajouter une source'], ['removeBoSource', 'Retirer une source'], ['updateBoSourceRole', 'Changer le rôle d\'une source'], ['boSrcAddFilter', 'Ajouter un filtre de source'], ['boSrcDelFilter', 'Retirer un filtre de source'],
+         ['updateBoApp', 'Changer l\'application'], ['wfSetBoStatus', 'Changer le statut'], ['removeBusinessObject', 'Supprimer l\'objet']].forEach(([nm, what]) => govWrapBoAction(nm, what, 0));
+        govWrapBoAction('toggleAssetLink', 'Modifier les applications de l\'objet', 1, args => args[0] === 'bo');
+        // Même mécanisme pour la structure d'une APPLICATION / d'un PROCESSUS (sources, colonnes, applications liées).
+        const _govAssetOrig = {};
+        function govWrapAssetAction(nm, what, idIndex) {
+            const orig = window[nm]; if (typeof orig !== 'function') return; _govAssetOrig[nm] = orig;
+            window[nm] = function () {
+                const args = Array.prototype.slice.call(arguments); const id = args[idIndex || 0];
+                const list = state.governance.assets || []; const a2 = list.find(x => x.id === id); const dom = a2 ? String(a2.domain || '').trim() : '';
+                if (_govBypass || !govFeatureOn() || !a2 || govCanEdit(dom)) return orig.apply(this, arguments);
+                if (!govCanPropose(dom)) { showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.'); return; }
+                // ces opérations touchent aussi le dictionnaire, les autres applications et les objets : on
+                // photographie tout ce qui peut bouger, on exécute, on compare l'application, on restaure tout.
+                const g = state.governance; const snapAll = JSON.stringify({ assets: g.assets || [], dictionary: g.dictionary || {}, businessObjects: g.businessObjects || [] });
+                const snap = JSON.parse(JSON.stringify(a2));
+                _govBypass = true; let r; try { r = orig.apply(this, arguments); } finally { _govBypass = false; }
+                const now = (g.assets || []).find(x => x.id === id); const patch = now ? govBoPatch(snap, now) : {}; ['domain', 'owner'].forEach(k => delete patch[k]); govPatchToDeltas(snap, patch);
+                const back = JSON.parse(snapAll); g.assets = back.assets; g.dictionary = back.dictionary; g.businessObjects = back.businessObjects; persistAppState();
+                if (!Object.keys(patch).length) { renderGovernance(); return r; }
+                const before = Object.keys(patch).map(k => (BO_KEY_LABELS[k] || k) + ' : ' + govDescribeVal(snap[k])).join(' ; ');
+                const after = Object.keys(patch).map(k => (BO_KEY_LABELS[k] || k) + ' : ' + govDescribeChange(snap[k], patch[k])).join(' ; ');
+                // à la validation : on rejoue l'opération (mêmes effets de bord), sauf si elle lit l'écran (patch)
+                govPropose({ kind: 'action', domain: dom, target: { assetId: id, fn: nm, sig: JSON.stringify(patch) }, field: nm, label: what + ' — « ' + snap.name + ' »', before, after, patch, args: nm === 'addAssetCol' ? null : args });
+                return r;
+            };
+        }
+        [['toggleAppSource', 'Modifier les sources de l\'application'], ['toggleAssetTable', 'Modifier les tables'], ['addAssetCol', 'Ajouter une colonne'], ['removeAssetCol', 'Retirer une colonne'], ['assetAppLink', 'Modifier les applications du processus']].forEach(([nm, what]) => govWrapAssetAction(nm, what, 0));
+        // Propositions de structure en attente sur un objet (affichées dans sa fiche).
+        function propActionsHtml(boId, assetId) {
+            const ps = govProposals().filter(x => x.status === 'pending' && x.kind === 'action' && (assetId ? x.target.assetId === assetId : x.target.boId === boId)); if (!ps.length) return '';
+            return '<div class="mt-3 border border-amber-200 bg-amber-50/60 rounded-xl p-3"><div class="text-[10px] uppercase font-bold text-amber-800 mb-1.5">⏳ Propositions de structure en attente (' + ps.length + ')</div>' + ps.map(p => '<div class="prop-badge" title="Proposé le ' + new Date(p.at).toLocaleString('fr-FR') + '"><span class="who">' + escapeHTML(govPersonName(p.by)) + ' — ' + escapeHTML(p.label.replace(/ — (objet )?«.*$/, '')) + ' :</span> <span class="val">' + escapeHTML(p.after) + '</span>' + (propCanDecide(p) ? '<span class="acts"><button data-ro="keep" onclick="propAccept(\'' + p.id + '\')" class="ok" title="Valider et appliquer">✓ Valider</button><button data-ro="keep" onclick="propReject(\'' + p.id + '\')" class="ko" title="Refuser">✕</button></span>' : ((curUser() || {}).id === p.by ? '<span class="acts"><button data-ro="keep" onclick="propWithdraw(\'' + p.id + '\')" class="ko">retirer</button></span>' : '')) + '</div>').join('') + '</div>';
+        }
         // Dictionnaire par table technique : le domaine d'une source est son « thème ».
         function tableDomainOf(tn) { const t = tableByName(tn); return t ? String(t.theme || '').trim() : ''; }
         const _w_updateDictColField = updateDictColField;
@@ -256,8 +374,9 @@
         const _w_updateDictField = updateDictField;
         updateDictField = function (tn, f, v) {
             const dom = tableDomainOf(tn);
-            if (!_govBypass && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'steward', 'sensitivity'].includes(f)) {
+            if (!_govBypass && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'steward', 'sensitivity', 'sourceSystem', 'status'].includes(f)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+                if (f === 'owner') return govGuard(dom, 'Le propriétaire d\'une source');
                 const cur = ensureDictEntry(tn)[f] || ''; if (String(cur) === String(v)) return;
                 return govPropose({ kind: 'dict', domain: dom, target: { tn }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de la source ' + tn, before: cur, after: v });
             }
@@ -290,7 +409,7 @@
         }
         function renderGovPeople() {
             const doms = govDomains(); const u = curUser();
-            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes »). Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global ») valide aussi cet objet, quel que soit son rôle sur le domaine. Un contributeur qui change le <b>domaine</b> d'un objet, d'un terme, d'une source ou d'une application en fait une proposition, validée par le propriétaire du domaine actuel. Toutes les décisions s'appliquent à vos données et sont tracées.</p>
+            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes »). Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global ») valide aussi cet objet, quel que soit son rôle sur le domaine. Le contributeur peut proposer <b>tout</b> (définitions, attributs, colonnes, facettes, sources, applications, règles, termes…) ; seuls le <b>propriétaire</b> et le <b>domaine métier</b> d'un élément lui sont fermés (🔒). Toutes les décisions s'appliquent à vos données et sont tracées.</p>
                 <div class="flex gap-2"><button onclick="govDemoPeople()" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded-lg font-bold hover:bg-slate-50" title="Crée quatre personnes d'exemple (propriétaire, contributeur, lectrice, administrateur) sur tous les domaines, sans modifier vos données">Exemple de rôles</button><button onclick="govAddPerson()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">+ Personne</button></div></div>`;
             html += `<div class="flex items-center gap-2 flex-wrap mb-4 bg-white border border-slate-200 rounded-xl p-3"><span class="text-[10px] uppercase font-bold text-slate-500">Domaines métier</span>${doms.length ? doms.map(d => { const ut = govDomainUsageText(govDomainUsage(d)); return `<span class="text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 font-bold inline-flex items-center gap-1.5" title="${escapeHTML(ut || 'non utilisé')}">${escapeHTML(d)}${ut ? `<span class="font-normal opacity-70">· ${escapeHTML(ut)}</span>` : ''}<button onclick="govRemoveDomain('${escapeHTML(d)}')" class="opacity-60 hover:opacity-100 hover:text-red-600" title="Supprimer ce domaine partout">✕</button></span>`; }).join('') : '<span class="text-xs text-slate-400 italic">aucun — ajoutez-en un, ou renseignez le domaine des sources, objets, applications</span>'}<input type="text" id="govNewDom" placeholder="＋ nouveau domaine…" class="border border-dashed border-emerald-300 rounded-full px-3 py-1 text-xs w-44" onkeydown="if(event.key==='Enter'){govAddDomain(this.value); this.value='';}"><button onclick="govAddDomain(el('govNewDom').value); el('govNewDom').value=''" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full font-bold">Ajouter</button></div>`;
             if (!govPeople().length) return html + emptyStateHtml('👥', 'Aucune personne', 'Créez les personnes de votre organisation et affectez-leur un rôle par domaine ; le propriétaire nommé sur un objet valide cet objet. Un exemple de rôles peut aussi être créé pour essayer le circuit.', '+ Personne', 'govAddPerson()');
@@ -345,4 +464,5 @@
             return html;
         }
         // Sélecteur de domaine réutilisable (objet, terme)
-        function govDomainSelectHtml(cur, onch, id) { const doms = govDomains(); return `<select ${id ? 'id="' + id + '"' : ''} onchange="${onch}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white" title="Domaine métier — détermine qui valide"><option value="">— domaine —</option>${doms.map(d => `<option ${d === cur ? 'selected' : ''}>${escapeHTML(d)}</option>`).join('')}${cur && !doms.includes(cur) ? `<option selected>${escapeHTML(cur)}</option>` : ''}</select>`; }
+        function govLockedHint() { return '<div class="hint">🔒 réservé au propriétaire</div>'; }
+        function govDomainSelectHtml(cur, onch, id, locked) { const doms = govDomains(); return `<select ${id ? 'id="' + id + '"' : ''} ${locked ? 'disabled' : ''} onchange="${onch}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white ${locked ? 'opacity-60 cursor-not-allowed' : ''}" title="${locked ? 'Réservé au propriétaire du domaine' : 'Domaine métier — détermine qui valide'}"><option value="">— domaine —</option>${doms.map(d => `<option ${d === cur ? 'selected' : ''}>${escapeHTML(d)}</option>`).join('')}${cur && !doms.includes(cur) ? `<option selected>${escapeHTML(cur)}</option>` : ''}</select>`; }
