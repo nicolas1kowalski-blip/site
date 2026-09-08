@@ -1,10 +1,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '10.2.1';
+        // La cible V11 (fichier séparé, voir manifest-v11.json) fournit sa propre version et ses entrées de journal.
+        const APP_VERSION = (typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.2';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            ...((typeof V11_CHANGELOG !== 'undefined') ? V11_CHANGELOG : []),
+            { v: '10.2.2', d: '2026-09-08', t: 'Chaîne de construction : deuxième cible StudioDataV11.html', items: [
+                'Aucun changement fonctionnel. Les sources peuvent désormais être assemblées en deux fichiers : StudioDataV7.html (inchangé) et StudioDataV11.html (couche ergonomique V11).'] },
             { v: '10.2.1', d: '2026-09-08', t: 'Ce qu\'on ne peut pas modifier est grisé', items: [
                 'Quand le profil actif n\'a ni rôle de propriétaire ni rôle de contributeur sur un élément, sa fiche devient <b>inerte</b> : bandeau « 🔒 Lecture seule », champs, listes et boutons grisés et désactivés. Fiche objet (et son dictionnaire par objet), fiche terme, fiche application ou processus, table du dictionnaire.',
                 'Pour un contributeur, les champs réservés (<b>propriétaire</b>, <b>domaine métier</b>) sont grisés de la même façon, avec l\'indication « réservé au propriétaire », au lieu d\'un message après coup.'] },

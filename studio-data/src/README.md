@@ -104,3 +104,19 @@ le résultat est strictement équivalent à l'ancien fichier monolithique.
    constantes et le code exécuté au chargement doivent précéder leurs premiers usages).
 3. Mettre à jour `APP_VERSION` et `APP_CHANGELOG` dans `1A-noyau-version-changelog.js`.
 4. `node studio-data/build.mjs`, puis lancer les tests.
+
+
+## Cible V11 (fichier séparé)
+
+`manifest-v11.json` assemble **StudioDataV11.html** : les mêmes sources que la V7, plus une couche ergonomique qui se greffe sur les écrans sans les réécrire :
+
+| Fichier | Rôle |
+|---|---|
+| `0V-v11-version.js` | version `V11_VERSION` et journal `V11_CHANGELOG` (repris par `1A-noyau-version-changelog.js`) |
+| `0V-v11-styles.css` | styles des composants V11 (fiches lecture, palette, accueil, plein écran, aide, densité, présentation, impression) |
+| `92-v11-noyau.js` | préférences, notifications, enregistré / annuler, raccourcis, aide, familles de menu, historique de navigation, fil d'Ariane, plein écran, tri des tableaux, vocabulaire |
+| `93-v11-fiches-lecture.js` | fiches en lecture (objet, terme, application, source), édition en place, duplication, impression |
+| `94-v11-recherche-accueil.js` | recherche globale Ctrl+K, accueil, jeu d'exemple, visite guidée |
+| `95-v11-saisie.js` | assistant de création d'objet, actions groupées, glisser-déposer de colonnes |
+
+Construction : `node studio-data/build.mjs --target v11` (ou `--all` pour les deux fichiers, `--check` pour vérifier).
