@@ -2,14 +2,17 @@
         // Objets, termes, applications et sources s'ouvrent d'abord comme une carte propre, sans
         // champ de saisie : même en-tête, mêmes sections, mêmes actions pour les quatre types.
         // « Modifier » ouvre le formulaire V7 complet ; un clic sur une valeur la modifie en place.
-        function v11Editing(key) { const v = v11State.edit[key]; return v === undefined ? !v11Prefs.readDefault : !!v; }
+        function v11Editing(key) { if (typeof govIsReadOnly === 'function' && govIsReadOnly()) return false; const v = v11State.edit[key]; return v === undefined ? !v11Prefs.readDefault : !!v; }
         function v11ToggleEdit(kind, id) { const k = kind + ':' + id; v11SetEditing(k, !v11Editing(k)); }
+        // 7. « Modifier dans l'objet » (fiche du catalogue) ouvre bien le formulaire.
+        if (typeof catEditInObject === 'function') { const _v11_cat = catEditInObject; catEditInObject = function () { const e2 = _catFicheCtx; if (e2 && e2.bo) v11State.edit['bo:' + e2.bo] = true; return _v11_cat.apply(this, arguments); }; }
         function v11GoBo(id, elId, stId) { govState.selectedBoId = id; govState.boSel = elId ? { kind: 'attr', stId: stId || '', elId } : null; if (elId) { govState.boTab = 'structure'; govState.structView = 'fiche'; } openGovTab('objects'); }
         function v11GoAsset(id) { openGovTab('assets'); setTimeout(() => { const n = el('v11-as-' + id) || document.querySelector(`input[onchange^="updateGovAsset('${id}','name'"]`); if (n) { (n.closest('.rounded-xl') || n).scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 50); }
         function v11GoTable(tn) { govState.dictMode = 'table'; govState.dictTable = tn; openGovTab('dictionary'); }
         function v11EditAttr(boId, stId, elId) { v11State.edit['bo:' + boId] = true; govState.selectedBoId = boId; govState.boTab = 'structure'; govState.structView = 'fiche'; govState.boSel = { kind: 'attr', stId: stId || '', elId }; openGovTab('objects'); }
         // Droits : peut-on modifier (ou proposer) cette fiche ? ce champ réservé ?
         function v11Can(kind, ent) {
+            if (typeof govIsReadOnly === 'function' && govIsReadOnly()) return { any: false, reserved: false };
             if (typeof govFeatureOn !== 'function' || !govFeatureOn()) return { any: true, reserved: true };
             if (kind === 'bo') return { any: govCanEditBo(ent) || govCanProposeBo(ent), reserved: govCanEditBo(ent) };
             const dom = kind === 'table' ? String((tableByName(ent.name) || {}).theme || '').trim() : String(ent.domain || '').trim();
@@ -24,7 +27,8 @@
             </div>`;
         }
         function v11Acts(kind, id, ent, extra) {
-            const can = v11Can(kind, ent); const key = kind + ':' + id;
+            const can = v11Can(kind, ent); const key = kind + ':' + id; const ro = typeof govIsReadOnly === 'function' && govIsReadOnly();
+            if (ro) return [...(extra || []).filter(x => !/v11BulkOpen/.test(x)), `<button class="v11-btn" onclick="v11Fs('#v11-${kind}-${id}', '${escapeHTML(String(ent.name || ent.term || '')).replace(/'/g, '&#39;')}')" title="Plein écran (F)">⛶</button>`, `<button class="v11-btn" onclick="v11Print('${kind}','${id}')" title="Imprimer ou enregistrer en PDF">🖨</button>`];
             return [can.any ? `<button class="v11-btn pri" onclick="v11ToggleEdit('${kind}','${id}')" title="Ouvrir le formulaire complet (E)">✎ Modifier</button>` : '<span class="text-[11px] text-slate-500">🔒 lecture seule</span>',
                 ...(extra || []),
                 `<button class="v11-btn" onclick="v11Duplicate('${kind}','${id}')" title="Créer une copie">⧉ Dupliquer</button>`,
@@ -33,7 +37,7 @@
         }
         // ---- Valeur modifiable en place ----
         function v11IE(kind, id, field, value, opts) {
-            opts = opts || {}; const ro = !!opts.ro; const empty = value === undefined || value === null || String(value).trim() === '';
+            opts = opts || {}; const ro = !!opts.ro || (typeof govIsReadOnly === 'function' && govIsReadOnly()); const empty = value === undefined || value === null || String(value).trim() === '';
             return `<div class="v11-val v11-ie ${ro ? 'ro' : ''} ${empty ? 'empty' : ''}" ${ro ? '' : `onclick="v11InlineEdit(this)"`} data-kind="${kind}" data-id="${escapeHTML(id)}" data-field="${field}" data-type="${opts.type || 'text'}" ${opts.options ? `data-options="${escapeHTML(JSON.stringify(opts.options))}"` : ''} title="${ro ? (opts.roTitle || 'Réservé au propriétaire') : 'Cliquer pour modifier · Entrée valide · Échap annule'}">${empty ? escapeHTML(opts.placeholder || '—') : escapeHTML(String(value))}</div>`;
         }
         function v11InlineEdit(node) {
@@ -58,7 +62,7 @@
             else if (kind === 'table') { if (field === 'theme') { const t = tableByName(id); if (t) updateTableTheme(t.id, v); } else updateDictField(id, field, v); }
             renderGovernance();
         }
-        function v11EditBar(kind, id, name, hint) { return `<div class="v11-editbar" data-ro="keep"><span>✎ <b>Modification</b> de ${escapeHTML(name)}${hint ? ' · ' + escapeHTML(hint) : ''}</span><span class="flex-grow"></span><button class="v11-btn sm" onclick="v11Fs('#boDetail','Attributs')" title="Plein écran des attributs">⛶ Attributs</button><button class="v11-btn pri sm" onclick="v11ToggleEdit('${kind}','${id}')" title="Revenir à la fiche en lecture (E)">✓ Terminer</button></div>`; }
+        function v11EditBar(kind, id, name, hint) { return `<div class="v11-editbar" data-ro="keep"><span>✎ <b>Modification</b> ${escapeHTML(name)}${hint ? ' · ' + escapeHTML(hint) : ''}</span><span class="flex-grow"></span><button class="v11-btn sm" onclick="v11Fs('#boDetail','Attributs')" title="Plein écran des attributs">⛶ Attributs</button><button class="v11-btn pri sm" onclick="v11ToggleEdit('${kind}','${id}')" title="Revenir à la fiche en lecture (E)">✓ Terminer</button></div>`; }
         function v11Chip(label, onclick, k, title) { return `<span class="v11-chip" ${onclick ? `onclick="${onclick}"` : ''} title="${escapeHTML(title || '')}">${k ? `<span class="k">${escapeHTML(k)}</span>` : ''}${escapeHTML(label)}</span>`; }
         function v11Empty(t) { return `<div class="v11-val empty">${escapeHTML(t || '—')}</div>`; }
         function v11Dash(v) { return (v === undefined || v === null || String(v).trim() === '') ? '<span class="dim">—</span>' : escapeHTML(String(v)); }
@@ -80,7 +84,7 @@
             return v11Fiche({
                 id: 'v11-bo-' + bo.id, icon: '🏛️', kindLabel: 'Objet métier', title: bo.name,
                 meta: [{ k: 'Statut', v: bo.status || 'Brouillon' }, { k: 'Domaine', v: bo.domain || '' }, { k: 'Propriétaire', v: bo.globalOwner || '' }, { k: 'Complétude', v: comp.score + ' %' }, { k: '', v: rows.length + ' attribut(s) · ' + (bo.sources || []).length + ' source(s)' }],
-                acts: v11Acts('bo', bo.id, bo, [`<button class="v11-btn" onclick="v11State.edit['bo:${bo.id}']=true; govState.boTab='usage'; renderGovernance(); openBoLineage('${bo.id}')" title="Applications → objet → usages">🕸 Lineage</button>`, `<button class="v11-btn" onclick="openBoAudit('${bo.id}')" title="Audit global de l'objet">🔎 Audit</button>`, can.any ? `<button class="v11-btn" onclick="v11BulkOpen('${bo.id}')" title="Modifier plusieurs attributs d'un coup">☑ Actions groupées</button>` : '']),
+                acts: v11Acts('bo', bo.id, bo, [`<button class="v11-btn ${v11State.lineage[bo.id] ? 'pri' : ''}" onclick="v11State.lineage['${bo.id}']=!v11State.lineage['${bo.id}']; renderGovernance()" title="Applications → objet → usages, dans la fiche">🕸 Lineage</button>`, `<button class="v11-btn" onclick="v11State.edit['bo:${bo.id}']=true; openBoAudit('${bo.id}')" title="Audit global de l'objet">🔎 Audit</button>`, can.any ? `<button class="v11-btn" onclick="v11BulkOpen('${bo.id}')" title="Modifier plusieurs attributs d'un coup">☑ Actions groupées</button>` : '']),
                 sections: [
                     { t: 'Définition', cls: 'half', html: v11IE('bo', bo.id, 'definition', bo.definition, { type: 'multi', ro: !can.any, placeholder: 'Aucune définition — cliquez pour l\'écrire.' }) },
                     { t: 'Propriétaire', cls: 'third', html: v11IE('bo', bo.id, 'globalOwner', bo.globalOwner, { ro: !can.reserved, placeholder: 'Aucun propriétaire' }) + (bo.contributors && bo.contributors.length ? `<div class="text-[11px] text-slate-500 mt-1">Contributeurs : ${escapeHTML(bo.contributors.join(', '))}</div>` : '') },
@@ -90,6 +94,7 @@
                     { t: 'Applications', n: (bo.producedBy || []).length + (bo.consumedBy || []).length, cls: 'half', html: (prod || cons) ? `<div class="v11-chips">${prod}${cons}</div>` : v11Empty('Aucune application déclarée') },
                     { t: 'Termes du glossaire', n: terms.length, cls: 'half', html: terms.length ? `<div class="v11-chips">${terms.map(t => v11Chip(t.term, `termTagOpen('${t.id}')`)).join('')}</div>` : v11Empty('Aucun terme') },
                     props.length ? { t: 'Propositions en attente', n: props.length, html: `<div class="v11-chips">${props.map(p => `<span class="v11-chip" onclick="openGovTab('review')" title="${escapeHTML(p.after || '')}">⏳ ${escapeHTML(p.label)}</span>`).join('')}</div>` } : null,
+                    v11State.lineage[bo.id] ? { t: 'Lineage', html: '<div id="attrLineageBox"></div>' } : null,
                     { t: 'Attributs', n: rows.length, html: attrTbl },
                 ]
             });
@@ -97,7 +102,7 @@
         const _v11_renderBoDetail = renderBoDetail;
         renderBoDetail = function (bo, names) {
             if (!v11Editing('bo:' + bo.id)) return v11BoRead(bo);
-            return v11EditBar('bo', bo.id, 'l\'objet « ' + bo.name + ' »', typeof govFeatureOn === 'function' && govFeatureOn() && !govCanEditBo(bo) && govCanProposeBo(bo) ? 'vos modifications seront des propositions' : '') + _v11_renderBoDetail.apply(this, arguments);
+            return v11EditBar('bo', bo.id, 'de l\'objet « ' + bo.name + ' »', typeof govFeatureOn === 'function' && govFeatureOn() && !govCanEditBo(bo) && govCanProposeBo(bo) ? 'vos modifications seront des propositions' : '') + _v11_renderBoDetail.apply(this, arguments);
         };
         // ---- Terme ----
         function v11TermRead(g) {
@@ -170,16 +175,36 @@
         function v11ApplyReadMode() {
             if (currentTab !== 9) return;
             const c = el('govContent'); if (!c) return;
+            if (govState.tab === 'objects' && govState.selectedBoId && v11State.lineage[govState.selectedBoId] && !v11Editing('bo:' + govState.selectedBoId) && el('attrLineageBox') && !el('attrLineageBox').querySelector('svg')) { try { openBoLineage(govState.selectedBoId); } catch (e) {} }
+            if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) v11ReadifyDictBo(c);
             if (govState.tab === 'glossary') {
                 (state.governance.glossary || []).forEach(g => { const card = el('gl-card-' + g.id); if (!card) return; if (v11Editing('term:' + g.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('term', g.id, 'du terme « ' + g.term + ' »')); return; } card.className = 'mb-3'; card.removeAttribute('data-gov-lock'); card.innerHTML = v11TermRead(g); });
             } else if (govState.tab === 'assets') {
-                (state.governance.assets || []).forEach(a => { const inp = c.querySelector(`input[onchange^="updateGovAsset('${a.id}','name'"]`); if (!inp) return; const card = inp.closest('.rounded-xl'); if (!card) return; if (v11Editing('asset:' + a.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('asset', a.id, 'de « ' + a.name + ' »')); return; } card.className = 'mb-3'; card.id = 'v11-as-' + a.id; card.removeAttribute('data-gov-lock'); card.innerHTML = v11AssetRead(a); });
+                (state.governance.assets || []).forEach(a => { const inp = c.querySelector(`input[onchange^="updateGovAsset('${a.id}','name'"]`); if (!inp) return; const card = inp.closest('.rounded-xl'); if (!card) return; if (v11Editing('asset:' + a.id)) { if (!card.querySelector('.v11-editbar')) card.insertAdjacentHTML('afterbegin', v11EditBar('asset', a.id, (a.kind === 'process' ? 'du processus « ' : 'de l\'application « ') + a.name + ' »')); return; } card.className = 'mb-3'; card.id = 'v11-as-' + a.id; card.removeAttribute('data-gov-lock'); card.innerHTML = v11AssetRead(a); });
             } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) {
                 const sel = el('dict-domain'); const wrap = sel ? sel.closest('#govContent > div') : null; if (!wrap) return;
                 const tn = govState.dictTable;
                 if (v11Editing('table:' + tn)) { if (!wrap.querySelector('.v11-editbar')) wrap.insertAdjacentHTML('afterbegin', `<div class="v11-editbar" data-ro="keep"><span>✎ <b>Modification</b> de la source « ${escapeHTML(tn)} »</span><span class="flex-grow"></span><button class="v11-btn pri sm" onclick="v11State.edit['table:${escapeHTML(tn).replace(/'/g, '&#39;')}']=false; renderGovernance()">✓ Terminer</button></div>`); return; }
                 wrap.removeAttribute('data-gov-lock'); wrap.innerHTML = v11TableRead(tn);
             }
+        }
+        // Lecture générique d'un formulaire V7 : chaque champ devient sa valeur (ou « — »), les boutons
+        // d'écriture disparaissent ; une barre propose « Modifier ». Utilisé pour le dictionnaire par objet.
+        function v11Readify(root, key, label, canEdit) {
+            root.querySelectorAll('input:not([type=checkbox]):not([type=radio]), select, textarea').forEach(n => {
+                if (n.closest('[data-ro="keep"]')) return;
+                let v = n.tagName === 'SELECT' ? ((n.options[n.selectedIndex] || {}).textContent || '').trim() : String(n.value || '').trim();
+                if (/^[—(]/.test(v)) v = '';
+                const sp = document.createElement('span'); sp.className = 'v11-val' + (v ? '' : ' empty'); sp.textContent = v || '—'; n.replaceWith(sp);
+            });
+            root.querySelectorAll('button, input[type=checkbox]').forEach(n => { if (!n.closest('[data-ro="keep"]')) n.remove(); });
+            root.insertAdjacentHTML('afterbegin', `<div class="v11-editbar" data-ro="keep"><span>👁 <b>Lecture</b> ${escapeHTML(label)}</span><span class="flex-grow"></span>${canEdit ? `<button class="v11-btn pri sm" onclick="v11State.edit['${key}']=true; renderGovernance()">✎ Modifier</button>` : '<span class="text-[11px] text-slate-500">🔒 lecture seule</span>'}</div>`);
+        }
+        function v11ReadifyDictBo(c) {
+            const bo = (state.governance.businessObjects || []).find(b => b.id === govState.dictBoId); if (!bo) return;
+            const key = 'dictbo:' + bo.id; const sel = c.querySelector('select[onchange^="govState.dictBoId"]'); const wrap = sel ? sel.closest('#govContent > div') : null; if (!wrap) return;
+            if (v11Editing(key)) { if (!wrap.querySelector('.v11-editbar')) wrap.insertAdjacentHTML('afterbegin', v11EditBar('dictbo', bo.id, 'du dictionnaire de « ' + bo.name + ' »')); return; }
+            v11Readify(wrap, key, 'du dictionnaire de « ' + bo.name + ' »', v11Can('bo', bo).any);
         }
         // ---- Dupliquer ----
         function v11Duplicate(kind, id) {

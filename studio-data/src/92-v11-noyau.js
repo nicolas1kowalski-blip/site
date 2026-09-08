@@ -5,7 +5,7 @@
         //   • enregistrement visible + annulation (Ctrl+Z), raccourcis clavier, aide « ? »
         //   • menu en trois familles, accueil, historique de navigation, fil d'Ariane cliquable
         //   • plein écran des fiches / tableaux / graphes, tri des tableaux, vocabulaire, infobulles
-        const v11State = { edit: {}, fs: null, hist: { stack: [], i: -1, nav: false }, undo: [], lastGov: null, toasts: [], toastOn: null, prevCollapsed: null, tour: null };
+        const v11State = { edit: {}, lineage: {}, fs: null, hist: { stack: [], i: -1, nav: false }, undo: [], lastGov: null, toasts: [], toastOn: null, prevCollapsed: null, tour: null };
         const V11_PREF_DEFAULT = { density: 'comfy', autoCollapse: true, readDefault: true, present: false, tourDone: false, screens: {} };
         let v11Prefs = Object.assign({}, V11_PREF_DEFAULT);
         function v11LoadPrefs() { try { const j = localStorage.getItem('sd_v11_prefs'); if (j) v11Prefs = Object.assign({}, V11_PREF_DEFAULT, JSON.parse(j)); } catch (e) {} }
@@ -53,6 +53,7 @@
         const _v11_persistAppState = persistAppState;
         persistAppState = function () {
             const cur = v11GovJson();
+            if (typeof restoreCompleted !== 'undefined' && !restoreCompleted) { if (cur) v11State.lastGov = cur; return _v11_persistAppState.apply(this, arguments); }
             if (cur && v11State.lastGov && cur !== v11State.lastGov && !v11State.undoing) { v11State.undo.push(v11State.lastGov); if (v11State.undo.length > 30) v11State.undo.shift(); }
             if (cur) v11State.lastGov = cur;
             v11SaveIndicator('busy');
@@ -130,18 +131,19 @@
             const c = el('govCrumb'); if (!c) return;
             const gov = NAV_PHASES.find(p => p.id === 'gov'); const t = gov.tabs.find(x => x.g === govState.tab) || {};
             const fam = t.fam || 'Gouvernance'; const first = (gov.tabs.find(x => x.fam === fam) || {}).g || 'home';
-            const parts = [`<a onclick="openGovTab('home')">${govIsReadOnly() ? '👁 Consultation' : 'Gouvernance'}</a>`, `<a onclick="openGovTab('${first}')">${escapeHTML(fam)}</a>`];
+            const A = (act, txt) => `<a data-ro="keep" onclick="${act}">${txt}</a>`;
+            const parts = [A("openGovTab('home')", govIsReadOnly() ? '👁 Consultation' : 'Gouvernance'), A(`openGovTab('${first}')`, escapeHTML(fam))];
             let leaf = escapeHTML(t.label || '');
             if (govState.tab === 'objects' && govState.selectedBoId) {
                 const bo = (state.governance.businessObjects || []).find(b => b.id === govState.selectedBoId);
                 if (bo) {
-                    parts.push(`<a onclick="openGovTab('objects')">${leaf}</a>`);
+                    parts.push(A("openGovTab('objects')", leaf));
                     const sel = govState.boSel; const r = sel && sel.kind === 'attr' ? (boAllAttrRows(bo) || []).find(x => x.el.id === sel.elId) : null;
-                    if (r && govState.boTab === 'structure') { parts.push(`<a onclick="govState.boSel=null; renderGovernance()">${escapeHTML(bo.name)}</a>`); leaf = escapeHTML(r.el.name); }
+                    if (r && govState.boTab === 'structure') { parts.push(A('govState.boSel=null; renderGovernance()', escapeHTML(bo.name))); leaf = escapeHTML(r.el.name); }
                     else leaf = escapeHTML(bo.name);
                 }
-            } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) { parts.push(`<a onclick="openGovTab('dictionary')">${leaf}</a>`); leaf = escapeHTML(govState.dictTable); }
-            else if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) { const bo = (state.governance.businessObjects || []).find(b => b.id === govState.dictBoId); if (bo) { parts.push(`<a onclick="openGovTab('dictionary')">${leaf}</a>`); leaf = escapeHTML(bo.name); } }
+            } else if (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(govState.dictTable); }
+            else if (govState.tab === 'dictionary' && govState.dictMode === 'bo' && govState.dictBoId) { const bo = (state.governance.businessObjects || []).find(b => b.id === govState.dictBoId); if (bo) { parts.push(A("openGovTab('dictionary')", leaf)); leaf = escapeHTML(bo.name); } }
             c.innerHTML = parts.join('<span class="sep">›</span>') + '<span class="sep">›</span><span class="cur">' + leaf + '</span>';
         }
         // ---- Plein écran ----
@@ -220,7 +222,7 @@
         // ---- Menu replié quand une fiche est ouverte ----
         function v11AutoCollapse() {
             if (!v11Prefs.autoCollapse || v11Prefs.present) return;
-            const fiche = currentTab === 9 && ((govState.tab === 'objects' && govState.selectedBoId && v11Editing('bo:' + govState.selectedBoId)) || (govState.tab === 'dictionary' && govState.dictMode === 'table') || !!v11State.fs);
+            const fiche = currentTab === 9 && ((govState.tab === 'objects' && govState.selectedBoId && v11Editing('bo:' + govState.selectedBoId)) || (govState.tab === 'dictionary' && govState.dictMode === 'table' && govState.dictTable && v11Editing('table:' + govState.dictTable)) || !!v11State.fs);
             if (fiche && !document.body.classList.contains('v7-collapsed')) { v11State.prevCollapsed = false; document.body.classList.add('v7-collapsed'); }
             else if (!fiche && v11State.prevCollapsed === false && !v11State.fs) { v11State.prevCollapsed = null; document.body.classList.remove('v7-collapsed'); }
         }
@@ -233,7 +235,7 @@
             const lab = Array.from(c.querySelectorAll('*')).find(n => n.childElementCount === 0 && /^Initialiser un objet métier depuis une source/.test(n.textContent.trim()));
             const block = lab ? lab.closest('.rounded-xl, .rounded-lg, .border') : null; if (!block || block.dataset.v11init) return;
             block.dataset.v11init = '1'; if (!v11State.initOpen) block.style.display = 'none';
-            block.insertAdjacentHTML('beforebegin', `<div class="flex items-center gap-2 flex-wrap mb-3" data-ro="keep"><button class="v11-btn pri" onclick="v11WizardOpen()">＋ Nouvel objet métier</button><button class="v11-btn sm" onclick="v11State.initOpen=!v11State.initOpen; renderGovernance()">${v11State.initOpen ? '▾ Masquer' : '▸ Autres façons de créer un objet'}</button><span class="text-[11px] text-slate-500">depuis une source, depuis le modèle de données, objet vierge</span></div>`);
+            block.insertAdjacentHTML('beforebegin', `<div class="flex items-center gap-2 flex-wrap mb-3"><button class="v11-btn pri" onclick="v11WizardOpen()">＋ Nouvel objet métier</button><button class="v11-btn sm" onclick="v11State.initOpen=!v11State.initOpen; renderGovernance()">${v11State.initOpen ? '▾ Masquer' : '▸ Autres façons de créer un objet'}</button><span class="text-[11px] text-slate-500">depuis une source, depuis le modèle de données, objet vierge</span></div>`);
         }
         // ---- Après chaque rendu de la gouvernance ----
         const _v11_renderGovernance = renderGovernance;
@@ -247,7 +249,7 @@
             try { v11CompactInit(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
         };
         // ---- Raccourcis clavier + aide ----
-        const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['N', 'Nouvel objet (assistant)'], ['P', 'Mode présentation']];
+        const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['N', 'Nouvel objet (assistant)'], ['Maj P', 'Mode présentation']];
         let _v11G = 0;
         document.addEventListener('keydown', e => {
             const tgt = e.target; const typing = tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable);
@@ -266,7 +268,7 @@
             if (k === 'f') { const n = document.querySelector('.v11-fiche') || document.querySelector('#boDetail'); if (n) { e.preventDefault(); v11Fs(n.id ? '#' + n.id : n, n.dataset.title || ''); } }
             else if (k === 'e' && govState.tab === 'objects' && govState.selectedBoId && typeof v11ToggleEdit === 'function') { e.preventDefault(); v11ToggleEdit('bo', govState.selectedBoId); }
             else if (k === 'n' && typeof v11WizardOpen === 'function') { e.preventDefault(); v11WizardOpen(); }
-            else if (k === 'p') { e.preventDefault(); v11Present(!v11Prefs.present); }
+            else if (k === 'p' && e.shiftKey) { e.preventDefault(); v11Present(!v11Prefs.present); }
         }, true);
         function v11HelpOpen() {
             v11HelpClose();
@@ -287,6 +289,8 @@
         function v11HelpClose() { const d = el('v11Help'); if (d) d.remove(); }
         function v11ModalOpen(html) { v11ModalClose(); const d = document.createElement('div'); d.className = 'v11-modal'; d.id = 'v11Modal'; d.setAttribute('data-ro', 'keep'); d.innerHTML = '<div class="box">' + html + '</div>'; d.addEventListener('click', e => { if (e.target === d) v11ModalClose(); }); document.body.appendChild(d); const f = d.querySelector('input[type=text],select,textarea'); if (f) setTimeout(() => { try { f.focus(); } catch (e) {} }, 30); return d; }
         function v11ModalClose() { const d = el('v11Modal'); if (d) d.remove(); }
+        // Après la restauration de session, l'état restauré devient le point de départ de l'annulation.
+        if (typeof restoreSession === 'function') { const _v11_restore = restoreSession; restoreSession = async function () { try { return await _v11_restore.apply(this, arguments); } finally { v11State.undo = []; v11State.lastGov = v11GovJson(); v11SaveIndicator('ok'); if (currentTab === 9) renderGovernance(); } }; }
         // ---- Démarrage ----
         (function () {
             v11LoadPrefs(); v11RestoreScreen(); v11ApplyPrefs();

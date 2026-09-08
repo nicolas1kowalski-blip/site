@@ -1,8 +1,13 @@
         // ======================= V11 : VERSION ET JOURNAL DE LA COUCHE ERGONOMIQUE =======================
         // Ce fichier n'est assemblé que dans StudioDataV11.html (manifest-v11.json). Il est chargé avant
         // le noyau : 1A-noyau-version-changelog.js reprend V11_VERSION et place V11_CHANGELOG en tête.
-        const V11_VERSION = '11.0.0';
+        const V11_VERSION = '11.0.1';
         const V11_CHANGELOG = [
+            { v: '11.0.1', d: '2026-09-08', t: 'Deuxième passe V11', items: [
+                'Fiche objet : le <b>lineage s\'affiche dans la fiche</b> en lecture (bouton 🕸), l\'audit ouvre bien le formulaire, le fil d\'Ariane reste cliquable en consultation et en présentation.',
+                'En <b>consultation</b> ou en <b>présentation</b>, les fiches sont toujours en lecture : plus de bouton Modifier, Dupliquer ni Actions groupées, valeurs non éditables ; le menu ne se replie qu\'en modification ou en plein écran.',
+                'Le <b>dictionnaire par objet</b> s\'ouvre en lecture (champs remplacés par leurs valeurs) avec « Modifier ». Libellés des barres de modification corrigés (« Modification de l\'application… »).',
+                '« Modifier dans l\'objet » depuis le catalogue ouvre le formulaire. Annulation : rien n\'est empilé avant la fin de la restauration de session. Le mode présentation se déclenche par Maj+P (plus par P seul).'] },
             { v: '11.0.0', d: '2026-09-08', t: 'V11 — l\'ergonomie d\'abord : fiches lisibles, recherche, plein écran, accueil', items: [
                 '<b>Fiches en mode lecture</b> : objets, termes, applications et sources s\'ouvrent d\'abord comme une carte propre (en-tête, définition, propriétaire, domaine, sources, applications, termes, attributs), sans champ de saisie. Un bouton « Modifier » ouvre le formulaire complet ; un clic sur une valeur la modifie en place (Entrée valide, Échap annule).',
                 '<b>Mise en page unifiée</b> des quatre types de fiches : même en-tête, mêmes sections, mêmes actions (Modifier, Dupliquer, Plein écran, Imprimer, Lineage).',
