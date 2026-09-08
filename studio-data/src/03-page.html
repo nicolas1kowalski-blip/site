@@ -1,0 +1,647 @@
+
+<body class="font-sans">
+
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+    <div class="scrim-ux" id="uxScrim" onclick="closeUxDrawer()"></div>
+    <aside class="drawer-ux" id="uxDrawer" role="dialog" aria-label="Détail">
+        <div class="dh">
+            <span class="typ t-txt" id="uxDrawerTyp">ABC</span>
+            <div class="min-w-0"><h2 id="uxDrawerTitle">—</h2><div class="sub" id="uxDrawerSub"></div></div>
+            <button onclick="closeUxDrawer()" aria-label="Fermer le panneau" class="ml-auto w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 font-bold shrink-0">✕</button>
+        </div>
+        <div class="db" id="uxDrawerBody"></div>
+        <div class="df" id="uxDrawerFoot"></div>
+    </aside>
+    <datalist id="themeDatalist"></datalist>
+    <input type="file" id="configUploader" accept=".json" class="hidden" onchange="importConfiguration(event)">
+
+    <div class="v7-shell">
+      <aside class="v7-side" aria-label="Navigation principale">
+        <div class="v7-brand">
+          <div class="v7-mark">SD</div>
+          <div class="txt leading-tight"><div class="nm">Studio Data</div>
+            <button id="appVersionBadge" onclick="openVersionNotes()" title="Notes de version" class="vr"></button></div>
+        </div>
+        <nav id="v7Nav" class="v7-nav"></nav>
+        <div class="v7-foot">
+          <button class="v7-fbtn" onclick="openBackupCenter()" title="Centre de sauvegarde"><svg class="v7-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 20.4H4.4a1.8 1.8 0 0 1-1.8-1.8V5.4a1.8 1.8 0 0 1 1.8-1.8h11l6 6v9a1.8 1.8 0 0 1-1.8 1.8z"/><path d="M16.6 20.4v-6.8H7.4v6.8M7.4 3.6v4.6h6.4"/></svg><span class="lbl" id="v7PersistLbl">Sauvegarde</span></button>
+          <button class="v7-fbtn" onclick="document.getElementById('configUploader').click()" title="Importer une configuration"><svg class="v7-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V4.6M6.4 10.2 12 4.6l5.6 5.6"/></svg><span class="lbl">Importer</span></button>
+          <button class="v7-fbtn" onclick="exportConfiguration()" title="Exporter la configuration"><svg class="v7-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v15.4M6.4 13.8 12 19.4l5.6-5.6"/></svg><span class="lbl">Exporter</span></button>
+          <button class="v7-fbtn" onclick="v7ToggleCollapse()" title="Réduire ou déployer le menu"><span class="ic" id="v7CollapseIc">⟨</span><span class="lbl">Réduire</span></button>
+        </div>
+      </aside>
+      <div class="v7-main">
+        <header class="v7-top">
+          <div class="min-w-0">
+            <h1 id="v7Title">—</h1>
+            <div class="sub" id="v7Sub"></div>
+          </div>
+          <div class="ml-auto flex items-center gap-2 flex-wrap">
+            <button onclick="wizOpen('menu')" id="wizTopBtn" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100" title="Assistant guidé : extraire des données ou contrôler leur qualité, pas à pas">🧭 Assistant</button>
+
+            <div id="v7FamNav" class="v7-seg"></div>
+            <div class="v7-seg" role="group" aria-label="Thème">
+              <button onclick="v7SetTheme('light')" id="v7ThLight" title="Thème clair">☀︎</button>
+              <button onclick="v7SetTheme('dark')" id="v7ThDark" title="Thème sombre">☾</button>
+              <button onclick="v7SetTheme('auto')" id="v7ThAuto" title="Suivre le système">Auto</button>
+            </div>
+          </div>
+        </header>
+    <div id="ctxBar" class="ctxbar" role="status" aria-label="Contexte de travail">
+        <div class="ctx-chip active"><span class="ctx-dot" style="background:var(--data)"></span><span class="k">Source active</span><span class="v" id="ctxSource">—</span></div>
+        <div class="ctx-chip"><span class="k">Lignes</span><span class="v" id="ctxRows">—</span></div>
+        <div class="ctx-chip"><span class="k">Colonnes</span><span class="v" id="ctxCols">—</span></div>
+        <div class="ctx-chip"><span class="k">Domaine</span><span class="v" id="ctxDomain">—</span></div>
+        <div class="ctx-crumb" id="ctxCrumb"></div>
+    </div>
+
+    <main class="container mx-auto p-4 flex-grow max-w-7xl mt-4">
+        <div id="globalError" class="hidden mb-6 p-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3 shadow-sm">
+            <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600"></i>
+            <div><span class="font-bold block mb-1">Erreur :</span><span id="globalErrorText"></span></div>
+            <button onclick="hideError()" class="ml-auto text-red-500 hover:text-red-700"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <div id="dbModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4">
+                <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="database" class="w-6 h-6 text-blue-600"></i> API Distante</h3>
+                <input type="text" id="apiTableName" placeholder="Nom Table" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
+                <input type="url" id="apiUrl" placeholder="URL API JSON" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
+                <input type="text" id="apiDataPath" placeholder="Chemin (ex: data.items)" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50">
+                <div id="apiLoading" class="hidden mt-2 text-blue-700 text-sm"><i data-lucide="loader-2" class="animate-spin inline"></i> Connexion...</div>
+                <div class="mt-4 flex justify-end gap-2"><button onclick="toggleDbModal()" class="px-4 py-2 bg-slate-100 rounded text-sm font-bold">Annuler</button><button onclick="connectApi()" class="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold">Connecter</button></div>
+            </div>
+        </div>
+
+        <div id="boWizardModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl mx-4">
+                <h3 class="text-lg font-bold mb-1 flex items-center gap-2"><span class="text-xl">🏛️</span> Objet métier depuis la source <span id="boWizTableName" class="text-emerald-700"></span></h3>
+                <p class="text-xs text-slate-500 mb-4">Rattachez cette source à un objet métier existant (pour éviter les doublons) ou créez-en un nouveau, puis indiquez le rôle de la source dans la circulation de la donnée.</p>
+                <div id="boWizSuggestion" class="hidden mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"></div>
+                <label class="text-xs font-bold text-slate-500 block mb-1">Objet métier</label>
+                <select id="boWizExisting" onchange="el('boWizNameWrap').classList.toggle('hidden', this.value !== '__new__')" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50"></select>
+                <div id="boWizNameWrap">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Nom du nouvel objet métier</label>
+                    <input type="text" id="boWizName" class="w-full border border-slate-300 p-2.5 mb-3 rounded text-sm bg-slate-50" placeholder="ex: Site, Client, Contrat...">
+                </div>
+                <label class="text-xs font-bold text-slate-500 block mb-2">Rôle de cette source pour l'objet métier</label>
+                <div class="grid grid-cols-1 gap-2 mb-4">
+                    <label class="flex items-start gap-2.5 border border-emerald-200 bg-emerald-50/50 p-3 rounded-lg cursor-pointer"><input type="radio" name="boWizRole" value="maitre" checked class="mt-0.5 text-emerald-600"><span class="text-sm"><strong>👑 Maître</strong> (source de référence / golden source)<br><span class="text-xs text-slate-500">C'est ici que la donnée naît et doit être corrigée.</span></span></label>
+                    <label class="flex items-start gap-2.5 border border-slate-200 p-3 rounded-lg cursor-pointer"><input type="radio" name="boWizRole" value="contributeur" class="mt-0.5 text-emerald-600"><span class="text-sm"><strong>✍️ Contributeur</strong><br><span class="text-xs text-slate-500">Enrichit certains attributs de l'objet sans en être la référence.</span></span></label>
+                    <label class="flex items-start gap-2.5 border border-slate-200 p-3 rounded-lg cursor-pointer"><input type="radio" name="boWizRole" value="destinataire" class="mt-0.5 text-emerald-600"><span class="text-sm"><strong>📥 Destinataire</strong><br><span class="text-xs text-slate-500">Reçoit / consomme la donnée diffusée depuis le maître.</span></span></label>
+                </div>
+                <label class="flex items-center gap-2 text-sm mb-4 cursor-pointer"><input type="checkbox" id="boWizGenElements" checked class="text-emerald-600 rounded"> Générer / mapper automatiquement les sous-éléments depuis les colonnes de la source</label>
+                <div class="flex justify-end gap-2"><button onclick="el('boWizardModal').classList.add('hidden')" class="px-4 py-2 bg-slate-100 rounded text-sm font-bold">Annuler</button><button onclick="confirmBoWizard()" class="px-4 py-2 bg-emerald-600 text-white rounded text-sm font-bold">Valider</button></div>
+            </div>
+        </div>
+
+        <!-- ============ ASSISTANT GUIDÉ (mode wizard) ============ -->
+        <div id="wizOverlay" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-6 flex flex-col" role="dialog" aria-modal="true" aria-labelledby="wizTitle">
+                <div class="px-5 py-4 border-b border-slate-100 flex items-start gap-3">
+                    <div class="min-w-0">
+                        <h3 id="wizTitle" class="text-base font-black text-slate-800">Assistant</h3>
+                        <p id="wizSub" class="text-[11.5px] text-slate-500 mt-0.5"></p>
+                    </div>
+                    <button onclick="wizClose()" class="ml-auto text-slate-300 hover:text-slate-600 text-lg font-bold px-2" title="Fermer l'assistant">✕</button>
+                </div>
+                <div id="wizSteps" class="px-5 pt-3"></div>
+                <div id="wizBody" class="px-5 py-4 min-h-[16rem]"></div>
+                <div id="wizFoot" class="px-5 py-3 border-t border-slate-100 flex items-center gap-2 flex-wrap bg-slate-50/60 rounded-b-2xl"></div>
+            </div>
+        </div>
+
+        <!-- TABS CONTENT -->
+        <div id="step-1" class="animate-fade-in block">
+            <div class="flex justify-between items-end mb-6">
+                <div><h2 class="text-xl font-bold text-slate-800">Fichiers chargés</h2><p class="text-sm text-slate-500 mt-1">Ajoutez d'abord vos fichiers ou connectez une base.</p></div>
+                <div class="flex flex-wrap gap-2">
+                    <input type="file" id="fileUploader" multiple accept=".csv, .txt, .xlsx, .xls, .json" class="hidden" onchange="handleFilesAdded(event)">
+                    <input type="file" id="folderUploader" webkitdirectory directory multiple class="hidden" onchange="handleFilesAdded(event)">
+                    <button onclick="document.getElementById('fileUploader').click()" class="bg-indigo-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="file-plus" class="w-5 h-5"></i> Fichiers</button>
+                    <button onclick="document.getElementById('folderUploader').click()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="folder-plus" class="w-5 h-5"></i> Dossier</button>
+                    <button onclick="openMergeModal()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm" title="Combiner plusieurs fichiers en une seule source"><i data-lucide="layers" class="w-5 h-5"></i> Fusionner</button>
+                    <button onclick="toggleDbModal()" class="bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg flex items-center gap-2 shadow-sm"><i data-lucide="database" class="w-5 h-5"></i> API</button>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
+                <button type="button" onclick="toggleSourceUpdatePanel()" class="w-full flex justify-between items-center px-5 py-3 bg-slate-50/70 hover:bg-slate-100 transition-colors">
+                    <span class="text-sm font-bold text-slate-700 flex items-center gap-2"><i data-lucide="refresh-cw" class="w-4 h-4 text-indigo-600"></i> Mises à jour des sources <span id="srcUpdateBadge" class="text-[10px] font-bold text-slate-400"></span></span>
+                    <i data-lucide="chevron-down" id="srcUpdateChevron" class="w-4 h-4 text-slate-400"></i>
+                </button>
+                <div id="sourceUpdateBody" class="hidden p-5 border-t border-slate-100"></div>
+            </div>
+            <div id="emptyStateSources" class="text-center py-16 bg-white border border-dashed border-slate-300 rounded-xl mb-6"><h3 class="text-lg font-bold text-slate-700">Aucune donnée chargée</h3></div>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="relative flex-1 max-w-md">
+                    <input type="text" id="srcSearchInput" oninput="srcSearchChanged(this.value)" placeholder="🔍 Rechercher une source (nom, domaine, colonne)…" class="w-full border border-slate-300 rounded-lg pl-3 pr-8 py-2.5 text-sm bg-white shadow-sm focus:border-indigo-400">
+                    <button onclick="el('srcSearchInput').value=''; srcSearchChanged('')" id="srcSearchClear" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 font-bold">✕</button>
+                </div>
+                <span id="srcSearchCount" class="text-xs text-slate-400"></span>
+            </div>
+            <div id="tablesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </div>
+
+        <div id="mergeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeMergeModal()">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+                <div class="bg-purple-50 border-b border-purple-200 px-4 py-3 flex items-center gap-2"><span class="text-sm font-black text-purple-800">🧩 Fusionner des fichiers en une source</span><button onclick="closeMergeModal()" class="ml-auto text-purple-600 hover:text-red-600 font-black text-base leading-none px-1">✕</button></div>
+                <div id="mergeModalBody" class="overflow-auto flex-grow p-4"></div>
+                <div class="border-t border-slate-200 px-4 py-2.5 flex gap-2 justify-end">
+                    <button onclick="closeMergeModal()" class="text-sm bg-slate-100 border border-slate-300 px-4 py-1.5 rounded-lg font-bold">Annuler</button>
+                    <button onclick="createMergedSource()" class="text-sm bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-lg font-bold">🧩 Fusionner</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-2" class="animate-fade-in hidden">
+            <div class="flex justify-between items-end mb-4 flex-wrap gap-2">
+                <div><h2 class="text-xl font-bold text-slate-800">Modèle de données</h2><p class="text-sm text-slate-500 mt-1">Créez des liens entre vos tables pour les fusionner.</p></div>
+                <div class="flex gap-2">
+                    <button onclick="openRelInfer()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-sm" title="Analyser le contenu des données et proposer automatiquement les liens"><i data-lucide="wand-2" class="w-4 h-4"></i> Déduire les liens</button>
+                    <button onclick="addManualRelation()" class="bg-slate-100 border border-slate-300 px-4 py-2 rounded-lg flex items-center gap-2 font-medium shadow-sm"><i data-lucide="plus" class="w-4 h-4"></i> Nouveau lien</button>
+                </div>
+            </div>
+            <div id="emptyStateModel" class="hidden text-center py-12 bg-white border border-dashed rounded-xl mb-6 text-slate-500">Aucune table disponible</div>
+            <div class="bg-white border rounded-xl shadow-sm mb-6 overflow-hidden">
+                <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex justify-between items-center flex-wrap gap-2"><span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><i data-lucide="share-2" class="w-4 h-4"></i> Vue Graphique</span>
+                    <span class="flex items-center gap-2 flex-wrap">
+                        <span class="mcdScopeWrap"></span>
+                        <select onchange="setMcdView(this.value)" id="mcdViewSelect" class="text-[11px] border border-slate-300 rounded px-1.5 py-1 bg-white font-bold text-slate-600" title="Niveau de détail : cartes compactes ou schéma complet de toutes les colonnes">
+                            <option value="links">🗂 Vue compacte</option>
+                            <option value="schema">🗺 Schéma complet (toutes les colonnes)</option>
+                        </select>
+                        <span id="mcdToolbar"></span>
+                        <button onclick="mcdToggleLinkMode()" class="mcdLinkBtn text-[11px] bg-white border border-indigo-300 px-2.5 py-1 rounded font-bold text-indigo-700 hover:bg-indigo-50" title="Tracer un lien à la souris : cliquez une table, puis une seconde — l'appli demande les attributs.">🖱 Tracer un lien</button>
+                        <button onclick="toggleMcdFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Ouvrir le modèle en plein écran">⛶ Plein écran</button>
+                        <button onclick="exportGraphImage('mcd')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷 Exporter l'image</button>
+                    </span>
+                </div>
+                <div class="mcdLinkHint hidden text-xs font-bold text-indigo-800 bg-indigo-50 border-b border-indigo-200 px-4 py-2"></div>
+                <div class="mcdScopeMsg hidden text-xs text-slate-500 bg-blue-50/60 border-b border-blue-100 px-4 py-2"></div>
+                <div id="networkGraph" class="w-full h-[350px] bg-slate-50/50" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div>
+            </div>
+            <div class="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
+                <div class="bg-slate-50 border-b border-slate-200 px-6 py-3 flex text-xs font-bold text-slate-500 uppercase"><div class="w-5/12">Table Source</div><div class="w-2/12"></div><div class="w-5/12">Table Cible</div></div>
+                <div id="relationsList" class="divide-y divide-slate-100"></div>
+                <div class="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex gap-2 justify-center flex-wrap">
+                    <button onclick="openRelInfer()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 font-bold"><i data-lucide="wand-2" class="w-4 h-4"></i> Déduire les liens</button>
+                    <button onclick="addManualRelation(); requestAnimationFrame(()=>{const l=el('relationsList'); if(l&&l.lastElementChild) l.lastElementChild.scrollIntoView({behavior:'smooth',block:'center'});})" class="bg-white border border-slate-300 px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 font-medium"><i data-lucide="plus" class="w-4 h-4"></i> Nouveau lien</button>
+                </div>
+            </div>
+            <div class="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
+                <div class="bg-slate-50 border-b border-slate-200 px-6 py-3 flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><i data-lucide="shield-check" class="w-4 h-4"></i> Règles métier sur les liens (cardinalités conditionnelles)</span>
+                    <span class="text-[11px] text-slate-400">Ex : un emplacement est rattaché à exactement 1 accès de type GÉNÉRAL</span>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                        <div class="lg:col-span-2">
+                            <label class="text-[11px] font-bold text-slate-500 uppercase">Lien concerné</label>
+                            <select id="bizRuleRel" onchange="bizRuleRelChanged()" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 text-sm"></select>
+                        </div>
+                        <div class="lg:col-span-2">
+                            <label class="text-[11px] font-bold text-slate-500 uppercase">Sens de la règle</label>
+                            <select id="bizRuleDir" onchange="bizRuleDirChanged()" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 text-sm"></select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 items-end">
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500 uppercase">Condition sur l'enfant (optionnel)</label>
+                            <select id="bizRuleCondCol" onchange="bizRuleCondColChanged()" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 text-sm"><option value="">— sans condition —</option></select>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500 uppercase">Valeur</label>
+                            <input id="bizRuleCondVal" list="bizRuleCondVals" onfocus="bizRuleCondColChanged()" placeholder="ex : GENERAL" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 text-sm">
+                            <datalist id="bizRuleCondVals"></datalist>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500 uppercase">Attendu</label>
+                            <select id="bizRuleExpect" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 text-sm">
+                                <option value="=">exactement</option>
+                                <option value="<=">au plus</option>
+                                <option value=">=">au moins</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500 uppercase">N</label>
+                            <input id="bizRuleN" type="number" min="0" value="1" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 text-sm">
+                        </div>
+                        <div>
+                            <button onclick="addBizRule()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">＋ Règle</button>
+                        </div>
+                    </div>
+                    <div id="bizRulesList" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-3" class="animate-fade-in hidden">
+            <div class="bg-white rounded-xl border border-indigo-200 shadow-sm mb-6 overflow-hidden">
+                <div class="px-6 py-4 bg-indigo-50/50 flex flex-col md:flex-row md:items-end gap-3 justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-indigo-800 flex items-center gap-2"><i data-lucide="database-zap" class="w-5 h-5"></i> Extraction</h2>
+                        <button onclick="wizOpen('extract')" class="mt-2 text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Parcours guidé : source, colonnes, filtres, résultat">🧭 Mode assistant — première extraction en 4 étapes</button>
+                        <p class="text-[11px] text-indigo-400 font-medium mt-0.5">Colonnes de tout le modèle · calculées · synthèses de tables liées · hiérarchies aplaties · filtres · dédoublonnage · agrégats — une seule configuration, un seul SQL, aperçu avant de lancer.</p>
+                    </div>
+                    <div class="min-w-[260px]">
+                        <label class="text-[10px] uppercase font-bold text-indigo-400 block mb-1">Table de départ</label>
+                        <select id="baseTableSelect" onchange="handleBaseTableChange()" class="w-full border border-slate-300 p-2.5 rounded-lg bg-white text-sm"></select>
+                    </div>
+                </div>
+                <div id="advExtractBody" class="p-6 border-t border-indigo-100"></div>
+            </div>
+
+            <div id="progressArea" class="hidden bg-white p-8 rounded-xl border border-slate-200 shadow-lg mt-8 text-center">
+                <h2 id="statusText" class="text-xl font-bold mb-2 text-indigo-800">Préparation...</h2><p id="statusDetail" class="text-slate-500 mb-6 font-medium">Patientez</p>
+                <div class="w-full bg-slate-100 rounded-full h-5 mb-6 shadow-inner overflow-hidden"><div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-purple-600 h-5 rounded-full transition-all duration-300" style="width:0%"></div></div>
+                <div id="downloadArea" class="hidden mt-8">
+                    <div class="inline-flex items-center justify-center p-4 bg-green-100 rounded-full mb-4"><i data-lucide="check" class="w-10 h-10 text-green-600 font-bold"></i></div>
+                    <p id="finalReport" class="text-lg font-bold text-slate-800 mb-6"></p>
+                    <div id="downloadLinkWrapper">
+                        <a id="downloadLink" href="#" class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow"><i data-lucide="download-cloud"></i> Télécharger Résultat</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-4" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-indigo-800 mb-4 flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> 1. Source de données</h2>
+                <select id="vizBaseTable" onchange="handleVizBaseTableChange()" class="w-full md:w-1/2 border border-slate-300 p-3 rounded-lg bg-slate-50"></select>
+            </div>
+            <div class="bg-white p-6 rounded-xl border border-teal-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-teal-800 mb-1 flex items-center gap-2">🎯 Analyse de couverture (croisement 3 tables)</h2>
+                <p class="text-xs text-slate-500 mb-4">Une <strong>population</strong> (table 1, filtrée) · une <strong>dimension d'analyse</strong> (attribut de la table 1 ou d'une table liée 1-1) · des <strong>éléments liés</strong> (table N, filtrée). Résultat : pour chaque valeur de la dimension, combien d'entités <strong>ont</strong> / <strong>n'ont pas</strong> au moins un élément correspondant. Ex. : « parmi les équipements <em>actifs</em> de nature <em>A ou B</em>, combien, <em>par site</em>, ont au moins un contrôle de type <em>X ou Y</em> ? »</p>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                    <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                        <label class="text-xs font-bold text-slate-600 block mb-1.5">1️⃣ Population (table de base)</label>
+                        <select id="covBase" onchange="covBaseChanged()" class="w-full border border-slate-300 rounded p-2 text-sm bg-white mb-2"></select>
+                        <div class="flex items-center justify-between mb-1"><span class="text-[10px] uppercase font-bold text-slate-400">Filtres (ET/OU)</span><button onclick="covAddFilter('base')" class="text-[10px] bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-500 hover:bg-slate-100">+ Filtre</button></div>
+                        <div id="covFilterRows-base" class="space-y-1"></div>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                        <label class="text-xs font-bold text-slate-600 block mb-1.5">2️⃣ Dimension d'analyse (axe)</label>
+                        <select id="covDimTable" onchange="covDimTableChanged()" class="w-full border border-slate-300 rounded p-2 text-sm bg-white mb-2"></select>
+                        <select id="covDimCol" class="w-full border border-slate-300 rounded p-2 text-sm bg-white"></select>
+                        <label class="text-[10px] uppercase font-bold text-slate-400 block mt-3 mb-1">Dimension 2 (optionnelle — barres groupées)</label>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <select id="covDim2Table" onchange="covDim2TableChanged()" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
+                            <select id="covDim2Col" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
+                        </div>
+                        <label class="text-[10px] uppercase font-bold text-slate-400 block mt-3 mb-1">Dimension 3 (optionnelle — un graphique par valeur)</label>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <select id="covDim3Table" onchange="covDim3TableChanged()" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
+                            <select id="covDim3Col" class="border border-slate-300 rounded p-1.5 text-xs bg-white"></select>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1.5">Ex : axe = 📅 année, dim 2 = nature de document, dim 3 = DAS → un histogramme année × nature <em>par DAS</em>.</p>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                        <label class="text-xs font-bold text-slate-600 block mb-1.5">3️⃣ Éléments liés (table N)</label>
+                        <select id="covRel" onchange="covRelChanged()" class="w-full border border-slate-300 rounded p-2 text-sm bg-white mb-2"></select>
+                        <div class="flex items-center justify-between mb-1"><span class="text-[10px] uppercase font-bold text-slate-400">Filtres (ET/OU)</span><button onclick="covAddFilter('rel')" class="text-[10px] bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-500 hover:bg-slate-100">+ Filtre</button></div>
+                        <div id="covFilterRows-rel" class="space-y-1"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 flex-wrap">
+                    <button onclick="runCoverageAnalysis(this)" id="btnCovRun" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg shadow text-sm">🎯 Lancer l'analyse</button>
+                    <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer"><input type="checkbox" id="covCompareTotal" class="w-4 h-4 text-teal-600 rounded"> Afficher aussi la <strong>totalité (sans les filtres)</strong> — segment gris ajouté au sommet de chaque barre (dimensions 2 et 3 comprises)</label>
+                </div>
+                <div id="covResult" class="mt-5 hidden">
+                    <div id="covSummary" class="mb-3"></div>
+                    <div class="h-[340px] relative"><canvas id="covChart"></canvas></div>
+                    <div id="covTable" class="mt-4"></div>
+                </div>
+            </div>
+            <div id="emptyStateViz" class="text-center py-16 bg-white border border-dashed rounded-xl mb-6"><h3 class="text-lg font-bold text-slate-700">Analyses Multi-Tables (BI)</h3></div>
+            <div id="vizElementsContainer" class="hidden">
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                    <h2 class="text-lg font-bold text-indigo-800 mb-4">2. Configuration du Graphique</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div><label class="block text-xs font-bold text-slate-500 mb-2">Axe X</label><select id="vizDim" class="w-full border p-2.5 rounded-lg bg-slate-50"></select></div>
+                        <div class="flex gap-2">
+                            <div class="w-1/3"><label class="block text-xs font-bold text-slate-500 mb-2">Op.</label><select id="vizAgg" onchange="toggleVizMeasure()" class="w-full border p-2.5 rounded-lg bg-slate-50"><option value="count">Count</option><option value="sum">Sum</option><option value="avg">Avg</option></select></div>
+                            <div class="w-2/3"><label class="block text-xs font-bold text-slate-500 mb-2">Axe Y</label><select id="vizMeasure" disabled class="w-full border p-2.5 rounded-lg bg-slate-100 text-slate-400"></select></div>
+                        </div>
+                        <div><label class="block text-xs font-bold text-slate-500 mb-2">Type</label><select id="vizType" class="w-full border p-2.5 rounded-lg bg-slate-50"><option value="bar">Barres</option><option value="pie">Secteurs</option><option value="doughnut">Anneau</option><option value="line">Courbe</option></select></div>
+                    </div>
+                    <div class="mt-6 flex justify-end"><button onclick="generateChart()" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg">Générer Graphique</button></div>
+                </div>
+                <div id="chartDisplayArea" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="w-full h-[400px] relative"><canvas id="myChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-5" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-indigo-800 mb-4 flex items-center gap-2"><i data-lucide="scan-search" class="w-5 h-5"></i> Explorateur 360° (Nœuds & Liens)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div><label class="block text-xs font-bold text-slate-500 mb-2">1. Table cible</label><select id="expBaseTable" onchange="populateExpColumns()" class="w-full border p-2.5 rounded-lg bg-slate-50"></select></div>
+                    <div><label class="block text-xs font-bold text-slate-500 mb-2">2. Colonne (Clé)</label><select id="expCol" class="w-full border p-2.5 rounded-lg bg-slate-50"></select></div>
+                    <div><label class="block text-xs font-bold text-slate-500 mb-2">3. Valeur</label><input type="text" id="expVal" class="w-full border p-2.5 rounded-lg bg-white" placeholder="Saisir valeur..."></div>
+                    <button onclick="startExploration()" class="bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg">Chercher</button>
+                </div>
+                <div class="mt-6 pt-4 border-t border-slate-100">
+                    <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i> Personnaliser les étiquettes du graphe</h3>
+                    <div class="flex gap-4">
+                        <select id="expConfigTable" onchange="renderExpConfigCols()" class="w-1/4 border p-2 rounded-lg text-sm"></select>
+                        <div id="expConfigCols" class="w-3/4 flex flex-wrap gap-2 items-center min-h-[38px] p-2 bg-slate-50 rounded-lg border"></div>
+                    </div>
+                </div>
+                <div id="expLoading" class="hidden mt-4 text-indigo-600 text-sm font-medium"><i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>Recherche dans les fichiers...</div>
+            </div>
+            <div id="expWorkspace" class="hidden flex flex-col lg:flex-row gap-6">
+                <div class="lg:w-2/3 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-[650px]">
+                    <div class="bg-slate-50 border-b p-3 flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-600 uppercase flex items-center gap-2"><i data-lucide="network" class="w-4 h-4"></i> Réseau Data</span>
+                        <div class="flex items-center gap-2"><input type="text" id="expGraphFilter" onkeyup="applyGraphFilter()" placeholder="Filtrer un nœud..." class="border p-1 text-xs rounded w-48"><button onclick="exportGraphImage('exp')" class="text-[11px] bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div>
+                    </div>
+                    <div id="expGraphContainer" class="flex-grow bg-slate-50/50" style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;"></div>
+                </div>
+                <div class="lg:w-1/3 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col h-[650px] overflow-hidden">
+                    <div class="bg-indigo-600 p-3"><span class="text-sm font-bold text-white">Détails de la donnée</span></div>
+                    <div id="expNodeDetails" class="p-4 overflow-y-auto custom-scrollbar flex-grow bg-slate-50"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-6" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-indigo-800 mb-4 flex items-center gap-2"><i data-lucide="table" class="w-5 h-5"></i> Explorer les données</h2>
+                
+                <div class="flex items-center gap-4 mb-4">
+                    <select id="browserTableSelect" onchange="handleBrowserTableChange()" class="w-full md:w-1/3 border p-2.5 rounded-lg bg-slate-50 font-bold"></select>
+                    <div id="browserLoading" class="hidden text-indigo-600 text-sm font-medium"><i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>Chargement...</div>
+                    <span id="browserRowCount" class="ml-auto text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg">0 résultat(s)</span>
+                </div>
+                <div class="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm relative">
+                    <div class="overflow-auto max-h-[600px] custom-scrollbar" id="browserTableContainer">
+                        <table class="w-full text-left text-sm whitespace-nowrap" id="browserDataTable">
+                            <thead id="browserDataHead" class="sticky-header"></thead>
+                            <tbody id="browserDataBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="step-7" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-indigo-800 mb-4 flex items-center gap-2"><i data-lucide="split-square-horizontal" class="w-5 h-5"></i> Comparateur de Fichiers</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-indigo-50/50 p-4 rounded-lg border border-indigo-200">
+                        <h3 class="font-bold text-indigo-800 mb-3">Fichier de Base (A)</h3>
+                        <select id="compTableA" onchange="handleCompTableChange('A')" class="w-full border p-2 rounded bg-white text-sm"></select>
+                    </div>
+                    <div class="bg-emerald-50/50 p-4 rounded-lg border border-emerald-200">
+                        <h3 class="font-bold text-emerald-800 mb-3">Fichier à Comparer (B)</h3>
+                        <select id="compTableB" onchange="handleCompTableChange('B')" class="w-full border p-2 rounded bg-white text-sm"></select>
+                    </div>
+                </div>
+                <div class="border-t border-slate-200 pt-6 mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-slate-700">🔑 Clé d'identification <span class="font-normal text-slate-400 text-sm">— une ou plusieurs colonnes (clé composite)</span></h3>
+                        <button onclick="addCompKey()" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded font-bold flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Ajouter une colonne à la clé</button>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">Les colonnes sont appariées deux à deux (A ↔ B) et concaténées dans l'ordre. Une ligne dont une partie de la clé est vide est écartée.</p>
+                    <div id="compKeysArea" class="space-y-2"></div>
+                </div>
+                <div class="border-t border-slate-200 pt-6 mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-slate-700">Correspondances des valeurs à vérifier <span class="font-normal text-slate-400 text-sm">— facultatif</span></h3>
+                        <button onclick="addCompMapping()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border px-3 py-1.5 rounded font-medium flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Ajouter un mapping</button>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">Laissez cette liste vide pour ne comparer que <strong>les écarts de clé</strong> : les clés présentes d'un côté et pas de l'autre.</p>
+                    <div id="compMappingsArea" class="space-y-2"><p class="text-sm text-slate-400 italic">Aucune correspondance. Ajoutez des colonnes pour les comparer.</p></div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 flex gap-6">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="compIgnoreCase" checked class="w-4 h-4 text-indigo-600 rounded"> Ignorer la casse</label>
+                    <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="compIgnoreSpace" checked class="w-4 h-4 text-indigo-600 rounded"> Ignorer les espaces invisibles</label>
+                </div>
+                <div class="text-center">
+                    <button id="btnRunComp" onclick="runComparison()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-10 rounded-lg flex items-center justify-center gap-2 mx-auto shadow-md"><i data-lucide="play-circle" class="w-5 h-5"></i> Lancer la comparaison</button>
+                </div>
+            </div>
+            <div id="compProgressArea" class="hidden bg-white p-8 rounded-xl border border-slate-200 shadow-sm mt-6 text-center">
+                <h2 id="compStatusText" class="text-xl font-bold mb-2 text-indigo-800">Comparaison en cours...</h2>
+                <div class="w-full bg-slate-100 h-4 rounded-full mb-6 overflow-hidden"><div id="compProgressBar" class="bg-indigo-500 h-4 rounded-full" style="width:0%"></div></div>
+                <div id="compSummary" class="mb-6"></div>
+                <div id="compDownloadArea" class="hidden mt-4">
+                    <a id="compDownloadLink" href="#" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-xl shadow"><i data-lucide="download"></i> Télécharger le Rapport CSV</a>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-8" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold mb-4 text-indigo-800 flex items-center gap-2"><i data-lucide="shield-check" class="w-5 h-5"></i> Audit Qualité & Conformité</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                        <label class="block text-xs font-bold text-slate-500 mb-1">1. Fichier à auditer (Table Principale)</label>
+                        <select id="qualTable" onchange="handleQualTableChange()" class="w-full border border-slate-300 p-2.5 mb-4 rounded-lg text-sm bg-white"></select>
+                        <div class="flex gap-4 mb-4">
+                            <div class="w-2/3">
+                                <label class="block text-xs font-bold text-slate-500 mb-1">2. Colonne (Optionnelle)</label>
+                                <select id="qualCol" class="w-full border border-slate-300 p-2.5 rounded-lg text-sm bg-white"><option value="">Audit global de la table</option></select>
+                            </div>
+                            <div class="w-1/3">
+                                <label class="block text-xs font-bold text-slate-500 mb-1">Volume analysé</label>
+                                <select id="qualSampleSize" class="w-full border border-slate-300 p-2.5 rounded-lg text-sm bg-white">
+                                    <option value="100">100 lignes</option>
+                                    <option value="1000" selected>1 000 lignes</option>
+                                    <option value="6000">6 000 lignes (2 lots)</option>
+                                    <option value="15000">15 000 lignes (5 lots)</option>
+                                    <option value="all">Tout</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="border-t border-slate-200 pt-4 mb-4">
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Comparer les valeurs <strong>à l'intérieur de</strong> (optionnel)</label>
+                            <select id="qualGroupCol" class="w-full border border-slate-300 p-2.5 rounded-lg text-sm bg-white"><option value="">— toute la table —</option></select>
+                            <p class="text-[10px] text-slate-400 mt-1.5">Une valeur peut être normale globalement et aberrante dans son contexte : un montant banal à Paris, énorme pour une commune rurale. En choisissant une colonne de regroupement, chaque valeur est comparée aux <strong>autres valeurs de son groupe</strong>, et non à toute la colonne.</p>
+                        </div>
+                        <div class="border-t border-slate-200 pt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-xs font-bold text-slate-500">3. Filtres (optionnel) — n'auditer que les lignes retenues</label>
+                                <button type="button" onclick="addQualFilterRow('file')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2 py-1 rounded font-bold hover:bg-indigo-50">+ Filtre</button>
+                            </div>
+                            <div id="qualFilterRows-file" class="space-y-1.5"></div>
+                            <p class="text-[10px] text-slate-400 mt-1.5">Combine plusieurs critères avec <strong>ET</strong> / <strong>OU</strong> (évalués de gauche à droite). Le filtre porte sur le profiling de la table.</p>
+                        </div>
+                    </div>
+                    <div class="bg-emerald-50/60 p-5 rounded-lg border border-emerald-200">
+                        <label class="block text-xs font-bold text-emerald-700 mb-1">🏛️ Ou : profiler un OBJET MÉTIER</label>
+                        <p class="text-[11px] text-slate-500 mb-3">Audit complet de l'objet avec <strong>toutes ses règles</strong> : profiling de la table maître, règles métier du modèle de données sur tout le périmètre, hiérarchies (parents admis, profondeur), conformité des facettes (cardinalité 1–1 avec leurs filtres) et check-list de gouvernance.</p>
+                        <div class="flex gap-3 mb-3">
+                            <select id="qualBoSelect" onchange="renderQualFilters('bo')" class="w-2/3 border border-emerald-300 p-2.5 rounded-lg text-sm bg-white"></select>
+                            <div class="w-1/3">
+                                <select id="qualBoSampleSize" class="w-full border border-emerald-300 p-2.5 rounded-lg text-sm bg-white" title="Volume analysé pour le profiling de la table maître">
+                                    <option value="100">100 lignes</option>
+                                    <option value="1000" selected>1 000 lignes</option>
+                                    <option value="6000">6 000 lignes</option>
+                                    <option value="15000">15 000 lignes</option>
+                                    <option value="all">Tout</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="border-t border-emerald-200 pt-3 mb-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-xs font-bold text-emerald-700">Filtres (optionnel) — sur la table maître</label>
+                                <button type="button" onclick="addQualFilterRow('bo')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-2 py-1 rounded font-bold hover:bg-emerald-50">+ Filtre</button>
+                            </div>
+                            <div id="qualFilterRows-bo" class="space-y-1.5"></div>
+                        </div>
+                        <button onclick="profileBusinessObject()" id="btnQualBo" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg flex justify-center items-center gap-2 shadow">🏛️ Profiler l'objet métier</button>
+                    </div>
+                </div>
+                <div class="text-center border-t border-slate-100 pt-6">
+                    <button onclick="runQualityAudit()" id="btnRunQual" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg flex justify-center items-center gap-2 mx-auto shadow"><i data-lucide="shield-check" class="w-5 h-5"></i> Lancer l'Audit Qualité</button>
+                </div>
+            </div>
+
+            <div id="qualResultArea" class="hidden bg-white p-8 rounded-xl border border-slate-200 shadow-sm mt-6">
+                <div id="qualLoading" class="hidden text-center py-12">
+                    <i data-lucide="loader-2" class="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4"></i>
+                    <p id="qualLoadingText" class="font-bold text-lg text-indigo-800">Analyse en cours...</p>
+                    <div class="w-1/2 mx-auto bg-slate-100 h-2 rounded-full mt-4 overflow-hidden"><div id="qualProgressBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div></div>
+                </div>
+                <div id="qualDashboard" class="hidden animate-fade-in">
+                    <div class="flex border-b border-slate-200 mb-6 overflow-x-auto items-center">
+                        <button onclick="switchQualSubTab('profiling')" id="btn-qual-prof" class="py-2.5 px-4 font-bold border-b-2 border-indigo-600 text-indigo-600 text-sm whitespace-nowrap">📊 Profilage Local</button>
+                        <button onclick="switchQualSubTab('columns')" id="btn-qual-cols" class="py-2.5 px-4 font-medium border-b-2 border-transparent text-slate-500 hover:text-indigo-600 text-sm whitespace-nowrap">🔍 Analyse Colonnes</button>
+                        <button onclick="switchQualSubTab('dups')" id="btn-qual-dups" class="py-2.5 px-4 font-medium border-b-2 border-transparent text-slate-500 hover:text-indigo-600 text-sm whitespace-nowrap">🔑 Doublons (clé fonctionnelle)</button>
+                        <div class="ml-auto flex gap-2 pb-1">
+                            <button onclick="exportAuditCsv()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600 hover:bg-slate-50">⬇ Export CSV</button>
+                            <button onclick="exportAuditJson()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold text-slate-600 hover:bg-slate-50">⬇ Export JSON</button>
+                        </div>
+                    </div>
+
+                    <div id="qual-sub-profiling" class="block space-y-6">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="profilingGlobalKpis"></div>
+                        <div class="flex justify-end -mb-3"><button onclick="toggleQualSections(this)" class="text-[11px] bg-white border border-slate-300 rounded px-2.5 py-1 font-bold text-slate-500 hover:bg-slate-50">⊟ Tout replier</button></div>
+                        <details id="qualAlertsDet" class="bg-slate-50 rounded-xl border border-slate-200 group">
+                            <summary class="cursor-pointer select-none p-5 pb-4 list-none flex items-center gap-2"><span class="text-slate-400 text-xs transition-transform group-open:rotate-90">▶</span><h3 class="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider"><i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i> Alertes Sémantiques</h3><span id="qualAlertsCount" class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-slate-200 text-slate-600"></span><span class="ml-auto text-[11px] text-slate-400 normal-case">cliquer pour déplier</span></summary>
+                            <div id="profilingAlerts" class="space-y-2 text-sm text-slate-600 px-5 pb-5"></div>
+                        </details>
+                        <details id="qualInspDet" class="bg-white border border-amber-200 rounded-xl overflow-hidden shadow-sm group">
+                            <summary class="cursor-pointer select-none bg-amber-50 border-b border-amber-100 p-4 list-none flex justify-between items-center gap-2 flex-wrap"><span class="text-sm font-bold text-amber-800 uppercase flex items-center gap-2"><span class="text-amber-400 text-xs transition-transform group-open:rotate-90">▶</span>🔍 Inspecteur d'anomalies — voir & extraire les lignes en défaut <span id="qualInspCount" class="text-[11px] font-bold rounded-full px-2 py-0.5 bg-amber-200 text-amber-900 normal-case"></span></span><span class="text-[11px] text-amber-600">recherche sur la table complète · cliquer pour déplier</span></summary>
+                            <div id="qualAnomalyList" class="p-4"></div>
+                        </details>
+                        <div id="qualTilesUx" class="tiles-ux hidden"></div>
+                        <details open class="bg-white border rounded-xl overflow-hidden shadow-sm group">
+                            <summary class="cursor-pointer select-none bg-slate-50 border-b p-4 list-none flex justify-between items-center"><span class="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><span class="text-slate-400 text-xs transition-transform group-open:rotate-90">▶</span>Aperçu Synthétique</span></summary>
+                            <div class="flex items-center gap-2 px-4 pt-3 flex-wrap">
+                                <span class="text-[11px] text-slate-400">Une ligne = une colonne. Cliquez une ligne pour ouvrir le détail complet (le tableau reste visible).</span>
+                                <span class="ml-auto text-[11px] text-slate-400">Densité</span>
+                                <div class="seg-ux" role="group" aria-label="Densité du tableau">
+                                    <button class="on" id="uxDensComfy" onclick="uxSetDensity(false)" aria-label="Densité confort">Confort</button>
+                                    <button id="uxDensCompact" onclick="uxSetDensity(true)" aria-label="Densité compacte">Compact</button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto p-2">
+                                <table id="uxProfilTable" class="w-full text-left text-sm whitespace-nowrap">
+                                    <thead class="border-b text-[10.5px] uppercase font-bold text-slate-500">
+                                        <tr><th class="p-3">Colonne</th><th class="p-3">Type</th><th class="p-3">Complétude</th><th class="p-3 text-right">Distinctes</th><th class="p-3">Profil des valeurs</th><th class="p-3">Qualité</th><th class="p-3">Exemple</th><th class="p-3" aria-hidden="true"></th></tr>
+                                    </thead>
+                                    <tbody id="profilingColumnsTableBody" class="divide-y divide-slate-100"></tbody>
+                                    <tfoot><tr><td colspan="8" class="p-2.5 text-[11px]" id="uxProfilTfoot"></td></tr></tfoot>
+                                </table>
+                            </div>
+                            <div class="legend-ux px-4 pb-3">
+                                <span><span class="ld" style="background:var(--ok)"></span>Conforme (≥ 95 %)</span>
+                                <span><span class="ld" style="background:var(--warn)"></span>À surveiller (80–95 % ou à nettoyer)</span>
+                                <span><span class="ld" style="background:var(--bad)"></span>Problème (&lt; 80 %)</span>
+                                <span style="margin-left:auto">💡 Survolez un nom de colonne pour sa définition métier</span>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div id="qual-sub-columns" class="hidden flex flex-col lg:flex-row gap-6">
+                        <div class="lg:w-1/3 bg-slate-50 p-4 border rounded-xl flex flex-col max-h-[500px] overflow-y-auto custom-scrollbar">
+                            <h3 class="font-bold text-slate-700 text-sm mb-3">Sélectionnez une colonne</h3>
+                            <div id="qualColsList" class="flex flex-col gap-2"></div>
+                        </div>
+                        <div class="lg:w-2/3 bg-white p-6 rounded-xl border shadow-sm" id="profilingColumnDetailPanel"></div>
+                    </div>
+
+                    <div id="qual-sub-dups" class="hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-16" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-blue-800 mb-1 flex items-center gap-2">📈 Séries temporelles</h2>
+                <p class="text-xs text-slate-500 mb-4">Déclarez ici les sources dont une ligne est une <strong>observation</strong> et non une entité : une valeur, pour un identifiant, à un instant donné. C'est une propriété de la <strong>structure</strong> de la donnée — au même titre qu'une clé ou une relation — et c'est ce qui rend visibles les défauts propres au temps, à commencer par <strong>la ligne qui n'existe pas</strong>.</p>
+                <div id="tsContent"></div>
+            </div>
+        </div>
+        <div id="step-15" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-rose-800 mb-1 flex items-center gap-2">🤝 Rapprochement inter-sources (résolution d'entités)</h2>
+                <p class="text-xs text-slate-500 mb-4">Rapprochez les entités de deux sources (un même client dans le CRM et la facturation) : clé de blocage obligatoire, paires candidates scorées, revue des cas douteux, puis production d'un <strong>golden record</strong> et d'une table de correspondances traçable.</p>
+                <div id="lkContent"></div>
+            </div>
+        </div>
+        <div id="step-14" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-sky-800 mb-1 flex items-center gap-2">📋 Tableaux de bord</h2>
+                <p class="text-xs text-slate-500 mb-4">Composez des tuiles (graphes, tableaux, indicateurs) avec des filtres globaux, sauvegardez, dupliquez : à la réouverture, chaque tuile rejoue sa requête sur les données courantes. Export HTML autonome sans aucun appel réseau.</p>
+                <div id="dbContent"></div>
+            </div>
+        </div>
+        <div id="step-13" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-teal-800 mb-1 flex items-center gap-2">🧹 Préparation de données</h2>
+                <p class="text-xs text-slate-500 mb-4">Décrivez <strong>une seule fois</strong> le nettoyage d'une source (filtrer, standardiser, dédoublonner, enrichir…) : Studio Data produit une table propre, sans toucher à l'original, et <strong>refait le nettoyage automatiquement</strong> à chaque mise à jour de la source.</p>
+                <div id="rcContent"></div>
+            </div>
+        </div>
+        <div id="step-12" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <h2 class="text-lg font-bold text-purple-800 mb-1 flex items-center gap-2">📏 Règles de qualité & score</h2>
+                <p class="text-xs text-slate-500 mb-4">Formalisez vos contrôles en règles réutilisables, exécutez-les en une passe (SQL DuckDB), suivez le score 0–100 pondéré par criticité et son évolution dans le temps.</p>
+                <div id="qrContent"></div>
+            </div>
+        </div>
+        <div id="step-11" class="animate-fade-in hidden">
+            <div id="cockpitContent"></div>
+        </div>
+
+        <div id="step-10" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h2 class="text-lg font-bold text-blue-800 flex items-center gap-2">🧱 Tables conçues</h2>
+                        <p class="text-xs text-slate-500 mt-1 max-w-2xl">Une table se <strong>conçoit à partir d'une ou plusieurs sources</strong> : consolidation multi-sources, renommage métier des attributs, colonnes calculées, clé primaire avec dédoublonnage et détection d'écarts entre sources. La table obtenue s'utilise partout (modèle de données, audit, extraction, objets métier) comme n'importe quelle source.</p>
+                    </div>
+                    <button onclick="tdNewDesign()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow text-sm whitespace-nowrap">➕ Nouvelle table</button>
+                </div>
+            </div>
+            <div id="tablesDesignContent"></div>
+        </div>
+
+        <div id="step-9" class="animate-fade-in hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+                <div class="gov-bar">
+                    <span class="crumb" id="govCrumb"></span>
+                    <span class="flex-grow"></span>
+                    <span id="govActions"></span>
+                    <div class="flex items-center gap-3">
+                        <label data-ro="keep" class="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer select-none border border-slate-200 rounded-lg px-2.5 py-1.5 hover:border-indigo-300" title="Masquer toutes les commandes de modification de la Gouvernance : on ne peut plus que consulter. Le reste de l'outil n'est pas affecté.">
+                            <input type="checkbox" id="govRoChk" data-ro="keep" onchange="govSetReadOnly(this.checked)"> 👁 Mode consultation
+                        </label>
+                        <span id="persistStatus" class="text-xs text-slate-400"></span>
+                    </div>
+                </div>
+                <div id="govFamTabs" class="hidden" aria-hidden="true"></div>
+                <div id="govRoBand" class="hidden"></div>
+                <div id="govContent"></div>
+            </div>
+            <input type="file" id="govImportFile" accept=".json" class="hidden" onchange="importGovernanceBundle(event)">
+        </div>
+
+    </main>
+      </div>
+    </div>
+

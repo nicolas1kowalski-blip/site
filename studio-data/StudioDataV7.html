@@ -12533,9 +12533,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }, true);
         document.addEventListener('focusout', e => { if (e.target === _cbSel) cbReset(true); }, true);
 
-        // ======================= VERSIONNAGE DE L'APPLICATION =======================
-        // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
-        // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
         /* ==================== MODE CONSULTATION DE LA GOUVERNANCE ====================
            Beaucoup de gens ouvrent la gouvernance pour LIRE : comprendre ce qui a été défini,
            relire des définitions, préparer un avis. Aujourd'hui chaque champ de saisie les invite
@@ -12828,10 +12825,18 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
-        const APP_VERSION = '9.5.1';
+        // ======================= VERSIONNAGE DE L'APPLICATION =======================
+        // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
+        // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
+        const APP_VERSION = '9.6.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '9.6.0', d: '2026-09-08', t: 'Le code est découpé en sources lisibles ; le fichier livré est construit', items: [
+                'Le code source vit désormais dans <b>studio-data/src/</b> : 55 fichiers découpés par <b>fonctionnalité</b> — noyau (état, moteur DuckDB, persistance, navigation, thème…), gouvernance (dictionnaire, listes de valeurs, objets métier, applications, glossaire, catalogue…), lineage, modèle de données, sources, qualité, séries temporelles, extraction, tableaux de bord. Chaque fichier a un rôle décrit dans <b>src/README.md</b>.',
+                'Une commande, <code>node studio-data/build.mjs</code>, assemble ces sources en <b>un seul fichier</b> StudioDataV7.html, strictement équivalent (la première construction a été vérifiée octet par octet avec l\'ancien fichier). L\'application reste 100 % locale, un seul fichier à ouvrir.',
+                '<code>node studio-data/build.mjs --check</code> vérifie que le fichier livré correspond bien aux sources ; la suite de tests l\'exécute. Règle : on modifie les sources, jamais le fichier construit.',
+                'Aucun changement fonctionnel dans cette version.'] },
             { v: '9.5.1', d: '2026-09-07', t: 'Qualité & Audit : alertes sémantiques et inspecteur repliés par défaut', items: [
                 'Sur l\'écran Qualité & Audit, les sections <b>Alertes sémantiques</b> et <b>Inspecteur d\'anomalies</b> sont désormais <b>repliées</b> à l\'ouverture : le tableau des colonnes arrive plus vite à l\'écran.',
                 'Chaque titre replié porte un <b>compteur</b> (« 4 alerte(s) », « 12 anomalie(s) », ou « aucune » en vert) pour savoir ce qu\'il contient sans l\'ouvrir. Un clic déplie ; « Tout déplier / replier » reste disponible.'] },
@@ -13420,7 +13425,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         (function () { const b2 = el('appVersionBadge'); if (b2) b2.textContent = 'v' + appVersionShort(); })();
 
-        // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
         /* ================= SÉRIES TEMPORELLES (V7.4) =================
            Le reste de l'application repose sur « une ligne = une entité ». Sur une série
            temporelle ce postulat tombe : une ligne est une OBSERVATION, l'entité est la
@@ -13819,6 +13823,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
         }
         function qrDup(id) { const r = qrRules().find(x => x.id === id); if (!r) return; const c = JSON.parse(JSON.stringify(r)); c.id = 'qr_' + generateId(); c.name = r.name + ' (copie)'; delete c.last; qrRules().push(c); persistAppState(); renderQualityRules(); }
         function qrDel(id) { state.governance.qualityRules = qrRules().filter(x => x.id !== id); persistAppState(); renderQualityRules(); }
+        // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
         // ---- V6.9 : compilateur d'EXPRESSION typée pour la règle « Cohérence (expression) » ----
         // Les sources sont chargées en TEXTE : comparer « [DATE_FIN] >= [DATE_DEBUT] » brut donnait une
         // comparaison LEXICOGRAPHIQUE (01/01/2024 « < » 31/12/2023 → faux positif) et comparer une colonne

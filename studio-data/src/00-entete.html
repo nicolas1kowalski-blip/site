@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Politique de sécurité du contenu : verrouille ce qui ne casse aucune fonctionnalité
+         légitime (pas de plugins, pas de détournement de <base>, pas d'inclusion en iframe) et
+         restreint le chargement de scripts/styles aux seules origines connues. Les gestionnaires
+         inline (onclick), les workers en blob (DuckDB) et le WebAssembly restent autorisés car
+         l'application repose dessus. connect-src reste large : les sources API sont saisies par
+         l'utilisateur et le moteur télécharge son WASM. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; worker-src blob:; child-src blob:; img-src 'self' data: blob:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https: data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <title>Studio Data</title>
+    <script>
+        const _ResizeObserver = window.ResizeObserver;
+        window.ResizeObserver = class ResizeObserver extends _ResizeObserver {
+            constructor(callback) { super((entries, observer) => { window.requestAnimationFrame(() => { try { callback(entries, observer); } catch (e) {} }); }); }
+        };
+    </script>
+    <!-- Bibliothèques épinglées à une version exacte + contrôle d'intégrité (SRI) : le navigateur
+         REFUSE d'exécuter le fichier si ses octets ne correspondent pas à l'empreinte (protection
+         contre un CDN compromis ou un fichier altéré). Ne plus utiliser de version « flottante ». -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- G6 totalement supprimé : tous les graphes sont rendus par le moteur SVG maison (aucune dépendance externe). -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.js" integrity="sha384-MH1axGwz/uQzfIcjFdjEfsM0xlf5mmWfAwwggaOh5IPFvgKFGbJ2PZ4VBbgSYBQN" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.474.0/dist/umd/lucide.min.js" integrity="sha384-wkxmY9HYHJVzx0oZ7k8stpLQ7g7ogSqBha75ozCZmxFadwtaIw5dzXKVWWfi9I36" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!-- DuckDB-Wasm : moteur SQL embarqué (WebAssembly + Web Worker) utilisé pour stocker les tables
+         et exécuter les jointures/agrégations sans devoir tout charger en mémoire JS. -->
+    <script type="module">
+        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm';
+        window.duckdb = duckdb;
+        async function initDuckDB() {
+            const bundles = duckdb.getJsDelivrBundles();
+            const bundle = await duckdb.selectBundle(bundles);
+            const workerUrl = URL.createObjectURL(new Blob(
+                [`importScripts(${JSON.stringify(bundle.mainWorker)});`],
+                { type: 'text/javascript' }
+            ));
+            const worker = new Worker(workerUrl);
+            const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+            const db = new duckdb.AsyncDuckDB(logger, worker);
+            await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+            URL.revokeObjectURL(workerUrl);
+            // Base ADOSSÉE AU DISQUE (OPFS) quand le navigateur le permet : les blocs inutilisés sont
+            // déchargés sur disque au lieu de saturer la RAM — c'est LE remède aux "Out of Memory"
+            // ("Launch the database with a persistent storage back-end"). Repli : base en mémoire.
+            let opfsBacked = false;
+            try {
+                if (navigator.storage && navigator.storage.getDirectory && duckdb.DuckDBAccessMode) {
+                    await db.open({ path: 'opfs://studio_data.db', accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+                    opfsBacked = true;
+                }
+            } catch (e) { console.warn('Base OPFS indisponible, moteur en mémoire :', e); }
+            const conn = await db.connect();
+            const bestEffort = async (sql) => { try { await conn.query(sql); } catch (e) {} };
+            await bestEffort("SET preserve_insertion_order=false");   // grosse économie mémoire sur agrégations/tris
+            // Limite mémoire ADAPTATIVE : ne PAS brider artificiellement (une limite trop basse
+            // provoque des "Out of Memory" sur des sources qui passaient avant). On vise le plafond
+            // WASM (~4 Go) modulé par la RAM de la machine, et on s'appuie sur le débordement disque
+            // (OPFS) + la lecture directe (vues) pour les très gros volumes.
+            let memGB = 3.0;
+            try { if (navigator.deviceMemory) memGB = Math.max(1.8, Math.min(3.4, navigator.deviceMemory * 0.65)); } catch (e) {}
+            window.__duckMemLimit = Math.round(memGB * 1024) + 'MB';
+            await bestEffort(`PRAGMA memory_limit='${window.__duckMemLimit}'`);
+            await bestEffort("PRAGMA threads=1");                     // chaque thread a ses propres tampons : 1 seul = pic mémoire minimal
+            if (!opfsBacked && navigator.storage && navigator.storage.getDirectory) { window.__duckTempDir = 'opfs://studio_tmp'; await bestEffort("SET temp_directory='opfs://studio_tmp'"); }
+            // Purge des tables orphelines d'une session précédente (la base OPFS persiste entre visites,
+            // mais nos noms de tables t_tb_* sont propres à chaque session : on repart net).
+            if (opfsBacked) {
+                try {
+                    const res = await conn.query("SELECT table_name FROM information_schema.tables WHERE table_name LIKE 't\\_tb\\_%' ESCAPE '\\'");
+                    const orphans = [];
+                    for (const row of res.toArray ? res.toArray() : res) {
+                        const n = (row.toJSON ? row.toJSON() : row).table_name;
+                        if (n) orphans.push(String(n));
+                    }
+                    // FILET DE SÉCURITÉ : si le stockage navigateur (IndexedDB) est VIDE alors que des
+                    // tables ont survécu dans la base disque, on ne les supprime plus — elles sont
+                    // proposées à la récupération au démarrage (bandeau dans ① Sources).
+                    let idbEmpty = false;
+                    try {
+                        idbEmpty = await new Promise((resolve) => {
+                            const rq = indexedDB.open('studio_data_db');
+                            rq.onupgradeneeded = () => { const d2 = rq.result; if (!d2.objectStoreNames.contains('meta')) d2.createObjectStore('meta'); if (!d2.objectStoreNames.contains('tabledata')) d2.createObjectStore('tabledata'); };
+                            rq.onerror = () => resolve(false);
+                            rq.onsuccess = () => {
+                                const d2 = rq.result;
+                                if (!d2.objectStoreNames.contains('tabledata')) { d2.close(); resolve(true); return; }
+                                const cr = d2.transaction('tabledata', 'readonly').objectStore('tabledata').count();
+                                cr.onsuccess = () => { d2.close(); resolve(cr.result === 0); };
+                                cr.onerror = () => { d2.close(); resolve(false); };
+                            };
+                        });
+                    } catch (e2) {}
+                    if (idbEmpty && orphans.length) {
+                        window.__opfsOrphans = orphans;
+                    } else {
+                        for (const n of orphans) { const qn = `"${n.replace(/"/g, '""')}"`; await bestEffort(`DROP TABLE IF EXISTS ${qn}`); await bestEffort(`DROP VIEW IF EXISTS ${qn}`); }
+                        await bestEffort('CHECKPOINT');
+                    }
+                } catch (e) {}
+            }
+            window.__duckdbOpfs = opfsBacked;
+            return { db, conn };
+        }
+        window.__duckdbPromise = initDuckDB().catch(err => {
+            console.error('Échec du chargement du moteur DuckDB-Wasm', err);
+            return { error: err };
+        });
+    </script>
+

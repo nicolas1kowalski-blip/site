@@ -61,3 +61,15 @@ Organisée en 4 phases :
 
 Squelette **Tauri** (DuckDB natif, sans limite mémoire navigateur) pour une future version
 bureau — chantier en pause, voir son README.
+
+## Sources et construction (depuis la 9.6.0)
+
+Le code de `StudioDataV7.html` est découpé par fonctionnalité dans `studio-data/src/` (voir `src/README.md`).
+Le fichier livré est construit par :
+
+```
+node studio-data/build.mjs           # assemble src/ -> StudioDataV7.html
+node studio-data/build.mjs --check   # vérifie que le fichier livré est à jour
+```
+
+On modifie les sources, jamais le fichier construit. L'application reste un seul fichier HTML, 100 % local.
