@@ -1,10 +1,14 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '10.1.0';
+        const APP_VERSION = '10.1.1';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.1.1', d: '2026-09-08', t: 'Domaines métier : choix possible par tous, suppression propre', items: [
+                'Choisir un <b>domaine</b> sur un objet, un terme, une application ou une source ne « rebondit » plus : quand le profil actif est contributeur, le changement devient une <b>proposition</b> (pastille ⏳ à côté du sélecteur), validée par le propriétaire du domaine actuel. Auparavant il était refusé avec un simple message.',
+                'Écran Acteurs : chaque domaine affiche ce qui l\'utilise (sources, objets, termes, applis, rôles) et un <b>✕ pour le supprimer</b> partout après confirmation.',
+                'Le <b>dictionnaire</b> permet de choisir le domaine métier d\'une source (son thème) directement dans la fiche de la table ; la liste de domaines des applications reprend tous les domaines déclarés.'] },
             { v: '10.1.0', d: '2026-09-08', t: 'Rôles et validation appliqués à vos données, plus seulement à un scénario', items: [
                 'Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global », désormais relié aux personnes déclarées) <b>valide cet objet</b>, quel que soit son rôle sur le domaine : la fiche indique « 👑 personne reconnue : elle valide cet objet ».',
                 'Le <b>dictionnaire par table technique</b> passe aussi par les propositions : définition, exemples, sensibilité, terme d\'une colonne, description et propriétaire d\'une source. Le domaine d\'une source est son thème ; les propositions se groupent par table dans « À valider » et « Voir » ouvre le dictionnaire sur la bonne table.',

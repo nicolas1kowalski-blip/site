@@ -47,7 +47,7 @@
             const names = readyTableNames();
             const srcNames = sourceTableNames();
             const apps = assets.filter(a => a.kind === 'app');
-            const doms = Array.from(new Set([...themeList(), ...assets.map(a => String(a.domain || '').trim()).filter(Boolean)])).sort();
+            const doms = typeof govDomains === 'function' ? govDomains() : Array.from(new Set([...themeList(), ...assets.map(a => String(a.domain || '').trim()).filter(Boolean)])).sort();
             let html = `<div class="bg-white border border-slate-200 rounded-xl px-4 py-3 mb-4 text-sm text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="text-[10px] uppercase font-bold text-slate-400 mr-1">Modèle</span>
                 <span class="font-bold text-slate-700">🖥 Application</span><span class="text-slate-300">contient →</span>
@@ -85,7 +85,7 @@
                         </div>
                         <div class="flex gap-2 mb-1.5 flex-wrap">
                             <input type="text" value="${escapeHTML(a.owner || '')}" placeholder="${kind === 'app' ? 'Responsable applicatif' : 'Responsable du processus'}" onchange="updateGovAsset('${a.id}','owner',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-44">
-                            <input type="text" value="${escapeHTML(a.domain || '')}" list="assetDomList" placeholder="${kind === 'process' && domEff && !(a.domain || '').trim() ? 'Domaine hérité : ' + domEff : 'Domaine métier'}" onchange="updateGovAsset('${a.id}','domain',this.value)" title="Domaine métier${kind === 'process' ? ' — laissé vide, il est hérité des applications liées' : ''}" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-40 ${kind === 'process' && domEff && !(a.domain || '').trim() ? 'placeholder-emerald-600' : ''}">
+                            <input type="text" value="${escapeHTML(a.domain || '')}" list="assetDomList" placeholder="${kind === 'process' && domEff && !(a.domain || '').trim() ? 'Domaine hérité : ' + domEff : 'Domaine métier'}" onchange="updateGovAsset('${a.id}','domain',this.value)" title="Domaine métier${kind === 'process' ? ' — laissé vide, il est hérité des applications liées' : ''}" class="border border-slate-200 p-1.5 rounded text-xs bg-white w-40 ${kind === 'process' && domEff && !(a.domain || '').trim() ? 'placeholder-emerald-600' : ''}">${typeof propBadgeHtml === 'function' ? propBadgeHtml('asset', { assetId: a.id }, 'domain') : ''}
                             <input type="text" value="${escapeHTML(a.description || '')}" placeholder="Description…" onchange="updateGovAsset('${a.id}','description',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white flex-grow min-w-[140px]">
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5 mb-2"><span class="text-[10px] uppercase font-bold text-indigo-600">📖 Termes du glossaire</span>${termTagsHtml('asset', { assetId: a.id })}</div>

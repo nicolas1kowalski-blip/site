@@ -6,7 +6,7 @@
         //   • Lecteur      : consultation seule.
         // Tant qu'aucune personne n'est déclarée, l'application se comporte comme avant.
         const GOV_ROLES = { owner: ['👑', 'Propriétaire'], contrib: ['✍️', 'Contributeur'], reader: ['👁', 'Lecteur'] };
-        const PROP_FIELD_LABELS = { definition: 'Définition', examples: 'Exemples', sensitivity: 'Sensibilité', owner: 'Propriétaire', multi: 'Nombre de valeurs', name: 'Nom', globalOwner: 'Propriétaire global', description: 'Description', term: 'Terme', contributors: 'Contributeurs' };
+        const PROP_FIELD_LABELS = { definition: 'Définition', examples: 'Exemples', sensitivity: 'Sensibilité', owner: 'Propriétaire', multi: 'Nombre de valeurs', name: 'Nom', globalOwner: 'Propriétaire global', domain: 'Domaine métier', description: 'Description', term: 'Terme', contributors: 'Contributeurs' };
         let _govBypass = false;
         function govPeople() { const g = state.governance; if (!Array.isArray(g.people)) g.people = []; return g.people; }
         function govProposals() { const g = state.governance; if (!Array.isArray(g.proposals)) g.proposals = []; return g.proposals; }
@@ -20,6 +20,27 @@
             return Array.from(s2).filter(Boolean).sort((a, b) => a.localeCompare(b));
         }
         function govAddDomain(name) { name = String(name || '').trim(); if (!name) return; const g = state.governance; g.domainList = g.domainList || []; if (!g.domainList.includes(name)) g.domainList.push(name); persistAppState(); renderGovernance(); }
+        // V10.1.1 — usages d'un domaine (pour l'afficher et le supprimer proprement partout).
+        function govDomainUsage(name) {
+            const g = state.governance; const eq = v => String(v || '').trim() === name;
+            return { tables: Object.values(state.tables).filter(t => eq(t.theme)).length, objects: (g.businessObjects || []).filter(b => eq(b.domain)).length,
+                terms: (g.glossary || []).filter(t2 => eq(t2.domain)).length, assets: (g.assets || []).filter(a => eq(a.domain)).length,
+                roles: govPeople().reduce((n, p) => n + (p.roles || []).filter(r => eq(r.domain)).length, 0) };
+        }
+        function govDomainUsageText(u2) { const parts = []; if (u2.tables) parts.push(u2.tables + ' source(s)'); if (u2.objects) parts.push(u2.objects + ' objet(s)'); if (u2.terms) parts.push(u2.terms + ' terme(s)'); if (u2.assets) parts.push(u2.assets + ' appli/processus'); if (u2.roles) parts.push(u2.roles + ' rôle(s)'); return parts.join(', '); }
+        function govRemoveDomain(name) {
+            name = String(name || '').trim(); if (!name) return;
+            const u2 = govDomainUsage(name); const used = govDomainUsageText(u2);
+            if (!confirm('Supprimer le domaine « ' + name + ' » ?' + (used ? '\nIl est utilisé par : ' + used + '. Ces éléments n\'auront plus de domaine (les rôles associés seront retirés).' : ''))) return;
+            const g = state.governance; const eq = v => String(v || '').trim() === name;
+            g.domainList = (g.domainList || []).filter(d => d !== name);
+            Object.values(state.tables).forEach(t => { if (eq(t.theme)) t.theme = ''; });
+            (g.businessObjects || []).forEach(b => { if (eq(b.domain)) b.domain = ''; });
+            (g.glossary || []).forEach(t2 => { if (eq(t2.domain)) t2.domain = ''; });
+            (g.assets || []).forEach(a => { if (eq(a.domain)) a.domain = ''; });
+            govPeople().forEach(p => { p.roles = (p.roles || []).filter(r => !eq(r.domain)); });
+            persistAppState(); renderNav(); renderGovernance(); showSuccess('Domaine « ' + name + ' » supprimé' + (used ? ' (' + used + ' mis à jour)' : '') + '.');
+        }
         function curUser() { if (!govFeatureOn()) return null; const id = govState.userId || (() => { try { return localStorage.getItem('sd_user'); } catch (e) { return null; } })(); return govPeople().find(p => p.id === id) || null; }
         function govSetUser(id) {
             govState.userId = id || ''; try { localStorage.setItem('sd_user', id || ''); } catch (e) {}
@@ -87,11 +108,13 @@
                 else if (p.kind === 'termlink') { if (p.field === 'add') termTagAdd(p.target.tk, p.target.ctx, p.after); else termTagRemove(p.target.tk, p.target.ctx, p.after); }
                 else if (p.kind === 'dictcol') updateDictColField(p.target.tn, p.target.col, p.field, p.raw !== undefined ? p.raw : p.after);
                 else if (p.kind === 'dict') updateDictField(p.target.tn, p.field, p.after);
+                else if (p.kind === 'table') updateTableTheme(p.target.tableId, p.after);
             } finally { _govBypass = false; }
         }
         function propTraceOn(p, verdict) {
             const g = state.governance; let ent = null;
             if (p.kind === 'dictcol' || p.kind === 'dict') ent = ensureDictEntry(p.target.tn);
+            else if (p.kind === 'table') { const t = state.tables[p.target.tableId]; ent = t ? ensureDictEntry(t.name) : null; }
             if (p.kind === 'attr' || p.kind === 'bo' || (p.kind === 'termlink' && (p.target.tk === 'attr' || p.target.tk === 'bo'))) ent = (g.businessObjects || []).find(b => b.id === (p.target.boId || (p.target.ctx || {}).boId));
             else if (p.kind === 'term') ent = (g.glossary || []).find(t2 => t2.id === p.target.termId);
             else if (p.kind === 'asset' || p.kind === 'termlink') ent = assetById(p.target.assetId || (p.target.ctx || {}).assetId);
@@ -113,7 +136,7 @@
         function propReject(id) { const c = prompt('Motif du refus (optionnel) :') || ''; propDecide(id, 'rejected', c); }
         function propWithdraw(id) { const p = govProposals().find(x => x.id === id); if (!p) return; const u = curUser(); if (u && p.by !== u.id && !propCanDecide(p)) return showError('Seul l\'auteur peut retirer sa proposition.'); state.governance.proposals = govProposals().filter(x => x.id !== id); persistAppState(); renderNav(); renderGovernance(); catRefreshFiche(); }
         function propAcceptAll(keyJson) { const key = JSON.parse(keyJson); govProposals().filter(x => x.status === 'pending' && propGroupKey(x) === key).forEach(x => { if (propCanDecide(x)) { x.status = 'accepted'; x.decidedAt = new Date().toISOString(); x.decidedBy = (curUser() || {}).id || ''; propApply(x); propTraceOn(x, 'accepted'); } }); persistAppState(); renderNav(); renderGovernance(); showSuccess('Propositions de la fiche validées.'); }
-        function propGroupKey(p) { const t = p.target || {}; if (p.kind === 'dictcol' || p.kind === 'dict') return 'tbl:' + t.tn; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
+        function propGroupKey(p) { const t = p.target || {}; if (p.kind === 'table') return 'tbl:' + ((state.tables[t.tableId] || {}).name || t.tableId); if (p.kind === 'dictcol' || p.kind === 'dict') return 'tbl:' + t.tn; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
         function propGroupLabel(key) { const [k, id] = key.split(':'); const g = state.governance; if (k === 'tbl') return '▦ ' + id; if (k === 'bo') { const bo = (g.businessObjects || []).find(b => b.id === id); return bo ? '🏛️ ' + bo.name : id; } if (k === 'term') { const t2 = (g.glossary || []).find(x => x.id === id); return t2 ? '📖 ' + t2.term : id; } const a = assetById(id); return a ? (a.kind === 'process' ? '⚙️ ' : '🖥 ') + a.name : id; }
         function propOpenTarget(id) {
             const p = govProposals().find(x => x.id === id); if (!p) return;
@@ -147,7 +170,7 @@
             const bo = (state.governance.businessObjects || []).find(x => x.id === id); const dom = boDomainOf(bo);
             if (!_govBypass && bo && govFeatureOn() && !govCanEditBo(bo)) {
                 if (!govCanProposeBo(bo)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
-                if (f === 'name' || f === 'domain' || f === 'globalOwner') return govGuard(dom, 'Renommer l\'objet, changer son domaine ou son propriétaire', bo);
+                if (f === 'name' || f === 'globalOwner') return govGuard(dom, 'Renommer l\'objet ou changer son propriétaire', bo);
                 const before = Array.isArray(bo[f]) ? bo[f].join(', ') : (bo[f] || ''); const after = Array.isArray(v) ? v.join(', ') : v;
                 if (String(before) === String(after)) return;
                 return govPropose({ kind: 'bo', domain: dom, target: { boId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de l\'objet « ' + bo.name + ' »', before, after });
@@ -161,16 +184,26 @@
             const t2 = (state.governance.glossary || []).find(x => x.id === id); const dom = t2 ? String(t2.domain || '').trim() : '';
             if (!_govBypass && t2 && govFeatureOn() && !govCanEdit(dom)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
-                if (f === 'domain') return govGuard(dom, 'Changer le domaine d\'un terme');
                 if (String(t2[f] || '') === String(v)) return;
                 return govPropose({ kind: 'term', domain: dom, target: { termId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' du terme « ' + t2.term + ' »', before: t2[f] || '', after: v });
             }
             return _w_updateGlossaryTerm(id, f, v);
         };
+        // V10.1.1 — le domaine d'une SOURCE (thème de la table) suit le même circuit : un contributeur le propose.
+        const _w_updateTableTheme = updateTableTheme;
+        updateTableTheme = function (tId, v) {
+            const t = state.tables[tId]; const dom = t ? String(t.theme || '').trim() : '';
+            if (!_govBypass && t && govFeatureOn() && !govCanEdit(dom)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+                if (dom === String(v || '').trim()) return;
+                return govPropose({ kind: 'table', domain: dom, target: { tableId: tId }, field: 'domain', label: 'Domaine métier de la source « ' + t.name + ' »', before: dom, after: String(v || '').trim() });
+            }
+            return _w_updateTableTheme(tId, v);
+        };
         const _w_updateGovAsset = updateGovAsset;
         updateGovAsset = function (id, f, v) {
             const a = assetById(id); const dom = a ? String(a.domain || '').trim() : '';
-            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'criticality'].includes(f)) {
+            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'criticality', 'domain'].includes(f)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
                 if (String(a[f] || '') === String(v)) return;
                 return govPropose({ kind: 'asset', domain: dom, target: { assetId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + a.name + ' »', before: a[f] || '', after: v });
@@ -257,9 +290,9 @@
         }
         function renderGovPeople() {
             const doms = govDomains(); const u = curUser();
-            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes »). Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global ») valide aussi cet objet, quel que soit son rôle sur le domaine. Toutes les décisions s'appliquent à vos données et sont tracées.</p>
+            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes »). Le <b>propriétaire nommé sur un objet</b> (champ « Propriétaire global ») valide aussi cet objet, quel que soit son rôle sur le domaine. Un contributeur qui change le <b>domaine</b> d'un objet, d'un terme, d'une source ou d'une application en fait une proposition, validée par le propriétaire du domaine actuel. Toutes les décisions s'appliquent à vos données et sont tracées.</p>
                 <div class="flex gap-2"><button onclick="govDemoPeople()" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded-lg font-bold hover:bg-slate-50" title="Crée quatre personnes d'exemple (propriétaire, contributeur, lectrice, administrateur) sur tous les domaines, sans modifier vos données">Exemple de rôles</button><button onclick="govAddPerson()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">+ Personne</button></div></div>`;
-            html += `<div class="flex items-center gap-2 flex-wrap mb-4 bg-white border border-slate-200 rounded-xl p-3"><span class="text-[10px] uppercase font-bold text-slate-500">Domaines métier</span>${doms.length ? doms.map(d => `<span class="text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 font-bold">${escapeHTML(d)}</span>`).join('') : '<span class="text-xs text-slate-400 italic">aucun — ajoutez-en un, ou renseignez le domaine des sources, objets, applications</span>'}<input type="text" id="govNewDom" placeholder="＋ nouveau domaine…" class="border border-dashed border-emerald-300 rounded-full px-3 py-1 text-xs w-44" onkeydown="if(event.key==='Enter'){govAddDomain(this.value); this.value='';}"><button onclick="govAddDomain(el('govNewDom').value); el('govNewDom').value=''" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full font-bold">Ajouter</button></div>`;
+            html += `<div class="flex items-center gap-2 flex-wrap mb-4 bg-white border border-slate-200 rounded-xl p-3"><span class="text-[10px] uppercase font-bold text-slate-500">Domaines métier</span>${doms.length ? doms.map(d => { const ut = govDomainUsageText(govDomainUsage(d)); return `<span class="text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 font-bold inline-flex items-center gap-1.5" title="${escapeHTML(ut || 'non utilisé')}">${escapeHTML(d)}${ut ? `<span class="font-normal opacity-70">· ${escapeHTML(ut)}</span>` : ''}<button onclick="govRemoveDomain('${escapeHTML(d)}')" class="opacity-60 hover:opacity-100 hover:text-red-600" title="Supprimer ce domaine partout">✕</button></span>`; }).join('') : '<span class="text-xs text-slate-400 italic">aucun — ajoutez-en un, ou renseignez le domaine des sources, objets, applications</span>'}<input type="text" id="govNewDom" placeholder="＋ nouveau domaine…" class="border border-dashed border-emerald-300 rounded-full px-3 py-1 text-xs w-44" onkeydown="if(event.key==='Enter'){govAddDomain(this.value); this.value='';}"><button onclick="govAddDomain(el('govNewDom').value); el('govNewDom').value=''" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full font-bold">Ajouter</button></div>`;
             if (!govPeople().length) return html + emptyStateHtml('👥', 'Aucune personne', 'Créez les personnes de votre organisation et affectez-leur un rôle par domaine ; le propriétaire nommé sur un objet valide cet objet. Un exemple de rôles peut aussi être créé pour essayer le circuit.', '+ Personne', 'govAddPerson()');
             html += govPeople().map(p => `<div class="border ${u && u.id === p.id ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'} rounded-xl p-4 mb-3 bg-white">
                 <div class="flex items-center gap-2 flex-wrap mb-2">
