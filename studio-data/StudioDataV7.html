@@ -442,6 +442,36 @@
     .v7-side{width:var(--v7-side-w);flex:0 0 var(--v7-side-w);background:var(--v7-side);color:var(--v7-side-txt);
              display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;
              transition:width .18s ease,flex-basis .18s ease;z-index:40}
+    /* V10 — Personnes, rôles, propositions */
+    .usw{display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--v7-txt) 5%,transparent);border-radius:9px;padding:3px 6px 3px 10px}
+    .usw .usw-lbl{font-size:11px;font-weight:700;color:var(--v7-muted)}
+    .usw select{font-size:12px;font-weight:700;border:1px solid var(--v7-border-strong);border-radius:7px;padding:4px 6px;background:var(--v7-surface);color:var(--v7-txt);max-width:180px}
+    .usw .usw-role{font-size:12px}
+    .usw .usw-todo{font-size:11px;font-weight:800;background:#d97706;color:#fff;border-radius:999px;padding:3px 9px;white-space:nowrap}
+    .v7-nb{margin-left:auto;font-size:10px;font-weight:800;background:#d97706;color:#fff;border-radius:999px;padding:1px 6px;line-height:1.4}
+    body.v7-collapsed .v7-nb{position:absolute;top:2px;right:2px;margin:0;padding:0 4px;font-size:9px}
+    body.v7-collapsed .v7-it{position:relative}
+    .prop-badge{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;font-size:11.5px;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:8px;padding:5px 9px;color:#78350f}
+    .prop-badge .who{font-weight:700;white-space:nowrap}
+    .prop-badge .val{font-weight:600;color:#1e293b;word-break:break-word}
+    .prop-badge .acts{margin-left:auto;display:inline-flex;gap:4px}
+    .prop-badge .acts button{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;border:1px solid}
+    .prop-badge .acts .ok{background:#059669;border-color:#059669;color:#fff}
+    .prop-badge .acts .ko{background:#fff;border-color:#fca5a5;color:#b91c1c}
+    .term-tag.prop{background:#fffbeb;border-color:#fcd34d;border-style:dashed;color:#92400e}
+    .prop-row{display:flex;align-items:flex-start;gap:12px;padding:10px 16px;border-bottom:1px solid #f1f5f9}
+    .prop-row:last-child{border-bottom:0}
+    .prop-diff{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:3px;font-size:12px}
+    .prop-diff .b{color:#64748b;text-decoration:line-through;max-width:38ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .prop-diff .arrow{color:#94a3b8}
+    .prop-diff .a{color:#065f46;font-weight:700;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 7px;max-width:60ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    html[data-theme="dark"] .prop-badge{background:#3b2a08;border-color:#7c5a12;border-left-color:#f59e0b;color:#fde68a}
+    html[data-theme="dark"] .prop-badge .val{color:#f1f5f9}
+    html[data-theme="dark"] .prop-badge .acts .ko{background:#1f2937;border-color:#7f1d1d;color:#fca5a5}
+    html[data-theme="dark"] .term-tag.prop{background:#3b2a08;border-color:#7c5a12;color:#fde68a}
+    html[data-theme="dark"] .prop-row{border-color:#1f2540}
+    html[data-theme="dark"] .prop-diff .b{color:#94a3b8}
+    html[data-theme="dark"] .prop-diff .a{color:#a7f3d0;background:#0f2e26;border-color:#1f6b52}
     /* V9.4 — Une seule navigation visible : le menu latéral. Les familles de l'en-tête ne
        servent que lorsque le menu est réduit (icônes seules). */
     body:not(.v7-collapsed) #v7FamNav{display:none !important}
@@ -1192,6 +1222,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
           <div class="ml-auto flex items-center gap-2 flex-wrap">
             <button onclick="wizOpen('menu')" id="wizTopBtn" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100" title="Assistant guidé : extraire des données ou contrôler leur qualité, pas à pas">🧭 Assistant</button>
 
+            <div id="v7UserSwitch" class="usw" style="display:none"></div>
             <div id="v7FamNav" class="v7-seg"></div>
             <div class="v7-seg" role="group" aria-label="Thème">
               <button onclick="v7SetTheme('light')" id="v7ThLight" title="Thème clair">☀︎</button>
@@ -3359,6 +3390,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
             else if (govState.tab === 'catalog') c.innerHTML = renderGovCatalog();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
+            else if (govState.tab === 'people') c.innerHTML = renderGovPeople();
+            else if (govState.tab === 'review') c.innerHTML = renderGovReview();
             else if (govState.tab === 'srcwatch') c.innerHTML = renderSrcWatch();
             else if (govState.tab === 'flow') c.innerHTML = renderLineageFlow();
             else if (govState.tab === 'share') { govState.tab = 'catalog'; c.innerHTML = renderGovCatalog(); openBackupCenter(); }
@@ -4826,13 +4859,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <button onclick="${del}" class="text-xs text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg border border-red-200 bg-white font-bold" title="Supprimer cet attribut">✕</button></div>
             <div class="bo-sect"><h4>Identité</h4><div class="bo-grid">
                 <div class="bo-fld" style="grid-column:span 2"><label for="boF-name">Nom métier</label><input id="boF-name" type="text" value="${escapeHTML(e2.name)}" onchange="${W('name', true)}" placeholder="ex : Date de fin de construction"></div>
-                <div class="bo-fld"><label>Propriétaire</label><input type="text" value="${escapeHTML(e2.owner || '')}" onchange="${W('owner', false)}" placeholder="${escapeHTML(bo.globalOwner ? '= ' + bo.globalOwner : '— celui de l\'objet —')}"></div>
-                <div class="bo-fld"><label>Nombre de valeurs</label>${boMultiSelectHtml(multi, `boSetMulti('${bo.id}','${stId}','${e2.id}',this.value)`, 'Combien de valeurs cet attribut peut prendre pour un(e) ' + bo.name).replace('class="', 'style="width:100%;min-height:34px;font-size:12.5px;padding:7px 9px;border-radius:8px" class="')}${!multi && cnt.multi ? `<div class="hint">Observé : ${escapeHTML(cnt.label)} (colonnes numérotées) — déclarez-le pour le figer.</div>` : ''}</div>
+                <div class="bo-fld"><label>Propriétaire</label><input type="text" value="${escapeHTML(e2.owner || '')}" onchange="${W('owner', false)}" placeholder="${escapeHTML(bo.globalOwner ? '= ' + bo.globalOwner : '— celui de l\'objet —')}">${propBadgeHtml('attr', { boId: bo.id, stId, elId: e2.id }, 'owner')}</div>
+                <div class="bo-fld"><label>Nombre de valeurs</label>${boMultiSelectHtml(multi, `boSetMulti('${bo.id}','${stId}','${e2.id}',this.value)`, 'Combien de valeurs cet attribut peut prendre pour un(e) ' + bo.name).replace('class="', 'style="width:100%;min-height:34px;font-size:12.5px;padding:7px 9px;border-radius:8px" class="')}${!multi && cnt.multi ? `<div class="hint">Observé : ${escapeHTML(cnt.label)} (colonnes numérotées) — déclarez-le pour le figer.</div>` : ''}${propBadgeHtml('attr', { boId: bo.id, stId, elId: e2.id }, 'multi')}</div>
             </div></div>
             <div class="bo-sect"><h4>Sens métier</h4><div class="bo-grid">
-                <div class="bo-fld" style="grid-column:1/-1"><label>Définition</label><textarea onchange="${W('definition', true)}" placeholder="Ce que désigne cet attribut, en langage métier — ce que verra un consommateur de la donnée dans le catalogue.">${escapeHTML(e2.definition || '')}</textarea></div>
-                <div class="bo-fld" style="grid-column:span 2"><label>Exemples de valeurs</label><div class="flex gap-1.5"><input type="text" value="${escapeHTML(e2.examples || '')}" onchange="${W('examples', false)}" placeholder="ex : PARIS ; LYON" ${e2.examplesAuto ? 'title="Valeurs prises dans la source rattachée"' : ''}>${hasMap ? `<button onclick="boAttrSampleOne('${bo.id}','${e2.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2.5 rounded-lg font-bold hover:bg-indigo-50 whitespace-nowrap" title="Prendre les valeurs les plus fréquentes dans la source">🎲 Échantillonner</button>` : ''}</div>${e2.examplesAuto ? '<div class="hint">Échantillonnés automatiquement depuis la source.</div>' : ''}</div>
-                <div class="bo-fld"><label>Sensibilité</label><select onchange="${W('sensitivity', false)}">${sensOpts(e2.sensitivity || '')}</select></div>
+                <div class="bo-fld" style="grid-column:1/-1"><label>Définition</label><textarea onchange="${W('definition', true)}" placeholder="Ce que désigne cet attribut, en langage métier — ce que verra un consommateur de la donnée dans le catalogue.">${escapeHTML(e2.definition || '')}</textarea>${propBadgeHtml('attr', { boId: bo.id, stId, elId: e2.id }, 'definition')}</div>
+                <div class="bo-fld" style="grid-column:span 2"><label>Exemples de valeurs</label><div class="flex gap-1.5"><input type="text" value="${escapeHTML(e2.examples || '')}" onchange="${W('examples', false)}" placeholder="ex : PARIS ; LYON" ${e2.examplesAuto ? 'title="Valeurs prises dans la source rattachée"' : ''}>${hasMap ? `<button onclick="boAttrSampleOne('${bo.id}','${e2.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-2.5 rounded-lg font-bold hover:bg-indigo-50 whitespace-nowrap" title="Prendre les valeurs les plus fréquentes dans la source">🎲 Échantillonner</button>` : ''}</div>${e2.examplesAuto ? '<div class="hint">Échantillonnés automatiquement depuis la source.</div>' : ''}${propBadgeHtml('attr', { boId: bo.id, stId, elId: e2.id }, 'examples')}</div>
+                <div class="bo-fld"><label>Sensibilité</label><select onchange="${W('sensitivity', false)}">${sensOpts(e2.sensitivity || '')}</select>${propBadgeHtml('attr', { boId: bo.id, stId, elId: e2.id }, 'sensitivity')}</div>
                 <div class="bo-fld" style="grid-column:1/-1"><label>Termes du glossaire (noms métier, synonymes)</label>${termTagsHtml('attr', { boId: bo.id, elId: e2.id })}<div class="hint">Tapez un terme existant ou un nouveau puis Entrée : il devient un synonyme cherchable dans le catalogue.</div></div>
             </div></div>
             <div class="bo-sect"><h4>Provenance (alimenté par)</h4>${prov}</div>
@@ -4907,9 +4940,10 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div class="bo-fld"><label for="bo-own-${bo.id}">Propriétaire global</label><input id="bo-own-${bo.id}" type="text" value="${escapeHTML(bo.globalOwner || '')}" onchange="updateBusinessObject('${bo.id}','globalOwner',this.value); renderGovernance()" placeholder="ex : Direction immobilière"></div>
-                        <div class="bo-fld"><label>Contributeurs (virgules)</label><input type="text" value="${escapeHTML((bo.contributors || []).join(', '))}" onchange="updateBusinessObject('${bo.id}','contributors',this.value.split(',').map(x=>x.trim()).filter(Boolean))" placeholder="ex : DSI, BU Sud"></div>
-                        <div class="bo-fld"><label for="bo-def-${bo.id}">Définition</label><textarea id="bo-def-${bo.id}" rows="2" onchange="updateBusinessObject('${bo.id}','definition',this.value); renderGovernance()" placeholder="Ce qu'est cet objet pour le métier, en une ou deux phrases." style="min-height:38px">${escapeHTML(bo.definition || '')}</textarea></div>
+                        <div class="bo-fld"><label>Domaine métier <span class="font-normal text-slate-400">— qui valide</span></label>${govDomainSelectHtml(bo.domain || '', `updateBusinessObject('${bo.id}','domain',this.value); renderGovernance()`, 'bo-domain-' + bo.id)}${propBadgeHtml('bo', { boId: bo.id }, 'globalOwner')}</div>
+                        <div class="bo-fld"><label for="bo-def-${bo.id}">Définition</label><textarea id="bo-def-${bo.id}" rows="2" onchange="updateBusinessObject('${bo.id}','definition',this.value); renderGovernance()" placeholder="Ce qu'est cet objet pour le métier, en une ou deux phrases." style="min-height:38px">${escapeHTML(bo.definition || '')}</textarea>${propBadgeHtml('bo', { boId: bo.id }, 'definition')}</div>
                     </div>
+                    <div class="flex items-center gap-2 flex-wrap mt-2 text-[11px] text-slate-500"><span class="font-bold">Contributeurs :</span><input type="text" value="${escapeHTML((bo.contributors || []).join(', '))}" onchange="updateBusinessObject('${bo.id}','contributors',this.value.split(',').map(x=>x.trim()).filter(Boolean))" placeholder="ex : DSI, BU Sud (virgules)" class="border border-slate-200 rounded-lg px-2 py-1 text-[11px] bg-white w-72">${govFeatureOn() ? `<span class="ml-auto text-[11px] ${govCanEdit(bo.domain) ? 'text-emerald-700' : (govCanPropose(bo.domain) ? 'text-sky-700' : 'text-slate-500')} font-bold">${govCanEdit(bo.domain) ? '👑 vous validez ce domaine' : (govCanPropose(bo.domain) ? '✍️ vos modifications seront des propositions' : '👁 lecture seule')}</span>` : ''}</div>
                     <div class="flex items-center gap-2 flex-wrap mt-3"><span class="text-[10px] uppercase font-bold text-indigo-600 whitespace-nowrap">📖 Termes de l'objet</span>${termTagsHtml('bo', { boId: bo.id })}</div>
                     ${boCompletenessHtml(bo)}
                     <div id="bo-vol-${bo.id}" class="mt-3"></div>
@@ -6242,7 +6276,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             // V9.3.3 : Entrée OU bouton. Dès qu'on tape, un bouton « ＋ Créer « … » » (terme inconnu)
             // ou « Relier » (terme existant) apparaît : plus besoin de deviner qu'il faut valider.
             const add = opts.readOnly ? '' : `<span class="term-addwrap"><input id="${uid}i" class="term-add" list="${uid}" placeholder="＋ Ajouter un terme…" aria-label="Ajouter un terme" title="Tapez un terme existant (suggestions) ou un NOUVEAU terme, puis Entrée ou le bouton : il est créé dans le glossaire et relié ici" oninput="termTagHint(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();termTagAdd('${kind}',${ctxJson},this.value);}" onkeyup="if(event.key==='Enter'){event.preventDefault();}"><button type="button" id="${uid}b" class="term-go" hidden onclick="termTagAdd('${kind}',${ctxJson},el('${uid}i').value)">＋ Créer</button></span><datalist id="${uid}">${remain.map(t2 => `<option value="${escapeHTML(t2.term)}"></option>`).join('')}</datalist>`;
-            return `<div class="term-tags">${tags}${inh}${!tags && !inh && opts.readOnly ? '<span class="term-none">aucun terme</span>' : ''}${add}</div>`;
+            const pend = (typeof govFeatureOn === 'function' && govFeatureOn() && kind !== 'col') ? propPending('termlink', { tk: kind, ctx }) : [];
+            const pendHtml = pend.map(p => `<span class="term-tag prop" title="Proposé par ${escapeHTML(govPersonName(p.by))}">${p.field === 'add' ? '⏳ + ' : '⏳ − '}${escapeHTML(p.field === 'add' ? p.after : p.before)}${govCanEdit(p.domain) ? `<button class="x" style="color:#047857" onclick="propAccept('${p.id}')" title="Valider">✓</button><button class="x" onclick="propReject('${p.id}')" title="Refuser">✕</button>` : ''}</span>`).join('');
+            return `<div class="term-tags">${tags}${inh}${pendHtml}${!tags && !inh && opts.readOnly ? '<span class="term-none">aucun terme</span>' : ''}${add}</div>`;
         }
         function termTagHint(inp) {
             const b = el(inp.id.replace(/i$/, 'b')); if (!b) return;
@@ -6367,7 +6403,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         <span class="text-[11px] text-slate-500">${tg.length ? 'désigne ' + tg.length + ' élément(s)' : '<span class="text-amber-700 font-bold">ne désigne rien pour l\'instant</span>'}</span>
                         <button onclick="removeGlossaryTerm('${g.id}')" class="text-red-500 hover:text-red-700 px-2 py-1 rounded-lg border border-red-200 bg-white text-xs font-bold ml-auto" title="Supprimer le terme">🗑</button>
                     </div>
-                    <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme, en langage métier…" class="w-full border border-slate-200 p-2 rounded-lg text-xs mb-3 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>
+                    <div class="flex items-center gap-2 flex-wrap mb-2"><span class="text-[10px] uppercase font-bold text-slate-500">Domaine</span>${govDomainSelectHtml(g.domain || '', `updateGlossaryTerm('${g.id}','domain',this.value); renderGovernance()`)}</div>
+                    <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme, en langage métier…" class="w-full border border-slate-200 p-2 rounded-lg text-xs mb-1 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>${propBadgeHtml('term', { termId: g.id }, 'definition')}<div class="mb-2"></div>
                     <div class="flex flex-wrap items-center gap-1.5 mb-2">
                         <span class="text-[10px] uppercase font-bold text-sky-700 w-40">🔹 Attributs d'objet</span>
                         ${aChips || '<span class="text-xs text-slate-400 italic">aucun attribut</span>'}
@@ -9037,6 +9074,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                   { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Patrimoine' },
                   { g: 'model', icon: '🧬', label: 'Modèle de données', fam: 'Patrimoine' },
                   { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
+                  { g: 'people', icon: '👥', label: 'Personnes & rôles', fam: 'Acteurs' },
                   { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
                   { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
                   { g: 'vlists', icon: '🎚️', label: 'Listes de valeurs', fam: 'Sens métier' },
@@ -9045,6 +9083,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                   { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
                   { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Lineage', hidden: true },
                   { g: 'srcwatch', icon: '🛰️', label: 'Surveillance des sources', fam: 'Contrôle' },
+                  { g: 'review', icon: '✅', label: 'À valider', fam: 'Contrôle' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Contrôle' },
               ] },
         ];
@@ -9251,7 +9290,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const itemsHtml = items.map(t => {
                         const isOn = on && (t.n === currentTab || (p.id === 'gov' && govState.tab === t.g));
                         const act = p.id === 'gov' ? `openGovTab('${t.g}')` : `switchTab(${t.n})`;
-                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span></button>`;
+                        const nb = (p.id === 'gov' && t.g === 'review' && typeof propCountPendingFor === 'function' && govFeatureOn()) ? propCountPendingFor() : 0;
+                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}${nb ? ' — ' + nb + ' proposition(s) à valider' : ''}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span>${nb ? `<span class="v7-nb">${nb}</span>` : ''}</button>`;
                     }).join('');
                     return `<div class="v7-grp${on ? ' on open' : ''}" data-phase="${p.id}">
                         <button class="hd" onclick="v7ClickPhase('${p.id}')" title="${escapeHTML(p.label)} — ${escapeHTML(p.desc || '')}">
@@ -9280,6 +9320,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     fam.innerHTML = fams.map(f => `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${v7Ico(f.icon)}${escapeHTML(f.name)}</button>`).join('');
                 }
             }
+            if (typeof renderUserSwitch === 'function') renderUserSwitch();
             if (window.lucide) { try { lucide.createIcons(); } catch (e) {} }
         }
         // Cliquer une phase : on l'ouvre et on va sur son premier écran.
@@ -11336,7 +11377,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 // restent cherchables (mots-clés) et sont listés à part dans la fiche, attribut par attribut.
                 const attrTerms = Array.from(new Set((boAllAttrRows(bo) || []).flatMap(r => termsOfAttr(bo.id, r.el.id).map(x => x.term))));
                 push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
-                desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
+                desc: bo.definition || '', dom: String(bo.domain || '').trim() || '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
                 tags: ['objet métier', ...syns.map(x => '📖 ' + x)], kw: attrTerms, bo: bo.id, syns });
                 // V9.5 : chaque attribut métier est une fiche du catalogue (navigable depuis l'objet,
                 // trouvable par recherche). Il n'encombre pas la liste par défaut : il n'apparaît
@@ -11731,6 +11772,284 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (t) { const sel2 = el('baseTableSelect'); if (sel2) { sel2.value = t.id; try { handleBaseTableChange(); } catch (er) {} } }
         }
 
+        // ======================= V10 : PERSONNES, RÔLES & VALIDATION DES PROPOSITIONS =======================
+        // Démonstrateur mono-poste : on choisit « qui on est » dans l'en-tête (profil actif,
+        // déclaratif). Une personne a un ou plusieurs couples (domaine métier, rôle).
+        //   • Propriétaire : modifie directement et VALIDE les propositions de son domaine.
+        //   • Contributeur : ses modifications deviennent des PROPOSITIONS (rien n'est écrasé).
+        //   • Lecteur      : consultation seule.
+        // Tant qu'aucune personne n'est déclarée, l'application se comporte comme avant.
+        const GOV_ROLES = { owner: ['👑', 'Propriétaire'], contrib: ['✍️', 'Contributeur'], reader: ['👁', 'Lecteur'] };
+        const PROP_FIELD_LABELS = { definition: 'Définition', examples: 'Exemples', sensitivity: 'Sensibilité', owner: 'Propriétaire', multi: 'Nombre de valeurs', name: 'Nom', globalOwner: 'Propriétaire global', description: 'Description', term: 'Terme', contributors: 'Contributeurs' };
+        let _govBypass = false;
+        function govPeople() { const g = state.governance; if (!Array.isArray(g.people)) g.people = []; return g.people; }
+        function govProposals() { const g = state.governance; if (!Array.isArray(g.proposals)) g.proposals = []; return g.proposals; }
+        function govFeatureOn() { return govPeople().length > 0; }
+        function govDomains() {
+            const g = state.governance; const s2 = new Set([...(g.domainList || []), ...themeList()]);
+            (g.assets || []).forEach(a => { if ((a.domain || '').trim()) s2.add(a.domain.trim()); });
+            (g.businessObjects || []).forEach(bo => { if ((bo.domain || '').trim()) s2.add(bo.domain.trim()); });
+            (g.glossary || []).forEach(t2 => { if ((t2.domain || '').trim()) s2.add(t2.domain.trim()); });
+            govPeople().forEach(p => (p.roles || []).forEach(r => { if (r.domain) s2.add(r.domain); }));
+            return Array.from(s2).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        }
+        function govAddDomain(name) { name = String(name || '').trim(); if (!name) return; const g = state.governance; g.domainList = g.domainList || []; if (!g.domainList.includes(name)) g.domainList.push(name); persistAppState(); renderGovernance(); }
+        function curUser() { if (!govFeatureOn()) return null; const id = govState.userId || (() => { try { return localStorage.getItem('sd_user'); } catch (e) { return null; } })(); return govPeople().find(p => p.id === id) || null; }
+        function govSetUser(id) {
+            govState.userId = id || ''; try { localStorage.setItem('sd_user', id || ''); } catch (e) {}
+            const u = curUser();
+            // Un lecteur partout (aucun domaine en propriétaire ni contributeur) bascule en consultation.
+            const onlyReader = u && !(u.roles || []).some(r => r.role === 'owner' || r.role === 'contrib' || r.role === 'admin');
+            if (govIsReadOnly() !== !!onlyReader) govSetReadOnly(!!onlyReader);
+            renderNav(); renderGovernance();
+            if (u) showSuccess(`Vous êtes maintenant ${u.name}${govRoleSummary(u) ? ' — ' + govRoleSummary(u) : ''}.`);
+        }
+        function govRoleSummary(u) { return (u.roles || []).map(r => (GOV_ROLES[r.role] ? GOV_ROLES[r.role][1] : r.role) + (r.domain ? ' · ' + r.domain : ' · tous domaines')).join(', '); }
+        // Rôle de la personne active sur un domaine : admin (rôle sur « tous domaines »), owner, contrib, reader.
+        function govRoleIn(domain) {
+            const u = curUser(); if (!u) return 'admin';
+            const rs = u.roles || []; const dom = String(domain || '').trim();
+            const pick = rs.filter(r => !r.domain || r.domain === dom);
+            if (pick.some(r => r.role === 'admin')) return 'admin';
+            if (pick.some(r => r.role === 'owner')) return 'owner';
+            if (pick.some(r => r.role === 'contrib')) return 'contrib';
+            if (pick.some(r => r.role === 'reader')) return 'reader';
+            // Sans domaine déclaré sur l'élément : tout propriétaire / contributeur agit selon son meilleur rôle.
+            if (!dom) { if (rs.some(r => r.role === 'owner')) return 'owner'; if (rs.some(r => r.role === 'contrib')) return 'contrib'; }
+            return 'reader';
+        }
+        function govCanEdit(domain) { const r = govRoleIn(domain); return r === 'admin' || r === 'owner'; }
+        function govCanPropose(domain) { return govRoleIn(domain) === 'contrib'; }
+        // Garde des opérations de STRUCTURE (réservées aux propriétaires) : renvoie true si autorisé.
+        function govGuard(domain, what) {
+            if (_govBypass || govCanEdit(domain)) return true;
+            showError((what || 'Cette opération') + ' est réservée au propriétaire du domaine' + (domain ? ' « ' + domain + ' »' : '') + '. Les contributeurs proposent des modifications de sens (définition, exemples, sensibilité, termes…).');
+            return false;
+        }
+        function boDomainOf(bo) { return bo ? String(bo.domain || '').trim() : ''; }
+        function govPersonName(id) { const p = govPeople().find(x => x.id === id); return p ? p.name : (id || '?'); }
+        // ---- Propositions ----
+        function govPropose(p) {
+            const u = curUser(); const list = govProposals();
+            // une proposition en attente sur la même cible + champ est remplacée
+            const same = list.find(x => x.status === 'pending' && x.kind === p.kind && x.field === p.field && JSON.stringify(x.target) === JSON.stringify(p.target) && (p.kind !== 'termlink' || x.after === p.after));
+            if (same) { same.after = p.after; same.at = new Date().toISOString(); }
+            else list.push(Object.assign({ id: 'pr_' + generateId(), at: new Date().toISOString(), by: u ? u.id : '', status: 'pending', comment: '' }, p));
+            persistAppState();
+            showSuccess(`Proposition enregistrée : ${p.label}. En attente de validation par un propriétaire du domaine${p.domain ? ' « ' + p.domain + ' »' : ''}.`);
+            renderNav(); renderGovernance(); catRefreshFiche();
+        }
+        function propPending(kind, target, field) { return govProposals().filter(x => x.status === 'pending' && x.kind === kind && (!field || x.field === field) && JSON.stringify(x.target) === JSON.stringify(target)); }
+        function propCountPendingFor(u) { u = u || curUser(); return govProposals().filter(x => x.status === 'pending' && (!u || govRoleIn(x.domain) === 'owner' || govRoleIn(x.domain) === 'admin')).length; }
+        function propFmt(v) { if (v === '' || v == null) return '<i class="text-slate-400">vide</i>'; return escapeHTML(String(v)); }
+        function propApply(p) {
+            _govBypass = true;
+            try {
+                if (p.kind === 'attr') boAttrWrite(p.target.boId, p.target.stId || '', p.target.elId, p.field, p.after);
+                else if (p.kind === 'bo') updateBusinessObject(p.target.boId, p.field, p.after);
+                else if (p.kind === 'term') updateGlossaryTerm(p.target.termId, p.field, p.after);
+                else if (p.kind === 'asset') updateGovAsset(p.target.assetId, p.field, p.after);
+                else if (p.kind === 'termlink') { if (p.field === 'add') termTagAdd(p.target.tk, p.target.ctx, p.after); else termTagRemove(p.target.tk, p.target.ctx, p.after); }
+            } finally { _govBypass = false; }
+        }
+        function propTraceOn(p, verdict) {
+            const g = state.governance; let ent = null;
+            if (p.kind === 'attr' || p.kind === 'bo' || (p.kind === 'termlink' && (p.target.tk === 'attr' || p.target.tk === 'bo'))) ent = (g.businessObjects || []).find(b => b.id === (p.target.boId || (p.target.ctx || {}).boId));
+            else if (p.kind === 'term') ent = (g.glossary || []).find(t2 => t2.id === p.target.termId);
+            else if (p.kind === 'asset' || p.kind === 'termlink') ent = assetById(p.target.assetId || (p.target.ctx || {}).assetId);
+            if (!ent) return;
+            ent.history = ent.history || [];
+            ent.history.push({ at: new Date().toISOString(), from: 'Proposé', to: verdict === 'accepted' ? 'Validé' : 'Refusé', by: govPersonName(p.decidedBy), comment: `${p.label} — proposé par ${govPersonName(p.by)}${p.comment ? ' · ' + p.comment : ''}` });
+            if (ent.history.length > 100) ent.history = ent.history.slice(-100);
+        }
+        function propDecide(id, verdict, comment) {
+            const p = govProposals().find(x => x.id === id); if (!p || p.status !== 'pending') return;
+            if (!govCanEdit(p.domain)) return showError('Seul un propriétaire du domaine' + (p.domain ? ' « ' + p.domain + ' »' : '') + ' peut décider.');
+            p.status = verdict; p.decidedAt = new Date().toISOString(); p.decidedBy = (curUser() || {}).id || ''; p.comment = comment || '';
+            if (verdict === 'accepted') propApply(p);
+            propTraceOn(p, verdict);
+            persistAppState(); renderNav(); renderGovernance(); catRefreshFiche();
+            showSuccess(verdict === 'accepted' ? 'Proposition validée et appliquée.' : 'Proposition refusée.');
+        }
+        function propAccept(id) { propDecide(id, 'accepted', ''); }
+        function propReject(id) { const c = prompt('Motif du refus (optionnel) :') || ''; propDecide(id, 'rejected', c); }
+        function propWithdraw(id) { const p = govProposals().find(x => x.id === id); if (!p) return; const u = curUser(); if (u && p.by !== u.id && !govCanEdit(p.domain)) return showError('Seul l\'auteur peut retirer sa proposition.'); state.governance.proposals = govProposals().filter(x => x.id !== id); persistAppState(); renderNav(); renderGovernance(); catRefreshFiche(); }
+        function propAcceptAll(keyJson) { const key = JSON.parse(keyJson); govProposals().filter(x => x.status === 'pending' && propGroupKey(x) === key).forEach(x => { if (govCanEdit(x.domain)) { x.status = 'accepted'; x.decidedAt = new Date().toISOString(); x.decidedBy = (curUser() || {}).id || ''; propApply(x); propTraceOn(x, 'accepted'); } }); persistAppState(); renderNav(); renderGovernance(); showSuccess('Propositions de la fiche validées.'); }
+        function propGroupKey(p) { const t = p.target || {}; return p.kind === 'term' ? 'term:' + t.termId : (p.kind === 'asset' || (p.kind === 'termlink' && t.tk === 'asset') ? 'asset:' + (t.assetId || (t.ctx || {}).assetId) : 'bo:' + (t.boId || (t.ctx || {}).boId)); }
+        function propGroupLabel(key) { const [k, id] = key.split(':'); const g = state.governance; if (k === 'bo') { const bo = (g.businessObjects || []).find(b => b.id === id); return bo ? '🏛️ ' + bo.name : id; } if (k === 'term') { const t2 = (g.glossary || []).find(x => x.id === id); return t2 ? '📖 ' + t2.term : id; } const a = assetById(id); return a ? (a.kind === 'process' ? '⚙️ ' : '🖥 ') + a.name : id; }
+        function propOpenTarget(id) {
+            const p = govProposals().find(x => x.id === id); if (!p) return;
+            const key = propGroupKey(p); const [k, tid] = key.split(':');
+            if (k === 'bo') { govState.selectedBoId = tid; govState.boTab = 'structure'; govState.structView = 'fiche'; const elId = p.target.elId || (p.target.ctx || {}).elId; if (elId) govState.boSel = { kind: 'attr', stId: p.target.stId || '', elId }; openGovTab('objects'); }
+            else if (k === 'term') { termTagOpen(tid); }
+            else openGovTab('assets');
+        }
+        // Pastille « proposition en attente » à côté d'un champ (avec décision si on est propriétaire).
+        function propBadgeHtml(kind, target, field) {
+            const ps = propPending(kind, target, field); if (!ps.length) return '';
+            return ps.map(p => `<div class="prop-badge" title="Proposé le ${new Date(p.at).toLocaleString('fr-FR')}"><span class="who">⏳ ${escapeHTML(govPersonName(p.by))} propose :</span> <span class="val">${propFmt(p.after)}</span>${govCanEdit(p.domain) ? `<span class="acts"><button data-ro="keep" onclick="propAccept('${p.id}')" class="ok" title="Valider et appliquer">✓ Valider</button><button data-ro="keep" onclick="propReject('${p.id}')" class="ko" title="Refuser">✕</button></span>` : ((curUser() || {}).id === p.by ? `<span class="acts"><button data-ro="keep" onclick="propWithdraw('${p.id}')" class="ko" title="Retirer ma proposition">retirer</button></span>` : '')}</div>`).join('');
+        }
+        // ---- Interception des écritures : un contributeur PROPOSE au lieu d'écrire ----
+        const _w_boAttrWrite = boAttrWrite;
+        boAttrWrite = function (boId, stId, elId, f, v) {
+            const bo = (state.governance.businessObjects || []).find(x => x.id === boId);
+            const dom = boDomainOf(bo);
+            if (!_govBypass && bo && govFeatureOn() && !govCanEdit(dom)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+                const r = (boAllAttrRows(bo) || []).find(x => x.el.id === elId); const before = r ? (r.el[f] || '') : '';
+                if (String(before) === String(v)) return;
+                if (f === 'name' || f === 'col') return govGuard(dom, 'Renommer ou rattacher un attribut'); // structure
+                return govPropose({ kind: 'attr', domain: dom, target: { boId, stId: stId || '', elId }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + (r ? r.el.name : elId) + ' » (' + bo.name + ')', before, after: v });
+            }
+            return _w_boAttrWrite(boId, stId, elId, f, v);
+        };
+        const _w_updateBusinessObject = updateBusinessObject;
+        updateBusinessObject = function (id, f, v) {
+            const bo = (state.governance.businessObjects || []).find(x => x.id === id); const dom = boDomainOf(bo);
+            if (!_govBypass && bo && govFeatureOn() && !govCanEdit(dom)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
+                if (f === 'name' || f === 'domain') return govGuard(dom, 'Renommer l\'objet ou changer son domaine');
+                const before = Array.isArray(bo[f]) ? bo[f].join(', ') : (bo[f] || ''); const after = Array.isArray(v) ? v.join(', ') : v;
+                if (String(before) === String(after)) return;
+                return govPropose({ kind: 'bo', domain: dom, target: { boId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de l\'objet « ' + bo.name + ' »', before, after });
+            }
+            return _w_updateBusinessObject(id, f, v);
+        };
+        const _w_updateGlossaryTerm = updateGlossaryTerm;
+        updateGlossaryTerm = function (id, f, v) {
+            const t2 = (state.governance.glossary || []).find(x => x.id === id); const dom = t2 ? String(t2.domain || '').trim() : '';
+            if (!_govBypass && t2 && govFeatureOn() && !govCanEdit(dom)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+                if (f === 'domain') return govGuard(dom, 'Changer le domaine d\'un terme');
+                if (String(t2[f] || '') === String(v)) return;
+                return govPropose({ kind: 'term', domain: dom, target: { termId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' du terme « ' + t2.term + ' »', before: t2[f] || '', after: v });
+            }
+            return _w_updateGlossaryTerm(id, f, v);
+        };
+        const _w_updateGovAsset = updateGovAsset;
+        updateGovAsset = function (id, f, v) {
+            const a = assetById(id); const dom = a ? String(a.domain || '').trim() : '';
+            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'criticality'].includes(f)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+                if (String(a[f] || '') === String(v)) return;
+                return govPropose({ kind: 'asset', domain: dom, target: { assetId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + a.name + ' »', before: a[f] || '', after: v });
+            }
+            if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom)) return govGuard(dom, 'Modifier la structure d\'une application');
+            return _w_updateGovAsset(id, f, v);
+        };
+        function termCtxDomain(tk, ctx) { if (tk === 'asset') { const a = assetById(ctx.assetId); return a ? String(a.domain || '').trim() : ''; } const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return boDomainOf(bo); }
+        const _w_termTagAdd = termTagAdd;
+        termTagAdd = function (kind, ctx, name) {
+            name = String(name || '').trim(); if (!name) return;
+            const dom = termCtxDomain(kind, ctx);
+            if (!_govBypass && govFeatureOn() && !govCanEdit(dom)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+                const t2 = termByName(name);
+                return govPropose({ kind: 'termlink', domain: dom, target: { tk: kind, ctx }, field: 'add', label: 'Poser le terme « ' + (t2 ? t2.term : name) + ' »' + (t2 ? '' : ' (nouveau)') + ' sur ' + govTermCtxLabel(kind, ctx), before: '', after: name });
+            }
+            return _w_termTagAdd(kind, ctx, name);
+        };
+        const _w_termTagRemove = termTagRemove;
+        termTagRemove = function (kind, ctx, termId) {
+            const dom = termCtxDomain(kind, ctx);
+            if (!_govBypass && govFeatureOn() && !govCanEdit(dom)) {
+                if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
+                return govPropose({ kind: 'termlink', domain: dom, target: { tk: kind, ctx }, field: 'remove', label: 'Retirer le terme « ' + termNameOf(termId) + ' » de ' + govTermCtxLabel(kind, ctx), before: termNameOf(termId), after: termId });
+            }
+            return _w_termTagRemove(kind, ctx, termId);
+        };
+        function govTermCtxLabel(kind, ctx) { const g = state.governance; if (kind === 'asset') { const a = assetById(ctx.assetId); return a ? a.name : '?'; } const bo = (g.businessObjects || []).find(x => x.id === ctx.boId); if (!bo) return '?'; if (kind === 'bo') return 'l\'objet « ' + bo.name + ' »'; const r = (boAllAttrRows(bo) || []).find(x => x.el.id === ctx.elId); return '« ' + (r ? r.el.name : '?') + ' » (' + bo.name + ')'; }
+        // Structure : réservée aux propriétaires
+        [['addBoElement', 'Ajouter un attribut'], ['boAddAttrAndSelect', 'Ajouter un attribut'], ['removeBoElement', 'Supprimer un attribut'], ['addBoMapping', 'Rattacher une colonne'], ['removeBoMapping', 'Détacher une colonne'], ['addBoStructure', 'Créer une facette'], ['removeBoStructure', 'Supprimer une facette'], ['addFacetElement', 'Ajouter un attribut de facette'], ['removeFacetElement', 'Supprimer un attribut de facette'], ['removeBusinessObject', 'Supprimer un objet'], ['boMoveEl', 'Réordonner les attributs']].forEach(([nm, what]) => {
+            const orig = window[nm]; if (typeof orig !== 'function') return;
+            window[nm] = function (boId) { const bo = (state.governance.businessObjects || []).find(x => x.id === boId); if (!_govBypass && govFeatureOn() && bo && !govGuard(boDomainOf(bo), what)) return; return orig.apply(this, arguments); };
+        });
+        // ---- Sélecteur « Vous êtes » (en-tête) ----
+        function renderUserSwitch() {
+            const box = el('v7UserSwitch'); if (!box) return;
+            if (!govFeatureOn()) { box.innerHTML = ''; box.style.display = 'none'; return; }
+            box.style.display = '';
+            const u = curUser(); const n = u ? propCountPendingFor(u) : 0;
+            box.innerHTML = `<span class="usw-lbl">Vous êtes</span><select data-ro="keep" onchange="govSetUser(this.value)" aria-label="Profil actif" title="Profil actif (déclaratif : démonstrateur mono-poste)"><option value="">— choisir —</option>${govPeople().map(p => `<option value="${p.id}" ${u && u.id === p.id ? 'selected' : ''}>${escapeHTML(p.name)}</option>`).join('')}</select>${u ? `<span class="usw-role" title="${escapeHTML(govRoleSummary(u))}">${(u.roles || []).slice(0, 2).map(r => (GOV_ROLES[r.role] || ['', r.role])[0]).join('')}</span>` : ''}${n ? `<button data-ro="keep" onclick="openGovTab('review')" class="usw-todo" title="Propositions à valider dans vos domaines">${n} à valider</button>` : ''}`;
+        }
+        // ---- Écran Personnes & rôles ----
+        function govAddPerson() { govPeople().push({ id: 'pe_' + generateId(), name: 'Nouvelle personne', email: '', roles: [] }); persistAppState(); renderGovernance(); }
+        function govSetPerson(id, f, v) { const p = govPeople().find(x => x.id === id); if (p) { p[f] = v; persistAppState(); if (f === 'name') { renderNav(); renderGovernance(); } } }
+        function govRemovePerson(id) { state.governance.people = govPeople().filter(x => x.id !== id); if (govState.userId === id) govSetUser(''); persistAppState(); renderNav(); renderGovernance(); }
+        function govAddRole(id) { const p = govPeople().find(x => x.id === id); if (!p) return; const dom = (el('pe-dom-' + id) || {}).value || '', role = (el('pe-role-' + id) || {}).value || 'contrib'; p.roles = p.roles || []; if (!p.roles.some(r => r.domain === dom && r.role === role)) p.roles.push({ domain: dom, role }); persistAppState(); renderNav(); renderGovernance(); }
+        function govRemoveRole(id, i) { const p = govPeople().find(x => x.id === id); if (!p) return; (p.roles || []).splice(i, 1); persistAppState(); renderNav(); renderGovernance(); }
+        function govDemoPeople() {
+            const doms = govDomains(); const d0 = doms[0] || 'Patrimoine';
+            if (!doms.length) govAddDomain(d0);
+            const g = state.governance;
+            (g.businessObjects || []).forEach(bo => { if (!bo.domain) bo.domain = d0; });
+            (g.glossary || []).forEach(t2 => { if (!t2.domain) t2.domain = d0; });
+            const mk = (name, email, roles) => { if (!govPeople().some(p => p.name === name)) govPeople().push({ id: 'pe_' + generateId(), name, email, roles }); };
+            mk('Alice Martin', 'alice@exemple.fr', [{ domain: d0, role: 'owner' }]);
+            mk('Bob Durand', 'bob@exemple.fr', [{ domain: d0, role: 'contrib' }]);
+            mk('Chloé Petit', 'chloe@exemple.fr', [{ domain: d0, role: 'reader' }]);
+            mk('Admin gouvernance', 'admin@exemple.fr', [{ domain: '', role: 'admin' }]);
+            persistAppState(); govSetUser(govPeople().find(p => p.name === 'Bob Durand').id);
+            showSuccess(`Jeu de démonstration créé sur le domaine « ${d0} » : Alice (propriétaire), Bob (contributeur), Chloé (lectrice), Admin. Vous êtes Bob : modifiez une définition, puis passez en Alice pour la valider.`);
+        }
+        function renderGovPeople() {
+            const doms = govDomains(); const u = curUser();
+            let html = `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><p class="text-sm text-slate-600 max-w-3xl">Chaque personne a un ou plusieurs couples <b>domaine métier → rôle</b>. Le <b>propriétaire</b> modifie et valide ; le <b>contributeur</b> propose ; le <b>lecteur</b> consulte. Le profil actif se choisit dans l'en-tête (« Vous êtes ») — démonstrateur mono-poste, sans authentification.</p>
+                <div class="flex gap-2"><button onclick="govDemoPeople()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg font-bold hover:bg-indigo-50" title="Crée Alice (propriétaire), Bob (contributeur), Chloé (lectrice) et un administrateur sur le premier domaine">🎬 Jeu de démonstration</button><button onclick="govAddPerson()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">+ Personne</button></div></div>`;
+            html += `<div class="flex items-center gap-2 flex-wrap mb-4 bg-white border border-slate-200 rounded-xl p-3"><span class="text-[10px] uppercase font-bold text-slate-500">Domaines métier</span>${doms.length ? doms.map(d => `<span class="text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 font-bold">${escapeHTML(d)}</span>`).join('') : '<span class="text-xs text-slate-400 italic">aucun — ajoutez-en un, ou renseignez le domaine des sources, objets, applications</span>'}<input type="text" id="govNewDom" placeholder="＋ nouveau domaine…" class="border border-dashed border-emerald-300 rounded-full px-3 py-1 text-xs w-44" onkeydown="if(event.key==='Enter'){govAddDomain(this.value); this.value='';}"><button onclick="govAddDomain(el('govNewDom').value); el('govNewDom').value=''" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full font-bold">Ajouter</button></div>`;
+            if (!govPeople().length) return html + emptyStateHtml('👥', 'Aucune personne', 'Créez les personnes et affectez-leur un rôle par domaine — ou chargez le jeu de démonstration pour voir le circuit de validation en action.', '🎬 Jeu de démonstration', 'govDemoPeople()');
+            html += govPeople().map(p => `<div class="border ${u && u.id === p.id ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'} rounded-xl p-4 mb-3 bg-white">
+                <div class="flex items-center gap-2 flex-wrap mb-2">
+                    <span class="cat-oav" style="background:${catOwnColor(p.name)}">${escapeHTML(p.name.split(/\s+/).map(x => x[0] || '').join('').toUpperCase().slice(0, 2))}</span>
+                    <input type="text" value="${escapeHTML(p.name)}" onchange="govSetPerson('${p.id}','name',this.value)" class="font-bold text-sm border border-slate-300 px-2.5 py-1.5 rounded-lg w-56 bg-white" aria-label="Nom">
+                    <input type="text" value="${escapeHTML(p.email || '')}" onchange="govSetPerson('${p.id}','email',this.value)" placeholder="e-mail" class="text-xs border border-slate-200 px-2.5 py-1.5 rounded-lg w-56 bg-white" aria-label="E-mail">
+                    ${u && u.id === p.id ? '<span class="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-800 rounded-full px-2 py-0.5">profil actif</span>' : `<button data-ro="keep" onclick="govSetUser('${p.id}')" class="text-[11px] font-bold text-indigo-700 hover:underline">Devenir cette personne</button>`}
+                    <button onclick="govRemovePerson('${p.id}')" class="ml-auto text-red-500 hover:text-red-700 px-2 py-1 rounded-lg border border-red-200 bg-white text-xs font-bold" title="Supprimer">🗑</button></div>
+                <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[10px] uppercase font-bold text-slate-500 w-36">Domaines → rôles</span>
+                    ${(p.roles || []).map((r, i) => `<span class="text-xs rounded-full px-2.5 py-1 font-bold inline-flex items-center gap-1.5 ${r.role === 'owner' ? 'bg-amber-50 border border-amber-300 text-amber-900' : (r.role === 'contrib' ? 'bg-sky-50 border border-sky-300 text-sky-900' : (r.role === 'admin' ? 'bg-slate-800 text-white' : 'bg-slate-100 border border-slate-300 text-slate-700'))}">${(GOV_ROLES[r.role] || ['🛠', 'Administrateur'])[0]} ${escapeHTML(r.domain || 'tous domaines')} · ${(GOV_ROLES[r.role] || ['', 'Administrateur'])[1]}<button onclick="govRemoveRole('${p.id}',${i})" class="opacity-60 hover:opacity-100" title="Retirer">✕</button></span>`).join('') || '<span class="text-xs text-slate-400 italic">aucun rôle</span>'}
+                    <select id="pe-dom-${p.id}" class="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white"><option value="">tous domaines</option>${doms.map(d => `<option>${escapeHTML(d)}</option>`).join('')}</select>
+                    <select id="pe-role-${p.id}" class="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">${Object.entries(GOV_ROLES).map(([k, v]) => `<option value="${k}">${v[0]} ${v[1]}</option>`).join('')}<option value="admin">🛠 Administrateur</option></select>
+                    <button onclick="govAddRole('${p.id}')" class="text-xs bg-white border border-slate-300 px-2.5 py-1 rounded-lg font-bold hover:bg-slate-50">+ Rôle</button></div>
+            </div>`).join('');
+            return html;
+        }
+        // ---- Écran « À valider » ----
+        function renderGovReview() {
+            const u = curUser(); const all = govProposals();
+            if (govState.reviewMine === undefined) govState.reviewMine = true;
+            if (!govFeatureOn()) return emptyStateHtml('✅', 'Aucun circuit de validation', 'Déclarez des personnes et leurs rôles par domaine : les contributeurs proposeront, les propriétaires valideront ici.', 'Personnes & rôles', "openGovTab('people')");
+            const mine = p => !u || govRoleIn(p.domain) === 'owner' || govRoleIn(p.domain) === 'admin';
+            const byMe = p => u && p.by === u.id;
+            let pend = all.filter(p => p.status === 'pending');
+            const view = govState.reviewView || 'todo';
+            let list = view === 'byme' ? pend.filter(byMe) : (govState.reviewMine ? pend.filter(mine) : pend);
+            const done = all.filter(p => p.status !== 'pending').sort((a, b) => (b.decidedAt || '').localeCompare(a.decidedAt || ''));
+            const groups = new Map();
+            list.forEach(p => { const k = propGroupKey(p); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); });
+            const byDom = new Map();
+            groups.forEach((ps, k) => { const d = ps[0].domain || 'Sans domaine'; if (!byDom.has(d)) byDom.set(d, []); byDom.get(d).push([k, ps]); });
+            let html = `<div class="flex items-center gap-2 flex-wrap mb-4">
+                <div class="bo-filt" role="group"><button data-ro="keep" class="${view === 'todo' ? 'on' : ''}" onclick="govState.reviewView='todo'; renderGovernance()">✅ À valider${pend.filter(mine).length ? ' (' + pend.filter(mine).length + ')' : ''}</button><button data-ro="keep" class="${view === 'byme' ? 'on' : ''}" onclick="govState.reviewView='byme'; renderGovernance()">✍️ Proposées par moi${pend.filter(byMe).length ? ' (' + pend.filter(byMe).length + ')' : ''}</button></div>
+                ${view === 'todo' ? `<label data-ro="keep" class="text-[11px] font-semibold text-slate-600 inline-flex items-center gap-1 cursor-pointer"><input type="checkbox" ${govState.reviewMine ? 'checked' : ''} onchange="govState.reviewMine=this.checked; renderGovernance()"> mes domaines seulement</label>` : ''}
+                <span class="flex-grow"></span><span class="text-[11px] text-slate-500">${u ? 'Vous êtes <b>' + escapeHTML(u.name) + '</b> — ' + escapeHTML(govRoleSummary(u)) : 'Aucun profil actif : choisissez « Vous êtes » dans l\'en-tête'}</span></div>`;
+            if (!list.length) html += emptyStateHtml('🎉', view === 'byme' ? 'Aucune proposition en attente de votre part' : 'Rien à valider', view === 'byme' ? 'Modifiez une définition, un exemple, une sensibilité ou posez un terme sur un objet de votre domaine : votre proposition apparaîtra ici.' : 'Aucune proposition en attente dans vos domaines. Les contributeurs verront leurs modifications arriver ici.', '', '');
+            byDom.forEach((grps, d) => {
+                html += `<div class="mb-4"><div class="text-[10px] uppercase font-bold tracking-wider text-emerald-700 mb-2">Domaine ${escapeHTML(d)}</div>`;
+                grps.forEach(([k, ps]) => {
+                    const can = govCanEdit(ps[0].domain);
+                    html += `<div class="border border-slate-200 rounded-xl bg-white mb-3 overflow-hidden">
+                        <div class="flex items-center gap-2 flex-wrap px-4 py-2.5 bg-slate-50 border-b border-slate-100"><button data-ro="keep" onclick="propOpenTarget('${ps[0].id}')" class="font-black text-sm text-slate-800 hover:underline" title="Ouvrir la fiche">${escapeHTML(propGroupLabel(k))}</button><span class="text-[11px] text-slate-500">${ps.length} proposition(s)</span><span class="flex-grow"></span>${can && ps.length > 1 ? `<button data-ro="keep" onclick="propAcceptAll(${JSON.stringify(k).replace(/"/g, '&quot;')})" class="text-xs bg-emerald-600 text-white px-3 py-1 rounded-lg font-bold">✓ Tout valider pour cette fiche</button>` : ''}</div>
+                        ${ps.map(p => `<div class="prop-row"><div class="min-w-0 flex-1"><div class="text-[12.5px] font-semibold text-slate-800">${escapeHTML(p.label)}</div><div class="prop-diff"><span class="b" title="Valeur en vigueur">${propFmt(p.before)}</span><span class="arrow">→</span><span class="a" title="Valeur proposée">${propFmt(p.after)}</span></div><div class="text-[10.5px] text-slate-500 mt-0.5">par ${escapeHTML(govPersonName(p.by))} · ${new Date(p.at).toLocaleString('fr-FR')}</div></div>
+                            <div class="flex items-center gap-1.5 shrink-0">${can ? `<button data-ro="keep" onclick="propAccept('${p.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-bold">✓ Valider</button><button data-ro="keep" onclick="propReject('${p.id}')" class="text-xs bg-white border border-red-300 text-red-700 px-3 py-1.5 rounded-lg font-bold hover:bg-red-50">✕ Refuser</button>` : (byMe(p) ? `<button data-ro="keep" onclick="propWithdraw('${p.id}')" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg font-bold">Retirer</button>` : '<span class="text-[11px] text-slate-400 italic">en attente du propriétaire</span>')}<button data-ro="keep" onclick="propOpenTarget('${p.id}')" class="text-xs text-indigo-700 font-bold px-2 py-1.5 hover:underline" title="Voir en contexte">Voir ›</button></div></div>`).join('')}
+                    </div>`;
+                });
+                html += '</div>';
+            });
+            if (done.length) html += `<details class="border border-slate-200 rounded-xl bg-white mt-2"><summary class="cursor-pointer select-none px-4 py-2.5 text-xs font-bold text-slate-600">🗂 Décisions passées (${done.length})</summary><div class="px-4 pb-3">${done.slice(0, 50).map(p => `<div class="flex items-center gap-2 py-1.5 border-b border-slate-50 text-[12px]"><span class="${p.status === 'accepted' ? 'text-emerald-700' : 'text-red-600'} font-bold w-16">${p.status === 'accepted' ? '✓ validée' : '✕ refusée'}</span><span class="flex-1 min-w-0 truncate">${escapeHTML(p.label)} <span class="text-slate-400">— ${propFmt(p.before)} → ${propFmt(p.after)}</span></span><span class="text-[10.5px] text-slate-500 whitespace-nowrap">par ${escapeHTML(govPersonName(p.decidedBy))} · ${new Date(p.decidedAt).toLocaleDateString('fr-FR')}${p.comment ? ' · ' + escapeHTML(p.comment) : ''}</span></div>`).join('')}</div></details>`;
+            return html;
+        }
+        // Sélecteur de domaine réutilisable (objet, terme)
+        function govDomainSelectHtml(cur, onch, id) { const doms = govDomains(); return `<select ${id ? 'id="' + id + '"' : ''} onchange="${onch}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white" title="Domaine métier — détermine qui valide"><option value="">— domaine —</option>${doms.map(d => `<option ${d === cur ? 'selected' : ''}>${escapeHTML(d)}</option>`).join('')}${cur && !doms.includes(cur) ? `<option selected>${escapeHTML(cur)}</option>` : ''}</select>`; }
         // ======================= E5 (V2) : RAPPROCHEMENT INTER-SOURCES (RECORD LINKAGE) =======================
         const LK_METHODS = { exact: 'Égalité (normalisée)', jw: 'Similarité Jaro-Winkler', lev: 'Similarité Levenshtein' };
         let lkPairs = null; // { id, rows:[{ra, rb, s, da, db, st}] } — st: auto | review | ok | ko
@@ -12554,7 +12873,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
            postes de travail : Périmètres, Sensibilité (classification/anonymisation) et
            Surveillance des sources — privés de leurs commandes ils ne disent plus rien, et leur
            présence ferait chercher au lecteur des choses qu'il ne peut pas faire. */
-        const GOV_RO_TABS = ['catalog', 'dictionary', 'model', 'objects', 'assets', 'glossary', 'vlists', 'flow', 'lineage', 'history'];
+        const GOV_RO_TABS = ['catalog', 'dictionary', 'model', 'objects', 'assets', 'glossary', 'vlists', 'flow', 'lineage', 'history', 'review', 'people'];
         function govTabAllowed(g) { return !govIsReadOnly() || GOV_RO_TABS.includes(g); }
         function govVisibleTabs(tabs) { return (tabs || []).filter(t => !t.hidden && govTabAllowed(t.g)); }
         function govIsReadOnly() { return !!govState.readOnly; }
@@ -12828,10 +13147,17 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '9.6.0';
+        const APP_VERSION = '10.0.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.0.0', d: '2026-09-08', t: 'Personnes, rôles par domaine et circuit de validation (démonstrateur)', items: [
+                'Nouvel écran <b>Personnes & rôles</b> : chaque personne reçoit un ou plusieurs couples <b>domaine métier → rôle</b> — <b>Propriétaire</b> (modifie et valide), <b>Contributeur</b> (propose), <b>Lecteur</b> (consulte), plus un administrateur « tous domaines ». Un bouton <b>🎬 Jeu de démonstration</b> crée Alice, Bob, Chloé et un admin sur le premier domaine.',
+                'Sélecteur <b>« Vous êtes »</b> dans l\'en-tête : on change de personne d\'un clic (profil actif déclaratif, mono-poste — pas une authentification). Un lecteur passe automatiquement en mode consultation.',
+                'Un <b>contributeur</b> travaille dans les écrans habituels, mais ses modifications de sens (définition, exemples, sensibilité, propriétaire, nombre de valeurs, termes posés ou retirés, définition d\'un terme, description d\'une application) deviennent des <b>propositions</b> : la valeur en vigueur reste, la proposition s\'affiche à côté en orange « ⏳ Bob propose : … ». La structure (attributs, colonnes, facettes) reste réservée au propriétaire.',
+                'Écran <b>✅ À valider</b> pour le propriétaire : propositions groupées par domaine puis par fiche, avant → après, auteur, date, <b>Valider</b> / <b>Refuser</b> (avec motif), « Tout valider pour cette fiche », « Voir » en contexte, filtre « mes domaines », vue « Proposées par moi » pour le contributeur, décisions passées. Compteur dans le menu latéral et dans l\'en-tête.',
+                'Valider applique la valeur et trace la décision dans l\'historique de la fiche ; refuser conserve la trace. Les objets métier et les termes gagnent un champ <b>Domaine métier</b>, qui détermine qui valide.',
+                'Tant qu\'aucune personne n\'est déclarée, rien ne change : l\'application se comporte exactement comme avant.'] },
             { v: '9.6.0', d: '2026-09-08', t: 'Le code est découpé en sources lisibles ; le fichier livré est construit', items: [
                 'Le code source vit désormais dans <b>studio-data/src/</b> : 55 fichiers découpés par <b>fonctionnalité</b> — noyau (état, moteur DuckDB, persistance, navigation, thème…), gouvernance (dictionnaire, listes de valeurs, objets métier, applications, glossaire, catalogue…), lineage, modèle de données, sources, qualité, séries temporelles, extraction, tableaux de bord. Chaque fichier a un rôle décrit dans <b>src/README.md</b>.',
                 'Une commande, <code>node studio-data/build.mjs</code>, assemble ces sources en <b>un seul fichier</b> StudioDataV7.html, strictement équivalent (la première construction a été vérifiée octet par octet avec l\'ancien fichier). L\'application reste 100 % locale, un seul fichier à ouvrir.',

@@ -32,6 +32,36 @@
     .v7-side{width:var(--v7-side-w);flex:0 0 var(--v7-side-w);background:var(--v7-side);color:var(--v7-side-txt);
              display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;
              transition:width .18s ease,flex-basis .18s ease;z-index:40}
+    /* V10 — Personnes, rôles, propositions */
+    .usw{display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--v7-txt) 5%,transparent);border-radius:9px;padding:3px 6px 3px 10px}
+    .usw .usw-lbl{font-size:11px;font-weight:700;color:var(--v7-muted)}
+    .usw select{font-size:12px;font-weight:700;border:1px solid var(--v7-border-strong);border-radius:7px;padding:4px 6px;background:var(--v7-surface);color:var(--v7-txt);max-width:180px}
+    .usw .usw-role{font-size:12px}
+    .usw .usw-todo{font-size:11px;font-weight:800;background:#d97706;color:#fff;border-radius:999px;padding:3px 9px;white-space:nowrap}
+    .v7-nb{margin-left:auto;font-size:10px;font-weight:800;background:#d97706;color:#fff;border-radius:999px;padding:1px 6px;line-height:1.4}
+    body.v7-collapsed .v7-nb{position:absolute;top:2px;right:2px;margin:0;padding:0 4px;font-size:9px}
+    body.v7-collapsed .v7-it{position:relative}
+    .prop-badge{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;font-size:11.5px;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:8px;padding:5px 9px;color:#78350f}
+    .prop-badge .who{font-weight:700;white-space:nowrap}
+    .prop-badge .val{font-weight:600;color:#1e293b;word-break:break-word}
+    .prop-badge .acts{margin-left:auto;display:inline-flex;gap:4px}
+    .prop-badge .acts button{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;border:1px solid}
+    .prop-badge .acts .ok{background:#059669;border-color:#059669;color:#fff}
+    .prop-badge .acts .ko{background:#fff;border-color:#fca5a5;color:#b91c1c}
+    .term-tag.prop{background:#fffbeb;border-color:#fcd34d;border-style:dashed;color:#92400e}
+    .prop-row{display:flex;align-items:flex-start;gap:12px;padding:10px 16px;border-bottom:1px solid #f1f5f9}
+    .prop-row:last-child{border-bottom:0}
+    .prop-diff{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:3px;font-size:12px}
+    .prop-diff .b{color:#64748b;text-decoration:line-through;max-width:38ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .prop-diff .arrow{color:#94a3b8}
+    .prop-diff .a{color:#065f46;font-weight:700;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 7px;max-width:60ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    html[data-theme="dark"] .prop-badge{background:#3b2a08;border-color:#7c5a12;border-left-color:#f59e0b;color:#fde68a}
+    html[data-theme="dark"] .prop-badge .val{color:#f1f5f9}
+    html[data-theme="dark"] .prop-badge .acts .ko{background:#1f2937;border-color:#7f1d1d;color:#fca5a5}
+    html[data-theme="dark"] .term-tag.prop{background:#3b2a08;border-color:#7c5a12;color:#fde68a}
+    html[data-theme="dark"] .prop-row{border-color:#1f2540}
+    html[data-theme="dark"] .prop-diff .b{color:#94a3b8}
+    html[data-theme="dark"] .prop-diff .a{color:#a7f3d0;background:#0f2e26;border-color:#1f6b52}
     /* V9.4 — Une seule navigation visible : le menu latéral. Les familles de l'en-tête ne
        servent que lorsque le menu est réduit (icônes seules). */
     body:not(.v7-collapsed) #v7FamNav{display:none !important}

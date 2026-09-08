@@ -24,7 +24,9 @@
             // V9.3.3 : Entrée OU bouton. Dès qu'on tape, un bouton « ＋ Créer « … » » (terme inconnu)
             // ou « Relier » (terme existant) apparaît : plus besoin de deviner qu'il faut valider.
             const add = opts.readOnly ? '' : `<span class="term-addwrap"><input id="${uid}i" class="term-add" list="${uid}" placeholder="＋ Ajouter un terme…" aria-label="Ajouter un terme" title="Tapez un terme existant (suggestions) ou un NOUVEAU terme, puis Entrée ou le bouton : il est créé dans le glossaire et relié ici" oninput="termTagHint(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();termTagAdd('${kind}',${ctxJson},this.value);}" onkeyup="if(event.key==='Enter'){event.preventDefault();}"><button type="button" id="${uid}b" class="term-go" hidden onclick="termTagAdd('${kind}',${ctxJson},el('${uid}i').value)">＋ Créer</button></span><datalist id="${uid}">${remain.map(t2 => `<option value="${escapeHTML(t2.term)}"></option>`).join('')}</datalist>`;
-            return `<div class="term-tags">${tags}${inh}${!tags && !inh && opts.readOnly ? '<span class="term-none">aucun terme</span>' : ''}${add}</div>`;
+            const pend = (typeof govFeatureOn === 'function' && govFeatureOn() && kind !== 'col') ? propPending('termlink', { tk: kind, ctx }) : [];
+            const pendHtml = pend.map(p => `<span class="term-tag prop" title="Proposé par ${escapeHTML(govPersonName(p.by))}">${p.field === 'add' ? '⏳ + ' : '⏳ − '}${escapeHTML(p.field === 'add' ? p.after : p.before)}${govCanEdit(p.domain) ? `<button class="x" style="color:#047857" onclick="propAccept('${p.id}')" title="Valider">✓</button><button class="x" onclick="propReject('${p.id}')" title="Refuser">✕</button>` : ''}</span>`).join('');
+            return `<div class="term-tags">${tags}${inh}${pendHtml}${!tags && !inh && opts.readOnly ? '<span class="term-none">aucun terme</span>' : ''}${add}</div>`;
         }
         function termTagHint(inp) {
             const b = el(inp.id.replace(/i$/, 'b')); if (!b) return;
@@ -149,7 +151,8 @@
                         <span class="text-[11px] text-slate-500">${tg.length ? 'désigne ' + tg.length + ' élément(s)' : '<span class="text-amber-700 font-bold">ne désigne rien pour l\'instant</span>'}</span>
                         <button onclick="removeGlossaryTerm('${g.id}')" class="text-red-500 hover:text-red-700 px-2 py-1 rounded-lg border border-red-200 bg-white text-xs font-bold ml-auto" title="Supprimer le terme">🗑</button>
                     </div>
-                    <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme, en langage métier…" class="w-full border border-slate-200 p-2 rounded-lg text-xs mb-3 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>
+                    <div class="flex items-center gap-2 flex-wrap mb-2"><span class="text-[10px] uppercase font-bold text-slate-500">Domaine</span>${govDomainSelectHtml(g.domain || '', `updateGlossaryTerm('${g.id}','domain',this.value); renderGovernance()`)}</div>
+                    <textarea onchange="updateGlossaryTerm('${g.id}','definition',this.value)" placeholder="Définition officielle du terme, en langage métier…" class="w-full border border-slate-200 p-2 rounded-lg text-xs mb-1 bg-white h-14">${escapeHTML(g.definition || '')}</textarea>${propBadgeHtml('term', { termId: g.id }, 'definition')}<div class="mb-2"></div>
                     <div class="flex flex-wrap items-center gap-1.5 mb-2">
                         <span class="text-[10px] uppercase font-bold text-sky-700 w-40">🔹 Attributs d'objet</span>
                         ${aChips || '<span class="text-xs text-slate-400 italic">aucun attribut</span>'}

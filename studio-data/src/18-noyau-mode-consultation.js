@@ -19,7 +19,7 @@
            postes de travail : Périmètres, Sensibilité (classification/anonymisation) et
            Surveillance des sources — privés de leurs commandes ils ne disent plus rien, et leur
            présence ferait chercher au lecteur des choses qu'il ne peut pas faire. */
-        const GOV_RO_TABS = ['catalog', 'dictionary', 'model', 'objects', 'assets', 'glossary', 'vlists', 'flow', 'lineage', 'history'];
+        const GOV_RO_TABS = ['catalog', 'dictionary', 'model', 'objects', 'assets', 'glossary', 'vlists', 'flow', 'lineage', 'history', 'review', 'people'];
         function govTabAllowed(g) { return !govIsReadOnly() || GOV_RO_TABS.includes(g); }
         function govVisibleTabs(tabs) { return (tabs || []).filter(t => !t.hidden && govTabAllowed(t.g)); }
         function govIsReadOnly() { return !!govState.readOnly; }

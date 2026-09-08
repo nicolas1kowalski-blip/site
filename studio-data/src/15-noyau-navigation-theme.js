@@ -20,6 +20,7 @@
                   { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Patrimoine' },
                   { g: 'model', icon: '🧬', label: 'Modèle de données', fam: 'Patrimoine' },
                   { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
+                  { g: 'people', icon: '👥', label: 'Personnes & rôles', fam: 'Acteurs' },
                   { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
                   { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
                   { g: 'vlists', icon: '🎚️', label: 'Listes de valeurs', fam: 'Sens métier' },
@@ -28,6 +29,7 @@
                   { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
                   { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Lineage', hidden: true },
                   { g: 'srcwatch', icon: '🛰️', label: 'Surveillance des sources', fam: 'Contrôle' },
+                  { g: 'review', icon: '✅', label: 'À valider', fam: 'Contrôle' },
                   { g: 'history', icon: '📈', label: 'Historique', fam: 'Contrôle' },
               ] },
         ];
@@ -234,7 +236,8 @@
                     const itemsHtml = items.map(t => {
                         const isOn = on && (t.n === currentTab || (p.id === 'gov' && govState.tab === t.g));
                         const act = p.id === 'gov' ? `openGovTab('${t.g}')` : `switchTab(${t.n})`;
-                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span></button>`;
+                        const nb = (p.id === 'gov' && t.g === 'review' && typeof propCountPendingFor === 'function' && govFeatureOn()) ? propCountPendingFor() : 0;
+                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}${nb ? ' — ' + nb + ' proposition(s) à valider' : ''}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span>${nb ? `<span class="v7-nb">${nb}</span>` : ''}</button>`;
                     }).join('');
                     return `<div class="v7-grp${on ? ' on open' : ''}" data-phase="${p.id}">
                         <button class="hd" onclick="v7ClickPhase('${p.id}')" title="${escapeHTML(p.label)} — ${escapeHTML(p.desc || '')}">
@@ -263,6 +266,7 @@
                     fam.innerHTML = fams.map(f => `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${v7Ico(f.icon)}${escapeHTML(f.name)}</button>`).join('');
                 }
             }
+            if (typeof renderUserSwitch === 'function') renderUserSwitch();
             if (window.lucide) { try { lucide.createIcons(); } catch (e) {} }
         }
         // Cliquer une phase : on l'ouvre et on va sur son premier écran.

@@ -1,10 +1,17 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '9.6.0';
+        const APP_VERSION = '10.0.0';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.0.0', d: '2026-09-08', t: 'Personnes, rôles par domaine et circuit de validation (démonstrateur)', items: [
+                'Nouvel écran <b>Personnes & rôles</b> : chaque personne reçoit un ou plusieurs couples <b>domaine métier → rôle</b> — <b>Propriétaire</b> (modifie et valide), <b>Contributeur</b> (propose), <b>Lecteur</b> (consulte), plus un administrateur « tous domaines ». Un bouton <b>🎬 Jeu de démonstration</b> crée Alice, Bob, Chloé et un admin sur le premier domaine.',
+                'Sélecteur <b>« Vous êtes »</b> dans l\'en-tête : on change de personne d\'un clic (profil actif déclaratif, mono-poste — pas une authentification). Un lecteur passe automatiquement en mode consultation.',
+                'Un <b>contributeur</b> travaille dans les écrans habituels, mais ses modifications de sens (définition, exemples, sensibilité, propriétaire, nombre de valeurs, termes posés ou retirés, définition d\'un terme, description d\'une application) deviennent des <b>propositions</b> : la valeur en vigueur reste, la proposition s\'affiche à côté en orange « ⏳ Bob propose : … ». La structure (attributs, colonnes, facettes) reste réservée au propriétaire.',
+                'Écran <b>✅ À valider</b> pour le propriétaire : propositions groupées par domaine puis par fiche, avant → après, auteur, date, <b>Valider</b> / <b>Refuser</b> (avec motif), « Tout valider pour cette fiche », « Voir » en contexte, filtre « mes domaines », vue « Proposées par moi » pour le contributeur, décisions passées. Compteur dans le menu latéral et dans l\'en-tête.',
+                'Valider applique la valeur et trace la décision dans l\'historique de la fiche ; refuser conserve la trace. Les objets métier et les termes gagnent un champ <b>Domaine métier</b>, qui détermine qui valide.',
+                'Tant qu\'aucune personne n\'est déclarée, rien ne change : l\'application se comporte exactement comme avant.'] },
             { v: '9.6.0', d: '2026-09-08', t: 'Le code est découpé en sources lisibles ; le fichier livré est construit', items: [
                 'Le code source vit désormais dans <b>studio-data/src/</b> : 55 fichiers découpés par <b>fonctionnalité</b> — noyau (état, moteur DuckDB, persistance, navigation, thème…), gouvernance (dictionnaire, listes de valeurs, objets métier, applications, glossaire, catalogue…), lineage, modèle de données, sources, qualité, séries temporelles, extraction, tableaux de bord. Chaque fichier a un rôle décrit dans <b>src/README.md</b>.',
                 'Une commande, <code>node studio-data/build.mjs</code>, assemble ces sources en <b>un seul fichier</b> StudioDataV7.html, strictement équivalent (la première construction a été vérifiée octet par octet avec l\'ancien fichier). L\'application reste 100 % locale, un seul fichier à ouvrir.',

@@ -49,6 +49,7 @@ le résultat est strictement équivalent à l'ancien fichier monolithique.
 - `28-gouvernance-surveillance-sources.js` — Gouvernance : surveillance des sources (amont)
 - `29-gouvernance-import-en-masse.js` — Gouvernance : sauvegarde et partage, import en masse
 - `2A-gouvernance-dossier-export.js` — Gouvernance : dossier de gouvernance exportable
+- `2C-gouvernance-personnes-validation.js` — Gouvernance : personnes, rôles par domaine, propositions et validation (démonstrateur)
 - `2B-gouvernance-catalogue.js` — Gouvernance : catalogue de données (recherche, facettes, couche métier, fiches navigables)
 
 ### Lineage et graphes

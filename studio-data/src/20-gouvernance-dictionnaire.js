@@ -198,6 +198,8 @@
             else if (govState.tab === 'privacy') c.innerHTML = renderGovPrivacy();
             else if (govState.tab === 'catalog') c.innerHTML = renderGovCatalog();
             else if (govState.tab === 'history') c.innerHTML = renderGovHistory();
+            else if (govState.tab === 'people') c.innerHTML = renderGovPeople();
+            else if (govState.tab === 'review') c.innerHTML = renderGovReview();
             else if (govState.tab === 'srcwatch') c.innerHTML = renderSrcWatch();
             else if (govState.tab === 'flow') c.innerHTML = renderLineageFlow();
             else if (govState.tab === 'share') { govState.tab = 'catalog'; c.innerHTML = renderGovCatalog(); openBackupCenter(); }

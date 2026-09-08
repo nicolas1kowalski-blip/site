@@ -126,6 +126,10 @@
    "role": "Gouvernance : catalogue de données (recherche, facettes, couche métier, fiches navigables)"
   },
   {
+   "file": "2C-gouvernance-personnes-validation.js",
+   "role": "Gouvernance : personnes, rôles par domaine, propositions des contributeurs et validation par les propriétaires (démonstrateur)"
+  },
+  {
    "file": "44-rapprochement-inter-sources.js",
    "role": "Rapprochement inter-sources (record linkage)"
   },

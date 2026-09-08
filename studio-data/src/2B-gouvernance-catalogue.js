@@ -110,7 +110,7 @@
                 // restent cherchables (mots-clés) et sont listés à part dans la fiche, attribut par attribut.
                 const attrTerms = Array.from(new Set((boAllAttrRows(bo) || []).flatMap(r => termsOfAttr(bo.id, r.el.id).map(x => x.term))));
                 push({ type: 'bo', id: bo.id, title: bo.name, sub: (boAllAttrRows(bo) || []).length + ' attribut(s)',
-                desc: bo.definition || '', dom: '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
+                desc: bo.definition || '', dom: String(bo.domain || '').trim() || '—', own: bo.globalOwner || '', q: null, sens: null, val: catValOf(bo.status), fresh: null,
                 tags: ['objet métier', ...syns.map(x => '📖 ' + x)], kw: attrTerms, bo: bo.id, syns });
                 // V9.5 : chaque attribut métier est une fiche du catalogue (navigable depuis l'objet,
                 // trouvable par recherche). Il n'encombre pas la liste par défaut : il n'apparaît
