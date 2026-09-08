@@ -443,6 +443,14 @@
              display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;
              transition:width .18s ease,flex-basis .18s ease;z-index:40}
     /* V10 — Personnes, rôles, propositions */
+    /* V10.2.1 — zones et champs grisés (lecture seule par rôle) */
+    .gov-lock-band{display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:9px;padding:7px 11px;margin-bottom:10px}
+    [data-gov-lock="1"] :is(input,select,textarea)[disabled]:not([data-ro="keep"]){background:#f1f5f9 !important;color:#64748b !important;border-color:#e2e8f0 !important;cursor:not-allowed;box-shadow:none}
+    [data-gov-lock="1"] button[disabled]:not([data-ro="keep"]),[data-gov-lock="1"] .term-tag.add[disabled]{opacity:.35;cursor:not-allowed;filter:grayscale(1)}
+    [data-gov-lock="1"] .bo-fld label{color:#94a3b8}
+    #step-9 :is(input,select,textarea)[disabled][title*="éservé"]{background:#f1f5f9 !important;color:#64748b !important;cursor:not-allowed}
+    html[data-theme="dark"] .gov-lock-band{background:#1e293b;color:#cbd5e1;border-color:#334155}
+    html[data-theme="dark"] [data-gov-lock="1"] :is(input,select,textarea)[disabled]:not([data-ro="keep"]),html[data-theme="dark"] #step-9 :is(input,select,textarea)[disabled][title*="éservé"]{background:#0f172a !important;color:#64748b !important;border-color:#1e293b !important}
     .usw{display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--v7-txt) 5%,transparent);border-radius:9px;padding:3px 6px 3px 10px}
     .usw .usw-lbl{font-size:11px;font-weight:700;color:var(--v7-muted)}
     .usw select{font-size:12px;font-weight:700;border:1px solid var(--v7-border-strong);border-radius:7px;padding:4px 6px;background:var(--v7-surface);color:var(--v7-txt);max-width:180px}
@@ -3329,7 +3337,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     : sec.rows.map(r => ({ fold: false, base: r.el.name, members: [r], idx: [], stId: r.stId || '', facet: r.facet }));
                 groups.forEach(g => { nShown++; if (g.fold) nFolded += g.members.length; rowsHtml += grpHtml(g); });
             });
-            return `<div class="flex items-center gap-3 mb-4 flex-wrap">
+            const _bl = typeof govLockAttr === 'function' ? govLockAttr(govCanEditBo(bo), govCanProposeBo(bo)) : '';
+            return (_bl ? '<div data-gov-lock="1">' + govLockBand('l\'objet « ' + bo.name + ' »', boDomainOf(bo)) : '<div>') + `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select data-ro="keep" onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
                     <button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité, termes et nombre de valeurs par fichier CSV ou Excel">⬆ Remplir par fichier</button>
@@ -3347,7 +3356,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 ${nFolded ? `<p class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">↻ <b>${nFolded} colonnes numérotées</b> ont été repliées en attributs multivalués : côté technique la donnée est étalée (TEL_1, TEL_2…), côté métier c'est <b>un seul attribut qui peut avoir plusieurs valeurs</b>. Ce que vous saisissez sur un attribut replié s'applique à toutes ses colonnes.</p>` : ''}
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
                     <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2" title="Combien de valeurs cet attribut peut prendre dans une occurrence — déclarable ici. La répétition du GROUPE, elle, est indiquée sur la ligne du composant.">Nombre de valeurs</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
+                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div></div>`;
         }
         function ensureDictEntry(tableName) {
             const d = state.governance.dictionary;
@@ -3407,6 +3416,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer" title="Par défaut, un fichier source est intégré à l\'application qui le produit. Décochez pour afficher chaque fichier séparément."><input type="checkbox" ' + (govState.lineageFoldSrc !== false ? 'checked' : '') + ' onchange="govState.lineageFoldSrc=this.checked; renderLineageGraph()"> 📦 Sources dans l\'appli</label>' + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
             govProjectValues();
+            if (typeof govLockZones === 'function') govLockZones();
         }
 
         // ---- Dictionnaire (définition fonctionnelle + technique, source de la donnée) ----
@@ -3457,7 +3467,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     <td class="p-2">${vlSelectHtml(tn, h, c.valueListId)}</td>
                 </tr>`;
             });
-            return modeBar + wfBar + `
+            const _tdom = String((tableByName(tn) || {}).theme || '').trim();
+            return modeBar + wfBar + (typeof govLockAttr === 'function' && govLockAttr(govCanEdit(_tdom), govCanPropose(_tdom)) ? '<div data-gov-lock="1">' + govLockBand('la source « ' + tn + ' »', _tdom) : '<div>') + `
                 <div class="flex items-center gap-4 mb-5">
                     <select data-ro="keep" onchange="govState.dictTable=this.value; renderGovernance()" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-bold text-sm">${names.map(n => `<option ${n === tn ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
                     <span class="text-xs px-2 py-1 rounded font-bold ${d.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${d.status}</span>
@@ -3481,7 +3492,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                         <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Définition fonctionnelle</th><th class="p-2">Type technique</th><th class="p-2">Exemples de valeurs</th><th class="p-2">Sensibilité</th><th class="p-2">Terme glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                         <tbody class="divide-y divide-slate-100">${colRows}</tbody>
                     </table>
-                </div>`;
+                </div></div>`;
         }
         function updateDictField(tn, f, v) { ensureDictEntry(tn)[f] = v; persistAppState(); }
         // ============ V6.27 : LISTES DE VALEURS (référentiels de codes) ============
@@ -3774,7 +3785,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             // garde toute la largeur pour le tableau des attributs.
             html += `<div class="flex flex-col 2xl:flex-row gap-4">
                 <div id="boListCol" class="flex flex-wrap gap-2 2xl:block 2xl:w-[230px] flex-shrink-0">${listHtml}</div>
-                <div class="flex-1 min-w-0">${renderBoDetail(selected, names)}</div>
+                <div class="flex-1 min-w-0">${typeof govLockHtml === 'function' ? govLockHtml(govCanEditBo(selected), govCanProposeBo(selected), 'l\'objet « ' + selected.name + ' »', boDomainOf(selected), renderBoDetail(selected, names)) : renderBoDetail(selected, names)}</div>
             </div>`;
             return html;
         }
@@ -6073,7 +6084,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     ${list.length ? '' : `<p class="text-xs text-slate-400 italic py-4 text-center border border-dashed border-slate-200 rounded-lg">Aucun(e) ${lbl.toLowerCase()} déclaré(e).</p>`}
                     ${list.map(a => { const u = assetUsage(a); const nUse = u.srcs.length + u.bos.length + u.procs.length;
                         const domEff = assetDomainEff(a);
-                        return `<div class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">
+                        const _dom = String(a.domain || '').trim(); const _lock = typeof govLockAttr === 'function' ? govLockAttr(govCanEdit(_dom), govCanPropose(_dom)) : '';
+                        return `<div${_lock} class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">${_lock ? govLockBand(a.name, _dom) : ''}
                         <div class="flex items-center gap-2 mb-1.5">
                             <span>${ic}</span>
                             <input type="text" value="${escapeHTML(a.name)}" onchange="updateGovAsset('${a.id}','name',this.value)" class="font-bold text-sm border border-slate-300 p-1.5 rounded flex-grow bg-white">
@@ -6398,7 +6410,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const asRemain = assets.filter(a => !termAssetIds(g).includes(a.id));
                 // héritage : liens colonne sans attribut
                 const legacy = (g.links || []).map((l, i) => `<span class="text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5" title="Ancien lien vers une colonne de fichier. Rattachez cette colonne à un attribut d'objet métier : le terme suivra automatiquement."><span class="font-mono">${escapeHTML(l.table)}.${escapeHTML(l.col)}</span><span class="text-[10px] uppercase font-bold">héritage</span><button onclick="removeGlossaryLink('${g.id}',${i})" class="text-amber-400 hover:text-red-500" title="Retirer">✕</button></span>`).join('');
-                html += `<div id="gl-card-${g.id}" class="border ${govState.glossFocus === g.id ? 'border-indigo-400 ring-2 ring-indigo-200' : 'border-slate-200'} rounded-xl p-4 mb-3 bg-white">
+                html += `<div id="gl-card-${g.id}"${typeof govLockAttr === 'function' ? govLockAttr(govCanEdit(String(g.domain || '').trim()), govCanPropose(String(g.domain || '').trim())) : ''} class="border ${govState.glossFocus === g.id ? 'border-indigo-400 ring-2 ring-indigo-200' : 'border-slate-200'} rounded-xl p-4 mb-3 bg-white">${typeof govLockAttr === 'function' && govLockAttr(govCanEdit(String(g.domain || '').trim()), govCanPropose(String(g.domain || '').trim())) ? govLockBand('le terme « ' + g.term + ' »', String(g.domain || '').trim()) : ''}
                     <div class="flex items-center gap-2 mb-2 flex-wrap">
                         <span class="text-lg" aria-hidden="true">📖</span>
                         <input type="text" value="${escapeHTML(g.term)}" onchange="updateGlossaryTerm('${g.id}','term',this.value); renderGovernance()" class="font-bold text-sm border border-slate-300 px-2.5 py-1.5 rounded-lg w-72 bg-white" aria-label="Terme">
@@ -11849,7 +11861,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // qui décident, pas seulement la grille des rôles.
         function govIsOwnerOfBo(bo) { const u = curUser(); if (!u || !bo) return false; if (bo.ownerId && bo.ownerId === u.id) return true; return !!(bo.globalOwner && catNorm(bo.globalOwner) === catNorm(u.name)); }
         function govCanEditBo(bo) { return govCanEdit(boDomainOf(bo)) || govIsOwnerOfBo(bo); }
-        function govCanProposeBo(bo) { return !govCanEditBo(bo) && (govCanPropose(boDomainOf(bo)) || (curUser() && (curUser().roles || []).some(r => r.role === 'contrib'))); }
+        // V10.2.1 : on propose sur un objet seulement avec un rôle de contributeur sur SON domaine (ou, sans domaine déclaré, n'importe quel rôle de contributeur — cf. govRoleIn).
+        function govCanProposeBo(bo) { return !govCanEditBo(bo) && govCanPropose(boDomainOf(bo)); }
         function govLinkOwner(bo) { if (!bo) return; const p = govPeople().find(x => catNorm(x.name) === catNorm(bo.globalOwner || '')); bo.ownerId = p ? p.id : ''; }
         function propTargetBo(p) { const t = p.target || {}; const id = t.boId || (t.ctx || {}).boId; return id ? (state.governance.businessObjects || []).find(b => b.id === id) : null; }
         function propCanDecide(p) { const bo = propTargetBo(p); return bo ? govCanEditBo(bo) : govCanEdit(p.domain); }
@@ -12240,6 +12253,22 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return html;
         }
         // Sélecteur de domaine réutilisable (objet, terme)
+        // ---- V10.2.1 : ZONES GRISÉES ----
+        // Quand le profil actif ne peut ni modifier ni proposer sur un élément (lecteur du domaine),
+        // la fiche entière est rendue inerte : bandeau « Lecture seule », champs et boutons grisés
+        // et désactivés. Les champs réservés (propriétaire, domaine) sont grisés pour le contributeur.
+        function govLockAttr(canEdit, canPropose) { return govFeatureOn() && !canEdit && !canPropose ? ' data-gov-lock="1"' : ''; }
+        function govLockBand(what, dom) { return `<div class="gov-lock-band" data-ro="keep">🔒 <b>Lecture seule</b> — vous n'avez ni rôle de propriétaire ni rôle de contributeur${dom ? ' sur le domaine « ' + escapeHTML(dom) + ' »' : ''} : ${escapeHTML(what || 'cette fiche')} se consulte mais ne se modifie pas.</div>`; }
+        function govLockHtml(canEdit, canPropose, what, dom, inner) { const a = govLockAttr(canEdit, canPropose); return a ? '<div' + a + '>' + govLockBand(what, dom) + inner + '</div>' : inner; }
+        function govLockZones() {
+            document.querySelectorAll('[data-gov-lock="1"]').forEach(z => {
+                z.querySelectorAll('input,select,textarea,button,[contenteditable="true"]').forEach(n => {
+                    if (n.closest('[data-ro="keep"]')) return;
+                    n.disabled = true; n.setAttribute('data-gov-locked', '1'); n.removeAttribute('contenteditable'); n.setAttribute('tabindex', '-1');
+                });
+                z.querySelectorAll('[draggable="true"]').forEach(n => n.setAttribute('draggable', 'false'));
+            });
+        }
         function govLockedHint() { return '<div class="hint">🔒 réservé au propriétaire</div>'; }
         function govDomainSelectHtml(cur, onch, id, locked) { const doms = govDomains(); return `<select ${id ? 'id="' + id + '"' : ''} ${locked ? 'disabled' : ''} onchange="${onch}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white ${locked ? 'opacity-60 cursor-not-allowed' : ''}" title="${locked ? 'Réservé au propriétaire du domaine' : 'Domaine métier — détermine qui valide'}"><option value="">— domaine —</option>${doms.map(d => `<option ${d === cur ? 'selected' : ''}>${escapeHTML(d)}</option>`).join('')}${cur && !doms.includes(cur) ? `<option selected>${escapeHTML(cur)}</option>` : ''}</select>`; }
         // ======================= E5 (V2) : RAPPROCHEMENT INTER-SOURCES (RECORD LINKAGE) =======================
@@ -13339,10 +13368,13 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '10.2.0';
+        const APP_VERSION = '10.2.1';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.2.1', d: '2026-09-08', t: 'Ce qu\'on ne peut pas modifier est grisé', items: [
+                'Quand le profil actif n\'a ni rôle de propriétaire ni rôle de contributeur sur un élément, sa fiche devient <b>inerte</b> : bandeau « 🔒 Lecture seule », champs, listes et boutons grisés et désactivés. Fiche objet (et son dictionnaire par objet), fiche terme, fiche application ou processus, table du dictionnaire.',
+                'Pour un contributeur, les champs réservés (<b>propriétaire</b>, <b>domaine métier</b>) sont grisés de la même façon, avec l\'indication « réservé au propriétaire », au lieu d\'un message après coup.'] },
             { v: '10.2.0', d: '2026-09-08', t: 'Le contributeur peut tout proposer, sauf le propriétaire et le domaine', items: [
                 'Un contributeur propose désormais aussi la <b>structure</b> : nom d\'un attribut, colonne rattachée, ajout ou suppression d\'attributs, facettes, sources et leurs rôles, applications, hiérarchies, règles, statut, suppression de l\'objet… L\'opération est exécutée sur une copie, la différence est enregistrée comme proposition, l\'objet reste intact jusqu\'à la validation.',
                 'Les propositions de structure apparaissent dans la fiche de l\'objet (« Propositions de structure en attente ») avec ce qui change (+ ajouts, − retraits) et dans « À valider », où le propriétaire valide ou refuse ; l\'application d\'une validation est tracée dans l\'historique.',

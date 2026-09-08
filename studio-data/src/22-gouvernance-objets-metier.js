@@ -89,7 +89,7 @@
             // garde toute la largeur pour le tableau des attributs.
             html += `<div class="flex flex-col 2xl:flex-row gap-4">
                 <div id="boListCol" class="flex flex-wrap gap-2 2xl:block 2xl:w-[230px] flex-shrink-0">${listHtml}</div>
-                <div class="flex-1 min-w-0">${renderBoDetail(selected, names)}</div>
+                <div class="flex-1 min-w-0">${typeof govLockHtml === 'function' ? govLockHtml(govCanEditBo(selected), govCanProposeBo(selected), 'l\'objet « ' + selected.name + ' »', boDomainOf(selected), renderBoDetail(selected, names)) : renderBoDetail(selected, names)}</div>
             </div>`;
             return html;
         }

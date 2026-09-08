@@ -137,7 +137,8 @@
                     : sec.rows.map(r => ({ fold: false, base: r.el.name, members: [r], idx: [], stId: r.stId || '', facet: r.facet }));
                 groups.forEach(g => { nShown++; if (g.fold) nFolded += g.members.length; rowsHtml += grpHtml(g); });
             });
-            return `<div class="flex items-center gap-3 mb-4 flex-wrap">
+            const _bl = typeof govLockAttr === 'function' ? govLockAttr(govCanEditBo(bo), govCanProposeBo(bo)) : '';
+            return (_bl ? '<div data-gov-lock="1">' + govLockBand('l\'objet « ' + bo.name + ' »', boDomainOf(bo)) : '<div>') + `<div class="flex items-center gap-3 mb-4 flex-wrap">
                     <select data-ro="keep" onchange="govState.dictBoId=this.value; renderGovernance()" class="border border-emerald-300 p-2.5 rounded-lg bg-emerald-50/50 font-bold text-sm">${bos.map(b => `<option value="${b.id}" ${b.id === bo.id ? 'selected' : ''}>🏛️ ${escapeHTML(b.name)}</option>`).join('')}</select>
                     <button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-50">Ouvrir la fiche complète →</button>
                     <button onclick="giOpen('boattr')" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-50" title="Charger définitions, exemples, sensibilité, termes et nombre de valeurs par fichier CSV ou Excel">⬆ Remplir par fichier</button>
@@ -155,7 +156,7 @@
                 ${nFolded ? `<p class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">↻ <b>${nFolded} colonnes numérotées</b> ont été repliées en attributs multivalués : côté technique la donnée est étalée (TEL_1, TEL_2…), côté métier c'est <b>un seul attribut qui peut avoir plusieurs valeurs</b>. Ce que vous saisissez sur un attribut replié s'applique à toutes ses colonnes.</p>` : ''}
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left text-sm">
                     <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Attribut métier <span class="normal-case font-medium text-slate-300">(et sa provenance)</span></th><th class="p-2" title="Combien de valeurs cet attribut peut prendre dans une occurrence — déclarable ici. La répétition du GROUPE, elle, est indiquée sur la ligne du composant.">Nombre de valeurs</th><th class="p-2">Définition</th><th class="p-2">Exemples</th><th class="p-2">Sensibilité</th><th class="p-2">Terme du glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
-                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div>`;
+                    <tbody class="divide-y divide-slate-100">${rowsHtml || '<tr><td colspan="7" class="p-4 text-xs text-slate-400 italic text-center">Aucun attribut — définissez la structure de l\'objet dans sa fiche.</td></tr>'}</tbody></table></div></div>`;
         }
         function ensureDictEntry(tableName) {
             const d = state.governance.dictionary;
@@ -215,6 +216,7 @@
                 + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer" title="Par défaut, un fichier source est intégré à l\'application qui le produit. Décochez pour afficher chaque fichier séparément."><input type="checkbox" ' + (govState.lineageFoldSrc !== false ? 'checked' : '') + ' onchange="govState.lineageFoldSrc=this.checked; renderLineageGraph()"> 📦 Sources dans l\'appli</label>' + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
             govProjectValues();
+            if (typeof govLockZones === 'function') govLockZones();
         }
 
         // ---- Dictionnaire (définition fonctionnelle + technique, source de la donnée) ----
@@ -265,7 +267,8 @@
                     <td class="p-2">${vlSelectHtml(tn, h, c.valueListId)}</td>
                 </tr>`;
             });
-            return modeBar + wfBar + `
+            const _tdom = String((tableByName(tn) || {}).theme || '').trim();
+            return modeBar + wfBar + (typeof govLockAttr === 'function' && govLockAttr(govCanEdit(_tdom), govCanPropose(_tdom)) ? '<div data-gov-lock="1">' + govLockBand('la source « ' + tn + ' »', _tdom) : '<div>') + `
                 <div class="flex items-center gap-4 mb-5">
                     <select data-ro="keep" onchange="govState.dictTable=this.value; renderGovernance()" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-bold text-sm">${names.map(n => `<option ${n === tn ? 'selected' : ''}>${escapeHTML(n)}</option>`).join('')}</select>
                     <span class="text-xs px-2 py-1 rounded font-bold ${d.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${d.status}</span>
@@ -289,6 +292,6 @@
                         <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Colonne</th><th class="p-2">Définition fonctionnelle</th><th class="p-2">Type technique</th><th class="p-2">Exemples de valeurs</th><th class="p-2">Sensibilité</th><th class="p-2">Terme glossaire</th><th class="p-2">🎚️ Liste de valeurs</th></tr></thead>
                         <tbody class="divide-y divide-slate-100">${colRows}</tbody>
                     </table>
-                </div>`;
+                </div></div>`;
         }
         function updateDictField(tn, f, v) { ensureDictEntry(tn)[f] = v; persistAppState(); }

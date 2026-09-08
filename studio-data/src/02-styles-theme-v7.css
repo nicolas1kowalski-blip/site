@@ -33,6 +33,14 @@
              display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;
              transition:width .18s ease,flex-basis .18s ease;z-index:40}
     /* V10 — Personnes, rôles, propositions */
+    /* V10.2.1 — zones et champs grisés (lecture seule par rôle) */
+    .gov-lock-band{display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:9px;padding:7px 11px;margin-bottom:10px}
+    [data-gov-lock="1"] :is(input,select,textarea)[disabled]:not([data-ro="keep"]){background:#f1f5f9 !important;color:#64748b !important;border-color:#e2e8f0 !important;cursor:not-allowed;box-shadow:none}
+    [data-gov-lock="1"] button[disabled]:not([data-ro="keep"]),[data-gov-lock="1"] .term-tag.add[disabled]{opacity:.35;cursor:not-allowed;filter:grayscale(1)}
+    [data-gov-lock="1"] .bo-fld label{color:#94a3b8}
+    #step-9 :is(input,select,textarea)[disabled][title*="éservé"]{background:#f1f5f9 !important;color:#64748b !important;cursor:not-allowed}
+    html[data-theme="dark"] .gov-lock-band{background:#1e293b;color:#cbd5e1;border-color:#334155}
+    html[data-theme="dark"] [data-gov-lock="1"] :is(input,select,textarea)[disabled]:not([data-ro="keep"]),html[data-theme="dark"] #step-9 :is(input,select,textarea)[disabled][title*="éservé"]{background:#0f172a !important;color:#64748b !important;border-color:#1e293b !important}
     .usw{display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--v7-txt) 5%,transparent);border-radius:9px;padding:3px 6px 3px 10px}
     .usw .usw-lbl{font-size:11px;font-weight:700;color:var(--v7-muted)}
     .usw select{font-size:12px;font-weight:700;border:1px solid var(--v7-border-strong);border-radius:7px;padding:4px 6px;background:var(--v7-surface);color:var(--v7-txt);max-width:180px}

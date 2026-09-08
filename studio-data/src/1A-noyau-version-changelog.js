@@ -1,10 +1,13 @@
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
-        const APP_VERSION = '10.2.0';
+        const APP_VERSION = '10.2.1';
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            { v: '10.2.1', d: '2026-09-08', t: 'Ce qu\'on ne peut pas modifier est grisé', items: [
+                'Quand le profil actif n\'a ni rôle de propriétaire ni rôle de contributeur sur un élément, sa fiche devient <b>inerte</b> : bandeau « 🔒 Lecture seule », champs, listes et boutons grisés et désactivés. Fiche objet (et son dictionnaire par objet), fiche terme, fiche application ou processus, table du dictionnaire.',
+                'Pour un contributeur, les champs réservés (<b>propriétaire</b>, <b>domaine métier</b>) sont grisés de la même façon, avec l\'indication « réservé au propriétaire », au lieu d\'un message après coup.'] },
             { v: '10.2.0', d: '2026-09-08', t: 'Le contributeur peut tout proposer, sauf le propriétaire et le domaine', items: [
                 'Un contributeur propose désormais aussi la <b>structure</b> : nom d\'un attribut, colonne rattachée, ajout ou suppression d\'attributs, facettes, sources et leurs rôles, applications, hiérarchies, règles, statut, suppression de l\'objet… L\'opération est exécutée sur une copie, la différence est enregistrée comme proposition, l\'objet reste intact jusqu\'à la validation.',
                 'Les propositions de structure apparaissent dans la fiche de l\'objet (« Propositions de structure en attente ») avec ce qui change (+ ajouts, − retraits) et dans « À valider », où le propriétaire valide ou refuse ; l\'application d\'une validation est tracée dans l\'historique.',

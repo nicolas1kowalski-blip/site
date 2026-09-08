@@ -73,7 +73,8 @@
         // qui décident, pas seulement la grille des rôles.
         function govIsOwnerOfBo(bo) { const u = curUser(); if (!u || !bo) return false; if (bo.ownerId && bo.ownerId === u.id) return true; return !!(bo.globalOwner && catNorm(bo.globalOwner) === catNorm(u.name)); }
         function govCanEditBo(bo) { return govCanEdit(boDomainOf(bo)) || govIsOwnerOfBo(bo); }
-        function govCanProposeBo(bo) { return !govCanEditBo(bo) && (govCanPropose(boDomainOf(bo)) || (curUser() && (curUser().roles || []).some(r => r.role === 'contrib'))); }
+        // V10.2.1 : on propose sur un objet seulement avec un rôle de contributeur sur SON domaine (ou, sans domaine déclaré, n'importe quel rôle de contributeur — cf. govRoleIn).
+        function govCanProposeBo(bo) { return !govCanEditBo(bo) && govCanPropose(boDomainOf(bo)); }
         function govLinkOwner(bo) { if (!bo) return; const p = govPeople().find(x => catNorm(x.name) === catNorm(bo.globalOwner || '')); bo.ownerId = p ? p.id : ''; }
         function propTargetBo(p) { const t = p.target || {}; const id = t.boId || (t.ctx || {}).boId; return id ? (state.governance.businessObjects || []).find(b => b.id === id) : null; }
         function propCanDecide(p) { const bo = propTargetBo(p); return bo ? govCanEditBo(bo) : govCanEdit(p.domain); }
@@ -464,5 +465,21 @@
             return html;
         }
         // Sélecteur de domaine réutilisable (objet, terme)
+        // ---- V10.2.1 : ZONES GRISÉES ----
+        // Quand le profil actif ne peut ni modifier ni proposer sur un élément (lecteur du domaine),
+        // la fiche entière est rendue inerte : bandeau « Lecture seule », champs et boutons grisés
+        // et désactivés. Les champs réservés (propriétaire, domaine) sont grisés pour le contributeur.
+        function govLockAttr(canEdit, canPropose) { return govFeatureOn() && !canEdit && !canPropose ? ' data-gov-lock="1"' : ''; }
+        function govLockBand(what, dom) { return `<div class="gov-lock-band" data-ro="keep">🔒 <b>Lecture seule</b> — vous n'avez ni rôle de propriétaire ni rôle de contributeur${dom ? ' sur le domaine « ' + escapeHTML(dom) + ' »' : ''} : ${escapeHTML(what || 'cette fiche')} se consulte mais ne se modifie pas.</div>`; }
+        function govLockHtml(canEdit, canPropose, what, dom, inner) { const a = govLockAttr(canEdit, canPropose); return a ? '<div' + a + '>' + govLockBand(what, dom) + inner + '</div>' : inner; }
+        function govLockZones() {
+            document.querySelectorAll('[data-gov-lock="1"]').forEach(z => {
+                z.querySelectorAll('input,select,textarea,button,[contenteditable="true"]').forEach(n => {
+                    if (n.closest('[data-ro="keep"]')) return;
+                    n.disabled = true; n.setAttribute('data-gov-locked', '1'); n.removeAttribute('contenteditable'); n.setAttribute('tabindex', '-1');
+                });
+                z.querySelectorAll('[draggable="true"]').forEach(n => n.setAttribute('draggable', 'false'));
+            });
+        }
         function govLockedHint() { return '<div class="hint">🔒 réservé au propriétaire</div>'; }
         function govDomainSelectHtml(cur, onch, id, locked) { const doms = govDomains(); return `<select ${id ? 'id="' + id + '"' : ''} ${locked ? 'disabled' : ''} onchange="${onch}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white ${locked ? 'opacity-60 cursor-not-allowed' : ''}" title="${locked ? 'Réservé au propriétaire du domaine' : 'Domaine métier — détermine qui valide'}"><option value="">— domaine —</option>${doms.map(d => `<option ${d === cur ? 'selected' : ''}>${escapeHTML(d)}</option>`).join('')}${cur && !doms.includes(cur) ? `<option selected>${escapeHTML(cur)}</option>` : ''}</select>`; }
