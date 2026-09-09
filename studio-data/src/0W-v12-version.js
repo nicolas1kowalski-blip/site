@@ -1,7 +1,12 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.6.1';
+        const V12_VERSION = '12.7.0';
         const V12_CHANGELOG = [
+            { v: '12.7.0', d: '2026-09-09', t: 'Lineage d\'un objet : vision synthétique et complète', items: [
+                '<b>Plus rien n\'est caché.</b> Le graphe d\'un objet montre désormais aussi ce qui est rattaché au niveau des attributs : l\'application source propre à un attribut, les tables des colonnes rattachées et des composants avec l\'application qui les produit, les <b>objets amont</b> dont il reprend des attributs, les <b>objets aval</b> qui reprennent les siens, les objets référencés, et les processus qui lisent ses tables.',
+                '<b>Synthétique</b> : une seule flèche par application ou objet, avec le nombre d\'attributs concernés (« produit 3 attribut(s) », « alimente 2 attribut(s) via SEGMENTS », « 1 attribut(s) repris (copie) »). La hauteur du graphe s\'adapte au nombre d\'éléments.',
+                '<b>Panneau « Synthèse »</b> au-dessus du graphe : compteurs amont (applications, fichiers, objets) et aval (applications, processus, objets, fichiers destinataires), puis la liste « Tout ce qui est relié à l\'objet » avec le sens, le type et le rôle de chaque élément.',
+                'La carte des flux (vue globale) reçoit les mêmes rattachements de niveau attribut : application → objet, objet → application consommatrice, table → objet, objet → objet référencé.'] },
             { v: '12.6.1', d: '2026-09-09', t: 'Origines : copie, dérivé, agrégé expliqués dans la fiche', items: [
                 'Dans « Provient d\'un autre objet métier », un guide dépliable <b>« Quelle nature choisir ? »</b> présente les trois natures avec leur logique et un exemple : <b>Copie</b> (1 ligne → 1 ligne, valeur identique), <b>Dérivé</b> (1 ligne → 1 ligne, valeur transformée), <b>Agrégé</b> (N lignes → 1 valeur). Ouvert tant qu\'aucune origine n\'est déclarée, replié ensuite.',
                 'Les listes déroulantes « nature » affichent la définition au survol ; le lexique de l\'aide « ? » contient copie, dérivé, agrégé.'] },

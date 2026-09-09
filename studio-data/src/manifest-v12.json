@@ -280,6 +280,10 @@
   {
    "file": "9B-v12-origines.js",
    "role": "V12 : origine d'un attribut dans un autre objet métier (copie, dérivé, agrégé) — déclaration dans la fiche, provenance héritée, chaîne complète dans le graphe d'attribut, la vue par attribut et la carte des flux, « réutilisé par », boucles refusées"
+  },
+  {
+   "file": "9C-v12-lineage-objet.js",
+   "role": "V12 : lineage d'un objet complet et synthétique — applications sources des attributs, tables des colonnes et composants avec leur application, objets amont / aval (origines), objets référencés, processus lecteurs ; panneau Synthèse listant chaque élément relié ; mêmes rattachements ajoutés à la carte des flux"
   }
  ]
 }
