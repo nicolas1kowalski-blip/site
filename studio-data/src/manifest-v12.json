@@ -263,7 +263,11 @@
   },
   {
    "file": "97-v12-extraction.js",
-   "role": "V12 : l'écran Extraire en espace de travail guidé — synthèse, outils rangés (paramétrages, objet métier, vue graphique, guide), quatre étapes (colonnes, filtres, options, résultat), ajout de colonnes en onglets ; aucun formulaire ni identifiant modifié"
+   "role": "V12 : l'écran Extraire en plan de travail — synthèse, outils rangés (paramétrages, objet métier, vue graphique, guide), sections Colonnes / Filtres / Forme du résultat, panneau Résultat latéral, ajout de colonnes à la demande ; aucun formulaire ni identifiant modifié"
+  },
+  {
+   "file": "98-v12-liste-entree.js",
+   "role": "V12 : filtrer une extraction sur une liste fournie (fichier Excel/CSV ou texte collé, une ou plusieurs colonnes de correspondance) sans l'ajouter comme source — greffes sur advPlanJoins, advCondSql et buildAdvSql, chargement en table temporaire DuckDB, vérification des valeurs sans correspondance"
   }
  ]
 }

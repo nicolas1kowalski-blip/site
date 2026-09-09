@@ -1,7 +1,13 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.2.0';
+        const V12_VERSION = '12.3.0';
         const V12_CHANGELOG = [
+            { v: '12.3.0', d: '2026-09-09', t: 'Extraire : filtrer sur une liste fournie, sans créer de source', items: [
+                '<b>« 📄 Filtrer sur un fichier »</b> dans les Filtres : déposez un fichier Excel, CSV ou texte (ou collez une liste) et l\'extraction ne garde que les lignes qui s\'y trouvent. La liste reste en mémoire pour cette extraction : elle n\'apparaît ni dans Sources, ni dans le modèle.',
+                '<b>Une ou plusieurs colonnes de correspondance</b> : chaque colonne du fichier est rattachée à une colonne des tables (table de départ ou tables reliées), pré-remplie quand les noms se ressemblent. Avec deux colonnes (client + année, par exemple), une ligne doit correspondre sur les deux.',
+                '<b>Correspondance tolérante</b> : majuscules / minuscules et espaces ignorés par défaut, valeur exacte, ou normalisée (accents, ponctuation, zéros de tête). <b>Garder</b> ou <b>exclure</b> les lignes du fichier.',
+                '<b>Conserver l\'ordre du fichier et joindre ses autres colonnes</b> (commentaire, référence interne…) au résultat, option à cocher ; les colonnes clés sont ajoutées en sortie automatiquement.',
+                '<b>Vérifier</b> : combien de valeurs du fichier n\'existent pas dans la table, avec les premières manquantes. Le filtre s\'affiche en pastille (nom, nombre de lignes, correspondances) avec Modifier / Vérifier / retirer ; il est enregistré avec les paramétrages.'] },
             { v: '12.2.0', d: '2026-09-09', t: 'Extraire : un plan de travail intuitif, sans étapes', items: [
                 'Plus d\'onglets ni de « Suivant » : la page se lit de haut en bas comme une recette — <b>Colonnes en sortie</b>, <b>Filtres</b>, <b>Forme du résultat</b> (doublons, regroupement, jointures, volume) — et, à droite, un panneau <b>Résultat</b> qui reste à portée (Compter, Prévisualiser, Bilan qualité, Voir le SQL, Générer, ajouter comme source). Aperçu, bilan et SQL s\'affichent en pleine largeur dessous.',
                 '<b>« ＋ Ajouter une colonne »</b> ouvre le sélecteur à la demande (colonne d\'une table, synthèse d\'une table liée, hiérarchie aplatie, colonne calculée) ; il est ouvert d\'office tant qu\'aucune colonne n\'est choisie.',
