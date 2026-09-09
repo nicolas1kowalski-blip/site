@@ -1,7 +1,11 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.4.0';
+        const V12_VERSION = '12.5.0';
         const V12_CHANGELOG = [
+            { v: '12.5.0', d: '2026-09-09', t: 'Extraire : plus besoin de choisir un « via » quand un seul des liens est renseigné', items: [
+                'Quand une table est atteignable par plusieurs chemins (ex. contrat → personne physique → adresse, ou contrat → personne morale → adresse), le sélecteur « via » propose en tête et présélectionne <b>« 🔀 Le lien renseigné, quel qu\'il soit »</b> : toutes les routes sont jointes et la valeur est prise sur le premier lien renseigné pour chaque ligne.',
+                'Disponible pour les colonnes en sortie, les filtres et les critères d\'agrégat (NB.SI.ENS). Les synthèses, hiérarchies, colonnes calculées et agrégats gardent le choix explicite du chemin, comme avant.',
+                'Le chemin précis reste proposé dans la même liste quand les liens ont des sens différents (souscripteur / bénéficiaire). Le SQL affiché montre le COALESCE entre les routes.'] },
             { v: '12.4.0', d: '2026-09-09', t: 'Jeux temporaires : auditer, comparer, analyser un résultat ou un fichier reçu, sans créer de source', items: [
                 '<b>Un jeu temporaire</b> est un tableau gardé pour la session : le résultat d\'une extraction (« ⏳ Garder comme jeu temporaire » dans Extraire), un fichier reçu (Excel, CSV, texte collé), les écarts d\'une comparaison, les lignes en anomalie d\'un audit (« ⏳ Garder » à côté de Voir / CSV).',
                 '<b>Utilisable partout</b> : il apparaît dans tous les sélecteurs de table, dans un groupe « ⏳ Jeux temporaires », donc dans Comparer, Qualité & Audit, Statistiques, Explorer, Explorateur 360°, Extraire, Tableaux de bord, Préparation… Il n\'apparaît <b>ni dans Sources, ni dans le modèle, ni dans les sauvegardes, ni dans la gouvernance</b>.',

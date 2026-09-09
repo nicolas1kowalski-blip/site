@@ -2224,8 +2224,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         ];
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.4.0';
+        const V12_VERSION = '12.5.0';
         const V12_CHANGELOG = [
+            { v: '12.5.0', d: '2026-09-09', t: 'Extraire : plus besoin de choisir un « via » quand un seul des liens est renseigné', items: [
+                'Quand une table est atteignable par plusieurs chemins (ex. contrat → personne physique → adresse, ou contrat → personne morale → adresse), le sélecteur « via » propose en tête et présélectionne <b>« 🔀 Le lien renseigné, quel qu\'il soit »</b> : toutes les routes sont jointes et la valeur est prise sur le premier lien renseigné pour chaque ligne.',
+                'Disponible pour les colonnes en sortie, les filtres et les critères d\'agrégat (NB.SI.ENS). Les synthèses, hiérarchies, colonnes calculées et agrégats gardent le choix explicite du chemin, comme avant.',
+                'Le chemin précis reste proposé dans la même liste quand les liens ont des sens différents (souscripteur / bénéficiaire). Le SQL affiché montre le COALESCE entre les routes.'] },
             { v: '12.4.0', d: '2026-09-09', t: 'Jeux temporaires : auditer, comparer, analyser un résultat ou un fichier reçu, sans créer de source', items: [
                 '<b>Un jeu temporaire</b> est un tableau gardé pour la session : le résultat d\'une extraction (« ⏳ Garder comme jeu temporaire » dans Extraire), un fichier reçu (Excel, CSV, texte collé), les écarts d\'une comparaison, les lignes en anomalie d\'un audit (« ⏳ Garder » à côté de Voir / CSV).',
                 '<b>Utilisable partout</b> : il apparaît dans tous les sélecteurs de table, dans un groupe « ⏳ Jeux temporaires », donc dans Comparer, Qualité & Audit, Statistiques, Explorer, Explorateur 360°, Extraire, Tableaux de bord, Préparation… Il n\'apparaît <b>ni dans Sources, ni dans le modèle, ni dans les sauvegardes, ni dans la gouvernance</b>.',
@@ -22411,6 +22415,70 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         v11Index = function () { const out = _v12tIndex.apply(this, arguments); out.push({ grp: 'Actions', ic: '⏳', label: 'Jeux temporaires (résultats et fichiers de la session)', key: 'jeux temporaires session fichier extérieur résultat', go: () => v12TmpOpen() }); v12TmpList().forEach(t => out.push({ grp: 'Actions', ic: '⏳', label: 'Jeu temporaire : ' + t.name, sub: v12TmpKindLabel(t) + ' · ' + (t.rows || 0).toLocaleString('fr-FR') + ' lignes', key: 'jeu temporaire ' + t.name, go: () => v12TmpOpen() })); return out; };
         Object.assign(V11_LEXIQUE, { 'jeu temporaire': 'Résultat ou fichier gardé en mémoire pour la session (extraction, fichier reçu, écarts, anomalies) : utilisable dans tous les écrans sans être une source. Disparaît à la fermeture, sauf promotion en source.' });
         setTimeout(() => { try { v12TmpTopBtn(); } catch (e) {} }, 0);
+        // ======================= V12 : EXTRAIRE — « L'UN OU L'AUTRE LIEN » SANS CHOISIR DE VIA =======================
+        // Cas : une table cible est atteignable par PLUSIEURS chemins (ex. CONTRAT → PERSONNE PHYSIQUE → ADRESSE
+        // et CONTRAT → PERSONNE MORALE → ADRESSE) et, pour chaque ligne, un seul de ces liens est renseigné.
+        // Plutôt que d'imposer le choix d'un « via », on propose (et présélectionne) « le lien renseigné,
+        // quel qu'il soit » : toutes les routes sont jointes et la valeur est prise sur la première non vide
+        // (COALESCE). Disponible pour les colonnes, les filtres et les critères d'agrégat ; les synthèses,
+        // hiérarchies, calculs et agrégats gardent le choix explicite du chemin. Moteur inchangé.
+        const V12_VIA_ANY = 'any';
+        const V12_VIA_ANY_SELECTS = ['adv-col-via', 'adv-flt-via', 'adv-aggc-via'];
+        function v12AnyVias(tableId) { return advViaOptions(tableId).map(o => ({ tableId, via: o.key })); }
+        function v12AnyAliases(map, x) {
+            const seen = new Set(); const out = [];
+            v12AnyVias(x.tableId).forEach(v => { const a = map[advRouteKey(v.tableId, v.via)]; if (a && !seen.has(a)) { seen.add(a); out.push(a); } });
+            if (!out.length) out.push(advAlias(map, { tableId: x.tableId, via: '' }));
+            return out;
+        }
+        function v12AnyCoalesce(map, x, col) { const al = v12AnyAliases(map, x); const refs = al.map(a => `${a}.${sqlIdent(col)}`); return refs.length > 1 ? `COALESCE(${refs.join(', ')})` : refs[0]; }
+        // Besoins de jointure : « any » se développe en toutes les routes vers la table.
+        const _v12aPlan = advPlanJoins;
+        advPlanJoins = function (baseId, needs) {
+            needs = (Array.isArray(needs) ? needs : []).flatMap(x => (x && typeof x === 'object' && x.via === V12_VIA_ANY) ? (v12AnyVias(x.tableId).length ? v12AnyVias(x.tableId) : [{ tableId: x.tableId, via: '' }]) : [x]);
+            return _v12aPlan(baseId, needs);
+        };
+        // Colonne : première valeur non vide parmi les routes.
+        const _v12aColExpr = advColExpr;
+        advColExpr = function (map, c) {
+            if (c && c.kind !== 'calc' && c.via === V12_VIA_ANY) {
+                const q = v12AnyCoalesce(map, c, c.col);
+                switch (c.transform) {
+                    case 'trim': return `TRIM(CAST(${q} AS VARCHAR))`;
+                    case 'upper': return `UPPER(TRIM(CAST(${q} AS VARCHAR)))`;
+                    case 'lower': return `LOWER(TRIM(CAST(${q} AS VARCHAR)))`;
+                    case 'noaccent': return `strip_accents(TRIM(CAST(${q} AS VARCHAR)))`;
+                    default: return q;
+                }
+            }
+            return _v12aColExpr(map, c);
+        };
+        // Filtre / critère : la condition d'origine est produite sur un alias fictif, puis ce dernier est
+        // remplacé par le COALESCE des routes.
+        const _v12aCond = advCondSql;
+        advCondSql = function (alias, c) {
+            if (c && c.via === V12_VIA_ANY && c.op !== 'list' && v12State.listMap) {
+                const ph = '__v12any__'; const sql = _v12aCond(ph, c);
+                return sql.split(`${ph}.${sqlIdent(c.col)}`).join(v12AnyCoalesce(v12State.listMap, c, c.col));
+            }
+            return _v12aCond(alias, c);
+        };
+        // Sélecteur « via » : l'option « l'un ou l'autre » en tête, présélectionnée quand rien n'a été choisi.
+        const _v12aViaSync = advViaSync;
+        advViaSync = function (id, tableId) {
+            const sel = el(id); const before = sel ? sel.value : '';
+            _v12aViaSync(id, tableId);
+            const w = el(id + '-wrap'); if (!sel || !w || w.classList.contains('hidden') || !V12_VIA_ANY_SELECTS.includes(id)) return;
+            const o = document.createElement('option'); o.value = V12_VIA_ANY; o.textContent = '🔀 Le lien renseigné, quel qu\'il soit (l\'un ou l\'autre)';
+            sel.insertBefore(o, sel.firstChild);
+            if (!before || before === V12_VIA_ANY) sel.value = V12_VIA_ANY;
+            const lbl = w.querySelector('span'); if (lbl) lbl.title = 'Cette table est atteignable par plusieurs liens. Par défaut, la valeur est prise sur le lien renseigné, quel qu\'il soit ; choisissez un chemin précis si les liens ont des sens différents (ex. souscripteur / bénéficiaire).';
+        };
+        const _v12aViaTxt = advViaTxt;
+        advViaTxt = function (via) { return via === V12_VIA_ANY ? ' via l\'un ou l\'autre lien' : _v12aViaTxt(via); };
+        const _v12aViaLabel = advViaLabel;
+        advViaLabel = function (via) { return via === V12_VIA_ANY ? 'l\'un ou l\'autre lien' : _v12aViaLabel(via); };
+        Object.assign(V11_LEXIQUE, { 'l\'un ou l\'autre lien': 'Quand une table est reliée par plusieurs chemins, la valeur est prise sur le premier lien renseigné pour chaque ligne, sans choisir de chemin.' });
 </script>
 </body>
 </html>

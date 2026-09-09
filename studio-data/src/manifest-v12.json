@@ -272,6 +272,10 @@
   {
    "file": "99-v12-jeux-temporaires.js",
    "role": "V12 : jeux temporaires — résultats d'extraction, fichiers extérieurs, écarts de comparaison et anomalies d'audit gardés pour la session (entrées non énumérables de state.tables), proposés dans tous les sélecteurs de table, panneau ⏳ en haut, export CSV, promotion en source"
+  },
+  {
+   "file": "9A-v12-lien-auto.js",
+   "role": "V12 : Extraire — option « le lien renseigné, quel qu'il soit » sur les colonnes, filtres et critères quand une table est atteignable par plusieurs chemins (toutes les routes jointes, COALESCE), présélectionnée pour éviter de choisir un via"
   }
  ]
 }
