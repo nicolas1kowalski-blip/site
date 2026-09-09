@@ -1,7 +1,13 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.3.0';
+        const V12_VERSION = '12.4.0';
         const V12_CHANGELOG = [
+            { v: '12.4.0', d: '2026-09-09', t: 'Jeux temporaires : auditer, comparer, analyser un résultat ou un fichier reçu, sans créer de source', items: [
+                '<b>Un jeu temporaire</b> est un tableau gardé pour la session : le résultat d\'une extraction (« ⏳ Garder comme jeu temporaire » dans Extraire), un fichier reçu (Excel, CSV, texte collé), les écarts d\'une comparaison, les lignes en anomalie d\'un audit (« ⏳ Garder » à côté de Voir / CSV).',
+                '<b>Utilisable partout</b> : il apparaît dans tous les sélecteurs de table, dans un groupe « ⏳ Jeux temporaires », donc dans Comparer, Qualité & Audit, Statistiques, Explorer, Explorateur 360°, Extraire, Tableaux de bord, Préparation… Il n\'apparaît <b>ni dans Sources, ni dans le modèle, ni dans les sauvegardes, ni dans la gouvernance</b>.',
+                '<b>Comparer</b> : « 📄 Fichier extérieur… » sous chaque côté pour comparer avec un fichier reçu, ou deux fichiers entre eux, sans les charger comme sources. Après la comparaison : garder les écarts seulement, ou tout le rapport.',
+                '<b>Panneau ⏳ Jeux</b> en haut : la liste des jeux (origine, lignes, colonnes), renommer, « Utiliser dans » Comparer / Qualité / Statistiques / Explorer / Extraire, exporter en CSV, <b>promouvoir en source</b> (avec son origine dans le lineage) ou supprimer. Les jeux disparaissent à la fermeture ; un rappel s\'affiche avant de quitter s\'il en reste.',
+                'Enchaînement type : fichier reçu → filtre par liste → extraction → jeu temporaire → audit dessus → anomalies en jeu → comparaison avec le fichier reçu → export. Aucune source créée.'] },
             { v: '12.3.0', d: '2026-09-09', t: 'Extraire : filtrer sur une liste fournie, sans créer de source', items: [
                 '<b>« 📄 Filtrer sur un fichier »</b> dans les Filtres : déposez un fichier Excel, CSV ou texte (ou collez une liste) et l\'extraction ne garde que les lignes qui s\'y trouvent. La liste reste en mémoire pour cette extraction : elle n\'apparaît ni dans Sources, ni dans le modèle.',
                 '<b>Une ou plusieurs colonnes de correspondance</b> : chaque colonne du fichier est rattachée à une colonne des tables (table de départ ou tables reliées), pré-remplie quand les noms se ressemblent. Avec deux colonnes (client + année, par exemple), une ligne doit correspondre sur les deux.',

@@ -268,6 +268,10 @@
   {
    "file": "98-v12-liste-entree.js",
    "role": "V12 : filtrer une extraction sur une liste fournie (fichier Excel/CSV ou texte collé, une ou plusieurs colonnes de correspondance) sans l'ajouter comme source — greffes sur advPlanJoins, advCondSql et buildAdvSql, chargement en table temporaire DuckDB, vérification des valeurs sans correspondance"
+  },
+  {
+   "file": "99-v12-jeux-temporaires.js",
+   "role": "V12 : jeux temporaires — résultats d'extraction, fichiers extérieurs, écarts de comparaison et anomalies d'audit gardés pour la session (entrées non énumérables de state.tables), proposés dans tous les sélecteurs de table, panneau ⏳ en haut, export CSV, promotion en source"
   }
  ]
 }
