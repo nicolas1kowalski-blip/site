@@ -284,6 +284,10 @@
   {
    "file": "9C-v12-lineage-objet.js",
    "role": "V12 : lineage d'un objet complet et synthétique — applications sources des attributs, tables des colonnes et composants avec leur application, objets amont / aval (origines), objets référencés, processus lecteurs ; panneau Synthèse listant chaque élément relié ; mêmes rattachements ajoutés à la carte des flux"
+  },
+  {
+   "file": "9D-v12-restitutions.js",
+   "role": "V12 : restitutions (rapports, tableaux de bord, fichiers livrés) — troisième type d'actif : générée par, objets et attributs utilisés, diffusée à ; chaîne complète dans les lineages et la carte des flux ; lineage repliable (groupes par type et par sens, ouverture au clic, seuil réglable)"
   }
  ]
 }

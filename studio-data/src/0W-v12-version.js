@@ -1,7 +1,11 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.7.0';
+        const V12_VERSION = '12.8.0';
         const V12_CHANGELOG = [
+            { v: '12.8.0', d: '2026-09-09', t: 'Restitutions et lineage repliable', items: [
+                '<b>Nouveau type d\'actif : la restitution</b> (📊) — rapport, tableau de bord, fichier réglementaire, extraction livrée, flux. Dans Applications & processus : « + Restitution », puis <b>générée par</b> (application ou processus), <b>objets utilisés</b>, <b>diffusée à</b> (applications, processus ou destinataires externes en clair), fréquence, forme, responsable, domaine, criticité. Dans la fiche d\'un attribut, elle se coche comme n\'importe quel usage.',
+                '<b>Chaîne complète dans le lineage</b> : source → objet → attribut → restitution → destinataires, avec l\'application qui la génère. Visible dans le graphe d\'un objet, celui d\'un attribut, la synthèse et la carte des flux.',
+                '<b>Lineage repliable</b> : quand un côté compte trop d\'éléments d\'un même type (4 par défaut, réglable), ils sont regroupés en un nœud « 5 applications en aval » que l\'on ouvre d\'un clic. Boutons « Réduire » et « Tout développer » dans l\'en-tête du lineage ; les liens des éléments regroupés sont fusionnés avec leur nombre.'] },
             { v: '12.7.0', d: '2026-09-09', t: 'Lineage d\'un objet : vision synthétique et complète', items: [
                 '<b>Plus rien n\'est caché.</b> Le graphe d\'un objet montre désormais aussi ce qui est rattaché au niveau des attributs : l\'application source propre à un attribut, les tables des colonnes rattachées et des composants avec l\'application qui les produit, les <b>objets amont</b> dont il reprend des attributs, les <b>objets aval</b> qui reprennent les siens, les objets référencés, et les processus qui lisent ses tables.',
                 '<b>Synthétique</b> : une seule flèche par application ou objet, avec le nombre d\'attributs concernés (« produit 3 attribut(s) », « alimente 2 attribut(s) via SEGMENTS », « 1 attribut(s) repris (copie) »). La hauteur du graphe s\'adapte au nombre d\'éléments.',

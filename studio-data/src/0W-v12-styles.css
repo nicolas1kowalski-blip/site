@@ -172,6 +172,11 @@
     .v12bl-list{border:1px solid var(--v11-line);border-radius:10px;padding:4px 10px;background:var(--v7-surface)} .v12bl-list summary{cursor:pointer;font-size:11.5px;font-weight:700;color:var(--v7-txt-2);padding:4px 0} .v12bl-list[open] summary{border-bottom:1px solid var(--v11-line);margin-bottom:4px}
     .v12bl-tbl{font-size:11.5px} .v12bl-tbl td .sub{display:block;font-size:10px;color:var(--v7-muted)} .v12bl-dir{font-size:10px;font-weight:800;border-radius:6px;padding:1px 6px;white-space:nowrap} .v12bl-dir.amont{background:#e2e8f0;color:#334155} .v12bl-dir.aval{background:#ffedd5;color:#9a3412}
     html[data-theme="dark"] .v12bl-obj{background:#052e16;border-color:#166534;color:#bbf7d0} html[data-theme="dark"] .v12bl-chip.tbl{background:#172554} html[data-theme="dark"] .v12bl-chip.obj{background:#2e1065} html[data-theme="dark"] .v12bl-chip.proc{background:#431407} html[data-theme="dark"] .v12bl-dir.amont{background:#1e293b;color:#cbd5e1} html[data-theme="dark"] .v12bl-dir.aval{background:#431407;color:#fdba74}
+    /* ---- V12.8 : restitutions, lineage repliable ---- */
+    .v12rep-sect{border-top:1px solid var(--v11-line);padding-top:12px} .v12rep-card input,.v12rep-card select{color:var(--v7-txt)}
+    .v12rep-read{margin-top:10px;font-size:12px;border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:8px 10px;color:#78350f}
+    .v12lf-bar{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--v7-txt-2);margin-right:8px} .v12lf-bar button{font-size:11px;font-weight:700;border:1px solid var(--v11-line);background:var(--v7-surface);color:var(--v7-txt-2);border-radius:7px;padding:2px 8px;cursor:pointer} .v12lf-bar button:hover{border-color:var(--v11-acc-bd);color:var(--v11-acc)} .v12lf-bar button:disabled{opacity:.45;cursor:default} .v12lf-bar select{font-size:11px;border:1px solid var(--v11-line);border-radius:6px;padding:1px 4px;background:var(--v7-surface);color:var(--v7-txt)} .v12lf-bar .n{font-weight:800;color:var(--v11-acc)}
+    html[data-theme="dark"] .v12rep-read{background:#431407;border-color:#b45309;color:#fde68a} html[data-theme="dark"] .v12rep-card{background:rgba(120,53,15,.15);border-color:#78350f}
     /* ---- sombre ---- */
     html[data-theme="dark"] .v12-sticky{box-shadow:0 10px 30px rgba(0,0,0,.5)}
     html[data-theme="dark"] .v12-band{background:var(--v7-surface)}
