@@ -1,7 +1,10 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.0.0';
+        const V13_VERSION = '13.1.0';
         const V13_CHANGELOG = [
+            { v: '13.1.0', d: '2026-09-09', t: 'Le vocabulaire métier jusque dans l\'impression et le dossier', items: [
+                'La fiche imprimée (⎙) et le dossier de gouvernance exporté utilisent les mêmes mots que l\'écran : information, variante, parcours de la donnée, colonne du fichier, confidentialité.',
+                'Reprend aussi les finitions de la V12.9 : restitutions et origines dans le catalogue, les exports et le dossier ; Extraire avec des jeux temporaires seuls.'] },
             { v: '13.0.0', d: '2026-09-09', t: 'V13 — la gouvernance en langage métier, pour les non-initiés', items: [
                 '<b>Un mot d\'ordre</b> : on décrit sa donnée comme on l\'expliquerait à un nouveau collègue, en trois questions — c\'est quoi, d\'où ça vient, qui s\'en sert. Tout le reste se déduit ou se propose.',
                 '<b>Vocabulaire métier</b> partout dans la gouvernance : « information » au lieu d\'attribut, « variante » au lieu de facette, « parcours de la donnée » au lieu de lineage, « colonne du fichier » au lieu de mapping ; le mot technique reste au survol. <b>Une phrase d\'aide</b> en tête de chaque écran dit ce qu\'on y fait et pourquoi.',

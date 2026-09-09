@@ -47,6 +47,10 @@
             } catch (e) {}
             return r;
         };
+        // vocabulaire métier aussi dans le texte HTML généré (impression d'une fiche, dossier de gouvernance)
+        function v13WordsHtml(html) { return String(html || '').replace(/>([^<>]+)</g, (m, t) => { const k = t.trim(); const w = V11_WORDS[k]; return w ? '>' + t.replace(k, w) + '<' : m; }); }
+        if (typeof v11Print === 'function') { const _v13wPrint = v11Print; v11Print = function () { const r = _v13wPrint.apply(this, arguments); try { const area = el('v11PrintArea'); if (area) { v11Wording(area); area.innerHTML = v13WordsHtml(area.innerHTML); } } catch (e) {} return r; }; }
+        if (typeof exportGovernanceReport === 'function' && typeof v12WithBlobHook === 'function') { const _v13wDossier = exportGovernanceReport; exportGovernanceReport = function () { const args = arguments; return v12WithBlobHook(() => _v13wDossier.apply(this, args), v13WordsHtml); }; }
         Object.assign(V11_LEXIQUE, {
             'information': 'Un renseignement élémentaire sur un objet (ex. la date de naissance d\'un client). Terme technique : attribut.',
             'variante': 'Une forme particulière d\'un objet, avec ses propres informations (ex. Client particulier / Client entreprise). Terme technique : facette.',

@@ -1,7 +1,11 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.8.0';
+        const V12_VERSION = '12.9.0';
         const V12_CHANGELOG = [
+            { v: '12.9.0', d: '2026-09-09', t: 'Finitions : restitutions et origines partout, Extraire avec des jeux temporaires', items: [
+                '<b>Catalogue</b> : une restitution apparaît avec le sous-titre « Restitution · fréquence · forme » ; la fiche d\'une information affiche « Provient d\'un autre objet » et « Réutilisé par », cliquables.',
+                '<b>Export et import en masse</b> : le type « restitution » est exporté et reconnu à l\'import. <b>Dossier de gouvernance</b> : sections « Restitutions » (générée par, diffusée à, informations utilisées) et « Informations provenant d\'un autre objet ».',
+                '<b>Extraire</b> fonctionne avec des jeux temporaires seuls, sans aucune source chargée : ils sont proposés comme tables de départ et tables liées.'] },
             { v: '12.8.0', d: '2026-09-09', t: 'Restitutions et lineage repliable', items: [
                 '<b>Nouveau type d\'actif : la restitution</b> (📊) — rapport, tableau de bord, fichier réglementaire, extraction livrée, flux. Dans Applications & processus : « + Restitution », puis <b>générée par</b> (application ou processus), <b>objets utilisés</b>, <b>diffusée à</b> (applications, processus ou destinataires externes en clair), fréquence, forme, responsable, domaine, criticité. Dans la fiche d\'un attribut, elle se coche comme n\'importe quel usage.',
                 '<b>Chaîne complète dans le lineage</b> : source → objet → attribut → restitution → destinataires, avec l\'application qui la génère. Visible dans le graphe d\'un objet, celui d\'un attribut, la synthèse et la carte des flux.',

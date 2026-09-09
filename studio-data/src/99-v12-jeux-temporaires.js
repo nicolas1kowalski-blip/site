@@ -173,6 +173,9 @@
             try { const t = await v12TmpFromRows(sh.cols, sh.rows, name, { kind: 'file', origin: 'fichier déposé, non ajouté aux sources' }); if (cb) cb(t.id); }
             catch (e) { showError('Impossible de charger le fichier dans le moteur : ' + e.message); }
         }
+        // ---- Extraire : les jeux temporaires comptent comme des tables le temps du rendu (sinon « chargez une source ») ----
+        function v12TmpVisible(fn) { const ids = v12State.tmpIds.filter(id => state.tables[id] && state.tables[id].temp); ids.forEach(id => { const t = state.tables[id]; delete state.tables[id]; state.tables[id] = t; }); try { return fn(); } finally { ids.forEach(id => { const t = state.tables[id]; if (!t) return; delete state.tables[id]; Object.defineProperty(state.tables, id, { value: t, enumerable: false, configurable: true, writable: true }); }); } }
+        const _v12tRenderAdv = renderAdvExtract; renderAdvExtract = function () { const args = arguments; return v12TmpVisible(() => _v12tRenderAdv.apply(this, args)); };
         // ---- Extraire : « Garder comme jeu temporaire » ----
         async function v12TmpFromExtract() {
             const r = advCurrentSql(); if (r.err) return showError(r.err); if (!r.sql) return showError('Requête SQL vide.');
