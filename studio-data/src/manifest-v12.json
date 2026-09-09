@@ -1,0 +1,265 @@
+{
+ "output": "../StudioDataV12.html",
+ "parts": [
+  {
+   "file": "00-entete.html",
+   "role": "En-tête HTML : métadonnées, politique de sécurité (CSP), chargement des bibliothèques externes, amorçage DuckDB-Wasm"
+  },
+  {
+   "file": "01-styles-base.css",
+   "role": "Styles de base de l'application (jetons de design, composants UX)"
+  },
+  {
+   "file": "02-styles-theme-v7.css",
+   "role": "Thème V7 : rail latéral, en-tête, mode sombre, contrastes, composants gouvernance"
+  },
+  {
+   "file": "0V-v11-styles.css",
+   "role": "V11 : styles de la couche ergonomique (fiches lecture, palette, accueil, plein écran, densité, présentation, impression)"
+  },
+  {
+   "file": "0W-v12-styles.css",
+   "role": "V12 : styles de la couche ergonomique de toute l'application (en-têtes unifiés, boutons, accueil, barres d'action, vue liste des sources, bandeaux)"
+  },
+  {
+   "file": "03-page.html",
+   "role": "Corps de la page : structure des écrans (sources, modèle, extraction, qualité, gouvernance…)"
+  },
+  {
+   "file": "0V-v11-version.js",
+   "role": "V11 : numéro de version et journal des évolutions propres à la V11 (chargé avant le noyau)"
+  },
+  {
+   "file": "0W-v12-version.js",
+   "role": "V12 : numéro de version et journal propres à la V12 (chargé avant le noyau)"
+  },
+  {
+   "file": "10-noyau-etat.js",
+   "role": "Noyau : état global de l'application"
+  },
+  {
+   "file": "11-noyau-moteur-duckdb.js",
+   "role": "Noyau : moteur de données DuckDB-Wasm, lecture des fichiers CSV/XLSX, auto-réparation"
+  },
+  {
+   "file": "12-modele-donnees-graphe.js",
+   "role": "Modèle de données : vue graphique, domaines de sources, création et suppression des liens, plein écran"
+  },
+  {
+   "file": "13-noyau-persistance-locale.js",
+   "role": "Noyau : persistance locale (IndexedDB), sources optimisées Parquet"
+  },
+  {
+   "file": "20-gouvernance-dictionnaire.js",
+   "role": "Gouvernance : dictionnaire des données (par objet métier et par table technique)"
+  },
+  {
+   "file": "21-gouvernance-listes-de-valeurs.js",
+   "role": "Gouvernance : listes de valeurs (référentiels de codes)"
+  },
+  {
+   "file": "22-gouvernance-objets-metier.js",
+   "role": "Gouvernance : objets métier — structure, facettes, fiche, attributs, hiérarchies, audit global, règles de cardinalité, assistants"
+  },
+  {
+   "file": "23-gouvernance-perimetres.js",
+   "role": "Gouvernance : périmètres métier"
+  },
+  {
+   "file": "24-gouvernance-applications-processus.js",
+   "role": "Gouvernance : applications et processus, rattachement des sources, réconciliation objets ↔ applications"
+  },
+  {
+   "file": "25-gouvernance-glossaire.js",
+   "role": "Gouvernance : glossaire — termes en tags, liens vers attributs, objets, applications, processus"
+  },
+  {
+   "file": "26-gouvernance-analyse-impact.js",
+   "role": "Gouvernance : analyse d'impact (cas d'usage fusionnés dans Applis & processus)"
+  },
+  {
+   "file": "30-lineage-par-attribut.js",
+   "role": "Lineage : vue par attribut (colonnes provenance → consommation)"
+  },
+  {
+   "file": "27-gouvernance-historique.js",
+   "role": "Gouvernance : historique qualité"
+  },
+  {
+   "file": "28-gouvernance-surveillance-sources.js",
+   "role": "Gouvernance : surveillance des sources (amont)"
+  },
+  {
+   "file": "31-lineage-carte-des-flux.js",
+   "role": "Lineage : carte des flux augmentée, réconciliation DuckDB, synchronisation depuis les données, transformations rejouables"
+  },
+  {
+   "file": "29-gouvernance-import-en-masse.js",
+   "role": "Gouvernance : sauvegarde et partage, import en masse"
+  },
+  {
+   "file": "14-noyau-centre-de-sauvegarde.js",
+   "role": "Noyau : centre de sauvegarde (export / import de l'application)"
+  },
+  {
+   "file": "15-noyau-navigation-theme.js",
+   "role": "Noyau : navigation à deux niveaux, rail latéral, icônes vectorielles, thème clair / sombre"
+  },
+  {
+   "file": "16-noyau-ux-drawer-contexte.js",
+   "role": "Noyau : helpers visuels, barre de contexte, panneau latéral (drawer)"
+  },
+  {
+   "file": "40-tables-concues.js",
+   "role": "Tables conçues : couche de consolidation, formats, rapport d'écarts, vue graphique du concepteur"
+  },
+  {
+   "file": "41-analyse-couverture.js",
+   "role": "Analyse de couverture (trois tables)"
+  },
+  {
+   "file": "17-noyau-cockpit.js",
+   "role": "Noyau : cockpit d'accueil"
+  },
+  {
+   "file": "50-sensibilite-rgpd-detection.js",
+   "role": "Sensibilité : détection RGPD / données personnelles"
+  },
+  {
+   "file": "2A-gouvernance-dossier-export.js",
+   "role": "Gouvernance : dossier de gouvernance exportable"
+  },
+  {
+   "file": "42-sources-fusion-fichiers.js",
+   "role": "Sources : fusion de fichiers (une source = plusieurs fichiers)"
+  },
+  {
+   "file": "43-modele-deduction-liens.js",
+   "role": "Modèle de données : déduction automatique des liens"
+  },
+  {
+   "file": "2B-gouvernance-catalogue.js",
+   "role": "Gouvernance : catalogue de données (recherche, facettes, couche métier, fiches navigables)"
+  },
+  {
+   "file": "2C-gouvernance-personnes-validation.js",
+   "role": "Gouvernance : personnes, rôles par domaine, propositions des contributeurs et validation par les propriétaires (démonstrateur)"
+  },
+  {
+   "file": "44-rapprochement-inter-sources.js",
+   "role": "Rapprochement inter-sources (record linkage)"
+  },
+  {
+   "file": "51-sensibilite-anonymisation.js",
+   "role": "Sensibilité : classification et anonymisation"
+  },
+  {
+   "file": "45-modele-analyse-impact.js",
+   "role": "Modèle de données : analyse d'impact"
+  },
+  {
+   "file": "60-tableaux-de-bord.js",
+   "role": "Tableaux de bord composables"
+  },
+  {
+   "file": "61-kpi-alertes-rapport.js",
+   "role": "KPI, seuils, alertes et rapport global"
+  },
+  {
+   "file": "62-preparation-recettes.js",
+   "role": "Préparation : recettes de transformation reproductibles"
+  },
+  {
+   "file": "18-noyau-mode-consultation.js",
+   "role": "Noyau : mode consultation de la gouvernance"
+  },
+  {
+   "file": "19-noyau-guide-assistant.js",
+   "role": "Noyau : guide pas à pas sur l'écran réel, assistant"
+  },
+  {
+   "file": "1A-noyau-version-changelog.js",
+   "role": "Noyau : version de l'application et notes de version"
+  },
+  {
+   "file": "70-series-temporelles.js",
+   "role": "Séries temporelles : maille, profil, calendrier, contrôles"
+  },
+  {
+   "file": "71-qualite-regles-score.js",
+   "role": "Qualité : règles déclaratives, compilateur d'expression, score pondéré et tendance"
+  },
+  {
+   "file": "46-sources-connecteurs.js",
+   "role": "Sources : connecteurs API / JSON / Parquet / Google Sheets"
+  },
+  {
+   "file": "47-sources-livraison-zip.js",
+   "role": "Sources : livraison ZIP"
+  },
+  {
+   "file": "48-sources-mises-a-jour.js",
+   "role": "Sources : mises à jour et rafraîchissement"
+  },
+  {
+   "file": "32-graphes-moteur-svg.js",
+   "role": "Graphes : moteur SVG universel"
+  },
+  {
+   "file": "49-modele-rendu-svg.js",
+   "role": "Modèle de données : rendu SVG et interactions"
+  },
+  {
+   "file": "80-extraction-avancee.js",
+   "role": "Extraction avancée : SQL et gouvernance, paramétrages, vue graphique, plein écran"
+  },
+  {
+   "file": "81-stats-bi.js",
+   "role": "Statistiques BI"
+  },
+  {
+   "file": "82-explorateur-360.js",
+   "role": "Explorateur 360"
+  },
+  {
+   "file": "83-navigateur-donnees.js",
+   "role": "Navigateur de données"
+  },
+  {
+   "file": "84-comparateur.js",
+   "role": "Comparateur de tables"
+  },
+  {
+   "file": "72-qualite-audit.js",
+   "role": "Qualité : audit par lots, profilage d'un objet, filtres, inspecteur d'anomalies"
+  },
+  {
+   "file": "73-qualite-profilage-doublons.js",
+   "role": "Qualité : clé fonctionnelle, doublons approchés, profilage, rapport, export"
+  },
+  {
+   "file": "1B-noyau-ux-scroll-focus.js",
+   "role": "Noyau : préservation du défilement et du focus"
+  },
+  {
+   "file": "92-v11-noyau.js",
+   "role": "V11 : noyau ergonomique — préférences, notifications, enregistrement et annulation, raccourcis, aide, familles de menu, historique de navigation, fil d'Ariane, plein écran, tri des tableaux, vocabulaire, présentation"
+  },
+  {
+   "file": "93-v11-fiches-lecture.js",
+   "role": "V11 : fiches en mode lecture (objet, terme, application, source) avec mise en page unifiée, édition en place, duplication, impression"
+  },
+  {
+   "file": "94-v11-recherche-accueil.js",
+   "role": "V11 : recherche globale (Ctrl+K), tableau de bord d'accueil de la gouvernance, jeu d'exemple, visite guidée"
+  },
+  {
+   "file": "95-v11-saisie.js",
+   "role": "V11 : assistant de création d'objet en trois étapes, actions groupées sur les attributs, glisser-déposer de colonnes"
+  },
+  {
+   "file": "96-v12-app.js",
+   "role": "V12 : ergonomie de toute l'application — accueil global et prochaines étapes, recherche et historique sur tous les écrans, bandeau moteur, en-têtes et boutons unifiés, textes repliés, barres d'action collantes, vue liste des sources et actions rapides, plein écran, « et ensuite ? », aide et visite étendues"
+  }
+ ]
+}

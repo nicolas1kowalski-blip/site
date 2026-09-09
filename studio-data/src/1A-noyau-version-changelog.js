@@ -2,11 +2,14 @@
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
         // La cible V11 (fichier séparé, voir manifest-v11.json) fournit sa propre version et ses entrées de journal.
-        const APP_VERSION = (typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.2';
+        const APP_VERSION = (typeof V12_VERSION !== 'undefined') ? V12_VERSION : ((typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.3');
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            ...((typeof V12_CHANGELOG !== 'undefined') ? V12_CHANGELOG : []),
             ...((typeof V11_CHANGELOG !== 'undefined') ? V11_CHANGELOG : []),
+            { v: '10.2.3', d: '2026-09-09', t: 'Chaîne de construction : troisième cible StudioDataV12.html', items: [
+                'Aucun changement fonctionnel. Trois fichiers peuvent être assemblés : V7 (inchangé), V11 (ergonomie de la gouvernance) et V12 (ergonomie de toute l\'application).'] },
             { v: '10.2.2', d: '2026-09-08', t: 'Chaîne de construction : deuxième cible StudioDataV11.html', items: [
                 'Aucun changement fonctionnel. Les sources peuvent désormais être assemblées en deux fichiers : StudioDataV7.html (inchangé) et StudioDataV11.html (couche ergonomique V11).'] },
             { v: '10.2.1', d: '2026-09-08', t: 'Ce qu\'on ne peut pas modifier est grisé', items: [

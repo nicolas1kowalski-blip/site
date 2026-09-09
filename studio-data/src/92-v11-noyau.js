@@ -268,7 +268,7 @@
             try { v11CompactInit(); v11FocusMode(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
         };
         // ---- Raccourcis clavier + aide ----
-        const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['N', 'Nouvel objet (assistant)'], ['Maj P', 'Mode présentation']];
+        const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['G puis I / S / M / X / Q / R / B', 'Aller à l\'Accueil / Sources / Modèle / Extraire / Qualité / Règles / Tableaux de bord'], ['N', 'Nouvel objet (assistant)'], ['Maj P', 'Mode présentation']];
         let _v11G = 0;
         document.addEventListener('keydown', e => {
             const tgt = e.target; const typing = tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable);
@@ -281,7 +281,7 @@
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             if (e.key === '?') { e.preventDefault(); return el('v11Help') ? v11HelpClose() : v11HelpOpen(); }
             const k = e.key.toLowerCase();
-            if (_v11G && Date.now() - _v11G < 1500) { _v11G = 0; const map = { o: 'objects', c: 'catalog', d: 'dictionary', t: 'glossary', a: 'assets', v: 'review', h: 'home', l: 'flow' }; if (map[k]) { e.preventDefault(); openGovTab(map[k]); } return; }
+            if (_v11G && Date.now() - _v11G < 1500) { _v11G = 0; const map = { o: 'objects', c: 'catalog', d: 'dictionary', t: 'glossary', a: 'assets', v: 'review', h: 'home', l: 'flow', s: 1, x: 3, q: 8, m: 2, b: 14, r: 12, i: 11 }; if (map[k] !== undefined) { e.preventDefault(); if (typeof map[k] === 'number') switchTab(map[k]); else openGovTab(map[k]); } return; }
             if (k === 'g') { _v11G = Date.now(); return; }
             if (currentTab !== 9) return;
             if (k === 'f') { const n = document.querySelector('.v11-fiche') || document.querySelector('#boDetail'); if (n) { e.preventDefault(); v11Fs(n.id ? '#' + n.id : n, n.dataset.title || ''); } }

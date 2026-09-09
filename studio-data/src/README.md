@@ -120,3 +120,16 @@ le résultat est strictement équivalent à l'ancien fichier monolithique.
 | `95-v11-saisie.js` | assistant de création d'objet, actions groupées, glisser-déposer de colonnes |
 
 Construction : `node studio-data/build.mjs --target v11` (ou `--all` pour les deux fichiers, `--check` pour vérifier).
+
+
+## Cible V12 (fichier séparé)
+
+`manifest-v12.json` assemble **StudioDataV12.html** : la V11 complète plus une couche qui applique la même ergonomie aux quatre phases :
+
+| Fichier | Rôle |
+|---|---|
+| `0W-v12-version.js` | version `V12_VERSION` et journal `V12_CHANGELOG` (prioritaires sur ceux de la V11 dans `1A-noyau-version-changelog.js`) |
+| `0W-v12-styles.css` | styles V12 : boutons unifiés, en-têtes, bandeaux, barres d'action collantes, vue liste des sources, accueil |
+| `96-v12-app.js` | accueil global et prochaines étapes, recherche et historique sur tous les écrans, bandeau moteur, en-têtes et textes repliés, barres collantes, sources en liste avec actions rapides, plein écran, « et ensuite ? », aide et visite étendues |
+
+Construction : `node studio-data/build.mjs --target v12` (`--all` construit V7, V11 et V12).
