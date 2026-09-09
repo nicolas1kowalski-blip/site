@@ -1446,11 +1446,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
     .v12-phase .p .t{font-size:12.5px;font-weight:800;color:var(--v7-txt);margin-bottom:6px}
     .v12-phase .p .v{font-size:11.5px;color:var(--v7-txt-2);line-height:1.5}
     .v12-phase .p .v b{color:var(--v7-txt)}
-    /* ---- Extraire : espace de travail guidé ---- */
+    /* ---- Extraire : plan de travail ---- */
     .v12x{margin:-8px 0 0}
     .v12x-top{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
     .v12x-sum{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:280px}
-    .v12x-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;border:1px solid var(--v11-line);background:var(--v7-surface-2);color:var(--v7-txt-2);border-radius:999px;padding:4px 10px;cursor:pointer}
+    .v12x-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;border:1px solid var(--v11-line);background:var(--v7-surface-2);color:var(--v7-txt-2);border-radius:999px;padding:4px 10px}
     .v12x-chip b{color:var(--v7-txt)}
     .v12x-chip.warn{border-color:#fcd34d;background:#fffbeb;color:#92400e}
     .v12x-tools{display:flex;flex-wrap:wrap;gap:6px}
@@ -1459,32 +1459,46 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
     .v12x-toolbtn .n{font-size:10px;background:var(--v11-acc);color:#fff;border-radius:999px;padding:0 6px;margin-left:3px}
     .v12x-tool{margin-bottom:12px}
     .v12x-tool>div{margin-bottom:0 !important}
-    .v12x-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
-    @media (max-width:900px){.v12x-tabs{grid-template-columns:repeat(2,1fr)}}
-    .v12x-tab{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--v11-line);border-radius:12px;background:var(--v7-surface);text-align:left;color:var(--v7-txt-2)}
-    .v12x-tab .n{width:24px;height:24px;border-radius:50%;background:var(--v7-surface-2);border:1px solid var(--v11-line);font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--v7-txt)}
-    .v12x-tab .l{font-size:13px;font-weight:800;color:var(--v7-txt);line-height:1.15}
-    .v12x-tab .l .sub{display:block;font-size:10.5px;font-weight:600;color:var(--v7-muted)}
-    .v12x-tab.on{border-color:var(--v11-acc);background:var(--v11-acc-soft)}
-    .v12x-tab.on .n{background:var(--v11-acc);color:#fff;border-color:var(--v11-acc)}
-    .v12x-panel>div{margin-bottom:12px}
-    .v12x-panel .text-\[11px\].font-bold.uppercase.mb-2{font-size:10.5px;letter-spacing:.08em;color:var(--v7-muted)}
-    .v12x-card{border:1px solid var(--v11-line);border-radius:12px;padding:12px 14px;background:var(--v7-surface)}
-    .v12x-card>.t{font-size:12.5px;font-weight:800;color:var(--v7-txt);margin-bottom:8px}
-    .v12x-addwrap{border:1px solid var(--v11-line);border-radius:12px;padding:10px 12px;background:var(--v7-surface);margin-top:8px}
+    .v12x-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+    @media (max-width:1100px){.v12x-grid{grid-template-columns:1fr}.v12x-side{position:static !important}}
+    .v12x-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+    .v12x-side{position:sticky;top:12px}
+    .v12x-sec{border:1px solid var(--v11-line);border-radius:14px;background:var(--v7-surface);overflow:hidden}
+    .v12x-sec.res{border-color:var(--v11-acc-bd);background:var(--v11-acc-soft)}
+    .v12x-h{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--v11-line);background:var(--v7-surface-2)}
+    .v12x-sec.res .v12x-h{background:transparent}
+    .v12x-h .ic{width:26px;height:26px;border-radius:8px;background:var(--v11-acc-soft);color:var(--v11-acc);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0}
+    .v12x-sec.res .v12x-h .ic{background:var(--v11-acc);color:#fff}
+    .v12x-h b{font-size:13.5px;color:var(--v7-txt);display:block;line-height:1.15}
+    .v12x-h .sub{font-size:11px;color:var(--v7-muted);font-weight:600}
+    .v12x-h .sp{flex:1}
+    .v12x-body{padding:12px 14px}
+    .v12x-body>div{margin-bottom:10px}
+    .v12x-body>div:last-child{margin-bottom:0}
+    .v12x-body .text-\[11px\].font-bold.uppercase.mb-2:first-child{display:none}
+    .v12x-body .grid.lg\:grid-cols-2{gap:10px}
+    .v12x-addbtn.on{background:var(--v7-surface) !important;color:var(--v11-acc) !important;border-color:var(--v11-acc-bd) !important}
+    .v12x-addwrap{border:1px dashed var(--v11-acc-bd);border-radius:12px;padding:10px 12px;background:var(--v11-acc-soft);margin-top:8px}
     .v12x-addtabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-    .v12x-addtabs .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:var(--v7-muted);margin-right:4px}
-    .v12x-addtab{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;border:1px solid var(--v11-line);background:var(--v7-surface-2);color:var(--v7-txt-2)}
+    .v12x-addtabs .sp{flex:1}
+    .v12x-addtab{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;border:1px solid var(--v11-acc-bd);background:var(--v7-surface);color:var(--v7-txt-2)}
     .v12x-addtab.on{background:var(--v11-acc);border-color:var(--v11-acc);color:#fff}
+    .v12x-x{font-weight:800;color:var(--v7-muted);padding:0 4px}
     .v12x-addwrap details.v12x-add{margin-top:0 !important;background:transparent !important;border:0 !important}
     .v12x-addwrap details.v12x-add>summary{display:none}
     .v12x-addwrap .v12x-add.flex{background:transparent !important;border:0 !important;padding:0 !important}
-    #step-3 > div > .px-6{padding-top:10px !important;padding-bottom:10px !important}
-    .v12x-panel > div > .text-\[11px\].font-bold.uppercase.mb-2:first-child{display:none}
-    .v12x-nav{display:flex;align-items:center;gap:8px;margin-top:8px}
-    .v12x-nav .sp{flex:1}
+    .v12x-verify{display:flex;flex-direction:column;align-items:stretch !important;gap:6px !important}
+    .v12x-verify button{width:100%;text-align:left}
+    .v12x-verify #adv-count{align-self:flex-end;font-size:20px}
+    .v12x-gen{display:flex;flex-direction:column;align-items:stretch !important;gap:8px !important;background:var(--v7-surface) !important;border-color:var(--v11-line) !important}
+    .v12x-gen button{width:100%;padding:10px !important;font-size:14px !important}
+    .v12x-gen input[type="text"]{width:100%}
+    .v12x-out{margin-top:14px}
+    .v12x-out>div{margin-bottom:10px}
     .v12x .border-indigo-200.bg-indigo-50\/40,.v12x .border-emerald-200.bg-emerald-50\/40{background:var(--v7-surface-2) !important;border-color:var(--v11-line) !important}
+    #step-3 > div > .px-6{padding-top:10px !important;padding-bottom:10px !important}
     html[data-theme="dark"] .v12x-chip.warn{background:#3a2a05;border-color:#92400e;color:#fcd34d}
+    html[data-theme="dark"] .v12x-sec.res{background:#1a1a3a}
     /* ---- densité sur toute l'application ---- */
     body.v11-compact main td,body.v11-compact main th{padding-top:3px !important;padding-bottom:3px !important}
     body.v11-compact main .p-6{padding:14px !important}
@@ -2177,8 +2191,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         ];
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.1.0';
+        const V12_VERSION = '12.2.0';
         const V12_CHANGELOG = [
+            { v: '12.2.0', d: '2026-09-09', t: 'Extraire : un plan de travail intuitif, sans étapes', items: [
+                'Plus d\'onglets ni de « Suivant » : la page se lit de haut en bas comme une recette — <b>Colonnes en sortie</b>, <b>Filtres</b>, <b>Forme du résultat</b> (doublons, regroupement, jointures, volume) — et, à droite, un panneau <b>Résultat</b> qui reste à portée (Compter, Prévisualiser, Bilan qualité, Voir le SQL, Générer, ajouter comme source). Aperçu, bilan et SQL s\'affichent en pleine largeur dessous.',
+                '<b>« ＋ Ajouter une colonne »</b> ouvre le sélecteur à la demande (colonne d\'une table, synthèse d\'une table liée, hiérarchie aplatie, colonne calculée) ; il est ouvert d\'office tant qu\'aucune colonne n\'est choisie.',
+                'Bandeau de synthèse et outils rangés (paramétrages, objet métier, vue graphique, guide) conservés. Aucun formulaire ni comportement du moteur modifié.'] },
             { v: '12.1.0', d: '2026-09-09', t: 'Extraire : un espace de travail guidé, toutes les fonctions conservées', items: [
                 '<b>Quatre étapes lisibles</b> — ① Colonnes (ce qui sort), ② Filtres (quelles lignes), ③ Options (doublons, agrégats, jointures, limite), ④ Résultat (compter, prévisualiser, bilan qualité, SQL, générer, ajouter comme source) — avec Précédent / Suivant. Compter, Prévisualiser ou Voir le SQL amènent directement au Résultat.',
                 '<b>Bandeau de synthèse</b> en tête : table de départ, objet métier, nombre de colonnes et de filtres, dédoublonnage, regroupement, type de jointure, SQL personnalisé ; chaque pastille mène à l\'étape concernée.',
@@ -21712,7 +21730,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         // ---- Barres d'action collantes (Extraire, Qualité) ----
         function v12StickyBars() {
             const mk = (sec, label, sels) => { if (!sec) return; let bar = sec.querySelector(':scope > .v12-sticky'); const btns = sels.map(s => sec.querySelector(s)).filter(Boolean); if (!btns.length) { if (bar) bar.remove(); return; } if (!bar) { bar = document.createElement('div'); bar.className = 'v12-sticky'; bar.setAttribute('data-ro', 'keep'); const nx = sec.querySelector('.v12-next'); if (nx) sec.insertBefore(bar, nx); else sec.appendChild(bar); } bar.innerHTML = `<span class="lbl">${label}</span><span class="sp"></span>` + btns.map(b => `<button class="v11-btn ${/adv-generate|btnRunQual/.test(b.id) ? 'pri' : ''}" ${b.disabled ? 'disabled' : ''}>${escapeHTML(b.textContent.trim().replace(/\s+/g, ' '))}</button>`).join(''); Array.from(bar.querySelectorAll('button')).forEach((c, i) => c.onclick = () => { btns[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); btns[i].click(); }); };
-            mk(el('step-3'), 'Extraction', ['[onclick="advCount()"]', '[onclick="advPreview()"]', '#adv-generate']);
             mk(el('step-8'), 'Audit', ['#btnRunQual']);
         }
         // ---- Plein écran sur les grands panneaux ----
@@ -21771,27 +21788,21 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const boot = () => { try { if (currentTab === 1 && !v12Ready().length) switchTab(11); else v12After(); } catch (e) { console.error(e); } };
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
         })();
-        // ======================= V12.1 : L'ÉCRAN « EXTRAIRE » EN ESPACE DE TRAVAIL GUIDÉ =======================
-        // Le moteur et les formulaires de l'extraction (80-extraction-avancee.js) ne changent pas : après
-        // chaque rendu, on RÉORGANISE le même DOM (mêmes identifiants, mêmes gestionnaires) en quatre
-        // étapes lisibles — Colonnes, Filtres, Options, Résultat — avec un bandeau de synthèse, les
-        // outils secondaires (paramétrages enregistrés, objet métier, vue graphique) rangés derrière
-        // des boutons, et les trois façons d'ajouter une colonne en onglets. Rien n'est perdu.
-        const V12X_STEPS = [['1', 'Colonnes', 'Ce qui sort'], ['2', 'Filtres', 'Quelles lignes'], ['3', 'Options', 'Doublons, agrégats, jointures'], ['4', 'Résultat', 'Compter, prévisualiser, générer']];
-        function v12xStep() { return v12State.xStep || '1'; }
-        function v12xGo(step) { v12State.xStep = String(step); try { v11Prefs.xStep = v12State.xStep; v11SavePrefs(); } catch (e) {} v12xShowStep(); }
-        function v12xShowStep() {
-            const root = el('v12x'); if (!root) return; const cur = v12xStep();
-            root.querySelectorAll('.v12x-panel').forEach(p => { p.style.display = p.dataset.step === cur ? '' : 'none'; });
-            root.querySelectorAll('.v12x-tab').forEach(t => t.classList.toggle('on', t.dataset.step === cur));
-            const sb = el('step-3') && el('step-3').querySelector(':scope > .v12-sticky'); if (sb) sb.style.display = cur === '4' ? 'none' : '';
-            const pv = el('v12x-prev'), nx = el('v12x-next'); if (pv) pv.disabled = cur === '1'; if (nx) nx.style.display = cur === '4' ? 'none' : '';
-        }
+        // ======================= V12.2 : L'ÉCRAN « EXTRAIRE » EN PLAN DE TRAVAIL =======================
+        // Pas d'étapes ni de « Suivant » : tout est visible d'un coup d'œil, comme une recette qui se lit
+        // de haut en bas — ce qui SORT (colonnes), quelles LIGNES (filtres), la FORME du résultat
+        // (doublons, agrégats, jointures) — avec, à droite, un panneau Résultat toujours à portée
+        // (compter, prévisualiser, bilan, SQL, générer). Les outils secondaires (paramétrages, objet
+        // métier, vue graphique, guide) sont rangés derrière des boutons. Le moteur et les formulaires
+        // (80-extraction-avancee.js) ne changent pas : on réorganise le même DOM après chaque rendu.
         function v12xTool(name) { v12State.xTool = v12State.xTool === name ? '' : name; v12xShowTools(); }
         function v12xShowTools() { const root = el('v12x'); if (!root) return; root.querySelectorAll('.v12x-tool').forEach(t => { t.style.display = t.dataset.tool === v12State.xTool ? '' : 'none'; }); root.querySelectorAll('.v12x-toolbtn').forEach(b => b.classList.toggle('on', b.dataset.tool === v12State.xTool)); }
-        function v12xAddMode(mode) { v12State.xAdd = mode; v12xShowAdd(); }
+        function v12xAddMode(mode) { v12State.xAdd = mode; v12State.xAddOpen = true; v12xShowAdd(); }
+        function v12xAddToggle() { v12State.xAddOpen = !v12State.xAddOpen; v12xShowAdd(); }
         function v12xShowAdd() {
-            const root = el('v12x'); if (!root) return; const m = v12State.xAdd || 'col';
+            const root = el('v12x'); if (!root) return; const m = v12State.xAdd || 'col'; const open = !!v12State.xAddOpen;
+            const wrap = root.querySelector('.v12x-addwrap'); if (wrap) wrap.style.display = open ? '' : 'none';
+            const btn = root.querySelector('.v12x-addbtn'); if (btn) btn.classList.toggle('on', open);
             root.querySelectorAll('.v12x-add').forEach(a => { const on = a.dataset.add === m; a.style.display = on ? '' : 'none'; if (a.tagName === 'DETAILS') a.open = on; });
             root.querySelectorAll('.v12x-addtab').forEach(b => b.classList.toggle('on', b.dataset.add === m));
         }
@@ -21801,12 +21812,12 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const chips = [];
             chips.push(`<span class="v12x-chip"><b>${escapeHTML(base ? base.name : '—')}</b> table de départ</span>`);
             if (obj) chips.push(`<span class="v12x-chip">🏛️ objet <b>${escapeHTML(obj)}</b></span>`);
-            chips.push(`<span class="v12x-chip ${s.columns.length ? '' : 'warn'}" onclick="v12xGo(1)"><b>${s.columns.length}</b> colonne(s)</span>`);
-            chips.push(`<span class="v12x-chip" onclick="v12xGo(2)"><b>${s.filters.length}</b> filtre(s)</span>`);
-            if (s.dedup.on) chips.push(`<span class="v12x-chip" onclick="v12xGo(3)">🎯 dédoublonnage (${(s.dedup.keys || []).length} clé)</span>`);
-            if (s.group.on) chips.push(`<span class="v12x-chip" onclick="v12xGo(3)">🧮 regroupement · ${(s.group.aggs || []).length} agrégat(s)</span>`);
-            chips.push(`<span class="v12x-chip" onclick="v12xGo(3)">${s.joinType === 'inner' ? 'intersection' : 'conserver tout'}${s.limit500 ? ' · 500 lignes' : ''}</span>`);
-            if (s.customSql) chips.push(`<span class="v12x-chip warn" onclick="v12xGo(4)">📝 SQL personnalisé</span>`);
+            chips.push(`<span class="v12x-chip ${s.columns.length ? '' : 'warn'}"><b>${s.columns.length}</b> colonne(s)</span>`);
+            chips.push(`<span class="v12x-chip"><b>${s.filters.length}</b> filtre(s)</span>`);
+            if (s.dedup.on) chips.push(`<span class="v12x-chip">🎯 dédoublonnage (${(s.dedup.keys || []).length} clé)</span>`);
+            if (s.group.on) chips.push(`<span class="v12x-chip">🧮 regroupement · ${(s.group.aggs || []).length} agrégat(s)</span>`);
+            chips.push(`<span class="v12x-chip">${s.joinType === 'inner' ? 'intersection' : 'conserver tout'}${s.limit500 ? ' · 500 lignes' : ''}</span>`);
+            if (s.customSql) chips.push(`<span class="v12x-chip warn">📝 SQL personnalisé</span>`);
             return chips.join('');
         }
         function v12ExtractLayout() {
@@ -21818,7 +21829,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const cols = take(/1\. Colonnes en sortie/), filt = take(/2\. Filtres/), opts = take(/Dédoublonner par cl/), acts = take(/Générer le CSV/);
             if (!cols || !acts) return; // structure inattendue : on laisse l'écran tel quel
             const s = state.advExtract; const eps = typeof epList === 'function' ? epList() : [];
-            // outils : ligne « table de départ » non utile (le sélecteur est dans l'en-tête), bloc graphique visible seulement en mode graphique ou à la demande
             if (start) start.remove();
             const root = document.createElement('div'); root.id = 'v12x'; root.className = 'v12x';
             root.innerHTML = `<div class="v12x-top" data-ro="keep">
@@ -21831,43 +21841,53 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     </div>
                 </div>
                 <div class="v12x-tool" data-tool="presets"></div><div class="v12x-tool" data-tool="obj"></div><div class="v12x-tool" data-tool="graph"></div>
-                <div class="v12x-tabs" data-ro="keep">${V12X_STEPS.map(([n, l, sub]) => `<button class="v12x-tab" data-step="${n}" onclick="v12xGo('${n}')"><span class="n">${n}</span><span class="l">${l}<span class="sub">${sub}</span></span></button>`).join('')}</div>
-                <div class="v12x-panel" data-step="1"></div><div class="v12x-panel" data-step="2"></div><div class="v12x-panel" data-step="3"></div><div class="v12x-panel" data-step="4"></div>
-                <div class="v12x-nav" data-ro="keep"><button class="v11-btn" id="v12x-prev">‹ Précédent</button><span class="sp"></span><button class="v11-btn pri" id="v12x-next">Suivant ›</button></div>`;
-            const P = n => root.querySelector(`.v12x-panel[data-step="${n}"]`);
+                <div class="v12x-grid">
+                    <div class="v12x-main">
+                        <section class="v12x-sec" data-sec="cols"><div class="v12x-h"><span class="ic">▤</span><div><b>Colonnes en sortie</b><span class="sub">ce que contiendra le fichier</span></div><span class="sp"></span><button class="v11-btn pri sm v12x-addbtn" onclick="v12xAddToggle()">＋ Ajouter une colonne</button></div><div class="v12x-body"></div></section>
+                        <section class="v12x-sec" data-sec="filt"><div class="v12x-h"><span class="ic">⛉</span><div><b>Filtres</b><span class="sub">quelles lignes garder — sans filtre, tout est extrait</span></div></div><div class="v12x-body"></div></section>
+                        <section class="v12x-sec" data-sec="opts"><div class="v12x-h"><span class="ic">◇</span><div><b>Forme du résultat</b><span class="sub">doublons, regroupement et agrégats, jointures, volume</span></div></div><div class="v12x-body"></div></section>
+                    </div>
+                    <aside class="v12x-side"><section class="v12x-sec res"><div class="v12x-h"><span class="ic">▶</span><div><b>Résultat</b><span class="sub">vérifier, puis générer</span></div></div><div class="v12x-body"></div></section></aside>
+                </div>
+                <div class="v12x-out"></div>`;
+            const B = k => root.querySelector(`.v12x-sec[data-sec="${k}"] .v12x-body`);
             if (presets) root.querySelector('.v12x-tool[data-tool="presets"]').appendChild(presets);
             if (obj) root.querySelector('.v12x-tool[data-tool="obj"]').appendChild(obj);
             if (graph) root.querySelector('.v12x-tool[data-tool="graph"]').appendChild(graph);
-            // ① Colonnes : tableau + « Ajouter » en onglets (simple, synthèse, hiérarchie, calculée)
-            P('1').appendChild(cols);
+            // Colonnes : tableau, puis « Ajouter » (masqué tant qu'on ne le demande pas, ouvert s'il n'y a aucune colonne)
+            B('cols').appendChild(cols);
             const addRow = Array.from(cols.children).find(n => n.querySelector && n.querySelector('#adv-col-tbl')); const dets = Array.from(cols.querySelectorAll(':scope > details'));
             if (addRow) {
                 const wrap = document.createElement('div'); wrap.className = 'v12x-addwrap';
-                const tabs = [['col', '＋ Colonne simple'], ['link', 'Σ Synthèse d\'une table liée'], ['hier', '🌳 Hiérarchie aplatie'], ['calc', 'ƒx Colonne calculée']];
-                wrap.innerHTML = `<div class="v12x-addtabs" data-ro="keep"><span class="lbl">Ajouter</span>${tabs.map(([k, l]) => `<button class="v12x-addtab" data-add="${k}" onclick="v12xAddMode('${k}')">${l}</button>`).join('')}</div>`;
+                const tabs = [['col', 'Colonne d\'une table'], ['link', 'Σ Synthèse d\'une table liée'], ['hier', '🌳 Hiérarchie aplatie'], ['calc', 'ƒx Colonne calculée']];
+                wrap.innerHTML = `<div class="v12x-addtabs" data-ro="keep">${tabs.map(([k, l]) => `<button class="v12x-addtab" data-add="${k}" onclick="v12xAddMode('${k}')">${l}</button>`).join('')}<span class="sp"></span><button class="v12x-x" onclick="v12State.xAddOpen=false; v12xShowAdd()" title="Fermer">✕</button></div>`;
                 cols.insertBefore(wrap, addRow); addRow.classList.add('v12x-add'); addRow.dataset.add = 'col'; wrap.appendChild(addRow);
                 dets.forEach(d => { const t = d.querySelector('summary').textContent; d.classList.add('v12x-add'); d.dataset.add = /Synthèse/.test(t) ? 'link' : (/Hiérarchie/.test(t) ? 'hier' : 'calc'); wrap.appendChild(d); });
             }
-            // ② Filtres (+ choix du lien quand deux tables sont reliées plusieurs fois)
-            if (filt) P('2').appendChild(filt); if (amb) P('2').appendChild(amb);
-            // ③ Options : dédoublonnage, regroupement, jointures, limite
-            if (opts) P('3').appendChild(opts);
+            // Filtres (+ choix du lien quand deux tables sont reliées plusieurs fois)
+            if (filt) B('filt').appendChild(filt); if (amb) B('filt').appendChild(amb);
+            // Forme du résultat : dédoublonnage, regroupement, jointures, limite
+            if (opts) B('opts').appendChild(opts);
             const joins = Array.from(acts.children).find(n => /Jointures/.test(n.textContent) && n.querySelector('input[name="advJoinType"]'));
-            if (joins) { const card = document.createElement('div'); card.className = 'v12x-card'; card.innerHTML = '<div class="t">🔗 Jointures et volume</div>'; card.appendChild(joins); P('3').appendChild(card); }
-            // ④ Résultat
-            P('4').appendChild(acts);
+            if (joins) B('opts').appendChild(joins);
+            // Résultat (panneau latéral) : boutons de vérification + génération ; aperçu, bilan et SQL en pleine largeur dessous
+            const resB = root.querySelector('.v12x-sec.res .v12x-body');
+            const btnRow = Array.from(acts.children).find(n => n.querySelector && n.querySelector('[onclick="advCount()"]'));
+            const genRow = Array.from(acts.children).find(n => n.querySelector && n.querySelector('#adv-generate'));
+            if (btnRow) { btnRow.classList.add('v12x-verify'); resB.appendChild(btnRow); }
+            if (genRow) { genRow.classList.add('v12x-gen'); resB.appendChild(genRow); }
+            const out = root.querySelector('.v12x-out'); ['adv-preview', 'adv-quality', 'adv-sql-wrap'].forEach(id => { const n = el(id); if (n && acts.contains(n)) out.appendChild(n); });
+            acts.remove();
             body.appendChild(root);
-            // étape courante : si rien n'est encore choisi, on commence par les colonnes
-            if (!v12State.xStep) v12State.xStep = (v11Prefs.xStep && s.columns.length) ? String(v11Prefs.xStep) : '1';
-            if (!s.columns.length && v12State.xStep !== '1' && !v12State.xTouched) v12State.xStep = '1';
             if (s.graphMode && !v12State.xTool) v12State.xTool = 'graph';
-            v12xShowStep(); v12xShowTools(); v12xShowAdd();
-            el('v12x-prev').onclick = () => { v12State.xTouched = true; v12xGo(Math.max(1, Number(v12xStep()) - 1)); };
-            el('v12x-next').onclick = () => { v12State.xTouched = true; v12xGo(Math.min(4, Number(v12xStep()) + 1)); };
-            el('v12x-prev').disabled = v12xStep() === '1'; el('v12x-next').style.display = v12xStep() === '4' ? 'none' : '';
+            if (v12State.xAddOpen === undefined) v12State.xAddOpen = !s.columns.length;
+            if (!s.columns.length) v12State.xAddOpen = true;
+            v12xShowTools(); v12xShowAdd();
+            const sb = el('step-3') && el('step-3').querySelector(':scope > .v12-sticky'); if (sb) sb.remove();
         }
-        // les actions de résultat affichent l'étape ④ ; la vue graphique se replie / déplie avec son interrupteur
-        ['advPreview', 'advCount', 'advQuality', 'advShowSql'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = function () { v12State.xTouched = true; v12State.xStep = '4'; v12xShowStep(); return o.apply(this, arguments); }; });
+        // aperçu, bilan, SQL : on amène l'utilisateur dessous
+        ['advPreview', 'advQuality', 'advShowSql'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = function () { const r = o.apply(this, arguments); setTimeout(() => { const n = el('v12x') && el('v12x').querySelector('.v12x-out'); if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150); return r; }; });
+        // la vue graphique se replie / déplie avec son interrupteur
         const _v12x_toggleMode = typeof advGToggleMode === 'function' ? advGToggleMode : null;
         if (_v12x_toggleMode) advGToggleMode = function (on) { v12State.xTool = on ? 'graph' : ''; return _v12x_toggleMode.apply(this, arguments); };
         const _v12x_tool = v12xTool; v12xTool = function (name) { _v12x_tool(name); if (name === 'graph' && v12State.xTool === 'graph' && !state.advExtract.graphMode) { const cb = document.querySelector('#v12x [data-tool="graph"] input[type="checkbox"]'); if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } } };

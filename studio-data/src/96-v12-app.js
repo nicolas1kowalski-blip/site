@@ -134,7 +134,6 @@
         // ---- Barres d'action collantes (Extraire, Qualité) ----
         function v12StickyBars() {
             const mk = (sec, label, sels) => { if (!sec) return; let bar = sec.querySelector(':scope > .v12-sticky'); const btns = sels.map(s => sec.querySelector(s)).filter(Boolean); if (!btns.length) { if (bar) bar.remove(); return; } if (!bar) { bar = document.createElement('div'); bar.className = 'v12-sticky'; bar.setAttribute('data-ro', 'keep'); const nx = sec.querySelector('.v12-next'); if (nx) sec.insertBefore(bar, nx); else sec.appendChild(bar); } bar.innerHTML = `<span class="lbl">${label}</span><span class="sp"></span>` + btns.map(b => `<button class="v11-btn ${/adv-generate|btnRunQual/.test(b.id) ? 'pri' : ''}" ${b.disabled ? 'disabled' : ''}>${escapeHTML(b.textContent.trim().replace(/\s+/g, ' '))}</button>`).join(''); Array.from(bar.querySelectorAll('button')).forEach((c, i) => c.onclick = () => { btns[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); btns[i].click(); }); };
-            mk(el('step-3'), 'Extraction', ['[onclick="advCount()"]', '[onclick="advPreview()"]', '#adv-generate']);
             mk(el('step-8'), 'Audit', ['#btnRunQual']);
         }
         // ---- Plein écran sur les grands panneaux ----

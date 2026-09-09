@@ -1,24 +1,18 @@
-        // ======================= V12.1 : L'ÉCRAN « EXTRAIRE » EN ESPACE DE TRAVAIL GUIDÉ =======================
-        // Le moteur et les formulaires de l'extraction (80-extraction-avancee.js) ne changent pas : après
-        // chaque rendu, on RÉORGANISE le même DOM (mêmes identifiants, mêmes gestionnaires) en quatre
-        // étapes lisibles — Colonnes, Filtres, Options, Résultat — avec un bandeau de synthèse, les
-        // outils secondaires (paramétrages enregistrés, objet métier, vue graphique) rangés derrière
-        // des boutons, et les trois façons d'ajouter une colonne en onglets. Rien n'est perdu.
-        const V12X_STEPS = [['1', 'Colonnes', 'Ce qui sort'], ['2', 'Filtres', 'Quelles lignes'], ['3', 'Options', 'Doublons, agrégats, jointures'], ['4', 'Résultat', 'Compter, prévisualiser, générer']];
-        function v12xStep() { return v12State.xStep || '1'; }
-        function v12xGo(step) { v12State.xStep = String(step); try { v11Prefs.xStep = v12State.xStep; v11SavePrefs(); } catch (e) {} v12xShowStep(); }
-        function v12xShowStep() {
-            const root = el('v12x'); if (!root) return; const cur = v12xStep();
-            root.querySelectorAll('.v12x-panel').forEach(p => { p.style.display = p.dataset.step === cur ? '' : 'none'; });
-            root.querySelectorAll('.v12x-tab').forEach(t => t.classList.toggle('on', t.dataset.step === cur));
-            const sb = el('step-3') && el('step-3').querySelector(':scope > .v12-sticky'); if (sb) sb.style.display = cur === '4' ? 'none' : '';
-            const pv = el('v12x-prev'), nx = el('v12x-next'); if (pv) pv.disabled = cur === '1'; if (nx) nx.style.display = cur === '4' ? 'none' : '';
-        }
+        // ======================= V12.2 : L'ÉCRAN « EXTRAIRE » EN PLAN DE TRAVAIL =======================
+        // Pas d'étapes ni de « Suivant » : tout est visible d'un coup d'œil, comme une recette qui se lit
+        // de haut en bas — ce qui SORT (colonnes), quelles LIGNES (filtres), la FORME du résultat
+        // (doublons, agrégats, jointures) — avec, à droite, un panneau Résultat toujours à portée
+        // (compter, prévisualiser, bilan, SQL, générer). Les outils secondaires (paramétrages, objet
+        // métier, vue graphique, guide) sont rangés derrière des boutons. Le moteur et les formulaires
+        // (80-extraction-avancee.js) ne changent pas : on réorganise le même DOM après chaque rendu.
         function v12xTool(name) { v12State.xTool = v12State.xTool === name ? '' : name; v12xShowTools(); }
         function v12xShowTools() { const root = el('v12x'); if (!root) return; root.querySelectorAll('.v12x-tool').forEach(t => { t.style.display = t.dataset.tool === v12State.xTool ? '' : 'none'; }); root.querySelectorAll('.v12x-toolbtn').forEach(b => b.classList.toggle('on', b.dataset.tool === v12State.xTool)); }
-        function v12xAddMode(mode) { v12State.xAdd = mode; v12xShowAdd(); }
+        function v12xAddMode(mode) { v12State.xAdd = mode; v12State.xAddOpen = true; v12xShowAdd(); }
+        function v12xAddToggle() { v12State.xAddOpen = !v12State.xAddOpen; v12xShowAdd(); }
         function v12xShowAdd() {
-            const root = el('v12x'); if (!root) return; const m = v12State.xAdd || 'col';
+            const root = el('v12x'); if (!root) return; const m = v12State.xAdd || 'col'; const open = !!v12State.xAddOpen;
+            const wrap = root.querySelector('.v12x-addwrap'); if (wrap) wrap.style.display = open ? '' : 'none';
+            const btn = root.querySelector('.v12x-addbtn'); if (btn) btn.classList.toggle('on', open);
             root.querySelectorAll('.v12x-add').forEach(a => { const on = a.dataset.add === m; a.style.display = on ? '' : 'none'; if (a.tagName === 'DETAILS') a.open = on; });
             root.querySelectorAll('.v12x-addtab').forEach(b => b.classList.toggle('on', b.dataset.add === m));
         }
@@ -28,12 +22,12 @@
             const chips = [];
             chips.push(`<span class="v12x-chip"><b>${escapeHTML(base ? base.name : '—')}</b> table de départ</span>`);
             if (obj) chips.push(`<span class="v12x-chip">🏛️ objet <b>${escapeHTML(obj)}</b></span>`);
-            chips.push(`<span class="v12x-chip ${s.columns.length ? '' : 'warn'}" onclick="v12xGo(1)"><b>${s.columns.length}</b> colonne(s)</span>`);
-            chips.push(`<span class="v12x-chip" onclick="v12xGo(2)"><b>${s.filters.length}</b> filtre(s)</span>`);
-            if (s.dedup.on) chips.push(`<span class="v12x-chip" onclick="v12xGo(3)">🎯 dédoublonnage (${(s.dedup.keys || []).length} clé)</span>`);
-            if (s.group.on) chips.push(`<span class="v12x-chip" onclick="v12xGo(3)">🧮 regroupement · ${(s.group.aggs || []).length} agrégat(s)</span>`);
-            chips.push(`<span class="v12x-chip" onclick="v12xGo(3)">${s.joinType === 'inner' ? 'intersection' : 'conserver tout'}${s.limit500 ? ' · 500 lignes' : ''}</span>`);
-            if (s.customSql) chips.push(`<span class="v12x-chip warn" onclick="v12xGo(4)">📝 SQL personnalisé</span>`);
+            chips.push(`<span class="v12x-chip ${s.columns.length ? '' : 'warn'}"><b>${s.columns.length}</b> colonne(s)</span>`);
+            chips.push(`<span class="v12x-chip"><b>${s.filters.length}</b> filtre(s)</span>`);
+            if (s.dedup.on) chips.push(`<span class="v12x-chip">🎯 dédoublonnage (${(s.dedup.keys || []).length} clé)</span>`);
+            if (s.group.on) chips.push(`<span class="v12x-chip">🧮 regroupement · ${(s.group.aggs || []).length} agrégat(s)</span>`);
+            chips.push(`<span class="v12x-chip">${s.joinType === 'inner' ? 'intersection' : 'conserver tout'}${s.limit500 ? ' · 500 lignes' : ''}</span>`);
+            if (s.customSql) chips.push(`<span class="v12x-chip warn">📝 SQL personnalisé</span>`);
             return chips.join('');
         }
         function v12ExtractLayout() {
@@ -45,7 +39,6 @@
             const cols = take(/1\. Colonnes en sortie/), filt = take(/2\. Filtres/), opts = take(/Dédoublonner par cl/), acts = take(/Générer le CSV/);
             if (!cols || !acts) return; // structure inattendue : on laisse l'écran tel quel
             const s = state.advExtract; const eps = typeof epList === 'function' ? epList() : [];
-            // outils : ligne « table de départ » non utile (le sélecteur est dans l'en-tête), bloc graphique visible seulement en mode graphique ou à la demande
             if (start) start.remove();
             const root = document.createElement('div'); root.id = 'v12x'; root.className = 'v12x';
             root.innerHTML = `<div class="v12x-top" data-ro="keep">
@@ -58,43 +51,53 @@
                     </div>
                 </div>
                 <div class="v12x-tool" data-tool="presets"></div><div class="v12x-tool" data-tool="obj"></div><div class="v12x-tool" data-tool="graph"></div>
-                <div class="v12x-tabs" data-ro="keep">${V12X_STEPS.map(([n, l, sub]) => `<button class="v12x-tab" data-step="${n}" onclick="v12xGo('${n}')"><span class="n">${n}</span><span class="l">${l}<span class="sub">${sub}</span></span></button>`).join('')}</div>
-                <div class="v12x-panel" data-step="1"></div><div class="v12x-panel" data-step="2"></div><div class="v12x-panel" data-step="3"></div><div class="v12x-panel" data-step="4"></div>
-                <div class="v12x-nav" data-ro="keep"><button class="v11-btn" id="v12x-prev">‹ Précédent</button><span class="sp"></span><button class="v11-btn pri" id="v12x-next">Suivant ›</button></div>`;
-            const P = n => root.querySelector(`.v12x-panel[data-step="${n}"]`);
+                <div class="v12x-grid">
+                    <div class="v12x-main">
+                        <section class="v12x-sec" data-sec="cols"><div class="v12x-h"><span class="ic">▤</span><div><b>Colonnes en sortie</b><span class="sub">ce que contiendra le fichier</span></div><span class="sp"></span><button class="v11-btn pri sm v12x-addbtn" onclick="v12xAddToggle()">＋ Ajouter une colonne</button></div><div class="v12x-body"></div></section>
+                        <section class="v12x-sec" data-sec="filt"><div class="v12x-h"><span class="ic">⛉</span><div><b>Filtres</b><span class="sub">quelles lignes garder — sans filtre, tout est extrait</span></div></div><div class="v12x-body"></div></section>
+                        <section class="v12x-sec" data-sec="opts"><div class="v12x-h"><span class="ic">◇</span><div><b>Forme du résultat</b><span class="sub">doublons, regroupement et agrégats, jointures, volume</span></div></div><div class="v12x-body"></div></section>
+                    </div>
+                    <aside class="v12x-side"><section class="v12x-sec res"><div class="v12x-h"><span class="ic">▶</span><div><b>Résultat</b><span class="sub">vérifier, puis générer</span></div></div><div class="v12x-body"></div></section></aside>
+                </div>
+                <div class="v12x-out"></div>`;
+            const B = k => root.querySelector(`.v12x-sec[data-sec="${k}"] .v12x-body`);
             if (presets) root.querySelector('.v12x-tool[data-tool="presets"]').appendChild(presets);
             if (obj) root.querySelector('.v12x-tool[data-tool="obj"]').appendChild(obj);
             if (graph) root.querySelector('.v12x-tool[data-tool="graph"]').appendChild(graph);
-            // ① Colonnes : tableau + « Ajouter » en onglets (simple, synthèse, hiérarchie, calculée)
-            P('1').appendChild(cols);
+            // Colonnes : tableau, puis « Ajouter » (masqué tant qu'on ne le demande pas, ouvert s'il n'y a aucune colonne)
+            B('cols').appendChild(cols);
             const addRow = Array.from(cols.children).find(n => n.querySelector && n.querySelector('#adv-col-tbl')); const dets = Array.from(cols.querySelectorAll(':scope > details'));
             if (addRow) {
                 const wrap = document.createElement('div'); wrap.className = 'v12x-addwrap';
-                const tabs = [['col', '＋ Colonne simple'], ['link', 'Σ Synthèse d\'une table liée'], ['hier', '🌳 Hiérarchie aplatie'], ['calc', 'ƒx Colonne calculée']];
-                wrap.innerHTML = `<div class="v12x-addtabs" data-ro="keep"><span class="lbl">Ajouter</span>${tabs.map(([k, l]) => `<button class="v12x-addtab" data-add="${k}" onclick="v12xAddMode('${k}')">${l}</button>`).join('')}</div>`;
+                const tabs = [['col', 'Colonne d\'une table'], ['link', 'Σ Synthèse d\'une table liée'], ['hier', '🌳 Hiérarchie aplatie'], ['calc', 'ƒx Colonne calculée']];
+                wrap.innerHTML = `<div class="v12x-addtabs" data-ro="keep">${tabs.map(([k, l]) => `<button class="v12x-addtab" data-add="${k}" onclick="v12xAddMode('${k}')">${l}</button>`).join('')}<span class="sp"></span><button class="v12x-x" onclick="v12State.xAddOpen=false; v12xShowAdd()" title="Fermer">✕</button></div>`;
                 cols.insertBefore(wrap, addRow); addRow.classList.add('v12x-add'); addRow.dataset.add = 'col'; wrap.appendChild(addRow);
                 dets.forEach(d => { const t = d.querySelector('summary').textContent; d.classList.add('v12x-add'); d.dataset.add = /Synthèse/.test(t) ? 'link' : (/Hiérarchie/.test(t) ? 'hier' : 'calc'); wrap.appendChild(d); });
             }
-            // ② Filtres (+ choix du lien quand deux tables sont reliées plusieurs fois)
-            if (filt) P('2').appendChild(filt); if (amb) P('2').appendChild(amb);
-            // ③ Options : dédoublonnage, regroupement, jointures, limite
-            if (opts) P('3').appendChild(opts);
+            // Filtres (+ choix du lien quand deux tables sont reliées plusieurs fois)
+            if (filt) B('filt').appendChild(filt); if (amb) B('filt').appendChild(amb);
+            // Forme du résultat : dédoublonnage, regroupement, jointures, limite
+            if (opts) B('opts').appendChild(opts);
             const joins = Array.from(acts.children).find(n => /Jointures/.test(n.textContent) && n.querySelector('input[name="advJoinType"]'));
-            if (joins) { const card = document.createElement('div'); card.className = 'v12x-card'; card.innerHTML = '<div class="t">🔗 Jointures et volume</div>'; card.appendChild(joins); P('3').appendChild(card); }
-            // ④ Résultat
-            P('4').appendChild(acts);
+            if (joins) B('opts').appendChild(joins);
+            // Résultat (panneau latéral) : boutons de vérification + génération ; aperçu, bilan et SQL en pleine largeur dessous
+            const resB = root.querySelector('.v12x-sec.res .v12x-body');
+            const btnRow = Array.from(acts.children).find(n => n.querySelector && n.querySelector('[onclick="advCount()"]'));
+            const genRow = Array.from(acts.children).find(n => n.querySelector && n.querySelector('#adv-generate'));
+            if (btnRow) { btnRow.classList.add('v12x-verify'); resB.appendChild(btnRow); }
+            if (genRow) { genRow.classList.add('v12x-gen'); resB.appendChild(genRow); }
+            const out = root.querySelector('.v12x-out'); ['adv-preview', 'adv-quality', 'adv-sql-wrap'].forEach(id => { const n = el(id); if (n && acts.contains(n)) out.appendChild(n); });
+            acts.remove();
             body.appendChild(root);
-            // étape courante : si rien n'est encore choisi, on commence par les colonnes
-            if (!v12State.xStep) v12State.xStep = (v11Prefs.xStep && s.columns.length) ? String(v11Prefs.xStep) : '1';
-            if (!s.columns.length && v12State.xStep !== '1' && !v12State.xTouched) v12State.xStep = '1';
             if (s.graphMode && !v12State.xTool) v12State.xTool = 'graph';
-            v12xShowStep(); v12xShowTools(); v12xShowAdd();
-            el('v12x-prev').onclick = () => { v12State.xTouched = true; v12xGo(Math.max(1, Number(v12xStep()) - 1)); };
-            el('v12x-next').onclick = () => { v12State.xTouched = true; v12xGo(Math.min(4, Number(v12xStep()) + 1)); };
-            el('v12x-prev').disabled = v12xStep() === '1'; el('v12x-next').style.display = v12xStep() === '4' ? 'none' : '';
+            if (v12State.xAddOpen === undefined) v12State.xAddOpen = !s.columns.length;
+            if (!s.columns.length) v12State.xAddOpen = true;
+            v12xShowTools(); v12xShowAdd();
+            const sb = el('step-3') && el('step-3').querySelector(':scope > .v12-sticky'); if (sb) sb.remove();
         }
-        // les actions de résultat affichent l'étape ④ ; la vue graphique se replie / déplie avec son interrupteur
-        ['advPreview', 'advCount', 'advQuality', 'advShowSql'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = function () { v12State.xTouched = true; v12State.xStep = '4'; v12xShowStep(); return o.apply(this, arguments); }; });
+        // aperçu, bilan, SQL : on amène l'utilisateur dessous
+        ['advPreview', 'advQuality', 'advShowSql'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = function () { const r = o.apply(this, arguments); setTimeout(() => { const n = el('v12x') && el('v12x').querySelector('.v12x-out'); if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150); return r; }; });
+        // la vue graphique se replie / déplie avec son interrupteur
         const _v12x_toggleMode = typeof advGToggleMode === 'function' ? advGToggleMode : null;
         if (_v12x_toggleMode) advGToggleMode = function (on) { v12State.xTool = on ? 'graph' : ''; return _v12x_toggleMode.apply(this, arguments); };
         const _v12x_tool = v12xTool; v12xTool = function (name) { _v12x_tool(name); if (name === 'graph' && v12State.xTool === 'graph' && !state.advExtract.graphMode) { const cb = document.querySelector('#v12x [data-tool="graph"] input[type="checkbox"]'); if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } } };

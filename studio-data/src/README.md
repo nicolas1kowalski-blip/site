@@ -130,6 +130,7 @@ Construction : `node studio-data/build.mjs --target v11` (ou `--all` pour les de
 |---|---|
 | `0W-v12-version.js` | version `V12_VERSION` et journal `V12_CHANGELOG` (prioritaires sur ceux de la V11 dans `1A-noyau-version-changelog.js`) |
 | `0W-v12-styles.css` | styles V12 : boutons unifiés, en-têtes, bandeaux, barres d'action collantes, vue liste des sources, accueil |
-| `96-v12-app.js` | accueil global et prochaines étapes, recherche et historique sur tous les écrans, bandeau moteur, en-têtes et textes repliés, barres collantes, sources en liste avec actions rapides, plein écran, « et ensuite ? », aide et visite étendues |
+| `96-v12-app.js` | accueil global et prochaines étapes, recherche et historique sur tous les écrans, bandeau moteur, en-têtes et textes repliés, barre collante de Qualité, sources en liste avec actions rapides, plein écran, « et ensuite ? », aide et visite étendues |
+| `97-v12-extraction.js` | plan de travail de l'écran Extraire : réorganise après rendu les blocs produits par `80-extraction-avancee.js` (sans modifier leurs identifiants ni leurs gestionnaires) en synthèse + outils repliés (paramétrages, objet métier, vue graphique, guide), trois sections toujours visibles (Colonnes en sortie avec sélecteur d'ajout à la demande, Filtres, Forme du résultat) et un panneau Résultat latéral ; aperçu, bilan et SQL en pleine largeur dessous |
 
 Construction : `node studio-data/build.mjs --target v12` (`--all` construit V7, V11 et V12).

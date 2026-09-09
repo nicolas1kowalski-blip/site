@@ -1,7 +1,11 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.1.0';
+        const V12_VERSION = '12.2.0';
         const V12_CHANGELOG = [
+            { v: '12.2.0', d: '2026-09-09', t: 'Extraire : un plan de travail intuitif, sans étapes', items: [
+                'Plus d\'onglets ni de « Suivant » : la page se lit de haut en bas comme une recette — <b>Colonnes en sortie</b>, <b>Filtres</b>, <b>Forme du résultat</b> (doublons, regroupement, jointures, volume) — et, à droite, un panneau <b>Résultat</b> qui reste à portée (Compter, Prévisualiser, Bilan qualité, Voir le SQL, Générer, ajouter comme source). Aperçu, bilan et SQL s\'affichent en pleine largeur dessous.',
+                '<b>« ＋ Ajouter une colonne »</b> ouvre le sélecteur à la demande (colonne d\'une table, synthèse d\'une table liée, hiérarchie aplatie, colonne calculée) ; il est ouvert d\'office tant qu\'aucune colonne n\'est choisie.',
+                'Bandeau de synthèse et outils rangés (paramétrages, objet métier, vue graphique, guide) conservés. Aucun formulaire ni comportement du moteur modifié.'] },
             { v: '12.1.0', d: '2026-09-09', t: 'Extraire : un espace de travail guidé, toutes les fonctions conservées', items: [
                 '<b>Quatre étapes lisibles</b> — ① Colonnes (ce qui sort), ② Filtres (quelles lignes), ③ Options (doublons, agrégats, jointures, limite), ④ Résultat (compter, prévisualiser, bilan qualité, SQL, générer, ajouter comme source) — avec Précédent / Suivant. Compter, Prévisualiser ou Voir le SQL amènent directement au Résultat.',
                 '<b>Bandeau de synthèse</b> en tête : table de départ, objet métier, nombre de colonnes et de filtres, dédoublonnage, regroupement, type de jointure, SQL personnalisé ; chaque pastille mène à l\'étape concernée.',
