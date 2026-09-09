@@ -260,6 +260,10 @@
   {
    "file": "96-v12-app.js",
    "role": "V12 : ergonomie de toute l'application — accueil global et prochaines étapes, recherche et historique sur tous les écrans, bandeau moteur, en-têtes et boutons unifiés, textes repliés, barres d'action collantes, vue liste des sources et actions rapides, plein écran, « et ensuite ? », aide et visite étendues"
+  },
+  {
+   "file": "97-v12-extraction.js",
+   "role": "V12 : l'écran Extraire en espace de travail guidé — synthèse, outils rangés (paramétrages, objet métier, vue graphique, guide), quatre étapes (colonnes, filtres, options, résultat), ajout de colonnes en onglets ; aucun formulaire ni identifiant modifié"
   }
  ]
 }
