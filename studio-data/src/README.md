@@ -139,4 +139,20 @@ Construction : `node studio-data/build.mjs --target v11` (ou `--all` pour les de
 | `9C-v12-lineage-objet.js` | lineage d'un objet complet : `buildBoLineageGraph` enrichi (applications sources des attributs, tables hors fiche Sources et leur application, objets amont / aval, référencés, processus lecteurs), panneau Synthèse dans `openBoLineage` (hauteur adaptée, re-rendu), arêtes de niveau attribut dans la carte des flux via `v12OrgLineageEdges` |
 | `9D-v12-restitutions.js` | `ASSET_KINDS.report` (restitution) : cartes dans `renderGovAssets`, champs `producedBy` / `deliveredTo` / `recipients` / `frequency` / `format`, extension des graphes (`v12RepExtend`) et de la carte des flux ; lineage repliable (`v12LinFold` par sens et type, `v12LinRender` avec barre Réduire / Tout développer / seuil, ouverture d'un groupe au clic) |
 
-Construction : `node studio-data/build.mjs --target v12` (`--all` construit V7, V11 et V12).
+Construction : `node studio-data/build.mjs --target v12` (`--all` construit V7, V11, V12 et V13).
+
+## Cible V13 (fichier séparé)
+
+`manifest-v13.json` assemble **StudioDataV13.html** : la V12 complète plus une couche « gouvernance simple », en langage métier pour les non-initiés :
+
+| Fichier | Rôle |
+|---|---|
+| `0Y-v13-version.js` | version `V13_VERSION` et journal `V13_CHANGELOG` (prioritaires dans `1A-noyau-version-changelog.js`) |
+| `0Y-v13-styles.css` | styles V13 : bandeaux d'aide, fiche en trois questions, jauge, question, mon domaine, feux, proposition |
+| `A0-v13-vocabulaire.js` | vocabulaire métier via `V11_WORDS` (information, variante, parcours de la donnée, colonne du fichier), libellés du menu, phrase d'aide par écran (`V13_HELP`, refermable et mémorisée), lexique |
+| `A1-v13-proposer.js` | objet proposé depuis un fichier (`v13Humanize`, `v13GuessDef`, exemples depuis `sampleData`, application via `appOwnerOfSource`) ou un modèle (`V13_TEMPLATES`), définitions suggérées depuis les autres objets (`v13SameDefs`) |
+| `A2-v13-fiche.js` | `boAttrFormHtml` regroupé en ① C'est quoi ② D'où ça vient ③ Qui s'en sert + « En dire plus », jauge `v13AttrScore`, exemples dans `v11BoRead`, feux tricolores `v13Light` sur les objets |
+| `A3-v13-question.js` | `v13Sentence` (parcours en une phrase depuis les graphes de lineage, injecté en tête de `openBoLineage` / `openAttrLineage`), « Posez votre question » (`v13Ask` : intention + entité) |
+| `A4-v13-domaine-accueil.js` | « Mon domaine » (`v13State.domain`, masquage dans objets / applications / glossaire), accueil : mode première fois, question, Mes tâches (`v13Tasks`), Les mots du métier ; « Proposer une correction » (`v13FixOpen` → `govPropose`) ; bouton « Décrire depuis un fichier / modèle » |
+
+Construction : `node studio-data/build.mjs --target v13`.

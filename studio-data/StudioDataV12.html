@@ -13845,10 +13845,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
         // La cible V11 (fichier séparé, voir manifest-v11.json) fournit sa propre version et ses entrées de journal.
-        const APP_VERSION = (typeof V12_VERSION !== 'undefined') ? V12_VERSION : ((typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.3');
+        const APP_VERSION = (typeof V13_VERSION !== 'undefined') ? V13_VERSION : ((typeof V12_VERSION !== 'undefined') ? V12_VERSION : ((typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.3'));
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            ...((typeof V13_CHANGELOG !== 'undefined') ? V13_CHANGELOG : []),
             ...((typeof V12_CHANGELOG !== 'undefined') ? V12_CHANGELOG : []),
             ...((typeof V11_CHANGELOG !== 'undefined') ? V11_CHANGELOG : []),
             { v: '10.2.3', d: '2026-09-09', t: 'Chaîne de construction : troisième cible StudioDataV12.html', items: [

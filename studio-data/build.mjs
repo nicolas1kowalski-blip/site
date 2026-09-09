@@ -3,6 +3,7 @@
 //   node studio-data/build.mjs                 -> construit StudioDataV7.html (manifest.json)
 //   node studio-data/build.mjs --target v11    -> construit StudioDataV11.html (manifest-v11.json)
 //   node studio-data/build.mjs --target v12    -> construit StudioDataV12.html (manifest-v12.json)
+//   node studio-data/build.mjs --target v13    -> construit StudioDataV13.html (manifest-v13.json)
 //   node studio-data/build.mjs --all           -> construit les trois
 //   ... --check                                -> vérifie que le(s) fichier(s) livré(s) sont à jour (code retour 1 sinon)
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
@@ -11,8 +12,8 @@ const srcDir = path.join(here, 'src');
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const tIdx = args.indexOf('--target');
-const targets = args.includes('--all') ? ['v7', 'v11', 'v12'] : [tIdx >= 0 ? args[tIdx + 1] : 'v7'];
-const MANIFESTS = { v7: 'manifest.json', v11: 'manifest-v11.json', v12: 'manifest-v12.json' };
+const targets = args.includes('--all') ? ['v7', 'v11', 'v12', 'v13'] : [tIdx >= 0 ? args[tIdx + 1] : 'v7'];
+const MANIFESTS = { v7: 'manifest.json', v11: 'manifest-v11.json', v12: 'manifest-v12.json', v13: 'manifest-v13.json' };
 let rc = 0;
 for (const target of targets) {
   const manifest = JSON.parse(fs.readFileSync(path.join(srcDir, MANIFESTS[target] || 'manifest.json'), 'utf8'));
@@ -25,7 +26,7 @@ for (const target of targets) {
     if (p.file.endsWith('.js')) js += txt; else html += txt;
   }
   const outHtml = html + '    <script>\n' + js + '</script>\n</body>\n</html>\n';
-  const v = target === 'v12' ? ((outHtml.match(/const V12_VERSION = '([^']+)'/) || [])[1] || '?') : (target === 'v11' ? ((outHtml.match(/const V11_VERSION = '([^']+)'/) || [])[1] || '?') : ((outHtml.match(/V11_VERSION : '([^']+)'/) || [])[1] || '?'));
+  const v = target === 'v13' ? ((outHtml.match(/const V13_VERSION = '([^']+)'/) || [])[1] || '?') : target === 'v12' ? ((outHtml.match(/const V12_VERSION = '([^']+)'/) || [])[1] || '?') : (target === 'v11' ? ((outHtml.match(/const V11_VERSION = '([^']+)'/) || [])[1] || '?') : ((outHtml.match(/V11_VERSION : '([^']+)'/) || [])[1] || '?'));
   const name = path.basename(outFile);
   if (check) {
     const cur = fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf8') : '';
