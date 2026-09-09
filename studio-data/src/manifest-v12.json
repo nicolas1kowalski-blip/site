@@ -276,6 +276,10 @@
   {
    "file": "9A-v12-lien-auto.js",
    "role": "V12 : Extraire — option « le lien renseigné, quel qu'il soit » sur les colonnes, filtres et critères quand une table est atteignable par plusieurs chemins (toutes les routes jointes, COALESCE), présélectionnée pour éviter de choisir un via"
+  },
+  {
+   "file": "9B-v12-origines.js",
+   "role": "V12 : origine d'un attribut dans un autre objet métier (copie, dérivé, agrégé) — déclaration dans la fiche, provenance héritée, chaîne complète dans le graphe d'attribut, la vue par attribut et la carte des flux, « réutilisé par », boucles refusées"
   }
  ]
 }
