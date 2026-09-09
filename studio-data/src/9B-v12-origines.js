@@ -4,7 +4,16 @@
         // Ici : déclaration dans la fiche de l'attribut (e2.origins = [{ boId, elId, kind, rule }]), provenance
         // héritée quand il n'y a pas de colonne, chaîne complète dans le graphe d'attribut, la vue par attribut
         // et la carte des flux, « réutilisé par » sur l'attribut d'origine, refus des boucles. Moteur inchangé.
-        const V12_ORG_KINDS = { copy: ['Copie', 'copié de', 'même valeur reprise telle quelle'], derived: ['Dérivé', 'dérivé de', 'transformé selon une règle'], agg: ['Agrégé', 'agrégé de', 'somme, compte, dernier, moyenne…'] };
+        const V12_ORG_KINDS = {
+            copy: ['Copie', 'copié de', 'La même valeur, reprise telle quelle. Une ligne d\'origine donne une ligne ici, sans transformation.', 'Contrat › Adresse de risque = Personne › Adresse'],
+            derived: ['Dérivé', 'dérivé de', 'Une valeur calculée ou transformée à partir de l\'origine : toujours une ligne pour une ligne, mais la valeur change (formule, format, découpage, règle).', 'Âge dérivé de Personne › Date de naissance · Date de fin = Date de début + Durée'],
+            agg: ['Agrégé', 'agrégé de', 'Une valeur qui résume plusieurs lignes de l\'origine : somme, nombre, moyenne, minimum, maximum, dernière valeur.', 'Contrat › Montant des sinistres = somme de Sinistre › Montant · Nombre de contrats du client = nombre de Contrat']
+        };
+        function v12OrgGuideHtml(open) {
+            return `<details class="v12o-guide" ${open ? 'open' : ''}><summary>Quelle nature choisir ? Copie, dérivé ou agrégé</summary>
+                <div class="v12o-cards">${Object.entries(V12_ORG_KINDS).map(([k, l]) => `<div class="v12o-card k-${k}"><b>${l[0]}</b><span class="v12o-arrow">${k === 'copy' ? '1 ligne → 1 ligne, valeur identique' : (k === 'derived' ? '1 ligne → 1 ligne, valeur transformée' : 'N lignes → 1 valeur')}</span><p>${l[2]}</p><em>Ex. ${escapeHTML(l[3])}</em></div>`).join('')}</div>
+                <div class="v12o-rule">En un mot : <b>même valeur</b> → Copie · <b>une ligne transformée</b> → Dérivé · <b>plusieurs lignes résumées</b> → Agrégé. Dans le doute, écrivez la règle en clair dans le champ prévu.</div></details>`;
+        }
         function v12OrgFindAttr(boId, elId) {
             const bo = (state.governance.businessObjects || []).find(b => b.id === boId); if (!bo) return null;
             const r = (boAllAttrRows(bo) || []).find(x => x.el.id === elId); return r ? { bo, r } : null;
@@ -56,21 +65,21 @@
             const e2 = r.el, stId = r.stId || ''; const orgs = v12OrgList(e2); const others = (state.governance.businessObjects || []).filter(b => b.id !== bo.id);
             const A = `'${bo.id}','${stId}','${e2.id}'`;
             const chips = orgs.map((o, i) => { const f = v12OrgFindAttr(o.boId, o.elId); return `<div class="v12o-chip"><button class="v12o-go" data-ro="keep" onclick="v12OrgGo('${o.boId}','${f.r.stId || ''}','${o.elId}')" title="Ouvrir l'attribut d'origine">🏛️ <b>${escapeHTML(f.bo.name)}</b> › ${escapeHTML(f.r.el.name)}</button>
-                <select onchange="v12OrgSet(${A},${i},'kind',this.value)" title="Nature du lien">${Object.entries(V12_ORG_KINDS).map(([k, l]) => `<option value="${k}" ${o.kind === k ? 'selected' : ''}>${l[0]}</option>`).join('')}</select>
+                <select onchange="v12OrgSet(${A},${i},'kind',this.value)" title="${escapeHTML((V12_ORG_KINDS[o.kind] || V12_ORG_KINDS.copy)[2])}">${Object.entries(V12_ORG_KINDS).map(([k, l]) => `<option value="${k}" ${o.kind === k ? 'selected' : ''} title="${escapeHTML(l[2])}">${l[0]}</option>`).join('')}</select>
                 <input type="text" value="${escapeHTML(o.rule || '')}" onchange="v12OrgSet(${A},${i},'rule',this.value)" placeholder="${o.kind === 'copy' ? 'règle (facultatif)' : 'règle : ex. date de début + durée'}" title="Comment la valeur est obtenue">
                 <button class="v12o-x" onclick="v12OrgRemove(${A},${i})" title="Retirer cette origine">✕</button></div>`; }).join('');
             const first = others[0]; const attrOpts = first ? (boAllAttrRows(first) || []).map(x => `<option value="${x.el.id}">${escapeHTML(x.el.name)}${x.facet ? ' (◆ ' + escapeHTML(x.facet) + ')' : ''}</option>`).join('') : '';
             const add = others.length ? `<div class="v12o-add" data-ro="keep"><span class="lbl">Ajouter une origine</span>
                 <select id="v12org-bo-${e2.id}" onchange="v12OrgBoChanged('${e2.id}', this.value)" aria-label="Objet d'origine">${others.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select><span class="text-slate-400 text-xs">›</span>
                 <select id="v12org-el-${e2.id}" aria-label="Attribut d'origine">${attrOpts}</select>
-                <select id="v12org-kind-${e2.id}" aria-label="Nature">${Object.entries(V12_ORG_KINDS).map(([k, l]) => `<option value="${k}" title="${escapeHTML(l[2])}">${l[0]}</option>`).join('')}</select>
+                <select id="v12org-kind-${e2.id}" aria-label="Nature" title="${escapeHTML(V12_ORG_KINDS.copy[2])}" onchange="this.title = ({copy:${JSON.stringify(V12_ORG_KINDS.copy[2])},derived:${JSON.stringify(V12_ORG_KINDS.derived[2])},agg:${JSON.stringify(V12_ORG_KINDS.agg[2])}})[this.value]">${Object.entries(V12_ORG_KINDS).map(([k, l]) => `<option value="${k}" title="${escapeHTML(l[2])}">${l[0]}</option>`).join('')}</select>
                 <input type="text" id="v12org-rule-${e2.id}" placeholder="règle (facultatif)">
                 <button onclick="v12OrgAdd(${A})" class="bg-violet-600 text-white">+ Origine</button></div>` : '<p class="text-[12px] text-slate-500 italic">Créez un second objet métier pour pouvoir déclarer une origine.</p>';
             const deps = v12OrgDependents(bo.id, e2.id);
             const depHtml = deps.length ? `<div class="v12o-deps"><h5>Réutilisé par</h5><div class="flex flex-wrap gap-1.5">${deps.map(d => `<button class="v12o-dep" data-ro="keep" onclick="v12OrgGo('${d.bo.id}','${d.r.stId || ''}','${d.r.el.id}')" title="${escapeHTML(V12_ORG_KINDS[d.o.kind] ? V12_ORG_KINDS[d.o.kind][2] : '')}">🏛️ <b>${escapeHTML(d.bo.name)}</b> › ${escapeHTML(d.r.el.name)} <span>${escapeHTML(v12OrgKindLbl(d.o.kind).toLowerCase())}</span></button>`).join('')}</div><div class="hint">Si cette donnée change, ces attributs changent avec elle.</div></div>` : '';
             return `<div class="bo-sect v12o-sect"><h4>Provient d'un autre objet métier</h4>
                 <p class="v12o-hint">Quand cet attribut reprend ou dérive d'un attribut d'un autre objet, déclarez-le ici : le lineage remonte toute la chaîne et la colonne technique devient facultative.</p>
-                ${orgs.length ? `<div class="v12o-list">${chips}</div>` : ''}${add}${depHtml}</div>`;
+                ${orgs.length ? `<div class="v12o-list">${chips}</div>` : ''}${add}${v12OrgGuideHtml(!orgs.length)}${depHtml}</div>`;
         }
         const _v12oForm = boAttrFormHtml;
         boAttrFormHtml = function (bo, r, names) {
@@ -174,4 +183,4 @@
             } catch (e) {}
             return h;
         };
-        Object.assign(V11_LEXIQUE, { 'origine': 'Attribut d\'un autre objet métier dont cet attribut est la copie, la dérivation ou l\'agrégation : le lineage remonte alors jusqu\'à lui.' });
+        Object.assign(V11_LEXIQUE, { 'origine': 'Attribut d\'un autre objet métier dont cet attribut est la copie, la dérivation ou l\'agrégation : le lineage remonte alors jusqu\'à lui.', 'copie': 'Origine « copie » : la même valeur reprise telle quelle, une ligne pour une ligne (ex. adresse de risque du contrat = adresse de la personne).', 'dérivé': 'Origine « dérivé » : une valeur calculée ou transformée à partir de l\'origine, toujours une ligne pour une ligne (ex. âge dérivé de la date de naissance).', 'agrégé': 'Origine « agrégé » : une valeur qui résume plusieurs lignes de l\'origine — somme, nombre, moyenne, dernier (ex. montant total des sinistres du contrat).' });

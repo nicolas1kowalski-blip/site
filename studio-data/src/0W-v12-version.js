@@ -1,7 +1,10 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.6.0';
+        const V12_VERSION = '12.6.1';
         const V12_CHANGELOG = [
+            { v: '12.6.1', d: '2026-09-09', t: 'Origines : copie, dérivé, agrégé expliqués dans la fiche', items: [
+                'Dans « Provient d\'un autre objet métier », un guide dépliable <b>« Quelle nature choisir ? »</b> présente les trois natures avec leur logique et un exemple : <b>Copie</b> (1 ligne → 1 ligne, valeur identique), <b>Dérivé</b> (1 ligne → 1 ligne, valeur transformée), <b>Agrégé</b> (N lignes → 1 valeur). Ouvert tant qu\'aucune origine n\'est déclarée, replié ensuite.',
+                'Les listes déroulantes « nature » affichent la définition au survol ; le lexique de l\'aide « ? » contient copie, dérivé, agrégé.'] },
             { v: '12.6.0', d: '2026-09-09', t: 'Gouvernance : un attribut peut provenir d\'un autre objet métier, et le lineage suit toute la chaîne', items: [
                 '<b>« Provient d\'un autre objet métier »</b> dans la fiche de chaque attribut : on choisit l\'objet, l\'attribut, la nature du lien (<b>copie</b>, <b>dérivé</b> avec sa règle, <b>agrégé</b>). Plusieurs origines possibles. Les boucles sont refusées.',
                 '<b>Provenance héritée</b> : un attribut qui vient d\'un autre objet compte comme alimenté même sans colonne technique ; les fiches, la complétude et le catalogue affichent « hérité de Objet › attribut ».',
