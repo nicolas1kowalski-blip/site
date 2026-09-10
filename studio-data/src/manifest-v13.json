@@ -306,6 +306,10 @@
    "role": "V12 : liens lisibles dans tous les graphes — un point d'attache par lien, tracé à angles droits avec un couloir par lien (plus de superposition, même après déplacement des cases), mise en avant au survol et pendant le déplacement ; crochets router / afterDraw du moteur SVG"
   },
   {
+   "file": "9G-v12-extraction-correctifs.js",
+   "role": "V12 : correctifs Extraire — fermeture durable de la vue graphique par son bouton, « l'un ou l'autre lien » pour les synthèses d'une table liée (routes réunies), transposition en colonnes par liste ordonnée, erreurs HTML rendues lisibles"
+  },
+  {
    "file": "A0-v13-vocabulaire.js",
    "role": "V13 : vocabulaire métier (informations, variantes, parcours de la donnée), phrase d'aide en tête de chaque écran de gouvernance, lexique en langage courant"
   },

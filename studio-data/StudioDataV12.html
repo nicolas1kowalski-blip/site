@@ -2268,8 +2268,12 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         ];
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.11.0';
+        const V12_VERSION = '12.11.1';
         const V12_CHANGELOG = [
+            { v: '12.11.1', d: '2026-09-10', t: 'Extraire : trois correctifs', items: [
+                '<b>Vue graphique</b> : refermée par son bouton, elle ne réapparaît plus à la manipulation suivante (le bouton désactive l\'interrupteur, comme la case à cocher).',
+                '<b>Synthèse d\'une table liée</b> : le sélecteur « via » propose désormais « 🔀 le lien renseigné, quel qu\'il soit », comme l\'ajout de colonne. Compter, compter les valeurs uniques, transposer en texte ou en colonnes portent alors sur les lignes de toutes les routes réunies.',
+                '<b>Transposer en colonnes</b> : une seule lecture de la table liée (liste ordonnée) au lieu de n sous-requêtes ; 12 colonnes ne coûtent pas plus que 3. Une erreur contenant une page HTML (réponse réseau inattendue) est affichée en clair au lieu du code brut.'] },
             { v: '12.11.0', d: '2026-09-10', t: 'Graphes : les liens ne se superposent plus', items: [
                 '<b>Un point d\'attache par lien.</b> Les liens d\'une même case partaient tous de son centre et se confondaient ; ils sont désormais répartis sur le côté de la case, dans l\'ordre vertical de l\'autre extrémité, et ne se croisent plus au départ.',
                 '<b>Tracé à angles droits, un couloir par lien</b> : entre deux colonnes, chaque lien a sa propre verticale ; deux liens vers la même case arrivent sur deux points distincts. Les angles sont arrondis, l\'étiquette est posée sur le dernier segment avec un halo pour rester lisible sur un trait. Quand on déplace une case, ses liens sont recalculés avec les mêmes règles ; si deux cases se chevauchent, le lien contourne par le haut au lieu de disparaître.',
@@ -23360,6 +23364,84 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         createSvgGraph.afterDraw = v12LnDecor;
         Object.assign(V11_LEXIQUE, { 'liens lisibles': 'Dans un graphe, chaque lien a son propre point d\'attache sur la case et son propre couloir : deux liens ne se superposent plus. Survolez un lien ou une case pour le mettre en avant, au-dessus des autres cases.' });
         if (typeof v11Index === 'function') { const _v12lnIdx = v11Index; v11Index = function () { const items = _v12lnIdx.apply(this, arguments); try { if (Array.isArray(items)) items.push({ grp: 'Actions', ic: '⌐', label: v12LinesOn() ? 'Graphes : liens courbes (tracé d\'origine)' : 'Graphes : liens à angles droits, un couloir par lien', sub: 'lineage, carte des flux, modèle', key: 'graphe liens droits courbes couloir superposer', go: () => v12LinesSet(!v12LinesOn()) }); } catch (e) {} return items; }; }
+        // ======================= V12.11.1 : EXTRAIRE — TROIS CORRECTIFS =======================
+        // 1. Vue graphique : refermée par son bouton, elle réapparaissait à la manipulation suivante
+        //    (l'interrupteur interne restait activé et chaque rendu la rouvrait). Fermer par le bouton
+        //    désactive maintenant l'interrupteur, comme la case à cocher.
+        // 2. Synthèse d'une table liée : le « via » propose « le lien renseigné, quel qu'il soit »,
+        //    comme l'ajout de colonne (V12.5). Compter, compter les valeurs uniques, transposer en
+        //    texte ou en colonnes se font alors sur les lignes de TOUTES les routes réunies.
+        // 3. Transposer en colonnes : n sous-requêtes LIMIT/OFFSET remplacées par une seule liste
+        //    ordonnée (list / list_extract) — même résultat, une seule lecture de la table liée, et
+        //    12 colonnes ne coûtent pas plus que 3. Les erreurs qui contiennent une page HTML (réponse
+        //    réseau inattendue) sont affichées en clair au lieu du code HTML brut.
+        // ---- 1. vue graphique ----
+        if (typeof v12xTool === 'function') {
+            const _v12gTool = v12xTool;
+            v12xTool = function (name) {
+                const wasGraph = v12State.xTool === 'graph';
+                _v12gTool.apply(this, arguments);
+                if (name === 'graph' && wasGraph && v12State.xTool !== 'graph' && state.advExtract && state.advExtract.graphMode && typeof advGToggleMode === 'function') advGToggleMode(false);
+            };
+        }
+        // ---- 2. « l'un ou l'autre lien » pour les synthèses ----
+        if (Array.isArray(V12_VIA_ANY_SELECTS) && !V12_VIA_ANY_SELECTS.includes('adv-link-via')) V12_VIA_ANY_SELECTS.push('adv-link-via');
+        function v12LinkAnchors(baseId, c) {
+            if (!c || c.kind !== 'link' || c.via !== V12_VIA_ANY) return null;
+            const seen = new Set(); const out = [];
+            advViaOptions(c.tableId).forEach(o => { const a = advLinkAnchor(baseId, c.tableId, o.key); if (!a) return; const k = advRouteKey(a.parentId, a.parentVia || '') + '¦' + a.childCol + '¦' + a.parentCol; if (seen.has(k)) return; seen.add(k); out.push(a); });
+            return out.length > 1 ? out : null;
+        }
+        const _v12gBuild = buildAdvSql;
+        buildAdvSql = function (spec) {
+            v12State.linkExtra = [];
+            try {
+                (spec && spec.columns || []).forEach(c => { c._anchors = v12LinkAnchors(spec.baseId, c); if (c._anchors) c._anchors.forEach(a => v12State.linkExtra.push({ tableId: a.parentId, via: a.parentVia || '' })); });
+                return _v12gBuild.apply(this, arguments);
+            } finally { v12State.linkExtra = []; }
+        };
+        const _v12gPlan = advPlanJoins;
+        advPlanJoins = function (baseId, needs) {
+            const extra = Array.isArray(v12State.linkExtra) ? v12State.linkExtra : [];
+            return _v12gPlan.call(this, baseId, [...(Array.isArray(needs) ? needs : []), ...extra]);
+        };
+        // ---- 2 + 3. développement SQL d'une synthèse ----
+        function v12LinkSrcSql(map, c, anchors, valueExpr) {
+            const S = sqlIdent(duckTableName(c.tableId));
+            return anchors.map(a => {
+                const key = `${advNk('s.' + sqlIdent(a.childCol))} = ${advNk(advAlias(map, { tableId: a.parentId, via: a.parentVia }) + '.' + sqlIdent(a.parentCol))}`;
+                return `SELECT ${valueExpr} AS v, s.${sqlIdent('__rn')} AS rn FROM ${S} s WHERE ${key}`;
+            }).join('\n      UNION ALL ');
+        }
+        const _v12gExpand = advExpandCol;
+        advExpandCol = function (map, c, hierRef) {
+            if (c && c.kind === 'link') {
+                const anchors = (c._anchors && c._anchors.length > 1) ? c._anchors : (c._anchor ? [c._anchor] : []);
+                const many = anchors.length > 1;
+                if (anchors.length && (many || c.mode === 'indexed')) {
+                    const al = c.alias || c.col || 'synthese';
+                    const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : `'1'`;
+                    if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM (${v12LinkSrcSql(map, c, anchors, '1')}) u)`, alias: al }];
+                    if (c.mode === 'countd') return [{ expr: `(SELECT COUNT(DISTINCT u.v) FROM (${v12LinkSrcSql(map, c, anchors, advNk('s.' + sqlIdent(c.col)))}) u)`, alias: al }];
+                    if (c.mode === 'values') return [{ expr: `(SELECT STRING_AGG(DISTINCT NULLIF(u.v, ''), ' | ') FROM (${v12LinkSrcSql(map, c, anchors, colRaw)}) u)`, alias: al }];
+                    const n = Math.max(1, Math.min(12, parseInt(c.n) || 3));
+                    const lst = `(SELECT list(u.v ORDER BY u.rn) FROM (${v12LinkSrcSql(map, c, anchors, colRaw)}) u)`;
+                    return Array.from({ length: n }, (_, k) => ({ expr: `list_extract(${lst}, ${k + 1})`, alias: al + '_' + (k + 1) }));
+                }
+            }
+            return _v12gExpand.apply(this, arguments);
+        };
+        // ---- 3. erreurs contenant une page HTML ----
+        function v12CleanErr(msg) {
+            const s = String(msg == null ? '' : msg);
+            if (!/<\s*(!doctype|html|head|body|title)\b/i.test(s)) return s;
+            const title = (/<title[^>]*>([^<]*)<\/title>/i.exec(s) || [])[1] || '';
+            const text = s.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            return 'Le moteur a reçu une page HTML au lieu d\'un résultat (réseau, proxy ou ressource indisponible). ' + (title ? '« ' + title + ' »' : '') + (text ? ' — ' + text.slice(0, 160) + (text.length > 160 ? '…' : '') : '');
+        }
+        if (typeof showError === 'function') { const _v12gErr = showError; showError = function (msg) { return _v12gErr.call(this, v12CleanErr(msg)); }; }
+        ['advPreview', 'advQuality'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = async function () { const r = await o.apply(this, arguments); try { const box = el(nm === 'advPreview' ? 'adv-preview' : 'adv-quality'); const p = box && box.querySelector('p.text-red-600'); if (p && /<\s*(!doctype|html|body)\b/i.test(p.textContent)) p.textContent = (nm === 'advPreview' ? 'Aperçu impossible : ' : 'Bilan impossible : ') + v12CleanErr(p.textContent); } catch (e) {} return r; }; });
+        Object.assign(V11_LEXIQUE, { 'transposer en colonnes': 'Pour chaque ligne de départ, les n premières valeurs de la table liée (dans l\'ordre du fichier) deviennent n colonnes nom_1 … nom_n. Avec « l\'un ou l\'autre lien », les lignes de toutes les routes sont réunies.' });
 </script>
 </body>
 </html>

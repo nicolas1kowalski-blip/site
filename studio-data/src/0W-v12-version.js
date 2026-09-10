@@ -1,7 +1,11 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.11.0';
+        const V12_VERSION = '12.11.1';
         const V12_CHANGELOG = [
+            { v: '12.11.1', d: '2026-09-10', t: 'Extraire : trois correctifs', items: [
+                '<b>Vue graphique</b> : refermée par son bouton, elle ne réapparaît plus à la manipulation suivante (le bouton désactive l\'interrupteur, comme la case à cocher).',
+                '<b>Synthèse d\'une table liée</b> : le sélecteur « via » propose désormais « 🔀 le lien renseigné, quel qu\'il soit », comme l\'ajout de colonne. Compter, compter les valeurs uniques, transposer en texte ou en colonnes portent alors sur les lignes de toutes les routes réunies.',
+                '<b>Transposer en colonnes</b> : une seule lecture de la table liée (liste ordonnée) au lieu de n sous-requêtes ; 12 colonnes ne coûtent pas plus que 3. Une erreur contenant une page HTML (réponse réseau inattendue) est affichée en clair au lieu du code brut.'] },
             { v: '12.11.0', d: '2026-09-10', t: 'Graphes : les liens ne se superposent plus', items: [
                 '<b>Un point d\'attache par lien.</b> Les liens d\'une même case partaient tous de son centre et se confondaient ; ils sont désormais répartis sur le côté de la case, dans l\'ordre vertical de l\'autre extrémité, et ne se croisent plus au départ.',
                 '<b>Tracé à angles droits, un couloir par lien</b> : entre deux colonnes, chaque lien a sa propre verticale ; deux liens vers la même case arrivent sur deux points distincts. Les angles sont arrondis, l\'étiquette est posée sur le dernier segment avec un halo pour rester lisible sur un trait. Quand on déplace une case, ses liens sont recalculés avec les mêmes règles ; si deux cases se chevauchent, le lien contourne par le haut au lieu de disparaître.',

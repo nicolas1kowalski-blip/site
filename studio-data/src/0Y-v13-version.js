@@ -1,7 +1,9 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.3.0';
+        const V13_VERSION = '13.3.1';
         const V13_CHANGELOG = [
+            { v: '13.3.1', d: '2026-09-10', t: 'Extraire : correctifs de la V12.11.1', items: [
+                'Vue graphique refermée durablement par son bouton ; « l\'un ou l\'autre lien » pour les synthèses d\'une table liée ; transposition en colonnes plus robuste ; erreurs HTML lisibles.'] },
             { v: '13.3.0', d: '2026-09-10', t: 'Parcours de la donnée : des liens qui ne se superposent plus', items: [
                 'Reprend la V12.11 : un point d\'attache par lien, tracé à angles droits avec un couloir par lien, mise en avant au survol et pendant le déplacement d\'une case — dans tous les graphes.'] },
             { v: '13.2.0', d: '2026-09-10', t: 'Parcours de la donnée : jusqu\'au début', items: [
