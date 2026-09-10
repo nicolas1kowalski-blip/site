@@ -348,6 +348,10 @@
   {
    "file": "96-couche-v14/B0-v14-architecture.js",
    "role": "V14 : panneau « Architecture du code » — modules par domaine et par couche, chaîne d'extensions de chaque fonction, auto-contrôle Studio.selfCheck, export de l'index de l'API ; accès par l'aide « ? » et la palette"
+  },
+  {
+   "file": "96-couche-v14/B1-v14-lisibilite.js",
+   "role": "V14.1 : onglet « Lisibilité » du panneau Architecture — mesures embarquées par le build (lignes longues, instructions multiples, noms courts, commentaires), seuils de non-régression, fichiers à reprendre"
   }
  ]
 }

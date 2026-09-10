@@ -2,46 +2,118 @@
         // Les numéros d'étape (step-N) restent inchangés : on ne fait que regrouper et réordonner
         // visuellement. switchTab(num) reste l'unité atomique « afficher l'étape N ».
         const NAV_PHASES = [
-            { id: 'data', badge: '①', label: 'Données & Modèle', desc: 'Charger & modéliser', color: 'blue',
-              tabs: [ { n: 11, icon: '🏠', label: 'Cockpit' }, { n: 1, icon: '📥', label: 'Sources' }, { n: 10, icon: '🧱', label: 'Tables' }, { n: 2, icon: '🔗', label: 'Modèle de données' }, { n: 16, icon: '📈', label: 'Séries temporelles' } ] },
-            { id: 'etl', badge: '②', label: 'Exploitation', desc: 'ETL, croisements & analyse', color: 'indigo',
-              tabs: [ { n: 3, icon: '⚗️', label: 'Extraire' }, { n: 13, icon: '🧹', label: 'Préparation' }, { n: 14, icon: '📋', label: 'Tableaux de bord' }, { n: 7, icon: '⚖️', label: 'Comparer' }, { n: 6, icon: '🔎', label: 'Explorer' }, { n: 4, icon: '📊', label: 'Statistiques' }, { n: 5, icon: '🕸️', label: 'Explorateur 360°' } ] },
-            { id: 'quality', badge: '③', label: 'Qualité & Audit', desc: 'Profiling, anomalies, doublons', color: 'amber',
-              tabs: [ { n: 8, icon: '✅', label: 'Qualité & Audit' }, { n: 12, icon: '📏', label: 'Règles & score' }, { n: 15, icon: '🤝', label: 'Rapprochement' } ] },
+            {
+                id: 'data',
+                badge: '①',
+                label: 'Données & Modèle',
+                desc: 'Charger & modéliser',
+                color: 'blue',
+                tabs: [
+                    { n: 11, icon: '🏠', label: 'Cockpit' },
+                    { n: 1, icon: '📥', label: 'Sources' },
+                    { n: 10, icon: '🧱', label: 'Tables' },
+                    { n: 2, icon: '🔗', label: 'Modèle de données' },
+                    { n: 16, icon: '📈', label: 'Séries temporelles' }
+                ]
+            },
+            {
+                id: 'etl',
+                badge: '②',
+                label: 'Exploitation',
+                desc: 'ETL, croisements & analyse',
+                color: 'indigo',
+                tabs: [
+                    { n: 3, icon: '⚗️', label: 'Extraire' },
+                    { n: 13, icon: '🧹', label: 'Préparation' },
+                    { n: 14, icon: '📋', label: 'Tableaux de bord' },
+                    { n: 7, icon: '⚖️', label: 'Comparer' },
+                    { n: 6, icon: '🔎', label: 'Explorer' },
+                    { n: 4, icon: '📊', label: 'Statistiques' },
+                    { n: 5, icon: '🕸️', label: 'Explorateur 360°' }
+                ]
+            },
+            {
+                id: 'quality',
+                badge: '③',
+                label: 'Qualité & Audit',
+                desc: 'Profiling, anomalies, doublons',
+                color: 'amber',
+                tabs: [
+                    { n: 8, icon: '✅', label: 'Qualité & Audit' },
+                    { n: 12, icon: '📏', label: 'Règles & score' },
+                    { n: 15, icon: '🤝', label: 'Rapprochement' }
+                ]
+            },
             // La phase Gouvernance vit dans l'écran 9 : ses sous-onglets (g:...) sont rendus dans la
             // MÊME barre que ceux des autres phases, et pilotent govState.tab au lieu d'un numéro d'écran.
-            { id: 'gov', badge: '④', label: 'Gouvernance', desc: 'Objets, dictionnaire, lineage', color: 'emerald', step: 9, icon: '📚',
-              tabs: [
-                  // Modèle clair (R4) : 6 familles alignées sur les 3 plans (physique / acteurs / sens
-                  // métier) + Lineage, Contrôle. Vocabulaire unifié : Table / Application / Objet.
-                  // V6.12 : « Découvrir » (le catalogue) est le POINT D'ENTRÉE — on commence par
-                  // chercher la donnée disponible, puis on descend vers le patrimoine et le détail.
-                  { g: 'catalog', icon: '🧭', label: 'Catalogue', fam: 'Découvrir' },
-                  { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Patrimoine' },
-                  { g: 'model', icon: '🧬', label: 'Modèle de données', fam: 'Patrimoine' },
-                  { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
-                  { g: 'people', icon: '👥', label: 'Personnes & rôles', fam: 'Acteurs' },
-                  { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
-                  { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
-                  { g: 'vlists', icon: '🎚️', label: 'Listes de valeurs', fam: 'Sens métier' },
-                  { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Sens métier' },
-                  { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Sens métier' },
-                  { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
-                  { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Lineage', hidden: true },
-                  { g: 'srcwatch', icon: '🛰️', label: 'Surveillance des sources', fam: 'Contrôle' },
-                  { g: 'review', icon: '✅', label: 'À valider', fam: 'Contrôle' },
-                  { g: 'history', icon: '📈', label: 'Historique', fam: 'Contrôle' },
-              ] },
+            {
+                id: 'gov',
+                badge: '④',
+                label: 'Gouvernance',
+                desc: 'Objets, dictionnaire, lineage',
+                color: 'emerald',
+                step: 9,
+                icon: '📚',
+                tabs: [
+                    // Modèle clair (R4) : 6 familles alignées sur les 3 plans (physique / acteurs / sens
+                    // métier) + Lineage, Contrôle. Vocabulaire unifié : Table / Application / Objet.
+                    // V6.12 : « Découvrir » (le catalogue) est le POINT D'ENTRÉE — on commence par
+                    // chercher la donnée disponible, puis on descend vers le patrimoine et le détail.
+                    { g: 'catalog', icon: '🧭', label: 'Catalogue', fam: 'Découvrir' },
+                    { g: 'dictionary', icon: '📚', label: 'Dictionnaire', fam: 'Patrimoine' },
+                    { g: 'model', icon: '🧬', label: 'Modèle de données', fam: 'Patrimoine' },
+                    { g: 'assets', icon: '🖥', label: 'Applications & processus', fam: 'Acteurs' },
+                    { g: 'people', icon: '👥', label: 'Personnes & rôles', fam: 'Acteurs' },
+                    { g: 'objects', icon: '🏛️', label: 'Objets métier', fam: 'Sens métier' },
+                    { g: 'glossary', icon: '📖', label: 'Glossaire', fam: 'Sens métier' },
+                    { g: 'vlists', icon: '🎚️', label: 'Listes de valeurs', fam: 'Sens métier' },
+                    { g: 'perimeters', icon: '🧩', label: 'Périmètres', fam: 'Sens métier' },
+                    { g: 'privacy', icon: '🔐', label: 'Sensibilité', fam: 'Sens métier' },
+                    { g: 'flow', icon: '🕸️', label: 'Lineage', fam: 'Lineage' },
+                    { g: 'lineage', icon: '🕸️', label: 'Graphe de bout en bout', fam: 'Lineage', hidden: true },
+                    { g: 'srcwatch', icon: '🛰️', label: 'Surveillance des sources', fam: 'Contrôle' },
+                    { g: 'review', icon: '✅', label: 'À valider', fam: 'Contrôle' },
+                    { g: 'history', icon: '📈', label: 'Historique', fam: 'Contrôle' }
+                ]
+            }
         ];
         const PHASE_COLORS = {
-            blue:    { on: 'bg-blue-600 text-white shadow-md shadow-blue-600/20',       off: 'bg-blue-50 text-blue-700 hover:bg-blue-100',          sub: 'text-blue-700 border-blue-500',       subDot: 'bg-blue-100 text-blue-700' },
-            indigo:  { on: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20',   off: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',    sub: 'text-indigo-700 border-indigo-500',   subDot: 'bg-indigo-100 text-indigo-700' },
-            amber:   { on: 'bg-amber-500 text-white shadow-md shadow-amber-500/20',     off: 'bg-amber-50 text-amber-700 hover:bg-amber-100',       sub: 'text-amber-700 border-amber-500',     subDot: 'bg-amber-100 text-amber-700' },
-            emerald: { on: 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20', off: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', sub: 'text-emerald-700 border-emerald-500', subDot: 'bg-emerald-100 text-emerald-700' },
+            blue: {
+                on: 'bg-blue-600 text-white shadow-md shadow-blue-600/20',
+                off: 'bg-blue-50 text-blue-700 hover:bg-blue-100',
+                sub: 'text-blue-700 border-blue-500',
+                subDot: 'bg-blue-100 text-blue-700'
+            },
+            indigo: {
+                on: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20',
+                off: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
+                sub: 'text-indigo-700 border-indigo-500',
+                subDot: 'bg-indigo-100 text-indigo-700'
+            },
+            amber: {
+                on: 'bg-amber-500 text-white shadow-md shadow-amber-500/20',
+                off: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
+                sub: 'text-amber-700 border-amber-500',
+                subDot: 'bg-amber-100 text-amber-700'
+            },
+            emerald: {
+                on: 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20',
+                off: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                sub: 'text-emerald-700 border-emerald-500',
+                subDot: 'bg-emerald-100 text-emerald-700'
+            }
         };
         let currentTab = 1;
-        function phaseOfTab(num) { return NAV_PHASES.find(p => p.step === num || p.tabs.some(t => t.n === num)) || NAV_PHASES[0]; }
-        function switchPhase(pid) { const p = NAV_PHASES.find(x => x.id === pid); if (!p) return; const f = p.tabs[0]; if (f.n) switchTab(f.n); else openGovTab(f.g); }
+        function phaseOfTab(num) {
+            return NAV_PHASES.find(p => p.step === num || p.tabs.some(t => t.n === num)) || NAV_PHASES[0];
+        }
+        function switchPhase(pid) {
+            const phase = NAV_PHASES.find(x => x.id === pid);
+            if (!phase) return;
+            const f = phase.tabs[0];
+            if (f.n) switchTab(f.n);
+            else openGovTab(f.g);
+        }
         // Ouvre un sous-onglet Gouvernance depuis la barre de navigation commune.
         function openGovTab(g) {
             if (!govTabAllowed(g)) g = GOV_RO_TABS[0];
@@ -49,9 +121,17 @@
             // À l'ouverture du Lineage, la carte « Vue systèmes » est resynchronisée en silence avec les
             // données (tables conçues + applications) — comme la vue « Bout en bout » l'est en direct —
             // pour que les deux vues reflètent toujours les mêmes faits. Réglages manuels préservés.
-            if (g === 'flow' || g === 'lineage') { try { lfSyncFromData({ silent: true }); } catch (e) { } }
-            if (currentTab !== 9) switchTab(9); // switchTab rend la gouvernance + la nav
-            else { renderGovernance(); renderNav(); }
+            if (g === 'flow' || g === 'lineage') {
+                try {
+                    lfSyncFromData({ silent: true });
+                } catch (e) {}
+            }
+            if (currentTab !== 9)
+                switchTab(9); // switchTab rend la gouvernance + la nav
+            else {
+                renderGovernance();
+                renderNav();
+            }
         }
         // ===================== V7 : NAVIGATION EN RAIL LATÉRAL =====================
         // Les phases deviennent des groupes dépliables, les écrans des entrées. La barre du haut
@@ -168,61 +248,85 @@
         // Toutes les occurrences, où qu'elles soient dans le texte — pas seulement en tête.
         const V7_ANY_RE = new RegExp('(' + V7_ICO_KEYS.map(V7_ESC).join('|') + ')\\uFE0F?', 'g');
         // Là où vit la DONNÉE de l'utilisateur : on n'y touche jamais.
-        const V7_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'SVG', 'TEXTAREA', 'INPUT', 'OPTION', 'SELECT', 'CODE', 'PRE', 'TD', 'TH']);
+        const V7_SKIP_TAGS = new Set([
+            'SCRIPT',
+            'STYLE',
+            'SVG',
+            'TEXTAREA',
+            'INPUT',
+            'OPTION',
+            'SELECT',
+            'CODE',
+            'PRE',
+            'TD',
+            'TH'
+        ]);
         const V7_SKIP_IDS = new Set(['advGCanvas', 'lfCanvas', 'tdgCanvas', 'v7Nav']);
 
         function v7Deemojify(root) {
             root = root || document.querySelector('.v7-main');
             if (!root || !root.querySelectorAll) return 0;
-            let n = 0;
+            let count = 0;
             const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
                 acceptNode(node) {
                     V7_ANY_RE.lastIndex = 0;
                     if (!V7_ANY_RE.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
                     for (let p = node.parentElement; p && p !== root; p = p.parentElement) {
-                        if (V7_SKIP_TAGS.has(p.tagName) || V7_SKIP_IDS.has(p.id) || p.isContentEditable) return NodeFilter.FILTER_REJECT;
+                        if (V7_SKIP_TAGS.has(p.tagName) || V7_SKIP_IDS.has(p.id) || p.isContentEditable)
+                            return NodeFilter.FILTER_REJECT;
                     }
                     return NodeFilter.FILTER_ACCEPT;
                 }
             });
-            const hits = []; let x;
+            const hits = [];
+            let x;
             while ((x = w.nextNode())) hits.push(x);
             hits.forEach(node => {
                 const txt = node.nodeValue;
                 const frag = document.createDocumentFragment();
-                let last = 0, m; V7_ANY_RE.lastIndex = 0;
+                let last = 0,
+                    m;
+                V7_ANY_RE.lastIndex = 0;
                 while ((m = V7_ANY_RE.exec(txt))) {
                     const svg = v7Ico(m[1]);
                     if (!/^<svg/.test(svg)) continue;
                     if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
                     const span = document.createElement('span');
-                    span.className = 'v7-cic'; span.innerHTML = svg;
+                    span.className = 'v7-cic';
+                    span.innerHTML = svg;
                     frag.appendChild(span);
-                    last = m.index + m[0].length; n++;
+                    last = m.index + m[0].length;
+                    count++;
                 }
                 if (!last) return;
                 if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
                 node.parentNode.replaceChild(frag, node);
             });
-            return n;
+            return count;
         }
         // Les écrans se redessinent par innerHTML : on repasse après coup, en une
         // seule fois par image, et sans se ré-observer soi-même.
-        let v7DeemojiPending = false, v7DeemojiObs = null;
+        let v7DeemojiPending = false,
+            v7DeemojiObs = null;
         function v7WatchIcons() {
-            const root = document.querySelector('.v7-main'); if (!root || v7DeemojiObs) return;
+            const root = document.querySelector('.v7-main');
+            if (!root || v7DeemojiObs) return;
             v7DeemojiObs = new MutationObserver(() => {
                 if (v7DeemojiPending) return;
                 v7DeemojiPending = true;
                 requestAnimationFrame(() => {
                     v7DeemojiPending = false;
                     v7DeemojiObs.disconnect();
-                    try { v7Deemojify(root); } catch (e) {}
+                    try {
+                        v7Deemojify(root);
+                    } catch (e) {}
                     v7DeemojiObs.observe(root, { childList: true, subtree: true });
                 });
             });
             v7DeemojiObs.observe(root, { childList: true, subtree: true });
-            try { v7Deemojify(root); } catch (e) {}
+            try {
+                v7Deemojify(root);
+            } catch (e) {}
         }
 
         function renderNav() {
@@ -232,12 +336,20 @@
                 nav.innerHTML = NAV_PHASES.map(p => {
                     const on = p.id === activePhase.id;
                     const items = p.id === 'gov' ? govVisibleTabs(p.tabs) : p.tabs.filter(t => !t.hidden);
-                    const itemsHtml = items.map(t => {
-                        const isOn = on && (t.n === currentTab || (p.id === 'gov' && govState.tab === t.g));
-                        const act = p.id === 'gov' ? `openGovTab('${t.g}')` : `switchTab(${t.n})`;
-                        const nb = (p.id === 'gov' && t.g === 'review' && typeof propCountPendingFor === 'function' && govFeatureOn()) ? propCountPendingFor() : 0;
-                        return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}${nb ? ' — ' + nb + ' proposition(s) à valider' : ''}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span>${nb ? `<span class="v7-nb">${nb}</span>` : ''}</button>`;
-                    }).join('');
+                    const itemsHtml = items
+                        .map(t => {
+                            const isOn = on && (t.n === currentTab || (p.id === 'gov' && govState.tab === t.g));
+                            const act = p.id === 'gov' ? `openGovTab('${t.g}')` : `switchTab(${t.n})`;
+                            const nb =
+                                p.id === 'gov' &&
+                                t.g === 'review' &&
+                                typeof propCountPendingFor === 'function' &&
+                                govFeatureOn()
+                                    ? propCountPendingFor()
+                                    : 0;
+                            return `<button class="v7-it${isOn ? ' on' : ''}" onclick="${act}" title="${escapeHTML(t.label)}${nb ? ' — ' + nb + ' proposition(s) à valider' : ''}">${v7Ico(t.icon)}<span class="lbl">${escapeHTML(t.label)}</span>${nb ? `<span class="v7-nb">${nb}</span>` : ''}</button>`;
+                        })
+                        .join('');
                     return `<div class="v7-grp${on ? ' on open' : ''}" data-phase="${p.id}">
                         <button class="hd" onclick="v7ClickPhase('${p.id}')" title="${escapeHTML(p.label)} — ${escapeHTML(p.desc || '')}">
                             ${v7Ico(p.icon || p.tabs[0].icon)}
@@ -249,30 +361,47 @@
                 }).join('');
             }
             // Titre de l'écran courant
-            const cur = activePhase.tabs.find(t => (activePhase.id === 'gov' ? t.g === govState.tab : t.n === currentTab))
-                || (activePhase.id === 'gov' ? govVisibleTabs(activePhase.tabs)[0] : null) || activePhase.tabs[0];
-            if (el('v7Title')) el('v7Title').textContent = (cur ? cur.label : activePhase.label);
+            const cur =
+                activePhase.tabs.find(t => (activePhase.id === 'gov' ? t.g === govState.tab : t.n === currentTab)) ||
+                (activePhase.id === 'gov' ? govVisibleTabs(activePhase.tabs)[0] : null) ||
+                activePhase.tabs[0];
+            if (el('v7Title')) el('v7Title').textContent = cur ? cur.label : activePhase.label;
             if (el('v7Sub')) el('v7Sub').textContent = activePhase.label + (activePhase.desc ? ' · ' + activePhase.desc : '');
             // Familles de la gouvernance : segments dans la barre du haut
             const fam = el('v7FamNav');
             if (fam) {
-                if (activePhase.id !== 'gov') { fam.innerHTML = ''; fam.style.display = 'none'; }
-                else {
+                if (activePhase.id !== 'gov') {
+                    fam.innerHTML = '';
+                    fam.style.display = 'none';
+                } else {
                     fam.style.display = '';
                     const fams = [];
-                    govVisibleTabs(activePhase.tabs).forEach(t => { if (!fams.some(f => f.name === t.fam)) fams.push({ name: t.fam, first: t.g, icon: t.icon }); });
+                    govVisibleTabs(activePhase.tabs).forEach(t => {
+                        if (!fams.some(f => f.name === t.fam)) fams.push({ name: t.fam, first: t.g, icon: t.icon });
+                    });
                     const curFam = (activePhase.tabs.find(t => t.g === govState.tab) || {}).fam;
-                    fam.innerHTML = fams.map(f => `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${v7Ico(f.icon)}${escapeHTML(f.name)}</button>`).join('');
+                    fam.innerHTML = fams
+                        .map(
+                            f =>
+                                `<button class="${f.name === curFam ? 'on' : ''}" onclick="openGovTab('${f.first}')">${v7Ico(f.icon)}${escapeHTML(f.name)}</button>`
+                        )
+                        .join('');
                 }
             }
             if (typeof renderUserSwitch === 'function') renderUserSwitch();
-            if (window.lucide) { try { lucide.createIcons(); } catch (e) {} }
+            if (window.lucide) {
+                try {
+                    lucide.createIcons();
+                } catch (e) {}
+            }
         }
         // Cliquer une phase : on l'ouvre et on va sur son premier écran.
         function v7ClickPhase(id) {
-            const p = NAV_PHASES.find(x => x.id === id); if (!p) return;
-            if (p.id === phaseOfTab(currentTab).id) {
-                const g = document.querySelector(`.v7-grp[data-phase="${id}"]`); if (g) g.classList.toggle('open');
+            const phase = NAV_PHASES.find(x => x.id === id);
+            if (!phase) return;
+            if (phase.id === phaseOfTab(currentTab).id) {
+                const element = document.querySelector(`.v7-grp[data-phase="${id}"]`);
+                if (element) element.classList.toggle('open');
                 return;
             }
             switchPhase(id);
@@ -280,38 +409,75 @@
         function v7ToggleCollapse() {
             const on = document.body.classList.toggle('v7-collapsed');
             if (el('v7CollapseIc')) el('v7CollapseIc').textContent = on ? '⟩' : '⟨';
-            try { localStorage.setItem('sd_v7_collapsed', on ? '1' : '0'); } catch (e) {}
-            setTimeout(() => { if (el('lfCanvas')) lfDrawGraph(); if (el('advGCanvas')) advDrawGraph(); }, 200);
+            try {
+                localStorage.setItem('sd_v7_collapsed', on ? '1' : '0');
+            } catch (e) {}
+            setTimeout(() => {
+                if (el('lfCanvas')) lfDrawGraph();
+                if (el('advGCanvas')) advDrawGraph();
+            }, 200);
         }
         // ---- Thème clair / sombre / automatique ----
         // Appliqué le plus tôt possible pour éviter tout clignotement clair→sombre au chargement.
         (function () {
             try {
                 const pref = localStorage.getItem('sd_v7_theme') || 'auto';
-                const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                const dark =
+                    pref === 'dark' ||
+                    (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
                 document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
                 if (localStorage.getItem('sd_v7_collapsed') === '1') document.body.classList.add('v7-collapsed');
             } catch (e) {}
             if (window.matchMedia) {
-                try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-                    if (((() => { try { return localStorage.getItem('sd_v7_theme'); } catch (e) { return null; } })() || 'auto') === 'auto') v7ApplyTheme();
-                }); } catch (e) {}
+                try {
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                        if (
+                            ((() => {
+                                try {
+                                    return localStorage.getItem('sd_v7_theme');
+                                } catch (e) {
+                                    return null;
+                                }
+                            })() || 'auto') === 'auto'
+                        )
+                            v7ApplyTheme();
+                    });
+                } catch (e) {}
             }
         })();
         function v7ApplyTheme() {
-            const pref = (() => { try { return localStorage.getItem('sd_v7_theme') || 'auto'; } catch (e) { return 'auto'; } })();
-            const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            const pref = (() => {
+                try {
+                    return localStorage.getItem('sd_v7_theme') || 'auto';
+                } catch (e) {
+                    return 'auto';
+                }
+            })();
+            const dark =
+                pref === 'dark' ||
+                (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-            ['light', 'dark', 'auto'].forEach(k => { const b = el('v7Th' + k[0].toUpperCase() + k.slice(1)); if (b) b.classList.toggle('on', pref === k); });
+            ['light', 'dark', 'auto'].forEach(k => {
+                const element = el('v7Th' + k[0].toUpperCase() + k.slice(1));
+                if (element) element.classList.toggle('on', pref === k);
+            });
             // Le bouton Assistant de l'en-tête : couleur posée en inline (l'audit a montré que les
             // règles sombres le perdaient par intermittence dans la cascade — l'inline est imbattable).
-            const wb = el('wizTopBtn');
-            if (wb) { wb.style.setProperty('color', dark ? '#c7d2fe' : '#4338ca', 'important');
-                      wb.style.setProperty('border-color', dark ? '#3b4a6b' : '#a5b4fc', 'important'); }
+            const wizTopBtnElement = el('wizTopBtn');
+            if (wizTopBtnElement) {
+                wizTopBtnElement.style.setProperty('color', dark ? '#c7d2fe' : '#4338ca', 'important');
+                wizTopBtnElement.style.setProperty('border-color', dark ? '#3b4a6b' : '#a5b4fc', 'important');
+            }
         }
         function v7SetTheme(v) {
-            try { localStorage.setItem('sd_v7_theme', v); } catch (e) {}
+            try {
+                localStorage.setItem('sd_v7_theme', v);
+            } catch (e) {}
             v7ApplyTheme();
             // les graphes dessinent des couleurs en dur : on les redessine après bascule
-            setTimeout(() => { if (el('lfCanvas')) lfDrawGraph(); if (el('advGCanvas')) advDrawGraph(); if (el('tdgCanvas')) tdDrawGraph(); }, 30);
+            setTimeout(() => {
+                if (el('lfCanvas')) lfDrawGraph();
+                if (el('advGCanvas')) advDrawGraph();
+                if (el('tdgCanvas')) tdDrawGraph();
+            }, 30);
         }

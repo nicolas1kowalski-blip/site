@@ -19,10 +19,29 @@
            postes de travail : Périmètres, Sensibilité (classification/anonymisation) et
            Surveillance des sources — privés de leurs commandes ils ne disent plus rien, et leur
            présence ferait chercher au lecteur des choses qu'il ne peut pas faire. */
-        const GOV_RO_TABS = ['catalog', 'dictionary', 'model', 'objects', 'assets', 'glossary', 'vlists', 'flow', 'lineage', 'history', 'review', 'people'];
-        function govTabAllowed(g) { return !govIsReadOnly() || GOV_RO_TABS.includes(g); }
-        function govVisibleTabs(tabs) { return (tabs || []).filter(t => !t.hidden && govTabAllowed(t.g)); }
-        function govIsReadOnly() { return !!govState.readOnly; }
+        const GOV_RO_TABS = [
+            'catalog',
+            'dictionary',
+            'model',
+            'objects',
+            'assets',
+            'glossary',
+            'vlists',
+            'flow',
+            'lineage',
+            'history',
+            'review',
+            'people'
+        ];
+        function govTabAllowed(g) {
+            return !govIsReadOnly() || GOV_RO_TABS.includes(g);
+        }
+        function govVisibleTabs(tabs) {
+            return (tabs || []).filter(t => !t.hidden && govTabAllowed(t.g));
+        }
+        function govIsReadOnly() {
+            return !!govState.readOnly;
+        }
         function govSetReadOnly(on) {
             govState.readOnly = !!on;
             if (!govTabAllowed(govState.tab)) govState.tab = GOV_RO_TABS[0];
@@ -37,8 +56,9 @@
            inutile d'encombrer la lecture avec ce qui n'a pas été rempli. */
         function govRoDisplayValue(n) {
             if (n.tagName.toLowerCase() === 'select') {
-                const o = n.options[n.selectedIndex]; const t = o ? (o.textContent || '').trim() : '';
-                return (!t || t.charAt(0) === '\u2014' || t.charAt(0) === '(') ? '' : t;
+                const element = n.options[n.selectedIndex];
+                const t = element ? (element.textContent || '').trim() : '';
+                return !t || t.charAt(0) === '\u2014' || t.charAt(0) === '(' ? '' : t;
             }
             if (n.type === 'checkbox' || n.type === 'radio') return n.checked ? '\u2713' : '';
             if (n.type === 'file') return '';
@@ -48,32 +68,40 @@
             document.querySelectorAll('.gov-ro-val').forEach(x => x.remove());
             if (!govIsReadOnly()) return;
             GOV_RO_SCOPE.forEach(id => {
-                const root = el(id); if (!root || !root.hasAttribute('data-gov-ro')) return;
+                const root = el(id);
+                if (!root || !root.hasAttribute('data-gov-ro')) return;
                 root.querySelectorAll('input,select,textarea').forEach(n => {
                     if (n.closest('[data-ro="keep"]')) return;
                     if (getComputedStyle(n).display !== 'none') return;
-                    const v = govRoDisplayValue(n); if (!v) return;
-                    const sp = document.createElement('span');
-                    sp.className = 'gov-ro-val';
-                    sp.textContent = v;
-                    n.insertAdjacentElement('afterend', sp);
+                    const v = govRoDisplayValue(n);
+                    if (!v) return;
+                    const spanElement = document.createElement('span');
+                    spanElement.className = 'gov-ro-val';
+                    spanElement.textContent = v;
+                    n.insertAdjacentElement('afterend', spanElement);
                 });
             });
         }
         function govApplyReadOnly() {
             const on = govIsReadOnly();
-            GOV_RO_SCOPE.forEach(id => { const n = el(id); if (!n) return;
-                if (on) n.setAttribute('data-gov-ro', '1'); else n.removeAttribute('data-gov-ro'); });
-            const chk = el('govRoChk'); if (chk) chk.checked = on;
+            GOV_RO_SCOPE.forEach(id => {
+                const element = el(id);
+                if (!element) return;
+                if (on) element.setAttribute('data-gov-ro', '1');
+                else element.removeAttribute('data-gov-ro');
+            });
+            const chk = el('govRoChk');
+            if (chk) chk.checked = on;
             const band = el('govRoBand');
             if (band) {
                 band.classList.toggle('hidden', !on);
-                band.innerHTML = on ? `<div class="gov-ro-band">
+                band.innerHTML = on
+                    ? `<div class="gov-ro-band">
                     <span class="font-black">👁 Mode consultation</span>
                     <span>Les écrans qui présentent le référentiel restent consultables, commandes de modification masquées. Trois écrans d'administration sont retirés : <b>Périmètres</b>, <b>Sensibilité</b> et <b>Surveillance des sources</b>.</span>
                     <span class="text-indigo-500">Ce n’est pas une sécurité — la case se décoche.</span>
                     <button data-ro="keep" onclick="govSetReadOnly(false)" style="background:#4f46e5;color:#fff" class="ml-auto text-[11px] font-bold px-3 py-1.5 rounded-lg">Reprendre la main</button>
-                </div>` : '';
+                </div>`
+                    : '';
             }
         }
-

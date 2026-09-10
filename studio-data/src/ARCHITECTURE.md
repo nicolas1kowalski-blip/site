@@ -78,7 +78,11 @@ et une correction du noyau profite à toutes les lignes sans fusion manuelle.
 | Index de l'API | `node studio-data/build.mjs --api` | `src/API.md` à jour |
 | Globales | `node studio-data/tools/globales-generer.mjs` | `eslint.globals.json` à jour (à relancer après ajout d'une globale) |
 | ESLint | `node <eslint>/bin/eslint.js -c studio-data/eslint.config.js studio-data/src` | références inter-fichiers valides, pas de réassignation de fonction, pas de clé dupliquée |
-| Tests | `node studio-data/tests/run.mjs [--target v14] [--filter mot]` | 46 suites headless + régression V6/V7 |
+| Tests | `node studio-data/tests/run.mjs [--target v14] [--filter mot]` | 47 suites headless + régression V6/V7 |
+| Mise en forme | `node studio-data/tools/formater.mjs [--check]` | Prettier, 120 colonnes, marge de 8 espaces conservée |
+| Renommage | `node studio-data/tools/renommer-locales.mjs [--dry-run]` | variables locales à nom court renommées par portée, sans collision |
+| Gabarits | `node studio-data/tools/gabarits-aerer.mjs [--dry-run]` | retours à la ligne après les blocs HTML des gabarits longs |
+| Lisibilité | `node studio-data/tools/lisibilite-mesurer.mjs [--strict] [--list]` | mesures par fichier (`src/LISIBILITE.json`), seuils de non-régression |
 | Auto-contrôle | dans l'application : Architecture → Auto-contrôle | extensions et déclarations cohérentes |
 
 ## 5. Ajouter une fonctionnalité (V14+)
@@ -89,4 +93,4 @@ et une correction du noyau profite à toutes les lignes sans fusion manuelle.
    venir après le fichier qui déclare la base.
 3. Étendre l'existant avec `Studio.extend(...)`, jamais par assignation.
 4. Documenter les champs nouveaux dans `01-types.js`, la version dans `0Z-v14-version.js`.
-5. `node tools/globales-generer.mjs`, ESLint, `node build.mjs --all`, `node tests/run.mjs`, puis une suite dédiée dans `tests/suites/`.
+5. `node tools/formater.mjs`, `node tools/globales-generer.mjs`, ESLint, `node tools/lisibilite-mesurer.mjs --strict`, `node build.mjs --all`, `node tests/run.mjs`, puis une suite dédiée dans `tests/suites/`.

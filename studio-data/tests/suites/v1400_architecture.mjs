@@ -16,7 +16,7 @@ const out = await p.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     try {
         ok('version : APP_VERSION = tête du journal = titre de l\'onglet (' + APP_VERSION + ')', APP_CHANGELOG[0].v === APP_VERSION && document.title === 'Studio Data ' + APP_VERSION);
-        ok('V14 : version 14.x, journal V14 puis V13', /^14\./.test(APP_VERSION) && /^14\./.test(APP_CHANGELOG[0].v) && /^13\./.test(APP_CHANGELOG[1].v));
+        ok('V14 : version 14.x, journal V14 puis V13', /^14\./.test(APP_VERSION) && /^14\./.test(APP_CHANGELOG[0].v) && APP_CHANGELOG.findIndex(e => /^13\./.test(e.v)) === APP_CHANGELOG.filter(e => /^14\./.test(e.v)).length);
         // ---- noyau d'architecture ----
         const check = Studio.selfCheck();
         ok('Studio : ' + check.modules + ' modules enregistrés par le build, ' + check.functions + ' fonctions déclarées', check.modules >= 75 && check.functions >= 1400);

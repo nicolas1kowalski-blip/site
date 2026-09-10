@@ -182,6 +182,8 @@ Construction : `node studio-data/build.mjs --target v13`.
 | `96-couche-v14/0Z-v14-styles.css` | styles du panneau Architecture |
 | `96-couche-v14/B0-v14-architecture.js` | panneau « Architecture du code » : modules par domaine et couche, chaîne d'extensions par fonction, auto-contrôle, export JSON de l'API ; accès par l'aide « ? » et la palette |
 
-Outils associés : `build.mjs --api` (API.md), `tools/globales-generer.mjs` (globales pour ESLint), `tools/extensions-migrer.mjs` (migration des anciennes enveloppes, rejouable), `eslint.config.js`, `tests/run.mjs`.
+| `96-couche-v14/B1-v14-lisibilite.js` | onglet « Lisibilité » : mesures embarquées par le build, seuils de non-régression, fichiers à reprendre |
+
+Outils associés : `build.mjs --api` (API.md), `tools/globales-generer.mjs` (globales pour ESLint), `tools/extensions-migrer.mjs` (migration des anciennes enveloppes, rejouable), `tools/formater.mjs` (Prettier), `tools/renommer-locales.mjs` (renommage par portée), `tools/gabarits-aerer.mjs` (gabarits aérés), `tools/lisibilite-mesurer.mjs` (mesures et seuils), `eslint.config.js`, `tests/run.mjs`.
 
 Construction : `node studio-data/build.mjs --target v14` (`--all` construit V7, V11, V12, V13 et V14).

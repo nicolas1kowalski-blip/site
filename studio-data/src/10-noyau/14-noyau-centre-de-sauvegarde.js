@@ -2,36 +2,67 @@
         // Accessible en permanence depuis l'en-tête — panneau latéral : l'écran courant reste visible.
         function openBackupCenter() {
             el('uxDrawer').classList.add('wide');
-            openUxDrawer({ sem: '', title: '💾 Sauvegarde & partage', sub: 'Persistance locale automatique · dossier de secours · bundles d\'échange — tout reste sur cette machine',
-                body: `<div id="bkStatusUx" class="dsect"></div>` + renderGovShare(), foot: `
+            openUxDrawer({
+                sem: '',
+                title: '💾 Sauvegarde & partage',
+                sub: "Persistance locale automatique · dossier de secours · bundles d'échange — tout reste sur cette machine",
+                body: `<div id="bkStatusUx" class="dsect"></div>` + renderGovShare(),
+                foot: `
                 <button onclick="uxSaveNow(this)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-bold">💾 Sauvegarder maintenant</button>
-                <button onclick="closeBackupCenter()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Fermer (Échap)</button>` });
+                <button onclick="closeBackupCenter()" class="flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">Fermer (Échap)</button>`
+            });
             renderBkStatusUx();
-            try { fillStorageEstimate(); fillBackupsList(); } catch (e) {}
-            try { lucide.createIcons({ root: el('uxDrawerBody') }); } catch (e) {}
+            try {
+                fillStorageEstimate();
+                fillBackupsList();
+            } catch (e) {}
+            try {
+                lucide.createIcons({ root: el('uxDrawerBody') });
+            } catch (e) {}
         }
-        function closeBackupCenter() { el('uxDrawer').classList.remove('wide'); closeUxDrawer(); }
+        function closeBackupCenter() {
+            el('uxDrawer').classList.remove('wide');
+            closeUxDrawer();
+        }
         function renderBkStatusUx() {
-            const b = el('bkStatusUx'); if (!b) return;
+            const bkStatusUxElement = el('bkStatusUx');
+            if (!bkStatusUxElement) return;
             const saved = (el('persistStatusTop') || { textContent: '' }).textContent.trim();
             const chip = (okState, txt) => `<span class="qual ${okState}" style="font-size:11px">${txt}</span>`;
-            b.innerHTML = `<div class="flex items-center gap-2 flex-wrap">
-                ${state.noPersist ? chip('q-bad', '⛔ Persistance locale DÉSACTIVÉE — rien n\'est conservé') : chip('q-ok', '✓ Persistance locale active (IndexedDB)')}
+            bkStatusUxElement.innerHTML = `<div class="flex items-center gap-2 flex-wrap">
+                ${state.noPersist ? chip('q-bad', "⛔ Persistance locale DÉSACTIVÉE — rien n'est conservé") : chip('q-ok', '✓ Persistance locale active (IndexedDB)')}
                 ${saved ? chip('q-ok', escapeHTML(saved)) : ''}
                 <span id="bkDirChip">${chip('q-warn', '📂 Dossier de secours : vérification…')}</span>
             </div>`;
-            (async () => { try { const h = await idbGet('meta', 'backupDir'); const c2 = el('bkDirChip');
-                if (c2) c2.innerHTML = h ? chip('q-ok', '📂 Dossier de secours configuré : ' + escapeHTML(h.name || '')) : chip('q-warn', '📂 Aucun dossier de secours — configurez-le ci-dessous (survit aux purges du navigateur)');
-            } catch (e) { const c2 = el('bkDirChip'); if (c2) c2.innerHTML = ''; } })();
+            (async () => {
+                try {
+                    const h = await idbGet('meta', 'backupDir');
+                    const bkDirChipElement = el('bkDirChip');
+                    if (bkDirChipElement)
+                        bkDirChipElement.innerHTML = h
+                            ? chip('q-ok', '📂 Dossier de secours configuré : ' + escapeHTML(h.name || ''))
+                            : chip(
+                                  'q-warn',
+                                  '📂 Aucun dossier de secours — configurez-le ci-dessous (survit aux purges du navigateur)'
+                              );
+                } catch (e) {
+                    const bkDirChipElement = el('bkDirChip');
+                    if (bkDirChipElement) bkDirChipElement.innerHTML = '';
+                }
+            })();
         }
         async function uxSaveNow(btn) {
             if (btn) btn.disabled = true;
             try {
                 persistAppState();
-                try { await fsBackupWrite(true); } catch (e2) {}
+                try {
+                    await fsBackupWrite(true);
+                } catch (e2) {}
                 showSuccess('💾 Configuration sauvegardée (IndexedDB' + ' + dossier de secours si configuré).');
                 renderBkStatusUx();
-            } finally { if (btn) btn.disabled = false; }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
         function renderGovShare() {
             const perims = state.governance.perimeters;
@@ -74,52 +105,98 @@
                 </div>`;
         }
         async function fillBackupsList() {
-            const c = el('backupsList'); if (!c) return;
+            const backupsListElement = el('backupsList');
+            if (!backupsListElement) return;
             try {
-                const fp = el('fsBackupPanel');
-                if (fp) {
-                    if (!fsDirSupported()) fp.innerHTML = '<span class="text-slate-400">Non supporté par ce navigateur — utilisez l\'export de bundle ci-contre.</span>';
+                const fsBackupPanelElement = el('fsBackupPanel');
+                if (fsBackupPanelElement) {
+                    if (!fsDirSupported())
+                        fsBackupPanelElement.innerHTML =
+                            '<span class="text-slate-400">Non supporté par ce navigateur — utilisez l\'export de bundle ci-contre.</span>';
                     else {
-                        let h = null; try { h = await idbGet('meta', 'backupDir'); } catch (e4) {}
-                        if (!h) fp.innerHTML = '<button onclick="fsBackupDirPick()" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">📁 Choisir un dossier de sauvegarde</button>';
+                        let h = null;
+                        try {
+                            h = await idbGet('meta', 'backupDir');
+                        } catch (e4) {}
+                        if (!h)
+                            fsBackupPanelElement.innerHTML =
+                                '<button onclick="fsBackupDirPick()" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">📁 Choisir un dossier de sauvegarde</button>';
                         else {
-                            let perm = 'prompt'; try { perm = await h.queryPermission({ mode: 'readwrite' }); } catch (e5) {}
-                            fp.innerHTML = `Dossier : <strong>${escapeHTML(h.name)}</strong> — ${perm === 'granted' ? '<span class="text-emerald-600 font-bold">actif ✅</span>' : '<button onclick="fsBackupReauth()" class="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded">🔓 Réautoriser l\'accès</button>'} <button onclick="fsBackupDisable()" class="text-slate-400 hover:text-red-500 ml-2">✕ désactiver</button><span id="fsBackupStatus"></span>`;
+                            let perm = 'prompt';
+                            try {
+                                perm = await h.queryPermission({ mode: 'readwrite' });
+                            } catch (e5) {}
+                            fsBackupPanelElement.innerHTML = `Dossier : <strong>${escapeHTML(h.name)}</strong> — ${perm === 'granted' ? '<span class="text-emerald-600 font-bold">actif ✅</span>' : '<button onclick="fsBackupReauth()" class="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded">🔓 Réautoriser l\'accès</button>'} <button onclick="fsBackupDisable()" class="text-slate-400 hover:text-red-500 ml-2">✕ désactiver</button><span id="fsBackupStatus"></span>`;
                         }
                     }
                 }
-                const dg = el('storageDiag');
-                if (dg) {
+                const storageDiagElement = el('storageDiag');
+                if (storageDiagElement) {
                     try {
                         const ks = await idbKeys('tabledata');
-                        const st2 = await idbGet('meta', 'appState');
+                        const stored = await idbGet('meta', 'appState');
                         const bk = (await idbGet('meta', 'appStateBackups')) || [];
-                        dg.textContent = `Sur ce poste : ${(ks || []).length} source(s) stockée(s) · configuration ${st2 ? 'du ' + new Date(st2.savedAt || 0).toLocaleString('fr-FR') + ' (' + cfgRichness(st2) + ' élément(s))' : 'ABSENTE'} · ${bk.length} sauvegarde(s) de secours`;
-                    } catch (e3) { dg.textContent = 'Diagnostic du stockage impossible : ' + String(e3.message || e3); }
+                        storageDiagElement.textContent = `Sur ce poste : ${(ks || []).length} source(s) stockée(s) · configuration ${stored ? 'du ' + new Date(stored.savedAt || 0).toLocaleString('fr-FR') + ' (' + cfgRichness(stored) + ' élément(s))' : 'ABSENTE'} · ${bk.length} sauvegarde(s) de secours`;
+                    } catch (e3) {
+                        storageDiagElement.textContent = 'Diagnostic du stockage impossible : ' + String(e3.message || e3);
+                    }
                 }
                 const list = (await idbGet('meta', 'appStateBackups')) || [];
-                if (!list.length) { c.textContent = 'Aucune sauvegarde de secours pour le moment.'; return; }
-                c.innerHTML = list.map((b, i) => `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1"><span class="font-mono">${escapeHTML(new Date(b.at).toLocaleString('fr-FR'))}</span><span class="text-slate-400">${cfgRichness(b.cfg)} élément(s) de configuration</span><button onclick="restoreBackup(${i}, this)" class="ml-auto px-2 py-0.5 rounded font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100">Restaurer</button></div>`).join('');
-            } catch (e) { c.textContent = 'Lecture des sauvegardes impossible : ' + String(e.message || e); }
+                if (!list.length) {
+                    backupsListElement.textContent = 'Aucune sauvegarde de secours pour le moment.';
+                    return;
+                }
+                backupsListElement.innerHTML = list
+                    .map(
+                        (b, i) =>
+                            `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1"><span class="font-mono">${escapeHTML(new Date(b.at).toLocaleString('fr-FR'))}</span><span class="text-slate-400">${cfgRichness(b.cfg)} élément(s) de configuration</span><button onclick="restoreBackup(${i}, this)" class="ml-auto px-2 py-0.5 rounded font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100">Restaurer</button></div>`
+                    )
+                    .join('');
+            } catch (e) {
+                backupsListElement.textContent = 'Lecture des sauvegardes impossible : ' + String(e.message || e);
+            }
         }
         async function restoreBackup(i, btn) {
             try {
                 const list = (await idbGet('meta', 'appStateBackups')) || [];
-                const b = list[i]; if (!b) return;
-                if (btn && !btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Confirmer ?'; setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Restaurer'; } }, 4000); return; }
+                const b = list[i];
+                if (!b) return;
+                if (btn && !btn.dataset.armed) {
+                    btn.dataset.armed = '1';
+                    btn.textContent = 'Confirmer ?';
+                    setTimeout(() => {
+                        if (btn.isConnected) {
+                            delete btn.dataset.armed;
+                            btn.textContent = 'Restaurer';
+                        }
+                    }, 4000);
+                    return;
+                }
                 applyPersistedConfig(b.cfg);
-                restoreCompleted = true; sessionBackupDone = true;
+                restoreCompleted = true;
+                sessionBackupDone = true;
                 await idbPut('meta', 'appState', b.cfg);
-                renderTables(); updateBaseTableSelect(); populateQualTables(); renderGovernance();
-                showSuccess('🛟 Sauvegarde du ' + new Date(b.at).toLocaleString('fr-FR') + ' restaurée (modèle, tables conçues, domaines, gouvernance).');
-            } catch (e) { showError('Restauration de la sauvegarde impossible : ' + String(e.message || e)); }
+                renderTables();
+                updateBaseTableSelect();
+                populateQualTables();
+                renderGovernance();
+                showSuccess(
+                    '🛟 Sauvegarde du ' +
+                        new Date(b.at).toLocaleString('fr-FR') +
+                        ' restaurée (modèle, tables conçues, domaines, gouvernance).'
+                );
+            } catch (e) {
+                showError('Restauration de la sauvegarde impossible : ' + String(e.message || e));
+            }
         }
         async function fillStorageEstimate() {
             try {
                 if (navigator.storage && navigator.storage.estimate) {
                     const e = await navigator.storage.estimate();
                     const mb = v => (v / 1024 / 1024).toFixed(1) + ' Mo';
-                    const s = el('storageEstimate'); if (s) s.textContent = `Utilisé : ${mb(e.usage || 0)} / Quota : ${mb(e.quota || 0)}`;
+                    const storageEstimateElement = el('storageEstimate');
+                    if (storageEstimateElement)
+                        storageEstimateElement.textContent = `Utilisé : ${mb(e.usage || 0)} / Quota : ${mb(e.quota || 0)}`;
                 }
             } catch (e) {}
         }
@@ -130,46 +207,95 @@
                 if (!(navigator.storage && navigator.storage.getDirectory)) return;
                 const root = await navigator.storage.getDirectory();
                 for (const name of ['studio_data.db', 'studio_data.db.wal', 'studio_tmp']) {
-                    try { await root.removeEntry(name, { recursive: true }); } catch (e) {}
+                    try {
+                        await root.removeEntry(name, { recursive: true });
+                    } catch (e) {}
                 }
-            } catch (e) { console.warn('Purge OPFS partielle :', e); }
+            } catch (e) {
+                console.warn('Purge OPFS partielle :', e);
+            }
         }
         async function resetLocalStorage(btn) {
-            if (!govState.resetArmed) { govState.resetArmed = true; btn.textContent = '⚠️ Cliquez à nouveau pour TOUT effacer (données incluses)'; setTimeout(() => { govState.resetArmed = false; if (btn.isConnected) btn.textContent = '🧹 Effacer toutes les données locales (2 clics)'; }, 4000); return; }
+            if (!govState.resetArmed) {
+                govState.resetArmed = true;
+                btn.textContent = '⚠️ Cliquez à nouveau pour TOUT effacer (données incluses)';
+                setTimeout(() => {
+                    govState.resetArmed = false;
+                    if (btn.isConnected) btn.textContent = '🧹 Effacer toutes les données locales (2 clics)';
+                }, 4000);
+                return;
+            }
             govState.resetArmed = false;
             if (btn) btn.disabled = true;
             try {
-                await idbClear('meta'); await idbClear('tabledata');
+                await idbClear('meta');
+                await idbClear('tabledata');
                 await wipeOpfsData();
-                showSuccess('✅ Toutes les données locales ont été effacées (stockage + disque). Rechargez la page pour repartir de zéro.');
-            } catch (e) { showError('Effacement incomplet : ' + e.message); }
-            finally { if (btn) btn.disabled = false; }
+                showSuccess(
+                    '✅ Toutes les données locales ont été effacées (stockage + disque). Rechargez la page pour repartir de zéro.'
+                );
+            } catch (e) {
+                showError('Effacement incomplet : ' + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
         // Mode sans persistance : bascule à chaud. En l'activant, on purge ce qui a déjà été écrit,
         // pour ne rien laisser sur le poste (idéal données sensibles / poste partagé).
         async function toggleNoPersist(on) {
             if (on) {
-                const okGo = confirm("⚠️ ATTENTION : activer le mode sans persistance EFFACE DÉFINITIVEMENT tout ce qui est enregistré sur ce poste (sources, tables conçues, modèle, gouvernance ET sauvegardes de secours).\n\nContinuer ?");
-                if (!okGo) { const c = el('noPersistChk'); if (c) c.checked = false; return; }
+                const okGo = confirm(
+                    '⚠️ ATTENTION : activer le mode sans persistance EFFACE DÉFINITIVEMENT tout ce qui est enregistré sur ce poste (sources, tables conçues, modèle, gouvernance ET sauvegardes de secours).\n\nContinuer ?'
+                );
+                if (!okGo) {
+                    const noPersistChkElement = el('noPersistChk');
+                    if (noPersistChkElement) noPersistChkElement.checked = false;
+                    return;
+                }
             }
             state.noPersist = !!on;
-            if (on) { try { await idbClear('meta'); await idbClear('tabledata'); await wipeOpfsData(); } catch (e) {} showSuccess('🔒 Mode sans persistance activé : rien n\'est enregistré sur le poste ; tout disparaît à la fermeture de l\'onglet.'); }
-            else { showSuccess('💾 Persistance réactivée : le travail sera de nouveau sauvegardé localement.'); persistAppState(); }
+            if (on) {
+                try {
+                    await idbClear('meta');
+                    await idbClear('tabledata');
+                    await wipeOpfsData();
+                } catch (e) {}
+                showSuccess(
+                    "🔒 Mode sans persistance activé : rien n'est enregistré sur le poste ; tout disparaît à la fermeture de l'onglet."
+                );
+            } else {
+                showSuccess('💾 Persistance réactivée : le travail sera de nouveau sauvegardé localement.');
+                persistAppState();
+            }
             renderGovernance();
         }
 
         function filterGovernanceToScope(scopeTables) {
-            const g = state.governance; const inScope = n => scopeTables.includes(n);
+            const governance = state.governance;
+            const inScope = n => scopeTables.includes(n);
             return {
-                perimeters: g.perimeters.map(p => ({ ...p, tables: (p.tables || []).filter(inScope) })).filter(p => p.tables.length || scopeTables.length === readyTableNames().length),
-                dictionary: Object.fromEntries(Object.entries(g.dictionary).filter(([n]) => inScope(n))),
-                glossary: g.glossary,
-                useCases: g.useCases.filter(uc => (uc.tables || []).some(inScope) || (uc.columns || []).some(c => inScope(c.table)) || scopeTables.length === readyTableNames().length),
-                businessObjects: g.businessObjects.filter(bo => (bo.elements || []).some(e2 => (e2.mappings || []).some(m => inScope(m.table))) || scopeTables.length === readyTableNames().length),
-                lineage: Object.fromEntries(Object.entries(g.lineage).filter(([n]) => inScope(n))),
-                qualityHistory: g.qualityHistory.filter(e => inScope(e.table)),
-                assets: g.assets || [],
-                rules: (g.rules || []).filter(r => inScope(r.parentTable) || inScope(r.childTable) || scopeTables.length === readyTableNames().length),
+                perimeters: governance.perimeters
+                    .map(p => ({ ...p, tables: (p.tables || []).filter(inScope) }))
+                    .filter(p => p.tables.length || scopeTables.length === readyTableNames().length),
+                dictionary: Object.fromEntries(Object.entries(governance.dictionary).filter(([n]) => inScope(n))),
+                glossary: governance.glossary,
+                useCases: governance.useCases.filter(
+                    uc =>
+                        (uc.tables || []).some(inScope) ||
+                        (uc.columns || []).some(c => inScope(c.table)) ||
+                        scopeTables.length === readyTableNames().length
+                ),
+                businessObjects: governance.businessObjects.filter(
+                    bo =>
+                        (bo.elements || []).some(e2 => (e2.mappings || []).some(m => inScope(m.table))) ||
+                        scopeTables.length === readyTableNames().length
+                ),
+                lineage: Object.fromEntries(Object.entries(governance.lineage).filter(([n]) => inScope(n))),
+                qualityHistory: governance.qualityHistory.filter(e => inScope(e.table)),
+                assets: governance.assets || [],
+                rules: (governance.rules || []).filter(
+                    r => inScope(r.parentTable) || inScope(r.childTable) || scopeTables.length === readyTableNames().length
+                )
             };
         }
 
@@ -179,97 +305,192 @@
             let scopeTables = readyTableNames();
             let scopeLabel = 'complet';
             if (scopeMode === 'perimeter') {
-                const p = state.governance.perimeters.find(x => x.id === el('bundlePerimeter').value);
-                if (!p) return showError('Sélectionnez un périmètre.');
-                scopeTables = (p.tables || []).filter(n => readyTableNames().includes(n));
-                scopeLabel = p.name;
+                const perimeter = state.governance.perimeters.find(x => x.id === el('bundlePerimeter').value);
+                if (!perimeter) return showError('Sélectionnez un périmètre.');
+                scopeTables = (perimeter.tables || []).filter(n => readyTableNames().includes(n));
+                scopeLabel = perimeter.name;
                 if (!scopeTables.length) return showError('Ce périmètre ne contient aucune table chargée.');
             }
             const includeData = el('bundleIncludeData').checked;
-            const btn = el('btnExportBundle'); btn.disabled = true;
+            const btn = el('btnExportBundle');
+            btn.disabled = true;
             try {
                 const cfg = collectPersistedConfig();
                 const bundle = {
-                    format: 'studio-data-gouv-bundle', version: 1, exportedAt: new Date().toISOString(), scope: scopeLabel,
+                    format: 'studio-data-gouv-bundle',
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    scope: scopeLabel,
                     governance: filterGovernanceToScope(scopeTables),
-                    config: { relations: cfg.relations.filter(r => scopeTables.includes(r.sourceTable) && scopeTables.includes(r.targetTable)) },
-                    tables: [],
+                    config: {
+                        relations: cfg.relations.filter(
+                            r => scopeTables.includes(r.sourceTable) && scopeTables.includes(r.targetTable)
+                        )
+                    },
+                    tables: []
                 };
                 for (const name of scopeTables) {
-                    const t = tableByName(name); if (!t) continue;
-                    const entry = { name: t.name, type: t.type, headers: t.headers.slice() };
-                    if (includeData) entry.parquetBase64 = bufToBase64(await exportTableParquet(t.id));
+                    const table = tableByName(name);
+                    if (!table) continue;
+                    const entry = { name: table.name, type: table.type, headers: table.headers.slice() };
+                    if (includeData) entry.parquetBase64 = bufToBase64(await exportTableParquet(table.id));
                     bundle.tables.push(entry);
                 }
                 const blob = new Blob([JSON.stringify(bundle)], { type: 'application/json' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = `StudioData_Bundle_${scopeLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.json`;
-                document.body.appendChild(a); a.click(); a.remove();
-                showSuccess(`Bundle "${scopeLabel}" exporté (${bundle.tables.length} table(s)${includeData ? ' avec données' : ', métadonnées seules'}).`);
-            } catch (e) { showError('Export du bundle échoué : ' + e.message); }
-            finally { btn.disabled = false; }
+                const anchorElement = document.createElement('a');
+                anchorElement.href = URL.createObjectURL(blob);
+                anchorElement.download = `StudioData_Bundle_${scopeLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.json`;
+                document.body.appendChild(anchorElement);
+                anchorElement.click();
+                anchorElement.remove();
+                showSuccess(
+                    `Bundle "${scopeLabel}" exporté (${bundle.tables.length} table(s)${includeData ? ' avec données' : ', métadonnées seules'}).`
+                );
+            } catch (e) {
+                showError('Export du bundle échoué : ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         async function importGovernanceBundle(e) {
-            const file = e.target.files[0]; if (!file) return;
+            const file = e.target.files[0];
+            if (!file) return;
             try {
                 const bundle = JSON.parse(await readFileAsText(file));
-                if (bundle.format !== 'studio-data-gouv-bundle') throw new Error('Ce fichier n\'est pas un bundle Studio Data.');
+                if (bundle.format !== 'studio-data-gouv-bundle') throw new Error("Ce fichier n'est pas un bundle Studio Data.");
                 let importedTables = 0;
                 for (const rec of bundle.tables || []) {
                     if (tableByName(rec.name)) continue;
                     if (!rec.parquetBase64) continue;
                     const tId = 'tb_' + generateId();
-                    state.tables[tId] = { id: tId, name: rec.name, file: null, type: rec.type === 'api' ? 'api' : 'extraction', size: 0, config: {}, headers: [], columnsMeta: {}, status: 'loading' };
+                    state.tables[tId] = {
+                        id: tId,
+                        name: rec.name,
+                        file: null,
+                        type: rec.type === 'api' ? 'api' : 'extraction',
+                        size: 0,
+                        config: {},
+                        headers: [],
+                        columnsMeta: {},
+                        status: 'loading'
+                    };
                     renderTables();
                     const headers = await ingestParquetIntoDuckDB(tId, base64ToBuf(rec.parquetBase64));
-                    const t = state.tables[tId];
-                    t.headers = headers; t.sampleData = await duckSampleRows(tId, 6); t.status = 'ready';
+                    const table = state.tables[tId];
+                    table.headers = headers;
+                    table.sampleData = await duckSampleRows(tId, 6);
+                    table.status = 'ready';
                     await persistTableData(tId);
                     importedTables++;
                 }
-                const g = state.governance, ig = normalizeGovernance(bundle.governance || {});
-                ig.perimeters.forEach(ip => { const ex = g.perimeters.find(p => p.name === ip.name); if (ex) { ex.tables = Array.from(new Set([...(ex.tables || []), ...(ip.tables || [])])); if (ip.description) ex.description = ip.description; } else g.perimeters.push(ip); });
-                Object.keys(ig.dictionary).forEach(n => { g.dictionary[n] = ig.dictionary[n]; });
-                ig.glossary.forEach(it => { const ex = g.glossary.find(x => x.term === it.term); if (ex) { if (it.definition) ex.definition = it.definition; ex.links = [...(ex.links || []), ...(it.links || []).filter(l => !(ex.links || []).some(e2 => e2.table === l.table && e2.col === l.col))]; } else g.glossary.push(it); });
-                ig.useCases.forEach(it => { const ex = g.useCases.find(x => x.name === it.name); if (ex) Object.assign(ex, it, { id: ex.id }); else g.useCases.push(it); });
+                const governance = state.governance,
+                    ig = normalizeGovernance(bundle.governance || {});
+                ig.perimeters.forEach(ip => {
+                    const perimeter = governance.perimeters.find(p => p.name === ip.name);
+                    if (perimeter) {
+                        perimeter.tables = Array.from(new Set([...(perimeter.tables || []), ...(ip.tables || [])]));
+                        if (ip.description) perimeter.description = ip.description;
+                    } else governance.perimeters.push(ip);
+                });
+                Object.keys(ig.dictionary).forEach(n => {
+                    governance.dictionary[n] = ig.dictionary[n];
+                });
+                ig.glossary.forEach(it => {
+                    const term = governance.glossary.find(x => x.term === it.term);
+                    if (term) {
+                        if (it.definition) term.definition = it.definition;
+                        term.links = [
+                            ...(term.links || []),
+                            ...(it.links || []).filter(
+                                l => !(term.links || []).some(e2 => e2.table === l.table && e2.col === l.col)
+                            )
+                        ];
+                    } else governance.glossary.push(it);
+                });
+                ig.useCases.forEach(it => {
+                    const ex = governance.useCases.find(x => x.name === it.name);
+                    if (ex) Object.assign(ex, it, { id: ex.id });
+                    else governance.useCases.push(it);
+                });
                 const asMap = {};
                 (ig.assets || []).forEach(it => {
-                    let ex = (g.assets || []).find(x => String(x.name).trim().toLowerCase() === String(it.name).trim().toLowerCase());
-                    if (ex) { if (it.owner && !ex.owner) ex.owner = it.owner; if (it.domain && !ex.domain) ex.domain = it.domain; if (it.criticality) ex.criticality = it.criticality; if (it.description && !ex.description) ex.description = it.description;
-                        ex.tables = Array.from(new Set([...(ex.tables || []), ...(it.tables || [])]));
-                        ex.columns = [...(ex.columns || [])]; (it.columns || []).forEach(c2 => { if (!ex.columns.some(x => x.table === c2.table && x.col === c2.col)) ex.columns.push(c2); });
-                    } else { ex = { ...it, id: 'as_' + generateId() }; g.assets.push(ex); }
-                    asMap[it.id] = ex.id;
+                    let asset = (governance.assets || []).find(
+                        x => String(x.name).trim().toLowerCase() === String(it.name).trim().toLowerCase()
+                    );
+                    if (asset) {
+                        if (it.owner && !asset.owner) asset.owner = it.owner;
+                        if (it.domain && !asset.domain) asset.domain = it.domain;
+                        if (it.criticality) asset.criticality = it.criticality;
+                        if (it.description && !asset.description) asset.description = it.description;
+                        asset.tables = Array.from(new Set([...(asset.tables || []), ...(it.tables || [])]));
+                        asset.columns = [...(asset.columns || [])];
+                        (it.columns || []).forEach(c2 => {
+                            if (!asset.columns.some(x => x.table === c2.table && x.col === c2.col)) asset.columns.push(c2);
+                        });
+                    } else {
+                        asset = { ...it, id: 'as_' + generateId() };
+                        governance.assets.push(asset);
+                    }
+                    asMap[it.id] = asset.id;
                 });
-                (g.assets || []).forEach(a => { if (a.appIds) a.appIds = a.appIds.map(id => asMap[id] || id); });
-                migrateUseCasesToAssets(g);
-                ig.businessObjects.forEach(it => { const ex = g.businessObjects.find(x => x.name === it.name); if (ex) Object.assign(ex, it, { id: ex.id }); else g.businessObjects.push(it); });
-                Object.keys(ig.lineage).forEach(n => { g.lineage[n] = ig.lineage[n]; });
-                (ig.rules || []).forEach(ir => { const sig = r2 => [r2.parentTable, r2.parentCol, r2.childTable, r2.childCol, JSON.stringify(r2.cond || null), r2.expect, r2.n].join('|'); if (!(g.rules || []).some(r2 => r2.id === ir.id || sig(r2) === sig(ir))) g.rules.push(ir); });
-                const knownTs = new Set(g.qualityHistory.map(h => h.ts));
-                ig.qualityHistory.forEach(h => { if (!knownTs.has(h.ts)) g.qualityHistory.push(h); });
-                g.qualityHistory.sort((a, b) => b.ts - a.ts); if (g.qualityHistory.length > 300) g.qualityHistory.length = 300;
+                (governance.assets || []).forEach(a => {
+                    if (a.appIds) a.appIds = a.appIds.map(id => asMap[id] || id);
+                });
+                migrateUseCasesToAssets(governance);
+                ig.businessObjects.forEach(it => {
+                    const businessObject = governance.businessObjects.find(x => x.name === it.name);
+                    if (businessObject) Object.assign(businessObject, it, { id: businessObject.id });
+                    else governance.businessObjects.push(it);
+                });
+                Object.keys(ig.lineage).forEach(n => {
+                    governance.lineage[n] = ig.lineage[n];
+                });
+                (ig.rules || []).forEach(ir => {
+                    const sig = r2 =>
+                        [
+                            r2.parentTable,
+                            r2.parentCol,
+                            r2.childTable,
+                            r2.childCol,
+                            JSON.stringify(r2.cond || null),
+                            r2.expect,
+                            r2.n
+                        ].join('|');
+                    if (!(governance.rules || []).some(r2 => r2.id === ir.id || sig(r2) === sig(ir))) governance.rules.push(ir);
+                });
+                const knownTs = new Set(governance.qualityHistory.map(h => h.ts));
+                ig.qualityHistory.forEach(h => {
+                    if (!knownTs.has(h.ts)) governance.qualityHistory.push(h);
+                });
+                governance.qualityHistory.sort((a, b) => b.ts - a.ts);
+                if (governance.qualityHistory.length > 300) governance.qualityHistory.length = 300;
                 persistQualityHistory();
                 const idOf = n => Object.keys(state.tables).find(i => state.tables[i].name === n);
                 ((bundle.config || {}).relations || []).forEach(r => {
-                    const s = idOf(r.sourceTable), t = idOf(r.targetTable);
+                    const s = idOf(r.sourceTable),
+                        t = idOf(r.targetTable);
                     if (s && t) addPredefinedRelation(s, r.sourceCol, t, r.targetCol);
                 });
                 persistAppState();
-                renderTables(); updateBaseTableSelect(); populateQualTables(); renderGovernance();
+                renderTables();
+                updateBaseTableSelect();
+                populateQualTables();
+                renderGovernance();
                 if (Object.keys(state.tables).length) el('emptyStateSources').classList.add('hidden');
                 showSuccess(`Bundle importé : ${importedTables} table(s) avec données, référentiel de gouvernance fusionné.`);
-            } catch (err) { showError('Import du bundle échoué : ' + err.message); }
+            } catch (err) {
+                showError('Import du bundle échoué : ' + err.message);
+            }
             e.target.value = '';
         }
 
         function readFileAsArrayBuffer(file) {
             return new Promise((resolve, reject) => {
-                const r = new FileReader();
-                r.onload = e => resolve(e.target.result);
-                r.onerror = err => reject(err);
-                r.readAsArrayBuffer(file);
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = err => reject(err);
+                reader.readAsArrayBuffer(file);
             });
         }
 
@@ -280,10 +501,11 @@
             await duckStreamRows(table.id, limit, onRow, onProgress);
         }
 
-
         function readFileAsText(file) {
             return new Promise((resolve, reject) => {
-                const r = new FileReader(); r.onload = e => resolve(e.target.result); r.onerror = err => reject(err); r.readAsText(file);
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = err => reject(err);
+                reader.readAsText(file);
             });
         }
-

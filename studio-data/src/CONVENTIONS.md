@@ -55,6 +55,20 @@ Studio.extend('nomDeLaFonction', (base) => function (…) { …; return base.app
 - Les styles d'une couche sont dans son fichier CSS (`0Z-v14-styles.css`), préfixés (`.v14-…`), avec leur variante
   sombre (`html[data-theme="dark"] …`).
 
+## Lisibilité mesurée
+
+- **Mise en forme** : Prettier (`tools/formater.mjs`), 120 colonnes, guillemets simples, pas de virgule finale ; une
+  instruction par ligne. Lancer l'outil avant de livrer ; `--check` échoue si un fichier n'est pas formaté.
+- **Seuils de non-régression** (`tools/lisibilite-mesurer.mjs --strict`, repris dans l'onglet Lisibilité du panneau
+  Architecture) : ≤ 15 lignes de logique de plus de 160 caractères hors gabarit HTML et texte, 0 ligne à trois
+  instructions ou plus, ≤ 15 % de variables locales à nom court. On ne remonte jamais au-dessus ; on abaisse quand on
+  retouche un fichier.
+- **Noms courts** : `tools/renommer-locales.mjs` renomme d'après l'initialiseur ou l'usage (`table`, `asset`,
+  `governance`, `element`, `attributeRow`, `base`…) sans jamais créer de collision ; ce qu'il laisse demande une
+  décision humaine — la prendre au moment où l'on modifie le code, pas en masse.
+- **Gabarits HTML** : un retour à la ligne après chaque bloc (`tools/gabarits-aerer.mjs`) ; les gabarits très longs
+  sont à extraire dans une fonction `…Html()` nommée d'après ce qu'elle rend.
+
 ## Tests
 
 - Chaque évolution livre une suite dans `studio-data/tests/suites/vNNNN_sujet.mjs` (headless, autonome, `SD_FILE`).

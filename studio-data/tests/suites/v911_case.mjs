@@ -11,7 +11,7 @@ const inst = await DuckDBInstance.create(':memory:'); const conn = await inst.co
 const q = async s => (await (await conn.run(s)).getRows());
 let pass=0, fail=0; const ok=(n,c)=>{ c?pass++:fail++; console.log(`${c?'✅':'❌'} ${n}`); };
 const src = fs.readFileSync(process.env.SD_FILE||ROOT + 'StudioDataV7.html','utf8');
-ok('version 10.2.3', /V11_VERSION : '10\.2\.3'/.test(src) && src.includes("v: '10.2.3'"));
+ok('version 10.2.3', /V11_VERSION\s*:\s*'10\.2\.3'/.test(src) && src.includes("v: '10.2.3'"));
 ok('le compteur ne dérive plus de deux estimations', !src.includes("caseDupGroups: Math.max(0, Number(colRow[`c${i}_distinct`]) - Number(colRow[`c${i}_ucnt`]") && src.includes("COUNT(DISTINCT CASE WHEN ${nb} THEN UPPER(${t2}) END))::BIGINT AS x${i}"));
 
 // Colonne à forte cardinalité SANS variante de casse (identifiants), + colonne AVEC 2 vraies variantes.

@@ -28,7 +28,6 @@
  "isNumVal": "readonly",
  "isDateVal": "readonly",
  "parseFlexibleDate": "readonly",
- "d": "writable",
  "hashCode": "readonly",
  "isTransientLockError": "writable",
  "getDB": "writable",
@@ -1716,5 +1715,8 @@
  "v14ArchOpen": "writable",
  "v14ApiExport": "writable",
  "v14SelfCheckToast": "writable",
- "v14State": "readonly"
+ "v14State": "readonly",
+ "v14ReadabilityTotals": "writable",
+ "v14ReadabilityHtml": "writable",
+ "V14_READABILITY_THRESHOLDS": "readonly"
 }

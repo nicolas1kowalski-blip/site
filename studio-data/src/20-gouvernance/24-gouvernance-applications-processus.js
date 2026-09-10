@@ -1,13 +1,37 @@
         // ---- Référentiel Applications & Processus (actifs du lineage) ----
         const ASSET_KINDS = { app: ['🖥', 'Application / système'], process: ['⚙️', 'Processus métier'] };
-        function assetById(id) { return (state.governance.assets || []).find(a => a.id === id); }
-        function assetLabel(a) { return (ASSET_KINDS[a.kind] ? ASSET_KINDS[a.kind][0] : '') + ' ' + a.name; }
+        function assetById(id) {
+            return (state.governance.assets || []).find(a => a.id === id);
+        }
+        function assetLabel(a) {
+            return (ASSET_KINDS[a.kind] ? ASSET_KINDS[a.kind][0] : '') + ' ' + a.name;
+        }
         function assetUsage(a) {
             const dict = state.governance.dictionary || {};
-            const nm = String(a.name || '').trim().toLowerCase();
-            const srcs = a.kind === 'app' ? Array.from(new Set([...(a.sources || []), ...Object.keys(dict).filter(n => String(dict[n].sourceSystem || '').trim().toLowerCase() === nm)])).filter(n => tableByName(n)) : [];
-            const bos = (state.governance.businessObjects || []).filter(bo => (bo.producedBy || []).includes(a.id) || (bo.consumedBy || []).includes(a.id));
-            const procs = a.kind === 'app' ? (state.governance.assets || []).filter(x => x.kind === 'process' && (x.appIds || []).includes(a.id)) : [];
+            const text = String(a.name || '')
+                .trim()
+                .toLowerCase();
+            const srcs =
+                a.kind === 'app'
+                    ? Array.from(
+                          new Set([
+                              ...(a.sources || []),
+                              ...Object.keys(dict).filter(
+                                  n =>
+                                      String(dict[n].sourceSystem || '')
+                                          .trim()
+                                          .toLowerCase() === text
+                              )
+                          ])
+                      ).filter(n => tableByName(n))
+                    : [];
+            const bos = (state.governance.businessObjects || []).filter(
+                bo => (bo.producedBy || []).includes(a.id) || (bo.consumedBy || []).includes(a.id)
+            );
+            const procs =
+                a.kind === 'app'
+                    ? (state.governance.assets || []).filter(x => x.kind === 'process' && (x.appIds || []).includes(a.id))
+                    : [];
             return { srcs, bos, procs };
         }
         // V6 Lot 4 : la chaîne AVAL d'une application, reconstruite depuis le paramétrage amont
@@ -16,38 +40,102 @@
         function appDownstream(app) {
             if (!app || app.kind !== 'app') return { srcs: [], bos: [], consumers: [] };
             const srcs = assetUsage(app).srcs;
-            const bos = (state.governance.businessObjects || []).filter(bo => (bo.sources || []).some(s => srcs.includes(s.table) && s.role !== 'destinataire'));
+            const bos = (state.governance.businessObjects || []).filter(bo =>
+                (bo.sources || []).some(s => srcs.includes(s.table) && s.role !== 'destinataire')
+            );
             const consumers = new Set();
             bos.forEach(bo => {
-                (bo.sources || []).filter(s => s.role === 'destinataire' && tableByName(s.table)).forEach(s => consumers.add('📄 ' + s.table));
-                (bo.consumedBy || []).forEach(id => { const a2 = assetById(id); if (a2) consumers.add((a2.kind === 'process' ? '⚙️ ' : '🖥 ') + a2.name); });
-                if (bo.appId) { const a2 = assetById(bo.appId); if (a2 && a2.id !== app.id) consumers.add('🖥 ' + a2.name); }
+                (bo.sources || [])
+                    .filter(s => s.role === 'destinataire' && tableByName(s.table))
+                    .forEach(s => consumers.add('📄 ' + s.table));
+                (bo.consumedBy || []).forEach(id => {
+                    const asset = assetById(id);
+                    if (asset) consumers.add((asset.kind === 'process' ? '⚙️ ' : '🖥 ') + asset.name);
+                });
+                if (bo.appId) {
+                    const asset = assetById(bo.appId);
+                    if (asset && asset.id !== app.id) consumers.add('🖥 ' + asset.name);
+                }
             });
             return { srcs, bos, consumers: [...consumers] };
         }
         // Domaine effectif : celui saisi, sinon (processus) hérité des applications liées.
         function assetDomainEff(a) {
             if (a.domain && String(a.domain).trim()) return String(a.domain).trim();
-            if (a.kind === 'process') { const doms = Array.from(new Set((a.appIds || []).map(assetById).filter(Boolean).map(x => String(x.domain || '').trim()).filter(Boolean))); return doms.join(' · '); }
+            if (a.kind === 'process') {
+                const doms = Array.from(
+                    new Set(
+                        (a.appIds || [])
+                            .map(assetById)
+                            .filter(Boolean)
+                            .map(x => String(x.domain || '').trim())
+                            .filter(Boolean)
+                    )
+                );
+                return doms.join(' · ');
+            }
             return '';
         }
         function assetAppLink(procId, appId, on) {
-            const a = assetById(procId); if (!a || !appId) return;
-            a.appIds = a.appIds || [];
-            if (on) { if (!a.appIds.includes(appId)) a.appIds.push(appId); } else a.appIds = a.appIds.filter(x => x !== appId);
-            persistAppState(); renderGovernance();
+            const asset = assetById(procId);
+            if (!asset || !appId) return;
+            asset.appIds = asset.appIds || [];
+            if (on) {
+                if (!asset.appIds.includes(appId)) asset.appIds.push(appId);
+            } else asset.appIds = asset.appIds.filter(x => x !== appId);
+            persistAppState();
+            renderGovernance();
         }
-        function toggleAssetTable(id, name, checked) { const a = assetById(id); if (!a) return; a.tables = a.tables || []; if (checked) { if (!a.tables.includes(name)) a.tables.push(name); } else a.tables = a.tables.filter(t => t !== name); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); }
-        function populateAssetCols(id, tableName) { const t = tableByName(tableName); const s2 = el('as-col-' + id); if (s2) s2.innerHTML = (t ? t.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join(''); }
-        function addAssetCol(id) { const a = assetById(id); if (!a) return; const tbl = el('as-tbl-' + id).value, col = el('as-col-' + id).value; if (!tbl || !col) return; a.columns = a.columns || []; if (!a.columns.some(l => l.table === tbl && l.col === col)) a.columns.push({ table: tbl, col }); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); }
-        function removeAssetCol(id, idx) { const a = assetById(id); if (a && a.columns) { a.columns.splice(idx, 1); persistAppState(); lfAutoSyncAsset(id); renderGovernance(); } }
+        function toggleAssetTable(id, name, checked) {
+            const asset = assetById(id);
+            if (!asset) return;
+            asset.tables = asset.tables || [];
+            if (checked) {
+                if (!asset.tables.includes(name)) asset.tables.push(name);
+            } else asset.tables = asset.tables.filter(t => t !== name);
+            persistAppState();
+            lfAutoSyncAsset(id);
+            renderGovernance();
+        }
+        function populateAssetCols(id, tableName) {
+            const table = tableByName(tableName);
+            const element = el('as-col-' + id);
+            if (element)
+                element.innerHTML = (table ? table.headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('');
+        }
+        function addAssetCol(id) {
+            const asset = assetById(id);
+            if (!asset) return;
+            const tbl = el('as-tbl-' + id).value,
+                col = el('as-col-' + id).value;
+            if (!tbl || !col) return;
+            asset.columns = asset.columns || [];
+            if (!asset.columns.some(l => l.table === tbl && l.col === col)) asset.columns.push({ table: tbl, col });
+            persistAppState();
+            lfAutoSyncAsset(id);
+            renderGovernance();
+        }
+        function removeAssetCol(id, idx) {
+            const asset = assetById(id);
+            if (asset && asset.columns) {
+                asset.columns.splice(idx, 1);
+                persistAppState();
+                lfAutoSyncAsset(id);
+                renderGovernance();
+            }
+        }
         function renderGovAssets() {
             if (migrateAppSources() | boSyncAppsFromSources()) persistAppState();
             const assets = state.governance.assets || [];
             const names = readyTableNames();
             const srcNames = sourceTableNames();
             const apps = assets.filter(a => a.kind === 'app');
-            const doms = typeof govDomains === 'function' ? govDomains() : Array.from(new Set([...themeList(), ...assets.map(a => String(a.domain || '').trim()).filter(Boolean)])).sort();
+            const doms =
+                typeof govDomains === 'function'
+                    ? govDomains()
+                    : Array.from(
+                          new Set([...themeList(), ...assets.map(a => String(a.domain || '').trim()).filter(Boolean)])
+                      ).sort();
             let html = `<div class="bg-white border border-slate-200 rounded-xl px-4 py-3 mb-4 text-sm text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="text-[10px] uppercase font-bold text-slate-400 mr-1">Modèle</span>
                 <span class="font-bold text-slate-700">🖥 Application</span><span class="text-slate-300">contient →</span>
@@ -74,10 +162,15 @@
                 html += `<div>
                     <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-bold text-slate-700">${ic} ${lbl}s (${list.length})</h3><button onclick="addGovAsset('${kind}')" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">+ ${lbl}</button></div>
                     ${list.length ? '' : `<p class="text-xs text-slate-400 italic py-4 text-center border border-dashed border-slate-200 rounded-lg">Aucun(e) ${lbl.toLowerCase()} déclaré(e).</p>`}
-                    ${list.map(a => { const u = assetUsage(a); const nUse = u.srcs.length + u.bos.length + u.procs.length;
-                        const domEff = assetDomainEff(a);
-                        const _dom = String(a.domain || '').trim(); const _lock = typeof govLockAttr === 'function' ? govLockAttr(govCanEdit(_dom), govCanPropose(_dom)) : '';
-                        return `<div${_lock} class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">${_lock ? govLockBand(a.name, _dom) : ''}
+                    ${list
+                        .map(a => {
+                            const u = assetUsage(a);
+                            const nUse = u.srcs.length + u.bos.length + u.procs.length;
+                            const domEff = assetDomainEff(a);
+                            const _dom = String(a.domain || '').trim();
+                            const _lock =
+                                typeof govLockAttr === 'function' ? govLockAttr(govCanEdit(_dom), govCanPropose(_dom)) : '';
+                            return `<div${_lock} class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">${_lock ? govLockBand(a.name, _dom) : ''}
                         <div class="flex items-center gap-2 mb-1.5">
                             <span>${ic}</span>
                             <input type="text" value="${escapeHTML(a.name)}" onchange="updateGovAsset('${a.id}','name',this.value)" class="font-bold text-sm border border-slate-300 p-1.5 rounded flex-grow bg-white">
@@ -90,19 +183,70 @@
                             <input type="text" value="${escapeHTML(a.description || '')}" placeholder="Description…" onchange="updateGovAsset('${a.id}','description',this.value)" class="border border-slate-200 p-1.5 rounded text-xs bg-white flex-grow min-w-[140px]">${typeof propBadgeHtml === 'function' ? propBadgeHtml('asset', { assetId: a.id }, 'description') : ''}
                         </div>${typeof propActionsHtml === 'function' ? propActionsHtml('', a.id) : ''}
                         <div class="flex flex-wrap items-center gap-1.5 mb-2"><span class="text-[10px] uppercase font-bold text-indigo-600">📖 Termes du glossaire</span>${termTagsHtml('asset', { assetId: a.id })}</div>
-                        ${kind === 'app' ? `
+                        ${
+                            kind === 'app'
+                                ? `
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">📄 Sources produites <span class="text-slate-300 normal-case font-normal">— fichiers dont cette application est maître</span></div>
-                        <div class="flex flex-wrap gap-1.5 mb-2">${srcNames.length ? srcNames.map(n => { const owner = appOwnerOfSource(n); const mine = owner && owner.id === a.id; const other = owner && owner.id !== a.id;
-                            return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : (mine ? 'Rattachée à cette application' : 'Rattacher à cette application')}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`; }).join('') : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'}</div>
-                        ${(() => { const objs = appBusinessObjects(a); return objs.length ? `<div class="text-[10px] uppercase font-bold text-emerald-600 mb-1">🏛️ Objets métier alimentés <span class="text-slate-300 normal-case font-normal">— déduits des sources ci-dessus (l'application y est rattachée automatiquement)</span></div>
-                        <div class="flex flex-wrap gap-1.5 mb-2">${objs.map(bo => { const isProd = (bo.producedBy || []).includes(a.id), isCons = (bo.consumedBy || []).includes(a.id);
-                            return `<button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`; }).join('')}</div>` : ''; })()}
-                        ${(() => { const d = appDownstream(a); return (d.srcs.length && (d.bos.length || d.consumers.length)) ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>` : ''; })()}` : ''}
-                        ${kind === 'process' ? `
+                        <div class="flex flex-wrap gap-1.5 mb-2">${
+                            srcNames.length
+                                ? srcNames
+                                      .map(n => {
+                                          const owner = appOwnerOfSource(n);
+                                          const mine = owner && owner.id === a.id;
+                                          const other = owner && owner.id !== a.id;
+                                          return `<label class="text-xs border rounded px-2 py-1 ${other ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${mine ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-200 text-slate-500'}" title="${other ? 'Déjà rattachée à ' + escapeHTML(owner.name) : mine ? 'Rattachée à cette application' : 'Rattacher à cette application'}"><input type="checkbox" class="hidden" ${mine ? 'checked' : ''} ${other ? 'disabled' : ''} onchange="toggleAppSource('${a.id}','${escapeHTML(n.replace(/'/g, "\\'"))}',this.checked)">${mine ? '📄 ' : ''}${escapeHTML(n)}${other ? ' · 🖥 ' + escapeHTML(owner.name) : ''}</label>`;
+                                      })
+                                      .join('')
+                                : '<span class="text-xs text-slate-400 italic">Aucune source chargée (onglet Sources)</span>'
+                        }</div>
+                        ${(() => {
+                            const objs = appBusinessObjects(a);
+                            return objs.length
+                                ? `<div class="text-[10px] uppercase font-bold text-emerald-600 mb-1">🏛️ Objets métier alimentés <span class="text-slate-300 normal-case font-normal">— déduits des sources ci-dessus (l'application y est rattachée automatiquement)</span></div>
+                        <div class="flex flex-wrap gap-1.5 mb-2">${objs
+                            .map(bo => {
+                                const isProd = (bo.producedBy || []).includes(a.id),
+                                    isCons = (bo.consumedBy || []).includes(a.id);
+                                return `<button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 font-bold hover:bg-emerald-100" title="Ouvrir la fiche de l'objet métier">🏛️ ${escapeHTML(bo.name)}${isProd ? ' · produite par' : ''}${isCons ? ' · consommée par' : ''}</button>`;
+                            })
+                            .join('')}</div>`
+                                : '';
+                        })()}
+                        ${(() => {
+                            const d = appDownstream(a);
+                            return d.srcs.length && (d.bos.length || d.consumers.length)
+                                ? `<div class="text-[11px] text-slate-600 mb-2 bg-white border border-slate-200 rounded p-1.5"><span class="text-[10px] uppercase font-bold text-slate-400">🔗 Chaîne aval</span> <span class="text-emerald-700 font-bold">📄 ${d.srcs.map(escapeHTML).join(', ')}</span>${d.bos.length ? ' → <span class="font-bold">🏛️ ' + d.bos.map(bo => escapeHTML(bo.name)).join(', ') + '</span>' : ''}${d.consumers.length ? ' → <span class="text-slate-600">' + d.consumers.map(escapeHTML).join(', ') + '</span>' : ''}<span class="text-[9px] text-slate-300 block mt-0.5">déduit du paramétrage amont — rien à ressaisir</span></div>`
+                                : '';
+                        })()}`
+                                : ''
+                        }
+                        ${
+                            kind === 'process'
+                                ? `
                         <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                             <span class="text-[10px] uppercase font-bold text-slate-400">🖥 Applications</span>
-                            ${(a.appIds || []).map(id => { const x = assetById(id); return x ? `<span class="text-xs bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold">🖥 ${escapeHTML(x.name)}<button onclick="assetAppLink('${a.id}','${x.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>` : ''; }).join('') || '<span class="text-xs text-slate-300 italic">aucune application liée</span>'}
-                            ${apps.filter(x => !(a.appIds || []).includes(x.id)).length ? `<select id="asapp-${a.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${apps.filter(x => !(a.appIds || []).includes(x.id)).map(x => `<option value="${x.id}">${escapeHTML(x.name)}</option>`).join('')}</select><button onclick="assetAppLink('${a.id}', el('asapp-${a.id}').value, true)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600 hover:bg-slate-50">Relier</button>` : (apps.length ? '' : '<span class="text-[10px] text-slate-300">(déclarez d\'abord des applications)</span>')}
+                            ${
+                                (a.appIds || [])
+                                    .map(id => {
+                                        const x = assetById(id);
+                                        return x
+                                            ? `<span class="text-xs bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold">🖥 ${escapeHTML(x.name)}<button onclick="assetAppLink('${a.id}','${x.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`
+                                            : '';
+                                    })
+                                    .join('') || '<span class="text-xs text-slate-300 italic">aucune application liée</span>'
+                            }
+                            ${
+                                apps.filter(x => !(a.appIds || []).includes(x.id)).length
+                                    ? `<select id="asapp-${a.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${apps
+                                          .filter(x => !(a.appIds || []).includes(x.id))
+                                          .map(x => `<option value="${x.id}">${escapeHTML(x.name)}</option>`)
+                                          .join(
+                                              ''
+                                          )}</select><button onclick="assetAppLink('${a.id}', el('asapp-${a.id}').value, true)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600 hover:bg-slate-50">Relier</button>`
+                                    : apps.length
+                                      ? ''
+                                      : '<span class="text-[10px] text-slate-300">(déclarez d\'abord des applications)</span>'
+                            }
                         </div>
                         ${boAttachHtml('as', a)}
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Tables utilisées</div>
@@ -113,45 +257,111 @@
                             <select id="as-tbl-${a.id}" onchange="populateAssetCols('${a.id}',this.value)" class="border border-slate-200 p-1 rounded text-xs bg-white">${names.map(n => `<option>${escapeHTML(n)}</option>`).join('')}</select>
                             <select id="as-col-${a.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${names[0] ? (tableByName(names[0]) || { headers: [] }).headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''}</select>
                             <button onclick="addAssetCol('${a.id}')" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-medium hover:bg-slate-50">Lier colonne</button>
-                        </div>` : ''}
+                        </div>`
+                                : ''
+                        }
                         <div class="text-[11px] text-slate-500">${nUse ? [u.srcs.length ? u.srcs.length + ' source(s)' : '', u.bos.length ? u.bos.length + ' objet(s) métier' : '', u.procs.length ? u.procs.length + ' processus outillé(s)' : ''].filter(Boolean).join(' · ') : '<span class="italic text-slate-300">pas encore relié — dictionnaire (Système source), fiche objet, applications ou tables ci-dessus</span>'}</div>
-                    </div>`; }).join('')}
+                    </div>`;
+                        })
+                        .join('')}
                 </div>`;
             }
             return html + '</div>';
         }
-        function addGovAsset(kind) { (state.governance.assets = state.governance.assets || []).push({ id: 'as_' + generateId(), kind, name: kind === 'app' ? 'Nouvelle application' : 'Nouveau processus', owner: '', criticality: 'Moyenne', description: '', domain: '', appIds: [], sources: [], tables: [], columns: [], boIds: [] }); persistAppState(); renderGovernance(); }
-        function updateGovAsset(id, f, v) { const a = assetById(id); if (!a) return;
+        function addGovAsset(kind) {
+            (state.governance.assets = state.governance.assets || []).push({
+                id: 'as_' + generateId(),
+                kind,
+                name: kind === 'app' ? 'Nouvelle application' : 'Nouveau processus',
+                owner: '',
+                criticality: 'Moyenne',
+                description: '',
+                domain: '',
+                appIds: [],
+                sources: [],
+                tables: [],
+                columns: [],
+                boIds: []
+            });
+            persistAppState();
+            renderGovernance();
+        }
+        function updateGovAsset(id, f, v) {
+            const asset = assetById(id);
+            if (!asset) return;
             // Renommer une application propage le renommage à ses sources possédées (Système source du dictionnaire).
-            if (f === 'name' && a.kind === 'app') { const old = String(a.name || '').trim().toLowerCase(); const dict = state.governance.dictionary || {};
-                (a.sources || []).forEach(tn => { const d = dict[tn]; if (d && String(d.sourceSystem || '').trim().toLowerCase() === old) d.sourceSystem = v; }); }
-            a[f] = v; persistAppState();
+            if (f === 'name' && asset.kind === 'app') {
+                const old = String(asset.name || '')
+                    .trim()
+                    .toLowerCase();
+                const dict = state.governance.dictionary || {};
+                (asset.sources || []).forEach(tn => {
+                    const d = dict[tn];
+                    if (
+                        d &&
+                        String(d.sourceSystem || '')
+                            .trim()
+                            .toLowerCase() === old
+                    )
+                        d.sourceSystem = v;
+                });
+            }
+            asset[f] = v;
+            persistAppState();
         }
         // ---- V6 Lot 1 : une SOURCE (fichier chargé) appartient à UNE application (son producteur/maître). ----
         // Le rattachement explicite est la source de vérité ; on synchronise le « Système source » du
         // dictionnaire (utilisé par toute la dérivation lineage) pour rester rétro-compatible.
-        function sourceTableNames() { return Object.values(state.tables).filter(t => t.status === 'ready' && t.type !== 'designed').map(t => t.name); }
+        function sourceTableNames() {
+            return Object.values(state.tables)
+                .filter(t => t.status === 'ready' && t.type !== 'designed')
+                .map(t => t.name);
+        }
         function appOwnerOfSource(tableName) {
             const byList = (state.governance.assets || []).find(a => a.kind === 'app' && (a.sources || []).includes(tableName));
             if (byList) return byList;
-            const sys = String(((state.governance.dictionary || {})[tableName] || {}).sourceSystem || '').trim().toLowerCase();
-            return sys ? (state.governance.assets || []).find(a => a.kind === 'app' && String(a.name || '').trim().toLowerCase() === sys) || null : null;
+            const sys = String(((state.governance.dictionary || {})[tableName] || {}).sourceSystem || '')
+                .trim()
+                .toLowerCase();
+            return sys
+                ? (state.governance.assets || []).find(
+                      a =>
+                          a.kind === 'app' &&
+                          String(a.name || '')
+                              .trim()
+                              .toLowerCase() === sys
+                  ) || null
+                : null;
         }
         function toggleAppSource(appId, tableName, on) {
-            const a = assetById(appId); if (!a) return;
-            const dict = state.governance.dictionary = state.governance.dictionary || {};
+            const asset = assetById(appId);
+            if (!asset) return;
+            const dict = (state.governance.dictionary = state.governance.dictionary || {});
             dict[tableName] = dict[tableName] || { columns: {} };
             if (on) {
                 // une source a un seul propriétaire : on la retire des autres applications
-                (state.governance.assets || []).forEach(x => { if (x.kind === 'app' && x.id !== appId && x.sources) x.sources = x.sources.filter(n => n !== tableName); });
-                a.sources = a.sources || []; if (!a.sources.includes(tableName)) a.sources.push(tableName);
-                dict[tableName].sourceSystem = a.name;
+                (state.governance.assets || []).forEach(x => {
+                    if (x.kind === 'app' && x.id !== appId && x.sources) x.sources = x.sources.filter(n => n !== tableName);
+                });
+                asset.sources = asset.sources || [];
+                if (!asset.sources.includes(tableName)) asset.sources.push(tableName);
+                dict[tableName].sourceSystem = asset.name;
             } else {
-                a.sources = (a.sources || []).filter(n => n !== tableName);
-                if (String(dict[tableName].sourceSystem || '').trim().toLowerCase() === String(a.name || '').trim().toLowerCase()) dict[tableName].sourceSystem = '';
+                asset.sources = (asset.sources || []).filter(n => n !== tableName);
+                if (
+                    String(dict[tableName].sourceSystem || '')
+                        .trim()
+                        .toLowerCase() ===
+                    String(asset.name || '')
+                        .trim()
+                        .toLowerCase()
+                )
+                    dict[tableName].sourceSystem = '';
             }
             boSyncAppsFromSources(); // l'appli devient « Produite par » des objets qui utilisent cette source
-            persistAppState(); lfSyncFromData({ silent: true }); renderGovernance();
+            persistAppState();
+            lfSyncFromData({ silent: true });
+            renderGovernance();
         }
         // ---- V6.10 : réconciliation BIDIRECTIONNELLE objet métier ↔ applications ----
         // C'est l'application qui est maître du fichier technique. Donc dès qu'une SOURCE entre dans un
@@ -162,26 +372,52 @@
         function boSyncAppsFromSources() {
             let changed = false;
             (state.governance.businessObjects || []).forEach(bo => {
-                const wantProd = [], wantCons = [];
+                const wantProd = [],
+                    wantCons = [];
                 (bo.sources || []).forEach(s => {
                     if (!s || !s.table) return;
-                    const own = appOwnerOfSource(s.table); if (!own) return;
+                    const own = appOwnerOfSource(s.table);
+                    if (!own) return;
                     const bucket = s.role === 'destinataire' ? wantCons : wantProd;
                     if (!bucket.includes(own.id)) bucket.push(own.id);
                 });
-                bo.producedBy = bo.producedBy || []; bo.consumedBy = bo.consumedBy || [];
-                const prevP = bo.producedByAuto || [], prevC = bo.consumedByAuto || [];
+                bo.producedBy = bo.producedBy || [];
+                bo.consumedBy = bo.consumedBy || [];
+                const prevP = bo.producedByAuto || [],
+                    prevC = bo.consumedByAuto || [];
                 // 1. ajouts déduits
-                wantProd.forEach(id => { if (!bo.producedBy.includes(id)) { bo.producedBy.push(id); changed = true; } });
-                wantCons.forEach(id => { if (!bo.consumedBy.includes(id)) { bo.consumedBy.push(id); changed = true; } });
+                wantProd.forEach(id => {
+                    if (!bo.producedBy.includes(id)) {
+                        bo.producedBy.push(id);
+                        changed = true;
+                    }
+                });
+                wantCons.forEach(id => {
+                    if (!bo.consumedBy.includes(id)) {
+                        bo.consumedBy.push(id);
+                        changed = true;
+                    }
+                });
                 // 2. retraits des SEULS liens déduits devenus injustifiés (les manuels restent)
                 const keepP = bo.producedBy.filter(id => wantProd.includes(id) || !prevP.includes(id));
-                if (keepP.length !== bo.producedBy.length) { bo.producedBy = keepP; changed = true; }
+                if (keepP.length !== bo.producedBy.length) {
+                    bo.producedBy = keepP;
+                    changed = true;
+                }
                 const keepC = bo.consumedBy.filter(id => wantCons.includes(id) || !prevC.includes(id));
-                if (keepC.length !== bo.consumedBy.length) { bo.consumedBy = keepC; changed = true; }
+                if (keepC.length !== bo.consumedBy.length) {
+                    bo.consumedBy = keepC;
+                    changed = true;
+                }
                 // 3. mémorise ce qui est déduit (pour pouvoir le retirer plus tard)
-                if (JSON.stringify(wantProd) !== JSON.stringify(prevP)) { bo.producedByAuto = wantProd; changed = true; }
-                if (JSON.stringify(wantCons) !== JSON.stringify(prevC)) { bo.consumedByAuto = wantCons; changed = true; }
+                if (JSON.stringify(wantProd) !== JSON.stringify(prevP)) {
+                    bo.producedByAuto = wantProd;
+                    changed = true;
+                }
+                if (JSON.stringify(wantCons) !== JSON.stringify(prevC)) {
+                    bo.consumedByAuto = wantCons;
+                    changed = true;
+                }
             });
             return changed;
         }
@@ -193,66 +429,149 @@
         }
         // Migration : reconstruit a.sources à partir du « Système source » (nom) déclaré au dictionnaire.
         function migrateAppSources() {
-            const dict = state.governance.dictionary || {}; let changed = false;
-            (state.governance.assets || []).filter(a => a.kind === 'app').forEach(a => {
-                if (!Array.isArray(a.sources)) { a.sources = []; changed = true; }
-                Object.keys(dict).forEach(tn => {
-                    if (!tableByName(tn)) return;
-                    if (String(dict[tn].sourceSystem || '').trim().toLowerCase() === String(a.name || '').trim().toLowerCase() && !a.sources.includes(tn)) { a.sources.push(tn); changed = true; }
+            const dict = state.governance.dictionary || {};
+            let changed = false;
+            (state.governance.assets || [])
+                .filter(a => a.kind === 'app')
+                .forEach(a => {
+                    if (!Array.isArray(a.sources)) {
+                        a.sources = [];
+                        changed = true;
+                    }
+                    Object.keys(dict).forEach(tn => {
+                        if (!tableByName(tn)) return;
+                        if (
+                            String(dict[tn].sourceSystem || '')
+                                .trim()
+                                .toLowerCase() ===
+                                String(a.name || '')
+                                    .trim()
+                                    .toLowerCase() &&
+                            !a.sources.includes(tn)
+                        ) {
+                            a.sources.push(tn);
+                            changed = true;
+                        }
+                    });
                 });
-            });
             return changed;
         }
         function removeGovAsset(id) {
             state.governance.assets = (state.governance.assets || []).filter(a => a.id !== id);
-            (state.governance.businessObjects || []).forEach(bo => { bo.producedBy = (bo.producedBy || []).filter(x => x !== id); bo.consumedBy = (bo.consumedBy || []).filter(x => x !== id); });
-            (state.governance.useCases || []).forEach(uc => { uc.assetIds = (uc.assetIds || []).filter(x => x !== id); });
-            (state.governance.assets || []).forEach(a => { if (a.appIds) a.appIds = a.appIds.filter(x => x !== id); });
-            persistAppState(); renderGovernance();
+            (state.governance.businessObjects || []).forEach(bo => {
+                bo.producedBy = (bo.producedBy || []).filter(x => x !== id);
+                bo.consumedBy = (bo.consumedBy || []).filter(x => x !== id);
+            });
+            (state.governance.useCases || []).forEach(uc => {
+                uc.assetIds = (uc.assetIds || []).filter(x => x !== id);
+            });
+            (state.governance.assets || []).forEach(a => {
+                if (a.appIds) a.appIds = a.appIds.filter(x => x !== id);
+            });
+            persistAppState();
+            renderGovernance();
         }
         // Rattachement générique d'actifs (objets métier : produite par / consommée par ; cas d'usage).
         function assetAttachHtml(entKind, entId, field, ids, title) {
             const assets = state.governance.assets || [];
-            const chips = (ids || []).map(id => { const a = assetById(id); if (!a) return '';
-                return `<span class="text-xs bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold">${escapeHTML(assetLabel(a))}<button onclick="toggleAssetLink('${entKind}','${entId}','${field}','${a.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+            const chips = (ids || [])
+                .map(id => {
+                    const asset = assetById(id);
+                    if (!asset) return '';
+                    return `<span class="text-xs bg-slate-100 border border-slate-300 text-slate-700 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold">${escapeHTML(assetLabel(asset))}<button onclick="toggleAssetLink('${entKind}','${entId}','${field}','${asset.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`;
+                })
+                .join('');
             const remain = assets.filter(a => !(ids || []).includes(a.id));
             const selId = `asatt-${entKind}-${entId}-${field}`;
             return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5">
                 <span class="text-[10px] uppercase font-bold text-slate-400 w-28">${title}</span>
                 ${chips || '<span class="text-xs text-slate-300 italic">—</span>'}
-                ${remain.length ? `<select id="${selId}" class="border border-slate-200 p-1 rounded text-xs bg-white">${remain.map(a => `<option value="${a.id}">${escapeHTML(assetLabel(a))}</option>`).join('')}</select><button onclick="toggleAssetLink('${entKind}','${entId}','${field}', el('${selId}').value, true)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600 hover:bg-slate-50">Relier</button>` : (assets.length ? '' : `<span class="text-[10px] text-slate-300">(déclarez-les dans Gouvernance ▸ Applis & processus)</span>`)}
+                ${remain.length ? `<select id="${selId}" class="border border-slate-200 p-1 rounded text-xs bg-white">${remain.map(a => `<option value="${a.id}">${escapeHTML(assetLabel(a))}</option>`).join('')}</select><button onclick="toggleAssetLink('${entKind}','${entId}','${field}', el('${selId}').value, true)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-600 hover:bg-slate-50">Relier</button>` : assets.length ? '' : `<span class="text-[10px] text-slate-300">(déclarez-les dans Gouvernance ▸ Applis & processus)</span>`}
             </div>`;
         }
         function toggleAssetLink(entKind, entId, field, assetId, on) {
-            const ent = entKind === 'bo' ? (state.governance.businessObjects || []).find(x => x.id === entId) : (state.governance.useCases || []).find(x => x.id === entId);
+            const ent =
+                entKind === 'bo'
+                    ? (state.governance.businessObjects || []).find(x => x.id === entId)
+                    : (state.governance.useCases || []).find(x => x.id === entId);
             if (!ent || !assetId) return;
             ent[field] = ent[field] || [];
-            if (on) { if (!ent[field].includes(assetId)) ent[field].push(assetId); } else ent[field] = ent[field].filter(x => x !== assetId);
-            persistAppState(); renderGovernance();
+            if (on) {
+                if (!ent[field].includes(assetId)) ent[field].push(assetId);
+            } else ent[field] = ent[field].filter(x => x !== assetId);
+            persistAppState();
+            renderGovernance();
         }
         // Rattachement d'objets métier aux périmètres / termes de glossaire / cas d'usage.
         function boAttachHtml(kind, ent) {
             const bos = state.governance.businessObjects || [];
             const ids = ent.boIds || [];
-            const chips = ids.map(id => { const bo = bos.find(b => b.id === id); if (!bo) return '';
-                return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`; }).join('');
+            const chips = ids
+                .map(id => {
+                    const bo = bos.find(b => b.id === id);
+                    if (!bo) return '';
+                    return `<span class="text-xs bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 font-bold"><button data-ro="keep" onclick="openBoFiche('${bo.id}')" class="hover:underline" title="Ouvrir la fiche de l'objet">🏛️ ${escapeHTML(bo.name)}</button><button onclick="toggleEntityBo('${kind}','${ent.id}','${bo.id}',false)" class="opacity-50 hover:opacity-100 hover:text-red-600">✕</button></span>`;
+                })
+                .join('');
             const remain = bos.filter(b => !ids.includes(b.id));
             return `<div class="flex flex-wrap items-center gap-1.5 mb-2">
                 <span class="text-[10px] uppercase font-bold text-emerald-600">🏛️ Objets métier</span>
                 ${chips || '<span class="text-xs text-slate-400 italic">aucun objet rattaché</span>'}
-                ${remain.length ? `<select id="boatt-${kind}-${ent.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${remain.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select><button onclick="toggleEntityBo('${kind}','${ent.id}', el('boatt-${kind}-${ent.id}').value, true)" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-2 py-1 rounded font-bold hover:bg-emerald-50">Rattacher</button>` : (bos.length ? '' : '<span class="text-[10px] text-slate-300">(créez des objets dans l\'onglet Objets métier)</span>')}
+                ${remain.length ? `<select id="boatt-${kind}-${ent.id}" class="border border-slate-200 p-1 rounded text-xs bg-white">${remain.map(b => `<option value="${b.id}">${escapeHTML(b.name)}</option>`).join('')}</select><button onclick="toggleEntityBo('${kind}','${ent.id}', el('boatt-${kind}-${ent.id}').value, true)" class="text-xs bg-white border border-emerald-300 text-emerald-700 px-2 py-1 rounded font-bold hover:bg-emerald-50">Rattacher</button>` : bos.length ? '' : '<span class="text-[10px] text-slate-300">(créez des objets dans l\'onglet Objets métier)</span>'}
             </div>`;
         }
         function toggleEntityBo(kind, id, boId, on) {
-            const coll = kind === 'per' ? state.governance.perimeters : (kind === 'gl' ? state.governance.glossary : (kind === 'as' ? state.governance.assets : state.governance.useCases));
-            const ent = (coll || []).find(x => x.id === id); if (!ent || !boId) return;
+            const coll =
+                kind === 'per'
+                    ? state.governance.perimeters
+                    : kind === 'gl'
+                      ? state.governance.glossary
+                      : kind === 'as'
+                        ? state.governance.assets
+                        : state.governance.useCases;
+            const ent = (coll || []).find(x => x.id === id);
+            if (!ent || !boId) return;
             ent.boIds = ent.boIds || [];
-            if (on) { if (!ent.boIds.includes(boId)) ent.boIds.push(boId); } else ent.boIds = ent.boIds.filter(x => x !== boId);
-            persistAppState(); renderGovernance();
+            if (on) {
+                if (!ent.boIds.includes(boId)) ent.boIds.push(boId);
+            } else ent.boIds = ent.boIds.filter(x => x !== boId);
+            persistAppState();
+            renderGovernance();
         }
-        function openBoFiche(boId) { govState.tab = 'objects'; govState.selectedBoId = boId; renderGovernance(); }
-        function addPerimeter() { state.governance.perimeters.push({ id: 'per_' + generateId(), name: 'Nouveau périmètre', description: '', tables: [] }); persistAppState(); renderGovernance(); }
-        function updatePerimeter(id, f, v) { const p = state.governance.perimeters.find(x => x.id === id); if (p) { p[f] = v; persistAppState(); } }
-        function removePerimeter(id) { state.governance.perimeters = state.governance.perimeters.filter(x => x.id !== id); persistAppState(); renderGovernance(); }
-        function togglePerimeterTable(id, name, checked) { const p = state.governance.perimeters.find(x => x.id === id); if (!p) return; p.tables = p.tables || []; if (checked) { if (!p.tables.includes(name)) p.tables.push(name); } else p.tables = p.tables.filter(t => t !== name); persistAppState(); renderGovernance(); }
-
+        function openBoFiche(boId) {
+            govState.tab = 'objects';
+            govState.selectedBoId = boId;
+            renderGovernance();
+        }
+        function addPerimeter() {
+            state.governance.perimeters.push({
+                id: 'per_' + generateId(),
+                name: 'Nouveau périmètre',
+                description: '',
+                tables: []
+            });
+            persistAppState();
+            renderGovernance();
+        }
+        function updatePerimeter(id, f, v) {
+            const perimeter = state.governance.perimeters.find(x => x.id === id);
+            if (perimeter) {
+                perimeter[f] = v;
+                persistAppState();
+            }
+        }
+        function removePerimeter(id) {
+            state.governance.perimeters = state.governance.perimeters.filter(x => x.id !== id);
+            persistAppState();
+            renderGovernance();
+        }
+        function togglePerimeterTable(id, name, checked) {
+            const perimeter = state.governance.perimeters.find(x => x.id === id);
+            if (!perimeter) return;
+            perimeter.tables = perimeter.tables || [];
+            if (checked) {
+                if (!perimeter.tables.includes(name)) perimeter.tables.push(name);
+            } else perimeter.tables = perimeter.tables.filter(t => t !== name);
+            persistAppState();
+            renderGovernance();
+        }

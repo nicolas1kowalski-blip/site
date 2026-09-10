@@ -9,14 +9,16 @@
 // puis tous les fichiers JS dans un seul <script>. Dès que le noyau d'architecture (10-noyau/00-studio.js)
 // est chargé, le build pose « Studio.beginModule('fichier') » devant chaque fichier JS et, en fin de script,
 // « Studio.registerModules([...]) » avec les fonctions déclarées par chaque fichier : c'est ce qui permet
-// Studio.selfCheck(), le panneau Architecture (V14) et API.md.
+// Studio.selfCheck(), le panneau Architecture (V14) et API.md. Les mesures de lisibilité (tools/lisibilite-mesurer.mjs)
+// de chaque fichier sont embarquées avec l'index des modules (onglet Lisibilité).
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
+import { measureFile } from './tools/lisibilite-mesurer.mjs';
 
 const buildDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.join(buildDir, 'src');
 const STUDIO_CORE_FILE = '10-noyau/00-studio.js';
 const MANIFEST_BY_TARGET = { v7: 'manifest.json', v11: 'manifest-v11.json', v12: 'manifest-v12.json', v13: 'manifest-v13.json', v14: 'manifest-v14.json' };
-const VERSION_PATTERN_BY_TARGET = { v7: /V11_VERSION : '([^']+)'/, v11: /const V11_VERSION = '([^']+)'/, v12: /const V12_VERSION = '([^']+)'/, v13: /const V13_VERSION = '([^']+)'/, v14: /const V14_VERSION = '([^']+)'/ };
+const VERSION_PATTERN_BY_TARGET = { v7: /V11_VERSION\s*:\s*'([^']+)'/, v11: /const V11_VERSION = '([^']+)'/, v12: /const V12_VERSION = '([^']+)'/, v13: /const V13_VERSION = '([^']+)'/, v14: /const V14_VERSION = '([^']+)'/ };
 
 const args = process.argv.slice(2);
 const checkOnly = args.includes('--check');
@@ -50,9 +52,10 @@ function assemble(manifest) {
         if (studioLoaded) script += `        Studio.beginModule('${part.file}');\n`;
         script += text;
         if (part.file === STUDIO_CORE_FILE) studioLoaded = true;
-        modules.push({ file: part.file, role: part.role || '', functions: declaredFunctions(text) });
+        const metrics = measureFile(text); delete metrics.longLines;
+        modules.push({ file: part.file, role: part.role || '', functions: declaredFunctions(text), metrics });
     }
-    if (studioLoaded) script += `        Studio.beginModule('(build)');\n        Studio.registerModules(${JSON.stringify(modules.map(m => ({ file: m.file, functions: m.functions })))});\n`;
+    if (studioLoaded) script += `        Studio.beginModule('(build)');\n        Studio.registerModules(${JSON.stringify(modules.map(m => ({ file: m.file, functions: m.functions, metrics: m.metrics })))});\n`;
     return { html: html + '    <script>\n' + script + '</script>\n</body>\n</html>\n', modules };
 }
 function detectVersion(target, html) { return (html.match(VERSION_PATTERN_BY_TARGET[target]) || [])[1] || '?'; }
