@@ -9,6 +9,13 @@ node studio-data/build.mjs --check  # vérifie que le fichier livré est à jour
 
 Règle : **on modifie les sources, jamais le fichier construit.** L'ordre d'assemblage est celui de `manifest.json`
 (les préfixes numériques des fichiers reflètent le regroupement par domaine, pas l'ordre d'assemblage).
+
+**Depuis la V14, les sources sont rangées par domaine** (`00-squelette/`, `10-noyau/`, `20-gouvernance/`,
+`30-lineage-graphes/`, `40-modele-sources/`, `50-sensibilite/`, `60-tableaux-preparation/`, `70-qualite/`,
+`80-extraction-exploration/`, puis `90-couche-v11/`, `92-couche-v12/`, `94-couche-v13/`, `96-couche-v14/`) ; les
+manifestes portent le chemin relatif de chaque fichier. Voir **ARCHITECTURE.md** (organisation, mécanisme
+d'extension `Studio.extend`, vérification), **CONVENTIONS.md** (nommage, style, tests) et **API.md** (index généré
+des modules et fonctions : `node studio-data/build.mjs --api`).
 Tout le code est en fonctions globales dans un même `<script>` : l'assemblage est une simple concaténation,
 le résultat est strictement équivalent à l'ancien fichier monolithique.
 
@@ -23,6 +30,8 @@ le résultat est strictement équivalent à l'ancien fichier monolithique.
 
 ### Noyau
 
+- `00-studio.js` — Noyau : architecture — registre des modules et des extensions (`Studio.extend`, `Studio.selfCheck`, `Studio.apiMap`)
+- `01-types.js` — Noyau : modèle de données documenté (typedefs JSDoc, aucun code exécuté)
 - `10-noyau-etat.js` — Noyau : état global de l'application
 - `11-noyau-moteur-duckdb.js` — Noyau : moteur de données DuckDB-Wasm, lecture des fichiers CSV/XLSX, auto-réparation
 - `12-modele-donnees-graphe.js` — Modèle de données : vue graphique, domaines de sources, création et suppression des liens, plein écran
@@ -102,8 +111,9 @@ le résultat est strictement équivalent à l'ancien fichier monolithique.
 1. Créer ou compléter le fichier du domaine concerné dans `src/`.
 2. Si c'est un nouveau fichier, l'ajouter dans `manifest.json` à la position voulue (les fonctions sont globales, mais les
    constantes et le code exécuté au chargement doivent précéder leurs premiers usages).
-3. Mettre à jour `APP_VERSION` et `APP_CHANGELOG` dans `1A-noyau-version-changelog.js`.
-4. `node studio-data/build.mjs`, puis lancer les tests.
+3. Mettre à jour la version et le journal de la ligne concernée (`96-couche-v14/0Z-v14-version.js` pour la V14 ; `1A-noyau-version-changelog.js` les reprend).
+4. Étendre l'existant avec `Studio.extend(nom, base => fonction, { motif })`, jamais par assignation directe.
+5. `node studio-data/tools/globales-generer.mjs`, ESLint (`node <eslint>/bin/eslint.js -c studio-data/eslint.config.js studio-data/src`), `node studio-data/build.mjs --all`, `node studio-data/tests/run.mjs`.
 
 
 ## Cible V11 (fichier séparé)
@@ -159,3 +169,19 @@ Construction : `node studio-data/build.mjs --target v12` (`--all` construit V7, 
 | `A4-v13-domaine-accueil.js` | « Mon domaine » (`v13State.domain`, masquage dans objets / applications / glossaire), accueil : mode première fois, question, Mes tâches (`v13Tasks`), Les mots du métier ; « Proposer une correction » (`v13FixOpen` → `govPropose`) ; bouton « Décrire depuis un fichier / modèle » |
 
 Construction : `node studio-data/build.mjs --target v13`.
+
+## Cible V14 (fichier séparé)
+
+`manifest-v14.json` assemble **StudioDataV14.html** : la V13 complète plus la couche technique — mêmes fonctionnalités, code maintenable et observable :
+
+| Fichier | Rôle |
+|---|---|
+| `10-noyau/00-studio.js` | (dans toutes les cibles) registre des modules et des extensions : `Studio.extend`, `Studio.extendAll`, `Studio.extensionsOf`, `Studio.selfCheck`, `Studio.apiMap` ; le build pose `Studio.beginModule` et `Studio.registerModules` |
+| `10-noyau/01-types.js` | modèle de données documenté (typedefs JSDoc) |
+| `96-couche-v14/0Z-v14-version.js` | version `V14_VERSION` et journal `V14_CHANGELOG` |
+| `96-couche-v14/0Z-v14-styles.css` | styles du panneau Architecture |
+| `96-couche-v14/B0-v14-architecture.js` | panneau « Architecture du code » : modules par domaine et couche, chaîne d'extensions par fonction, auto-contrôle, export JSON de l'API ; accès par l'aide « ? » et la palette |
+
+Outils associés : `build.mjs --api` (API.md), `tools/globales-generer.mjs` (globales pour ESLint), `tools/extensions-migrer.mjs` (migration des anciennes enveloppes, rejouable), `eslint.config.js`, `tests/run.mjs`.
+
+Construction : `node studio-data/build.mjs --target v14` (`--all` construit V7, V11, V12, V13 et V14).

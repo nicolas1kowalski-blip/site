@@ -2041,6 +2041,66 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
     </div>
 
     <script>
+        // ======================= NOYAU : ARCHITECTURE — MODULES ET EXTENSIONS =======================
+        // Tout le code est assemblé dans un seul <script> (voir build.mjs). Les fonctions sont globales
+        // et les couches (V11, V12, V13…) ENRICHISSENT des fonctions existantes au lieu de les réécrire.
+        // Ce module rend ce mécanisme explicite et observable :
+        //   • Studio.extend(nom, base => nouvelleFonction, { motif })
+        //       remplace la fonction globale « nom » par une version enrichie ; « base » est l'implémentation
+        //       précédente (à appeler pour conserver le comportement d'origine). Le registre conserve la
+        //       chaîne complète : Studio.extensionsOf('renderGovernance') → [couche V11, couche V12, …].
+        //   • Studio.beginModule(fichier)  — posé par le build avant chaque fichier source, pour savoir
+        //       quel module déclare quoi et quel module étend quoi.
+        //   • Studio.registerModules(liste) — posé par le build en fin de script : fonctions déclarées par
+        //       chaque fichier (l'index de l'API, aussi exporté dans API.md).
+        //   • Studio.selfCheck() — extensions dont la base n'existait pas, fonctions déclarées deux fois,
+        //       extensions non appliquées : ce que l'on regarde avant de livrer.
+        // Règle : une couche n'assigne jamais une fonction globale directement (« fn = function … »),
+        // elle passe par Studio.extend (voir CONVENTIONS.md ; ESLint interdit no-func-assign).
+        const Studio = (() => {
+            const globalScope = typeof window !== 'undefined' ? window : globalThis;
+            const modules = [];      // { file, layer, functions: [nom…] } — renseigné par registerModules
+            const extensions = [];   // { name, module, layer, motif, applied, base, wrapped }
+            let currentModule = '(inconnu)';
+            const LAYER_BY_FOLDER = [['90-couche-v11', 'V11'], ['92-couche-v12', 'V12'], ['94-couche-v13', 'V13'], ['96-couche-v14', 'V14']];
+            function layerOf(file) { const hit = LAYER_BY_FOLDER.find(([folder]) => String(file || '').startsWith(folder)); return hit ? hit[1] : 'noyau'; }
+            function beginModule(file) { currentModule = String(file || '(inconnu)'); }
+            function extend(name, decorate, options) {
+                const motif = options && options.motif ? String(options.motif) : '';
+                const base = globalScope[name];
+                const record = { name: String(name), module: currentModule, layer: layerOf(currentModule), motif, applied: false, base: null, wrapped: null };
+                extensions.push(record);
+                if (typeof base !== 'function') return null; // la base n'existe pas dans cette cible : extension ignorée, visible dans selfCheck()
+                if (typeof decorate !== 'function') throw new TypeError('Studio.extend(' + name + ') : le second argument doit être une fonction base => fonction');
+                const wrapped = decorate(base);
+                if (typeof wrapped !== 'function') throw new TypeError('Studio.extend(' + name + ') : la fonction de décoration doit renvoyer une fonction');
+                wrapped.__studioBase = base; wrapped.__studioName = String(name);
+                globalScope[name] = wrapped;
+                record.applied = true; record.base = base; record.wrapped = wrapped;
+                return wrapped;
+            }
+            // Étend plusieurs fonctions avec la même décoration (ex. « rafraîchir après ») — remplace les boucles window[nm] = …
+            function extendAll(names, decorate, options) { return (names || []).map(name => extend(name, decorate, options)); }
+            function extensionsOf(name) { return extensions.filter(x => x.name === name); }
+            function registerModules(list) { (list || []).forEach(m => modules.push({ file: m.file, layer: layerOf(m.file), functions: (m.functions || []).slice() })); }
+            function declarations() {
+                const byName = new Map();
+                modules.forEach(m => m.functions.forEach(fn => { if (!byName.has(fn)) byName.set(fn, []); byName.get(fn).push(m.file); }));
+                return byName;
+            }
+            function selfCheck() {
+                const byName = declarations();
+                const duplicates = []; byName.forEach((files, fn) => { if (files.length > 1) duplicates.push({ name: fn, files }); });
+                const notApplied = extensions.filter(x => !x.applied).map(x => ({ name: x.name, module: x.module }));
+                const unknownBase = extensions.filter(x => x.applied && !byName.has(x.name)).map(x => ({ name: x.name, module: x.module }));
+                return { modules: modules.length, functions: byName.size, extensions: extensions.length, applied: extensions.filter(x => x.applied).length, duplicates, notApplied, unknownBase, ok: !duplicates.length && !notApplied.length };
+            }
+            function apiMap() {
+                return modules.map(m => ({ file: m.file, layer: m.layer, functions: m.functions.map(fn => ({ name: fn, extendedBy: extensionsOf(fn).map(x => x.module) })) }));
+            }
+            return { beginModule, extend, extendAll, extensionsOf, extensions: () => extensions.slice(), modules: () => modules.slice(), registerModules, selfCheck, apiMap, layerOf, currentModule: () => currentModule };
+        })();
+        Studio.beginModule('90-couche-v11/0V-v11-version.js');
         // ======================= V11 : VERSION ET JOURNAL DE LA COUCHE ERGONOMIQUE =======================
         // Ce fichier n'est assemblé que dans StudioDataV11.html (manifest-v11.json). Il est chargé avant
         // le noyau : 1A-noyau-version-changelog.js reprend V11_VERSION et place V11_CHANGELOG en tête.
@@ -2072,6 +2132,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 '<b>Visite guidée</b> au premier lancement (réactivable), <b>aide « ? »</b> avec raccourcis clavier et lexique, états vides avec exemple chargeable.',
                 '<b>Préférences mémorisées</b> par écran (vue, filtres, densité, replis), <b>impression / PDF</b> d\'une fiche, <b>mode présentation</b> (grandes polices, menu masqué, lecture seule).'] },
         ];
+        Studio.beginModule('10-noyau/10-noyau-etat.js');
         const state = { tables: {}, relations: [], selectedCols: {}, pivotMode: {}, filters: {}, hierarchyConfig: {}, graphConfig: {} };
         state.advExtract = { from: 'table', objectId: '', baseId: '', columns: [], filters: [], dedup: { on: false, keys: [], keep: 'first' }, group: { on: false, aggs: [] }, customSql: false, joinType: 'left', limit500: false, migrated: false };
         let networkInstance = null; let currentChart = null; 
@@ -2106,6 +2167,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return head + list.map(t => `<option value="${t.id}">${escapeHTML(t.name)}</option>`).join('');
         }
 
+        Studio.beginModule('10-noyau/11-noyau-moteur-duckdb.js');
         // ==========================================
         //  MOTEUR DE DONNÉES : DUCKDB-WASM
         // ==========================================
@@ -2590,6 +2652,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             }
         }
 
+        Studio.beginModule('10-noyau/12-modele-donnees-graphe.js');
         // ==========================================
         //  RENDU DES GRAPHES : moteur SVG maison
         // ==========================================
@@ -2815,7 +2878,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // ======================= Création graphique des liens =======================
         // Mode « Tracer un lien » : clic sur une 1re table, clic sur une 2e → fenêtre qui demande
         // les attributs (pré-remplis par rapprochement de noms). Le mode reste actif pour enchaîner.
-        let mcdLinkMode = false, mcdLinkSrc = null, mcdDragSrc = null, mcdJustDropped = 0;
+        let mcdLinkMode = false, mcdLinkSrc = null, mcdDragSrc = null; const mcdJustDropped = 0; // jamais réarmé : conservé pour le garde-fou du clic résiduel
         function mcdLinkHint(html) {
             document.querySelectorAll('.mcdLinkHint').forEach(h => { h.classList.toggle('hidden', !html); h.innerHTML = html || ''; });
         }
@@ -2986,6 +3049,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             lucide.createIcons(); 
         });
 
+        Studio.beginModule('10-noyau/13-noyau-persistance-locale.js');
         // ==========================================
         //  PERSISTANCE LOCALE (IndexedDB)
         // ==========================================
@@ -3432,6 +3496,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             setTimeout(() => { try { wizMaybeAutoOpen(); } catch (e) { } }, 1200);
         });
 
+        Studio.beginModule('20-gouvernance/20-gouvernance-dictionnaire.js');
         // ==========================================
         //  GOUVERNANCE : DICTIONNAIRE / PÉRIMÈTRES / GLOSSAIRE / CAS D'USAGE / LINEAGE
         // ==========================================
@@ -3647,7 +3712,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 + (_am ? '<select onchange="govState.lineageAttrBo=this.value; renderLineageGraph()" class="border border-emerald-300 rounded-lg px-2 py-1.5 text-xs font-bold bg-emerald-50/50">' + _bos.map(b2 => '<option value="' + b2.id + '"' + (govState.lineageAttrBo === b2.id ? ' selected' : '') + '>🏛️ ' + escapeHTML(b2.name) + '</option>').join('') + '</select>'
                     + '<input type="text" value="' + escapeHTML(govState.lineageAttrQ || '') + '" oninput="govState.lineageAttrQ=this.value; attrFlowApplyFocus()" placeholder="🔍 filtrer les attributs…" class="text-[11px] border border-slate-300 rounded px-2 py-1.5 w-44 bg-white">' : '')
                 + '</div>'
-                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [k2, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer" title="Par défaut, un fichier source est intégré à l\'application qui le produit. Décochez pour afficher chaque fichier séparément."><input type="checkbox" ' + (govState.lineageFoldSrc !== false ? 'checked' : '') + ' onchange="govState.lineageFoldSrc=this.checked; renderLineageGraph()"> 📦 Sources dans l\'appli</label>' + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
+                + '<div class="flex justify-end items-center gap-2.5 mb-2 flex-wrap bg-white/90 rounded-lg px-2 py-1' + (_am ? ' hidden' : '') + '">' + ['srcs,📄 Sources,lineageSrcs', 'bos,🏛 Objets,lineageBos', 'apps,🖥 Applications,lineageApps', 'procs,⚙️ Processus,lineageProcs'].map(x => { const [, lbl2, gk] = x.split(','); return '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" ' + (govState[gk] !== false ? 'checked' : '') + ' onchange="govState.' + gk + '=this.checked; renderLineageGraph()"> ' + lbl2 + '</label>'; }).join('') + '<label class="flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer" title="Par défaut, un fichier source est intégré à l\'application qui le produit. Décochez pour afficher chaque fichier séparément."><input type="checkbox" ' + (govState.lineageFoldSrc !== false ? 'checked' : '') + ' onchange="govState.lineageFoldSrc=this.checked; renderLineageGraph()"> 📦 Sources dans l\'appli</label>' + '<label class="flex items-center gap-1 text-[11px] text-emerald-700 font-bold cursor-pointer" title="Affiche les attributs des objets métier avec leur colonne source"><input type="checkbox" ' + (govState.lineageBoDetail ? 'checked' : '') + ' onchange="govState.lineageBoDetail=this.checked; renderLineageGraph()"> 🔬 Attributs des objets</label><input list="linGotoList" placeholder="🔍 aller à…" onchange="lineageGoto(this.value); this.value=\'\'" class="text-[11px] border border-slate-300 rounded px-2 py-1 w-36 bg-white"><datalist id="linGotoList"></datalist>' + graphToolbarHtml('lineage') + '<button onclick="lineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100" title="Plein écran">⛶ Plein écran</button><button onclick="exportGraphImage(\'lineage\')" class="text-[11px] bg-white border border-slate-300 px-2.5 py-1 rounded font-bold text-slate-600 hover:bg-slate-100">📷</button></div><div id="lineageHint" class="hidden text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 mb-2"></div><div id="lineageGraphWrap" class="border border-slate-200 rounded-xl bg-slate-50/50 h-[550px]" style="background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px;"></div><p class="text-xs text-slate-400 mt-3">Bleu : fichiers sources · Cyan : API · Violet : extractions (dérivées) · Vert : objets métier. Flèches violettes : alimentation (lineage) · Traits gris pointillés : relations du modèle de données · Flèches ambre : table utilisée par un processus · <strong>👑 Vert épais : source maître → objet</strong> · Vert pointillé : contributeur · <strong>Sarcelle : objet → destinataire (diffusion)</strong> · <strong>🖥 Gris foncé : application (produit)</strong> · <strong>⚙️ Orange : processus (consomme)</strong> · 💡 <strong>Cliquez un nœud</strong> pour mettre en évidence toute sa chaîne de bout en bout (re-cliquez pour effacer).</p></div>'; renderLineageGraph(); requestAnimationFrame(() => reflowGraph('lineage')); }
             lucide.createIcons();
             govProjectValues();
             if (typeof govLockZones === 'function') govLockZones();
@@ -3729,6 +3794,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 </div></div>`;
         }
         function updateDictField(tn, f, v) { ensureDictEntry(tn)[f] = v; persistAppState(); }
+        Studio.beginModule('20-gouvernance/21-gouvernance-listes-de-valeurs.js');
         // ============ V6.27 : LISTES DE VALEURS (référentiels de codes) ============
         // Une liste de valeurs dit ce qu'un attribut a le droit de contenir. Deux façons de la définir :
         //   • en clair   : on saisit « code ; libellé ; statut » ligne à ligne ;
@@ -3928,6 +3994,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             } catch (e) { showError("Échantillonnage impossible : " + e.message); if (btn) { btn.disabled = false; } renderGovernance(); }
         }
 
+        Studio.beginModule('20-gouvernance/22-gouvernance-objets-metier.js');
         // ---- Objets métier : propriétaire global, contributeurs, sous-éléments avec propriétaires
         //      et mappings vers les colonnes physiques de plusieurs sources ----
         // Détecte les attributs présents dans plusieurs sources (même nom de colonne) et résout leur
@@ -4156,7 +4223,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     const diff = e2.sourceApp && e2.sourceApp !== globalSrc;
                     const setF = r.stId ? `boFacetElSetField('${bo.id}','${r.stId}','${e2.id}'` : `boElSetField('${bo.id}','${e2.id}'`;
                     const tgl = aid => (r.stId ? `boFacetElToggleUsedBy('${bo.id}','${r.stId}','${e2.id}'` : `boElToggleUsedBy('${bo.id}','${e2.id}'`) + `,'${aid}',this.checked)`;
-                    const m = r.stId ? (e2.col ? { table: r.facet, col: e2.col } : null) : (e2.mappings || [])[0];
+                    
                     return `<tr class="hover:bg-slate-50 ${used.length ? '' : 'bg-amber-50/30'}">
                         <td class="p-2 font-bold text-slate-700 whitespace-nowrap">${escapeHTML(e2.name)}${r.facet ? `<br><span class="text-[9px] text-emerald-600 font-bold">◆ ${escapeHTML(r.facet)}</span>` : ''}${used.length ? '' : ' <span title="Aucun usage déclaré">😴</span>'}</td>
                         <td class="p-2"><select onchange="${setF},'sourceApp',this.value)" class="w-full border p-1 rounded text-[11px] ${diff ? 'border-amber-400 bg-amber-50 font-bold' : 'border-slate-200 bg-white'}"><option value="">${globalA ? '= objet (' + escapeHTML(globalA.name) + ')' : '(celle de l\'objet)'}</option>${apps.map(a => `<option value="${a.id}" ${e2.sourceApp === a.id ? 'selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>${diff ? '<span class="text-[9px] font-black text-amber-600">≠ objet</span>' : ''}</td>
@@ -5072,7 +5139,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const multi = boMultiNorm(e2.multi) || '';
             const cnt = boAttrMulti(bo, { fold: false, members: [{ el: e2, stId }], idx: [], stId });
             const hasMap = boAttrHasMap(r);
-            const glossOpts = cur => '<option value="">— Aucun terme —</option>' + (state.governance.glossary || []).map(g => `<option value="${g.id}" ${g.id === cur ? 'selected' : ''}>${escapeHTML(g.term)}</option>`).join('');
             const sensOpts = cur => '<option value="">—</option>' + SENSITIVITY_OPTS.map(o => `<option ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
             // provenance
             let prov = '';
@@ -5609,7 +5675,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const hasCtxRules = ((bo.contextRules || {}).rules || []).length > 0;
             const masters = (bo.sources || []).filter(s2 => s2.role === 'maitre');
             const dictEntry = t ? (g.dictionary[t.name] || {}) : {};
-            const definedElems = (bo.elements || []).filter(e2 => e2.owner || (bo.globalOwner)).length;
             const checks = [
                 ['Propriétaire global nommé', !!bo.globalOwner],
                 ['Définition renseignée', !!(bo.definition || '').trim()],
@@ -5781,7 +5846,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         function bizRuleRelChanged() {
             const rel = state.relations.find(r => r.id === el('bizRuleRel').value);
-            const dir = el('bizRuleDir'); const condCol = el('bizRuleCondCol');
+            const dir = el('bizRuleDir');
             if (!rel) { if (dir) dir.innerHTML = ''; return; }
             const sN = state.tables[rel.sourceTable].name, tN = state.tables[rel.targetTable].name;
             dir.innerHTML = `<option value="s">parent = ${escapeHTML(sN)}, enfants = ${escapeHTML(tN)}</option><option value="t">parent = ${escapeHTML(tN)}, enfants = ${escapeHTML(sN)}</option>`;
@@ -6220,6 +6285,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function updateBoApp(boId, appId) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (!bo) return; bo.appId = appId || ''; persistAppState(); lfSyncFromData({ silent: true }); renderGovernance(); }
         function removeBoSource(boId, tableName) { const bo = state.governance.businessObjects.find(x => x.id === boId); if (bo) { bo.sources = (bo.sources || []).filter(s => s.table !== tableName); boSyncAppsFromSources(); persistAppState(); lfSyncFromData({ silent: true }); renderGovernance(); } }
 
+        Studio.beginModule('20-gouvernance/23-gouvernance-perimetres.js');
         // ---- Périmètres métier ----
         function renderGovPerimeters() {
             const names = readyTableNames();
@@ -6240,6 +6306,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
             return html + '</div>';
         }
+        Studio.beginModule('20-gouvernance/24-gouvernance-applications-processus.js');
         // ---- Référentiel Applications & Processus (actifs du lineage) ----
         const ASSET_KINDS = { app: ['🖥', 'Application / système'], process: ['⚙️', 'Processus métier'] };
         function assetById(id) { return (state.governance.assets || []).find(a => a.id === id); }
@@ -6498,6 +6565,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function removePerimeter(id) { state.governance.perimeters = state.governance.perimeters.filter(x => x.id !== id); persistAppState(); renderGovernance(); }
         function togglePerimeterTable(id, name, checked) { const p = state.governance.perimeters.find(x => x.id === id); if (!p) return; p.tables = p.tables || []; if (checked) { if (!p.tables.includes(name)) p.tables.push(name); } else p.tables = p.tables.filter(t => t !== name); persistAppState(); renderGovernance(); }
 
+        Studio.beginModule('20-gouvernance/25-gouvernance-glossaire.js');
         // ---- Glossaire métier ----
         // ======================= V9.3 : TERMES EN TAGS, AJOUT DIRECT =======================
         // Un seul composant pour tout le monde : les termes d'un attribut, d'un objet, d'une
@@ -6735,6 +6803,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function addGlossaryLink(id) { const g = state.governance.glossary.find(x => x.id === id); if (!g) return; const tbl = el('gl-tbl-' + id).value, col = el('gl-col-' + id).value; if (!tbl || !col) return; g.links = g.links || []; if (!g.links.some(l => l.table === tbl && l.col === col)) g.links.push({ table: tbl, col }); persistAppState(); renderGovernance(); }
         function removeGlossaryLink(id, idx) { const g = state.governance.glossary.find(x => x.id === id); if (g && g.links) { g.links.splice(idx, 1); persistAppState(); renderGovernance(); } }
 
+        Studio.beginModule('20-gouvernance/26-gouvernance-analyse-impact.js');
         // ---- Analyse d'impact (l'écran Cas d'usage a fusionné dans Applis & processus en v3.7) ----
         function populateImpactCols() { const tn = el('impactTable').value; const t = tableByName(tn); el('impactCol').innerHTML = '<option value="">Toute la table</option>' + (t ? t.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('') : ''); }
 
@@ -6818,6 +6887,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             catch (e) { console.error('Lineage render error', e); wrap.innerHTML = graphUnavailableHtml('Le lineage n\'a pas pu être affiché : ' + escapeHTML(e.message)); return; }
             observeGraphResize('lineage');
         }
+        Studio.beginModule('30-lineage-graphes/30-lineage-par-attribut.js');
         // ================= 🔬 LINEAGE PAR ATTRIBUT : vue en COLONNES =================
         // Applications sources -> colonnes techniques -> attributs de l'objet -> consommateurs.
         // Lisible même avec beaucoup d'applications : clic = isoler une chaîne, recherche = filtrer.
@@ -7106,6 +7176,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         document.addEventListener('fullscreenchange', () => { if (el('lineageFsWrap')) setTimeout(() => reflowGraph('lineage'), 150); });
 
+        Studio.beginModule('20-gouvernance/27-gouvernance-historique.js');
         // ---- Historique qualité ----
         function recordQualityHistory(stats, col) {
             const cols = Object.values(stats.columns);
@@ -7125,6 +7196,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             persistQualityHistory();
             persistAppState();
         }
+        Studio.beginModule('20-gouvernance/28-gouvernance-surveillance-sources.js');
         // ======================= SURVEILLANCE DES SOURCES (amont) =======================
         // 4 outils autour d'une source rafraîchie depuis une application amont :
         //  1) Moniteur : fraîcheur/SLA + dérive de schéma et de volumétrie entre instantanés.
@@ -7290,6 +7362,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         function swSet(f, v) { swState[f] = v; if (f === 'tool' || f === 'recA' || f === 'recB' || f === 'deltaSrc') renderGovernance(); }
 
+        Studio.beginModule('30-lineage-graphes/31-lineage-carte-des-flux.js');
         // ==========================================================================================
         //  LINEAGE AUGMENTÉ & RÉCONCILIATION (V5) — carte du flux A→B→C… + contrôles de fraîcheur et
         //  de distorsion. Le lineage dit OÙ regarder ; la réconciliation dit SI c'est cohérent.
@@ -7658,8 +7731,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
 
         function lfBuilderHtml(nodes, edges, tables) {
-            const tOpts = tables.map(t => `<option value="${escapeHTML(t.name)}">${escapeHTML(t.name)}</option>`).join('');
-            const nOpts = nodes.map(n => `<option value="${n.id}">${escapeHTML(n.name)}</option>`).join('');
             let h = `<details class="mt-4 bg-slate-50 border border-slate-200 rounded-xl" ${(nodes.length && !lfEditNodeId && !lfEditEdgeId) ? '' : 'open'}>
                 <summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600">⚙️ Construire le flux — systèmes &amp; liens ${nodes.length ? `(${nodes.length} nœud(s), ${edges.length} lien(s))` : ''}</summary>
                 <div class="p-3 space-y-4">`;
@@ -7764,7 +7835,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             edges.forEach(e => { if (idset.has(e.source) && idset.has(e.target) && e.source !== e.target) { adj[e.source].push(e.target); indeg[e.target]++; } });
             const depth = {}; nodes.forEach(n => depth[n.id] = 0);
             let starts = nodes.filter(n => !indeg[n.id]).map(n => n.id); if (!starts.length) starts = nodes.map(n => n.id);
-            const queue = [...starts]; let guard = 0, cap = nodes.length * nodes.length + 20;
+            const queue = [...starts]; let guard = 0; const cap = nodes.length * nodes.length + 20;
             while (queue.length && guard++ < cap) { const u = queue.shift(); adj[u].forEach(v => { if (depth[v] < depth[u] + 1) { depth[v] = depth[u] + 1; queue.push(v); } }); }
             const colOf = {}; nodes.forEach(n => colOf[n.id] = Math.max(depth[n.id], (LF_ROLE[lfNodeRole(n)] || {}).col || 0));
             const maxCol = Math.max(0, ...nodes.map(n => colOf[n.id]));
@@ -8493,7 +8564,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         async function lfReconDownstream(nodeId, btn) {
             const runnable = lfDownstreamFeeds(nodeId).filter(lfRunnableEdge);
             if (!runnable.length) return showError('Aucune alimentation contrôlable en aval de ce nœud (chaque lien doit avoir source + cible chargées, une clé et au moins un attribut).');
-            const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = '… contrôle en cours'; }
+            if (btn) { btn.disabled = true; btn.textContent = '… contrôle en cours'; }
             let okN = 0, koN = 0, totalDany = 0; const fails = [];
             for (const e of runnable) { const r = await lfReconEdge(e.id, null, { silent: true }); if (r && r.ok) { okN++; totalDany += r.dany; } else { koN++; fails.push((r && r.name) || e.id); } }
             renderGovernance();
@@ -8701,6 +8772,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 <div class="border border-slate-200 rounded-lg overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2.5">Date</th><th class="p-2.5">Table</th><th class="p-2.5">Colonne</th><th class="p-2.5 text-right">Lignes</th><th class="p-2.5 text-right">Complétude moy.</th><th class="p-2.5 text-right">Densité</th><th class="p-2.5 text-right">Doublons</th></tr></thead><tbody class="divide-y divide-slate-100">${rows}</tbody></table></div>`;
         }
 
+        Studio.beginModule('20-gouvernance/29-gouvernance-import-en-masse.js');
         // ---- Sauvegarde & partage (bundle fichier) ----
 
         // ======================= V3 : IMPORT EN MASSE DE LA GOUVERNANCE =======================
@@ -9011,6 +9083,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             finally { if (btn) btn.disabled = false; }
         }
 
+        Studio.beginModule('10-noyau/14-noyau-centre-de-sauvegarde.js');
         // ======================= V3 UX : CENTRE DE SAUVEGARDE (sorti du menu Gouvernance) =======================
         // Accessible en permanence depuis l'en-tête — panneau latéral : l'écran courant reste visible.
         function openBackupCenter() {
@@ -9300,6 +9373,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             });
         }
 
+        Studio.beginModule('10-noyau/15-noyau-navigation-theme.js');
         // ---- Navigation à 2 niveaux : 4 phases (parcours) -> sous-onglets ----
         // Les numéros d'étape (step-N) restent inchangés : on ne fait que regrouper et réordonner
         // visuellement. switchTab(num) reste l'unité atomique « afficher l'étape N ».
@@ -9379,7 +9453,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             '⚖️': '<path d="M12 4.2v16"/><path d="M6 7.6h12"/><path d="M6.2 7.7 3.4 14h5.6z"/><path d="M17.8 7.7 15 14h5.6z"/><path d="M8 20.4h8"/>',
             '🔎': '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20.4 20.4"/>',
             '📊': '<path d="M4.6 20.2v-7.4"/><path d="M9.9 20.2V6.6"/><path d="M15.2 20.2v-5.4"/><path d="M20.5 20.2V9.4"/>',
-            '📈': '<path d="M4 16.4 9.4 11l3.4 3.4 6.8-6.8"/><path d="M15.6 7.6h4v4"/>',
             '🕸️': '<circle cx="12" cy="5.4" r="2.3"/><circle cx="5.2" cy="17.4" r="2.3"/><circle cx="18.8" cy="17.4" r="2.3"/><path d="M10.7 7.5 6.5 15.3M13.3 7.5l4.2 7.8M7.5 17.4h9"/>',
             '✅': '<circle cx="12" cy="12" r="8.4"/><path d="M8.3 12.2l2.6 2.6 4.9-5.2"/>',
             '📏': '<rect x="2.8" y="8.2" width="18.4" height="7.6" rx="1.8"/><path d="M7 8.4v2.8M11 8.4v4.2M15 8.4v2.8M19 8.4v4.2"/>',
@@ -9618,6 +9691,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             // les graphes dessinent des couleurs en dur : on les redessine après bascule
             setTimeout(() => { if (el('lfCanvas')) lfDrawGraph(); if (el('advGCanvas')) advDrawGraph(); if (el('tdgCanvas')) tdDrawGraph(); }, 30);
         }
+        Studio.beginModule('10-noyau/16-noyau-ux-drawer-contexte.js');
         // ======================= V3 UX : helpers visuels, barre de contexte, drawer =======================
         const meterColor = pct => pct >= 95 ? 'var(--ok)' : (pct >= 80 ? 'var(--warn)' : 'var(--bad)');
         // Affichage d'un taux SANS arrondi trompeur : 15 valeurs sur 234 279 lignes ne doit
@@ -9810,6 +9884,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if(num===9) renderGovernance();
         }
 
+        Studio.beginModule('40-modele-sources/40-tables-concues.js');
         // ======================= Tables conçues (couche de consolidation) =======================
         // Une table conçue est une RECETTE : sources contributrices + mapping de colonnes (avec
         // renommage métier) + colonnes calculées + clé primaire. Elle est matérialisée dans DuckDB
@@ -10703,6 +10778,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             </div>`;
         }
 
+        Studio.beginModule('40-modele-sources/41-analyse-couverture.js');
         // ======================= Analyse de couverture (3 tables) =======================
         // Population (table 1 filtrée) × dimension (attribut 1-1) × présence d'éléments liés
         // (table N filtrée) → histogramme empilé « avec / sans » + tableau + exports.
@@ -10850,7 +10926,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                     }
                     return `COALESCE(NULLIF(TRIM(CAST(${alias}.${sqlIdent(col)} AS VARCHAR)), ''), '(vide)')`;
                 };
-                let joins = [];
+                const joins = [];
                 const dimSel = rd ? (joins.push(dimJoin(rd, 'd')), dimExpr('d', dC)) : dimExpr('b', dC);
                 let dim2Sel = null;
                 if (dim2On) {
@@ -10975,6 +11051,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             finally { if (btn) btn.disabled = false; }
         }
 
+        Studio.beginModule('10-noyau/17-noyau-cockpit.js');
         // ======================= 🏠 Cockpit =======================
         async function renderCockpit() {
             const c = el('cockpitContent'); if (!c) return;
@@ -11044,6 +11121,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             } catch (e) { const cv = el('ckVol'); if (cv) cv.textContent = 'Volumétrie indisponible : ' + e.message; }
         }
 
+        Studio.beginModule('50-sensibilite/50-sensibilite-rgpd-detection.js');
         // ======================= 🛡 Détection RGPD / données personnelles =======================
         const PII_HEADER_RX = /nom|prenom|prénom|name|email|mail|tel|phone|portable|mobile|adresse|address|rue|iban|bic|naissance|birth|secu|nir|salaire|salary|cni|passeport/i;
         async function scanPII(btn) {
@@ -11087,6 +11165,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             finally { if (btn) { btn.disabled = false; btn.textContent = '🛡 Détecter les données personnelles (RGPD)'; } }
         }
 
+        Studio.beginModule('20-gouvernance/2A-gouvernance-dossier-export.js');
         // ======================= 📄 Dossier de gouvernance exportable =======================
         function exportGovernanceReport() {
             const g = state.governance, e2 = escapeHTML;
@@ -11132,7 +11211,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             try {
                 const text = await readFileAsText(file);
                 const conf = JSON.parse(text);
-                if(conf.apiSources) { for(let api of conf.apiSources) { el('apiTableName').value = api.name; el('apiUrl').value = api.url; el('apiDataPath').value = api.path||''; await connectApi(); } }
+                if(conf.apiSources) { for(const api of conf.apiSources) { el('apiTableName').value = api.name; el('apiUrl').value = api.url; el('apiDataPath').value = api.path||''; await connectApi(); } }
                 const getId = n => Object.keys(state.tables).find(i => state.tables[i].name === n);
                 state.relations = []; conf.relations?.forEach(r => { const s=getId(r.sourceTable), t=getId(r.targetTable); if(s&&t) state.relations.push({id:'rel_'+generateId(), sourceTable:s, sourceCol:r.sourceCol, targetTable:t, targetCol:r.targetCol}); });
                 conf.selections && Object.keys(conf.selections).forEach(n=>{ const id=getId(n); if(id) state.selectedCols[id]=conf.selections[n]; });
@@ -11178,6 +11257,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             } catch (err) { t.status = 'error'; t.errorMsg = err.message; renderTables(); }
         }
 
+        Studio.beginModule('40-modele-sources/42-sources-fusion-fichiers.js');
         // ======================= Fusion de fichiers (une source = plusieurs fichiers) =======================
         let _mergePicked = [];
         function openMergeModal() { _mergePicked = []; renderMergeModal(); const m = el('mergeModal'); m.classList.remove('hidden'); m.classList.add('flex'); }
@@ -11232,6 +11312,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             } catch (err) { state.tables[tId].status = 'error'; state.tables[tId].errorMsg = err.message; renderTables(); }
         }
 
+        Studio.beginModule('40-modele-sources/43-modele-deduction-liens.js');
         // ======================= Déduction automatique des liens (modèle de données) =======================
         // Deux signaux : (1) proximité des NOMS de colonnes (clés étrangères probables), utilisée pour
         // pré-sélectionner les paires candidates, puis (2) RECOUVREMENT RÉEL des valeurs mesuré en SQL
@@ -11439,7 +11520,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         async function handleFilesAdded(e) {
             hideError(); const files = e.target.files; if(!files.length) return;
             el('emptyStateSources').classList.add('hidden');
-            for (let f of Array.from(files)) { await loadNewSourceFromFile(f); }
+            for (const f of Array.from(files)) { await loadNewSourceFromFile(f); }
             e.target.value='';
         }
         // Charge un fichier comme NOUVELLE source (factorisé, réutilisé par l'import de dossier surveillé).
@@ -11513,6 +11594,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function fixSourceEncoding(tId, enc) { updateTableConfig(tId, 'enc', enc); }
         function dismissEncHint(tId) { if (state.tables[tId]) { state.tables[tId]._encHide = true; renderTables(); } }
 
+        Studio.beginModule('20-gouvernance/2B-gouvernance-catalogue.js');
         // ======================= E10 (V2) : CATALOGUE DE DONNÉES RECHERCHABLE =======================
         // Refonte « consommateur de données » (maquette catalogue.html) : recherche d'abord,
         // facettes vivantes, cartes de confiance, fiche en panneau latéral. 100 % local,
@@ -11711,7 +11793,6 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const list = catSort(ix.filter(e2 => catMatch(e2)));
             catRes = list;
             const techHidden = ix.filter(e2 => !catLayerOk(e2) && catMatch(e2, null, true)).length;
-            const techAll = ix.filter(e2 => CAT_TECH_TYPES.includes(e2.type)).length;
             const layerBar = `<div class="seg-ux" role="group" aria-label="Couche du catalogue" title="Métier : objets, applications, processus, termes… · Tout : ajoute les tables, colonnes et vues issues des sources">
                 <button data-ro="keep" id="catLayerMetier" class="${catState.layer !== 'tout' ? 'on' : ''}" onclick="catSet('layer','metier')">🏛 Métier</button>
                 <button data-ro="keep" id="catLayerTout" class="${catState.layer === 'tout' ? 'on' : ''}" onclick="catSet('layer','tout')">▦ Tout</button></div>`;
@@ -11732,7 +11813,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return rows ? `<div class="border-b border-slate-100 pb-3 mb-3"><div class="text-[10px] uppercase font-black tracking-wide text-slate-400 mb-1.5">${f.title}</div>${rows}</div>` : '';
             }).join('');
             const exs = [tablesN[0] ? tablesN[0].name.replace(/\..*$/, '') : 'client', 'données personnelles', (g.businessObjects[0] || {}).name, Object.values(g.dictionary).map(d => d.owner).find(Boolean)].filter(Boolean).slice(0, 4);
-            let html = `
+            const html = `
             <div class="cat-hero">
                 <h2 class="text-lg font-black flex items-center gap-2 m-0">🔎 Catalogue de données</h2>
                 <p class="text-[12px] text-slate-300 mt-0.5 mb-3">Trouvez la donnée dont vous avez besoin, vérifiez si vous pouvez lui faire confiance, comprenez comment l'utiliser.</p>
@@ -12020,6 +12101,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (t) { const sel2 = el('baseTableSelect'); if (sel2) { sel2.value = t.id; try { handleBaseTableChange(); } catch (er) {} } }
         }
 
+        Studio.beginModule('20-gouvernance/2C-gouvernance-personnes-validation.js');
         // ======================= V10 : PERSONNES, RÔLES & VALIDATION DES PROPOSITIONS =======================
         // Mono-poste : on choisit « qui on est » dans l'en-tête (profil actif, déclaratif) ; les
         // rôles et les décisions s'appliquent aux données réellement saisies. Une personne a un ou plusieurs couples (domaine métier, rôle).
@@ -12177,8 +12259,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             return ps.map(p => `<div class="prop-badge" title="Proposé le ${new Date(p.at).toLocaleString('fr-FR')}"><span class="who">⏳ ${escapeHTML(govPersonName(p.by))} propose :</span> <span class="val">${propFmt(p.after)}</span>${propCanDecide(p) ? `<span class="acts"><button data-ro="keep" onclick="propAccept('${p.id}')" class="ok" title="Valider et appliquer">✓ Valider</button><button data-ro="keep" onclick="propReject('${p.id}')" class="ko" title="Refuser">✕</button></span>` : ((curUser() || {}).id === p.by ? `<span class="acts"><button data-ro="keep" onclick="propWithdraw('${p.id}')" class="ko" title="Retirer ma proposition">retirer</button></span>` : '')}</div>`).join('');
         }
         // ---- Interception des écritures : un contributeur PROPOSE au lieu d'écrire ----
-        const _w_boAttrWrite = boAttrWrite;
-        boAttrWrite = function (boId, stId, elId, f, v) {
+        Studio.extend('boAttrWrite', (_w_boAttrWrite) => function (boId, stId, elId, f, v) {
             const bo = (state.governance.businessObjects || []).find(x => x.id === boId);
             const dom = boDomainOf(bo);
             if (!_govBypass && bo && govFeatureOn() && !govCanEditBo(bo)) {
@@ -12188,9 +12269,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return govPropose({ kind: 'attr', domain: dom, target: { boId, stId: stId || '', elId }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + (r ? r.el.name : elId) + ' » (' + bo.name + ')', before, after: v });
             }
             return _w_boAttrWrite(boId, stId, elId, f, v);
-        };
-        const _w_updateBusinessObject = updateBusinessObject;
-        updateBusinessObject = function (id, f, v) {
+        });
+        Studio.extend('updateBusinessObject', (_w_updateBusinessObject) => function (id, f, v) {
             const bo = (state.governance.businessObjects || []).find(x => x.id === id); const dom = boDomainOf(bo);
             if (!_govBypass && bo && govFeatureOn() && !govCanEditBo(bo)) {
                 if (!govCanProposeBo(bo)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
@@ -12202,9 +12282,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const r2 = _w_updateBusinessObject(id, f, v);
             if (f === 'globalOwner' && bo) { govLinkOwner(bo); persistAppState(); }
             return r2;
-        };
-        const _w_updateGlossaryTerm = updateGlossaryTerm;
-        updateGlossaryTerm = function (id, f, v) {
+        });
+        Studio.extend('updateGlossaryTerm', (_w_updateGlossaryTerm) => function (id, f, v) {
             const t2 = (state.governance.glossary || []).find(x => x.id === id); const dom = t2 ? String(t2.domain || '').trim() : '';
             if (!_govBypass && t2 && govFeatureOn() && !govCanEdit(dom)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
@@ -12213,19 +12292,17 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return govPropose({ kind: 'term', domain: dom, target: { termId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' du terme « ' + t2.term + ' »', before: t2[f] || '', after: v });
             }
             return _w_updateGlossaryTerm(id, f, v);
-        };
+        });
         // V10.2 — le domaine d'une SOURCE (thème de la table) est réservé au propriétaire, comme tout domaine.
-        const _w_updateTableTheme = updateTableTheme;
-        updateTableTheme = function (tId, v) {
+        Studio.extend('updateTableTheme', (_w_updateTableTheme) => function (tId, v) {
             const t = state.tables[tId]; const dom = t ? String(t.theme || '').trim() : '';
             if (!_govBypass && t && govFeatureOn() && !govCanEdit(dom)) {
                 if (dom === String(v || '').trim()) return;
                 return govGuard(dom, 'Le domaine métier d\'une source');
             }
             return _w_updateTableTheme(tId, v);
-        };
-        const _w_updateGovAsset = updateGovAsset;
-        updateGovAsset = function (id, f, v) {
+        });
+        Studio.extend('updateGovAsset', (_w_updateGovAsset) => function (id, f, v) {
             const a = assetById(id); const dom = a ? String(a.domain || '').trim() : '';
             if (!_govBypass && a && govFeatureOn() && !govCanEdit(dom)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur ce domaine.');
@@ -12235,12 +12312,11 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return govPropose({ kind: 'asset', domain: dom, target: { assetId: id }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de « ' + a.name + ' »', before, after, raw: v });
             }
             return _w_updateGovAsset(id, f, v);
-        };
+        });
         function termCtxDomain(tk, ctx) { if (tk === 'asset') { const a = assetById(ctx.assetId); return a ? String(a.domain || '').trim() : ''; } const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return boDomainOf(bo); }
         function termCtxCanEdit(tk, ctx) { if (tk === 'asset') return govCanEdit(termCtxDomain(tk, ctx)); const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return bo ? govCanEditBo(bo) : govCanEdit(''); }
         function termCtxCanPropose(tk, ctx) { if (tk === 'asset') return govCanPropose(termCtxDomain(tk, ctx)); const bo = (state.governance.businessObjects || []).find(x => x.id === ctx.boId); return bo ? govCanProposeBo(bo) : govCanPropose(''); }
-        const _w_termTagAdd = termTagAdd;
-        termTagAdd = function (kind, ctx, name) {
+        Studio.extend('termTagAdd', (_w_termTagAdd) => function (kind, ctx, name) {
             name = String(name || '').trim(); if (!name) return;
             const dom = termCtxDomain(kind, ctx);
             if (!_govBypass && govFeatureOn() && !termCtxCanEdit(kind, ctx)) {
@@ -12249,23 +12325,22 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return govPropose({ kind: 'termlink', domain: dom, target: { tk: kind, ctx }, field: 'add', label: 'Poser le terme « ' + (t2 ? t2.term : name) + ' »' + (t2 ? '' : ' (nouveau)') + ' sur ' + govTermCtxLabel(kind, ctx), before: '', after: name });
             }
             return _w_termTagAdd(kind, ctx, name);
-        };
-        const _w_termTagRemove = termTagRemove;
-        termTagRemove = function (kind, ctx, termId) {
+        });
+        Studio.extend('termTagRemove', (_w_termTagRemove) => function (kind, ctx, termId) {
             const dom = termCtxDomain(kind, ctx);
             if (!_govBypass && govFeatureOn() && !termCtxCanEdit(kind, ctx)) {
                 if (!termCtxCanPropose(kind, ctx)) return showError('Lecture seule sur ce domaine.');
                 return govPropose({ kind: 'termlink', domain: dom, target: { tk: kind, ctx }, field: 'remove', label: 'Retirer le terme « ' + termNameOf(termId) + ' » de ' + govTermCtxLabel(kind, ctx), before: termNameOf(termId), after: termId });
             }
             return _w_termTagRemove(kind, ctx, termId);
-        };
+        });
         function govTermCtxLabel(kind, ctx) { const g = state.governance; if (kind === 'asset') { const a = assetById(ctx.assetId); return a ? a.name : '?'; } const bo = (g.businessObjects || []).find(x => x.id === ctx.boId); if (!bo) return '?'; if (kind === 'bo') return 'l\'objet « ' + bo.name + ' »'; const r = (boAllAttrRows(bo) || []).find(x => x.el.id === ctx.elId); return '« ' + (r ? r.el.name : '?') + ' » (' + bo.name + ')'; }
         // ---- V10.2 : STRUCTURE d'un objet proposée par un contributeur ----
         // Principe « exécuter, comparer, annuler, proposer » : l'opération s'exécute réellement sur une copie
         // de travail (elle peut lire l'écran), on calcule ce qui a changé sur l'objet, on remet l'objet
         // dans son état d'avant et on enregistre la différence comme proposition. À la validation, la
         // différence est réappliquée sur l'objet. Rien n'est jamais écrasé sans l'accord du propriétaire.
-        const BO_KEY_LABELS = { sources: 'sources', tables: 'tables', columns: 'colonnes', appIds: 'applications', elements: 'attributs', structure: 'facettes', sources: 'sources', references: 'références', hierarchies: 'hiérarchies', contextRules: 'règles de contexte', bizRules: 'règles métier', producedBy: 'produit par', consumedBy: 'consommé par', name: 'nom', status: 'statut', definition: 'définition', contributors: 'contributeurs', usedBy: 'utilisé par', history: 'historique' };
+        const BO_KEY_LABELS = { sources: 'sources', tables: 'tables', columns: 'colonnes', appIds: 'applications', elements: 'attributs', structure: 'facettes', references: 'références', hierarchies: 'hiérarchies', contextRules: 'règles de contexte', bizRules: 'règles métier', producedBy: 'produit par', consumedBy: 'consommé par', name: 'nom', status: 'statut', definition: 'définition', contributors: 'contributeurs', usedBy: 'utilisé par', history: 'historique' };
         function govValNames(v) { if (!Array.isArray(v)) return null; return v.map(x => (x && typeof x === 'object') ? (x.name || x.table || x.term || x.label || x.id || '') : (typeof assetById === 'function' && assetById(x) ? assetById(x).name : String(x))).filter(Boolean); }
         function govDescribeVal(v) { if (v == null || v === '') return 'vide'; if (Array.isArray(v)) return v.length + ' élément(s)'; if (typeof v === 'object') return 'renseigné'; return String(v); }
         function govDescribeChange(before, after) {
@@ -12311,8 +12386,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         function govPatchToDeltas(snap, patch) { Object.keys(patch).forEach(k => { if (Array.isArray(patch[k]) || Array.isArray(snap[k])) patch[k] = govDelta(snap[k], patch[k]); }); return patch; }
         function govApplyPatch(obj, patch) { Object.keys(patch || {}).forEach(k => { const v = patch[k]; if (v === null) delete obj[k]; else if (v && v.__delta) obj[k] = govApplyDelta(obj[k], v); else obj[k] = JSON.parse(JSON.stringify(v)); }); }
         function govWrapBoAction(nm, what, boIdIndex, onlyIf) {
-            const orig = window[nm]; if (typeof orig !== 'function') return;
-            window[nm] = function () {
+            Studio.extend(nm, (orig) => function () {
                 const args = Array.prototype.slice.call(arguments); const boId = args[boIdIndex || 0];
                 const list = state.governance.businessObjects || []; const bo = list.find(x => x.id === boId);
                 if (_govBypass || !govFeatureOn() || !bo || govCanEditBo(bo) || (onlyIf && !onlyIf(args))) return orig.apply(this, arguments);
@@ -12333,7 +12407,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 const after = del ? 'objet supprimé' : Object.keys(patch).map(k => (BO_KEY_LABELS[k] || k) + ' : ' + govDescribeChange(snap[k], patch[k])).join(' ; ');
                 govPropose({ kind: 'action', domain: dom, target: { boId, fn: nm, sig: del ? 'del' : JSON.stringify(patch) }, field: nm, label: what + ' — objet « ' + snap.name + ' »', before, after, patch, del });
                 return r;
-            };
+            }, { motif: 'proposition soumise à validation au lieu d\'une modification directe (' + what + ')' });
         }
         function propApplyAction(p) {
             if (p.target.assetId) { const a2 = assetById(p.target.assetId); if (!a2) return; if (Array.isArray(p.args) && _govAssetOrig[p.target.fn]) { _govAssetOrig[p.target.fn].apply(null, p.args); return; } govApplyPatch(a2, p.patch); persistAppState(); return; }
@@ -12354,8 +12428,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         // Même mécanisme pour la structure d'une APPLICATION / d'un PROCESSUS (sources, colonnes, applications liées).
         const _govAssetOrig = {};
         function govWrapAssetAction(nm, what, idIndex) {
-            const orig = window[nm]; if (typeof orig !== 'function') return; _govAssetOrig[nm] = orig;
-            window[nm] = function () {
+            Studio.extend(nm, (orig) => { _govAssetOrig[nm] = orig; return function () {
                 const args = Array.prototype.slice.call(arguments); const id = args[idIndex || 0];
                 const list = state.governance.assets || []; const a2 = list.find(x => x.id === id); const dom = a2 ? String(a2.domain || '').trim() : '';
                 if (_govBypass || !govFeatureOn() || !a2 || govCanEdit(dom)) return orig.apply(this, arguments);
@@ -12373,7 +12446,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 // à la validation : on rejoue l'opération (mêmes effets de bord), sauf si elle lit l'écran (patch)
                 govPropose({ kind: 'action', domain: dom, target: { assetId: id, fn: nm, sig: JSON.stringify(patch) }, field: nm, label: what + ' — « ' + snap.name + ' »', before, after, patch, args: nm === 'addAssetCol' ? null : args });
                 return r;
-            };
+            }; }, { motif: 'proposition soumise à validation au lieu d\'une modification directe (' + what + ')' });
         }
         [['toggleAppSource', 'Modifier les sources de l\'application'], ['toggleAssetTable', 'Modifier les tables'], ['addAssetCol', 'Ajouter une colonne'], ['removeAssetCol', 'Retirer une colonne'], ['assetAppLink', 'Modifier les applications du processus']].forEach(([nm, what]) => govWrapAssetAction(nm, what, 0));
         // Propositions de structure en attente sur un objet (affichées dans sa fiche).
@@ -12383,8 +12456,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         // Dictionnaire par table technique : le domaine d'une source est son « thème ».
         function tableDomainOf(tn) { const t = tableByName(tn); return t ? String(t.theme || '').trim() : ''; }
-        const _w_updateDictColField = updateDictColField;
-        updateDictColField = function (tn, col, f, v) {
+        Studio.extend('updateDictColField', (_w_updateDictColField) => function (tn, col, f, v) {
             const dom = tableDomainOf(tn);
             if (!_govBypass && govFeatureOn() && !govCanEdit(dom) && ['definition', 'examples', 'sensitivity', 'term', 'technicalType'].includes(f)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
@@ -12393,9 +12465,8 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return govPropose({ kind: 'dictcol', domain: dom, target: { tn, col }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de la colonne ' + tn + '.' + col, before: f === 'term' ? termNameOf(cur) : cur, after: f === 'term' ? termNameOf(v) : v, raw: v });
             }
             return _w_updateDictColField(tn, col, f, v);
-        };
-        const _w_updateDictField = updateDictField;
-        updateDictField = function (tn, f, v) {
+        });
+        Studio.extend('updateDictField', (_w_updateDictField) => function (tn, f, v) {
             const dom = tableDomainOf(tn);
             if (!_govBypass && govFeatureOn() && !govCanEdit(dom) && ['description', 'owner', 'steward', 'sensitivity', 'sourceSystem', 'status'].includes(f)) {
                 if (!govCanPropose(dom)) return showError('Lecture seule sur le domaine' + (dom ? ' « ' + dom + ' »' : '') + '.');
@@ -12404,7 +12475,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return govPropose({ kind: 'dict', domain: dom, target: { tn }, field: f, label: (PROP_FIELD_LABELS[f] || f) + ' de la source ' + tn, before: cur, after: v });
             }
             return _w_updateDictField(tn, f, v);
-        };
+        });
         // ---- Sélecteur « Vous êtes » (en-tête) ----
         function renderUserSwitch() {
             const box = el('v7UserSwitch'); if (!box) return;
@@ -12458,9 +12529,9 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             if (!govFeatureOn()) return emptyStateHtml('✅', 'Aucun circuit de validation', 'Déclarez des personnes et leurs rôles par domaine : les contributeurs proposeront, les propriétaires valideront ici.', 'Personnes & rôles', "openGovTab('people')");
             const mine = p => !u || govRoleIn(p.domain) === 'owner' || govRoleIn(p.domain) === 'admin';
             const byMe = p => u && p.by === u.id;
-            let pend = all.filter(p => p.status === 'pending');
+            const pend = all.filter(p => p.status === 'pending');
             const view = govState.reviewView || 'todo';
-            let list = view === 'byme' ? pend.filter(byMe) : (govState.reviewMine ? pend.filter(mine) : pend);
+            const list = view === 'byme' ? pend.filter(byMe) : (govState.reviewMine ? pend.filter(mine) : pend);
             const done = all.filter(p => p.status !== 'pending').sort((a, b) => (b.decidedAt || '').localeCompare(a.decidedAt || ''));
             const groups = new Map();
             list.forEach(p => { const k = propGroupKey(p); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); });
@@ -12505,6 +12576,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         function govLockedHint() { return '<div class="hint">🔒 réservé au propriétaire</div>'; }
         function govDomainSelectHtml(cur, onch, id, locked) { const doms = govDomains(); return `<select ${id ? 'id="' + id + '"' : ''} ${locked ? 'disabled' : ''} onchange="${onch}" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white ${locked ? 'opacity-60 cursor-not-allowed' : ''}" title="${locked ? 'Réservé au propriétaire du domaine' : 'Domaine métier — détermine qui valide'}"><option value="">— domaine —</option>${doms.map(d => `<option ${d === cur ? 'selected' : ''}>${escapeHTML(d)}</option>`).join('')}${cur && !doms.includes(cur) ? `<option selected>${escapeHTML(cur)}</option>` : ''}</select>`; }
+        Studio.beginModule('40-modele-sources/44-rapprochement-inter-sources.js');
         // ======================= E5 (V2) : RAPPROCHEMENT INTER-SOURCES (RECORD LINKAGE) =======================
         const LK_METHODS = { exact: 'Égalité (normalisée)', jw: 'Similarité Jaro-Winkler', lev: 'Similarité Levenshtein' };
         let lkPairs = null; // { id, rows:[{ra, rb, s, da, db, st}] } — st: auto | review | ok | ko
@@ -12654,6 +12726,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             c.innerHTML = html;
         }
 
+        Studio.beginModule('50-sensibilite/51-sensibilite-anonymisation.js');
         // ======================= E6 (V2) : CLASSIFICATION DE SENSIBILITÉ & ANONYMISATION =======================
         const PV_LEVELS = { public: ['🟢', 'Public'], interne: ['🔵', 'Interne'], confidentiel: ['🟠', 'Confidentiel'], personnel: ['🔴', 'Données personnelles'] };
         const PV_ACTIONS = { none: 'aucune (en clair)', mask: 'masquage (1er caractère + •••)', pseudo: 'pseudonymisation (jeton stable salé)', generalize: 'généralisation (tranches / année)', drop: 'suppression de la colonne' };
@@ -12747,6 +12820,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 </tr>`).join('')}</tbody></table></div>`;
         }
 
+        Studio.beginModule('40-modele-sources/45-modele-analyse-impact.js');
         // ======================= E9 (V2) : ANALYSE D'IMPACT SUR LE MODÈLE =======================
         // Depuis une table (et éventuellement une colonne) : tous les objets AVAL qui en dépendent.
         function modelImpact(tn, col) {
@@ -12809,6 +12883,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 : '<p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">Aucun objet technique ne dépend de ' + escapeHTML(tn) + (cn ? '.' + escapeHTML(cn) : '') + ' — modification sans risque connu.</p>'}</div>`;
         }
 
+        Studio.beginModule('60-tableaux-preparation/60-tableaux-de-bord.js');
         // ======================= E4 (V2) : TABLEAUX DE BORD COMPOSABLES & SAUVEGARDABLES =======================
         const DB_KINDS = { bar: '📊 Barres', line: '📈 Courbe', pie: '🥧 Camembert', table: '▦ Tableau', kpi: '#️⃣ Indicateur' };
         const DB_AGGS = { count: 'Nombre de lignes', countd: 'Valeurs distinctes de…', sum: 'Somme de…', avg: 'Moyenne de…', min: 'Min de…', max: 'Max de…' };
@@ -12922,7 +12997,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 return;
             }
             const allCols = [...new Set(tables.flatMap(t => t.headers))];
-            let html = `<div class="flex items-center gap-2 mb-3 flex-wrap">
+            const html = `<div class="flex items-center gap-2 mb-3 flex-wrap">
                 <button onclick="dbClose()" class="text-xs bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg font-bold text-slate-600">← Tableaux</button>
                 <input type="text" value="${escapeHTML(d.name)}" onchange="dbSet('${d.id}','name',this.value)" class="font-bold text-base border border-slate-300 p-1.5 rounded-lg w-72">
                 <button onclick="dbAddTile('${d.id}')" class="bg-sky-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">+ Tuile</button>
@@ -12967,6 +13042,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             dbRunAll(d.id);
         }
 
+        Studio.beginModule('60-tableaux-preparation/61-kpi-alertes-rapport.js');
         // ======================= E12 (V2) : KPI, SEUILS, ALERTES & RAPPORT GLOBAL =======================
         // Seuils déclarés sur les tuiles « Indicateur » (⚠ alerte / ⛔ critique, sens ≥ ou ≤) +
         // seuil de score qualité global. Évaluation à la demande, 100 % locale, rapport HTML autonome.
@@ -13044,6 +13120,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = `RAPPORT_STUDIO_DATA_${new Date().toISOString().slice(0, 10)}.html`; document.body.appendChild(a2); a2.click(); a2.remove();
         }
 
+        Studio.beginModule('60-tableaux-preparation/62-preparation-recettes.js');
         // ======================= E3 (V2) : RECETTES DE TRANSFORMATION REPRODUCTIBLES =======================
         const RC_STEPS = { filter: '▼ Filtrer', clean: '🧼 Nettoyer', normalize: '📐 Normaliser (format)', std: '☎️ Standardiser (tél/email)', enrich: '🌍 Enrichir (référentiel)', calc: '🧮 Colonne calculée', dedup: '♊ Dédoublonner', rename: '✏️ Renommer', drop: '🗑 Supprimer colonnes' };
         // E8 : référentiels EMBARQUÉS (fonctionnement hors ligne).
@@ -13307,6 +13384,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }, true);
         document.addEventListener('focusout', e => { if (e.target === _cbSel) cbReset(true); }, true);
 
+        Studio.beginModule('10-noyau/18-noyau-mode-consultation.js');
         /* ==================== MODE CONSULTATION DE LA GOUVERNANCE ====================
            Beaucoup de gens ouvrent la gouvernance pour LIRE : comprendre ce qui a été défini,
            relire des définitions, préparer un avis. Aujourd'hui chaque champ de saisie les invite
@@ -13386,6 +13464,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             }
         }
 
+        Studio.beginModule('10-noyau/19-noyau-guide-assistant.js');
         /* ==================== GUIDE PAS À PAS SUR L'ÉCRAN RÉEL ====================
            Première version de l'assistant : un formulaire dans une fenêtre, qui refaisait les
            écrans en plus simple. Verdict de l'utilisateur : inutile — et il avait raison, car en
@@ -13599,14 +13678,16 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             wizOpen('menu'); return true;
         }
 
+        Studio.beginModule('10-noyau/1A-noyau-version-changelog.js');
         // ======================= VERSIONNAGE DE L'APPLICATION =======================
         // Convention : MAJEUR.MINEUR.CORRECTIF — le mineur augmente à chaque évolution
         // fonctionnelle, le majeur pour les refontes d'ampleur, le correctif pour les corrections.
         // La cible V11 (fichier séparé, voir manifest-v11.json) fournit sa propre version et ses entrées de journal.
-        const APP_VERSION = (typeof V13_VERSION !== 'undefined') ? V13_VERSION : ((typeof V12_VERSION !== 'undefined') ? V12_VERSION : ((typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.3'));
+        const APP_VERSION = (typeof V14_VERSION !== 'undefined') ? V14_VERSION : ((typeof V13_VERSION !== 'undefined') ? V13_VERSION : ((typeof V12_VERSION !== 'undefined') ? V12_VERSION : ((typeof V11_VERSION !== 'undefined') ? V11_VERSION : '10.2.3')))
         // V9.2.1 : le titre de l'onglet suit la version, plus jamais un numéro figé (« V5 »).
         try { document.title = 'Studio Data ' + APP_VERSION; } catch (e) {}
         const APP_CHANGELOG = [
+            ...((typeof V14_CHANGELOG !== 'undefined') ? V14_CHANGELOG : []),
             ...((typeof V13_CHANGELOG !== 'undefined') ? V13_CHANGELOG : []),
             ...((typeof V12_CHANGELOG !== 'undefined') ? V12_CHANGELOG : []),
             ...((typeof V11_CHANGELOG !== 'undefined') ? V11_CHANGELOG : []),
@@ -14230,6 +14311,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
         }
         (function () { const b2 = el('appVersionBadge'); if (b2) b2.textContent = 'v' + appVersionShort(); })();
 
+        Studio.beginModule('70-qualite/70-series-temporelles.js');
         /* ================= SÉRIES TEMPORELLES (V7.4) =================
            Le reste de l'application repose sur « une ligne = une entité ». Sur une série
            temporelle ce postulat tombe : une ligne est une OBSERVATION, l'entité est la
@@ -14628,6 +14710,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
         }
         function qrDup(id) { const r = qrRules().find(x => x.id === id); if (!r) return; const c = JSON.parse(JSON.stringify(r)); c.id = 'qr_' + generateId(); c.name = r.name + ' (copie)'; delete c.last; qrRules().push(c); persistAppState(); renderQualityRules(); }
         function qrDel(id) { state.governance.qualityRules = qrRules().filter(x => x.id !== id); persistAppState(); renderQualityRules(); }
+        Studio.beginModule('70-qualite/71-qualite-regles-score.js');
         // ======================= E1/E2 (V2) : RÈGLES DE QUALITÉ DÉCLARATIVES & SCORE =======================
         // ---- V6.9 : compilateur d'EXPRESSION typée pour la règle « Cohérence (expression) » ----
         // Les sources sont chargées en TEXTE : comparer « [DATE_FIN] >= [DATE_DEBUT] » brut donnait une
@@ -14682,7 +14765,7 @@ FROM s JOIN m1 ON m1.sid = s.sid AND m1.bk = s.bk JOIN m2 ON m2.sid = s.sid AND 
         function qrExprSql(formula) {
             const src = String(formula || '').trim(); if (!src) return null;
             const compileAtom = a => {
-                let s = a.trim(); if (!s) return null;
+                const s = a.trim(); if (!s) return null;
                 // parenthèses englobantes : on compile l'intérieur
                 if (s[0] === '(' && s[s.length - 1] === ')') {
                     let d = 0, wraps = true;
@@ -15193,13 +15276,12 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         }
         // Toute règle affiche ce qu'elle mesure, sous ses réglages : une règle qu'on ne
         // comprend pas est une règle qu'on ne corrige pas.
-        const _qrParamsHtmlRaw = qrParamsHtml;
-        qrParamsHtml = function (r) {
+        Studio.extend('qrParamsHtml', (_qrParamsHtmlRaw) => function (r) {
             const base = _qrParamsHtmlRaw(r);
             const e = qrExplain(r); if (!e) return base;
             return `${base}<details class="mt-1"><summary class="text-[10px] text-slate-400 cursor-pointer select-none">Comment ce contrôle mesure l'erreur</summary>
                 <div class="mt-1 p-2 rounded-lg bg-slate-50 border border-slate-200">${qrExplainHtml(r)}</div></details>`;
-        };
+        });
         function renderQualityRules() {
             const c = el('qrContent'); if (!c) return;
             const rules = qrRules();
@@ -15282,6 +15364,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     return `<tr class="border-t border-slate-100"><td class="p-1.5 font-bold">${escapeHTML(tn)}</td><td class="p-1.5 text-right">${a2 == null ? '—' : a2}</td><td class="p-1.5 text-right">${b2 == null ? '—' : b2}</td><td class="p-1.5 text-right font-black ${d == null ? '' : (d >= 0 ? 'text-emerald-600' : 'text-red-600')}">${d == null ? '—' : (d > 0 ? '+' : '') + d}</td></tr>`; }).join('')}</tbody></table>`;
         }
 
+        Studio.beginModule('40-modele-sources/46-sources-connecteurs.js');
         // ======================= E11 (V2) : CONNECTEURS API / JSON / PARQUET / GOOGLE SHEETS =======================
         // Import par URL avec DIFFÉRENTIEL (ajouts / suppressions / modifications) avant mise à jour.
         // Confidentialité : l'URL et l'éventuelle clé d'API restent sur cette machine (IndexedDB local),
@@ -15422,6 +15505,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             </div>`;
         }
 
+        Studio.beginModule('40-modele-sources/47-sources-livraison-zip.js');
         // ======================= Livraison ZIP (sans dépendance : DecompressionStream natif) =======================
         state.zipMappings = state.zipMappings || {};   // { dossier: { mode:'folder'|'files', dest:'domaine'|'', files:{ nomFichier: 'domaine'|'' } } }
         let _zipDelivery = null;                        // { name, buf, entries:[{name, folder, base, ...}] }
@@ -15535,6 +15619,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             finally { if (btn) btn.disabled = false; }
         }
 
+        Studio.beginModule('40-modele-sources/48-sources-mises-a-jour.js');
         // ======================= Mises à jour des sources =======================
         // Trois modes : (1) manuel — re-sélection d'un fichier pour une source existante ;
         // (2) dossier surveillé — l'appli relit les fichiers d'un répertoire et met à jour les sources
@@ -16026,6 +16111,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 w.innerHTML = emptyDesigned ? '🧱 Aucune table conçue pour l\'instant — créez-en une dans l\'onglet <strong>Tables</strong> ; son modèle apparaîtra ici, séparé de celui des sources.' : '';
             });
         }
+        Studio.beginModule('30-lineage-graphes/32-graphes-moteur-svg.js');
         // ======================= Moteur SVG universel (unique moteur de graphes) =======================
         // Petit moteur maison exposant l'API dont les écrans ont besoin (data/render/changeData/
         // layout/fitView/findById/getNodes/getEdges/updateItem/addItem/on/zoom/downloadFullImage).
@@ -16201,7 +16287,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 });
                 S._nEls = nEls; S._eByN = byN;
                 const pt = ev => { const r = svg.getBoundingClientRect(); return { x: (ev.clientX - r.left - S.tx) / S.k, y: (ev.clientY - r.top - S.ty) / S.k }; };
-                let mode = null, dragId = null, last = null, moved = 0, sg = null, clicks = {};
+                let mode = null, dragId = null, last = null, moved = 0, sg = null; const clicks = {};
                 svg.addEventListener('mousedown', ev => { const ng = ev.target.closest('.usvgn');
                     if (ng) { mode = 'node'; dragId = ng.getAttribute('data-id'); sg = pt(ev); moved = 0; } else { mode = 'pan'; last = { x: ev.clientX, y: ev.clientY }; }
                     ev.preventDefault(); });
@@ -16263,6 +16349,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             };
             return api;
         }
+        Studio.beginModule('40-modele-sources/49-modele-rendu-svg.js');
         // ======================= Rendu SVG maison du Modèle de données =======================
         // Aucune dépendance externe : on dessine des cartes (rect + textes) et des liens (path) en SVG.
         // Positions calculées par computeDomainPositions (couloirs par domaine, sans collision). Le
@@ -16285,7 +16372,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const pk = new Set(design ? (design.key || []) : []);
                 const fmts = design ? (design.formats || {}) : {};
                 const fkAttrs = new Set(design ? (design.fks || []).map(f => f.attr) : []);
-                let cols = schemaMode ? t.headers.slice() : [...t.headers].sort((a, b) => ((pk.has(b) || ks.has(b)) ? 1 : 0) - ((pk.has(a) || ks.has(a)) ? 1 : 0));
+                const cols = schemaMode ? t.headers.slice() : [...t.headers].sort((a, b) => ((pk.has(b) || ks.has(b)) ? 1 : 0) - ((pk.has(a) || ks.has(a)) ? 1 : 0));
                 const lineOf = h => (pk.has(h) ? '🔑 ' : (fkAttrs.has(h) ? '🔐 ' : (ks.has(h) ? '🔗 ' : '· '))) + h + (fmts[h] ? '  〈' + tdFormatLabel(fmts[h]) + '〉' : '');
                 const max = schemaMode ? 40 : 7;
                 const rows = cols.slice(0, max).map(lineOf);
@@ -16360,7 +16447,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 nodesSvg += `<g class="svgnode" data-id="${n.id}" transform="translate(${x},${y})" style="cursor:grab">${inner}</g>`;
             });
 
-            const W = cont.clientWidth || 800, H = cont.clientHeight || 520;
             cont.innerHTML = `<svg id="mcdSvg" width="100%" height="100%" style="display:block;touch-action:none">
                 <defs><marker id="svgArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs>
                 <style>.svg-dim{opacity:.12}.svgnode:hover rect:first-child{stroke-width:2}</style>
@@ -16577,6 +16663,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
 
 
 
+        Studio.beginModule('80-extraction-exploration/80-extraction-avancee.js');
         // ======================= Extraction avancée (SQL & gouvernance) =======================
         // Un moteur d'extraction déclaratif 100% DuckDB : on décrit colonnes (avec transformations et
         // alias métier), filtres, dédoublonnage par clé fonctionnelle et agrégats ; on génère une seule
@@ -17350,7 +17437,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (!readyTables.length) { body.innerHTML = '<p class="text-sm text-slate-400 italic">Chargez au moins une source (onglet 1) pour utiliser l\'extraction avancée.</p>'; return; }
             if (!s.baseId || !state.tables[s.baseId]) s.baseId = readyTables[0].id;
             const reach = advReachableTables();
-            const reachOpts = reach.map(t => `<option value="${t.id}" ${''}>${escapeHTML(t.name)}</option>`).join('');
             const bos = state.governance.businessObjects || [];
             // -- Paramétrages d'extraction enregistrés --
             const eps = epList().slice().sort((a, b) => (b.at || 0) - (a.at || 0));
@@ -18030,13 +18116,13 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
 
 
 
+        Studio.beginModule('80-extraction-exploration/81-stats-bi.js');
         // ==========================================
         //  STEP 4: STATS BI
         // ==========================================
         function updateVizBaseTableSelect() { const s=el('vizBaseTable'); s.innerHTML = tableOptionsHtml({ placeholder: 'Sélectionnez la table...' }); }
         function handleVizBaseTableChange() { 
             el('vizElementsContainer').classList.remove('hidden'); 
-            const baseId = el('vizBaseTable').value;
             let opts = ''; Object.values(state.tables).forEach(t => { opts += `<optgroup label="${escapeHTML(t.name)}">${t.headers.map(h=>`<option value="${t.id}|${escapeHTML(h)}">${escapeHTML(h)}</option>`).join('')}</optgroup>`; });
             el('vizDim').innerHTML = opts; el('vizMeasure').innerHTML = opts;
         }
@@ -18046,7 +18132,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const dimRaw = el('vizDim').value; if(!dimRaw) return showError("Sélectionnez l'Axe X.");
             hideError();
             const measureRaw = el('vizMeasure').value; const agg = el('vizAgg').value;
-            const [dimTId, dimCol] = dimRaw.split('|'); const [measTId, measCol] = agg!=='count' ? measureRaw.split('|') : [null, null];
+            const [dimTId, dimCol] = dimRaw.split('|'); const [, measCol] = agg!=='count' ? measureRaw.split('|') : [null, null];
             
             el('chartDisplayArea').classList.remove('hidden'); 
             
@@ -18086,6 +18172,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             });
         }
 
+        Studio.beginModule('80-extraction-exploration/82-explorateur-360.js');
         // ==========================================
         //  UI SELECTORS
         // ==========================================
@@ -18122,10 +18209,10 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         // Renvoie {title, content} : le nœud du moteur SVG dessine le titre en gras et le contenu en
         // dessous (voir studio-rich-node), au lieu du sous-ensemble HTML approximatif utilisé par vis-network.
         function buildNodeLabel(tId, row) {
-            const table = state.tables[tId]; let title = table.name.length > 20 ? table.name.substring(0, 17) + '...' : table.name; let content = '';
+            const table = state.tables[tId]; const title = table.name.length > 20 ? table.name.substring(0, 17) + '...' : table.name; let content = '';
             const conf = state.graphConfig && state.graphConfig[tId];
             if (conf && conf.length > 0) { content = conf.map(c => `${c}: ${row[c] || ''}`).join(' | '); }
-            else { for (let h of table.headers) { if (row[h] && String(row[h]).trim() !== '') { content = String(row[h]).substring(0, 25); break; } } }
+            else { for (const h of table.headers) { if (row[h] && String(row[h]).trim() !== '') { content = String(row[h]).substring(0, 25); break; } } }
             return { title, content };
         }
         function applyGraphFilter() {
@@ -18133,7 +18220,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const term = el('expGraphFilter').value.toLowerCase();
             expNetInstance.getNodes().forEach(node => {
                 const info = expDataStore[node.getModel().id]; if (!info) return; let match = false;
-                if (term === '') { match = true; } else { for (let key in info.data) { if (String(info.data[key] || '').toLowerCase().includes(term)) { match = true; break; } } }
+                if (term === '') { match = true; } else { for (const key in info.data) { if (String(info.data[key] || '').toLowerCase().includes(term)) { match = true; break; } } }
                 if (match) node.show(); else node.hide();
             });
             expNetInstance.getEdges().forEach(edge => {
@@ -18169,19 +18256,19 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const tId = nodeInfo.tableId; const rowData = nodeInfo.data;
             const relevantRelations = state.relations.filter(r => r.sourceCol && r.targetCol && (r.sourceTable === tId || r.targetTable === tId));
 
-            for (let rel of relevantRelations) {
+            for (const rel of relevantRelations) {
                 if (rel.sourceTable === tId) {
                     const targetTableId = rel.targetTable, targetCol = rel.targetCol, joinVal = rowData[rel.sourceCol], edgeLabel = `${rel.sourceCol} = ${rel.targetCol}`;
                     if (joinVal !== undefined && joinVal !== null && String(joinVal).trim() !== '') {
                         const connectedRows = await fetchRowsByCondition(targetTableId, targetCol, joinVal);
-                        for (let cRow of connectedRows) { const targetNodeId = addGraphNode(targetTableId, cRow); addGraphEdge(nodeId, targetNodeId, edgeLabel); }
+                        for (const cRow of connectedRows) { const targetNodeId = addGraphNode(targetTableId, cRow); addGraphEdge(nodeId, targetNodeId, edgeLabel); }
                     }
                 }
                 if (rel.targetTable === tId) {
                     const targetTableId = rel.sourceTable, targetCol = rel.sourceCol, joinVal = rowData[rel.targetCol], edgeLabel = `${rel.targetCol} = ${rel.sourceCol}`;
                     if (joinVal !== undefined && joinVal !== null && String(joinVal).trim() !== '') {
                         const connectedRows = await fetchRowsByCondition(targetTableId, targetCol, joinVal);
-                        for (let cRow of connectedRows) { const targetNodeId = addGraphNode(targetTableId, cRow); addGraphEdge(targetNodeId, nodeId, edgeLabel); }
+                        for (const cRow of connectedRows) { const targetNodeId = addGraphNode(targetTableId, cRow); addGraphEdge(targetNodeId, nodeId, edgeLabel); }
                     }
                 }
             }
@@ -18221,11 +18308,12 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             expNetInstance.changeData({ nodes: [], edges: [] }); expDataStore = {}; el('expGraphFilter').value = '';
             try {
                 const rows = await fetchRowsByCondition(tId, col, val);
-                if(rows.length) { for(let r of rows) { const rId = addGraphNode(tId, r); await expandNodeRelationships(rId); } } else { showError("Aucun résultat."); }
+                if(rows.length) { for(const r of rows) { const rId = addGraphNode(tId, r); await expandNodeRelationships(rId); } } else { showError("Aucun résultat."); }
             } catch(e) { showError("Erreur d'exploration"); }
             finally { el('expLoading').classList.add('hidden'); if (expNetInstance) { expNetInstance.layout(); expNetInstance.fitView(20); } }
         }
 
+        Studio.beginModule('80-extraction-exploration/83-navigateur-donnees.js');
         // ==========================================
         //  STEP 6: DATA BROWSER
         // ==========================================
@@ -18254,7 +18342,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function applyBrowserSortAndRender() {
             if (browserState.sortCol) {
                 browserState.data.sort((a, b) => {
-                    let va = a[browserState.sortCol] || '', vb = b[browserState.sortCol] || ''; let strA = String(va).trim(), strB = String(vb).trim();
+                    let va = a[browserState.sortCol] || '', vb = b[browserState.sortCol] || ''; const strA = String(va).trim(), strB = String(vb).trim();
                     if (strA !== '' && strB !== '' && !isNaN(strA) && !isNaN(strB)) { va = parseFloat(strA); vb = parseFloat(strB); } else { va = strA.toLowerCase(); vb = strB.toLowerCase(); }
                     if (va < vb) return browserState.sortDir === 'asc' ? -1 : 1; if (va > vb) return browserState.sortDir === 'asc' ? 1 : -1; return 0;
                 });
@@ -18276,7 +18364,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const results = [];
                 await processDataStream(table, 15000, (row) => {
                     let match = true;
-                    for (let col in browserState.filters) {
+                    for (const col in browserState.filters) {
                         const filterVal = String(browserState.filters[col] || '').trim().toLowerCase();
                         if (filterVal !== '') {
                             const cellVal = String(row[col] || '').trim().toLowerCase();
@@ -18318,6 +18406,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             el('browserRowCount').innerText = `${browserState.data.length} résultat(s)`; lucide.createIcons();
         }
 
+        Studio.beginModule('80-extraction-exploration/84-comparateur.js');
         // ==========================================
         //  STEP 7: COMPARATEUR
         // ==========================================
@@ -18499,7 +18588,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const missingA = Number(statsRow.missinga || 0), missingB = Number(statsRow.missingb || 0);
 
                 const headerLine = outSchema.map(escapeCSV).join(';') + '\n';
-                let blobParts = [headerLine], chunkBuf = [];
+                const blobParts = [headerLine]; let chunkBuf = [];
                 pb.style.width = '70%'; st.innerText = "Écriture du rapport...";
                 await duckStreamRows(resultTId, 0, async (row) => {
                     chunkBuf.push(outSchema.map(h => escapeCSV(row[h])).join(';'));
@@ -18538,6 +18627,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             }
         }
 
+        Studio.beginModule('70-qualite/72-qualite-audit.js');
         // ==========================================
         //  STEP 8: QUALITÉ ET AUDIT PAR LOTS
         // ==========================================
@@ -18600,8 +18690,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 await runQualityAudit();
                 const alerts = el('profilingAlerts'); if (!alerts) return;
                 // 2. En-tête + conteneurs, PUIS audit global (check-list, règles du périmètre, hiérarchies)
-                const hiers = getBoHierarchies(bo);
-                const head = document.createElement('div');
+                    const head = document.createElement('div');
                 head.className = 'p-3 rounded-lg border-2 bg-emerald-50 border-emerald-300';
                 head.innerHTML = `<div class="font-black text-sm text-emerald-800">🏛️ Audit de l'objet métier "${escapeHTML(bo.name)}"</div><div class="text-[11px] text-slate-500 mt-0.5">Table maître profilée : <strong>${escapeHTML(master.name)}</strong> — gouvernance, règles métier, hiérarchies et facettes 1–1 vérifiées ci-dessous.</div><div id="bo-global-audit-${bo.id}"></div>`;
                 alerts.prepend(head);
@@ -18999,7 +19088,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             // construction et masque les vrais doublons métier. On détecte les colonnes quasi
             // 100 % uniques — présélection par estimation (tolérante à la dérive HLL), puis
             // CONFIRMATION EXACTE — et on recompte les doublons sans elles.
-            let funcDupCols = [], funcDuplicateRows = 0, funcDuplicatesApprox = false;
+            const funcDupCols = []; let funcDuplicateRows = 0, funcDuplicatesApprox = false;
             try {
                 const KB = 16; const cand = [];
                 for (let s = 0; s < table.headers.length; s += KB) {
@@ -19050,7 +19139,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     const notBlank = `(${trimmed} IS NOT NULL AND ${trimmed} <> '')`;
                     const isNum = `regexp_matches(${trimmed}, '${re.num}')`;
                     // V6.21 : profil des DATES — bornes réelles et valeurs hors du possible.
-                    const dateExpr = `COALESCE(TRY_CAST(${tdNormExpr('date', raw)} AS DATE), CAST(TRY_CAST(${raw} AS TIMESTAMP) AS DATE))`;
                     // V6.24 : cette passe reste LÉGÈRE et porte sur toutes les colonnes — elle sert
                     // à détecter le type et à mesurer remplissage, cardinalité, longueurs et hygiène.
                     // Les mesures propres aux nombres et aux dates sont reportées à des passes ciblées :
@@ -19389,6 +19477,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (tab === 'dups') renderDupSection();
         }
 
+        Studio.beginModule('70-qualite/73-qualite-profilage-doublons.js');
         // ==========================================
         //  CLÉ FONCTIONNELLE & DOUBLONS APPROCHÉS
         // ==========================================
@@ -20083,7 +20172,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const alertsList = [];
             const alertsDiv = el('profilingAlerts');
             
-            for (let cName in stats.columns) {
+            for (const cName in stats.columns) {
                 const col = stats.columns[cName];
                 if (col.completeness < 90) alertsList.push(`<div class="flex items-center gap-2 text-xs bg-red-50 border border-red-100 text-red-700 px-3 py-2 rounded-lg"><i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0"></i><span>La colonne <strong>${escapeHTML(cName)}</strong> a une complétude faible de ${col.completeness.toFixed(1)}% (${col.nullCount} vides).</span></div>`);
                 if (col.semanticType === 'Email' && col.numEmail < (stats.totalRows - col.nullCount)) {
@@ -20118,7 +20207,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const tName2 = state.tables[currentProfilingTableId] ? state.tables[currentProfilingTableId].name : (stats.tableName || '');
             let _tbodyHtml = '';
             let _nAlert = 0, _hygTotal = 0;
-            for (let cName in stats.columns) {
+            for (const cName in stats.columns) {
                 const c = stats.columns[cName]; const pct = c.completeness;
                 const [qs, ql] = uxColQuality(c); if (qs !== 'ok') _nAlert++;
                 _hygTotal += (c.placeholders || 0) + (c.multiSpace || 0) + (c.caseDupGroups || 0) + (c.outliers || 0);
@@ -20168,7 +20257,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
 
             const listSelector = el('qualColsList');
             let _selHtml = '';
-            for (let cName in stats.columns) {
+            for (const cName in stats.columns) {
                 const c = stats.columns[cName];
                 _selHtml += `
                     <button onclick="showColumnProfilingDetail('${escapeHTML(cName.replace(/'/g, "\\'"))}')" id="btn-col-select-${cName}" class="w-full text-left p-2.5 rounded-lg text-xs font-bold text-slate-700 hover:bg-indigo-50 border border-transparent transition-colors flex justify-between items-center">
@@ -20494,7 +20583,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
 
         async function runQualityAudit(retried) {
             const tId = el('qualTable').value, col = el('qualCol').value, sampleOption = el('qualSampleSize').value;
-            let sampleLimit = sampleOption === 'all' ? 'all' : parseInt(sampleOption);
+            const sampleLimit = sampleOption === 'all' ? 'all' : parseInt(sampleOption);
             // Filtre : soit celui du carré fichier, soit celui reporté depuis l'audit d'un objet métier.
             const whereSql = qualAuditWhereOverride != null ? qualAuditWhereOverride : buildQualWhere('file');
             qualAuditWhereOverride = null;
@@ -20563,6 +20652,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         }
 
     
+        Studio.beginModule('10-noyau/1B-noyau-ux-scroll-focus.js');
         // ======================= V3 UX : préservation du scroll et du focus =======================
         (function () {
             const KEEP = ['renderGovernance', 'renderTables', 'renderTablesDesign', 'renderQualityRules', 'renderRecipes', 'renderSrcWatch', 'renderLineageFlow',
@@ -20616,8 +20706,9 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 restore(); requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
                 return out;
             };
-            KEEP.forEach(nm => { if (typeof window[nm] === 'function' && !window[nm].__keepScroll) { const w = wrap(window[nm]); w.__keepScroll = true; window[nm] = w; } });
+            Studio.extendAll(KEEP.filter(nm => typeof window[nm] === 'function' && !window[nm].__keepScroll), base => { const w = wrap(base); w.__keepScroll = true; return w; }, { motif: 'conserver le défilement et le focus pendant un rendu' });
         })();
+        Studio.beginModule('90-couche-v11/92-v11-noyau.js');
         // ======================= V11 : NOYAU ERGONOMIQUE =======================
         // Cette couche ne réécrit pas les écrans V7 : elle s'y greffe (enveloppes de fonctions,
         // retouches après rendu) pour rendre l'application plus simple à lire et à utiliser.
@@ -20670,8 +20761,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         showError = function (msg) { const t2 = el('globalErrorText'); if (t2) t2.textContent = msg; v11Toast(msg, 'err'); };
         // ---- Enregistrement visible + annulation de la dernière modification ----
         function v11GovJson() { try { return JSON.stringify({ g: state.governance, th: Object.fromEntries(Object.values(state.tables).map(t => [t.id, t.theme || ''])) }); } catch (e) { return null; } }
-        const _v11_persistAppState = persistAppState;
-        persistAppState = function () {
+        Studio.extend('persistAppState', (_v11_persistAppState) => function () {
             const cur = v11GovJson();
             if (typeof restoreCompleted !== 'undefined' && !restoreCompleted) { if (cur) v11State.lastGov = cur; return _v11_persistAppState.apply(this, arguments); }
             if (cur && v11State.lastGov && cur !== v11State.lastGov && !v11State.undoing) { v11State.undo.push(v11State.lastGov); if (v11State.undo.length > 30) v11State.undo.shift(); }
@@ -20680,7 +20770,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const r = _v11_persistAppState.apply(this, arguments);
             setTimeout(() => v11SaveIndicator('ok'), 600);
             return r;
-        };
+        });
         function v11Undo() {
             const j = v11State.undo.pop(); if (!j) return v11Toast('Rien à annuler.', 'info');
             let snap; try { snap = JSON.parse(j); } catch (e) { return; }
@@ -20691,7 +20781,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             v11Toast('Dernière modification annulée.', 'info');
         }
         function v11SaveIndicator(st) {
-            let s = el('v11Save'); if (!s) return;
+            const s = el('v11Save'); if (!s) return;
             s.classList.toggle('busy', st === 'busy');
             const when = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             s.title = st === 'busy' ? 'Enregistrement en cours' : 'Enregistré à ' + when + ' sur votre poste'; s.innerHTML = `<span class="dot"></span>${st === 'busy' ? '…' : when}${v11State.undo.length ? '<button data-ro="keep" onclick="v11Undo()" title="Annuler la dernière modification (Ctrl+Z)">⟲ Annuler</button>' : ''}`;
@@ -20718,8 +20808,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (Array.isArray(GOV_RO_TABS) && !GOV_RO_TABS.includes('home')) GOV_RO_TABS.push('home');
             if (govState.tab === 'catalog') govState.tab = 'home';
         })();
-        const _v11_renderNav = renderNav;
-        renderNav = function () {
+        Studio.extend('renderNav', (_v11_renderNav) => function () {
             _v11_renderNav.apply(this, arguments);
             const items = document.querySelector('.v7-grp[data-phase="gov"] .v7-items'); if (!items) return;
             let last = null;
@@ -20727,7 +20816,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const m = (b.getAttribute('onclick') || '').match(/openGovTab\('([^']+)'\)/); const fam = m ? V11_FAMS[m[1]] : null;
                 if (fam && fam !== last) { const h = document.createElement('div'); h.className = 'v11-fam'; h.textContent = fam; items.insertBefore(h, b); last = fam; }
             });
-        };
+        });
         // ---- Historique de navigation (Précédent / Suivant) ----
         function v11NavKey() { return JSON.stringify({ tab: govState.tab, bo: govState.selectedBoId, sel: govState.boSel, boTab: govState.boTab, dm: govState.dictMode, dt: govState.dictTable, db: govState.dictBoId, gf: govState.glossFocus, gv: govState.glossView }); }
         function v11HistPush() {
@@ -20803,7 +20892,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             });
         }
         // Les encarts de lineage se dessinent hors renderGovernance : on y ajoute le bouton ⛶ après coup.
-        ['openBoLineage', 'openAttrLineage', 'catGoLineage', 'catShowAttrLineage'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = function () { const r = o.apply(this, arguments); try { v11FsButtons(); v11SortableTables(); } catch (e) {} return r; }; });
+        ['openBoLineage', 'openAttrLineage', 'catGoLineage', 'catShowAttrLineage'].forEach(nm => Studio.extend(nm, (o) => function () { const r = o.apply(this, arguments); try { v11FsButtons(); v11SortableTables(); } catch (e) {} return r; }, { motif: 'bouton plein écran et tri après le dessin du lineage' }));
         // ---- Tableaux : tri d'un clic ----
         function v11SortableTables(root) {
             (root || document).querySelectorAll('#govContent table, .v11-fiche table, #v11Fs table').forEach(tb => {
@@ -20824,7 +20913,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const val = tr => { const c = tr.cells[ci]; if (!c) return ''; const inp = c.querySelector('input,select,textarea'); const t = inp ? (inp.tagName === 'SELECT' ? (inp.options[inp.selectedIndex] || {}).textContent : inp.value) : c.textContent; return String(t || '').trim(); };
             const num = s => { const n = parseFloat(String(s).replace(/\s/g, '').replace(',', '.')); return isNaN(n) ? null : n; };
             const rows = Array.from(tbody.rows);
-            rows.sort((a, b) => { const va = val(a), vb = val(b); const na = num(va), nb = num(vb); let r = (na !== null && nb !== null) ? na - nb : va.localeCompare(vb, 'fr', { numeric: true, sensitivity: 'base' }); return dir === 'asc' ? r : -r; });
+            rows.sort((a, b) => { const va = val(a), vb = val(b); const na = num(va), nb = num(vb); const r = (na !== null && nb !== null) ? na - nb : va.localeCompare(vb, 'fr', { numeric: true, sensitivity: 'base' }); return dir === 'asc' ? r : -r; });
             rows.forEach(r => tbody.appendChild(r));
         }
         // ---- Vocabulaire unifié + valeurs vides + infobulles ----
@@ -20848,7 +20937,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             if (fiche && !document.body.classList.contains('v7-collapsed')) { v11State.prevCollapsed = false; document.body.classList.add('v7-collapsed'); }
             else if (!fiche && v11State.prevCollapsed === false && !v11State.fs) { v11State.prevCollapsed = null; document.body.classList.remove('v7-collapsed'); }
         }
-        function v11Editing(key) { return !!v11State.edit[key]; }
         function v11SetEditing(key, on) { v11State.edit[key] = !!on; if (on && v11Prefs.autoCollapse) { v11State.prevCollapsed = document.body.classList.contains('v7-collapsed') ? null : false; } renderGovernance(); }
         // Le bloc « Initialiser un objet métier depuis une source » est replié derrière une ligne :
         // l'assistant (＋ Objet) est la voie normale, les autres façons restent à un clic.
@@ -20877,8 +20965,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function v11RecentGo(kind, id) { if (kind === 'bo') v11GoBo(id); else if (kind === 'term') termTagOpen(id); else if (kind === 'asset') v11GoAsset(id); else if (kind === 'table') v11GoTable(id); }
         function v11RecentList() { const g = state.governance; return (v11Prefs.recent || []).filter(x => (x.kind === 'bo' && (g.businessObjects || []).some(b => b.id === x.id)) || (x.kind === 'term' && (g.glossary || []).some(t => t.id === x.id)) || (x.kind === 'asset' && (g.assets || []).some(a => a.id === x.id)) || (x.kind === 'table' && !!tableByName(x.id))); }
         // ---- Après chaque rendu de la gouvernance ----
-        const _v11_renderGovernance = renderGovernance;
-        renderGovernance = function () {
+        Studio.extend('renderGovernance', (_v11_renderGovernance) => function () {
             const home = govState.tab === 'home';
             _v11_renderGovernance.apply(this, arguments);
             const c = el('govContent');
@@ -20886,7 +20973,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const acts = el('govActions'); if (acts && !acts.querySelector('.v11-acts')) acts.insertAdjacentHTML('afterbegin', `<span class="v11-acts inline-flex items-center gap-1.5 mr-2" data-ro="keep"><button class="v11-btn sm" onclick="v11WizardOpen()" title="Créer un objet métier en trois étapes">＋ Objet</button><button class="v11-btn sm" onclick="v11PaletteOpen()" title="Rechercher (Ctrl+K)">🔍</button></span>`);
             try { if (typeof v11ApplyReadMode === 'function') v11ApplyReadMode(); } catch (e) { console.error(e); }
             try { v11CompactInit(); v11FocusMode(); v11Crumb(); v11FsButtons(); v11SortableTables(); v11Wording(); v11HistPush(); v11RememberScreen(); v11AutoCollapse(); v11FsReattach(); if (typeof v11DragInit === 'function') v11DragInit(); } catch (e) { console.error(e); }
-        };
+        });
         // ---- Raccourcis clavier + aide ----
         const V11_SHORTCUTS = [['Ctrl K', 'Rechercher partout'], ['?', 'Aide, raccourcis, préférences'], ['Échap', 'Fermer (plein écran, palette, tiroir, aide)'], ['Alt ←  /  Alt →', 'Écran précédent / suivant'], ['Ctrl Z', 'Annuler la dernière modification'], ['F', 'Plein écran de la fiche courante'], ['E', 'Modifier / terminer la fiche courante'], ['G puis O / C / D / T / A / V', 'Aller aux Objets / Catalogue / Dictionnaire / Termes / Applications / À valider'], ['G puis I / S / M / X / Q / R / B', 'Aller à l\'Accueil / Sources / Modèle / Extraire / Qualité / Règles / Tableaux de bord'], ['N', 'Nouvel objet (assistant)'], ['Maj P', 'Mode présentation']];
         let _v11G = 0;
@@ -20929,7 +21016,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function v11ModalOpen(html) { v11ModalClose(); const d = document.createElement('div'); d.className = 'v11-modal'; d.id = 'v11Modal'; d.setAttribute('data-ro', 'keep'); d.innerHTML = '<div class="box">' + html + '</div>'; d.addEventListener('click', e => { if (e.target === d) v11ModalClose(); }); document.body.appendChild(d); const f = d.querySelector('input[type=text],select,textarea'); if (f) setTimeout(() => { try { f.focus(); } catch (e) {} }, 30); return d; }
         function v11ModalClose() { const d = el('v11Modal'); if (d) d.remove(); }
         // Après la restauration de session, l'état restauré devient le point de départ de l'annulation.
-        if (typeof restoreSession === 'function') { const _v11_restore = restoreSession; restoreSession = async function () { try { return await _v11_restore.apply(this, arguments); } finally { v11State.undo = []; v11State.lastGov = v11GovJson(); v11SaveIndicator('ok'); if (currentTab === 9) renderGovernance(); } }; }
+        Studio.extend('restoreSession', (_v11_restore) => async function () { try { return await _v11_restore.apply(this, arguments); } finally { v11State.undo = []; v11State.lastGov = v11GovJson(); v11SaveIndicator('ok'); if (currentTab === 9) renderGovernance(); } });
         // ---- Démarrage ----
         (function () {
             v11LoadPrefs(); v11RestoreScreen(); v11ApplyPrefs();
@@ -20937,6 +21024,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             const boot = () => { v11MountTopbar(); if (el('v7Nav')) renderNav(); setTimeout(() => { v11State.lastGov = v11GovJson(); if (!v11Prefs.tourDone && typeof v11TourStart === 'function') v11TourStart(true); }, 1200); };
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
         })();
+        Studio.beginModule('90-couche-v11/93-v11-fiches-lecture.js');
         // ======================= V11 : FICHES EN MODE LECTURE =======================
         // Objets, termes, applications et sources s'ouvrent d'abord comme une carte propre, sans
         // champ de saisie : même en-tête, mêmes sections, mêmes actions pour les quatre types.
@@ -20944,11 +21032,11 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function v11Editing(key) { if (typeof govIsReadOnly === 'function' && govIsReadOnly()) return false; const v = v11State.edit[key]; return v === undefined ? !v11Prefs.readDefault : !!v; }
         function v11ToggleEdit(kind, id) { const k = kind + ':' + id; v11SetEditing(k, !v11Editing(k)); }
         // 7. « Modifier dans l'objet » (fiche du catalogue) ouvre bien le formulaire.
-        if (typeof catEditInObject === 'function') { const _v11_cat = catEditInObject; catEditInObject = function () { const e2 = _catFicheCtx; if (e2 && e2.bo) v11State.edit['bo:' + e2.bo] = true; return _v11_cat.apply(this, arguments); }; }
+        Studio.extend('catEditInObject', (_v11_cat) => function () { const e2 = _catFicheCtx; if (e2 && e2.bo) v11State.edit['bo:' + e2.bo] = true; return _v11_cat.apply(this, arguments); });
         function v11GoBo(id, elId, stId) { govState.selectedBoId = id; govState.boSel = elId ? { kind: 'attr', stId: stId || '', elId } : null; if (elId) { govState.boTab = 'structure'; govState.structView = 'fiche'; v11State.edit['bo:' + id] = true; } const bo = (state.governance.businessObjects || []).find(b => b.id === id); if (bo) v11Recent('bo', id, bo.name); openGovTab('objects'); }
         function v11GoAsset(id) { v11State.selAsset = id; const a = assetById(id); if (a) v11Recent('asset', id, a.name); openGovTab('assets'); setTimeout(() => { const n = el('v11-as-' + id) || document.querySelector(`input[onchange^="updateGovAsset('${id}','name'"]`); if (n) { (n.closest('.rounded-xl') || n).scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 50); }
         function v11GoTable(tn) { govState.dictMode = 'table'; govState.dictTable = tn; v11Recent('table', tn, tn); openGovTab('dictionary'); }
-        const _v11_termTagOpen = termTagOpen; termTagOpen = function (id) { v11State.selTerm = id; const t = (state.governance.glossary || []).find(x => x.id === id); if (t) v11Recent('term', id, t.term); return _v11_termTagOpen.apply(this, arguments); };
+        Studio.extend('termTagOpen', (_v11_termTagOpen) => function (id) { v11State.selTerm = id; const t = (state.governance.glossary || []).find(x => x.id === id); if (t) v11Recent('term', id, t.term); return _v11_termTagOpen.apply(this, arguments); });
         function v11EditAttr(boId, stId, elId) { v11State.edit['bo:' + boId] = true; govState.selectedBoId = boId; govState.boTab = 'structure'; govState.structView = 'fiche'; govState.boSel = { kind: 'attr', stId: stId || '', elId }; openGovTab('objects'); }
         // Droits : peut-on modifier (ou proposer) cette fiche ? ce champ réservé ?
         function v11Can(kind, ent) {
@@ -20967,7 +21055,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             </div>`;
         }
         function v11Acts(kind, id, ent, extra) {
-            const can = v11Can(kind, ent); const key = kind + ':' + id; const ro = typeof govIsReadOnly === 'function' && govIsReadOnly();
+            const can = v11Can(kind, ent); const ro = typeof govIsReadOnly === 'function' && govIsReadOnly();
             if (ro) return [...(extra || []).filter(x => !/v11BulkOpen/.test(x)), `<button class="v11-btn" onclick="v11Fs('#v11-${kind}-${id}', '${escapeHTML(String(ent.name || ent.term || '')).replace(/'/g, '&#39;')}')" title="Plein écran (F)">⛶</button>`, `<button class="v11-btn" onclick="v11Print('${kind}','${id}')" title="Imprimer ou enregistrer en PDF">🖨</button>`];
             return [can.any ? `<button class="v11-btn pri" onclick="v11ToggleEdit('${kind}','${id}')" title="Ouvrir le formulaire complet (E)">✎ Modifier</button>` : '<span class="text-[11px] text-slate-500">🔒 lecture seule</span>',
                 ...(extra || []),
@@ -21041,11 +21129,10 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 ]
             });
         }
-        const _v11_renderBoDetail = renderBoDetail;
-        renderBoDetail = function (bo, names) {
+        Studio.extend('renderBoDetail', (_v11_renderBoDetail) => function (bo, names) {
             if (!v11Editing('bo:' + bo.id)) return v11BoRead(bo);
             return v11EditBar('bo', bo.id, 'de l\'objet « ' + bo.name + ' »', typeof govFeatureOn === 'function' && govFeatureOn() && !govCanEditBo(bo) && govCanProposeBo(bo) ? 'vos modifications seront des propositions' : '') + _v11_renderBoDetail.apply(this, arguments);
-        };
+        });
         // ---- Terme ----
         function v11TermRead(g) {
             const can = v11Can('term', g); const bos = state.governance.businessObjects || [];
@@ -21093,7 +21180,6 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         function v11TableRead(tn) {
             const t = tableByName(tn); const d = ensureDictEntry(tn); const ent = { name: tn }; const can = v11Can('table', ent);
             const cols = t ? t.headers : Object.keys(d.columns || {});
-            const bos = state.governance.businessObjects || [];
             const fed = cols.map(h => { const at = typeof attrsOfColumn === 'function' ? attrsOfColumn(tn, h) : []; return at.map(x => `<span class="v11-chip" onclick="v11GoBo('${x.bo.id}','${x.r.el.id}','${x.r.stId || ''}')">${escapeHTML(x.r.el.name)}<span class="k">${escapeHTML(x.bo.name)}</span></span>`).join(''); }).filter(Boolean).join('');
             const tbl = `<div class="overflow-x-auto"><table class="v11-tbl"><thead><tr><th>Colonne</th><th>Définition</th><th>Type</th><th>Exemples</th><th>Sensibilité</th><th>Terme(s)</th><th>Alimente</th></tr></thead><tbody>${cols.map(h => { const c = (d.columns || {})[h] || {}; const at = typeof attrsOfColumn === 'function' ? attrsOfColumn(tn, h) : []; const tt = (typeof attrsOfColumn === 'function' && typeof termsOfAttr === 'function') ? Array.from(new Set(at.flatMap(x => termsOfAttr(x.bo.id, x.r.el.id).map(z => z.term)))) : [];
                 return `<tr class="click" onclick="v11State.edit['table:${escapeHTML(tn).replace(/'/g, '&#39;')}']=true; renderGovernance()" title="Ouvrir le formulaire"><td><b>${escapeHTML(h)}</b></td><td>${v11Dash(c.definition)}</td><td class="dim">${v11Dash(c.technicalType)}</td><td class="dim">${v11Dash(c.examples)}</td><td>${v11Dash(c.sensitivity)}</td><td>${tt.length ? tt.map(escapeHTML).join(', ') : '<span class="dim">—</span>'}</td><td>${at.length ? at.map(x => escapeHTML(x.bo.name + ' › ' + x.r.el.name)).join('<br>') : '<span class="dim">—</span>'}</td></tr>`; }).join('')}</tbody></table></div>`;
@@ -21173,12 +21259,9 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             v11Readify(wrap, key, 'du dictionnaire de « ' + bo.name + ' »', v11Can('bo', bo).any);
         }
         // ---- Suppression : confirmation puis notification avec « Annuler » ----
-        [['removeBusinessObject', id => ((state.governance.businessObjects || []).find(b => b.id === id) || {}).name, 'l\'objet', () => state.governance.businessObjects], ['removeGlossaryTerm', id => ((state.governance.glossary || []).find(t => t.id === id) || {}).term, 'le terme', () => state.governance.glossary], ['removeGovAsset', id => (assetById(id) || {}).name, 'l\'application ou le processus', () => state.governance.assets]].forEach(([nm, nameOf, what, coll]) => {
-            const o = window[nm]; if (typeof o !== 'function') return;
-            window[nm] = function (id) { const name = nameOf(id); if (name && !_govBypass && !confirm('Supprimer ' + what + ' « ' + name + ' » ?')) return; const before = (coll() || []).length; const r = o.apply(this, arguments); if (name && (coll() || []).length < before) v11Toast('« ' + name + ' » supprimé(e).', 'info', { action: () => v11Undo(), actionLabel: '⟲ Annuler' }); return r; };
-        });
+        [['removeBusinessObject', id => ((state.governance.businessObjects || []).find(b => b.id === id) || {}).name, 'l\'objet', () => state.governance.businessObjects], ['removeGlossaryTerm', id => ((state.governance.glossary || []).find(t => t.id === id) || {}).term, 'le terme', () => state.governance.glossary], ['removeGovAsset', id => (assetById(id) || {}).name, 'l\'application ou le processus', () => state.governance.assets]].forEach(([nm, nameOf, what, coll]) => Studio.extend(nm, (o) => function (id) { const name = nameOf(id); if (name && !_govBypass && !confirm('Supprimer ' + what + ' « ' + name + ' » ?')) return; const before = (coll() || []).length; const r = o.apply(this, arguments); if (name && (coll() || []).length < before) v11Toast('« ' + name + ' » supprimé(e).', 'info', { action: () => v11Undo(), actionLabel: '⟲ Annuler' }); return r; }, { motif: 'confirmation et annulation d\'une suppression' }));
         // ---- Fiche complète depuis le catalogue ----
-        if (typeof catOpenFiche === 'function') { const _v11_cof = catOpenFiche; catOpenFiche = function () { const r = _v11_cof.apply(this, arguments); const e2 = _catFicheCtx; const foot = el('uxDrawerFoot'); if (e2 && e2.bo && foot && !foot.querySelector('.v11-fullbtn')) foot.insertAdjacentHTML('afterbegin', `<button data-ro="keep" class="v11-fullbtn flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50" onclick="closeUxDrawer(); v11State.edit['bo:${e2.bo}']=false; v11GoBo('${e2.bo}')">📄 Fiche complète</button>`); return r; }; }
+        Studio.extend('catOpenFiche', (_v11_cof) => function () { const r = _v11_cof.apply(this, arguments); const e2 = _catFicheCtx; const foot = el('uxDrawerFoot'); if (e2 && e2.bo && foot && !foot.querySelector('.v11-fullbtn')) foot.insertAdjacentHTML('afterbegin', `<button data-ro="keep" class="v11-fullbtn flex-1 bg-white border border-slate-300 rounded-lg py-2 text-xs font-bold text-slate-600 hover:bg-slate-50" onclick="closeUxDrawer(); v11State.edit['bo:${e2.bo}']=false; v11GoBo('${e2.bo}')">📄 Fiche complète</button>`); return r; });
         // ---- Dupliquer ----
         function v11Duplicate(kind, id) {
             const g = state.governance; const clone = o => JSON.parse(JSON.stringify(o));
@@ -21209,9 +21292,10 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
             return html;
         }
         // Un objet fraîchement créé s'ouvre en modification.
-        ['addBusinessObject', 'createObjectFromAttribute', 'generateObjectFromDesign'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = function () { const before = new Set((state.governance.businessObjects || []).map(b => b.id)); const r = o.apply(this, arguments); let any = false; (state.governance.businessObjects || []).forEach(b => { if (!before.has(b.id)) { v11State.edit['bo:' + b.id] = true; any = true; } }); if (any && currentTab === 9) renderGovernance(); return r; }; });
-        const _v11_addGlossaryTerm = addGlossaryTerm; addGlossaryTerm = function () { const before = new Set((state.governance.glossary || []).map(t => t.id)); const r = _v11_addGlossaryTerm.apply(this, arguments); let any = false; (state.governance.glossary || []).forEach(t => { if (!before.has(t.id)) { v11State.edit['term:' + t.id] = true; any = true; } }); if (any) renderGovernance(); return r; };
-        const _v11_addGovAsset = addGovAsset; addGovAsset = function () { const before = new Set((state.governance.assets || []).map(a => a.id)); const r = _v11_addGovAsset.apply(this, arguments); let any = false; (state.governance.assets || []).forEach(a => { if (!before.has(a.id)) { v11State.edit['asset:' + a.id] = true; any = true; } }); if (any) renderGovernance(); return r; };
+        ['addBusinessObject', 'createObjectFromAttribute', 'generateObjectFromDesign'].forEach(nm => Studio.extend(nm, (o) => function () { const before = new Set((state.governance.businessObjects || []).map(b => b.id)); const r = o.apply(this, arguments); let any = false; (state.governance.businessObjects || []).forEach(b => { if (!before.has(b.id)) { v11State.edit['bo:' + b.id] = true; any = true; } }); if (any && currentTab === 9) renderGovernance(); return r; }, { motif: 'un objet fraîchement créé s\'ouvre en modification' }));
+        Studio.extend('addGlossaryTerm', (_v11_addGlossaryTerm) => function () { const before = new Set((state.governance.glossary || []).map(t => t.id)); const r = _v11_addGlossaryTerm.apply(this, arguments); let any = false; (state.governance.glossary || []).forEach(t => { if (!before.has(t.id)) { v11State.edit['term:' + t.id] = true; any = true; } }); if (any) renderGovernance(); return r; });
+        Studio.extend('addGovAsset', (_v11_addGovAsset) => function () { const before = new Set((state.governance.assets || []).map(a => a.id)); const r = _v11_addGovAsset.apply(this, arguments); let any = false; (state.governance.assets || []).forEach(a => { if (!before.has(a.id)) { v11State.edit['asset:' + a.id] = true; any = true; } }); if (any) renderGovernance(); return r; });
+        Studio.beginModule('90-couche-v11/94-v11-recherche-accueil.js');
         // ======================= V11 : RECHERCHE GLOBALE, ACCUEIL, EXEMPLE, VISITE GUIDÉE =======================
         // ---- Recherche globale (Ctrl+K) ----
         function v11Index() {
@@ -21341,6 +21425,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
         }
         function v11TourNext() { if (!v11State.tour) return; v11State.tour.i++; v11TourStep(); }
         function v11TourEnd(done) { v11State.tour = null; const ov = el('v11Tour'); if (ov) ov.remove(); if (done) { v11Prefs.tourDone = true; v11SavePrefs(); } }
+        Studio.beginModule('90-couche-v11/95-v11-saisie.js');
         // ======================= V11 : SAISIE PLUS SIMPLE =======================
         // Assistant de création d'objet en trois étapes, actions groupées sur les attributs,
         // glisser-déposer d'une colonne de source sur un attribut.
@@ -21455,6 +21540,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 row.addEventListener('drop', e => { e.preventDefault(); row.classList.remove('v11-drop'); let d; try { d = JSON.parse(e.dataTransfer.getData('text/plain')); } catch (er) { return; } if (d && d.tbl && d.col) { v11AddMapping(bo.id, m[2], d.tbl, d.col); v11Toast(d.col + ' rattachée.', 'ok'); } });
             });
         }
+        Studio.beginModule('(build)');
+        Studio.registerModules([{"file":"10-noyau/00-studio.js","functions":[]},{"file":"90-couche-v11/0V-v11-version.js","functions":[]},{"file":"10-noyau/10-noyau-etat.js","functions":["tableOptionsHtml"]},{"file":"10-noyau/11-noyau-moteur-duckdb.js","functions":["isTransientLockError","getDB","isSpillWriteError","queryResilient","runNoSpill","arrowResultToObjects","duckDropTable","duckTableHeaders","duckSampleRows","sniffEncodingFromBytes","sniffFileEncoding","ingestLooksWrong","csvReadClauses","csvViewThreshold","ingestCsvIntoDuckDB","ingestCsvMultiIntoDuckDB","ingestRowsIntoDuckDB","jsonRowsFrom","xlsxPickSheet","xlsxSheetNote","ingestFileTable","isCsvScanError","isEncodingError","autoFixCsvRead","duckStreamRows"]},{"file":"10-noyau/12-modele-donnees-graphe.js","functions":["umlNodeSize","pinNodeOnDrag","computeDomainPositions","graphInstanceOf","graphZoom","graphFit","graphToolbarHtml","setMcdView","mcdScope","setMcdScope","mcdVisibleIds","setMcdTheme","mcdThemeFilterHtml","mcdToggleFocus","mcdRelayout","mcdIsSvg","mcdHideTable","mcdUnhideAll","mcdScopeButtonsHtml","themeList","themePalette","updateTableTheme","openEdgeDeleteModal","deleteRelationById","mcdLinkHint","mcdToggleLinkMode","mcdNodeClicked","openLinkModal","closeLinkModal","confirmLinkModal","toggleMcdFullscreen","reflowGraph","observeGraphResize","graphUnavailableHtml","bgTaskStart","bgTaskEnd","showError","hideError","showSuccess"]},{"file":"10-noyau/13-noyau-persistance-locale.js","functions":["openIDB","idbPut","idbGet","idbDel","idbKeys","idbClear","bufToBase64","base64ToBuf","exportTableParquet","ingestParquetIntoDuckDB","attachParquetView","optimizeSourceToParquet","persistTableData","collectPersistedConfig","applyPersistedConfig","migrateUseCasesToAssets","normalizeGovernance","fsBackupDirPick","fsBackupWrite","fsBackupReauth","fsBackupDisable","importConfigFile","persistQualityHistory","cfgRichness","persistAppState","updatePersistStatus","renderOpfsRecovery","recoverOpfsTables","restoreSession"]},{"file":"20-gouvernance/20-gouvernance-dictionnaire.js","functions":["wfTransition","wfBadge","wfHistoryHtml","wfSetDictStatus","wfSetBoStatus","wfStats","readyTableNames","tableByName","renderGovDictionaryBo","ensureDictEntry","switchGovTab","renderGovernance","renderGovDictionary","updateDictField"]},{"file":"20-gouvernance/21-gouvernance-listes-de-valeurs.js","functions":["vlList","vlSelectHtml","vlBindPickTable","vlBindFromPicker","vlBind","vlById","vlAdd","vlSet","vlDel","vlParseInline","vlSetInline","vlInlineText","vlUsage","vlBindingFor","vlCodesSql","vlOutsideCond","vlCount","vlLabel","vlPreview","renderValueLists","updateDictColField","sampleTableExamples"]},{"file":"20-gouvernance/22-gouvernance-objets-metier.js","functions":["computeMultiSourceAttributes","renderGovObjects","boCoreTableNames","getBoFacets","boCoreElements","boElToggleUsedBy","boElSetField","boUsageBadgeHtml","boAllAttrRows","renderBoUsageByApp","renderBoUsageMatrix","boUsageMatrixAll","openAttrLineage","buildAttrLineageGraph","buildColumnLineageGraph","lineageFilesOn","lineageFilesSet","lineageFilesToggleHtml","buildBoLineageGraph","openBoLineage","boFacetElToggleUsedBy","boFacetElSetField","boAttrCardinality","boCardBadgeHtml","boRepeatSplit","boFoldRows","boFoldMax","boFoldIds","boFoldField","boFoldCols","boFoldWrite","boFoldRename","boMultiNorm","boAttrMulti","boValueCountBadgeHtml","boMultiSelectHtml","boSetMulti","boFacetCardBadgeHtml","boToggleFold","boFoldSample","boAttrMapOf","boSampleValues","boAttrSampleOne","boAttrSampleAll","boAttrWrite","boAttrLiftFromColumn","dictColResolved","boMapChipHtml","boMapPickToggle","boElementRowHtml","boAttrTableHead","boElementsTableHtml","facetScopeLabel","facetElementRowHtml","renderBoFacetCard","renderBoStructure","addBoStructure","updateBoFacet","removeBoStructure","addFacetElement","updateFacetElement","removeFacetElement","addFacetScope","removeFacetScope","addFacetApplies","removeFacetApplies","fillFacetAppliesVals","fillFacetScopeVals","addBoReference","removeBoReference","boAttrHasMap","boAttrProv","boFilterOk","boCompleteness","boFocus","boGoFilter","boSetFilter","boSetQ","boSetStructView","boSelect","boListKey","boCompletenessHtml","renderBoWorkspace","boAddAttrAndSelect","boAttrWriteR","boAttrFormHtml","boFacetFormHtml","boNewFacetFormHtml","boAddFacetAndSelect","boRefsFormHtml","renderBoDetail","setBoTab","openBoAudit","renderBoSourcesBlock","boSourceWhere","boSrcAddFilter","boSrcSetFilter","boSrcDelFilter","boMasterTable","boPerimeterTableNames","fillBoVolumetry","getBoHierarchies","buildDetectedHierarchy","findBoHier","renderBoHierarchy","renderBoHierCard","addBoHierarchy","removeBoHierarchy","updateBoHier","addBoHierLevel","removeBoHierLevel","toggleBoHierLevelParent","fillBoHierLevelValues","auditBoHierarchy","auditBusinessObject","bizRuleLabel","auditBusinessRule","renderBizRules","updateBizRule","bizRuleRelChanged","bizRuleDirChanged","bizRuleCondColChanged","addBizRule","removeBizRule","testBizRule","renderBoContextRules","fillCtxRuleValues","updateBoContext","addBoContextRule","updateBoContextRule","removeBoContextRule","analyzeContextCoverage","addBusinessObject","updateBusinessObject","removeBusinessObject","addBoElement","updateBoElement","removeBoElement","populateBoMapCols","addBoMapping","removeBoMapping","createObjectFromAttribute","openBoDesigner","closeBoDesigner","renderBoDesigner","analyzeBoDesign","generateObjectFromDesign","renderObjectModelDiagram","_renderObjectModelImpl","suggestObjectsForTable","openBoWizard","attachSourceToObject","confirmBoWizard","addBoSource","updateBoSourceRole","updateBoApp","removeBoSource"]},{"file":"20-gouvernance/23-gouvernance-perimetres.js","functions":["renderGovPerimeters"]},{"file":"20-gouvernance/24-gouvernance-applications-processus.js","functions":["assetById","assetLabel","assetUsage","appDownstream","assetDomainEff","assetAppLink","toggleAssetTable","populateAssetCols","addAssetCol","removeAssetCol","renderGovAssets","addGovAsset","updateGovAsset","sourceTableNames","appOwnerOfSource","toggleAppSource","boSyncAppsFromSources","appBusinessObjects","migrateAppSources","removeGovAsset","assetAttachHtml","toggleAssetLink","boAttachHtml","toggleEntityBo","openBoFiche","addPerimeter","updatePerimeter","removePerimeter","togglePerimeterTable"]},{"file":"20-gouvernance/25-gouvernance-glossaire.js","functions":["termsOfBo","termsFor","termTagsHtml","termTagHint","termTagOpen","termByName","termTagAdd","catRefreshFiche","termTagRemove","glossViewBar","renderGlossaryByBo","renderGlossaryByAsset","termAttrLinks","termAssetIds","termAttrRow","attrsOfColumn","glossaryMigrateLinks","renderGovGlossary","addGlossaryTerm","updateGlossaryTerm","removeGlossaryTerm","glossaryFillAttrs","glossaryLinkAttr","boAttrSetTerm","addGlossaryAttr","removeGlossaryAttr","addGlossaryAsset","removeGlossaryAsset","attrTermsCellHtml","attrTermUnlink","colTermsPillsHtml","termsOfAsset","termsOfAttr","populateGlossLinkCols","addGlossaryLink","removeGlossaryLink"]},{"file":"20-gouvernance/26-gouvernance-analyse-impact.js","functions":["populateImpactCols","computeImpact","runImpactAnalysis","renderLineageGraph"]},{"file":"30-lineage-graphes/30-lineage-par-attribut.js","functions":["renderAttrFlow","attrFlowCard","attrFlowDraw","attrFlowClick","attrFlowChain","attrFlowApplyFocus","_renderLineageImpl","lineageChainFocus","lineageGoto","lineageFullscreen"]},{"file":"20-gouvernance/27-gouvernance-historique.js","functions":["recordQualityHistory"]},{"file":"20-gouvernance/28-gouvernance-surveillance-sources.js","functions":["swModel","swGet","swReadyTables","swSimpleType","swRealSchema","swFreqDays","swFreshness","swFreshBadge","swSnapshot","swDrift","swGenContract","swToggleRequired","swCheckContract","swFreezeData","swComputeDelta","swReconcile","swSet"]},{"file":"30-lineage-graphes/31-lineage-carte-des-flux.js","functions":["lfEdgeNature","lfEdgeKeys","lfModel","lfFoldGraph","lfCollapseToObjects","lfFocusBo","lfSetFocusBo","lfSetFocusRadius","lfSetGrain","lfCollapseSources","lfToggleSources","lfNode","lfEdge","lfNodeKind","lfEdgeRel","lfWritebackTables","lfConsumedAttrs","lfIncomingCount","lfProducerOf","lfAppProduces","lfDeduceRole","lfNodeRole","lfConsolidates","lfDeduceEdgeType","lfEdgeTypeLabel","lfOwnedTables","lfIsReport","lfIcon","lfAge","lfFresh","lfEdgeFresh","lfDistStatus","lfWorst","lfEdgeHealth","lfC","lfInjectCss","renderLineageFlow","lfBuilderHtml","lfDrawGraph","lfResetLayout","lfToggleObjects","lfSaveNodeForm","lfEditNodeStart","lfEditCancel","lfDelNode","lfSaveEdgeForm","lfEditEdgeStart","lfDelEdge","lfSetThreshold","lfClearAll","lfRederiveAll","lfSeedFromObjects","lfSyncFromData","lfAutoSyncAsset","lfMasteryConflicts","lfModelChecks","lfOpenNode","lfOpenEdge","lfKeyExpr","lfEdgePairs","lfEnsurePairs","lfXfLabel","lfPairExprs","lfPairAdd","lfPairDel","lfPairAddCommon","lfBoPairsForEdge","lfApplyBoPairs","lfReconEdge","lfRunnableEdge","lfDownstreamFeeds","lfReconDownstream","lfExportEcarts","lfSetView","lfNodeAttrs","lfXkChanged","lfLog","lfLogPush","lfClearLog","lfJournalHtml","lfEdgeColsChanged","renderSrcWatch","renderGovHistory"]},{"file":"20-gouvernance/29-gouvernance-import-en-masse.js","functions":["giOpen","giTemplateRows","giDownloadTemplate","giNorm","giAutoMap","giLoadFile","giVal","giRender","giApply"]},{"file":"10-noyau/14-noyau-centre-de-sauvegarde.js","functions":["openBackupCenter","closeBackupCenter","renderBkStatusUx","uxSaveNow","renderGovShare","fillBackupsList","restoreBackup","fillStorageEstimate","wipeOpfsData","resetLocalStorage","toggleNoPersist","filterGovernanceToScope","exportGovernanceBundle","importGovernanceBundle","readFileAsArrayBuffer","processDataStream","readFileAsText"]},{"file":"10-noyau/15-noyau-navigation-theme.js","functions":["phaseOfTab","switchPhase","openGovTab","v7Ico","v7Deemojify","v7WatchIcons","renderNav","v7ClickPhase","v7ToggleCollapse","v7ApplyTheme","v7SetTheme"]},{"file":"10-noyau/16-noyau-ux-drawer-contexte.js","functions":["fmtPctUx","cellMeter","cellQuality","cellDist","uxTypeOf","typeIconUx","colDefFor","emptyStateHtml","fmtBadgeUx","lastAuditFor","renderContextBar","openUxDrawer","closeUxDrawer","uxSetDensity","uxColQuality","openColumnDrawer","uxGoDictionary","uxGoClean","switchTab"]},{"file":"40-modele-sources/40-tables-concues.js","functions":["tdNewDesign","tdEdit","tdCancel","tdAddSource","tdRemoveSource","tdAddAttr","tdRemoveAttr","tdRenameAttr","tdSetMap","tdToggleKey","tdAddCalc","tdRemoveCalc","tdSetCalc","tdSetName","tdAddFilter","tdSetFilter","tdRemoveFilter","tdSetFormat","tdMoveAttr","tdMoveAttrEdge","boMoveEl","reorderDragStart","reorderDragEnd","reorderDragOver","reorderDragLeave","reorderDrop","arrMove","tdAttrDrop","boElReorder","tdFillDatalist","tdAddFk","tdRemoveFk","tdSetFk","tdWizStart","tdWizCancel","tdWizSet","tdWizAdd","tdWizHtml","tdAddJoin","tdRemoveJoin","tdSetJoin","tdFormulaSql","tdValidJoins","tdValidFks","tdFormatLabel","tdNormExpr","tdBuildSql","tdAutoRebuildFor","tdMaterialize","tdSaveDesign","tdRebuild","tdDivAttrs","tdCollectDivergences","tdDivergenceReport","tdExportDivergences","renderDesignedSourcePanel","tdGInjectCss","tdGToggle","tdGAutoFeed","tdGMap","tdGDropNew","tdGraphHtml","tdDrawGraph","renderTablesDesign","tdEditorHtml"]},{"file":"40-modele-sources/41-analyse-couverture.js","functions":["covNeighbors","covPopulate","covBaseChanged","covDimColOptions","covDimTableChanged","covDim2TableChanged","covDim3TableChanged","covRelChanged","covScopeTable","covAddFilter","covSetFilter","covDelFilter","covColIsDate","covRenderFilters","covWhere","covRelBetween","runCoverageAnalysis"]},{"file":"10-noyau/17-noyau-cockpit.js","functions":["renderCockpit"]},{"file":"50-sensibilite/50-sensibilite-rgpd-detection.js","functions":["scanPII"]},{"file":"20-gouvernance/2A-gouvernance-dossier-export.js","functions":["exportGovernanceReport","exportConfiguration","importConfiguration","autoDetectRelations","addPredefinedRelation","repairCsvSource"]},{"file":"40-modele-sources/42-sources-fusion-fichiers.js","functions":["openMergeModal","closeMergeModal","mergePickFiles","removeMergePicked","renderMergeModal","createMergedSource"]},{"file":"40-modele-sources/43-modele-deduction-liens.js","functions":["normColName","relCandidatePairs","inferRelations","relInferModal","closeRelInfer","openRelInfer","renderRelInferResults","addSelectedInferred","deduceRelationRow","toggleDbModal","connectApi","handleFilesAdded","loadNewSourceFromFile","encMojibakeInfo","fixSourceEncoding","dismissEncHint"]},{"file":"20-gouvernance/2B-gouvernance-catalogue.js","functions":["catLayerOk","catOpenByKey","catKeyAttr","catNorm","catOwnColor","catSensOf","catValOf","catQOf","termById","termNameOf","termTargets","termsOfColumn","catBuildIndex","catMatch","catToggleFacet","catClearFacets","catSet","catSort","catCardHtml","renderGovCatalog","catRealTypeLabel","catTypeChip","catFillRealTypes","catLineageCounts","catKeyOf","catSameKey","catBack","catOpenFiche","catFillColType","catGoLineage","catEditInObject","catGoLineageTab","catShowAttrLineage","catFitLineage","catCloseLineage","catLineageFullscreen","catUseData"]},{"file":"20-gouvernance/2C-gouvernance-personnes-validation.js","functions":["govPeople","govProposals","govFeatureOn","govDomains","govAddDomain","govDomainUsage","govDomainUsageText","govRemoveDomain","curUser","govSetUser","govRoleSummary","govRoleIn","govCanEdit","govCanPropose","govIsOwnerOfBo","govCanEditBo","govCanProposeBo","govLinkOwner","propTargetBo","propCanDecide","govGuard","boDomainOf","govPersonName","govPropose","propPending","propCountPendingFor","propFmt","propApply","propTraceOn","propDecide","propAccept","propReject","propWithdraw","propAcceptAll","propGroupKey","propGroupLabel","propOpenTarget","propBadgeHtml","termCtxDomain","termCtxCanEdit","termCtxCanPropose","govTermCtxLabel","govValNames","govDescribeVal","govDescribeChange","govBoPatch","govDeltaKey","govDelta","govApplyDelta","govPatchToDeltas","govApplyPatch","govWrapBoAction","propApplyAction","govWrapAssetAction","propActionsHtml","tableDomainOf","renderUserSwitch","govAddPerson","govSetPerson","govRemovePerson","govAddRole","govRemoveRole","govDemoPeople","renderGovPeople","renderGovReview","govLockAttr","govLockBand","govLockHtml","govLockZones","govLockedHint","govDomainSelectHtml"]},{"file":"40-modele-sources/44-rapprochement-inter-sources.js","functions":["lkList","lkById","lkAdd","lkSet","lkDel","lkAddCmp","lkSetCmp","lkDelCmp","lkScoreExpr","lkDisplayExpr","lkRun","lkDecide","lkGolden","renderLinkage"]},{"file":"50-sensibilite/51-sensibilite-anonymisation.js","functions":["pvCfg","pvSuggestLevel","pvLevelOf","pvSetLevel","pvSetAction","pvAnonExpr","pvPlan","pvExport","renderGovPrivacy"]},{"file":"40-modele-sources/45-modele-analyse-impact.js","functions":["modelImpact","renderModelImpactPanel"]},{"file":"60-tableaux-preparation/60-tableaux-de-bord.js","functions":["dbList","dbById","dbAdd","dbOpen","dbClose","dbDup","dbDel","dbSet","dbAddTile","dbSetTile","dbDelTile","dbAddFilter","dbSetFilter","dbDelFilter","dbWhereFor","dbTileSql","dbRunTile","dbRunAll","dbExportHtml","renderDashboards"]},{"file":"60-tableaux-preparation/61-kpi-alertes-rapport.js","functions":["dbKpiStatus","dbCheckAlerts","dbAlertIcon","dbAlertsHtml","dbExportReport"]},{"file":"60-tableaux-preparation/62-preparation-recettes.js","functions":["rcRefValuesSql","rcList","rcAdd","rcById","rcSet","rcDel","rcAddStep","rcSetStep","rcDelStep","rcMoveStep","rcBuildSql","rcRun","rcAutoRun","rcPreview","rcExport","rcImport","rcStepParamsHtml","renderRecipes","cbShowBadge","cbReset","cbApply"]},{"file":"10-noyau/18-noyau-mode-consultation.js","functions":["govTabAllowed","govVisibleTabs","govIsReadOnly","govSetReadOnly","govRoDisplayValue","govProjectValues","govApplyReadOnly"]},{"file":"10-noyau/19-noyau-guide-assistant.js","functions":["guideRail","guideStart","guideStop","guideFlowSteps","guideNext","guideTick","guideEls","guidePlace","guideTipFill","wizReadyTables","wizOpen","wizClose","wizMaybeAutoOpen"]},{"file":"10-noyau/1A-noyau-version-changelog.js","functions":["appVersionShort","openVersionNotes"]},{"file":"70-qualite/70-series-temporelles.js","functions":["tsList","tsById","tsForTable","tsCfgOk","tsAdd","tsSet","tsDel","tsTsSql","tsValSql","tsKeySql","tsCte","tsProfileSql","tsCalendarSql","tsPickBucket","tsFilterSql","tsRuleQuery","tsPickCfg","tsAnalyse","tsDur","tsCalendarHtml","renderTimeSeries","tsScreenHtml","qrRules","boQualityRules","qrEvalRule","qrAdd","qrSet","qrDup","qrDel"]},{"file":"70-qualite/71-qualite-regles-score.js","functions":["qrTxtSql","qrDateSql","qrNumSql","qrSmartCmp","qrSplitLogical","qrFindCmp","qrExprSql","qrFailCond","qrSqlCheck","qrSqlCond","qrGroupSql","qrUniqueKey","qrBoById","qrBoAttrNames","qrBoAttrMaps","qrBoResolutions","qrVirtual","qrExplain","qrExplainHtml","tsDateSql","tsHumanSql","tsInspectSql","qrInspectSql","qrRunOne","qrRun","qrAutoRun","qrScore","qrTakeSnapshot","qrScoreColor","qrExportCsv","qrExportJson","qrParamsHtml","renderQualityRules","qrCompare"]},{"file":"40-modele-sources/46-sources-connecteurs.js","functions":["cnList","cnById","cnAdd","cnSet","cnDel","cnSheetUrl","cnFetch","cnJsonAtPath","cnRun","cnPanelHtml"]},{"file":"40-modele-sources/47-sources-livraison-zip.js","functions":["zipListEntries","zipExtractEntry","zipDeliveryLoad","zipSetMap","zipSetFileMap","renderZipMapping","zipDeliveryImport"]},{"file":"40-modele-sources/48-sources-mises-a-jour.js","functions":["fsDirSupported","refreshTableFromFile","manualUpdateSource","saveWatchedDirs","saveUpdatePrefs","ensureDirPermission","addWatchedDir","removeWatchedDir","_scanDirImpl","scanWatchedDir","scanAllWatchedDirs","setAutoRefresh","setAutoRefreshMinutes","scheduleAutoRefresh","toggleSourceUpdatePanel","renderSourceUpdatePanel","restoreUpdateConfig","updateTableConfig","removeTable","comboifyTableSelect","srcNorm","srcSearchChanged","renderTables","addManualRelation","removeRelation","updateRelation","fillRelTableSel","fillRelColSel","renderRelationsList","tableHierarchyInfo","isHierTable","hierNodeContent","exportGraphImage","svgExportImage","relKindSymbol","relEdgeLabel","measureRelation","measureRelationCardinality","renderGraph","renderMcdControls"]},{"file":"30-lineage-graphes/32-graphes-moteur-svg.js","functions":["createSvgGraph"]},{"file":"40-modele-sources/49-modele-rendu-svg.js","functions":["svgBuildNodeModels","svgBorderPoint","svgApplyTransform","renderGraphSVG","svgFitAll","svgTrunc","svgBindEvents","svgUpdateEdgeRec","svgUpdateEdgesFor","svgSetDim","svgApplyFocus","svgHighlightNeighbors","svgClearHighlight","svgCenterOn","mcdGotoTable","mcdTogglePathMode","mcdPathClick","svgRenderMinimap","getReachableTables","updateBaseTableSelect","handleBaseTableChange","dedupeHeader"]},{"file":"80-extraction-exploration/80-extraction-avancee.js","functions":["advReachableTables","advHierAttrs","advColExpr","advCalcExpr","advColNeeds","advCondSql","advRelValid","advRelPairKey","advRelsByPair","advRelLabel","advChosenRel","advSetJoinChoice","advJoinChoices","advLinkAnchor","advRouteKey","advAlias","advPathKey","advPathLabel","advPaths","advViaOptions","advViaLabel","advViaSelectHtml","advViaSync","advViaVal","advViaTxt","advPlanJoins","advExpandCol","buildAdvSql","advCurrentSql","advColumnsOf","advCount","advPreview","advShowSql","advQuality","advCsvCell","advGenerate","advLoadFromObject","advSetBase","advAddColumn","advUpdateColumn","advRemoveColumn","advAddAllColumns","advAddFilter","advRemoveFilter","advFillFilterVals","advToggleDedup","advToggleDedupKey","advSetDedupKeep","advToggleGroup","advAddAggCond","advRemovePendingCond","advAddAgg","advFillAggCondVals","advAggCondTblChanged","advCalcFnChanged","advCalcTblChanged","advConcatAddPart","advConcatDelPart","advRenderConcatParts","advAddCalcColumn","advUpdateAgg","advRemoveAgg","advToggleCustomSql","advColLabel","epList","epRemapTableRefs","epSuggestName","epSaveCurrent","epLoad","epRename","epDelete","renderAdvExtract","advInitViaSelects","gfxInjectCss","gfxIsFull","gfxAvailH","gfxExitFull","gfxToggleFull","gfxFullBtn","advGInjectCss","advRoutes","advGRouteOf","advGCol","advGFilters","advGAlias","advGToggleCol","advGAllCols","advGSetField","advGAddFilter","advGSetFilter","advGDelFilter","advGAddCount","advGSetBase","advGToggleMode","advGFilter","advGSetView","advGClearFilter","advGVisibleCols","advGraphHtml","advGDrawSoft","advDrawGraph","advColColChanged","advLinkTblChanged","advLinkModeChanged","advAddLinkColumn","advHierTblChanged","advHierAddAttr","advHierDelAttr","advRenderHierAttrs","advHierLinkTblChanged","advHierTypeChanged","advAddHierColumn","advBulkOpen","advBulkFilter","advBulkApply","advSyncBase","advMigrateClassic","advSetJoinType","advSetLimit500","advFltTblChanged","advAggTblChanged"]},{"file":"80-extraction-exploration/81-stats-bi.js","functions":["updateVizBaseTableSelect","handleVizBaseTableChange","toggleVizMeasure","generateChart"]},{"file":"80-extraction-exploration/82-explorateur-360.js","functions":["populateBrowserTableSelect","populateCompareTables","populateExpTableSelect","populateExpColumns","renderExpConfigCols","toggleGraphConfigCol","buildNodeLabel","applyGraphFilter","fetchRowsByCondition","addGraphNode","addGraphEdge","expandNodeRelationships","startExploration"]},{"file":"80-extraction-exploration/83-navigateur-donnees.js","functions":["handleBrowserTableChange","onBrowserFilterInput","toggleBrowserSort","applyBrowserSortAndRender","jumpToRelated","loadBrowserData","renderBrowserTableHTML"]},{"file":"80-extraction-exploration/84-comparateur.js","functions":["handleCompTableChange","addCompKey","removeCompKey","updateCompKey","compKeyParts","renderCompKeys","addCompMapping","removeCompMapping","updateCompMapping","renderCompMappings","comparisonNormExpr","runComparison"]},{"file":"70-qualite/72-qualite-audit.js","functions":["populateQualTables","auditFacetCardinality","profileBusinessObject","handleQualTableChange","qualFilterTableId","qualFilterHeaders","addQualFilterRow","removeQualFilterRow","updateQualFilter","renderQualFilters","qualCondSql","buildQualWhere","registerQualInspect","qualInspectButtons","qualInspectModal","closeQualInspectModal","qualViewInspect","qualExportInspect","qualAnomalyEntries","renderQualAnomalyInspector","bizRuleViolRowsSql","facetViolRowsSql","profilingRegex","performDeterministicProfiling","switchQualSubTab"]},{"file":"70-qualite/73-qualite-profilage-doublons.js","functions":["getKeyProfiles","selfRelationFor","guessParentPointer","dupAllowedTables","fkPartLabel","profileScopeLabel","scopeCondSql","renderDupSection","addKeyProfile","removeKeyProfile","addScopeCond","removeScopeCond","fkScopeColChanged","fkTableChanged","fkCondColChanged","addFkPart","updateFkPartMatch","removeFkPart","refreshKeyPreview","renderKeySegments","buildDupSrcSql","analyzeDuplicates","renderDupResults","toggleDupRows","renderDupRowsTable","downloadTextFile","exportDupCsv","collectDupRowsByType","exportDupRowsCsv","exportDupRowsXlsx","exportAuditCsv","exportAuditJson","renderProfilingReport","toggleQualSections","showColumnProfilingDetail","relatedTableIdsForAnalysis","analyzeFunctionalPatterns","runQualityAudit"]},{"file":"10-noyau/1B-noyau-ux-scroll-focus.js","functions":[]},{"file":"90-couche-v11/92-v11-noyau.js","functions":["v11LoadPrefs","v11SavePrefs","v11SetPref","v11ApplyPrefs","v11Present","v11RememberScreen","v11RestoreScreen","v11ToastHost","v11Short","v11Toast","v11ToastNext","v11ToastClose","v11GovJson","v11Undo","v11SaveIndicator","v11MountTopbar","v11NavKey","v11HistPush","v11HistGo","v11Back","v11Fwd","v11HistButtons","v11Crumb","v11Fs","v11FsRedraw","v11FsClose","v11FsReattach","v11FsBtn","v11FsButtons","v11SortableTables","v11SortTable","v11Wording","v11AutoCollapse","v11SetEditing","v11CompactInit","v11FocusMode","v11BoListFilter","v11Recent","v11RecentGo","v11RecentList","v11HelpOpen","v11HelpClose","v11ModalOpen","v11ModalClose"]},{"file":"90-couche-v11/93-v11-fiches-lecture.js","functions":["v11Editing","v11ToggleEdit","v11GoBo","v11GoAsset","v11GoTable","v11EditAttr","v11Can","v11Fiche","v11Acts","v11IE","v11InlineEdit","v11InlineSave","v11EditBar","v11Chip","v11Empty","v11Dash","v11BoRead","v11TermRead","v11AssetRead","v11TableRead","v11ApplyReadMode","v11ListBarHtml","v11ListFilter","v11Readify","v11ReadifyDictBo","v11Duplicate","v11Print"]},{"file":"90-couche-v11/94-v11-recherche-accueil.js","functions":["v11Index","v11Score","v11PaletteOpen","v11PaletteRender","v11PaletteGo","v11PaletteClose","v11HomeHtml","v11LoadSample","v11TourStart","v11TourStep","v11TourNext","v11TourEnd"]},{"file":"90-couche-v11/95-v11-saisie.js","functions":["v11WizardOpen","v11WizardRender","v11WizCol","v11WizardCollect","v11WizardNext","v11WizardPrev","v11WizardFinish","v11BulkOpen","v11BulkField","v11BulkApply","v11AddMapping","v11ColsPanelHtml","v11DragInit"]}]);
 </script>
 </body>
 </html>
