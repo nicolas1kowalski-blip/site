@@ -1,7 +1,9 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.2.0';
+        const V13_VERSION = '13.3.0';
         const V13_CHANGELOG = [
+            { v: '13.3.0', d: '2026-09-10', t: 'Parcours de la donnée : des liens qui ne se superposent plus', items: [
+                'Reprend la V12.11 : un point d\'attache par lien, tracé à angles droits avec un couloir par lien, mise en avant au survol et pendant le déplacement d\'une case — dans tous les graphes.'] },
             { v: '13.2.0', d: '2026-09-10', t: 'Parcours de la donnée : jusqu\'au début', items: [
                 'Reprend la V12.10 : le parcours d\'un objet, d\'une information ou d\'une colonne remonte tout l\'amont connu jusqu\'au premier maillon, avec le panneau « Depuis le début » et l\'interrupteur « ⇠ Jusqu\'au début » (onglet Objets et catalogue).',
                 'La phrase de résumé en tête du parcours cite aussi les points de départ : « … tout au début : Système tiers ».'] },

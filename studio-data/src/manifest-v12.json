@@ -292,6 +292,10 @@
   {
    "file": "9E-v12-amont-complet.js",
    "role": "V12 : lineage — remonter jusqu'au début de la donnée (sources des objets amont, fichiers lus par les applications et leurs producteurs, alimentations de la carte des flux), chaînes complètes en clair, interrupteur « Jusqu'au début » ; onglet Objets et catalogue"
+  },
+  {
+   "file": "9F-v12-liens-lisibles.js",
+   "role": "V12 : liens lisibles dans tous les graphes — un point d'attache par lien, tracé à angles droits avec un couloir par lien (plus de superposition, même après déplacement des cases), mise en avant au survol et pendant le déplacement ; crochets router / afterDraw du moteur SVG"
   }
  ]
 }

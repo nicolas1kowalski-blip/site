@@ -15907,7 +15907,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     if (e.source === e.target) { const b = box(e.source); const d = (e.loopCfg && e.loopCfg.dist) || 40;
                         eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.source)}" data-loop="${d}"><path d="M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} marker-end="url(#uArrow)"/>${e.label ? `<text class="usvg-lbl" x="${b.cx}" y="${b.cy - b.h / 2 - d - 4}" text-anchor="middle" font-size="10">${esc(e.label)}</text>` : ''}</g>`; return; }
                     const a = box(e.source), b = box(e.target);
-                    const ep = edgePath(a, b);
+                    const ep = (createSvgGraph.router && createSvgGraph.router(S, e, a, b)) || edgePath(a, b);
                     const shown = lblFor(e);
                     eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.target)}"><path d="${ep.d}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} opacity=".85" marker-end="url(#uArrow)"/>${shown ? `<text class="usvg-lbl" x="${ep.mx}" y="${ep.my - 3}" text-anchor="middle" font-size="10">${esc(shown)}</text>` : ''}</g>`;
                 });
@@ -15926,6 +15926,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 });
                 S.c.innerHTML = `<svg class="usvg" width="100%" height="100%" style="display:block"><defs><marker id="uArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs><g class="uvp" transform="translate(${S.tx},${S.ty}) scale(${S.k})">${eSvg}${nSvg}</g></svg>`;
                 bind();
+                // Crochet de couche (V12) : décoration après rendu (mise en avant des liens, calques). Sans effet si absent.
+                if (createSvgGraph.afterDraw) { try { createSvgGraph.afterDraw(S, S.c.querySelector('svg.usvg')); } catch (e) {} }
             };
             const apply = () => { const vp = S.c.querySelector('.uvp'); if (vp) vp.setAttribute('transform', `translate(${S.tx},${S.ty}) scale(${S.k})`);
                 const sv = S.c.querySelector('svg.usvg'); if (sv) sv.classList.toggle('usvg-far', S.k < 0.45); };
@@ -15945,7 +15947,8 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                     }
                     if (!S.pos[rec.s] || !S.pos[rec.t]) return;
                     const a = box(rec.s), b = box(rec.t);
-                    const ep = edgePath(a, b);
+                    const ed = createSvgGraph.router ? S.edges.find(x => x.id === rec.id) : null;
+                    const ep = (ed && createSvgGraph.router(S, ed, a, b)) || edgePath(a, b);
                     if (rec.path) rec.path.setAttribute('d', ep.d);
                     if (rec.text) { rec.text.setAttribute('x', ep.mx); rec.text.setAttribute('y', ep.my - 3); }
                 });
@@ -15957,7 +15960,7 @@ ORDER BY abs(v - med) / NULLIF(seuil, 0) DESC`;
                 const nEls = {}; svg.querySelectorAll('.usvgn').forEach(g => nEls[g.getAttribute('data-id')] = g);
                 const byN = {};
                 svg.querySelectorAll('.usvge').forEach(g => {
-                    const rec = { g, s: g.getAttribute('data-s'), t: g.getAttribute('data-t'), loop: g.getAttribute('data-loop'), path: g.querySelector('path'), text: g.querySelector('text') };
+                    const rec = { g, id: g.getAttribute('data-id'), s: g.getAttribute('data-s'), t: g.getAttribute('data-t'), loop: g.getAttribute('data-loop'), path: g.querySelector('path'), text: g.querySelector('text') };
                     if (!rec.s) return;
                     (byN[rec.s] = byN[rec.s] || []).push(rec);
                     if (rec.t !== rec.s) (byN[rec.t] = byN[rec.t] || []).push(rec);

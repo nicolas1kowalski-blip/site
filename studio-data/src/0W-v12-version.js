@@ -1,7 +1,12 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.10.0';
+        const V12_VERSION = '12.11.0';
         const V12_CHANGELOG = [
+            { v: '12.11.0', d: '2026-09-10', t: 'Graphes : les liens ne se superposent plus', items: [
+                '<b>Un point d\'attache par lien.</b> Les liens d\'une même case partaient tous de son centre et se confondaient ; ils sont désormais répartis sur le côté de la case, dans l\'ordre vertical de l\'autre extrémité, et ne se croisent plus au départ.',
+                '<b>Tracé à angles droits, un couloir par lien</b> : entre deux colonnes, chaque lien a sa propre verticale ; deux liens vers la même case arrivent sur deux points distincts. Les angles sont arrondis, l\'étiquette est posée sur le dernier segment avec un halo pour rester lisible sur un trait. Quand on déplace une case, ses liens sont recalculés avec les mêmes règles ; si deux cases se chevauchent, le lien contourne par le haut au lieu de disparaître.',
+                '<b>Mise en avant</b> : au survol d\'un lien ou d\'une case, le lien (ou tous les liens de la case) passe au-dessus des autres cases, en gras ; pendant un déplacement, les liens de la case suivent en gras. Vaut pour tous les graphes : lineage d\'un objet ou d\'une information, catalogue, carte des flux, modèle.',
+                'Action de la palette « Graphes : liens courbes / liens à angles droits » pour revenir au tracé d\'origine (mémorisé).'] },
             { v: '12.10.0', d: '2026-09-10', t: 'Lineage : remonter jusqu\'au début de la donnée', items: [
                 '<b>Tout l\'amont, pas seulement le premier niveau.</b> Dans le graphe d\'un objet, d\'un attribut ou d\'une colonne (onglet Objets et fiches du catalogue), chaque élément amont est remonté à son tour : les sources de l\'objet dont on reprend un attribut, l\'objet d\'un attribut d\'origine, les fichiers lus par une application et leurs producteurs, les applications qui alimentent une application (carte des flux), les fichiers dont un fichier est construit (table conçue, extraction promue, connecteur), les applications sur lesquelles s\'appuie un processus — jusqu\'au tout premier maillon, marqué <b>« début de la chaîne »</b>. Chaque élément ajouté indique son niveau (« amont 2 », « amont 3 »…).',
                 '<b>Panneau « Depuis le début »</b> au-dessus du graphe : les chaînes complètes en clair, du point de départ jusqu\'à l\'élément (« Système tiers ⇢ Gestion des tiers ⇢ Personne ⇢ Contrat »), avec le nombre de chaînes et de points de départ.',

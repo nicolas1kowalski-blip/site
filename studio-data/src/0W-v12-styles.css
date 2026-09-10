@@ -186,4 +186,9 @@
     .v12up-body{padding:0 0 8px;display:flex;flex-direction:column;gap:4px} .v12up-none{color:var(--v7-txt-2);font-style:italic}
     .v12up-chain{display:flex;flex-wrap:wrap;align-items:center;gap:3px 4px;line-height:1.3} .v12up-step{display:inline-block;border:1px solid var(--v11-line);border-radius:999px;padding:1px 8px;background:var(--v7-bg);color:var(--v7-txt);font-weight:600} .v12up-step.first{border-color:#7c3aed;background:#ede9fe;color:#4c1d95} .v12up-step.me{border-color:#16a34a;background:#dcfce7;color:#14532d;font-weight:800} .v12up-arr{color:var(--v7-txt-2);font-weight:800}
     html[data-theme="dark"] .v12up-step.first{background:#3b2a6b;color:#ddd6fe} html[data-theme="dark"] .v12up-step.me{background:#14532d;color:#bbf7d0}
+    /* ---- V12.11 : liens lisibles (graphes) ---- */
+    .usvg .usvg-lbl{paint-order:stroke;stroke:var(--v7-surface,#fff);stroke-width:3px;stroke-linejoin:round}
+    .usvg .usvge path{transition:stroke-width .12s}
+    .usvg .usvge-on path{stroke-width:3px !important;opacity:1 !important} .usvg .usvge-on text{font-weight:800;font-size:11px}
+    .usvg.usvg-drag .usvgn{cursor:grabbing}
     </style>
