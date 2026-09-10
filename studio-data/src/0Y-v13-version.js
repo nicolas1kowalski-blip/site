@@ -1,7 +1,9 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.3.1';
+        const V13_VERSION = '13.3.2';
         const V13_CHANGELOG = [
+            { v: '13.3.2', d: '2026-09-10', t: 'Extraire : requêtes volumineuses sans fichier temporaire (V12.11.2)', items: [
+                'Plus d\'erreur « HTML FileReaders do not support writing » : les actions d\'Extraire relancent la requête en mémoire pure, et expliquent quoi faire si la mémoire ne suffit pas.'] },
             { v: '13.3.1', d: '2026-09-10', t: 'Extraire : correctifs de la V12.11.1', items: [
                 'Vue graphique refermée durablement par son bouton ; « l\'un ou l\'autre lien » pour les synthèses d\'une table liée ; transposition en colonnes plus robuste ; erreurs HTML lisibles.'] },
             { v: '13.3.0', d: '2026-09-10', t: 'Parcours de la donnée : des liens qui ne se superposent plus', items: [

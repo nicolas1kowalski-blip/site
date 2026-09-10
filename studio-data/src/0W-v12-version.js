@@ -1,7 +1,9 @@
         // ======================= V12 : VERSION ET JOURNAL DE LA COUCHE « TOUTE L'APPLICATION » =======================
         // Assemblé uniquement dans StudioDataV12.html (manifest-v12.json), après la couche V11 dont il hérite.
-        const V12_VERSION = '12.11.1';
+        const V12_VERSION = '12.11.2';
         const V12_CHANGELOG = [
+            { v: '12.11.2', d: '2026-09-10', t: 'Extraire : « HTML FileReaders do not support writing »', items: [
+                'Quand une requête d\'Extraire dépasse la mémoire (transposition ou synthèse sur une grosse table liée), DuckDB voulait écrire un fichier temporaire, ce que le navigateur interdit : « Invalid Error: HTML FileReaders do not support writing ». <b>Compter, prévisualiser, bilan, générer et jeu temporaire relancent désormais la requête en mémoire pure avec une limite relevée</b>, comme les analyses du noyau. Si cela ne suffit toujours pas, le message dit quoi faire : cocher « 500 lignes », ajouter un filtre, réduire le nombre de colonnes transposées, générer en plusieurs fois.'] },
             { v: '12.11.1', d: '2026-09-10', t: 'Extraire : trois correctifs', items: [
                 '<b>Vue graphique</b> : refermée par son bouton, elle ne réapparaît plus à la manipulation suivante (le bouton désactive l\'interrupteur, comme la case à cocher).',
                 '<b>Synthèse d\'une table liée</b> : le sélecteur « via » propose désormais « 🔀 le lien renseigné, quel qu\'il soit », comme l\'ajout de colonne. Compter, compter les valeurs uniques, transposer en texte ou en colonnes portent alors sur les lignes de toutes les routes réunies.',

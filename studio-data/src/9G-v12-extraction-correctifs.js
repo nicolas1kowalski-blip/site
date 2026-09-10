@@ -76,3 +76,43 @@
         if (typeof showError === 'function') { const _v12gErr = showError; showError = function (msg) { return _v12gErr.call(this, v12CleanErr(msg)); }; }
         ['advPreview', 'advQuality'].forEach(nm => { const o = window[nm]; if (typeof o !== 'function') return; window[nm] = async function () { const r = await o.apply(this, arguments); try { const box = el(nm === 'advPreview' ? 'adv-preview' : 'adv-quality'); const p = box && box.querySelector('p.text-red-600'); if (p && /<\s*(!doctype|html|body)\b/i.test(p.textContent)) p.textContent = (nm === 'advPreview' ? 'Aperçu impossible : ' : 'Bilan impossible : ') + v12CleanErr(p.textContent); } catch (e) {} return r; }; });
         Object.assign(V11_LEXIQUE, { 'transposer en colonnes': 'Pour chaque ligne de départ, les n premières valeurs de la table liée (dans l\'ordre du fichier) deviennent n colonnes nom_1 … nom_n. Avec « l\'un ou l\'autre lien », les lignes de toutes les routes sont réunies.' });
+        // ---- 4. « HTML FileReaders do not support writing » : sans débordement disque ----
+        // Quand une requête d'Extraire dépasse la mémoire (transposition, synthèses sur une grosse table
+        // liée), DuckDB tente d'écrire un fichier temporaire, ce que le navigateur interdit : « Invalid
+        // Error: HTML FileReaders do not support writing ». Les analyses du noyau ont déjà un repli
+        // (queryResilient / runNoSpill) ; les actions d'Extraire appelaient le moteur en direct. Ici, pendant
+        // compter, prévisualiser, bilan, générer et jeu temporaire, chaque requête qui échoue ainsi est
+        // relancée en mémoire pure avec une limite relevée ; si cela ne suffit toujours pas, le message
+        // explique quoi faire (500 lignes, moins de colonnes transposées, filtrer).
+        function v12IsSpill(e) { return typeof isSpillWriteError === 'function' ? isSpillWriteError(e) : /do not support writing|temp_directory|temporary/i.test(String((e && e.message) || e)); }
+        function v12IsOom(e) { return /out of memory|memory limit|cannot allocate|Failed to allocate/i.test(String((e && e.message) || e)); }
+        async function v12QueryNoSpill(conn, sql) {
+            try { return await conn.query(sql); }
+            catch (e) {
+                if (!v12IsSpill(e) && !v12IsOom(e)) throw e;
+                let memSet = false;
+                for (const lim of ['4GB', '3GB', '2GB', '1GB']) { try { await conn.query("SET memory_limit='" + lim + "'"); memSet = true; break; } catch (e2) {} }
+                try { await conn.query("SET temp_directory=''"); } catch (e2) {}
+                try { return await conn.query(sql); }
+                catch (e3) {
+                    const err = new Error('Résultat trop volumineux pour la mémoire du navigateur (le stockage temporaire n\'est pas inscriptible ici). Cochez « 500 lignes » pour vérifier, ajoutez un filtre, réduisez le nombre de colonnes transposées ou générez en plusieurs fois. Détail : ' + (e3 && e3.message || e3));
+                    err.cause = e3; throw err;
+                }
+                finally {
+                    if (window.__duckTempDir) { try { await conn.query("SET temp_directory='" + window.__duckTempDir + "'"); } catch (e4) {} }
+                    if (memSet) { try { if (window.__duckMemLimit) await conn.query("SET memory_limit='" + window.__duckMemLimit + "'"); else await conn.query("RESET memory_limit"); } catch (e4) {} }
+                }
+            }
+        }
+        function v12ConnNoSpill(conn) {
+            if (!conn || conn.__v12ns) return conn;
+            const p = new Proxy(conn, { get(t, k) { if (k === '__v12ns') return true; if (k === 'query') return sql => v12QueryNoSpill(t, sql); const v = t[k]; return typeof v === 'function' ? v.bind(t) : v; } });
+            return p;
+        }
+        v12State.noSpill = 0;
+        const _v12gGetDB = getDB;
+        getDB = async function () { const r = await _v12gGetDB.apply(this, arguments); if (v12State.noSpill > 0 && r && r.conn) return Object.assign({}, r, { conn: v12ConnNoSpill(r.conn) }); return r; };
+        ['advCount', 'advPreview', 'advQuality', 'advGenerate', 'advColumnsOf', 'v12TmpFromSql', 'v12TmpFromTable'].forEach(nm => {
+            const o = window[nm]; if (typeof o !== 'function') return;
+            window[nm] = async function () { v12State.noSpill++; try { return await o.apply(this, arguments); } finally { v12State.noSpill--; } };
+        });
