@@ -298,6 +298,10 @@
    "role": "V12 : restitutions (rapports, tableaux de bord, fichiers livrés) — troisième type d'actif : générée par, objets et attributs utilisés, diffusée à ; chaîne complète dans les lineages et la carte des flux ; lineage repliable (groupes par type et par sens, ouverture au clic, seuil réglable)"
   },
   {
+   "file": "9E-v12-amont-complet.js",
+   "role": "V12 : lineage — remonter jusqu'au début de la donnée (sources des objets amont, fichiers lus par les applications et leurs producteurs, alimentations de la carte des flux), chaînes complètes en clair, interrupteur « Jusqu'au début » ; onglet Objets et catalogue"
+  },
+  {
    "file": "A0-v13-vocabulaire.js",
    "role": "V13 : vocabulaire métier (informations, variantes, parcours de la donnée), phrase d'aide en tête de chaque écran de gouvernance, lexique en langage courant"
   },

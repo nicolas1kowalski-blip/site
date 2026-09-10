@@ -1,7 +1,10 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.1.0';
+        const V13_VERSION = '13.2.0';
         const V13_CHANGELOG = [
+            { v: '13.2.0', d: '2026-09-10', t: 'Parcours de la donnée : jusqu\'au début', items: [
+                'Reprend la V12.10 : le parcours d\'un objet, d\'une information ou d\'une colonne remonte tout l\'amont connu jusqu\'au premier maillon, avec le panneau « Depuis le début » et l\'interrupteur « ⇠ Jusqu\'au début » (onglet Objets et catalogue).',
+                'La phrase de résumé en tête du parcours cite aussi les points de départ : « … tout au début : Système tiers ».'] },
             { v: '13.1.0', d: '2026-09-09', t: 'Le vocabulaire métier jusque dans l\'impression et le dossier', items: [
                 'La fiche imprimée (⎙) et le dossier de gouvernance exporté utilisent les mêmes mots que l\'écran : information, variante, parcours de la donnée, colonne du fichier, confidentialité.',
                 'Reprend aussi les finitions de la V12.9 : restitutions et origines dans le catalogue, les exports et le dossier ; Extraire avec des jeux temporaires seuls.'] },
