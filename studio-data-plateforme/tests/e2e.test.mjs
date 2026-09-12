@@ -468,10 +468,51 @@ try {
         noeudsParcours.includes('CRM') && noeudsParcours.includes('ville') && noeudsParcours.length >= 3
     );
 
+    // ---- exploitation : tableau de bord (indicateur et barres), comparateur ----
+    await page.click('a[href="/tableaux-de-bord"]');
+    await page.waitForSelector('app-tableaux-de-bord');
+    await page.click('app-tableaux-de-bord button:has-text("Nouveau tableau")');
+    await page.fill('app-tableaux-de-bord input[name=nom]', 'Suivi clients');
+    await page.fill('app-tableaux-de-bord input[name=tuile-titre-0]', 'Nombre de clients');
+    await page.selectOption('app-tableaux-de-bord select[name=tuile-table-0]', { label: 'clients.csv' });
+    await page.selectOption('app-tableaux-de-bord select[name=tuile-genre-0]', 'kpi');
+    await page.click('app-tableaux-de-bord button:has-text("+ tuile")');
+    await page.fill('app-tableaux-de-bord input[name=tuile-titre-1]', 'Clients par ville');
+    await page.selectOption('app-tableaux-de-bord select[name=tuile-table-1]', { label: 'clients.csv' });
+    await page.selectOption('app-tableaux-de-bord select[name=tuile-axe-1]', 'ville');
+    await page.click('app-tableaux-de-bord button:has-text("Exécuter")');
+    await page.waitForSelector('app-tableaux-de-bord .indicateur');
+    verifier(
+        'tableaux de bord : l’indicateur compte 4 clients et le graphique par ville a 3 barres',
+        (await page.textContent('app-tableaux-de-bord .indicateur')).trim() === '4' &&
+            (await page.$$('app-tableaux-de-bord app-graphique-svg rect')).length === 3
+    );
+    await capture('tableaux-de-bord');
+
+    await page.click('a[href="/comparateur"]');
+    await page.waitForSelector('app-comparateur');
+    await page.selectOption('app-comparateur select[name=tableA]', { label: 'clients.csv' });
+    await page.selectOption('app-comparateur select[name=tableB]', { label: 'Clients consolidés' });
+    await page.selectOption('app-comparateur select[name=cle-a-0]', 'id_client');
+    await page.click('app-comparateur button:has-text("+ colonne à comparer")');
+    await page.selectOption('app-comparateur select[name=colonne-a-0]', 'ville');
+    // « + colonne à comparer » contient aussi « comparer » : on vise le bouton principal.
+    await page.click('app-comparateur button.principal:has-text("Comparer")');
+    await page.waitForSelector('app-comparateur .synthese');
+    const syntheseComparaison = await page.$$eval('app-comparateur .synthese .valeur', valeurs =>
+        valeurs.map(valeur => valeur.textContent.trim())
+    );
+    verifier(
+        'comparateur : clients.csv contre la table conçue — 4 lignes, 4 identiques (ville comparée sans tenir compte de la casse), 0 différente, 0 manquante',
+        syntheseComparaison.join() === '4,4,0,0,0' &&
+            /Comparaison clients\.csv vs Clients consolidés/.test(await page.textContent('app-comparateur h2'))
+    );
+
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');
     await page.waitForSelector('app-explorateur .table');
-    await page.click('app-explorateur .table:has-text("clients.csv")');
+    // Le nom exact est dans le <b> : « Comparaison clients.csv vs … » ne doit pas être retenu.
+    await page.locator('app-explorateur .table', { has: page.locator('b', { hasText: /^clients\.csv$/ }) }).click();
     await page.click('app-explorateur button:has-text("Exécuter")');
     await page.waitForSelector('app-explorateur .resultat');
     verifier(
@@ -501,7 +542,7 @@ try {
     );
     await page.click('a[href="/dictionnaire"]');
     await page.waitForSelector('app-dictionnaire .element');
-    await page.click('app-dictionnaire .element:has-text("clients.csv")');
+    await page.locator('app-dictionnaire .element', { has: page.locator('b', { hasText: /^clients\.csv$/ }) }).click();
     await page.fill('app-dictionnaire input[name=owner]', 'Équipe Données');
     await page.fill('app-dictionnaire textarea[name=description]', 'Référentiel clients');
     await page.fill('app-dictionnaire input[name="d_ville"]', 'Ville de résidence');
@@ -557,11 +598,12 @@ try {
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     verifier(
-        'application classique : les deux sources déposées depuis Angular et la table conçue sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 3 &&
+        'application classique : les deux sources déposées depuis Angular, la table conçue et la comparaison sont restaurées prêtes (sans ré-ingestion)',
+        classique.tables.length === 4 &&
             classique.tables.every(table => table.status === 'ready') &&
             classique.tables.filter(table => table.headers === 3).length === 2 &&
-            classique.tables.some(table => table.name === 'Clients consolidés' && table.type === 'designed' && table.headers === 6)
+            classique.tables.some(table => table.name === 'Clients consolidés' && table.type === 'designed' && table.headers === 6) &&
+            classique.tables.some(table => table.name.startsWith('Comparaison ') && table.type === 'extraction')
     );
     verifier(
         'application classique : glossaire et dictionnaire saisis dans Angular sont visibles',

@@ -494,3 +494,119 @@ export type VocabulaireLineage = {
     agregats: Record<string, string>;
     scalaires: Record<string, string>;
 };
+
+// ---- exploitation : tableaux de bord, comparateur, séries temporelles, rapprochement (format classique) ----
+export type GenreTuile = 'bar' | 'line' | 'pie' | 'table' | 'kpi';
+export type AgregatTuile = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';
+/** Tuile : table, genre, axe (dim), agrégat et colonne agrégée, N premières valeurs ; seuils d'un indicateur. */
+export type Tuile = {
+    id: string;
+    title: string;
+    table: string;
+    kind: GenreTuile;
+    dim: string;
+    agg: AgregatTuile;
+    aggCol: string;
+    topN: number;
+    thWarn?: string | number;
+    thCrit?: string | number;
+    thDir?: 'max' | 'min';
+};
+export type FiltreTableau = { col: string; op: OperateurFiltreSource; val: string; conn: 'AND' | 'OR' };
+export type TableauDeBord = { id: string; name: string; filters: FiltreTableau[]; tiles: Tuile[]; [autre: string]: unknown };
+export type ResultatTuile = {
+    id: string;
+    lignes: { d: string; v: number }[];
+    valeur: number | null;
+    statut: 'crit' | 'warn' | 'ok' | null;
+    erreur?: string;
+};
+export type Alerte = {
+    tableau: string;
+    indicateur: string;
+    valeur: number | null;
+    statut: 'crit' | 'warn' | 'ok' | 'err';
+    thWarn?: string;
+    thCrit?: string;
+    sens: 'max' | 'min';
+    erreur?: string;
+};
+export type ParametresComparaison = {
+    tableA: string;
+    tableB: string;
+    cles: { colA: string; colB: string }[];
+    correspondances: { colA: string; colB: string }[];
+    ignorerCasse: boolean;
+    ignorerEspaces: boolean;
+};
+export type ResultatComparaison = {
+    sourceId: string;
+    nom: string;
+    total: number;
+    identiques: number;
+    differentes: number;
+    manquantesA: number;
+    manquantesB: number;
+    colonnes: string[];
+    apercu: unknown[][];
+};
+/** Série temporelle : source, clé de série (keyCols), horodatage (tsCol), mesure (valCol), pas (auto ou secondes). */
+export type ConfigurationSerie = {
+    id: string;
+    name: string;
+    table: string;
+    keyCols: string[];
+    tsCol: string;
+    valCol: string;
+    step: string;
+    tol: number;
+    regMin: number;
+    [autre: string]: unknown;
+};
+export type ProfilSerie = Record<string, unknown> & {
+    serie: string;
+    points: number;
+    doublons: number;
+    trous: number;
+    cadencee: boolean;
+    regularite: number;
+    couverture: number | null;
+    plateau_max: number;
+    retard_sec: number;
+};
+export type AnalyseSerie = {
+    maille: 'hour' | 'day' | 'week' | 'month';
+    profil: ProfilSerie[];
+    calendrier: { serie: string; periode: string; n: number }[];
+};
+export type MethodeComparaison = 'exact' | 'jw' | 'lev';
+/** Rapprochement : sources a et b, clé de blocage (blockA, blockB), comparaisons pondérées, seuils, décisions par paire. */
+export type Rapprochement = {
+    id: string;
+    name: string;
+    a: string;
+    b: string;
+    blockA: string;
+    blockB: string;
+    compares: { colA: string; colB: string; method: MethodeComparaison; weight: number }[];
+    thAuto: number;
+    thReview: number;
+    decisions: Record<string, 'ok' | 'ko'>;
+    [autre: string]: unknown;
+};
+export type PaireCandidate = {
+    ra: number;
+    rb: number;
+    da: string;
+    db: string;
+    s: number;
+    key: string;
+    st: 'auto' | 'review' | 'ok' | 'ko';
+};
+export type VocabulaireExploitation = {
+    genresTuile: Record<GenreTuile, string>;
+    agregats: Record<AgregatTuile, string>;
+    methodes: Record<MethodeComparaison, string>;
+    pas: Record<string, string>;
+    mailles: Record<string, string>;
+};

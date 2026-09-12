@@ -219,10 +219,19 @@ export class CoqueComponent {
             titre: 'Exploitation',
             liens: [
                 { chemin: '/extraction', libelle: 'Extraction', icone: '⤓' },
-                { chemin: '/explorateur', libelle: 'Explorateur SQL', icone: '⌕' }
+                { chemin: '/explorateur', libelle: 'Explorateur SQL', icone: '⌕' },
+                { chemin: '/tableaux-de-bord', libelle: 'Tableaux de bord', icone: '▤' },
+                { chemin: '/comparateur', libelle: 'Comparateur', icone: '⇆' },
+                { chemin: '/rapprochement', libelle: 'Rapprochement', icone: '⚭' }
             ]
         },
-        { titre: 'Qualité', liens: [{ chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' }] },
+        {
+            titre: 'Qualité',
+            liens: [
+                { chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' },
+                { chemin: '/series-temporelles', libelle: 'Séries temporelles', icone: '∿' }
+            ]
+        },
         {
             titre: 'Gouvernance',
             liens: [

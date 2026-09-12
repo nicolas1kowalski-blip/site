@@ -10,6 +10,7 @@ import { CoqueComponent } from './coque/coque.component';
 import { AccueilComponent } from './pages/accueil/accueil.component';
 import { ActifsComponent } from './pages/actifs/actifs.component';
 import { ClassiqueComponent } from './pages/classique/classique.component';
+import { ComparateurComponent } from './pages/comparateur/comparateur.component';
 import { CompteComponent } from './pages/compte/compte.component';
 import { DictionnaireComponent } from './pages/dictionnaire/dictionnaire.component';
 import { EspacesComponent } from './pages/espaces/espaces.component';
@@ -25,8 +26,11 @@ import { PerimetresComponent } from './pages/perimetres/perimetres.component';
 import { PersonnesComponent } from './pages/personnes/personnes.component';
 import { PropositionsComponent } from './pages/propositions/propositions.component';
 import { QualiteComponent } from './pages/qualite/qualite.component';
+import { RapprochementComponent } from './pages/rapprochement/rapprochement.component';
 import { SensibiliteComponent } from './pages/sensibilite/sensibilite.component';
+import { SeriesTemporellesComponent } from './pages/series-temporelles/series-temporelles.component';
 import { SourcesComponent } from './pages/sources/sources.component';
+import { TableauxDeBordComponent } from './pages/tableaux-de-bord/tableaux-de-bord.component';
 import { TablesConcuesComponent } from './pages/tables-concues/tables-concues.component';
 import { UtilisateursComponent } from './pages/utilisateurs/utilisateurs.component';
 
@@ -43,6 +47,10 @@ export const routes: Routes = [
             { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
+            { path: 'tableaux-de-bord', component: TableauxDeBordComponent, title: 'Tableaux de bord — Studio Data' },
+            { path: 'comparateur', component: ComparateurComponent, title: 'Comparateur — Studio Data' },
+            { path: 'series-temporelles', component: SeriesTemporellesComponent, title: 'Séries temporelles — Studio Data' },
+            { path: 'rapprochement', component: RapprochementComponent, title: 'Rapprochement — Studio Data' },
             { path: 'qualite', component: QualiteComponent, title: 'Qualité & Audit — Studio Data' },
             { path: 'glossaire', component: GlossaireComponent, title: 'Glossaire — Studio Data' },
             { path: 'dictionnaire', component: DictionnaireComponent, title: 'Dictionnaire — Studio Data' },

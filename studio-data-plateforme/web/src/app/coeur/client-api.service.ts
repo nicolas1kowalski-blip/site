@@ -11,7 +11,17 @@ import { Router } from '@angular/router';
 import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
     Actif,
+    Alerte,
+    AnalyseSerie,
     ApercuExtraction,
+    ConfigurationSerie,
+    PaireCandidate,
+    ParametresComparaison,
+    Rapprochement,
+    ResultatComparaison,
+    ResultatTuile,
+    TableauDeBord,
+    VocabulaireExploitation,
     BilanSynchronisation,
     CarteFlux,
     Flux,
@@ -437,6 +447,74 @@ export class ClientApiService {
     }
     lineageTable(nom: string): Promise<Graphe> {
         return firstValueFrom(this.http.get<Graphe>(`${this.racine}/lineage/table/${encodeURIComponent(nom)}`));
+    }
+
+    // ---- exploitation ----
+    vocabulaireExploitation(): Promise<VocabulaireExploitation> {
+        return firstValueFrom(this.http.get<VocabulaireExploitation>(`${this.racine}/exploitation/vocabulaire`));
+    }
+    tableauxDeBord(): Promise<TableauDeBord[]> {
+        return firstValueFrom(this.http.get<TableauDeBord[]>(`${this.racine}/exploitation/tableaux-de-bord`));
+    }
+    enregistrerTableauDeBord(id: string, tableau: Omit<TableauDeBord, 'id'>): Promise<TableauDeBord> {
+        return firstValueFrom(
+            this.http.put<TableauDeBord>(`${this.racine}/exploitation/tableaux-de-bord/${encodeURIComponent(id)}`, tableau)
+        );
+    }
+    supprimerTableauDeBord(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/exploitation/tableaux-de-bord/${encodeURIComponent(id)}`));
+    }
+    executerTableauDeBord(id: string): Promise<ResultatTuile[]> {
+        return firstValueFrom(
+            this.http.post<ResultatTuile[]>(`${this.racine}/exploitation/tableaux-de-bord/${encodeURIComponent(id)}/executer`, {})
+        );
+    }
+    alertesTableauxDeBord(): Promise<Alerte[]> {
+        return firstValueFrom(this.http.post<Alerte[]>(`${this.racine}/exploitation/tableaux-de-bord/alertes`, {}));
+    }
+    comparer(parametres: ParametresComparaison): Promise<ResultatComparaison> {
+        return firstValueFrom(this.http.post<ResultatComparaison>(`${this.racine}/exploitation/comparer`, parametres));
+    }
+    series(): Promise<ConfigurationSerie[]> {
+        return firstValueFrom(this.http.get<ConfigurationSerie[]>(`${this.racine}/exploitation/series`));
+    }
+    enregistrerSerie(id: string, serie: Omit<ConfigurationSerie, 'id'>): Promise<ConfigurationSerie> {
+        return firstValueFrom(this.http.put<ConfigurationSerie>(`${this.racine}/exploitation/series/${encodeURIComponent(id)}`, serie));
+    }
+    supprimerSerie(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/exploitation/series/${encodeURIComponent(id)}`));
+    }
+    analyserSerie(id: string): Promise<AnalyseSerie> {
+        return firstValueFrom(this.http.post<AnalyseSerie>(`${this.racine}/exploitation/series/${encodeURIComponent(id)}/analyser`, {}));
+    }
+    rapprochements(): Promise<Rapprochement[]> {
+        return firstValueFrom(this.http.get<Rapprochement[]>(`${this.racine}/exploitation/rapprochements`));
+    }
+    enregistrerRapprochement(id: string, rapprochement: Omit<Rapprochement, 'id'>): Promise<Rapprochement> {
+        return firstValueFrom(
+            this.http.put<Rapprochement>(`${this.racine}/exploitation/rapprochements/${encodeURIComponent(id)}`, rapprochement)
+        );
+    }
+    supprimerRapprochement(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/exploitation/rapprochements/${encodeURIComponent(id)}`));
+    }
+    executerRapprochement(id: string): Promise<PaireCandidate[]> {
+        return firstValueFrom(
+            this.http.post<PaireCandidate[]>(`${this.racine}/exploitation/rapprochements/${encodeURIComponent(id)}/executer`, {})
+        );
+    }
+    deciderPaire(id: string, cle: string, decision: 'ok' | 'ko'): Promise<Rapprochement> {
+        return firstValueFrom(
+            this.http.post<Rapprochement>(`${this.racine}/exploitation/rapprochements/${encodeURIComponent(id)}/decider`, { cle, decision })
+        );
+    }
+    produireGolden(id: string): Promise<{ liens: string; golden: string; fusions: number }> {
+        return firstValueFrom(
+            this.http.post<{ liens: string; golden: string; fusions: number }>(
+                `${this.racine}/exploitation/rapprochements/${encodeURIComponent(id)}/golden`,
+                {}
+            )
+        );
     }
 
     // ---- journal ----

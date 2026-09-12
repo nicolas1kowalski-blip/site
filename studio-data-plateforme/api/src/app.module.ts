@@ -8,6 +8,7 @@ import { BaseDeDonneesModule } from './base-de-donnees/base-de-donnees.module';
 import { CONFIGURATION, Configuration } from './configuration/configuration';
 import { DocumentsModule } from './documents/documents.module';
 import { EspacesModule } from './espaces/espaces.module';
+import { ExploitationModule } from './exploitation/exploitation.module';
 import { ExtractionModule } from './extraction/extraction.module';
 import { FichiersController } from './fichiers/fichiers.controller';
 import { FrontController } from './front/front.controller';
@@ -42,7 +43,8 @@ export class AppModule {
                 ExtractionModule,
                 QualiteModule,
                 TablesConcuesModule,
-                LineageModule
+                LineageModule,
+                ExploitationModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],
