@@ -12,6 +12,11 @@ import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
     ApercuExtraction,
     AuditQualite,
+    Contribution,
+    RapportEcarts,
+    Recette,
+    TableConcue,
+    VocabulaireTablesConcues,
     DefinitionRegle,
     ExecutionRegles,
     EntreeJournal,
@@ -210,6 +215,44 @@ export class ClientApiService {
                 params: { limite: String(limite), ...(sourceId ? { sourceId } : {}) }
             })
         );
+    }
+
+    // ---- tables conçues ----
+    vocabulaireTablesConcues(): Promise<VocabulaireTablesConcues> {
+        return firstValueFrom(this.http.get<VocabulaireTablesConcues>(`${this.racine}/tables-concues/vocabulaire`));
+    }
+    tablesConcues(): Promise<TableConcue[]> {
+        return firstValueFrom(this.http.get<TableConcue[]>(`${this.racine}/tables-concues`));
+    }
+    sqlTableConcue(recette: Recette): Promise<{ sql: string }> {
+        return firstValueFrom(this.http.post<{ sql: string }>(`${this.racine}/tables-concues/sql`, recette));
+    }
+    apercuTableConcue(recette: Recette, limite = 50): Promise<ResultatSql> {
+        return firstValueFrom(this.http.post<ResultatSql>(`${this.racine}/tables-concues/apercu`, { recette, limite }));
+    }
+    construireTableConcue(recette: Recette): Promise<TableConcue> {
+        return firstValueFrom(this.http.post<TableConcue>(`${this.racine}/tables-concues/construire`, recette));
+    }
+    reconstruireTableConcue(id: string): Promise<TableConcue> {
+        return firstValueFrom(this.http.post<TableConcue>(`${this.racine}/tables-concues/${encodeURIComponent(id)}/reconstruire`, {}));
+    }
+    reconstruireTablesDependantes(nomSource: string): Promise<{ reconstruites: string[]; erreurs: { table: string; erreur: string }[] }> {
+        return firstValueFrom(
+            this.http.post<{ reconstruites: string[]; erreurs: { table: string; erreur: string }[] }>(
+                `${this.racine}/tables-concues/reconstruire-dependantes`,
+                { nomSource }
+            )
+        );
+    }
+    ecartsTableConcue(id: string, limite = 1500): Promise<RapportEcarts> {
+        return firstValueFrom(
+            this.http.get<RapportEcarts>(`${this.racine}/tables-concues/${encodeURIComponent(id)}/ecarts`, {
+                params: { limite: String(limite) }
+            })
+        );
+    }
+    contributionsTableConcue(id: string): Promise<Contribution[]> {
+        return firstValueFrom(this.http.get<Contribution[]>(`${this.racine}/tables-concues/${encodeURIComponent(id)}/contributions`));
     }
 
     // ---- journal ----

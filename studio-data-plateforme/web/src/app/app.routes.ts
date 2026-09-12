@@ -19,6 +19,7 @@ import { JournalComponent } from './pages/journal/journal.component';
 import { ModeleComponent } from './pages/modele/modele.component';
 import { QualiteComponent } from './pages/qualite/qualite.component';
 import { SourcesComponent } from './pages/sources/sources.component';
+import { TablesConcuesComponent } from './pages/tables-concues/tables-concues.component';
 import { UtilisateursComponent } from './pages/utilisateurs/utilisateurs.component';
 
 export const routes: Routes = [
@@ -31,6 +32,7 @@ export const routes: Routes = [
             { path: '', component: AccueilComponent, title: 'Accueil — Studio Data' },
             { path: 'sources', component: SourcesComponent, title: 'Sources — Studio Data' },
             { path: 'modele', component: ModeleComponent, title: 'Modèle de données — Studio Data' },
+            { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
             { path: 'qualite', component: QualiteComponent, title: 'Qualité & Audit — Studio Data' },

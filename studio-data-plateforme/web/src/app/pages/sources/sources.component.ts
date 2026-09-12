@@ -221,10 +221,24 @@ export class SourcesComponent {
                 srcModified: fichier.lastModified
             });
             this.notifications.succes(`« ${fichier.name} » chargée : ${headers.length} colonne(s).`);
+            await this.reconstruireTablesConcuesDependantes(fichier.name);
         } catch (erreur) {
             this.notifications.erreur(`« ${fichier.name} » : ${(erreur as Error).message}`);
         } finally {
             this.depots.update(liste => liste.filter(candidat => candidat !== depot));
+        }
+    }
+
+    /** Les tables conçues qui s'appuient sur cette source sont reconstruites sur son nouveau contenu. */
+    private async reconstruireTablesConcuesDependantes(nomSource: string): Promise<void> {
+        try {
+            const resultat = await this.api.reconstruireTablesDependantes(nomSource);
+            if (resultat.reconstruites.length)
+                this.notifications.succes(`Table(s) conçue(s) reconstruite(s) : ${resultat.reconstruites.join(', ')}.`);
+            for (const echec of resultat.erreurs) this.notifications.erreur(`Table conçue « ${echec.table} » : ${echec.erreur}`);
+            if (resultat.reconstruites.length) await this.recharger();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
         }
     }
 

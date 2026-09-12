@@ -17,6 +17,7 @@ import { ModeleModule } from './modele/modele.module';
 import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
 import { SourcesModule } from './sources/sources.module';
+import { TablesConcuesModule } from './tables-concues/tables-concues.module';
 import { SqlController } from './sql/sql.controller';
 import { UtilisateursModule } from './utilisateurs/utilisateurs.module';
 
@@ -38,7 +39,8 @@ export class AppModule {
                 GouvernanceModule,
                 ModeleModule,
                 ExtractionModule,
-                QualiteModule
+                QualiteModule,
+                TablesConcuesModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],

@@ -211,7 +211,8 @@ export class CoqueComponent {
             liens: [
                 { chemin: '/', libelle: 'Accueil', icone: '⌂' },
                 { chemin: '/sources', libelle: 'Sources', icone: '▤' },
-                { chemin: '/modele', libelle: 'Modèle de données', icone: '⇄' }
+                { chemin: '/modele', libelle: 'Modèle de données', icone: '⇄' },
+                { chemin: '/tables-concues', libelle: 'Tables conçues', icone: '🧱' }
             ]
         },
         {

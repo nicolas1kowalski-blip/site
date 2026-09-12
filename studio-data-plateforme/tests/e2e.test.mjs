@@ -232,10 +232,81 @@ try {
     );
     await capture('qualite');
 
+    // ---- tables conçues : recette, SQL, aperçu, construction, contribution ----
+    await page.click('a[href="/tables-concues"]');
+    await page.waitForSelector('app-tables-concues');
+    await page.click('app-tables-concues button:has-text("Nouvelle table")');
+    await page.fill('app-tables-concues input[name=nom]', 'Clients consolidés');
+    await page.selectOption('app-tables-concues select[name=ajoutSource]', { label: 'clients.csv' });
+    await page.click('app-tables-concues button:has-text("Ajouter la source")');
+    await page.waitForSelector('app-tables-concues input[name=attribut-2]');
+    // Renommage d'un attribut, clé, format « code » (majuscules) sur la ville.
+    await page.fill('app-tables-concues input[name=attribut-1]', 'Nom du client');
+    await page.press('app-tables-concues input[name=attribut-1]', 'Tab');
+    await page.check('app-tables-concues input[name=cle-0]');
+    await page.selectOption('app-tables-concues select[name=format-2]', 'code');
+    // Enrichissement : montant ramené de commandes.csv par id_client.
+    await page.click('app-tables-concues button:has-text("+ enrichissement")');
+    await page.selectOption('app-tables-concues select[name=enrichissement-source-0]', { label: 'commandes.csv' });
+    await page.selectOption('app-tables-concues select[name=enrichissement-colonne-0]', 'montant');
+    await page.selectOption('app-tables-concues select[name=enrichissement-accroche-0]', 'id_client');
+    await page.selectOption('app-tables-concues select[name=enrichissement-cle-0]', 'id_client');
+    // Colonne calculée et clé étrangère.
+    await page.click('app-tables-concues button:has-text("+ colonne calculée")');
+    await page.fill('app-tables-concues input[name=calcul-nom-0]', 'Etiquette');
+    await page.fill('app-tables-concues input[name=calcul-formule-0]', "[Nom du client] || ' (' || [ville] || ')'");
+    await page.click('app-tables-concues button:has-text("+ clé étrangère")');
+    await page.selectOption('app-tables-concues select[name=cle-etrangere-attribut-0]', 'id_client');
+    await page.selectOption('app-tables-concues select[name=cle-etrangere-table-0]', { label: 'commandes.csv' });
+    await page.selectOption('app-tables-concues select[name=cle-etrangere-colonne-0]', 'id_client');
+    await page.click('app-tables-concues button:has-text("Voir le SQL")');
+    await page.waitForSelector('app-tables-concues pre.sql');
+    const sqlRecette = await page.textContent('app-tables-concues pre.sql');
+    verifier(
+        'tables conçues : le SQL de la recette contient l’union, l’enrichissement (LEFT JOIN), le calcul et le dédoublonnage par clé',
+        /SOURCE_ORIGINE/.test(sqlRecette) && /LEFT JOIN/.test(sqlRecette) && /"Etiquette"/.test(sqlRecette) && /QUALIFY/.test(sqlRecette)
+    );
+    await page.click('app-tables-concues button:has-text("Aperçu (50 lignes)")');
+    await page.waitForSelector('app-tables-concues th:has-text("Etiquette")');
+    const apercuRecette = await page.evaluate(() => {
+        const table = [...document.querySelectorAll('app-tables-concues table')].find(candidat =>
+            [...candidat.querySelectorAll('th')].some(entete => entete.textContent.trim() === 'Etiquette')
+        );
+        const lignes = [...table.querySelectorAll('tbody tr')].map(ligne =>
+            [...ligne.querySelectorAll('td')].map(cellule => cellule.textContent.trim())
+        );
+        return { entetes: [...table.querySelectorAll('th')].map(entete => entete.textContent.trim()), lignes };
+    });
+    verifier(
+        'tables conçues : l’aperçu montre 4 lignes, la ville en majuscules, le montant ramené et l’étiquette calculée',
+        apercuRecette.entetes.join() === 'SOURCE_ORIGINE,id_client,Nom du client,ville,montant,Etiquette' &&
+            apercuRecette.lignes.length === 4 &&
+            apercuRecette.lignes.some(ligne => ligne[1] === '3' && ligne[3] === 'LILLE' && ligne[4] === '' && ligne[5] === 'Zoé (LILLE)')
+    );
+    await page.click('app-tables-concues button:has-text("Construire la table")');
+    await page.waitForSelector('app-tables-concues .table-concue');
+    const carteTable = await page.textContent('app-tables-concues .table-concue');
+    verifier(
+        'tables conçues : la table « Clients consolidés » est construite (4 lignes, clé id_client, 1 format, 1 orphelin de clé étrangère : Zoé sans commande)',
+        /Clients consolidés/.test(carteTable) &&
+            /4 ligne\(s\)/.test(carteTable) &&
+            /🔑 id_client/.test(carteTable) &&
+            /1 orphelin\(s\)/.test(carteTable) &&
+            (await page.$('app-tables-concues button:has-text("Écarts entre sources")')) === null
+    );
+    await page.click('app-tables-concues button:has-text("Contribution par source")');
+    await page.waitForSelector('app-tables-concues h2:has-text("Contribution par source")');
+    const contributionsTexte = await page.textContent('app-tables-concues');
+    verifier(
+        'tables conçues : la contribution par source affiche clients.csv, 4 lignes, 100 %',
+        /clients\.csv\s*4\s*100,0 %/.test(contributionsTexte.replace(/\s+/g, ' '))
+    );
+    await capture('tables-concues');
+
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');
     await page.waitForSelector('app-explorateur .table');
-    await page.click('app-explorateur .table');
+    await page.click('app-explorateur .table:has-text("clients.csv")');
     await page.click('app-explorateur button:has-text("Exécuter")');
     await page.waitForSelector('app-explorateur .resultat');
     verifier(
@@ -265,7 +336,7 @@ try {
     );
     await page.click('a[href="/dictionnaire"]');
     await page.waitForSelector('app-dictionnaire .element');
-    await page.click('app-dictionnaire .element');
+    await page.click('app-dictionnaire .element:has-text("clients.csv")');
     await page.fill('app-dictionnaire input[name=owner]', 'Équipe Données');
     await page.fill('app-dictionnaire textarea[name=description]', 'Référentiel clients');
     await page.fill('app-dictionnaire input[name="d_ville"]', 'Ville de résidence');
@@ -309,17 +380,23 @@ try {
     await cadre.locator('#sdServeurChip').waitFor({ timeout: 30000 });
     await page.waitForTimeout(2500);
     const classique = await cadre.locator('body').evaluate(() => ({
-        tables: Object.values(state.tables).map(table => ({ name: table.name, status: table.status, headers: table.headers.length })),
+        tables: Object.values(state.tables).map(table => ({
+            name: table.name,
+            type: table.type,
+            status: table.status,
+            headers: table.headers.length
+        })),
         glossaire: state.governance.glossary.map(terme => terme.term),
         dictionnaire: Object.keys(state.governance.dictionary),
         relations: state.relations.map(lien => state.tables[lien.sourceTable].name + '>' + state.tables[lien.targetTable].name),
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     verifier(
-        'application classique : les deux sources déposées depuis Angular sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 2 &&
-            classique.tables.some(table => table.name === 'clients.csv') &&
-            classique.tables.every(table => table.status === 'ready' && table.headers === 3)
+        'application classique : les deux sources déposées depuis Angular et la table conçue sont restaurées prêtes (sans ré-ingestion)',
+        classique.tables.length === 3 &&
+            classique.tables.every(table => table.status === 'ready') &&
+            classique.tables.filter(table => table.headers === 3).length === 2 &&
+            classique.tables.some(table => table.name === 'Clients consolidés' && table.type === 'designed' && table.headers === 6)
     );
     verifier(
         'application classique : glossaire et dictionnaire saisis dans Angular sont visibles',
@@ -328,7 +405,7 @@ try {
     verifier('application classique : pastille « serveur · DuckDB » (moteur distant actif)', /serveur · DuckDB/.test(classique.pastille));
     verifier(
         'application classique : le lien déclaré dans Angular est présent dans son modèle de données',
-        classique.relations.join() === 'commandes.csv>clients.csv'
+        classique.relations.sort().join() === 'Clients consolidés>commandes.csv,commandes.csv>clients.csv'
     );
     await capture('classique');
 

@@ -40,6 +40,8 @@ export type Source = {
     srcModified?: number | null;
     enregistreLe?: string;
     config?: Record<string, unknown>;
+    /** Recette d'une table conçue (type « designed »). */
+    design?: Recette;
 };
 
 export type ColonneResultat = { nom: string; type: string };
@@ -218,3 +220,61 @@ export type AuditQualite = {
     detail?: unknown;
 };
 export type VocabulaireQualite = { typesRegle: Record<TypeRegle, string>; criticites: Record<Criticite, number> };
+
+// ---- tables conçues (recette au format de l'application classique, voir l'en-tête et le README) ----
+export type FormatAttribut = '' | 'int' | 'dec' | 'date' | 'bool' | 'code';
+export type OperateurFiltreSource =
+    'eq' | 'neq' | 'contains' | 'ncontains' | 'starts' | 'ends' | 'empty' | 'nempty' | 'gt' | 'gte' | 'lt' | 'lte';
+export type ModeValidite = '' | 'status' | 'period';
+/** Filtre d'entrée d'une source contributrice : col (colonne), op (opérateur), val (valeur). */
+export type FiltreSourceRecette = { col: string; op: OperateurFiltreSource; val: string };
+/** Source contributrice : src (nom de la source), map (attribut → colonne de la source), filters. */
+export type SourceContributrice = { src: string; map: Record<string, string>; filters: FiltreSourceRecette[] };
+/**
+ * Enrichissement : colonne « col » de la source « src » ramenée sous le nom « as », en joignant la clé « srcKey »
+ * à la colonne d'accroche « attr » de la table ; via une table de lien (viaSrc, viaIn, viaOut) si besoin ;
+ * lignes valides par statut (vCol, vOp, vVal) ou par période (vStart, vEnd).
+ */
+export type Enrichissement = {
+    src: string;
+    srcKey: string;
+    attr: string;
+    col: string;
+    as: string;
+    viaSrc: string;
+    viaIn: string;
+    viaOut: string;
+    validMode: ModeValidite;
+    vCol: string;
+    vOp: OperateurFiltreSource;
+    vVal: string;
+    vStart: string;
+    vEnd: string;
+};
+/** Clé étrangère déclarée : l'attribut « attr » référence la colonne « col » de la source « table ». */
+export type CleEtrangere = { attr: string; table: string; col: string };
+export type ResultatCleEtrangere = CleEtrangere & { orphans: number | null };
+export type Recette = {
+    name: string;
+    sources: SourceContributrice[];
+    attrs: string[];
+    calcs: { name: string; formula: string }[];
+    key: string[];
+    formats: Record<string, FormatAttribut>;
+    joins: Enrichissement[];
+    fks: CleEtrangere[];
+    targetId?: string | null;
+    lastRows?: number;
+    lastBuild?: string;
+    lastConform?: Record<string, number>;
+    lastFk?: ResultatCleEtrangere[];
+};
+export type TableConcue = Source & { design: Recette };
+export type Ecart = { cle: string; attribut: string; source: string; valeur: string };
+export type RapportEcarts = { cle: string[]; nombreCles: number; ecarts: Ecart[]; tronque: boolean };
+export type Contribution = { source: string; lignes: number; part: number; completude: number };
+export type VocabulaireTablesConcues = {
+    formats: Record<FormatAttribut, string>;
+    operateursFiltre: Record<OperateurFiltreSource, string>;
+    modesValidite: Record<ModeValidite, string>;
+};
