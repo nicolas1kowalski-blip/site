@@ -88,3 +88,60 @@ export function formaterDate(iso: string | null | undefined): string {
 export function genererIdentifiant(prefixe: string): string {
     return prefixe + Math.random().toString(36).slice(2, 11);
 }
+
+// ---- modèle de données et extraction ----
+export type Relation = {
+    id: string;
+    sourceTable: string;
+    sourceCol: string;
+    targetTable: string;
+    targetCol: string;
+    cardinality?: string;
+    kind?: string;
+    sourceId: string | null;
+    targetId: string | null;
+};
+export type PropositionLien = Omit<Relation, 'id' | 'sourceId' | 'targetId'> & {
+    sourceId: string;
+    targetId: string;
+    couverture: number;
+    valeursSource: number;
+};
+
+export type OperateurFiltre =
+    '=' | '!=' | 'contains' | 'startsWith' | 'in' | '>=' | '<=' | 'between' | 'dfrom' | 'dto' | 'empty' | 'notempty';
+export type Transformation = 'none' | 'trim' | 'upper' | 'lower' | 'noaccent';
+export type Agregat = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max' | 'values';
+
+export type ColonneExtraction = { tableId: string; col: string; alias?: string; transformation: Transformation; agregat?: Agregat };
+export type FiltreExtraction = { tableId: string; col: string; op: OperateurFiltre; valeur?: string; valeur2?: string };
+export type JointureExtraction = { deTableId: string; deCol: string; versTableId: string; versCol: string };
+export type SpecificationExtraction = {
+    baseId: string;
+    jointures: JointureExtraction[];
+    typeJointure: 'left' | 'inner';
+    colonnes: ColonneExtraction[];
+    filtres: FiltreExtraction[];
+    regrouper: boolean;
+    dedoublonner: boolean;
+    tri: { alias: string; sens: 'asc' | 'desc' }[];
+    limite?: number;
+};
+export type ApercuExtraction = { sql: string; colonnes: ColonneResultat[]; lignes: unknown[][]; limite: number };
+export type ModeleExtraction = {
+    id: string;
+    nom: string;
+    description: string;
+    specification: SpecificationExtraction;
+    modifieLe: string;
+    auteur: string;
+};
+export type VocabulaireExtraction = {
+    operateurs: Record<OperateurFiltre, string>;
+    transformations: Record<Transformation, string>;
+    agregats: Record<Agregat, string>;
+};
+
+/** Les opérateurs qui n'attendent aucune valeur, et celui qui en attend deux. */
+export const OPERATEURS_SANS_VALEUR: OperateurFiltre[] = ['empty', 'notempty'];
+export const OPERATEUR_DEUX_VALEURS: OperateurFiltre = 'between';

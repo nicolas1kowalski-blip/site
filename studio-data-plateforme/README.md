@@ -31,10 +31,12 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | Référentiel PostgreSQL (schéma Drizzle, migrations SQL versionnées, PGlite pour le développement) | **livré** | `api/src/base-de-donnees`, `api/migrations` |
 | Moteur DuckDB natif par espace, fichiers déposés une fois, Parquet côté serveur | **livré** | `api/src/espaces` |
 | Front Angular : connexion, coque, accueil, sources (dépôt, aperçu, optimisation, suppression), explorateur SQL (défilement virtuel, export CSV), glossaire, dictionnaire, journal, espaces et membres, utilisateurs, mon compte | **livré** | `web/src/app` |
+| **Modèle de données** en Angular : liens entre sources, ajout manuel, détection par le contenu (colonnes de même nom, unicité, couverture), suppression — partagé avec l'application classique | **livré** | `api/src/modele`, `web/src/app/pages/modele` |
+| **Extraction** en Angular : table de départ, tables liées d'après le modèle, colonnes (alias, transformation, agrégat), filtres (12 opérateurs), regroupement, dédoublonnage, aperçu à défilement virtuel, comptage, export CSV en flux, SQL affiché, modèles enregistrés | **livré** | `api/src/extraction`, `web/src/app/pages/extraction` |
 | Application classique (tous les écrans historiques) intégrée dans la coque, sur les mêmes données | **livré** | `web-classique`, route `/classique` |
-| Tests : 19 tests d'API (PGlite et PostgreSQL), 21 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
+| Tests : 33 tests d'API (PGlite et PostgreSQL, dont le constructeur SQL et l'extraction jointe), 29 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
 | Docker, Caddy, guide Oracle Cloud | **livré** | `Dockerfile`, `docker-compose.yml`, `deploiement` |
-| Réécriture en Angular des écrans restants (tables conçues, modèle, extraction, qualité, objets métier, lineage, tableaux de bord…) | **à faire, écran par écran** | plan ci-dessous |
+| Réécriture en Angular des écrans restants (tables conçues, qualité et audit, objets métier, lineage, tableaux de bord, extraction avancée : synthèses de tables liées, hiérarchies, colonnes calculées) | **à faire, écran par écran** | plan ci-dessous |
 | Connexion à l'annuaire de l'entreprise (OpenID Connect) | à faire | remplacer `api/src/authentification` (contrat : poser `request.contexte`) |
 
 ## Architecture
@@ -103,12 +105,23 @@ les deux interfaces voient les mêmes données. Quand tous les écrans seront en
 Ordre conseillé, un écran à la fois, chacun validé par un test de bout en bout avant de retirer sa version
 classique :
 
-1. **Extraction** (le plus utilisé) — l'API SQL existe ; l'écran Angular compose la requête et affiche le résultat
-   avec le défilement virtuel de l'explorateur.
-2. **Tables conçues** et **Modèle de données** — le moteur SVG de lineage/modèle est encapsulé dans un composant.
+1. ~~**Modèle de données** et **Extraction**~~ — livrés (voir ci-dessus). Restent, pour l'extraction, les fonctions
+   avancées de l'application classique : synthèses d'une table liée (compter, transposer), hiérarchies aplaties,
+   colonnes calculées, filtre « dans le fichier ». Elles s'ajoutent au constructeur SQL (`constructeur-sql.ts`)
+   sans changer l'écran.
+2. **Tables conçues** — recette (sources, jointures, colonnes renommées, formats, clé primaire) exécutée par le
+   même constructeur SQL, résultat matérialisé en table DuckDB.
 3. **Qualité et audit** — profilage et audits en SQL côté serveur, résultats stockés dans PostgreSQL.
-4. **Objets métier, applications, lineage, tableaux de bord** — routes typées ajoutées à `gouvernance/`.
+4. **Objets métier, applications, lineage, tableaux de bord** — routes typées ajoutées à `gouvernance/` ; le moteur
+   SVG de lineage encapsulé dans un composant.
 5. Retrait de `web-classique` et éclatement du document `appState` en tables.
+
+Comment un écran est migré (méthode suivie pour le modèle et l'extraction) :
+- la logique métier passe dans l'API, en TypeScript testé sans navigateur (fonctions pures quand c'est possible :
+  `constructeur-sql.ts` a ses propres tests) ;
+- l'écran Angular ne fait que composer une spécification et afficher ; les données restent au format de
+  l'application classique quand elle les partage (liens dans `appState.relations`) ;
+- une assertion de bout en bout par usage réel, et une vérification que l'application classique voit la même chose.
 
 Les classeurs Excel sont pour l'instant déposés depuis l'application classique (lecture dans le navigateur) ;
 l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté serveur, l'extension DuckDB
@@ -117,15 +130,16 @@ l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté se
 ## Tests et qualité
 
 ```bash
-npm run tester:api                                  # 19 tests, PGlite
+npm run tester:api                                  # 33 tests, PGlite
 SD_POSTGRES_URL_TEST=postgres://… npm run tester:api # les mêmes sur PostgreSQL
-npm run tester:e2e                                  # 21 assertions, Chromium (Playwright de l'environnement)
+npm run tester:e2e                                  # 29 assertions, Chromium (Playwright de l'environnement)
 npm run verifier                                    # Prettier --check + ESLint (typescript-eslint)
 ```
 
-Le test de bout en bout enchaîne : connexion, dépôt d'un CSV depuis Angular, aperçu, explorateur, glossaire,
-dictionnaire, création d'une utilisatrice, ajout comme lectrice, application classique dans la coque (sources et
-gouvernance identiques), journal, puis vérification des droits de la lectrice (interface et API).
+Le test de bout en bout enchaîne : connexion, dépôt de deux CSV depuis Angular, aperçu, détection et ajout d'un
+lien dans le modèle, extraction jointe avec filtre (aperçu, comptage, export CSV téléchargé, modèle enregistré),
+explorateur, glossaire, dictionnaire, création d'une utilisatrice, ajout comme lectrice, application classique
+dans la coque (sources, lien et gouvernance identiques), journal, puis vérification des droits de la lectrice.
 
 ## Limites connues
 

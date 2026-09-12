@@ -201,7 +201,7 @@ export class ExplorateurComponent {
             resultat.colonnes.map(colonne => echapper(colonne.nom)).join(';'),
             ...resultat.lignes.map(ligne => ligne.map(echapper).join(';'))
         ];
-        const blob = new Blob(['﻿' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const blob = new Blob(['\ufeff' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
         const lien = document.createElement('a');
         lien.href = URL.createObjectURL(blob);
         lien.download = 'resultat.csv';

@@ -105,13 +105,83 @@ try {
         'la source est enregistrée dans PostgreSQL avec le fichier déposé (src_<id>) et ses en-têtes',
         doublon.length === 1 && doublon[0].fichier.nom === 'src_' + doublon[0].id && doublon[0].headers.join() === 'id_client,nom,ville'
     );
-    await page.click('app-sources tbody tr button:has-text("Aperçu")');
+    await page.setInputFiles('app-sources input[type=file]', path.join(dossierTests, 'donnees', 'commandes.csv'));
+    await page.waitForFunction(() => document.querySelectorAll('app-sources tbody tr').length === 2);
+    await page.click('app-sources tbody tr:first-child button:has-text("Aperçu")');
     await page.waitForSelector('app-sources h2:has-text("Aperçu")');
     ok(
         'aperçu : 4 lignes lues par DuckDB, colonnes affichées',
         /4 ligne/.test(await page.textContent('app-sources h2:has-text("Aperçu")')) && /Ana/.test(await page.textContent('app-sources'))
     );
     await capture('sources');
+
+    // ---- modèle de données : détection et ajout d'un lien ----
+    await page.click('a[href="/modele"]');
+    await page.waitForSelector('app-modele');
+    await page.click('app-modele button:has-text("Détecter les liens")');
+    await page.waitForSelector('app-modele button:has-text("Ajouter")');
+    const proposition = await page.textContent('app-modele tbody tr');
+    ok(
+        'modèle : un lien commandes.id_client → clients.id_client est proposé d’après le contenu (100 %)',
+        /commandes\.csv/.test(proposition) && /clients\.csv/.test(proposition) && /100 %/.test(proposition)
+    );
+    await page.click('app-modele button:has-text("Ajouter")');
+    await page.waitForSelector('app-modele button:has-text("Supprimer")');
+    const relations = await page.evaluate(async () => await (await fetch('/api/modele/relations')).json());
+    ok(
+        'modèle : le lien est enregistré au format de l’application classique (par nom de table)',
+        relations.length === 1 && relations[0].sourceTable === 'commandes.csv' && relations[0].targetCol === 'id_client'
+    );
+    await capture('modele');
+
+    // ---- extraction : jointure, colonnes, filtre, aperçu, comptage, export, modèle ----
+    await page.click('a[href="/extraction"]');
+    await page.waitForSelector('app-extraction');
+    await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
+    await page.waitForSelector('app-extraction .ligne-table.proposee');
+    await page.click('app-extraction .ligne-table.proposee button');
+    await page.waitForFunction(() => document.querySelectorAll('app-extraction details').length === 2);
+    const cases = await page.$$('app-extraction details input[type=checkbox]');
+    ok('extraction : la table commandes est proposée par le lien du modèle puis jointe ; 6 colonnes disponibles', cases.length === 6);
+    // Cases dans l'ordre d'affichage : clients (id_client, nom, ville) puis commandes (id_commande, id_client, montant).
+    for (const position of [1, 2, 5]) await cases[position].click();
+    await page.click('app-extraction button:has-text("Ajouter un filtre")');
+    await page.selectOption('app-extraction select[name="fc_0"]', 'ville');
+    await page.selectOption('app-extraction select[name="fo_0"]', 'in');
+    await page.fill('app-extraction input[name="fv_0"]', 'paris;lyon');
+    await page.click('app-extraction button:has-text("Aperçu (200 lignes)")');
+    await page.waitForSelector('app-extraction .resultat');
+    const enTetes = await page.$$eval('app-extraction .entete-colonnes .cellule b', cellules =>
+        cellules.map(cellule => cellule.textContent)
+    );
+    ok('extraction : aperçu avec les colonnes nom, ville et commandes.montant', enTetes.join() === 'nom,ville,commandes.montant');
+    await page.click('app-extraction button:has-text("Compter")');
+    await page.waitForSelector('app-extraction .badge:has-text("ligne(s) au total")');
+    ok(
+        'extraction : 4 lignes au total (jointure gauche, filtre ville dans paris;lyon)',
+        /4 ligne\(s\) au total/.test(await page.textContent('app-extraction .badge'))
+    );
+    const [telechargement] = await Promise.all([
+        page.waitForEvent('download'),
+        page.click('app-extraction button:has-text("Exporter en CSV")')
+    ]);
+    const contenuCsv = fs.readFileSync(await telechargement.path(), 'utf8');
+    ok(
+        'extraction : export CSV téléchargé (en-têtes, 4 lignes, point-virgule)',
+        telechargement.suggestedFilename() === 'clients_extraction.csv' &&
+            contenuCsv.startsWith('\ufeff"nom";"ville";"commandes.montant"') &&
+            contenuCsv.trim().split('\n').length === 5
+    );
+    page.once('dialog', dialogue => dialogue.accept('Clients Paris Lyon'));
+    await page.click('app-extraction button:has-text("Enregistrer le modèle")');
+    await page.waitForSelector('.notification.succes:has-text("Modèle")');
+    ok(
+        'extraction : modèle enregistré et proposé dans la liste',
+        (
+            await page.$$eval('app-extraction select[name=modeleCharge] option', options => options.map(option => option.textContent))
+        ).includes('Clients Paris Lyon')
+    );
+    await capture('extraction');
 
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');
@@ -187,20 +257,24 @@ try {
         tables: Object.values(state.tables).map(t => ({ name: t.name, status: t.status, headers: t.headers.length })),
         glossaire: state.governance.glossary.map(g => g.term),
         dictionnaire: Object.keys(state.governance.dictionary),
+        relations: state.relations.map(r => state.tables[r.sourceTable].name + '>' + state.tables[r.targetTable].name),
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     ok(
-        'application classique : la source déposée depuis Angular est restaurée prête (sans ré-ingestion)',
-        classique.tables.length === 1 &&
-            classique.tables[0].name === 'clients.csv' &&
-            classique.tables[0].status === 'ready' &&
-            classique.tables[0].headers === 3
+        'application classique : les deux sources déposées depuis Angular sont restaurées prêtes (sans ré-ingestion)',
+        classique.tables.length === 2 &&
+            classique.tables.some(t => t.name === 'clients.csv') &&
+            classique.tables.every(t => t.status === 'ready' && t.headers === 3)
     );
     ok(
         'application classique : glossaire et dictionnaire saisis dans Angular sont visibles',
         classique.glossaire.includes('Client') && classique.dictionnaire.includes('clients.csv')
     );
     ok('application classique : pastille « serveur · DuckDB » (moteur distant actif)', /serveur · DuckDB/.test(classique.pastille));
+    ok(
+        'application classique : le lien déclaré dans Angular est présent dans son modèle de données',
+        classique.relations.join() === 'commandes.csv>clients.csv'
+    );
     await capture('classique');
 
     // ---- journal ----

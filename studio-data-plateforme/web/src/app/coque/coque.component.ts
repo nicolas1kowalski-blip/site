@@ -211,6 +211,13 @@ export class CoqueComponent {
             liens: [
                 { chemin: '/', libelle: 'Accueil', icone: '⌂' },
                 { chemin: '/sources', libelle: 'Sources', icone: '▤' },
+                { chemin: '/modele', libelle: 'Modèle de données', icone: '⇄' }
+            ]
+        },
+        {
+            titre: 'Exploitation',
+            liens: [
+                { chemin: '/extraction', libelle: 'Extraction', icone: '⤓' },
                 { chemin: '/explorateur', libelle: 'Explorateur SQL', icone: '⌕' }
             ]
         },

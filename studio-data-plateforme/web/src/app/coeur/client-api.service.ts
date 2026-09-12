@@ -10,18 +10,24 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
+    ApercuExtraction,
     EntreeJournal,
     Espace,
     FicheDictionnaire,
     Identite,
     Membre,
+    ModeleExtraction,
+    PropositionLien,
+    Relation,
     ResultatSql,
     RoleEspace,
     RoleGlobal,
     Sante,
     Source,
+    SpecificationExtraction,
     TermeGlossaire,
-    Utilisateur
+    Utilisateur,
+    VocabulaireExtraction
 } from './modeles';
 
 export class ErreurApi extends Error {
@@ -122,6 +128,48 @@ export class ClientApiService {
         return firstValueFrom(
             this.http.put<FicheDictionnaire>(`${this.racine}/gouvernance/dictionnaire/${encodeURIComponent(source)}`, fiche)
         );
+    }
+
+    // ---- modèle de données ----
+    relations(): Promise<Relation[]> {
+        return firstValueFrom(this.http.get<Relation[]>(`${this.racine}/modele/relations`));
+    }
+    ajouterRelation(relation: Omit<Relation, 'id' | 'sourceId' | 'targetId'>): Promise<{ ajoute: boolean; relations: Relation[] }> {
+        return firstValueFrom(this.http.post<{ ajoute: boolean; relations: Relation[] }>(`${this.racine}/modele/relations`, relation));
+    }
+    supprimerRelation(id: string): Promise<Relation[]> {
+        return firstValueFrom(this.http.delete<Relation[]>(`${this.racine}/modele/relations/${encodeURIComponent(id)}`));
+    }
+    detecterRelations(): Promise<PropositionLien[]> {
+        return firstValueFrom(this.http.post<PropositionLien[]>(`${this.racine}/modele/relations/detecter`, {}));
+    }
+
+    // ---- extraction ----
+    vocabulaireExtraction(): Promise<VocabulaireExtraction> {
+        return firstValueFrom(this.http.get<VocabulaireExtraction>(`${this.racine}/extraction/vocabulaire`));
+    }
+    apercuExtraction(specification: SpecificationExtraction, limite = 200): Promise<ApercuExtraction> {
+        return firstValueFrom(this.http.post<ApercuExtraction>(`${this.racine}/extraction/apercu`, { specification, limite }));
+    }
+    compterExtraction(specification: SpecificationExtraction): Promise<{ total: number }> {
+        return firstValueFrom(this.http.post<{ total: number }>(`${this.racine}/extraction/compter`, specification));
+    }
+    exporterExtractionCsv(specification: SpecificationExtraction, nomFichier: string): Promise<Blob> {
+        return firstValueFrom(
+            this.http.post(`${this.racine}/extraction/export.csv`, { specification, nomFichier }, { responseType: 'blob' })
+        );
+    }
+    modelesExtraction(): Promise<ModeleExtraction[]> {
+        return firstValueFrom(this.http.get<ModeleExtraction[]>(`${this.racine}/extraction/modeles`));
+    }
+    enregistrerModeleExtraction(
+        id: string,
+        modele: { nom: string; description: string; specification: SpecificationExtraction }
+    ): Promise<ModeleExtraction> {
+        return firstValueFrom(this.http.put<ModeleExtraction>(`${this.racine}/extraction/modeles/${encodeURIComponent(id)}`, modele));
+    }
+    supprimerModeleExtraction(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/extraction/modeles/${encodeURIComponent(id)}`));
     }
 
     // ---- journal ----
