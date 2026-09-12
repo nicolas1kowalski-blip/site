@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Version client/serveur : aucune bibliothèque n'est chargée depuis un CDN. Les scripts, styles et
+         polices viennent du serveur lui-même ('self'). connect-src reste large car les sources « API »
+         sont des adresses saisies par l'utilisateur. Pas de WebAssembly ni de worker : le moteur SQL
+         tourne sur le serveur. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+    <title>Studio Data</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Ctext x='16' y='22' font-size='17' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='white'%3ESD%3C/text%3E%3C/svg%3E">
+    <script>
+        const _ResizeObserver = window.ResizeObserver;
+        window.ResizeObserver = class ResizeObserver extends _ResizeObserver {
+            constructor(callback) { super((entries, observer) => { window.requestAnimationFrame(() => { try { callback(entries, observer); } catch (e) {} }); }); }
+        };
+    </script>
+    <!-- Tailwind est compilé à la construction (client/construire.mjs) à partir des classes réellement
+         utilisées ; les autres bibliothèques sont copiées depuis node_modules, versions épinglées. -->
+    <link rel="stylesheet" href="tailwind.css">
+    <script src="vendor/xlsx.full.min.js"></script>
+    <script src="vendor/chart.umd.js"></script>
+    <script src="vendor/lucide.min.js"></script>

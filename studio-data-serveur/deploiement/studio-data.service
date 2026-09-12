@@ -1,0 +1,28 @@
+# Unité systemd — /etc/systemd/system/studio-data.service
+#   sudo useradd --system --home /opt/studio-data-serveur --shell /usr/sbin/nologin studiodata
+#   sudo cp -r studio-data-serveur /opt/ && sudo chown -R studiodata: /opt/studio-data-serveur
+#   sudo systemctl daemon-reload && sudo systemctl enable --now studio-data
+[Unit]
+Description=Studio Data — serveur (Node + DuckDB)
+After=network.target
+
+[Service]
+Type=simple
+User=studiodata
+WorkingDirectory=/opt/studio-data-serveur
+Environment=NODE_ENV=production
+Environment=SD_HOTE=127.0.0.1
+Environment=SD_PORT=8420
+Environment=SD_DONNEES=/var/lib/studio-data
+Environment=SD_JOURNAL=info
+ExecStart=/usr/bin/node serveur/serveur.mjs
+Restart=on-failure
+RestartSec=3
+# Le processus n'a besoin d'écrire que dans le dossier de données.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/studio-data
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+{
+ "base": "../studio-data/src/manifest-v14.json",
+ "remplacements": {
+  "00-squelette/00-entete.html": "src/00-entete-serveur.html"
+ },
+ "stylesSupplementaires": [
+  { "file": "98-couche-serveur/0X-serveur-styles.css", "role": "Couche serveur : pastille d'état de la connexion" }
+ ],
+ "scriptsSupplementaires": [
+  { "file": "98-couche-serveur/C0-serveur-moteur-distant.js", "role": "Couche serveur : moteur SQL distant (conn.query / conn.send / fichiers) servi par l'API HTTP" },
+  { "file": "98-couche-serveur/C1-serveur-persistance.js", "role": "Couche serveur : état et tables persistés sur le serveur, ingestion CSV adaptée, Parquet côté serveur" },
+  { "file": "98-couche-serveur/C2-serveur-version.js", "role": "Couche serveur : version, pastille d'état dans l'en-tête, lexique" }
+ ]
+}
