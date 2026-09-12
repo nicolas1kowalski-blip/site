@@ -14,6 +14,7 @@ import { FrontController } from './front/front.controller';
 import { GouvernanceModule } from './gouvernance/gouvernance.module';
 import { JournalModule } from './journal/journal.module';
 import { ModeleModule } from './modele/modele.module';
+import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
 import { SourcesModule } from './sources/sources.module';
 import { SqlController } from './sql/sql.controller';
@@ -36,7 +37,8 @@ export class AppModule {
                 SourcesModule,
                 GouvernanceModule,
                 ModeleModule,
-                ExtractionModule
+                ExtractionModule,
+                QualiteModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],

@@ -11,14 +11,20 @@ import { Router } from '@angular/router';
 import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
     ApercuExtraction,
+    AuditQualite,
+    DefinitionRegle,
+    ExecutionRegles,
     EntreeJournal,
     Espace,
     FicheDictionnaire,
     Identite,
     Membre,
     ModeleExtraction,
+    ProfilSource,
     PropositionLien,
+    RegleQualite,
     Relation,
+    ResultatDoublons,
     ResultatSql,
     RoleEspace,
     RoleGlobal,
@@ -27,7 +33,8 @@ import {
     SpecificationExtraction,
     TermeGlossaire,
     Utilisateur,
-    VocabulaireExtraction
+    VocabulaireExtraction,
+    VocabulaireQualite
 } from './modeles';
 
 export class ErreurApi extends Error {
@@ -170,6 +177,39 @@ export class ClientApiService {
     }
     supprimerModeleExtraction(id: string): Promise<unknown> {
         return firstValueFrom(this.http.delete(`${this.racine}/extraction/modeles/${encodeURIComponent(id)}`));
+    }
+
+    // ---- qualité ----
+    vocabulaireQualite(): Promise<VocabulaireQualite> {
+        return firstValueFrom(this.http.get<VocabulaireQualite>(`${this.racine}/qualite/vocabulaire`));
+    }
+    profilerSource(sourceId: string): Promise<ProfilSource> {
+        return firstValueFrom(this.http.post<ProfilSource>(`${this.racine}/qualite/profil`, { sourceId }));
+    }
+    chercherDoublons(sourceId: string, cle: string[]): Promise<ResultatDoublons> {
+        return firstValueFrom(this.http.post<ResultatDoublons>(`${this.racine}/qualite/doublons`, { sourceId, cle }));
+    }
+    reglesQualite(sourceId?: string): Promise<RegleQualite[]> {
+        return firstValueFrom(this.http.get<RegleQualite[]>(`${this.racine}/qualite/regles`, { params: sourceId ? { sourceId } : {} }));
+    }
+    creerRegleQualite(definition: DefinitionRegle): Promise<RegleQualite> {
+        return firstValueFrom(this.http.post<RegleQualite>(`${this.racine}/qualite/regles`, definition));
+    }
+    modifierRegleQualite(id: string, definition: DefinitionRegle): Promise<RegleQualite> {
+        return firstValueFrom(this.http.put<RegleQualite>(`${this.racine}/qualite/regles/${encodeURIComponent(id)}`, definition));
+    }
+    supprimerRegleQualite(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/qualite/regles/${encodeURIComponent(id)}`));
+    }
+    executerReglesQualite(sourceId?: string): Promise<ExecutionRegles> {
+        return firstValueFrom(this.http.post<ExecutionRegles>(`${this.racine}/qualite/regles/executer`, sourceId ? { sourceId } : {}));
+    }
+    auditsQualite(sourceId?: string, limite = 100): Promise<AuditQualite[]> {
+        return firstValueFrom(
+            this.http.get<AuditQualite[]>(`${this.racine}/qualite/audits`, {
+                params: { limite: String(limite), ...(sourceId ? { sourceId } : {}) }
+            })
+        );
     }
 
     // ---- journal ----

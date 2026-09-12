@@ -183,6 +183,55 @@ try {
     );
     await capture('extraction');
 
+    // ---- qualité : profilage, doublons, règle et score ----
+    await page.click('a[href="/qualite"]');
+    await page.waitForSelector('app-qualite');
+    await page.selectOption('app-qualite select[name=source]', { label: 'clients.csv' });
+    await page.click('app-qualite button:has-text("Profiler la source")');
+    await page.waitForSelector('app-qualite tbody tr');
+    const profil = await page.textContent('app-qualite');
+    verifier(
+        'qualité : profilage de clients.csv — 4 lignes, complétude moyenne 100 %, 0 doublon exact, 3 colonnes profilées',
+        /4 ligne\(s\)/.test(profil) &&
+            /complétude moyenne 100\.0 %/.test(profil) &&
+            /0 doublon\(s\) exact/.test(profil) &&
+            (await page.$$('app-qualite tbody tr')).length === 3
+    );
+    await page.click('app-qualite .onglets button:has-text("Doublons")');
+    await page.click('app-qualite label.case:has-text("ville") input');
+    await page.click('app-qualite button:has-text("Chercher les doublons")');
+    await page.waitForSelector('app-qualite h2:has-text("groupe(s)")');
+    const texteDoublons = await page.textContent('app-qualite');
+    verifier(
+        'qualité : doublons sur la clé ville — 1 groupe (Paris ×2), 2 lignes',
+        // La clé est affichée normalisée (majuscules, sans espaces) : « PARIS ».
+        /1 groupe\(s\)/.test(texteDoublons) && /2 ligne\(s\) concernée/.test(texteDoublons) && /PARIS/i.test(texteDoublons)
+    );
+    await page.click('app-qualite .onglets button:has-text("Règles")');
+    await page.click('app-qualite button:has-text("Nouvelle règle")');
+    await page.fill('app-qualite input[name=nom]', 'Ville autorisée');
+    await page.selectOption('app-qualite select[name=colonne]', 'ville');
+    await page.selectOption('app-qualite select[name=type]', 'dansListe');
+    await page.fill('app-qualite input[name=valeurs]', 'Paris;Lyon');
+    await page.click('app-qualite button[type=submit]:has-text("Enregistrer")');
+    await page.waitForSelector('app-qualite tbody tr:has-text("Ville autorisée")');
+    await page.click('app-qualite button:has-text("Exécuter les règles")');
+    await page.waitForSelector('app-qualite .score');
+    const regles = await page.textContent('app-qualite');
+    verifier(
+        'qualité : la règle « ville dans Paris;Lyon » trouve 1 échec sur 4 (Lille), score 75 / 100',
+        /1 échec\(s\) \/ 4/.test(regles) && /Score 75 \/ 100/.test(regles) && /ex\. Lille/.test(regles)
+    );
+    await page.click('app-qualite .onglets button:has-text("Historique")');
+    await page.waitForSelector('app-qualite tbody tr');
+    await page.waitForFunction(() => document.querySelectorAll('app-qualite tbody tr').length >= 3);
+    const historique = await page.textContent('app-qualite tbody');
+    verifier(
+        'qualité : l’historique montre les trois audits (profilage, doublons, règles)',
+        ['profilage', 'doublons', 'regles'].every(genre => historique.includes(genre))
+    );
+    await capture('qualite');
+
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');
     await page.waitForSelector('app-explorateur .table');

@@ -221,6 +221,7 @@ export class CoqueComponent {
                 { chemin: '/explorateur', libelle: 'Explorateur SQL', icone: '⌕' }
             ]
         },
+        { titre: 'Qualité', liens: [{ chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' }] },
         {
             titre: 'Gouvernance',
             liens: [

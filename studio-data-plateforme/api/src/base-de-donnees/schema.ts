@@ -136,3 +136,52 @@ export type EntreeJournal = typeof journal.$inferSelect;
 
 export type RoleGlobal = 'administrateur' | 'utilisateur';
 export type RoleEspace = 'lecteur' | 'editeur' | 'administrateur';
+
+/** Règle de qualité : une vérification sur une colonne (ou une source), avec sa criticité et son dernier résultat. */
+export const reglesQualite = pgTable(
+    'regles_qualite',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        espaceId: uuid('espace_id')
+            .notNull()
+            .references(() => espaces.id, { onDelete: 'cascade' }),
+        nom: text('nom').notNull(),
+        sourceId: text('source_id').notNull(),
+        colonne: text('colonne').notNull().default(''),
+        /** nonVide, unique, format, dansListe, plage, longueur, dateValide, reference (voir qualite/regles.ts). */
+        type: text('type').notNull(),
+        parametres: jsonb('parametres').notNull().default({}),
+        /** bloquante (poids 3), majeure (2), mineure (1) : pondération du score. */
+        criticite: text('criticite').notNull().default('majeure'),
+        active: boolean('active').notNull().default(true),
+        dernierResultat: jsonb('dernier_resultat'),
+        modifieLe: timestamp('modifie_le', { withTimezone: true }).notNull().defaultNow()
+    },
+    table => [index('regles_qualite_espace_index').on(table.espaceId, table.sourceId)]
+);
+
+/** Audit de qualité enregistré : profilage, recherche de doublons ou exécution des règles sur une source. */
+export const auditsQualite = pgTable(
+    'audits_qualite',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        espaceId: uuid('espace_id')
+            .notNull()
+            .references(() => espaces.id, { onDelete: 'cascade' }),
+        sourceId: text('source_id').notNull(),
+        sourceNom: text('source_nom').notNull(),
+        /** profilage | doublons | regles */
+        genre: text('genre').notNull(),
+        lanceLe: timestamp('lance_le', { withTimezone: true }).notNull().defaultNow(),
+        lanceParId: uuid('lance_par_id').references(() => utilisateurs.id, { onDelete: 'set null' }),
+        lignes: bigint('lignes', { mode: 'number' }).notNull().default(0),
+        /** Indicateurs de synthèse (complétude moyenne, doublons, score…) affichés dans l'historique. */
+        resume: jsonb('resume').notNull().default({}),
+        /** Résultat complet (par colonne, par règle) pour relecture. */
+        detail: jsonb('detail').notNull().default({})
+    },
+    table => [index('audits_qualite_espace_index').on(table.espaceId, table.sourceId, table.lanceLe)]
+);
+
+export type RegleQualite = typeof reglesQualite.$inferSelect;
+export type AuditQualite = typeof auditsQualite.$inferSelect;

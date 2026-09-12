@@ -150,3 +150,71 @@ export type VocabulaireExtraction = {
 /** Les opérateurs qui n'attendent aucune valeur, et celui qui en attend deux. */
 export const OPERATEURS_SANS_VALEUR: OperateurFiltre[] = ['empty', 'notempty'];
 export const OPERATEUR_DEUX_VALEURS: OperateurFiltre = 'between';
+
+// ---- qualité ----
+export type ProfilColonne = {
+    colonne: string;
+    total: number;
+    vides: number;
+    completude: number;
+    distinctes: number;
+    longueurMin: number | null;
+    longueurMax: number | null;
+    espacesParasites: number;
+    partNumerique: number;
+    partDate: number;
+    motifMajoritaire: string | null;
+    partMotifMajoritaire: number;
+    motifsDistincts: number;
+    valeursFrequentes: { valeur: string | null; nombre: number }[];
+};
+export type ProfilSource = {
+    sourceId: string;
+    sourceNom: string;
+    lignes: number;
+    colonnes: ProfilColonne[];
+    completudeMoyenne: number;
+    doublonsExacts: number;
+};
+export type ResultatDoublons = {
+    cle: string[];
+    groupes: number;
+    lignes: number;
+    exemples: { valeurs: (string | null)[]; nombre: number }[];
+};
+export type TypeRegle = 'nonVide' | 'unique' | 'format' | 'dansListe' | 'plage' | 'longueur' | 'dateValide' | 'reference';
+export type Criticite = 'bloquante' | 'majeure' | 'mineure';
+export type ParametresRegle = {
+    expression?: string;
+    valeurs?: string[];
+    minimum?: number;
+    maximum?: number;
+    sourceCibleId?: string;
+    colonneCible?: string;
+};
+export type ResultatRegle = { total: number; echecs: number; taux: number; executeLe: string; exemples: string[] };
+export type RegleQualite = {
+    id: string;
+    nom: string;
+    sourceId: string;
+    colonne: string;
+    type: TypeRegle;
+    parametres: ParametresRegle;
+    criticite: Criticite;
+    active: boolean;
+    dernierResultat: ResultatRegle | null;
+    modifieLe: string;
+};
+export type DefinitionRegle = Omit<RegleQualite, 'id' | 'dernierResultat' | 'modifieLe'>;
+export type ExecutionRegles = { score: number | null; regles: (RegleQualite & { resultat: ResultatRegle | null; erreur?: string })[] };
+export type AuditQualite = {
+    id: string;
+    sourceId: string;
+    sourceNom: string;
+    genre: 'profilage' | 'doublons' | 'regles';
+    lanceLe: string;
+    lignes: number;
+    resume: Record<string, unknown>;
+    detail?: unknown;
+};
+export type VocabulaireQualite = { typesRegle: Record<TypeRegle, string>; criticites: Record<Criticite, number> };

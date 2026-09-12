@@ -17,6 +17,7 @@ import { ExtractionComponent } from './pages/extraction/extraction.component';
 import { GlossaireComponent } from './pages/glossaire/glossaire.component';
 import { JournalComponent } from './pages/journal/journal.component';
 import { ModeleComponent } from './pages/modele/modele.component';
+import { QualiteComponent } from './pages/qualite/qualite.component';
 import { SourcesComponent } from './pages/sources/sources.component';
 import { UtilisateursComponent } from './pages/utilisateurs/utilisateurs.component';
 
@@ -32,6 +33,7 @@ export const routes: Routes = [
             { path: 'modele', component: ModeleComponent, title: 'Modèle de données — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
+            { path: 'qualite', component: QualiteComponent, title: 'Qualité & Audit — Studio Data' },
             { path: 'glossaire', component: GlossaireComponent, title: 'Glossaire — Studio Data' },
             { path: 'dictionnaire', component: DictionnaireComponent, title: 'Dictionnaire — Studio Data' },
             { path: 'journal', component: JournalComponent, title: 'Journal — Studio Data' },
