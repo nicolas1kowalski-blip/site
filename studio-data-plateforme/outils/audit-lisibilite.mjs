@@ -20,7 +20,9 @@ function lister(dossier) {
 }
 
 /** Identifiants déclarés dans un fichier : const/let, fonctions, paramètres de fonctions fléchées. */
-function identifiantsDeclares(texte) {
+function identifiantsDeclares(texteBrut) {
+    // Les chaînes de caractères (SQL, messages) ne déclarent rien : elles sont retirées avant l'analyse.
+    const texte = texteBrut.replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, "''");
     const identifiants = new Set();
     for (const correspondance of texte.matchAll(/\b(?:const|let)\s+([a-zA-Z_$][\w$]*)/g)) identifiants.add(correspondance[1]);
     for (const correspondance of texte.matchAll(/\bfunction\s+([a-zA-Z_$][\w$]*)/g)) identifiants.add(correspondance[1]);
