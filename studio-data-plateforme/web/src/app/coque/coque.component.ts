@@ -235,6 +235,7 @@ export class CoqueComponent {
                 { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🛡' },
                 { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '☺' },
                 { chemin: '/propositions', libelle: 'Propositions à valider', icone: '✔' },
+                { chemin: '/lineage', libelle: 'Lineage', icone: '⇢' },
                 { chemin: '/journal', libelle: 'Journal', icone: '⏱' }
             ]
         },

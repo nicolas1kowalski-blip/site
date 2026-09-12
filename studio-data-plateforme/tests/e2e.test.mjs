@@ -338,8 +338,15 @@ try {
     await page.fill('app-actifs input[name=nom]', 'CRM');
     await page.fill('app-actifs input[name=responsable]', 'Équipe Ventes');
     // Cases à cocher désignées par leur texte exact (« Client » ne doit pas retenir « clients.csv »).
-    await page.locator('app-actifs label.case', { hasText: /^\s*clients\.csv\s*$/ }).first().locator('input').click();
-    await page.locator('app-actifs label.case', { hasText: /^\s*Client\s*$/ }).locator('input').click();
+    await page
+        .locator('app-actifs label.case', { hasText: /^\s*clients\.csv\s*$/ })
+        .first()
+        .locator('input')
+        .click();
+    await page
+        .locator('app-actifs label.case', { hasText: /^\s*Client\s*$/ })
+        .locator('input')
+        .click();
     await page.click('app-actifs button:has-text("Enregistrer")');
     await page.waitForSelector('app-actifs .liste .element:has-text("CRM")');
     const actifs = await page.evaluate(async () => await (await fetch('/api/gouvernance/actifs')).json());
@@ -427,6 +434,39 @@ try {
             /validée/.test(await page.textContent('app-propositions tbody'))
     );
     await capture('propositions');
+
+    // ---- lineage : carte des flux synchronisée, fiche d'un nœud, parcours d'un attribut ----
+    await page.click('a[href="/lineage"]');
+    await page.waitForSelector('app-lineage');
+    await page.click('app-lineage button:has-text("Synchroniser depuis les données")');
+    await page.waitForSelector('app-lineage app-graphe-svg .noeud');
+    const noeudsCarte = await page.$$eval('app-lineage app-graphe-svg .noeud .titre', titres =>
+        titres.map(titre => titre.textContent.trim()).sort()
+    );
+    verifier(
+        'lineage : la carte dérivée contient les deux fichiers, la table conçue, l’application CRM et l’objet Client (' +
+            noeudsCarte.join(', ') +
+            ')',
+        ['CRM', 'Client', 'Clients consolidés', 'clients.csv', 'commandes.csv'].every(nom => noeudsCarte.includes(nom))
+    );
+    await page.click('app-lineage app-graphe-svg .noeud:has-text("Clients consolidés")');
+    await page.waitForSelector('app-lineage h2:has-text("Clients consolidés")');
+    verifier(
+        'lineage : la table conçue alimentée par deux sources est un « Référentiel » (consolidation)',
+        /Référentiel/.test(await page.textContent('app-lineage .disposition .carte'))
+    );
+    await capture('lineage');
+    await page.click('app-lineage .onglets button:has-text("Parcours")');
+    await page.selectOption('app-lineage select[name=objet]', { label: 'Client' });
+    await page.selectOption('app-lineage select[name=attribut]', { label: 'ville' });
+    await page.waitForSelector('app-lineage app-graphe-svg .noeud');
+    const noeudsParcours = await page.$$eval('app-lineage app-graphe-svg .noeud .titre', titres =>
+        titres.map(titre => titre.textContent.trim())
+    );
+    verifier(
+        'lineage : le parcours de l’attribut « ville » montre l’application CRM, la colonne clients.csv.ville et l’attribut',
+        noeudsParcours.includes('CRM') && noeudsParcours.includes('ville') && noeudsParcours.length >= 3
+    );
 
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');

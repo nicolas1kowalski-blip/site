@@ -13,6 +13,7 @@ import { FichiersController } from './fichiers/fichiers.controller';
 import { FrontController } from './front/front.controller';
 import { GouvernanceModule } from './gouvernance/gouvernance.module';
 import { JournalModule } from './journal/journal.module';
+import { LineageModule } from './lineage/lineage.module';
 import { ModeleModule } from './modele/modele.module';
 import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
@@ -40,7 +41,8 @@ export class AppModule {
                 ModeleModule,
                 ExtractionModule,
                 QualiteModule,
-                TablesConcuesModule
+                TablesConcuesModule,
+                LineageModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],

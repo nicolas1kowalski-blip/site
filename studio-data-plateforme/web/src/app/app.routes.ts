@@ -17,6 +17,7 @@ import { ExplorateurComponent } from './pages/explorateur/explorateur.component'
 import { ExtractionComponent } from './pages/extraction/extraction.component';
 import { GlossaireComponent } from './pages/glossaire/glossaire.component';
 import { JournalComponent } from './pages/journal/journal.component';
+import { LineageComponent } from './pages/lineage/lineage.component';
 import { ListesValeursComponent } from './pages/listes-valeurs/listes-valeurs.component';
 import { ModeleComponent } from './pages/modele/modele.component';
 import { ObjetsMetierComponent } from './pages/objets-metier/objets-metier.component';
@@ -52,6 +53,7 @@ export const routes: Routes = [
             { path: 'sensibilite', component: SensibiliteComponent, title: 'Sensibilité — Studio Data' },
             { path: 'personnes', component: PersonnesComponent, title: 'Personnes & rôles — Studio Data' },
             { path: 'propositions', component: PropositionsComponent, title: 'Propositions à valider — Studio Data' },
+            { path: 'lineage', component: LineageComponent, title: 'Lineage — Studio Data' },
             { path: 'journal', component: JournalComponent, title: 'Journal — Studio Data' },
             { path: 'classique', component: ClassiqueComponent, title: 'Application complète — Studio Data' },
             { path: 'espaces', component: EspacesComponent, title: 'Espaces — Studio Data' },

@@ -408,3 +408,89 @@ export type Proposition = DefinitionProposition & {
     decidedBy?: string;
     comment?: string;
 };
+
+// ---- lineage : carte des flux (governance.flow, format classique) ----
+export type GenreNoeudFlux = 'table' | 'app' | 'object';
+export type NoeudFlux = {
+    id: string;
+    name: string;
+    kind?: GenreNoeudFlux;
+    tableName?: string;
+    assetId?: string;
+    boId?: string;
+    origine?: string;
+    domain?: string;
+    derived?: boolean;
+    producer?: boolean;
+    [autre: string]: unknown;
+};
+export type TransformationPaire = { kind: 'none' | 'agg' | 'scalar'; fn?: string; op?: string; param?: string };
+/** Attribut contrôlé d'un lien : colonne source (src), colonne cible (tgt), transformation attendue. */
+export type PaireAttributs = { id: string; src: string; tgt: string; xform?: TransformationPaire };
+export type ResultatReconciliation = {
+    at: number;
+    rows: number;
+    missing: number;
+    distAny: number;
+    rate: number;
+    worstRate: number;
+    pairs: { src: string; tgt: string; dist: number; rate: number; samples: string[][] }[];
+};
+export type LienFlux = {
+    id: string;
+    source: string;
+    target: string;
+    rel?: string;
+    srcKey?: string;
+    tgtKey?: string;
+    attrPairs?: PaireAttributs[];
+    slaHours?: number | null;
+    transformation?: string;
+    nature?: string;
+    scope?: string;
+    lastRun?: ResultatReconciliation | null;
+    derived?: boolean;
+    [autre: string]: unknown;
+};
+export type Flux = {
+    nodes: NoeudFlux[];
+    edges: LienFlux[];
+    threshold: number;
+    showObjects: boolean;
+    hideSources: boolean;
+    grain: 'bo' | 'table';
+};
+export type StatutFraicheur = 'ok' | 'warn' | 'bad' | 'none';
+export type Fraicheur = {
+    status: StatutFraicheur;
+    ageJours?: number;
+    joursMaximum?: number | null;
+    frequence?: string;
+    source?: string;
+    herite?: boolean;
+};
+export type NoeudFluxEnrichi = NoeudFlux & { role: string; fraicheur: Fraicheur };
+export type LienFluxEnrichi = LienFlux & { type: string; fraicheur: Fraicheur; distorsion: StatutFraicheur; sante: 'ok' | 'warn' | 'bad' };
+export type ControleModele = { severite: 'error' | 'warn'; categorie: string; message: string };
+export type CarteFlux = { flux: Flux; noeuds: NoeudFluxEnrichi[]; liens: LienFluxEnrichi[]; controles: ControleModele[] };
+export type BilanSynchronisation = {
+    noeudsAjoutes: number;
+    liensAjoutes: number;
+    originesRenseignees: number;
+    liensRetires: number;
+    noeudsRetires: number;
+};
+export type NoeudGraphe = {
+    id: string;
+    titre: string;
+    detail?: string;
+    genre: 'app' | 'table' | 'colonne' | 'attribut' | 'objet' | 'alerte';
+};
+export type Graphe = { noeuds: NoeudGraphe[]; liens: { source: string; target: string; libelle?: string }[] };
+export type VocabulaireLineage = {
+    relations: Record<string, string>;
+    roles: Record<string, string>;
+    natures: Record<string, string>;
+    agregats: Record<string, string>;
+    scalaires: Record<string, string>;
+};

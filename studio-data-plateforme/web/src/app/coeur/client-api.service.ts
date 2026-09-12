@@ -12,6 +12,14 @@ import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
     Actif,
     ApercuExtraction,
+    BilanSynchronisation,
+    CarteFlux,
+    Flux,
+    Graphe,
+    LienFlux,
+    NoeudFlux,
+    ResultatReconciliation,
+    VocabulaireLineage,
     AuditQualite,
     Classification,
     ColonnePersonnelle,
@@ -392,6 +400,43 @@ export class ClientApiService {
     }
     retirerProposition(id: string): Promise<unknown> {
         return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/propositions/${encodeURIComponent(id)}`));
+    }
+
+    // ---- lineage ----
+    vocabulaireLineage(): Promise<VocabulaireLineage> {
+        return firstValueFrom(this.http.get<VocabulaireLineage>(`${this.racine}/lineage/vocabulaire`));
+    }
+    carteFlux(): Promise<CarteFlux> {
+        return firstValueFrom(this.http.get<CarteFlux>(`${this.racine}/lineage/flux`));
+    }
+    synchroniserFlux(): Promise<BilanSynchronisation> {
+        return firstValueFrom(this.http.post<BilanSynchronisation>(`${this.racine}/lineage/flux/synchroniser`, {}));
+    }
+    definirOptionsFlux(options: Partial<Pick<Flux, 'threshold' | 'showObjects' | 'hideSources' | 'grain'>>): Promise<Flux> {
+        return firstValueFrom(this.http.put<Flux>(`${this.racine}/lineage/flux/options`, options));
+    }
+    enregistrerNoeudFlux(id: string, noeud: Partial<NoeudFlux> & { name: string }): Promise<NoeudFlux> {
+        return firstValueFrom(this.http.put<NoeudFlux>(`${this.racine}/lineage/flux/noeuds/${encodeURIComponent(id)}`, noeud));
+    }
+    supprimerNoeudFlux(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/lineage/flux/noeuds/${encodeURIComponent(id)}`));
+    }
+    enregistrerLienFlux(id: string, lien: Partial<LienFlux> & { source: string; target: string }): Promise<LienFlux> {
+        return firstValueFrom(this.http.put<LienFlux>(`${this.racine}/lineage/flux/liens/${encodeURIComponent(id)}`, lien));
+    }
+    supprimerLienFlux(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/lineage/flux/liens/${encodeURIComponent(id)}`));
+    }
+    reconcilierLien(id: string): Promise<ResultatReconciliation> {
+        return firstValueFrom(
+            this.http.post<ResultatReconciliation>(`${this.racine}/lineage/flux/liens/${encodeURIComponent(id)}/reconcilier`, {})
+        );
+    }
+    parcoursAttribut(boId: string, elId: string): Promise<Graphe> {
+        return firstValueFrom(this.http.get<Graphe>(`${this.racine}/lineage/attribut`, { params: { boId, elId } }));
+    }
+    lineageTable(nom: string): Promise<Graphe> {
+        return firstValueFrom(this.http.get<Graphe>(`${this.racine}/lineage/table/${encodeURIComponent(nom)}`));
     }
 
     // ---- journal ----
