@@ -278,3 +278,133 @@ export type VocabulaireTablesConcues = {
     operateursFiltre: Record<OperateurFiltreSource, string>;
     modesValidite: Record<ModeValidite, string>;
 };
+
+// ---- gouvernance : référentiels (format de l'application classique, champs en anglais) ----
+export type RoleObjetSource = 'maitre' | 'contributeur' | 'destinataire';
+/** Attribut (« information ») d'un objet métier : mappings = colonnes techniques qui l'alimentent, usedBy = actifs. */
+export type AttributObjetMetier = {
+    id: string;
+    name: string;
+    definition?: string;
+    mappings: { table: string; col: string }[];
+    usedBy: string[];
+    owner?: string;
+    sensitivity?: string;
+    examples?: string;
+    term?: string;
+    [autre: string]: unknown;
+};
+export type ObjetMetier = {
+    id: string;
+    name: string;
+    definition: string;
+    domain?: string;
+    globalOwner: string;
+    contributors: string[];
+    status?: string;
+    elements: AttributObjetMetier[];
+    sources: { table: string; role: RoleObjetSource }[];
+    producedBy: string[];
+    consumedBy: string[];
+    references: { boId: string; cardinality?: string }[];
+    appId?: string;
+    history?: { at: string; from: string; to: string; by: string; comment: string }[];
+    [autre: string]: unknown;
+};
+export type GenreActif = 'app' | 'process' | 'report';
+/** Actif : application (sources = tables produites, tables = tables lues), processus (appIds), restitution. */
+export type Actif = {
+    id: string;
+    name: string;
+    kind: GenreActif;
+    description: string;
+    owner: string;
+    domain: string;
+    criticality: string;
+    sources: string[];
+    tables: string[];
+    columns: { table: string; col: string }[];
+    boIds: string[];
+    appIds: string[];
+    producedBy: string[];
+    deliveredTo: string[];
+    recipients?: string;
+    frequency?: string;
+    format?: string;
+    [autre: string]: unknown;
+};
+export type Perimetre = { id: string; name: string; description: string; tables: string[]; boIds: string[]; [autre: string]: unknown };
+export type RolePersonne = 'owner' | 'contrib' | 'reader' | 'admin';
+export type Personne = {
+    id: string;
+    name: string;
+    email: string;
+    roles: { domain: string; role: RolePersonne }[];
+    [autre: string]: unknown;
+};
+export type VocabulaireGouvernance = {
+    rolesSource: Record<RoleObjetSource, string>;
+    genresActif: Record<GenreActif, string>;
+    rolesPersonne: Record<RolePersonne, string>;
+    criticites: string[];
+};
+/** Liste de valeurs : codes en clair (values) ou lus dans une source (srcTable, colCode…). */
+export type ListeValeurs = {
+    id: string;
+    name: string;
+    description: string;
+    kind: 'inline' | 'table';
+    values: { code: string; label: string; status: string }[];
+    srcTable: string;
+    colCode: string;
+    colLabel: string;
+    colStatus: string;
+    colList: string;
+    listValue: string;
+    activeStatus: string;
+    utilisations?: { table: string; col: string }[];
+    [autre: string]: unknown;
+};
+export type ControleListe = {
+    table: string;
+    col: string;
+    total: number;
+    horsListe: number;
+    exemples: { valeur: string; nombre: number }[];
+};
+export type NiveauSensibilite = '' | 'public' | 'interne' | 'confidentiel' | 'personnel';
+export type ColonneClassee = {
+    table: string;
+    col: string;
+    niveau: NiveauSensibilite;
+    niveauPropose: Exclude<NiveauSensibilite, ''>;
+    sensibilite: string;
+};
+export type Classification = {
+    niveaux: Record<Exclude<NiveauSensibilite, ''>, string>;
+    actionsPossibles: Record<string, string>;
+    actions: Record<string, string>;
+    colonnes: ColonneClassee[];
+};
+export type ColonnePersonnelle = { table: string; col: string; motif: string };
+export type GenreProposition = 'attr' | 'bo' | 'term' | 'asset' | 'dict' | 'dictcol';
+export type DefinitionProposition = {
+    kind: GenreProposition;
+    field: string;
+    target: Record<string, string>;
+    label: string;
+    before: string;
+    after: string;
+    raw?: unknown;
+    domain: string;
+};
+export type Proposition = DefinitionProposition & {
+    id: string;
+    status: 'pending' | 'accepted' | 'rejected';
+    by: string;
+    byName: string;
+    at: string;
+    decidedAt?: string;
+    decidedBy?: string;
+    comment?: string;
+};

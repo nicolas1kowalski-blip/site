@@ -303,6 +303,131 @@ try {
     );
     await capture('tables-concues');
 
+    // ---- gouvernance : objets métier, applications, personnes, listes de valeurs, sensibilité, propositions ----
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier');
+    await page.selectOption('app-objets-metier select[name=sourceInitiale]', { label: 'clients.csv' });
+    await page.click('app-objets-metier button:has-text("Initialiser")');
+    await page.waitForSelector('app-objets-metier input[name=attribut-nom-2]');
+    verifier(
+        'objets métier : initialisation depuis clients.csv — nom « clients », 3 attributs alimentés par la source',
+        (await page.inputValue('app-objets-metier input[name=nom]')) === 'clients' &&
+            (await page.$$('app-objets-metier tbody tr')).length === 3 &&
+            /clients\.csv\.ville/.test(await page.textContent('app-objets-metier tbody'))
+    );
+    await page.fill('app-objets-metier input[name=nom]', 'Client');
+    await page.fill('app-objets-metier textarea[name=definition]', 'Personne ayant passé au moins une commande');
+    await page.fill('app-objets-metier input[name=proprietaire]', 'Alice Martin');
+    await page.fill('app-objets-metier input[name=domaine]', 'Ventes');
+    await page.fill('app-objets-metier input[name=attribut-definition-2]', 'Ville de résidence');
+    await page.click('app-objets-metier button:has-text("Enregistrer")');
+    await page.waitForSelector('app-objets-metier .liste .element:has-text("Client")');
+    const objetsMetier = await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json());
+    verifier(
+        'objets métier : « Client » enregistré dans appState.governance.businessObjects (source maître clients.csv, attribut ville défini)',
+        objetsMetier.length === 1 &&
+            objetsMetier[0].name === 'Client' &&
+            objetsMetier[0].sources[0].role === 'maitre' &&
+            objetsMetier[0].elements.find(attribut => attribut.name === 'ville').definition === 'Ville de résidence'
+    );
+    await capture('objets-metier');
+
+    await page.click('a[href="/actifs"]');
+    await page.waitForSelector('app-actifs');
+    await page.click('app-actifs button:has-text("Nouvelle application")');
+    await page.fill('app-actifs input[name=nom]', 'CRM');
+    await page.fill('app-actifs input[name=responsable]', 'Équipe Ventes');
+    // Cases à cocher désignées par leur texte exact (« Client » ne doit pas retenir « clients.csv »).
+    await page.locator('app-actifs label.case', { hasText: /^\s*clients\.csv\s*$/ }).first().locator('input').click();
+    await page.locator('app-actifs label.case', { hasText: /^\s*Client\s*$/ }).locator('input').click();
+    await page.click('app-actifs button:has-text("Enregistrer")');
+    await page.waitForSelector('app-actifs .liste .element:has-text("CRM")');
+    const actifs = await page.evaluate(async () => await (await fetch('/api/gouvernance/actifs')).json());
+    verifier(
+        'applications : « CRM » produit clients.csv et porte l’objet Client',
+        actifs.length === 1 && actifs[0].kind === 'app' && actifs[0].sources.join() === 'clients.csv' && actifs[0].boIds.length === 1
+    );
+
+    await page.click('a[href="/personnes"]');
+    await page.waitForSelector('app-personnes');
+    await page.fill('app-personnes input[name=nouveauDomaine]', 'Finance');
+    await page.click('app-personnes form button:has-text("Ajouter")');
+    await page.waitForSelector('app-personnes .puce:has-text("Finance")');
+    await page.click('app-personnes button:has-text("Nouvelle personne")');
+    await page.fill('app-personnes input[name=personne-nom-0]', 'Alice Martin');
+    await page.selectOption('app-personnes select[name=personne-role-0]', 'owner');
+    await page.selectOption('app-personnes select[name=personne-domaine-0]', 'Ventes');
+    await page.click('app-personnes button:has-text("+ rôle")');
+    await page.click('app-personnes button:has-text("Enregistrer")');
+    await page.waitForSelector('.notification.succes');
+    const personnes = await page.evaluate(async () => await (await fetch('/api/gouvernance/personnes')).json());
+    verifier(
+        'personnes : Alice Martin propriétaire du domaine Ventes ; domaines = Finance (déclaré) + Ventes (cité)',
+        personnes.length === 1 &&
+            personnes[0].roles[0].role === 'owner' &&
+            personnes[0].roles[0].domain === 'Ventes' &&
+            /Finance/.test(await page.textContent('app-personnes .puces'))
+    );
+
+    await page.click('a[href="/listes-de-valeurs"]');
+    await page.waitForSelector('app-listes-valeurs');
+    await page.click('app-listes-valeurs button:has-text("Créer une liste")');
+    await page.fill('app-listes-valeurs input[name=liste-nom-0]', 'Villes autorisées');
+    await page.fill('app-listes-valeurs textarea[name=liste-codes-0]', 'PARIS ; Paris\nLYON ; Lyon');
+    await page.click('app-listes-valeurs button:has-text("Enregistrer")');
+    await page.waitForSelector('.notification.succes');
+    await page.selectOption('app-listes-valeurs select[name=controle-table-0]', { label: 'clients.csv' });
+    await page.selectOption('app-listes-valeurs select[name=controle-colonne-0]', 'ville');
+    await page.click('app-listes-valeurs button:has-text("Contrôler la colonne")');
+    await page.waitForSelector('app-listes-valeurs .resultat-controle');
+    verifier(
+        'listes de valeurs : clients.ville contrôlée contre {PARIS, LYON} — 1 valeur hors liste sur 4 (LILLE)',
+        /1 valeur\(s\) hors liste sur 4/.test(await page.textContent('app-listes-valeurs .resultat-controle')) &&
+            /LILLE/.test(await page.textContent('app-listes-valeurs .resultat-controle'))
+    );
+
+    await page.click('a[href="/sensibilite"]');
+    await page.waitForSelector('app-sensibilite tbody tr');
+    await page.click('app-sensibilite button:has-text("Détecter")');
+    await page.waitForSelector('app-sensibilite .puce');
+    await page.selectOption('app-sensibilite select[name="niveau-clients.csv-ville"]', 'interne');
+    await page.waitForFunction(() => /1 \/ \d+ classée/.test(document.querySelector('app-sensibilite .badge')?.textContent || ''));
+    verifier(
+        'sensibilité : la colonne « nom » est détectée comme donnée personnelle ; ville classée « interne »',
+        /clients\.csv\.nom/.test(await page.textContent('app-sensibilite .carte')) &&
+            (await page.inputValue('app-sensibilite select[name="niveau-clients.csv-ville"]')) === 'interne'
+    );
+    await capture('sensibilite');
+
+    // Une proposition (déposée par l'API, comme le ferait un lecteur) est validée depuis l'écran.
+    await page.evaluate(async boId => {
+        await fetch('/api/gouvernance/propositions', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                kind: 'bo',
+                field: 'definition',
+                target: { boId },
+                label: 'Client : définition',
+                before: 'Personne ayant passé au moins une commande',
+                after: 'Personne physique ou morale ayant passé au moins une commande',
+                domain: 'Ventes'
+            })
+        });
+    }, objetsMetier[0].id);
+    await page.click('a[href="/propositions"]');
+    await page.waitForSelector('app-propositions .proposition');
+    await page.click('app-propositions button:has-text("Valider")');
+    await page.waitForSelector('app-propositions h2:has-text("Décisions passées")');
+    const objetApres = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json()))[0];
+    verifier(
+        'propositions : la proposition validée est appliquée à l’objet Client et tracée dans son historique',
+        objetApres.definition === 'Personne physique ou morale ayant passé au moins une commande' &&
+            objetApres.history.length === 1 &&
+            /validée/.test(await page.textContent('app-propositions tbody'))
+    );
+    await capture('propositions');
+
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');
     await page.waitForSelector('app-explorateur .table');

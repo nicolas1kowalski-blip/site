@@ -228,6 +228,13 @@ export class CoqueComponent {
             liens: [
                 { chemin: '/glossaire', libelle: 'Glossaire', icone: '✎' },
                 { chemin: '/dictionnaire', libelle: 'Dictionnaire', icone: '☰' },
+                { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛' },
+                { chemin: '/actifs', libelle: 'Applications & processus', icone: '⚙' },
+                { chemin: '/perimetres', libelle: 'Périmètres', icone: '◫' },
+                { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '≡' },
+                { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🛡' },
+                { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '☺' },
+                { chemin: '/propositions', libelle: 'Propositions à valider', icone: '✔' },
                 { chemin: '/journal', libelle: 'Journal', icone: '⏱' }
             ]
         },

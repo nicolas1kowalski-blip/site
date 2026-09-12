@@ -34,11 +34,12 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | **Modèle de données** en Angular : liens entre sources, ajout manuel, détection par le contenu (colonnes de même nom, unicité, couverture), suppression — partagé avec l'application classique | **livré** | `api/src/modele`, `web/src/app/pages/modele` |
 | **Extraction** en Angular : table de départ, tables liées d'après le modèle, colonnes (alias, transformation, agrégat), filtres (12 opérateurs), regroupement, dédoublonnage, aperçu à défilement virtuel, comptage, export CSV en flux, SQL affiché, modèles enregistrés | **livré** | `api/src/extraction`, `web/src/app/pages/extraction` |
 | **Tables conçues** en Angular : recette de consolidation (sources contributrices avec correspondance des colonnes et filtres d'entrée, attributs renommés et ordonnés, clé, formats normalisés, enrichissements directs ou via une table de lien avec validité par statut ou période, colonnes calculées, clés étrangères), SQL affiché, aperçu, construction et reconstruction (automatique après mise à jour d'une source), contribution par source, rapport d'écarts entre sources — format de recette partagé avec l'application classique | **livré** | `api/src/tables-concues`, `web/src/app/pages/tables-concues` |
+| **Gouvernance** en Angular : objets métier (attributs alimentés par les colonnes, sources et rôles, actifs producteurs et consommateurs, références, complétude, historique, initialisation depuis une source), applications & processus & restitutions, périmètres, listes de valeurs (en clair ou par source, contrôle d'une colonne, rattachement au dictionnaire), sensibilité (classification par colonne, actions par niveau, détection RGPD), personnes & rôles & domaines, propositions à valider (dépôt, validation appliquée, refus, retrait, trace dans l'historique) — toutes dans le document appState partagé avec l'application classique | **livré** | `api/src/gouvernance`, `web/src/app/pages/{objets-metier,actifs,perimetres,listes-valeurs,sensibilite,personnes,propositions}` |
 | **Qualité et audit** en Angular : profilage colonne par colonne (complétude, distinctes, longueurs, espaces parasites, part numérique et date, motif majoritaire, valeurs fréquentes), doublons exacts et sur une clé, règles de qualité (8 types, criticité, activation), score pondéré, historique des audits en PostgreSQL | **livré** | `api/src/qualite`, `web/src/app/pages/qualite` |
 | Application classique (tous les écrans historiques) intégrée dans la coque, sur les mêmes données | **livré** | `web-classique`, route `/classique` |
-| Tests : 43 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité et les tables conçues), 37 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
+| Tests : 49 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues et la gouvernance), 44 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
 | Docker, Caddy, guide Oracle Cloud | **livré** | `Dockerfile`, `docker-compose.yml`, `deploiement` |
-| Réécriture en Angular des écrans restants (objets métier, lineage, tableaux de bord, extraction avancée : synthèses de tables liées, hiérarchies, colonnes calculées) | **à faire, écran par écran** | plan ci-dessous |
+| Réécriture en Angular des écrans restants (lineage, tableaux de bord, extraction avancée : synthèses de tables liées, hiérarchies, colonnes calculées) | **à faire, écran par écran** | plan ci-dessous |
 | Connexion à l'annuaire de l'entreprise (OpenID Connect) | à faire | remplacer `api/src/authentification` (contrat : poser `request.contexte`) |
 
 ## Architecture
@@ -119,9 +120,12 @@ classique :
    pures testées), résultat matérialisé en table DuckDB `t_<id>` et enregistré comme source de type « designed ».
 3. ~~**Qualité et audit**~~ — livré : profilage et audits en SQL côté serveur (`qualite/profilage.ts`, `qualite/regles.ts`,
    fonctions pures testées), règles et audits stockés dans PostgreSQL (`migrations/0002_qualite.sql`).
-4. **Objets métier, applications, lineage, tableaux de bord** — routes typées ajoutées à `gouvernance/` ; le moteur
-   SVG de lineage encapsulé dans un composant.
-5. Retrait de `web-classique` et éclatement du document `appState` en tables.
+4. ~~**Objets métier, applications, périmètres, listes de valeurs, sensibilité, personnes, propositions**~~ — livré :
+   routes typées dans `gouvernance/` (`gouvernance.service.ts` pour l'accès au document, `propositions.ts`,
+   `listes-valeurs.ts`, `sensibilite.ts` pour la logique pure testée). Restent, côté classique : le concepteur
+   d'objets et les audits d'objet (hiérarchies, règles métier, couverture), l'import en masse, l'anonymisation.
+5. **Lineage, tableaux de bord** — le moteur SVG de lineage encapsulé dans un composant.
+6. Retrait de `web-classique` et éclatement du document `appState` en tables.
 
 Comment un écran est migré (méthode suivie pour le modèle et l'extraction) :
 - la logique métier passe dans l'API, en TypeScript testé sans navigateur (fonctions pures quand c'est possible :
@@ -137,9 +141,9 @@ l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté se
 ## Tests et qualité
 
 ```bash
-npm run tester:api                                  # 43 tests, PGlite
+npm run tester:api                                  # 49 tests, PGlite
 SD_POSTGRES_URL_TEST=postgres://… npm run tester:api # les mêmes sur PostgreSQL
-npm run tester:e2e                                  # 37 assertions, Chromium (Playwright de l'environnement)
+npm run tester:e2e                                  # 44 assertions, Chromium (Playwright de l'environnement)
 npm run verifier                                    # Prettier --check + ESLint (typescript-eslint)
 ```
 

@@ -10,8 +10,19 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
+    Actif,
     ApercuExtraction,
     AuditQualite,
+    Classification,
+    ColonnePersonnelle,
+    ControleListe,
+    DefinitionProposition,
+    ListeValeurs,
+    ObjetMetier,
+    Perimetre,
+    Personne,
+    Proposition,
+    VocabulaireGouvernance,
     Contribution,
     RapportEcarts,
     Recette,
@@ -253,6 +264,134 @@ export class ClientApiService {
     }
     contributionsTableConcue(id: string): Promise<Contribution[]> {
         return firstValueFrom(this.http.get<Contribution[]>(`${this.racine}/tables-concues/${encodeURIComponent(id)}/contributions`));
+    }
+
+    // ---- gouvernance : référentiels ----
+    vocabulaireGouvernance(): Promise<VocabulaireGouvernance> {
+        return firstValueFrom(this.http.get<VocabulaireGouvernance>(`${this.racine}/gouvernance/vocabulaire`));
+    }
+    objetsMetier(): Promise<ObjetMetier[]> {
+        return firstValueFrom(this.http.get<ObjetMetier[]>(`${this.racine}/gouvernance/objets-metier`));
+    }
+    enregistrerObjetMetier(id: string, objet: Omit<ObjetMetier, 'id'>): Promise<ObjetMetier> {
+        return firstValueFrom(this.http.put<ObjetMetier>(`${this.racine}/gouvernance/objets-metier/${encodeURIComponent(id)}`, objet));
+    }
+    supprimerObjetMetier(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/objets-metier/${encodeURIComponent(id)}`));
+    }
+    actifs(): Promise<Actif[]> {
+        return firstValueFrom(this.http.get<Actif[]>(`${this.racine}/gouvernance/actifs`));
+    }
+    enregistrerActif(id: string, actif: Omit<Actif, 'id'>): Promise<Actif> {
+        return firstValueFrom(this.http.put<Actif>(`${this.racine}/gouvernance/actifs/${encodeURIComponent(id)}`, actif));
+    }
+    supprimerActif(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/actifs/${encodeURIComponent(id)}`));
+    }
+    perimetres(): Promise<Perimetre[]> {
+        return firstValueFrom(this.http.get<Perimetre[]>(`${this.racine}/gouvernance/perimetres`));
+    }
+    enregistrerPerimetre(id: string, perimetre: Omit<Perimetre, 'id'>): Promise<Perimetre> {
+        return firstValueFrom(this.http.put<Perimetre>(`${this.racine}/gouvernance/perimetres/${encodeURIComponent(id)}`, perimetre));
+    }
+    supprimerPerimetre(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/perimetres/${encodeURIComponent(id)}`));
+    }
+    personnes(): Promise<Personne[]> {
+        return firstValueFrom(this.http.get<Personne[]>(`${this.racine}/gouvernance/personnes`));
+    }
+    enregistrerPersonne(id: string, personne: Omit<Personne, 'id'>): Promise<Personne> {
+        return firstValueFrom(this.http.put<Personne>(`${this.racine}/gouvernance/personnes/${encodeURIComponent(id)}`, personne));
+    }
+    supprimerPersonne(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/personnes/${encodeURIComponent(id)}`));
+    }
+    domaines(): Promise<string[]> {
+        return firstValueFrom(this.http.get<string[]>(`${this.racine}/gouvernance/domaines`));
+    }
+    ajouterDomaine(name: string): Promise<string[]> {
+        return firstValueFrom(this.http.post<string[]>(`${this.racine}/gouvernance/domaines`, { name }));
+    }
+    retirerDomaine(name: string): Promise<string[]> {
+        return firstValueFrom(this.http.delete<string[]>(`${this.racine}/gouvernance/domaines/${encodeURIComponent(name)}`));
+    }
+
+    // ---- gouvernance : listes de valeurs ----
+    listesValeurs(): Promise<ListeValeurs[]> {
+        return firstValueFrom(this.http.get<ListeValeurs[]>(`${this.racine}/gouvernance/listes-de-valeurs`));
+    }
+    enregistrerListeValeurs(id: string, liste: Omit<ListeValeurs, 'id' | 'utilisations'>): Promise<ListeValeurs> {
+        return firstValueFrom(this.http.put<ListeValeurs>(`${this.racine}/gouvernance/listes-de-valeurs/${encodeURIComponent(id)}`, liste));
+    }
+    supprimerListeValeurs(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/listes-de-valeurs/${encodeURIComponent(id)}`));
+    }
+    apercuListeValeurs(id: string): Promise<{ codes: string[]; total: number }> {
+        return firstValueFrom(
+            this.http.post<{ codes: string[]; total: number }>(
+                `${this.racine}/gouvernance/listes-de-valeurs/${encodeURIComponent(id)}/apercu`,
+                {}
+            )
+        );
+    }
+    controlerListeValeurs(id: string, table: string, col: string): Promise<ControleListe> {
+        return firstValueFrom(
+            this.http.post<ControleListe>(`${this.racine}/gouvernance/listes-de-valeurs/${encodeURIComponent(id)}/controler`, {
+                table,
+                col
+            })
+        );
+    }
+    rattacherListeValeurs(id: string, table: string, col: string): Promise<{ utilisations: { table: string; col: string }[] }> {
+        return firstValueFrom(
+            this.http.put<{ utilisations: { table: string; col: string }[] }>(
+                `${this.racine}/gouvernance/listes-de-valeurs/${encodeURIComponent(id)}/rattacher`,
+                { table, col }
+            )
+        );
+    }
+    detacherListeValeurs(id: string, table: string, col: string): Promise<{ utilisations: { table: string; col: string }[] }> {
+        return firstValueFrom(
+            this.http.post<{ utilisations: { table: string; col: string }[] }>(
+                `${this.racine}/gouvernance/listes-de-valeurs/${encodeURIComponent(id)}/detacher`,
+                { table, col }
+            )
+        );
+    }
+
+    // ---- gouvernance : sensibilité ----
+    classification(): Promise<Classification> {
+        return firstValueFrom(this.http.get<Classification>(`${this.racine}/gouvernance/sensibilite`));
+    }
+    definirNiveauSensibilite(table: string, col: string, niveau: string): Promise<unknown> {
+        return firstValueFrom(this.http.put(`${this.racine}/gouvernance/sensibilite/niveau`, { table, col, niveau }));
+    }
+    definirActionsSensibilite(actions: Record<string, string>): Promise<Record<string, string>> {
+        return firstValueFrom(this.http.put<Record<string, string>>(`${this.racine}/gouvernance/sensibilite/actions`, { actions }));
+    }
+    detecterDonneesPersonnelles(): Promise<ColonnePersonnelle[]> {
+        return firstValueFrom(this.http.post<ColonnePersonnelle[]>(`${this.racine}/gouvernance/sensibilite/detecter`, {}));
+    }
+
+    // ---- gouvernance : propositions ----
+    propositions(): Promise<Proposition[]> {
+        return firstValueFrom(this.http.get<Proposition[]>(`${this.racine}/gouvernance/propositions`));
+    }
+    proposer(proposition: DefinitionProposition): Promise<Proposition> {
+        return firstValueFrom(this.http.post<Proposition>(`${this.racine}/gouvernance/propositions`, proposition));
+    }
+    accepterProposition(id: string, comment = ''): Promise<Proposition> {
+        return firstValueFrom(
+            this.http.post<Proposition>(`${this.racine}/gouvernance/propositions/${encodeURIComponent(id)}/accepter`, { comment })
+        );
+    }
+    refuserProposition(id: string, comment = ''): Promise<Proposition> {
+        return firstValueFrom(
+            this.http.post<Proposition>(`${this.racine}/gouvernance/propositions/${encodeURIComponent(id)}/refuser`, { comment })
+        );
+    }
+    retirerProposition(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/gouvernance/propositions/${encodeURIComponent(id)}`));
     }
 
     // ---- journal ----

@@ -24,6 +24,8 @@ export type FicheDictionnaire = {
     domain?: string;
     updateFrequency?: string;
     sensitivity?: string;
+    sourceSystem?: string;
+    steward?: string;
     columns?: Record<string, { description?: string; sensitivity?: string }>;
 };
 
@@ -45,6 +47,8 @@ const schemaFiche = z.object({
     domain: z.string().trim().optional(),
     updateFrequency: z.string().trim().optional(),
     sensitivity: z.string().trim().optional(),
+    sourceSystem: z.string().trim().optional(),
+    steward: z.string().trim().optional(),
     columns: z.record(z.object({ description: z.string().optional(), sensitivity: z.string().optional() })).optional()
 });
 
