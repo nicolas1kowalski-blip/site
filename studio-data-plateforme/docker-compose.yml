@@ -1,0 +1,61 @@
+# Plateforme complète : PostgreSQL + API/front + Caddy (TLS automatique).
+#   cp .env.exemple .env   (puis renseigner SD_ADMIN_MOT_DE_PASSE, POSTGRES_PASSWORD, SD_DOMAINE)
+#   docker compose up -d --build
+# Les données persistent dans deux volumes : postgres (référentiel) et donnees (DuckDB, fichiers).
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: studio_data
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d studio_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: studio-data-plateforme/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SD_POSTGRES_URL: postgres://studio:${POSTGRES_PASSWORD}@postgres:5432/studio_data
+      SD_ADMIN_IDENTIFIANT: ${SD_ADMIN_IDENTIFIANT:-admin}
+      SD_ADMIN_MOT_DE_PASSE: ${SD_ADMIN_MOT_DE_PASSE:?définir SD_ADMIN_MOT_DE_PASSE dans .env}
+      SD_COOKIE_SECURISE: "true"
+      SD_DUCKDB_THREADS: ${SD_DUCKDB_THREADS:-}
+      SD_DUCKDB_MEMOIRE: ${SD_DUCKDB_MEMOIRE:-}
+      SD_JOURNAL: ${SD_JOURNAL:-info}
+    volumes:
+      - donnees:/donnees
+    expose:
+      - "8430"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SD_DOMAINE: ${SD_DOMAINE:-localhost}
+    volumes:
+      - ./deploiement/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_donnees:/data
+      - caddy_config:/config
+
+volumes:
+  postgres:
+  donnees:
+  caddy_donnees:
+  caddy_config:

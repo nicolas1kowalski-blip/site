@@ -1,0 +1,91 @@
+/*
+ * Styles globaux : jetons de design (couleurs, espacements), thème clair et sombre (préférence du système),
+ * et composants de base réutilisés par toutes les pages (boutons, champs, tableaux, cartes, badges).
+ * Les composants Angular n'ajoutent que leur mise en page propre.
+ */
+:root {
+    color-scheme: light dark;
+    --fond: #f5f6fa;
+    --surface: #ffffff;
+    --surface-2: #f1f3f9;
+    --bordure: #d9dde8;
+    --texte: #1b1f2a;
+    --texte-2: #5b6274;
+    --accent: #4f46e5;
+    --accent-2: #eef2ff;
+    --succes: #10b981;
+    --alerte: #f59e0b;
+    --erreur: #ef4444;
+    --rail: #14172b;
+    --rail-texte: #c7cbe0;
+    --rayon: 10px;
+    --ombre: 0 1px 2px rgba(20, 23, 43, 0.06), 0 4px 16px rgba(20, 23, 43, 0.06);
+    font-family: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --fond: #0f1117;
+        --surface: #171a24;
+        --surface-2: #1f2331;
+        --bordure: #2c3142;
+        --texte: #e6e8f0;
+        --texte-2: #9aa1b8;
+        --accent: #8b85ff;
+        --accent-2: #262a4a;
+        --rail: #0b0d16;
+        --ombre: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); }
+a { color: var(--accent); }
+h1, h2, h3 { margin: 0 0 8px; font-weight: 700; }
+h1 { font-size: 22px; }
+h2 { font-size: 16px; }
+h3 { font-size: 14px; }
+p { margin: 0 0 8px; }
+code { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+/* ---- composants de base ---- */
+.bouton {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--bordure);
+    background: var(--surface); color: var(--texte); font: inherit; font-weight: 600; cursor: pointer; line-height: 1.2;
+}
+.bouton:hover { background: var(--surface-2); }
+.bouton:disabled { opacity: 0.5; cursor: not-allowed; }
+.bouton.principal { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bouton.principal:hover { filter: brightness(1.08); }
+.bouton.danger { color: var(--erreur); border-color: color-mix(in srgb, var(--erreur) 40%, transparent); }
+.bouton.petit { padding: 4px 8px; font-size: 12px; }
+.champ, select.champ, textarea.champ {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--bordure); background: var(--surface); color: var(--texte); font: inherit;
+}
+.champ:focus { outline: 2px solid var(--accent-2); border-color: var(--accent); }
+textarea.champ { min-height: 90px; resize: vertical; font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 13px; }
+label.etiquette { display: block; font-size: 12px; font-weight: 600; color: var(--texte-2); margin: 0 0 4px; }
+.formulaire-ligne { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.formulaire-ligne > * { flex: 1 1 160px; }
+.carte { background: var(--surface); border: 1px solid var(--bordure); border-radius: var(--rayon); box-shadow: var(--ombre); padding: 16px; }
+.carte + .carte, .carte + .grille { margin-top: 14px; }
+.grille { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.tableau { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tableau th, .tableau td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bordure); vertical-align: top; }
+.tableau th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texte-2); background: var(--surface-2); position: sticky; top: 0; }
+.tableau tr:hover td { background: color-mix(in srgb, var(--accent-2) 50%, transparent); }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--accent-2); color: var(--accent); }
+.badge.succes { background: color-mix(in srgb, var(--succes) 15%, transparent); color: var(--succes); }
+.badge.alerte { background: color-mix(in srgb, var(--alerte) 18%, transparent); color: var(--alerte); }
+.badge.erreur { background: color-mix(in srgb, var(--erreur) 15%, transparent); color: var(--erreur); }
+.badge.neutre { background: var(--surface-2); color: var(--texte-2); }
+.discret { color: var(--texte-2); font-size: 12px; }
+.vide { padding: 30px; text-align: center; color: var(--texte-2); }
+.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kpi { background: var(--surface); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: 12px 14px; }
+.kpi b { display: block; font-size: 22px; }
+.kpi span { color: var(--texte-2); font-size: 12px; }
+.barre-progression { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.barre-progression > div { height: 100%; background: var(--accent); transition: width 0.2s; }
+.entete-page { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.entete-page .espace { flex: 1; }
+.defilement-x { overflow-x: auto; }

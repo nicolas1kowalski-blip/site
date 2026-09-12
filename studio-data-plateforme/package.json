@@ -1,0 +1,24 @@
+{
+  "name": "studio-data-plateforme",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Studio Data — plateforme : API NestJS (PostgreSQL + DuckDB, authentification, espaces), front Angular, application classique intégrée.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "installer": "npm install && npm install --prefix api && npm install --prefix web",
+    "construire": "npm run construire --prefix api && npm run construire --prefix web && node web-classique/construire.mjs",
+    "demarrer": "npm run demarrer --prefix api",
+    "tester": "npm run tester --prefix api && node tests/e2e.test.mjs",
+    "tester:api": "npm run tester --prefix api",
+    "tester:e2e": "node tests/e2e.test.mjs",
+    "verifier": "node formater.mjs --check && eslint .",
+    "formater": "node formater.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}

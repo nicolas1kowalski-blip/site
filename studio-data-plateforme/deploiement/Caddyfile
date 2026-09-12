@@ -1,0 +1,15 @@
+# Reverse proxy Caddy : TLS automatique (Let's Encrypt) pour le domaine SD_DOMAINE ; avec « localhost »,
+# Caddy émet un certificat local. Les dépôts de fichiers volumineux passent en flux, sans limite de taille.
+{$SD_DOMAINE} {
+    encode zstd gzip
+    request_body {
+        max_size 0
+    }
+    reverse_proxy api:8430 {
+        flush_interval -1
+        transport http {
+            read_timeout 1h
+            write_timeout 1h
+        }
+    }
+}

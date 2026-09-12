@@ -1,0 +1,34 @@
+{
+  "name": "studio-data-api",
+  "version": "2.0.0",
+  "private": true,
+  "description": "API Studio Data : NestJS + PostgreSQL (référentiel, utilisateurs, espaces) + DuckDB (calcul analytique).",
+  "type": "commonjs",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "construire": "tsc -p tsconfig.json",
+    "demarrer": "node dist/src/main.js",
+    "developper": "tsc -p tsconfig.json --watch",
+    "tester": "npm run construire && node --test dist/test/*.test.js"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.4",
+    "@electric-sql/pglite": "^0.5.8",
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/static": "^10.1.2",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-fastify": "^11.0.0",
+    "@nestjs/swagger": "^11.0.0",
+    "drizzle-orm": "^0.45.0",
+    "pg": "^8.13.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "~5.9.0"
+  }
+}
