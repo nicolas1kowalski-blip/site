@@ -254,17 +254,17 @@ try {
     await cadre.locator('#sdServeurChip').waitFor({ timeout: 30000 });
     await page.waitForTimeout(2500);
     const classique = await cadre.locator('body').evaluate(() => ({
-        tables: Object.values(state.tables).map(t => ({ name: t.name, status: t.status, headers: t.headers.length })),
-        glossaire: state.governance.glossary.map(g => g.term),
+        tables: Object.values(state.tables).map(table => ({ name: table.name, status: table.status, headers: table.headers.length })),
+        glossaire: state.governance.glossary.map(terme => terme.term),
         dictionnaire: Object.keys(state.governance.dictionary),
-        relations: state.relations.map(r => state.tables[r.sourceTable].name + '>' + state.tables[r.targetTable].name),
+        relations: state.relations.map(lien => state.tables[lien.sourceTable].name + '>' + state.tables[lien.targetTable].name),
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     ok(
         'application classique : les deux sources déposées depuis Angular sont restaurées prêtes (sans ré-ingestion)',
         classique.tables.length === 2 &&
-            classique.tables.some(t => t.name === 'clients.csv') &&
-            classique.tables.every(t => t.status === 'ready' && t.headers === 3)
+            classique.tables.some(table => table.name === 'clients.csv') &&
+            classique.tables.every(table => table.status === 'ready' && table.headers === 3)
     );
     ok(
         'application classique : glossaire et dictionnaire saisis dans Angular sont visibles',
@@ -329,7 +329,7 @@ for (const [phrase, reussi] of resultats) {
     if (!reussi) echecs++;
 }
 console.log(`\n${resultats.length - echecs}/${resultats.length} OK · erreurs page : ${erreursPage.length}`);
-erreursPage.slice(0, 5).forEach(e => console.log('  ', e));
+erreursPage.slice(0, 5).forEach(erreur => console.log('  ', erreur));
 await navigateur.close();
 await app.close();
 fs.rmSync(dossierTemporaire, { recursive: true, force: true });

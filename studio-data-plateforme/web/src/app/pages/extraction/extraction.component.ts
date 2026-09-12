@@ -86,7 +86,7 @@ type TableProposee = { source: Source; jointure: JointureExtraction; relation: R
                                 <span>
                                     <b>{{ nomDe(jointure.versTableId) }}</b>
                                     <span class="discret"
-                                        >via {{ nomDe(jointure.deTableId) }}.{{ jointure.deCol }} = {{ jointure.versCol }}</span
+                                        >via {{ nomDe(jointure.deTableId) }}.{{ jointure.deColonne }} = {{ jointure.versColonne }}</span
                                     >
                                 </span>
                                 <button class="bouton petit" (click)="retirerTable(jointure.versTableId)">Retirer</button>
@@ -96,7 +96,9 @@ type TableProposee = { source: Source; jointure: JointureExtraction; relation: R
                             <div class="ligne-table proposee">
                                 <span>
                                     {{ proposition.source.name }}
-                                    <span class="discret">via {{ proposition.jointure.deCol }} → {{ proposition.jointure.versCol }}</span>
+                                    <span class="discret"
+                                        >via {{ proposition.jointure.deColonne }} → {{ proposition.jointure.versColonne }}</span
+                                    >
                                 </span>
                                 <button class="bouton petit" (click)="ajouterTable(proposition)">Ajouter</button>
                             </div>
@@ -186,7 +188,7 @@ type TableProposee = { source: Source; jointure: JointureExtraction; relation: R
                                 <select
                                     class="champ petit"
                                     [(ngModel)]="filtre.tableId"
-                                    (ngModelChange)="filtre.col = ''"
+                                    (ngModelChange)="filtre.nomColonne = ''"
                                     [name]="'ft_' + index"
                                     [attr.name]="'ft_' + index"
                                 >
@@ -194,7 +196,12 @@ type TableProposee = { source: Source; jointure: JointureExtraction; relation: R
                                         <option [value]="tableId">{{ nomDe(tableId) }}</option>
                                     }
                                 </select>
-                                <select class="champ petit" [(ngModel)]="filtre.col" [name]="'fc_' + index" [attr.name]="'fc_' + index">
+                                <select
+                                    class="champ petit"
+                                    [(ngModel)]="filtre.nomColonne"
+                                    [name]="'fc_' + index"
+                                    [attr.name]="'fc_' + index"
+                                >
                                     <option value="">colonne…</option>
                                     @for (colonne of colonnesDe(filtre.tableId); track colonne) {
                                         <option [value]="colonne">{{ colonne }}</option>
@@ -442,11 +449,11 @@ export class ExtractionComponent {
                 [relation.sourceId, relation.sourceCol, relation.targetId, relation.targetCol],
                 [relation.targetId, relation.targetCol, relation.sourceId, relation.sourceCol]
             ];
-            for (const [deTableId, deCol, versTableId, versCol] of candidats) {
+            for (const [deTableId, deColonne, versTableId, versColonne] of candidats) {
                 if (!presentes.has(deTableId) || presentes.has(versTableId)) continue;
                 if (propositions.some(candidat => candidat.source.id === versTableId)) continue;
                 const source = this.sources().find(candidat => candidat.id === versTableId);
-                if (source) propositions.push({ source, jointure: { deTableId, deCol, versTableId, versCol }, relation });
+                if (source) propositions.push({ source, jointure: { deTableId, deColonne, versTableId, versColonne }, relation });
             }
         }
         return propositions;
@@ -510,29 +517,29 @@ export class ExtractionComponent {
         this.filtres.update(liste => liste.filter(filtre => !aRetirer.has(filtre.tableId)));
     }
 
-    choixDe(tableId: string, col: string): ColonneExtraction | undefined {
-        return this.colonnes().find(colonne => colonne.tableId === tableId && colonne.col === col);
+    choixDe(tableId: string, nomColonne: string): ColonneExtraction | undefined {
+        return this.colonnes().find(colonne => colonne.tableId === tableId && colonne.nomColonne === nomColonne);
     }
-    estCochee(tableId: string, col: string): boolean {
-        return !!this.choixDe(tableId, col);
+    estCochee(tableId: string, nomColonne: string): boolean {
+        return !!this.choixDe(tableId, nomColonne);
     }
     nombreCochees(tableId: string): number {
         return this.colonnes().filter(colonne => colonne.tableId === tableId).length;
     }
-    basculer(tableId: string, col: string): void {
-        if (this.estCochee(tableId, col))
-            this.colonnes.update(liste => liste.filter(colonne => !(colonne.tableId === tableId && colonne.col === col)));
-        else this.colonnes.update(liste => [...liste, { tableId, col, alias: '', transformation: 'none' }]);
+    basculer(tableId: string, nomColonne: string): void {
+        if (this.estCochee(tableId, nomColonne))
+            this.colonnes.update(liste => liste.filter(colonne => !(colonne.tableId === tableId && colonne.nomColonne === nomColonne)));
+        else this.colonnes.update(liste => [...liste, { tableId, nomColonne, alias: '', transformation: 'none' }]);
     }
     toutCocher(tableId: string): void {
-        for (const col of this.colonnesDe(tableId)) if (!this.estCochee(tableId, col)) this.basculer(tableId, col);
+        for (const nomColonne of this.colonnesDe(tableId)) if (!this.estCochee(tableId, nomColonne)) this.basculer(tableId, nomColonne);
     }
     toutDecocher(tableId: string): void {
         this.colonnes.update(liste => liste.filter(colonne => colonne.tableId !== tableId));
     }
 
     ajouterFiltre(): void {
-        this.filtres.update(liste => [...liste, { tableId: this.baseId(), col: '', op: '=', valeur: '' }]);
+        this.filtres.update(liste => [...liste, { tableId: this.baseId(), nomColonne: '', op: '=', valeur: '' }]);
     }
     retirerFiltre(index: number): void {
         this.filtres.update(liste => liste.filter((_, position) => position !== index));
@@ -549,12 +556,12 @@ export class ExtractionComponent {
             typeJointure: this.typeJointure,
             colonnes: this.colonnes().map(colonne => ({
                 tableId: colonne.tableId,
-                col: colonne.col,
+                nomColonne: colonne.nomColonne,
                 transformation: colonne.transformation,
                 ...(colonne.alias?.trim() ? { alias: colonne.alias.trim() } : {}),
                 ...(this.regrouper && colonne.agregat ? { agregat: colonne.agregat } : {})
             })),
-            filtres: this.filtres().filter(filtre => filtre.col),
+            filtres: this.filtres().filter(filtre => filtre.nomColonne),
             regrouper: this.regrouper,
             dedoublonner: this.dedoublonner,
             tri: [],
@@ -604,7 +611,9 @@ export class ExtractionComponent {
                 specification: this.specification()
             });
             this.modeles.update(liste =>
-                [...liste.filter(candidat => candidat.id !== modele.id), modele].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+                [...liste.filter(candidat => candidat.id !== modele.id), modele].sort((premier, second) =>
+                    premier.nom.localeCompare(second.nom, 'fr')
+                )
             );
             this.notifications.succes(`Modèle « ${nom} » enregistré.`);
         } catch (erreur) {

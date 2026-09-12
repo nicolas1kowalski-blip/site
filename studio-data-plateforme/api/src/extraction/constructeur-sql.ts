@@ -46,7 +46,7 @@ export const AGREGATS = {
 
 const schemaColonne = z.object({
     tableId: z.string().min(1),
-    col: z.string().min(1),
+    nomColonne: z.string().min(1),
     alias: z.string().trim().min(1).optional(),
     transformation: z.enum(['none', 'trim', 'upper', 'lower', 'noaccent']).default('none'),
     /** Renseigné en mode regroupé : la colonne devient une mesure ; absent : elle fait partie de la clé de regroupement. */
@@ -54,7 +54,7 @@ const schemaColonne = z.object({
 });
 const schemaFiltre = z.object({
     tableId: z.string().min(1),
-    col: z.string().min(1),
+    nomColonne: z.string().min(1),
     op: z.enum(['=', '!=', 'contains', 'startsWith', 'in', '>=', '<=', 'between', 'dfrom', 'dto', 'empty', 'notempty']),
     valeur: z.string().optional(),
     valeur2: z.string().optional()
@@ -62,10 +62,10 @@ const schemaFiltre = z.object({
 const schemaJointure = z.object({
     /** Table déjà présente dans l'extraction. */
     deTableId: z.string().min(1),
-    deCol: z.string().min(1),
+    deColonne: z.string().min(1),
     /** Table ajoutée par cette jointure. */
     versTableId: z.string().min(1),
-    versCol: z.string().min(1)
+    versColonne: z.string().min(1)
 });
 export const schemaSpecification = z.object({
     baseId: z.string().min(1, 'table de départ requise'),
@@ -94,7 +94,7 @@ export class ErreurSpecification extends Error {}
 /** Alias SQL d'une colonne : celui demandé, sinon « colonne » pour la table de départ et « table.colonne » ailleurs. */
 export function aliasParDefaut(colonne: ColonneExtraction, specification: Specification, contexte: ContexteConstruction): string {
     if (colonne.alias) return colonne.alias;
-    const nomColonne = colonne.agregat && colonne.agregat !== 'values' ? `${colonne.col}_${colonne.agregat}` : colonne.col;
+    const nomColonne = colonne.agregat && colonne.agregat !== 'values' ? `${colonne.nomColonne}_${colonne.agregat}` : colonne.nomColonne;
     return colonne.tableId === specification.baseId
         ? nomColonne
         : `${contexte.nomSourceDe(colonne.tableId).replace(/\.[^.]+$/, '')}.${nomColonne}`;
@@ -137,16 +137,16 @@ function expressionAgregee(expression: string, agregat: NonNullable<ColonneExtra
 
 /** Condition SQL d'un filtre, avec la même tolérance que l'application classique (texte normalisé, nombres et dates convertis). */
 export function conditionFiltre(alias: string, filtre: FiltreExtraction): string {
-    const brut = `CAST(${alias}.${identifiantSql(filtre.col)} AS VARCHAR)`;
+    const brut = `CAST(${alias}.${identifiantSql(filtre.nomColonne)} AS VARCHAR)`;
     const normalisee = `UPPER(TRIM(${brut}))`;
     const valeur = String(filtre.valeur ?? '');
     const nombre = `TRY_CAST(REPLACE(${brut}, ',', '.') AS DOUBLE)`;
     const date = `TRY_CAST(${brut} AS DATE)`;
     switch (filtre.op) {
         case 'empty':
-            return `(${alias}.${identifiantSql(filtre.col)} IS NULL OR TRIM(${brut}) = '')`;
+            return `(${alias}.${identifiantSql(filtre.nomColonne)} IS NULL OR TRIM(${brut}) = '')`;
         case 'notempty':
-            return `(${alias}.${identifiantSql(filtre.col)} IS NOT NULL AND TRIM(${brut}) <> '')`;
+            return `(${alias}.${identifiantSql(filtre.nomColonne)} IS NOT NULL AND TRIM(${brut}) <> '')`;
         case '=':
             return `${normalisee} = ${litteralSql(valeur.trim().toUpperCase())}`;
         case '!=':
@@ -200,7 +200,7 @@ export function construireSql(specification: Specification, contexte: ContexteCo
         const alias = 't' + (index + 1);
         aliasDe.set(lien.versTableId, alias);
         clausesFrom.push(
-            `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${cleNormalisee(`${alias}.${identifiantSql(lien.versCol)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deCol)}`)}`
+            `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${cleNormalisee(`${alias}.${identifiantSql(lien.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deColonne)}`)}`
         );
     });
     const aliasSortie: string[] = [];
@@ -208,19 +208,19 @@ export function construireSql(specification: Specification, contexte: ContexteCo
     const clesRegroupement: string[] = [];
     for (const colonne of specification.colonnes) {
         const aliasTable = aliasDe.get(colonne.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`La colonne « ${colonne.col} » vient d'une table absente de l'extraction.`);
+        if (!aliasTable) throw new ErreurSpecification(`La colonne « ${colonne.nomColonne} » vient d'une table absente de l'extraction.`);
         const aliasColonne = aliasParDefaut(colonne, specification, contexte);
         if (aliasSortie.includes(aliasColonne))
             throw new ErreurSpecification(`Deux colonnes portent le même nom en sortie : « ${aliasColonne} ».`);
         aliasSortie.push(aliasColonne);
-        let expression = expressionTransformee(`${aliasTable}.${identifiantSql(colonne.col)}`, colonne.transformation);
+        let expression = expressionTransformee(`${aliasTable}.${identifiantSql(colonne.nomColonne)}`, colonne.transformation);
         if (specification.regrouper && colonne.agregat) expression = expressionAgregee(expression, colonne.agregat);
         else if (specification.regrouper) clesRegroupement.push(expression);
         selections.push(`${expression} AS ${identifiantSql(aliasColonne)}`);
     }
     const conditions = specification.filtres.map(filtre => {
         const aliasTable = aliasDe.get(filtre.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`Le filtre sur « ${filtre.col} » vise une table absente de l'extraction.`);
+        if (!aliasTable) throw new ErreurSpecification(`Le filtre sur « ${filtre.nomColonne} » vise une table absente de l'extraction.`);
         return conditionFiltre(aliasTable, filtre);
     });
     let sql = `SELECT ${specification.dedoublonner && !specification.regrouper ? 'DISTINCT ' : ''}${selections.join(', ')}\nFROM ${clausesFrom.join('\n')}`;

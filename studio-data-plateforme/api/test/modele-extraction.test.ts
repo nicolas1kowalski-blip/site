@@ -54,7 +54,7 @@ before(async () => {
         url: '/api/auth/connexion',
         payload: { identifiant: 'admin', motDePasse: 'MotDePasseAdmin1' }
     });
-    cookies = { sd_session: connexion.cookies.find(c => c.name === 'sd_session')!.value };
+    cookies = { sd_session: connexion.cookies.find(cookie => cookie.name === 'sd_session')!.value };
     await deposerSource('tb_clients', 'clients.csv', 'id_client;nom;ville\n1;Ana;Paris\n2;Bob;Lyon\n3;Zoé;Lille\n4;Idris;Paris\n', [
         'id_client',
         'nom',
@@ -106,13 +106,13 @@ test('ajout d’un lien : enregistré dans appState.relations (format de l’app
 
 const specificationJointe = {
     baseId: 'tb_clients',
-    jointures: [{ deTableId: 'tb_clients', deCol: 'id_client', versTableId: 'tb_commandes', versCol: 'id_client' }],
+    jointures: [{ deTableId: 'tb_clients', deColonne: 'id_client', versTableId: 'tb_commandes', versColonne: 'id_client' }],
     colonnes: [
-        { tableId: 'tb_clients', col: 'nom' },
-        { tableId: 'tb_clients', col: 'ville', transformation: 'upper' },
-        { tableId: 'tb_commandes', col: 'montant', alias: 'Montant' }
+        { tableId: 'tb_clients', nomColonne: 'nom' },
+        { tableId: 'tb_clients', nomColonne: 'ville', transformation: 'upper' },
+        { tableId: 'tb_commandes', nomColonne: 'montant', alias: 'Montant' }
     ],
-    filtres: [{ tableId: 'tb_clients', col: 'ville', op: 'in', valeur: 'paris;lyon' }],
+    filtres: [{ tableId: 'tb_clients', nomColonne: 'ville', op: 'in', valeur: 'paris;lyon' }],
     tri: [
         { alias: 'nom', sens: 'asc' },
         { alias: 'Montant', sens: 'desc' }
@@ -122,7 +122,7 @@ const specificationJointe = {
 test('extraction jointe : aperçu, SQL renvoyé, filtre « dans la liste » et tri appliqués, jointure gauche conservant les clients sans commande', async () => {
     const apercu = json(await appel({ method: 'POST', url: '/api/extraction/apercu', payload: { specification: specificationJointe } }));
     assert.deepEqual(
-        apercu.colonnes.map((c: { nom: string }) => c.nom),
+        apercu.colonnes.map((colonne: { nom: string }) => colonne.nom),
         ['nom', 'ville', 'Montant']
     );
     assert.deepEqual(apercu.lignes, [
@@ -154,9 +154,9 @@ test('extraction regroupée : total par ville avec nombre de clients distincts',
         jointures: specificationJointe.jointures,
         regrouper: true,
         colonnes: [
-            { tableId: 'tb_clients', col: 'ville' },
-            { tableId: 'tb_clients', col: 'id_client', agregat: 'countd', alias: 'clients' },
-            { tableId: 'tb_commandes', col: 'montant', agregat: 'sum', alias: 'total' }
+            { tableId: 'tb_clients', nomColonne: 'ville' },
+            { tableId: 'tb_clients', nomColonne: 'id_client', agregat: 'countd', alias: 'clients' },
+            { tableId: 'tb_commandes', nomColonne: 'montant', agregat: 'sum', alias: 'total' }
         ],
         tri: [{ alias: 'ville', sens: 'asc' }]
     };

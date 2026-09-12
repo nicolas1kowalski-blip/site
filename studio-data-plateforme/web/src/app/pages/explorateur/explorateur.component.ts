@@ -32,7 +32,7 @@ import { SessionService } from '../../coeur/session.service';
                 @for (source of sources(); track source.id) {
                     <button class="table" (click)="inserer(source)" [title]="source.headers.join(', ')">
                         <b>{{ source.name }}</b
-                        ><span class="discret">t_{{ source.id }} · {{ source.headers.length }} col.</span>
+                        ><span class="discret">t_{{ source.id }} · {{ source.headers.length }} colonne(s)</span>
                     </button>
                 }
             </aside>

@@ -1,5 +1,10 @@
 /**
  * Types partagés par le front : ce que l'API renvoie (voir api/src). Les noms de champs sont ceux de l'API.
+ *
+ * Note sur les champs en anglais (name, headers, storage, size, term, definition, owner, domain, sourceTable,
+ * targetCol…) : ce sont les noms que l'application classique enregistre dans ses documents. Ils sont conservés
+ * tels quels pour que les deux interfaces lisent les mêmes données ; ils seront francisés quand l'application
+ * classique sera retirée. Tout ce qui est propre à la plateforme (espaces, membres, journal, extraction) est en français.
  */
 export type RoleGlobal = 'administrateur' | 'utilisateur';
 export type RoleEspace = 'lecteur' | 'editeur' | 'administrateur';
@@ -113,9 +118,9 @@ export type OperateurFiltre =
 export type Transformation = 'none' | 'trim' | 'upper' | 'lower' | 'noaccent';
 export type Agregat = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max' | 'values';
 
-export type ColonneExtraction = { tableId: string; col: string; alias?: string; transformation: Transformation; agregat?: Agregat };
-export type FiltreExtraction = { tableId: string; col: string; op: OperateurFiltre; valeur?: string; valeur2?: string };
-export type JointureExtraction = { deTableId: string; deCol: string; versTableId: string; versCol: string };
+export type ColonneExtraction = { tableId: string; nomColonne: string; alias?: string; transformation: Transformation; agregat?: Agregat };
+export type FiltreExtraction = { tableId: string; nomColonne: string; op: OperateurFiltre; valeur?: string; valeur2?: string };
+export type JointureExtraction = { deTableId: string; deColonne: string; versTableId: string; versColonne: string };
 export type SpecificationExtraction = {
     baseId: string;
     jointures: JointureExtraction[];

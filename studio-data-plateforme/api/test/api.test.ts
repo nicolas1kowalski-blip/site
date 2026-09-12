@@ -81,7 +81,7 @@ test('connexion : mauvais mot de passe refusé ; bon mot de passe → cookie htt
         payload: { identifiant: 'Admin', motDePasse: 'MotDePasseAdmin1' }
     });
     assert.equal(reponse.statusCode, 201);
-    const cookie = reponse.cookies.find(c => c.name === 'sd_session');
+    const cookie = reponse.cookies.find(cookie => cookie.name === 'sd_session');
     assert.ok(cookie && cookie.value.length > 20);
     assert.match(String(reponse.headers['set-cookie']), /HttpOnly/);
     cookieAdmin = { sd_session: cookie!.value };
@@ -173,7 +173,7 @@ test('SQL : le fichier déposé est lisible par son nom, BIGINT en chaîne, erre
     );
     const lecture = json(await sql('SELECT * FROM t_tb_test ORDER BY __rn'));
     assert.deepEqual(
-        lecture.colonnes.map((c: { nom: string }) => c.nom),
+        lecture.colonnes.map((colonne: { nom: string }) => colonne.nom),
         ['__rn', 'id', 'nom']
     );
     assert.deepEqual(lecture.lignes[2], ['3', '3', 'Zoé']);
@@ -195,10 +195,10 @@ test('SQL en flux : NDJSON avec colonnes puis paquets de lignes', async () => {
     const lignes = reponse.body
         .trim()
         .split('\n')
-        .map(l => JSON.parse(l));
+        .map(ligne => JSON.parse(ligne));
     assert.deepEqual(lignes[0].colonnes, [{ nom: 'i', type: 'BIGINT' }]);
     assert.equal(
-        lignes.slice(1).reduce((n, paquet) => n + paquet.lignes.length, 0),
+        lignes.slice(1).reduce((total, paquet) => total + paquet.lignes.length, 0),
         5000
     );
 });
@@ -259,7 +259,7 @@ test('gouvernance typée : glossaire et dictionnaire lisent et modifient le docu
     assert.equal(terme.id, 'gl_b');
     const glossaire = json(await appel({ method: 'GET', url: '/api/gouvernance/glossaire', cookies: cookieAdmin }));
     assert.deepEqual(
-        glossaire.map((t: { term: string }) => t.term),
+        glossaire.map((terme: { term: string }) => terme.term),
         ['Client', 'Zèbre']
     );
     const fiche = json(
@@ -311,7 +311,7 @@ test('utilisateurs : création par l’administrateur, identifiant en double ref
     );
     const liste = json(await appel({ method: 'GET', url: '/api/utilisateurs', cookies: cookieAdmin }));
     assert.deepEqual(
-        liste.map((u: { identifiant: string }) => u.identifiant),
+        liste.map((utilisateur: { identifiant: string }) => utilisateur.identifiant),
         ['admin', 'lea']
     );
 });
@@ -323,14 +323,14 @@ test('espaces et rôles : une utilisatrice sans espace ne peut rien lire ; ajout
         payload: { identifiant: 'lea', motDePasse: 'MotDePasse1!' }
     });
     assert.equal(connexion.statusCode, 201);
-    cookieLecteur = { sd_session: connexion.cookies.find(c => c.name === 'sd_session')!.value };
+    cookieLecteur = { sd_session: connexion.cookies.find(cookie => cookie.name === 'sd_session')!.value };
     assert.equal(json(connexion).espaceCourant, null);
     assert.equal((await appel({ method: 'GET', url: '/api/etat', cookies: cookieLecteur })).statusCode, 403);
     assert.equal((await appel({ method: 'GET', url: '/api/utilisateurs', cookies: cookieLecteur })).statusCode, 403);
     const membres = json(
         await appel({ method: 'PUT', url: '/api/espaces/defaut/membres/lea', payload: { role: 'lecteur' }, cookies: cookieAdmin })
     );
-    assert.ok(membres.some((m: { identifiant: string; role: string }) => m.identifiant === 'lea' && m.role === 'lecteur'));
+    assert.ok(membres.some((membre: { identifiant: string; role: string }) => membre.identifiant === 'lea' && membre.role === 'lecteur'));
     const moi = json(await appel({ method: 'GET', url: '/api/auth/moi', cookies: cookieLecteur }));
     assert.equal(moi.espaceCourant.code, 'defaut');
     assert.equal(moi.espaceCourant.role, 'lecteur');
@@ -375,7 +375,7 @@ test('espaces : création par l’administrateur, bascule d’espace courant, is
 
 test('journal : les actions sont consignées avec leur auteur', async () => {
     const entrees = json(await appel({ method: 'GET', url: '/api/journal?limite=50', cookies: cookieAdmin }));
-    const actions = entrees.map((e: { action: string }) => e.action);
+    const actions = entrees.map((entree: { action: string }) => entree.action);
     for (const attendue of [
         'fichier.depot',
         'source.ajout',
@@ -387,7 +387,7 @@ test('journal : les actions sont consignées avec leur auteur', async () => {
     ]) {
         assert.ok(actions.includes(attendue), 'action attendue dans le journal : ' + attendue);
     }
-    assert.ok(entrees.every((e: { auteur: string }) => e.auteur === 'Administrateur'));
+    assert.ok(entrees.every((entree: { auteur: string }) => entree.auteur === 'Administrateur'));
 });
 
 test('mot de passe : changement par l’utilisateur, ancien mot de passe vérifié', async () => {
@@ -424,7 +424,7 @@ test('déconnexion : la session ne vaut plus rien ; un utilisateur désactivé n
     assert.equal((await appel({ method: 'POST', url: '/api/auth/deconnexion', cookies: cookieLecteur })).statusCode, 201);
     assert.equal((await appel({ method: 'GET', url: '/api/auth/moi', cookies: cookieLecteur })).statusCode, 401);
     const lea = json(await appel({ method: 'GET', url: '/api/utilisateurs', cookies: cookieAdmin })).find(
-        (u: { identifiant: string }) => u.identifiant === 'lea'
+        (utilisateur: { identifiant: string }) => utilisateur.identifiant === 'lea'
     );
     assert.equal(
         (await appel({ method: 'PUT', url: '/api/utilisateurs/' + lea.id, payload: { actif: false }, cookies: cookieAdmin })).statusCode,

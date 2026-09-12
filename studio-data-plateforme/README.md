@@ -67,7 +67,11 @@ studio-data-plateforme/
 ### Principes de code
 
 - **Une langue, le français**, pour les noms de fichiers, de classes, de fonctions, de variables et de routes,
-  avec les seules exceptions imposées par les cadres (`Controller`, `Injectable`, `signal`…).
+  avec deux exceptions assumées : les mots imposés par les cadres (`Controller`, `Injectable`, `signal`…) et les
+  champs des documents hérités de l'application classique (`name`, `headers`, `term`, `sourceTable`…), conservés
+  pour que les deux interfaces lisent les mêmes données (voir la note en tête de `web/src/app/coeur/modeles.ts`).
+- **Pas de nom abrégé** : un audit (noms d'une ou deux lettres, abréviations `cfg`, `tmp`, `col`…, fichiers sans
+  en-tête, fonctions de plus de 60 lignes) est rejouable ; seuls `id` et les paramètres nommés par les cadres restent.
 - **Un fichier commence par expliquer son rôle** ; chaque route d'API a un résumé OpenAPI (`/api/docs`).
 - **Les erreurs parlent à l'utilisateur** : chaque réponse d'erreur est `{ erreur: "phrase en français" }`, affichée
   telle quelle par le front.

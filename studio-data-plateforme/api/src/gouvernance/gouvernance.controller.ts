@@ -61,7 +61,7 @@ export class GouvernanceController {
     @ApiOperation({ summary: 'Termes du glossaire, triés par terme.' })
     async glossaire(@EspaceCourant() espace: EspaceAvecRole): Promise<TermeGlossaire[]> {
         const etat = await this.etat(espace.id);
-        return [...(etat.governance?.glossary || [])].sort((a, b) => a.term.localeCompare(b.term, 'fr'));
+        return [...(etat.governance?.glossary || [])].sort((premier, second) => premier.term.localeCompare(second.term, 'fr'));
     }
 
     @Put('glossaire/:id')
