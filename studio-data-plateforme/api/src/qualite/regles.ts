@@ -34,6 +34,103 @@ export const TYPES_REGLE = {
 export type TypeRegle = keyof typeof TYPES_REGLE;
 
 /** Types qui ne portent pas sur une colonne précise (l'expression ou la condition cite ses colonnes). */
+/** Ce que chaque contrôle vérifie et comment il compte l'erreur (affiché à côté de la règle). */
+export const EXPLICATIONS_REGLE: Record<string, { quoi: string; comment: string }> = {
+    nonVide: {
+        quoi: 'La valeur doit être renseignée.',
+        comment: 'Est comptée en échec toute ligne dont la valeur est absente ou ne contient que des espaces.'
+    },
+    unique: {
+        quoi: "La clé ne doit désigner qu'une seule ligne.",
+        comment:
+            "Les valeurs sont comparées en majuscules et sans espaces de bord ; on compte les lignes appartenant à un groupe de plus d'une occurrence."
+    },
+    format: {
+        quoi: 'La valeur doit respecter une forme.',
+        comment:
+            "La valeur non vide est confrontée à l'expression régulière ; une valeur vide n'est pas jugée (c'est le rôle de « non vide »)."
+    },
+    dansListe: { quoi: 'La valeur doit figurer dans une liste écrite ici.', comment: 'Comparaison en majuscules et sans espaces de bord.' },
+    listeValeurs: {
+        quoi: 'La valeur doit appartenir à une liste de valeurs déclarée.',
+        comment: "La liste vient de la gouvernance : on la modifie une fois, toutes les règles qui s'y rattachent suivent."
+    },
+    plage: {
+        quoi: 'La valeur numérique doit rester dans une plage.',
+        comment:
+            "Le texte est converti en nombre (virgule ou point, espaces retirés) puis comparé aux bornes ; ce qui n'est pas convertible est en échec."
+    },
+    longueur: {
+        quoi: 'La longueur du texte doit rester entre deux bornes.',
+        comment: 'Longueur mesurée après suppression des espaces de bord.'
+    },
+    dateValide: {
+        quoi: 'La valeur doit être une date lisible.',
+        comment: 'Sept formats courants sont essayés (ISO, jour/mois/année, avec ou sans heure).'
+    },
+    fraicheur: {
+        quoi: 'La date ne doit pas être trop ancienne.',
+        comment: "Écart entre la date de la ligne et aujourd'hui, comparé au seuil en jours."
+    },
+    reference: {
+        quoi: 'La valeur doit exister dans une table de référence.',
+        comment: 'Jointure sur la colonne de référence ; les valeurs vides ne sont pas jugées.'
+    },
+    condition: {
+        quoi: "Si une condition est vraie, une autre doit l'être aussi.",
+        comment: "Seules les lignes qui vérifient le « si » sont jugées ; les autres sont hors périmètre et n'entrent pas dans le total."
+    },
+    expression: {
+        quoi: 'Une cohérence entre colonnes doit être vraie.',
+        comment:
+            'Chaque comparaison est compilée en essayant la DATE, puis le NOMBRE, puis le TEXTE — pour qu’un 01/01/2024 ne soit pas jugé « inférieur » à 31/12/2023 par comparaison alphabétique.'
+    },
+    sql: {
+        quoi: 'Une condition SQL libre définit la conformité.',
+        comment: "La condition est évaluée ligne à ligne ; les ordres d'écriture sont refusés."
+    },
+    groupe: {
+        quoi: 'Un agrégat par groupe doit respecter un seuil.',
+        comment: "L'unité comptée est le GROUPE, pas la ligne : le résultat dit combien de groupes sont non conformes."
+    },
+    serieTrou: {
+        quoi: 'Aucun point attendu ne doit manquer.',
+        comment: "L'écart entre deux points consécutifs est comparé au pas de la série ; seules les séries cadencées sont jugées."
+    },
+    serieDoublon: {
+        quoi: "Un instant ne doit porter qu'une seule valeur.",
+        comment: "On regroupe par (série, horodatage) et on retient les groupes de plus d'une occurrence."
+    },
+    seriePlateau: {
+        quoi: 'La mesure ne doit pas rester figée.',
+        comment:
+            'On repère les suites de points identiques et on retient celles qui atteignent la longueur minimale : signature d’un capteur bloqué.'
+    },
+    serieSaut: {
+        quoi: 'La variation entre deux points doit rester plausible.',
+        comment:
+            'Chaque point est comparé au précédent de la même série : une valeur normale dans l’absolu peut être impossible comme variation.'
+    },
+    serieMonotonie: {
+        quoi: 'La mesure doit évoluer dans un seul sens.',
+        comment: 'Pour les compteurs et cumuls : tout recul est signalé avec la valeur précédente.'
+    },
+    serieFraicheur: {
+        quoi: "Chaque série doit continuer d'alimenter.",
+        comment:
+            "Écart entre le dernier point de la série et la référence (dernier point du fichier ou maintenant) ; l'unité comptée est la série."
+    },
+    serieSaisonnalite: {
+        quoi: 'Un point doit ressembler aux autres points du même créneau.',
+        comment: 'Comparaison à la médiane du même créneau (heure, jour de semaine ou mois) pour la même série, avec un écart robuste.'
+    },
+    serieCouverture: {
+        quoi: 'Chaque série doit être suffisamment complète.',
+        comment:
+            "Points distincts rapportés aux points attendus entre le premier et le dernier, au pas de la série ; l'unité comptée est la série."
+    }
+};
+
 export const TYPES_SANS_COLONNE: TypeRegle[] = ['expression', 'sql', 'groupe', ...(Object.keys(TYPES_REGLE_SERIE) as TypeRegleSerie[])];
 
 export const OPERATEURS_CONDITION = { renseigne: 'est renseignée', vide: 'est vide', dans: 'vaut (liste ;)' } as const;

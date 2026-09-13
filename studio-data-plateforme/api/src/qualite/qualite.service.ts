@@ -20,6 +20,7 @@ import { DocumentSource, SourcesService } from '../sources/sources.service';
 import { FiltreSource, conditionFiltreSource } from '../tables-concues/constructeur-table-concue';
 import { Anomalie, GenreAnomalie, anomaliesDuProfil, sqlLignesAnomalie } from './anomalies';
 import { ContexteCle, ProfilCle, SEPARATEUR_COMPOSANTS, sqlAnalyseCle, sqlSourceCle } from './cle-fonctionnelle';
+import { DetailColonne, assemblerDetailColonne, sqlMotifsFrequents, sqlStatistiquesColonne } from './detail-colonne';
 import {
     ProfilColonne,
     ProfilSource,
@@ -72,6 +73,8 @@ export type ResultatProfilCle = {
 };
 
 const TAILLE_PAGE = 50;
+/** Nombre de valeurs les plus fréquentes renvoyées par le détail d'une colonne. */
+const VALEURS_FREQUENTES_DETAIL = 12;
 
 /** Les composants d'une clé sont concaténés avec le séparateur ASCII 31 ; à l'écran on les sépare par « · ». */
 const cleLisible = (valeur: unknown) => String(valeur).split(SEPARATEUR_COMPOSANTS).join(' · ');
@@ -87,17 +90,23 @@ export class QualiteService {
     ) {}
 
     // ---- périmètre d'audit (filtres) ----
-    /** Table à auditer : la source elle-même, ou une copie filtrée (table temporaire à abandonner après usage). */
+    /**
+     * Table à auditer : la source elle-même, ou une copie filtrée et/ou limitée aux premières lignes (« volume
+     * analysé »), table temporaire à abandonner après usage.
+     */
     private async tableAuditee(
         moteur: MoteurDuckDB,
         sourceId: string,
-        filtres: FiltreSource[] | undefined
+        filtres: FiltreSource[] | undefined,
+        echantillon?: number
     ): Promise<{ nomTable: string; liberer: () => Promise<void> }> {
         const conditions = (filtres || []).map(filtre => conditionFiltreSource(filtre)).filter(Boolean);
-        if (!conditions.length) return { nomTable: 't_' + sourceId, liberer: async () => undefined };
+        if (!conditions.length && !echantillon) return { nomTable: 't_' + sourceId, liberer: async () => undefined };
         const nomTable = 'audit_' + sourceId;
+        const clauseWhere = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
+        const clauseLimite = echantillon ? ` ORDER BY __rn LIMIT ${Math.floor(echantillon)}` : '';
         await moteur.executer(
-            `CREATE OR REPLACE TABLE ${identifiantSql(nomTable)} AS SELECT * FROM ${identifiantSql('t_' + sourceId)} WHERE ${conditions.join(' AND ')}`
+            `CREATE OR REPLACE TABLE ${identifiantSql(nomTable)} AS SELECT * FROM ${identifiantSql('t_' + sourceId)}${clauseWhere}${clauseLimite}`
         );
         return { nomTable, liberer: () => moteur.abandonner(nomTable) };
     }
@@ -107,11 +116,12 @@ export class QualiteService {
         espace: EspaceAvecRole,
         sourceId: string,
         auteurId: string,
-        filtres?: FiltreSource[]
+        filtres?: FiltreSource[],
+        echantillon?: number
     ): Promise<ProfilSource & { anomalies: Anomalie[] }> {
         const source = await this.sourceDe(espace, sourceId);
         const { moteur } = await this.espaces.ressources(espace);
-        const { nomTable, liberer } = await this.tableAuditee(moteur, sourceId, filtres);
+        const { nomTable, liberer } = await this.tableAuditee(moteur, sourceId, filtres, echantillon);
         try {
             const colonnes: ProfilColonne[] = [];
             for (const colonne of source.headers || []) colonnes.push(await this.profilerColonne(moteur, nomTable, colonne));
@@ -136,7 +146,8 @@ export class QualiteService {
                 completudeMoyenne,
                 doublonsExacts,
                 lignesVides,
-                filtres: filtres || []
+                filtres: filtres || [],
+                ...(echantillon ? { echantillon } : {})
             };
             await this.enregistrerAudit(
                 espace.id,
@@ -195,6 +206,31 @@ export class QualiteService {
             moyenne: moyenne === null ? null : nombre(moyenne),
             ecartType: ecartType === null ? null : nombre(ecartType)
         };
+    }
+
+    /** Détail d'une colonne (« Analyse Colonnes ») : type sémantique, statistiques, valeurs fréquentes, motifs, signaux. */
+    async detailColonne(
+        espace: EspaceAvecRole,
+        sourceId: string,
+        colonne: string,
+        filtres?: FiltreSource[],
+        echantillon?: number
+    ): Promise<DetailColonne> {
+        const source = await this.sourceDe(espace, sourceId);
+        if (!(source.headers || []).includes(colonne)) throw erreurRequete(`Colonne inconnue : « ${colonne} ».`);
+        const { moteur } = await this.espaces.ressources(espace);
+        const { nomTable, liberer } = await this.tableAuditee(moteur, sourceId, filtres, echantillon);
+        try {
+            const [profil, statistiques, frequentes, motifs] = await Promise.all([
+                this.profilerColonne(moteur, nomTable, colonne),
+                moteur.executer(sqlStatistiquesColonne(nomTable, colonne)),
+                moteur.executer(sqlValeursFrequentes(nomTable, colonne, VALEURS_FREQUENTES_DETAIL)),
+                moteur.executer(sqlMotifsFrequents(nomTable, colonne))
+            ]);
+            return assemblerDetailColonne(profil, statistiques.lignes[0], frequentes.lignes, motifs.lignes);
+        } finally {
+            await liberer();
+        }
     }
 
     /** Les lignes d'une anomalie du profil, par page de 50 (inspecteur d'anomalies). */
@@ -432,6 +468,45 @@ export class QualiteService {
         if (!supprimees.length) throw erreurIntrouvable('Règle inconnue.');
     }
 
+    /** Copie d'une règle (« nom (copie) »), désactivée pour être relue avant de compter dans le score. */
+    async dupliquerRegle(espace: EspaceAvecRole, id: string): Promise<RegleQualite> {
+        const origine = await this.regleDe(espace.id, id);
+        const definition = this.definitionDe(origine);
+        const [copie] = await this.base
+            .insert(reglesQualite)
+            .values({
+                espaceId: espace.id,
+                nom: origine.nom + ' (copie)',
+                sourceId: definition.sourceId,
+                colonne: definition.colonne,
+                type: definition.type,
+                parametres: definition.parametres,
+                criticite: definition.criticite,
+                active: false
+            })
+            .returning();
+        return copie;
+    }
+
+    /** Exécute une seule règle (même inactive) et mémorise son résultat. */
+    async executerUneRegle(espace: EspaceAvecRole, id: string, auteurId: string): Promise<ExecutionRegles['regles'][number]> {
+        const regle = await this.regleDe(espace.id, id);
+        const execution = await this.executerListeRegles(espace, [regle], auteurId);
+        return execution.regles[0];
+    }
+
+    private async regleDe(espaceId: string, id: string): Promise<RegleQualite> {
+        const regle = (
+            await this.base
+                .select()
+                .from(reglesQualite)
+                .where(and(eq(reglesQualite.espaceId, espaceId), eq(reglesQualite.id, id)))
+                .limit(1)
+        )[0];
+        if (!regle) throw erreurIntrouvable('Règle inconnue.');
+        return regle;
+    }
+
     /** Environnement d'évaluation : tables des sources et codes des listes de valeurs de la gouvernance. */
     private async contexteRegles(espaceId: string): Promise<{ contexte: ContexteRegle; parId: Map<string, DocumentSource> }> {
         const [sources, etat] = await Promise.all([this.sources.lister(espaceId), this.gouvernance.etat(espaceId)]);
@@ -504,14 +579,7 @@ export class QualiteService {
 
     /** Les lignes en échec d'une règle, par page de 50. */
     async lignesRegle(espace: EspaceAvecRole, id: string, offset: number): Promise<PageLignes> {
-        const regle = (
-            await this.base
-                .select()
-                .from(reglesQualite)
-                .where(and(eq(reglesQualite.espaceId, espace.id), eq(reglesQualite.id, id)))
-                .limit(1)
-        )[0];
-        if (!regle) throw erreurIntrouvable('Règle inconnue.');
+        const regle = await this.regleDe(espace.id, id);
         const { contexte } = await this.contexteRegles(espace.id);
         const { moteur } = await this.espaces.ressources(espace);
         try {

@@ -17,6 +17,7 @@ import { CRENEAUX_SAISON, TYPES_REGLE_SERIE } from './regles-series';
 import {
     AGREGATS_GROUPE,
     CRITICITES,
+    EXPLICATIONS_REGLE,
     OPERATEURS_CONDITION,
     OPERATEURS_GROUPE,
     TYPES_REGLE,
@@ -26,7 +27,10 @@ import {
 
 /** Filtres d'audit : conditions sur les lignes de la source, pour n'auditer qu'un périmètre. */
 const schemaFiltres = z.array(schemaFiltreSource).default([]);
-const schemaSource = z.object({ sourceId: z.string().min(1, 'source requise'), filtres: schemaFiltres });
+/** Volume analysé : nombre de premières lignes retenues (absent = toute la source). */
+const schemaEchantillon = z.number().int().min(1).max(10_000_000).optional();
+const schemaSource = z.object({ sourceId: z.string().min(1, 'source requise'), filtres: schemaFiltres, echantillon: schemaEchantillon });
+const schemaColonne = schemaSource.extend({ colonne: z.string().min(1, 'colonne requise') });
 const schemaDoublons = z.object({
     sourceId: z.string().min(1),
     cle: z.array(z.string().min(1)).min(1, 'au moins une colonne'),
@@ -65,7 +69,8 @@ export class QualiteController {
             genresAnomalie: GENRES_ANOMALIE,
             modesAppariement: MODES_APPARIEMENT,
             typesRegleSerie: TYPES_REGLE_SERIE,
-            creneauxSaison: CRENEAUX_SAISON
+            creneauxSaison: CRENEAUX_SAISON,
+            explications: EXPLICATIONS_REGLE
         };
     }
 
@@ -78,15 +83,22 @@ export class QualiteController {
         @UtilisateurCourant() utilisateur: Utilisateur,
         @Body(valider(schemaSource)) corps: z.infer<typeof schemaSource>
     ) {
-        const profil = await this.qualite.profiler(espace, corps.sourceId, utilisateur.id, corps.filtres);
+        const profil = await this.qualite.profiler(espace, corps.sourceId, utilisateur.id, corps.filtres, corps.echantillon);
         await this.journal.consigner({
             espaceId: espace.id,
             utilisateurId: utilisateur.id,
             action: 'qualite.profilage',
             cible: profil.sourceNom,
-            details: { lignes: profil.lignes, filtres: corps.filtres.length }
+            details: { lignes: profil.lignes, filtres: corps.filtres.length, echantillon: corps.echantillon ?? null }
         });
         return profil;
+    }
+
+    @Post('colonne')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Détail d’une colonne : type sémantique, statistiques, valeurs fréquentes, formats, signaux.' })
+    detailColonne(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaColonne)) corps: z.infer<typeof schemaColonne>) {
+        return this.qualite.detailColonne(espace, corps.sourceId, corps.colonne, corps.filtres, corps.echantillon);
     }
 
     @Post('anomalies/lignes')
@@ -229,6 +241,39 @@ export class QualiteController {
             details: { score: execution.score, regles: execution.regles.length }
         });
         return execution;
+    }
+
+    @Post('regles/:id/executer')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Exécute une seule règle (même inactive) et renvoie son résultat.' })
+    async executerUneRegle(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Param('id') id: string
+    ) {
+        const resultat = await this.qualite.executerUneRegle(espace, id, utilisateur.id);
+        await this.journal.consigner({
+            espaceId: espace.id,
+            utilisateurId: utilisateur.id,
+            action: 'qualite.regle.execution',
+            cible: resultat.nom,
+            details: { echecs: resultat.resultat?.echecs ?? null }
+        });
+        return resultat;
+    }
+
+    @Post('regles/:id/dupliquer')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({ summary: 'Copie une règle (désactivée, nom suffixé « (copie) »).' })
+    async dupliquerRegle(@EspaceCourant() espace: EspaceAvecRole, @UtilisateurCourant() utilisateur: Utilisateur, @Param('id') id: string) {
+        const copie = await this.qualite.dupliquerRegle(espace, id);
+        await this.journal.consigner({
+            espaceId: espace.id,
+            utilisateurId: utilisateur.id,
+            action: 'qualite.regle.duplication',
+            cible: copie.nom
+        });
+        return copie;
     }
 
     @Get('regles/:id/lignes')

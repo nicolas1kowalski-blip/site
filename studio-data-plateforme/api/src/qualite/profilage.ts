@@ -51,6 +51,8 @@ export type ProfilSource = {
     lignesVides?: number;
     /** Filtres d'audit appliqués (périmètre), vide si toute la source. */
     filtres?: { col: string; op: string; val: string }[];
+    /** Volume analysé : nombre de premières lignes retenues (absent = toute la source). */
+    echantillon?: number;
 };
 
 /** Expression SQL du motif d'une valeur (chiffres → 9, lettres → A), limité à 40 caractères pour rester lisible. */

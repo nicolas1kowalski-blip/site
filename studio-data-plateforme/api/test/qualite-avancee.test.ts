@@ -299,6 +299,73 @@ test('nouveaux types de règles : condition, cohérence, SQL, agrégat par group
     assert.equal((await appel({ method: 'GET', url: '/api/qualite/regles/00000000-0000-4000-8000-000000000000/lignes' })).statusCode, 404);
 });
 
+test('détail d’une colonne : type sémantique, statistiques numériques et de dates, valeurs fréquentes, motifs, signaux ; volume analysé', async () => {
+    const detail = async (colonne: string, complement: Record<string, unknown> = {}) => {
+        const reponse = await appel({ method: 'POST', url: '/api/qualite/colonne', payload: { sourceId: 'tb_k', colonne, ...complement } });
+        assert.equal(reponse.statusCode, 201, reponse.body);
+        return json(reponse);
+    };
+    const montant = await detail('montant');
+    assert.equal(montant.typeSemantique, 'Numérique');
+    assert.deepEqual(
+        [montant.nombres.minimum, montant.nombres.maximum, montant.nombres.somme, montant.nombres.moyenne, montant.nombres.mediane],
+        [5, 200, 355, 88.75, 75]
+    );
+    assert.equal(montant.valeursFrequentes.length, 4);
+    assert.equal(montant.motifs[0].motif, '999');
+    assert.ok(montant.signaux.cleCandidate, 'montants tous distincts et renseignés');
+    const identifiant = await detail('id_contrat', { echantillon: 2 });
+    assert.equal(identifiant.profil.total, 2, 'volume analysé : seules les 2 premières lignes');
+    assert.deepEqual(identifiant.nombres.minimum, 10);
+    const dateMaj = json(await appel({ method: 'POST', url: '/api/qualite/colonne', payload: { sourceId: 'tb_c', colonne: 'date_maj' } }));
+    assert.equal(dateMaj.typeSemantique, 'Date/Heure');
+    assert.equal(dateMaj.dates.premiere, '2010-01-01');
+    assert.equal(dateMaj.dates.futures, 0);
+    const nom = json(await appel({ method: 'POST', url: '/api/qualite/colonne', payload: { sourceId: 'tb_c', colonne: 'nom' } }));
+    assert.equal(nom.typeSemantique, 'Texte');
+    assert.equal(nom.nombres, null);
+    assert.ok(nom.longueurMoyenne > 4);
+    assert.equal(
+        (await appel({ method: 'POST', url: '/api/qualite/colonne', payload: { sourceId: 'tb_c', colonne: 'absente' } })).statusCode,
+        400
+    );
+    const profilEchantillon = json(
+        await appel({ method: 'POST', url: '/api/qualite/profil', payload: { sourceId: 'tb_c', echantillon: 3 } })
+    );
+    assert.deepEqual([profilEchantillon.lignes, profilEchantillon.echantillon], [3, 3]);
+});
+
+test('règles : exécution d’une seule règle (même inactive), duplication en copie inactive, explications du vocabulaire', async () => {
+    const creation = await appel({
+        method: 'POST',
+        url: '/api/qualite/regles',
+        payload: { nom: 'Montant positif', sourceId: 'tb_k', colonne: 'montant', type: 'plage', parametres: { minimum: 10 }, active: false }
+    });
+    assert.equal(creation.statusCode, 201, creation.body);
+    const regle = json(creation);
+    const execution = json(await appel({ method: 'POST', url: `/api/qualite/regles/${regle.id}/executer` }));
+    assert.deepEqual([execution.resultat.total, execution.resultat.echecs], [4, 1], 'le contrat 13 (5 €) est sous le minimum');
+    const duplication = await appel({ method: 'POST', url: `/api/qualite/regles/${regle.id}/dupliquer` });
+    assert.equal(duplication.statusCode, 201, duplication.body);
+    const copie = json(duplication);
+    assert.equal(copie.nom, 'Montant positif (copie)');
+    assert.equal(copie.active, false);
+    assert.notEqual(copie.id, regle.id);
+    assert.deepEqual(copie.parametres, { minimum: 10 });
+    assert.equal(
+        (await appel({ method: 'POST', url: '/api/qualite/regles/00000000-0000-4000-8000-000000000000/dupliquer' })).statusCode,
+        404
+    );
+    assert.equal(
+        (await appel({ method: 'POST', url: '/api/qualite/regles/00000000-0000-4000-8000-000000000000/executer' })).statusCode,
+        404
+    );
+    const vocabulaire = json(await appel({ method: 'GET', url: '/api/qualite/vocabulaire' }));
+    for (const type of Object.keys(vocabulaire.typesRegle))
+        assert.ok(vocabulaire.explications[type]?.quoi, 'explication manquante : ' + type);
+    for (const id of [regle.id, copie.id]) await appel({ method: 'DELETE', url: '/api/qualite/regles/' + id });
+});
+
 test('audit d’un objet métier : profil de la table maître, règles du périmètre, cardinalité des facettes', async () => {
     const audit = json(await appel({ method: 'POST', url: '/api/qualite/objet', payload: { objetId: 'bo_client' } }));
     assert.equal(audit.tableMaitre, 'clients.csv');

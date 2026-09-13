@@ -444,6 +444,35 @@ try {
         'qualité avancée : le profilage restreint au périmètre ville = Paris ne compte que 2 lignes',
         /2 ligne\(s\)/.test(await page.textContent('app-qualite .carte .entete-page'))
     );
+    // Analyse d'une colonne (détail), volume analysé, export JSON de l'audit.
+    await page.locator('app-qualite table.tableau tbody tr').nth(0).locator('button:has-text("Détail")').click();
+    await page.waitForSelector('app-detail-colonne .kpi');
+    const detailId = await page.textContent('app-detail-colonne');
+    verifier(
+        'qualité (écrans) : le détail de la colonne id (périmètre Paris) est numérique, clé candidate, avec médiane et quartiles',
+        /Numérique/.test(detailId) && /clé candidate/.test(detailId) && /médiane/.test(detailId) && /Formats/.test(detailId)
+    );
+    await page.locator('app-qualite table.tableau tbody tr').nth(1).locator('button:has-text("Détail")').click();
+    await page.waitForSelector('app-detail-colonne .badge:has-text("Texte")');
+    verifier(
+        'qualité (écrans) : le détail de la colonne nom est textuel et liste ses valeurs les plus fréquentes',
+        /Valeurs les plus fréquentes/.test(await page.textContent('app-detail-colonne'))
+    );
+    await page.selectOption('app-qualite select[name=echantillon]', { label: '1 000 premières lignes' });
+    await page.click('app-qualite button:has-text("Profiler la source")');
+    await page.waitForSelector('app-qualite .badge:has-text("volume analysé : 1000 premières lignes")');
+    const telechargementAudit = page.waitForEvent('download');
+    await page.click('app-qualite button:has-text("Exporter l\'audit (JSON)")');
+    const fichierAudit = await telechargementAudit;
+    const auditJson = JSON.parse(fs.readFileSync(await fichierAudit.path(), 'utf8'));
+    verifier(
+        'qualité (écrans) : l’export JSON de l’audit contient le profil, le volume analysé et le périmètre',
+        fichierAudit.suggestedFilename() === 'audit_clients.csv.json' &&
+            auditJson.echantillon === 1000 &&
+            auditJson.colonnes.length === 3 &&
+            auditJson.filtres.length === 1
+    );
+    await page.selectOption('app-qualite select[name=echantillon]', { label: 'Toute la source' });
     await page.click('app-qualite .onglets button:has-text("Règles")');
     await page.click('app-qualite button:has-text("Nouvelle règle")');
     await page.fill('app-formulaire-regle input[name=nom]', 'Au plus 1 client par ville');
@@ -466,6 +495,50 @@ try {
         'qualité avancée : « Voir les lignes » montre le groupe en échec (Paris, 2 clients)',
         /Lignes en échec/.test(lignesEnEchec) && /Paris/.test(lignesEnEchec) && /1 ligne\(s\)/.test(lignesEnEchec)
     );
+    // Explication d'une règle, exécution d'une seule règle, dettes qualité, tendance et comparaison, scorecard, duplication.
+    await page.click('app-qualite tbody tr:has-text("Au plus 1 client par ville") button[title*="vérifie"]');
+    await page.waitForSelector('app-qualite tr.explication');
+    verifier(
+        'qualité (écrans) : le bouton « ? » déplie ce que la règle vérifie (quoi) et comment elle compte (comment)',
+        /Quoi :/.test(await page.textContent('app-qualite tr.explication')) &&
+            /Comment :/.test(await page.textContent('app-qualite tr.explication'))
+    );
+    await page.click('app-qualite tbody tr:has-text("Ville autorisée") button:has-text("Exécuter")');
+    await page.waitForSelector('.notification.succes:has-text("échec(s) sur")');
+    verifier(
+        'qualité (écrans) : « Exécuter » sur une seule règle affiche son résultat (1 échec sur 4 : Lille)',
+        /« Ville autorisée » : 1 échec\(s\) sur 4/.test(await page.textContent('.notification.succes:has-text("échec(s) sur")'))
+    );
+    const dettes = await page.textContent('app-dettes-qualite');
+    verifier(
+        'qualité (écrans) : les dettes qualité classent les deux règles en échec (coût = échecs × poids, majeure ×2 → total 4)',
+        /coût total 4/.test(dettes) && /Au plus 1 client par ville/.test(dettes) && /Ville autorisée/.test(dettes)
+    );
+    await page.waitForSelector('app-tendance-scores select[name=comparaison-avant]');
+    const tendance = await page.textContent('app-tendance-scores');
+    verifier(
+        'qualité (écrans) : la tendance mémorise les exécutions et compare les deux dernières règle par règle',
+        /exécution\(s\)/.test(tendance) && /Comparaison de deux exécutions/.test(tendance) && /Ville autorisée/.test(tendance)
+    );
+    const telechargementScorecard = page.waitForEvent('download');
+    await page.click('app-qualite button:has-text("Scorecard (JSON)")');
+    const fichierScorecard = await telechargementScorecard;
+    const scorecard = JSON.parse(fs.readFileSync(await fichierScorecard.path(), 'utf8'));
+    verifier(
+        'qualité (écrans) : la scorecard JSON contient le score et le résultat de chaque règle',
+        fichierScorecard.suggestedFilename() === 'scorecard_clients.csv.json' &&
+            typeof scorecard.score === 'number' &&
+            scorecard.regles.some(regle => regle.nom === 'Au plus 1 client par ville' && regle.echecs === 1)
+    );
+    await page.click('app-qualite tbody tr:has-text("Ville autorisée") button:has-text("Dupliquer")');
+    await page.waitForSelector('app-qualite tbody tr:has-text("Ville autorisée (copie)")');
+    verifier(
+        'qualité (écrans) : « Dupliquer » crée une copie inactive de la règle',
+        /inactive/.test(await page.textContent('app-qualite tbody tr:has-text("Ville autorisée (copie)")'))
+    );
+    page.once('dialog', dialogue => dialogue.accept());
+    await page.click('app-qualite tbody tr:has-text("Ville autorisée (copie)") button:has-text("Supprimer")');
+    await page.waitForSelector('app-qualite tbody tr:has-text("Ville autorisée (copie)")', { state: 'detached' });
     await page.click('app-qualite .onglets button:has-text("Clé fonctionnelle")');
     await page.waitForSelector('app-cles-fonctionnelles');
     await page.click('app-cles-fonctionnelles button:has-text("Ajouter un profil")');

@@ -37,16 +37,28 @@ import {
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
-import { telechargerCsv } from '../../coeur/telechargement';
+import { telechargerCsv, telechargerJson } from '../../coeur/telechargement';
 import { AuditObjetComponent } from './audit-objet.component';
 import { cibleDeLaRegle } from './description-regle';
 import { ClesFonctionnellesComponent } from './cles-fonctionnelles.component';
+import { DetailColonneComponent } from './detail-colonne.component';
+import { DettesQualiteComponent } from './dettes-qualite.component';
 import { FiltresAuditComponent } from './filtres-audit.component';
 import { BrouillonRegle, FormulaireRegleComponent } from './formulaire-regle.component';
 import { InspecteurAnomaliesComponent } from './inspecteur-anomalies.component';
 import { PageLignesComponent, TAILLE_PAGE_LIGNES } from './page-lignes.component';
+import { TendanceScoresComponent } from './tendance-scores.component';
 
 type Onglet = 'profil' | 'doublons' | 'cles' | 'regles' | 'objet' | 'historique';
+
+/** Volumes analysés proposés (nombre de premières lignes) ; 0 = toute la source. */
+const VOLUMES_ANALYSES = [
+    { valeur: 0, libelle: 'Toute la source' },
+    { valeur: 1000, libelle: '1 000 premières lignes' },
+    { valeur: 10000, libelle: '10 000 premières lignes' },
+    { valeur: 100000, libelle: '100 000 premières lignes' },
+    { valeur: 1000000, libelle: '1 000 000 premières lignes' }
+];
 
 const REGLE_VIDE = (): DefinitionRegle => ({
     nom: '',
@@ -67,7 +79,10 @@ const REGLE_VIDE = (): DefinitionRegle => ({
         FormulaireRegleComponent,
         ClesFonctionnellesComponent,
         AuditObjetComponent,
-        PageLignesComponent
+        PageLignesComponent,
+        DetailColonneComponent,
+        DettesQualiteComponent,
+        TendanceScoresComponent
     ],
     template: `
         <div class="entete-page">
@@ -110,8 +125,23 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                         <button class="bouton principal" (click)="profiler()" [disabled]="enCours()">
                             {{ enCours() ? 'Analyse…' : 'Profiler la source' }}
                         </button>
+                        <select
+                            class="champ"
+                            style="width: auto"
+                            name="echantillon"
+                            title="Volume analysé : n'analyser que les premières lignes pour une source volumineuse"
+                            [ngModel]="echantillon()"
+                            (ngModelChange)="echantillon.set(+$event)"
+                        >
+                            @for (volume of volumesAnalyses; track volume.valeur) {
+                                <option [ngValue]="volume.valeur">{{ volume.libelle }}</option>
+                            }
+                        </select>
                         @if (profil(); as profil) {
                             <span class="badge">{{ profil.lignes }} ligne(s)</span>
+                            @if (profil.echantillon) {
+                                <span class="badge neutre">volume analysé : {{ profil.echantillon }} premières lignes</span>
+                            }
                             <span
                                 class="badge"
                                 [class.succes]="profil.completudeMoyenne >= 0.95"
@@ -126,6 +156,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                             }
                             <span class="espace"></span>
                             <button class="bouton petit" (click)="exporterProfil()">Exporter le profil (CSV)</button>
+                            <button class="bouton petit" (click)="exporterAuditJson()">Exporter l'audit (JSON)</button>
                         }
                     </div>
                     <div style="margin-top: 10px">
@@ -151,11 +182,12 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                     <th>Type dominant</th>
                                     <th>Format majoritaire</th>
                                     <th>Valeurs fréquentes</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @for (colonne of profil.colonnes; track colonne.colonne) {
-                                    <tr>
+                                    <tr [class.choisie]="colonneDetaillee() === colonne.colonne">
                                         <td>
                                             <code>{{ colonne.colonne }}</code>
                                             @if (colonne.espacesParasites) {
@@ -208,11 +240,24 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                                 >
                                             }
                                         </td>
+                                        <td style="white-space: nowrap">
+                                            <button class="bouton petit" (click)="detaillerColonne(colonne.colonne)">Détail</button>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
+                    @if (colonneDetaillee(); as colonne) {
+                        <app-detail-colonne
+                            [sourceId]="source.id"
+                            [sourceNom]="source.name"
+                            [colonne]="colonne"
+                            [filtres]="profil.filtres || []"
+                            [echantillon]="profil.echantillon"
+                            (fermer)="colonneDetaillee.set('')"
+                        />
+                    }
                     <app-inspecteur-anomalies
                         [sourceId]="source.id"
                         [sourceNom]="source.name"
@@ -306,6 +351,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                 >Score {{ execution.score ?? '—' }} / 100</span
                             >
                             <button class="bouton petit" (click)="exporterResultats()">Exporter les résultats (CSV)</button>
+                            <button class="bouton petit" (click)="exporterScorecard()">Scorecard (JSON)</button>
                         }
                         <span class="espace"></span>
                         @if (session.peutEditer()) {
@@ -385,17 +431,40 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                             }
                                         </td>
                                         <td style="white-space: nowrap">
+                                            <button
+                                                class="bouton petit"
+                                                (click)="expliquerRegle(regle)"
+                                                title="Ce que la règle vérifie et comment elle compte les échecs"
+                                            >
+                                                ?
+                                            </button>
+                                            <button class="bouton petit" (click)="executerUneRegle(regle)" [disabled]="enCours()">
+                                                Exécuter
+                                            </button>
                                             @if (session.peutEditer()) {
                                                 <button class="bouton petit" (click)="modifierRegle(regle)">Modifier</button>
+                                                <button class="bouton petit" (click)="dupliquerRegle(regle)">Dupliquer</button>
                                                 <button class="bouton petit danger" (click)="supprimerRegle(regle)">Supprimer</button>
                                             }
                                         </td>
                                     </tr>
+                                    @if (regleExpliquee() === regle.id && explication(regle); as explication) {
+                                        <tr class="explication">
+                                            <td colspan="6">
+                                                <b>Quoi :</b> {{ explication.quoi }}<br />
+                                                <b>Comment :</b> {{ explication.comment }}
+                                            </td>
+                                        </tr>
+                                    }
                                 }
                             </tbody>
                         </table>
                     }
                 </div>
+                @if (regles().length) {
+                    <app-dettes-qualite [regles]="regles()" [poidsCriticites]="vocabulaire()?.criticites || {}" />
+                    <app-tendance-scores [audits]="audits()" />
+                }
                 @if (pageRegle()) {
                     <div class="carte">
                         <app-page-lignes
@@ -509,6 +578,14 @@ const REGLE_VIDE = (): DefinitionRegle => ({
         .inactive td {
             opacity: 0.6;
         }
+        .explication td {
+            background: var(--surface-2);
+            font-size: 12px;
+            color: var(--texte-2);
+        }
+        tr.choisie td {
+            background: var(--accent-2);
+        }
         .barre-progression {
             width: 120px;
             display: inline-block;
@@ -549,6 +626,12 @@ export class QualiteComponent {
     readonly pageRegle = signal<PageLignes | null>(null);
     readonly audits = signal<AuditQualite[]>([]);
     readonly formaterDate = formaterDate;
+    /** Volume analysé au profilage (0 = toute la source) et colonne dont le détail est ouvert. */
+    readonly volumesAnalyses = VOLUMES_ANALYSES;
+    readonly echantillon = signal(0);
+    readonly colonneDetaillee = signal('');
+    /** Règle dont l'explication (quoi / comment) est dépliée. */
+    readonly regleExpliquee = signal('');
     /** Périmètres d'audit (filtres) du profilage et de la recherche de doublons. */
     filtresProfil: FiltreAudit[] = [];
     filtresDoublons: FiltreAudit[] = [];
@@ -613,6 +696,8 @@ export class QualiteComponent {
         this.execution.set(null);
         this.brouillon.set(null);
         this.pageRegle.set(null);
+        this.colonneDetaillee.set('');
+        this.regleExpliquee.set('');
         this.filtresProfil = [];
         this.filtresDoublons = [];
         if (!sourceId) return;
@@ -660,9 +745,19 @@ export class QualiteComponent {
     // ---- profilage ----
     async profiler(): Promise<void> {
         await this.executer(async () => {
-            this.profil.set(await this.api.profilerSource(this.sourceId(), this.filtresProfil));
+            this.colonneDetaillee.set('');
+            this.profil.set(await this.api.profilerSource(this.sourceId(), this.filtresProfil, this.echantillon() || undefined));
             await this.rechargerAudits();
         });
+    }
+    detaillerColonne(colonne: string): void {
+        this.colonneDetaillee.set(this.colonneDetaillee() === colonne ? '' : colonne);
+    }
+    /** L'audit complet (profil, anomalies, périmètre) en JSON, pour archivage ou traitement externe. */
+    exporterAuditJson(): void {
+        const profil = this.profil();
+        if (!profil) return;
+        telechargerJson(`audit ${profil.sourceNom}.json`, { exporteLe: new Date().toISOString(), ...profil });
     }
     exporterProfil(): void {
         const profil = this.profil();
@@ -759,6 +854,54 @@ export class QualiteComponent {
         await this.executer(async () => {
             this.execution.set(await this.api.executerReglesQualite(this.sourceId()));
             await Promise.all([this.rechargerRegles(), this.rechargerAudits()]);
+        });
+    }
+    /** Exécute une seule règle (même inactive) : utile pour tester une règle qu'on vient d'écrire. */
+    async executerUneRegle(regle: RegleQualite): Promise<void> {
+        await this.executer(async () => {
+            const resultat = await this.api.executerUneRegle(regle.id);
+            if (resultat.erreur) this.notifications.erreur(`« ${regle.nom} » : ${resultat.erreur}`);
+            else
+                this.notifications.succes(
+                    `« ${regle.nom} » : ${resultat.resultat?.echecs ?? 0} échec(s) sur ${resultat.resultat?.total ?? 0}.`
+                );
+            await Promise.all([this.rechargerRegles(), this.rechargerAudits()]);
+        });
+    }
+    async dupliquerRegle(regle: RegleQualite): Promise<void> {
+        try {
+            const copie = await this.api.dupliquerRegleQualite(regle.id);
+            this.notifications.succes(`Copie « ${copie.nom} » créée (inactive) : modifiez-la puis activez-la.`);
+            await this.rechargerRegles();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+    expliquerRegle(regle: RegleQualite): void {
+        this.regleExpliquee.set(this.regleExpliquee() === regle.id ? '' : regle.id);
+    }
+    explication(regle: RegleQualite): { quoi: string; comment: string } | null {
+        return this.vocabulaire()?.explications?.[regle.type] || null;
+    }
+    /** Scorecard : le score et le résultat de chaque règle, en JSON (format repris de l'application classique). */
+    exporterScorecard(): void {
+        const execution = this.execution();
+        const source = this.source();
+        if (!execution || !source) return;
+        telechargerJson(`scorecard ${source.name}.json`, {
+            source: source.name,
+            exporteLe: new Date().toISOString(),
+            score: execution.score,
+            regles: execution.regles.map(regle => ({
+                nom: regle.nom,
+                type: regle.type,
+                cible: cibleDeLaRegle(regle),
+                criticite: regle.criticite,
+                total: regle.resultat?.total ?? null,
+                echecs: regle.resultat?.echecs ?? null,
+                taux: regle.resultat?.taux ?? null,
+                erreur: regle.erreur || null
+            }))
         });
     }
     exporterResultats(): void {

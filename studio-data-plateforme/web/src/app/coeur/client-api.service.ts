@@ -88,6 +88,7 @@ import {
     TableConcue,
     VocabulaireTablesConcues,
     DefinitionRegle,
+    DetailColonne,
     ExecutionRegles,
     EntreeJournal,
     Espace,
@@ -331,8 +332,20 @@ export class ClientApiService {
     vocabulaireQualite(): Promise<VocabulaireQualite> {
         return firstValueFrom(this.http.get<VocabulaireQualite>(`${this.racine}/qualite/vocabulaire`));
     }
-    profilerSource(sourceId: string, filtres: FiltreAudit[] = []): Promise<ProfilSource> {
-        return firstValueFrom(this.http.post<ProfilSource>(`${this.racine}/qualite/profil`, { sourceId, filtres }));
+    profilerSource(sourceId: string, filtres: FiltreAudit[] = [], echantillon?: number): Promise<ProfilSource> {
+        return firstValueFrom(
+            this.http.post<ProfilSource>(`${this.racine}/qualite/profil`, { sourceId, filtres, ...(echantillon ? { echantillon } : {}) })
+        );
+    }
+    detailColonne(sourceId: string, colonne: string, filtres: FiltreAudit[] = [], echantillon?: number): Promise<DetailColonne> {
+        return firstValueFrom(
+            this.http.post<DetailColonne>(`${this.racine}/qualite/colonne`, {
+                sourceId,
+                colonne,
+                filtres,
+                ...(echantillon ? { echantillon } : {})
+            })
+        );
     }
     lignesAnomalie(
         sourceId: string,
@@ -381,6 +394,14 @@ export class ClientApiService {
     }
     executerReglesQualite(sourceId?: string): Promise<ExecutionRegles> {
         return firstValueFrom(this.http.post<ExecutionRegles>(`${this.racine}/qualite/regles/executer`, sourceId ? { sourceId } : {}));
+    }
+    executerUneRegle(id: string): Promise<ExecutionRegles['regles'][number]> {
+        return firstValueFrom(
+            this.http.post<ExecutionRegles['regles'][number]>(`${this.racine}/qualite/regles/${encodeURIComponent(id)}/executer`, {})
+        );
+    }
+    dupliquerRegleQualite(id: string): Promise<RegleQualite> {
+        return firstValueFrom(this.http.post<RegleQualite>(`${this.racine}/qualite/regles/${encodeURIComponent(id)}/dupliquer`, {}));
     }
     auditsQualite(sourceId?: string, limite = 100): Promise<AuditQualite[]> {
         return firstValueFrom(

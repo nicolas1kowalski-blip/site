@@ -268,6 +268,33 @@ export type ProfilSource = {
     lignesVides?: number;
     filtres?: FiltreAudit[];
     anomalies?: Anomalie[];
+    /** Volume analysé : nombre de premières lignes retenues (absent = toute la source). */
+    echantillon?: number;
+};
+/** Détail d'une colonne (« Analyse Colonnes ») : type sémantique, statistiques, valeurs fréquentes, formats, signaux. */
+export type TypeSemantique = 'Numérique' | 'Date/Heure' | 'Email' | 'Téléphone' | 'Texte' | 'Vide';
+export type DetailColonne = {
+    colonne: string;
+    typeSemantique: TypeSemantique;
+    profil: ProfilColonne;
+    longueurMoyenne: number | null;
+    nombres: {
+        minimum: number;
+        maximum: number;
+        somme: number;
+        moyenne: number;
+        ecartType: number;
+        p05: number;
+        q1: number;
+        mediane: number;
+        q3: number;
+        p95: number;
+    } | null;
+    dates: { premiere: string | null; derniere: string | null; futures: number; avant1900: number } | null;
+    valeursFrequentes: { valeur: string | null; nombre: number; part: number }[];
+    motifs: { motif: string; nombre: number; part: number }[];
+    motifsDistincts: number;
+    signaux: { cleCandidate: boolean; constante: boolean; faibleCardinalite: boolean; asymetrique: boolean };
 };
 /** Une page de lignes (50 par page) : lignes d'une anomalie ou lignes en échec d'une règle. */
 export type PageLignes = { colonnes: string[]; lignes: unknown[][]; total: number; offset: number };
@@ -384,6 +411,20 @@ export type VocabulaireQualite = {
     modesAppariement: Record<ModeAppariement, string>;
     typesRegleSerie: Record<TypeRegleSerie, string>;
     creneauxSaison: Record<CreneauSaison, string>;
+    /** Pour chaque type de règle : ce qu'elle vérifie (quoi) et comment elle compte les échecs (comment). */
+    explications: Record<string, { quoi: string; comment: string }>;
+};
+/** Résultat d'une règle tel qu'il est mémorisé dans un audit « règles » (photographie d'une exécution). */
+export type RegleDansAudit = {
+    id: string;
+    nom: string;
+    type: TypeRegle;
+    colonne: string;
+    criticite: Criticite;
+    total: number;
+    echecs: number;
+    taux: number;
+    executeLe: string;
 };
 /** Composant d'une clé fonctionnelle : colonne de la table auditée ou d'une table liée (avec condition facultative). */
 export type ComposantCle = { table: string; col: string; whereCol: string; whereVal: string; match: ModeAppariement };
