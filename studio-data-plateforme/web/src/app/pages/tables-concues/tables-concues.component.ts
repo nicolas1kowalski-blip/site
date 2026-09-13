@@ -25,6 +25,7 @@ import {
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { exporterTableEnCsv } from '../../coeur/telechargement';
 
 const RECETTE_VIDE = (): Recette => ({
     name: '',
@@ -130,6 +131,7 @@ type GroupeEcarts = { cle: string; attributs: { attribut: string; valeurs: { sou
                                 <button class="bouton petit" (click)="reconstruire(table)" [disabled]="enCours()">Reconstruire</button>
                             }
                             <button class="bouton petit" (click)="voirContributions(table)">Contribution par source</button>
+                            <button class="bouton petit" (click)="exporterCsv(table)" [disabled]="enCours()">Exporter (CSV)</button>
                             @if (table.design.key.length && table.design.sources.length > 1) {
                                 <button class="bouton petit" (click)="voirEcarts(table)">Écarts entre sources</button>
                             }
@@ -862,6 +864,15 @@ export class TablesConcuesComponent {
     nouvelleTable(): void {
         this.fermerPanneaux();
         this.brouillon.set(RECETTE_VIDE());
+    }
+
+    async exporterCsv(table: TableConcue): Promise<void> {
+        try {
+            const lignes = await exporterTableEnCsv(requete => this.api.sql(requete), table.id, `${table.name}.csv`);
+            this.notifications.succes(`« ${table.name} » exportée : ${lignes} ligne(s).`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
     }
 
     modifier(table: TableConcue): void {

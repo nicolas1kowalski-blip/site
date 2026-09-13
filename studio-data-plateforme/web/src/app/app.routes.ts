@@ -34,6 +34,7 @@ import { SauvegardeComponent } from './pages/sauvegarde/sauvegarde.component';
 import { SensibiliteComponent } from './pages/sensibilite/sensibilite.component';
 import { SeriesTemporellesComponent } from './pages/series-temporelles/series-temporelles.component';
 import { CouvertureComponent } from './pages/couverture/couverture.component';
+import { NavigateurComponent } from './pages/navigateur/navigateur.component';
 import { SourcesComponent } from './pages/sources/sources.component';
 import { StatistiquesComponent } from './pages/statistiques/statistiques.component';
 import { SurveillanceComponent } from './pages/surveillance/surveillance.component';
@@ -58,6 +59,7 @@ export const routes: Routes = [
             { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
+            { path: 'navigateur', component: NavigateurComponent, title: 'Navigateur de données — Studio Data' },
             { path: 'preparation', component: PreparationComponent, title: 'Préparation — Studio Data' },
             { path: 'statistiques', component: StatistiquesComponent, title: 'Statistiques — Studio Data' },
             { path: 'explorateur-360', component: Explorateur360Component, title: 'Explorateur 360° — Studio Data' },

@@ -94,6 +94,27 @@ export function filtresDesFacettes(
     return filtres;
 }
 
+/** Équivalents des fonctions de tableur, en SQL DuckDB (les colonnes sont remplacées par celles de la table de départ). */
+const MODELES_FORMULE = [
+    { nom: 'CONCATENER', description: 'assembler deux colonnes', formule: "[colonne] || ' ' || [colonne2]" },
+    { nom: 'GAUCHE', description: 'les N premiers caractères', formule: 'left([colonne], 3)' },
+    { nom: 'DROITE', description: 'les N derniers caractères', formule: 'right([colonne], 3)' },
+    { nom: 'STXT', description: 'un morceau (début, longueur)', formule: 'substr([colonne], 1, 5)' },
+    { nom: 'NBCAR', description: 'longueur du texte', formule: 'length([colonne])' },
+    { nom: 'MAJUSCULE', description: 'en majuscules', formule: 'upper([colonne])' },
+    { nom: 'MINUSCULE', description: 'en minuscules', formule: 'lower([colonne])' },
+    { nom: 'SUPPRESPACE', description: 'sans espaces autour', formule: 'trim([colonne])' },
+    { nom: 'SI', description: 'si… alors… sinon', formule: "CASE WHEN [colonne] > 0 THEN 'oui' ELSE 'non' END" },
+    { nom: 'ARRONDI', description: 'arrondi à N décimales', formule: 'round(CAST([colonne] AS DOUBLE), 2)' },
+    { nom: 'ANNEE', description: 'année d’une date', formule: 'year(TRY_CAST([colonne] AS DATE))' },
+    { nom: 'MOIS', description: 'mois d’une date', formule: 'month(TRY_CAST([colonne] AS DATE))' },
+    {
+        nom: 'DIFFERENCE_JOURS',
+        description: 'jours entre deux dates',
+        formule: "date_diff('day', TRY_CAST([colonne] AS DATE), TRY_CAST([colonne2] AS DATE))"
+    }
+];
+
 @Component({
     selector: 'app-extraction',
     imports: [FormsModule, ScrollingModule],
@@ -278,6 +299,21 @@ export function filtresDesFacettes(
                                             [attr.name]="'av_formule_' + index"
                                             placeholder="ex : [prix] * [qte]   ou   upper([nom]) || ' ' || [commandes.montant]"
                                         />
+                                        <div class="ligne-avance">
+                                            <span class="discret">ƒx façon tableur :</span>
+                                            <select
+                                                class="champ petit"
+                                                [name]="'av_modele_' + index"
+                                                [attr.name]="'av_modele_' + index"
+                                                [ngModel]="''"
+                                                (ngModelChange)="insererModeleFormule(colonne, $event)"
+                                            >
+                                                <option value="">choisir une fonction…</option>
+                                                @for (modele of modelesFormule; track modele.nom) {
+                                                    <option [value]="modele.nom">{{ modele.nom }} — {{ modele.description }}</option>
+                                                }
+                                            </select>
+                                        </div>
                                         <p class="discret">
                                             Les colonnes s'écrivent entre crochets ; le reste est du SQL (opérateurs, fonctions, CASE WHEN …
                                             END).
@@ -703,6 +739,16 @@ export class ExtractionComponent {
     readonly modesSynthese = computed(() => Object.entries(this.vocabulaire()?.modesSynthese || {}) as [ModeSynthese, string][]);
     /** Les colonnes calculées, synthèses et hiérarchies (les colonnes simples sont cochées table par table). */
     readonly colonnesAvancees = computed(() => this.colonnes().filter(colonne => colonne.genre && colonne.genre !== 'colonne'));
+    /** Fonctions « façon tableur » : chaque modèle est une formule prête à adapter (colonnes entre crochets). */
+    readonly modelesFormule = MODELES_FORMULE;
+    insererModeleFormule(colonne: ColonneExtraction, nomModele: string): void {
+        const modele = MODELES_FORMULE.find(candidat => candidat.nom === nomModele);
+        if (!modele) return;
+        const entetes = this.sources().find(source => source.id === this.baseId())?.headers || [];
+        const premiere = entetes[0] || 'colonne';
+        const seconde = entetes[1] || premiere;
+        colonne.formule = modele.formule.replace(/\[colonne2\]/g, `[${seconde}]`).replace(/\[colonne\]/g, `[${premiere}]`);
+    }
 
     /** Tables joignables : un lien du modèle entre une table présente et une table absente, dans un sens ou l'autre. */
     readonly tablesProposees = computed<TableProposee[]>(() => {

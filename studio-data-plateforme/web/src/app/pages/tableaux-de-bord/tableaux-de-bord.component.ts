@@ -19,6 +19,8 @@ import {
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { GraphiqueSvgComponent } from '../../composants/graphique-svg.component';
+import { telechargerHtml } from '../../coeur/telechargement';
+import { htmlRapportGlobal, htmlTableauDeBord } from './export-html';
 
 const TUILE_VIDE = (): Tuile => ({
     id: genererIdentifiant('tl'),
@@ -56,6 +58,14 @@ const TUILE_VIDE = (): Tuile => ({
                 <button class="bouton principal" (click)="nouveau()">Nouveau tableau</button>
             }
             <button class="bouton" (click)="verifierAlertes()" [disabled]="enCours()">Vérifier les alertes</button>
+            <button
+                class="bouton"
+                (click)="rapportGlobal()"
+                [disabled]="enCours()"
+                title="Indicateurs et seuils, dernier score qualité, tableaux de bord : une page HTML à partager"
+            >
+                Rapport global (HTML)
+            </button>
         </div>
 
         @if (alertes(); as alertes) {
@@ -121,9 +131,20 @@ const TUILE_VIDE = (): Tuile => ({
                         <button class="bouton principal" (click)="enregistrer()" [disabled]="enCours()">Enregistrer</button>
                         <button class="bouton" (click)="ajouterTuile(tableau)">+ tuile</button>
                         <button class="bouton" (click)="ajouterFiltre(tableau)">+ filtre global</button>
+                        <button class="bouton" (click)="dupliquer(tableau)" [disabled]="enCours()">Dupliquer</button>
                         <button class="bouton danger" (click)="supprimer(tableau)">Supprimer</button>
                     }
-                    <button class="bouton" (click)="executer()" [disabled]="enCours()">{{ enCours() ? 'Calcul…' : 'Exécuter' }}</button>
+                    <button class="bouton" (click)="executer()" [disabled]="enCours()">
+                        {{ enCours() ? 'Calcul…' : 'Tout actualiser' }}
+                    </button>
+                    <button
+                        class="bouton"
+                        (click)="exporterHtml()"
+                        [disabled]="!resultats().length"
+                        title="Page HTML autonome avec les valeurs calculées, sans appel réseau"
+                    >
+                        Export HTML autonome
+                    </button>
                 </div>
                 @for (filtre of tableau.filters; track $index; let index = $index) {
                     <div class="formulaire-ligne filtre">
@@ -480,6 +501,56 @@ export class TableauxDeBordComponent {
                 critiques + avertissements
                     ? `${critiques} alerte(s) critique(s) et ${avertissements} avertissement(s) sur ${alertes.length} indicateur(s) suivi(s).`
                     : `${alertes.length} indicateur(s) suivi(s) — tous dans les seuils.`
+            );
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+
+    /** Copie du tableau (tuiles et filtres), enregistrée sous un nouveau nom. */
+    async dupliquer(tableau: TableauDeBord): Promise<void> {
+        const copie: TableauDeBord = { ...structuredClone(tableau), id: genererIdentifiant('db'), name: tableau.name + ' (copie)' };
+        copie.tiles = copie.tiles.map(tuile => ({ ...tuile, id: genererIdentifiant('tile') }));
+        try {
+            const { id, ...corps } = copie;
+            await this.api.enregistrerTableauDeBord(id, corps);
+            await this.recharger();
+            this.tableauId.set(id);
+            this.edition.set(this.tableaux().find(candidat => candidat.id === id) || copie);
+            this.resultats.set([]);
+            this.notifications.succes(`Tableau « ${copie.name} » créé.`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+    exporterHtml(): void {
+        const tableau = this.edition();
+        if (!tableau) return;
+        telechargerHtml(`${tableau.name.replace(/[^\w-]+/g, '_')}.html`, htmlTableauDeBord(tableau, this.resultats()));
+    }
+    /** Rapport global : alertes de tous les tableaux, dernier score qualité (cockpit), compteurs de l'espace. */
+    async rapportGlobal(): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const [alertes, cockpit, regles, recettes] = await Promise.all([
+                this.api.alertesTableauxDeBord(),
+                this.api.cockpit(),
+                this.api.reglesQualite(),
+                this.api.recettesPreparation()
+            ]);
+            const dernierPassage = (await this.api.auditsQualite(undefined, 50)).find(audit => audit.genre === 'regles');
+            telechargerHtml(
+                `RAPPORT_STUDIO_DATA_${new Date().toISOString().slice(0, 10)}.html`,
+                htmlRapportGlobal(alertes, this.tableaux(), {
+                    sources: cockpit.sources,
+                    regles: regles.length,
+                    objetsMetier: cockpit.objetsMetier,
+                    preparations: recettes.length,
+                    scoreQualite: cockpit.scoreQualite,
+                    dateScore: dernierPassage?.lanceLe || null
+                })
             );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);

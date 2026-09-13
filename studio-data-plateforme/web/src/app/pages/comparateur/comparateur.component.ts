@@ -9,6 +9,7 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { ParametresComparaison, ResultatComparaison, Source } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { exporterTableEnCsv } from '../../coeur/telechargement';
 
 /** Nom de colonne comparable entre sources : minuscules, sans accents ni ponctuation. */
 function nomComparable(nom: string): string {
@@ -167,6 +168,9 @@ function nomComparable(nom: string): string {
                 </div>
                 <p class="discret">
                     Le détail complet est disponible dans les sources sous « {{ resultat.nom }} » (explorateur SQL, extraction, export CSV).
+                    <button class="bouton petit" (click)="telechargerRapport(resultat)" [disabled]="enCours()">
+                        Télécharger le rapport CSV
+                    </button>
                 </p>
                 <div class="defilement-x">
                     <table class="tableau">
@@ -285,6 +289,19 @@ export class ComparateurComponent {
 
     seulementCles(): boolean {
         return this.parametres.correspondances.filter(correspondance => correspondance.colA && correspondance.colB).length === 0;
+    }
+
+    /** Le rapport complet (toutes les lignes comparées) est la source produite : on la télécharge en CSV. */
+    async telechargerRapport(resultat: ResultatComparaison): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const lignes = await exporterTableEnCsv(requete => this.api.sql(requete), resultat.sourceId, `${resultat.nom}.csv`);
+            this.notifications.succes(`Rapport téléchargé : ${lignes} ligne(s).`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
     }
 
     async comparer(): Promise<void> {

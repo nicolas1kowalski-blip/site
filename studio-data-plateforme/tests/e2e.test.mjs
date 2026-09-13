@@ -646,7 +646,7 @@ try {
     await page.fill('app-tableaux-de-bord input[name=tuile-titre-1]', 'Clients par ville');
     await page.selectOption('app-tableaux-de-bord select[name=tuile-table-1]', { label: 'clients.csv' });
     await page.selectOption('app-tableaux-de-bord select[name=tuile-axe-1]', 'ville');
-    await page.click('app-tableaux-de-bord button:has-text("Exécuter")');
+    await page.click('app-tableaux-de-bord button:has-text("Tout actualiser")');
     await page.waitForSelector('app-tableaux-de-bord .indicateur');
     verifier(
         'tableaux de bord : l’indicateur compte 4 clients et le graphique par ville a 3 barres',
@@ -654,6 +654,22 @@ try {
             (await page.$$('app-tableaux-de-bord app-graphique-svg rect')).length === 3
     );
     await capture('tableaux-de-bord');
+    const telechargementHtml = page.waitForEvent('download');
+    await page.click('app-tableaux-de-bord button:has-text("Export HTML autonome")');
+    const fichierHtml = await telechargementHtml;
+    verifier('tableaux de bord : l’export HTML autonome télécharge une page .html', /\.html$/.test(fichierHtml.suggestedFilename()));
+    await page.click('app-tableaux-de-bord button:has-text("Dupliquer")');
+    await page.waitForSelector('.notification.succes:has-text("(copie) » créé")');
+    verifier(
+        'tableaux de bord : « Dupliquer » crée une copie enregistrée et l’ouvre',
+        /\(copie\)/.test(await page.inputValue('app-tableaux-de-bord input[name=nom]'))
+    );
+    const telechargementRapport = page.waitForEvent('download');
+    await page.click('app-tableaux-de-bord button:has-text("Rapport global (HTML)")');
+    verifier(
+        'tableaux de bord : le rapport global HTML est téléchargé',
+        /^RAPPORT_STUDIO_DATA_/.test((await telechargementRapport).suggestedFilename())
+    );
 
     await page.click('a[href="/comparateur"]');
     await page.waitForSelector('app-comparateur');
@@ -672,6 +688,12 @@ try {
         'comparateur : clients.csv contre la table conçue — 4 lignes, 4 identiques (ville comparée sans tenir compte de la casse), 0 différente, 0 manquante',
         syntheseComparaison.join() === '4,4,0,0,0' &&
             /Comparaison clients\.csv vs Clients consolidés/.test(await page.textContent('app-comparateur h2'))
+    );
+    const telechargementComparaison = page.waitForEvent('download');
+    await page.click('app-comparateur button:has-text("Télécharger le rapport CSV")');
+    verifier(
+        'comparateur : le rapport complet se télécharge en CSV',
+        (await telechargementComparaison).suggestedFilename() === 'Comparaison_clients.csv_vs_Clients_consolides.csv'
     );
 
     // ---- exploitation : statistiques, explorateur 360°, préparation ----
@@ -812,6 +834,31 @@ try {
         /Paris/.test(await page.textContent('app-explorateur .resultat'))
     );
     await capture('explorateur');
+
+    // ---- navigateur de données : filtres par colonne, tri, saut vers la table liée ----
+    await page.click('a[href="/navigateur"]');
+    await page.waitForSelector('app-navigateur');
+    await page.selectOption('app-navigateur select[name=table]', { label: 'clients.csv' });
+    await page.waitForFunction(() => document.querySelectorAll('app-navigateur tbody tr').length === 4);
+    await page.fill('app-navigateur input[name=filtre-ville]', 'Paris');
+    await page.waitForFunction(() => document.querySelectorAll('app-navigateur tbody tr').length === 2);
+    await page.click('app-navigateur th.entete:has-text("nom")');
+    await page.waitForFunction(() => /Ana/.test(document.querySelector('app-navigateur tbody tr')?.textContent || ''));
+    verifier(
+        'navigateur : filtre « ville contient Paris » → 2 lignes sur 4, tri par nom (Ana en premier)',
+        /2 ligne\(s\) sur 4/.test(await page.textContent('app-navigateur .entete-page .badge')) &&
+            /Ana/.test(await page.textContent('app-navigateur tbody tr'))
+    );
+    await page.selectOption('app-navigateur select[name=table]', { label: 'commandes.csv' });
+    await page.waitForFunction(() => document.querySelectorAll('app-navigateur tbody tr').length === 4);
+    await page.click('app-navigateur tbody tr:first-child a.saut');
+    await page.waitForFunction(() => document.querySelectorAll('app-navigateur tbody tr').length === 1);
+    verifier(
+        'navigateur : cliquer l’id_client d’une commande saute vers clients.csv filtrée sur ce client (Ana)',
+        /Ana/.test(await page.textContent('app-navigateur tbody')) &&
+            (await page.inputValue('app-navigateur input[name=filtre-id_client]')) === '=1'
+    );
+    await capture('navigateur');
 
     // ---- données avancées : mise à jour d'une source, livraison ZIP, fusion, analyse de couverture ----
     await page.click('a[href="/sources"]');

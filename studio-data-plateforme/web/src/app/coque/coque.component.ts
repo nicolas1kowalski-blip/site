@@ -225,7 +225,8 @@ export class CoqueComponent {
                 { chemin: '/preparation', libelle: 'Préparation', icone: '🧹' },
                 { chemin: '/tableaux-de-bord', libelle: 'Tableaux de bord', icone: '▤' },
                 { chemin: '/comparateur', libelle: 'Comparer', icone: '⇆' },
-                { chemin: '/explorateur', libelle: 'Explorer (SQL)', icone: '⌕' },
+                { chemin: '/navigateur', libelle: 'Explorer', icone: '⌕' },
+                { chemin: '/explorateur', libelle: 'Explorer (SQL)', icone: '⌗' },
                 { chemin: '/statistiques', libelle: 'Statistiques', icone: '📊' },
                 { chemin: '/explorateur-360', libelle: 'Explorateur 360°', icone: '🕸' }
             ]
