@@ -32,7 +32,7 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | Moteur DuckDB natif par espace, fichiers déposés une fois, Parquet côté serveur | **livré** | `api/src/espaces` |
 | Front Angular : connexion, coque, accueil, sources (dépôt, aperçu, optimisation, suppression), explorateur SQL (défilement virtuel, export CSV), glossaire, dictionnaire, journal, espaces et membres, utilisateurs, mon compte | **livré** | `web/src/app` |
 | **Modèle de données** en Angular : liens entre sources, ajout manuel, détection par le contenu (colonnes de même nom, unicité, couverture), suppression — partagé avec l'application classique | **livré** | `api/src/modele`, `web/src/app/pages/modele` |
-| **Extraction** en Angular : table de départ, tables liées d'après le modèle, colonnes (alias, transformation, agrégat), filtres (12 opérateurs), regroupement, dédoublonnage, aperçu à défilement virtuel, comptage, export CSV en flux, SQL affiché, modèles enregistrés | **livré** | `api/src/extraction`, `web/src/app/pages/extraction` |
+| **Extraction** en Angular : table de départ, tables liées d'après le modèle, colonnes (alias, transformation, agrégat), colonnes calculées (formule avec [colonne]), synthèses d'une table liée (nombre, distincts, liste, N premières valeurs, sans multiplier les lignes), hiérarchies aplaties (identifiant / parent → une colonne par niveau), filtres (13 opérateurs dont « dans une liste fournie » par fichier ou texte collé), regroupement, dédoublonnage, pré-remplissage depuis un objet métier, aperçu à défilement virtuel, comptage, export CSV en flux, SQL affiché, modèles enregistrés, résultat enregistré comme source | **livré** | `api/src/extraction`, `web/src/app/pages/extraction` |
 | **Tables conçues** en Angular : recette de consolidation (sources contributrices avec correspondance des colonnes et filtres d'entrée, attributs renommés et ordonnés, clé, formats normalisés, enrichissements directs ou via une table de lien avec validité par statut ou période, colonnes calculées, clés étrangères), SQL affiché, aperçu, construction et reconstruction (automatique après mise à jour d'une source), contribution par source, rapport d'écarts entre sources — format de recette partagé avec l'application classique | **livré** | `api/src/tables-concues`, `web/src/app/pages/tables-concues` |
 | **Exploitation** en Angular : tableaux de bord composables (tuiles barres, courbe, camembert, tableau, indicateur ; filtres globaux ; seuils et alertes ; graphiques SVG sans bibliothèque), comparateur de deux sources (clé simple ou composite, colonne par colonne, résultat matérialisé en source), séries temporelles (profil par série : pas, régularité, trous, doublons, plateaux, couverture, retard ; calendrier), rapprochement inter-sources (clé de blocage, similarités Jaro-Winkler / Levenshtein / égalité, seuils, décisions, golden record et table des liens) | **livré** | `api/src/exploitation`, `web/src/app/composants/graphique-svg.component.ts`, `web/src/app/pages/{tableaux-de-bord,comparateur,series-temporelles,rapprochement}` |
 | **Lineage** en Angular : carte des flux dérivée des données (tables conçues, applications, dictionnaire, objets métier) et complétée à la main, rôles déduits (maître, source, référentiel, consommateur), fraîcheur (fréquence du dictionnaire, SLA du lien), réconciliation d'une alimentation dans DuckDB (clé, attributs contrôlés, transformations, écarts et exemples), contrôles de cohérence du modèle, parcours d'un attribut, amont et aval d'une table ; composant graphe SVG (couches, barycentre, zoom, déplacement) | **livré** | `api/src/lineage`, `web/src/app/composants/graphe-svg.component.ts`, `web/src/app/pages/lineage` |
@@ -46,7 +46,7 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | **Statistiques** et **Explorateur 360°** en Angular : graphique dimension × agrégat calculé par le serveur ; exploration d'une valeur de table en table par les liens du modèle (graphe, détail, extension) | **livré** | `api/src/exploitation/exploration.ts`, `web/src/app/pages/{statistiques,explorateur-360}` |
 | **Analyse d'impact** (onglet du lineage) : applications touchées directement, via le lineage des tables conçues, via les relations du modèle ; tables en aval | **livré** | `api/src/lineage/lineage.service.ts`, onglet « impact » de `web/src/app/pages/lineage` |
 | Application classique (tous les écrans historiques) intégrée dans la coque, sur les mêmes données | **livré** | `web-classique`, route `/classique` |
-| Tests : 85 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact, le cockpit, les préparations, les statistiques et l'explorateur 360°), 58 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
+| Tests : 90 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact, le cockpit, les préparations, les statistiques et l'explorateur 360°), 60 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
 | Docker, Caddy, guide Oracle Cloud, pile AWS CloudFormation (EC2 Graviton, RDS optionnel, S3, Systems Manager), TLS vérifié vers PostgreSQL (`SD_POSTGRES_CA`) | **livré** | `Dockerfile`, `docker-compose.yml`, `deploiement/oracle-cloud.md`, `deploiement/aws.md`, `deploiement/aws/pile.yaml` |
 | Fonctions avancées restées dans l'application classique (liste ci-dessous) | **optionnel** | `web-classique` |
 | Connexion à l'annuaire de l'entreprise (OpenID Connect) | à faire | remplacer `api/src/authentification` (contrat : poser `request.contexte`) |
@@ -147,7 +147,9 @@ classique :
    la navigation reprend les quatre phases du classique (Données & Modèle, Exploitation, Qualité & Audit,
    Gouvernance) ; `cockpit/cockpit.ts`, `preparation/recettes-preparation.ts` et `exploitation/exploration.ts`
    sont des fonctions pures testées.
-9. Retrait de `web-classique` et éclatement du document `appState` en tables.
+9. ~~**Extraction avancée**~~ — livré : `extraction/constructeur-avance.ts` (formules, synthèses, hiérarchies, listes
+   fournies — fonctions pures testées), route `POST /api/extraction/materialiser`.
+10. Retrait de `web-classique` et éclatement du document `appState` en tables.
 
 ### Ce qui est migré et ce qui reste dans l'application classique
 
@@ -157,7 +159,7 @@ sur les mêmes données, pour les fonctions avancées suivantes, plus rares, qui
 | Domaine | Migré en Angular | Resté dans l'application classique |
 |---|---|---|
 | Sources et exploration | dépôt, aperçu, optimisation, explorateur SQL, export | classeurs Excel lus dans le navigateur, connecteurs distants, dépôt ZIP |
-| Modèle et extraction | liens, détection, extraction jointe avec filtres et agrégats, modèles enregistrés, préparation (recettes de nettoyage) | synthèses d'une table liée (compter, transposer), hiérarchies aplaties, colonnes calculées, filtre « dans le fichier » |
+| Modèle et extraction | liens, détection, extraction jointe avec filtres et agrégats, colonnes calculées, synthèses de tables liées, hiérarchies, filtre sur liste fournie, pilotage par objet métier, résultat enregistré comme source, modèles enregistrés, préparation (recettes de nettoyage) | hiérarchie « via une table de liaison » avec dates de validité, choix du lien quand deux tables sont reliées plusieurs fois |
 | Tables conçues | recette complète, construction, reconstruction, contributions, écarts | — |
 | Qualité | profilage, doublons, règles, score, historique | anonymisation |
 | Gouvernance | objets métier, applications, périmètres, listes de valeurs, sensibilité, personnes, propositions, glossaire, dictionnaire | concepteur d'objets et audits d'objet (hiérarchies, règles métier, couverture), import en masse |
@@ -179,9 +181,9 @@ l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté se
 ## Tests et qualité
 
 ```bash
-npm run tester:api                                  # 85 tests, PGlite
+npm run tester:api                                  # 90 tests, PGlite
 SD_POSTGRES_URL_TEST=postgres://… npm run tester:api # les mêmes sur PostgreSQL
-npm run tester:e2e                                  # 58 assertions, Chromium (Playwright de l'environnement)
+npm run tester:e2e                                  # 60 assertions, Chromium (Playwright de l'environnement)
 npm run verifier                                    # Prettier --check + ESLint (typescript-eslint)
 ```
 

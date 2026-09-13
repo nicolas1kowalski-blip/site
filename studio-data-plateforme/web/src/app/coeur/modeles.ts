@@ -116,12 +116,43 @@ export type PropositionLien = Omit<Relation, 'id' | 'sourceId' | 'targetId'> & {
 };
 
 export type OperateurFiltre =
-    '=' | '!=' | 'contains' | 'startsWith' | 'in' | '>=' | '<=' | 'between' | 'dfrom' | 'dto' | 'empty' | 'notempty';
+    '=' | '!=' | 'contains' | 'startsWith' | 'in' | '>=' | '<=' | 'between' | 'dfrom' | 'dto' | 'empty' | 'notempty' | 'list';
 export type Transformation = 'none' | 'trim' | 'upper' | 'lower' | 'noaccent';
 export type Agregat = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max' | 'values';
 
-export type ColonneExtraction = { tableId: string; nomColonne: string; alias?: string; transformation: Transformation; agregat?: Agregat };
-export type FiltreExtraction = { tableId: string; nomColonne: string; op: OperateurFiltre; valeur?: string; valeur2?: string };
+export type GenreColonneExtraction = 'colonne' | 'calcul' | 'synthese' | 'hierarchie';
+export type ModeSynthese = 'count' | 'countd' | 'values' | 'first';
+/** Synthèse d'une table liée : table résumée, table présente qui porte la clé (de…) et colonnes de la relation. */
+export type SyntheseExtraction = {
+    tableId: string;
+    deTableId: string;
+    deColonne: string;
+    versColonne: string;
+    mode: ModeSynthese;
+    nomColonne: string;
+    n: number;
+};
+export type HierarchieExtraction = { idColonne: string; parentColonne: string; attributs: string[]; profondeur: number };
+export type ColonneExtraction = {
+    tableId: string;
+    nomColonne: string;
+    genre?: GenreColonneExtraction;
+    formule?: string;
+    synthese?: SyntheseExtraction;
+    hierarchie?: HierarchieExtraction;
+    alias?: string;
+    transformation: Transformation;
+    agregat?: Agregat;
+};
+export type FiltreExtraction = {
+    tableId: string;
+    nomColonne: string;
+    op: OperateurFiltre;
+    valeur?: string;
+    valeur2?: string;
+    liste?: string[];
+    exclure?: boolean;
+};
 export type JointureExtraction = { deTableId: string; deColonne: string; versTableId: string; versColonne: string };
 export type SpecificationExtraction = {
     baseId: string;
@@ -147,10 +178,13 @@ export type VocabulaireExtraction = {
     operateurs: Record<OperateurFiltre, string>;
     transformations: Record<Transformation, string>;
     agregats: Record<Agregat, string>;
+    genresColonne: Record<GenreColonneExtraction, string>;
+    modesSynthese: Record<ModeSynthese, string>;
 };
+export type Materialisation = { sourceId: string; nom: string; lignes: number; colonnes: string[] };
 
 /** Les opérateurs qui n'attendent aucune valeur, et celui qui en attend deux. */
-export const OPERATEURS_SANS_VALEUR: OperateurFiltre[] = ['empty', 'notempty'];
+export const OPERATEURS_SANS_VALEUR: OperateurFiltre[] = ['empty', 'notempty', 'list'];
 export const OPERATEUR_DEUX_VALEURS: OperateurFiltre = 'between';
 
 // ---- qualité ----

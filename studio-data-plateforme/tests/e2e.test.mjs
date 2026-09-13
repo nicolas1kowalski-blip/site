@@ -191,6 +191,44 @@ try {
     );
     await capture('extraction');
 
+    // ---- extraction avancée : colonne calculée, synthèse d'une table liée, filtre sur liste, résultat enregistré comme source ----
+    await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
+    const casesClients = await page.$$('app-extraction details input[type=checkbox]');
+    await casesClients[1].click();
+    await casesClients[2].click();
+    await page.click('app-extraction button:has-text("+ colonne calculée")');
+    await page.fill('app-extraction input[name=av_alias_0]', 'etiquette');
+    await page.fill('app-extraction input[name=av_formule_0]', "upper([nom]) || ' (' || [ville] || ')'");
+    await page.click('app-extraction button:has-text("+ synthèse de commandes.csv")');
+    await page.fill('app-extraction input[name=av_alias_1]', 'nb_commandes');
+    await page.click('app-extraction button:has-text("Ajouter un filtre")');
+    await page.selectOption('app-extraction select[name="fc_0"]', 'ville');
+    await page.selectOption('app-extraction select[name="fo_0"]', 'list');
+    page.once('dialog', dialogue => dialogue.accept('paris\nLILLE'));
+    await page.click('app-extraction button:has-text("coller")');
+    await page.click('app-extraction button:has-text("Aperçu (200 lignes)")');
+    await page.waitForFunction(() => /nb_commandes/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
+    const lignesAvancees = await page.$$eval('app-extraction .resultat .corps .ligne', lignes =>
+        lignes.map(ligne =>
+            Array.from(ligne.querySelectorAll('.cellule'))
+                .map(cellule => cellule.textContent.trim())
+                .join('|')
+        )
+    );
+    verifier(
+        'extraction avancée : étiquette calculée, nombre de commandes par client (synthèse sans jointure), filtre « dans la liste » paris + lille → 3 clients',
+        lignesAvancees.length === 3 &&
+            lignesAvancees.includes('Ana|Paris|ANA (Paris)|2') &&
+            lignesAvancees.includes('Zoé|Lille|ZOÉ (Lille)|0')
+    );
+    page.once('dialog', dialogue => dialogue.accept('Clients Paris Lille'));
+    await page.click('app-extraction button:has-text("Enregistrer le résultat comme source")');
+    await page.waitForSelector('.notification.succes:has-text("Source « Clients Paris Lille »")');
+    verifier(
+        'extraction avancée : le résultat est enregistré comme source (3 lignes, 4 colonnes)',
+        /3 ligne\(s\), 4 colonne\(s\)/.test(await page.textContent('.notification.succes:has-text("Source « Clients Paris Lille »")'))
+    );
+
     // ---- qualité : profilage, doublons, règle et score ----
     await page.click('a[href="/qualite"]');
     await page.waitForSelector('app-qualite');
@@ -624,10 +662,10 @@ try {
     await page.waitForSelector('app-sauvegarde');
     const exportEspace = await page.evaluate(async () => await (await fetch('/api/sauvegarde/export')).json());
     verifier(
-        'sauvegarde : l’export de l’espace contient les documents partagés et les 5 sources',
+        'sauvegarde : l’export de l’espace contient les documents partagés et les 6 sources',
         exportEspace.kind === 'studio-data-espace' &&
             exportEspace.documents.appState.governance.businessObjects.length === 1 &&
-            exportEspace.sources.length === 5
+            exportEspace.sources.length === 6
     );
     const dossierHtml = await page.evaluate(async () => await (await fetch('/api/sauvegarde/dossier')).text());
     verifier(
@@ -725,8 +763,8 @@ try {
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     verifier(
-        'application classique : les deux sources déposées depuis Angular, la table conçue, la comparaison et la table préparée sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 5 &&
+        'application classique : les deux sources déposées depuis Angular, la table conçue, la comparaison, la table préparée et l’extraction enregistrée sont restaurées prêtes (sans ré-ingestion)',
+        classique.tables.length === 6 &&
             classique.tables.every(table => table.status === 'ready') &&
             classique.tables.filter(table => table.headers === 3).length === 3 &&
             classique.tables.some(table => table.name === 'Clients consolidés' && table.type === 'designed' && table.headers === 6) &&

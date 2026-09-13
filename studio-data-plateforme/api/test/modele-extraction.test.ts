@@ -220,3 +220,50 @@ test('suppression d’un lien par son identifiant', async () => {
     const restantes = json(await appel({ method: 'DELETE', url: '/api/modele/relations/' + encodeURIComponent(relations[0].id) }));
     assert.deepEqual(restantes, []);
 });
+
+test('extraction avancée par l’API : synthèse, colonne calculée, filtre sur liste, puis résultat enregistré comme source', async () => {
+    const specification = {
+        baseId: 'tb_clients',
+        colonnes: [
+            { tableId: 'tb_clients', nomColonne: 'nom' },
+            {
+                tableId: 'tb_clients',
+                genre: 'synthese',
+                alias: 'nb_commandes',
+                synthese: {
+                    tableId: 'tb_commandes',
+                    deTableId: 'tb_clients',
+                    deColonne: 'id_client',
+                    versColonne: 'id_client',
+                    mode: 'count'
+                }
+            },
+            { tableId: 'tb_clients', genre: 'calcul', alias: 'etiquette', formule: "[nom] || ' (' || [ville] || ')'" }
+        ],
+        filtres: [{ tableId: 'tb_clients', nomColonne: 'ville', op: 'list', liste: ['PARIS', 'lille'], exclure: false }],
+        tri: [{ alias: 'nom', sens: 'asc' }]
+    };
+    const apercu = json(await appel({ method: 'POST', url: '/api/extraction/apercu', payload: { specification } }));
+    assert.deepEqual(
+        apercu.lignes,
+        [
+            ['Ana', '2', 'Ana (Paris)'],
+            ['Idris', '1', 'Idris (Paris)'],
+            ['Zoé', '0', 'Zoé (Lille)']
+        ],
+        'les comptages BIGINT arrivent en texte'
+    );
+    const materialisation = json(
+        await appel({ method: 'POST', url: '/api/extraction/materialiser', payload: { specification, nom: 'Clients Paris Lille' } })
+    );
+    assert.equal(materialisation.lignes, 3);
+    assert.deepEqual(materialisation.colonnes, ['nom', 'nb_commandes', 'etiquette']);
+    const source = json(await appel({ method: 'GET', url: `/api/tables/${materialisation.sourceId}` }));
+    assert.equal(source.type, 'extraction');
+    assert.equal(source.origine, 'extraction');
+    assert.equal(
+        (await appel({ method: 'POST', url: '/api/extraction/materialiser', payload: { specification, nom: 'clients.csv' } })).statusCode,
+        400,
+        'pas d’écrasement d’une source déposée'
+    );
+});

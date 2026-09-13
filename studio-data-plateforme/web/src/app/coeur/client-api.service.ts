@@ -75,6 +75,7 @@ import {
     Identite,
     Membre,
     ModeleExtraction,
+    Materialisation,
     ProfilSource,
     PropositionLien,
     RegleQualite,
@@ -218,6 +219,9 @@ export class ClientApiService {
     }
     compterExtraction(specification: SpecificationExtraction): Promise<{ total: number }> {
         return firstValueFrom(this.http.post<{ total: number }>(`${this.racine}/extraction/compter`, specification));
+    }
+    materialiserExtraction(specification: SpecificationExtraction, nom: string): Promise<Materialisation> {
+        return firstValueFrom(this.http.post<Materialisation>(`${this.racine}/extraction/materialiser`, { specification, nom }));
     }
     exporterExtractionCsv(specification: SpecificationExtraction, nomFichier: string): Promise<Blob> {
         return firstValueFrom(

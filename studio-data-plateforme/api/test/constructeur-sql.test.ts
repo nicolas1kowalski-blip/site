@@ -108,3 +108,81 @@ test('spécifications incohérentes refusées : jointure depuis une table absent
     );
     assert.throws(() => construireSql(specification({ tri: [{ alias: 'inconnu', sens: 'asc' }] }), contexte), /absente de la sortie/);
 });
+
+test('colonne calculée : [colonne] et [table.colonne] deviennent des expressions SQL ; référence inconnue refusée', () => {
+    const contexteAvecColonnes = {
+        ...contexte,
+        colonnesDe: (id: string) => ({ a: ['nom', 'ville', 'prix', 'qte'], b: ['id_client', 'montant'] })[id] || []
+    };
+    const spec = specification({
+        jointures: [{ deTableId: 'a', deColonne: 'id_client', versTableId: 'b', versColonne: 'id_client' }],
+        colonnes: [
+            { tableId: 'a', nomColonne: 'nom' },
+            { tableId: 'a', genre: 'calcul', formule: "upper([nom]) || ' - ' || [commandes.montant]", alias: 'etiquette' },
+            { tableId: 'a', genre: 'calcul', formule: '[prix] * [qte]', alias: 'total' }
+        ]
+    });
+    const { sql, alias } = construireSql(spec, contexteAvecColonnes);
+    assert.match(sql, /\(upper\(t0\."nom"\) \|\| ' - ' \|\| t1\."montant"\) AS "etiquette"/);
+    assert.match(sql, /\(t0\."prix" \* t0\."qte"\) AS "total"/);
+    assert.deepEqual(alias, ['nom', 'etiquette', 'total']);
+    assert.throws(
+        () =>
+            construireSql(
+                specification({ colonnes: [{ tableId: 'a', genre: 'calcul', formule: '[inconnue] + 1' }] }),
+                contexteAvecColonnes
+            ),
+        /Colonne inconnue dans la formule/
+    );
+});
+
+test('synthèse d’une table liée : sous-requête corrélée (nombre, valeurs, N premières) sans jointure', () => {
+    const synthese = { tableId: 'b', deTableId: 'a', deColonne: 'id_client', versColonne: 'id_client' };
+    const { sql, alias } = construireSql(
+        specification({
+            colonnes: [
+                { tableId: 'a', nomColonne: 'nom' },
+                { tableId: 'a', genre: 'synthese', synthese: { ...synthese, mode: 'count' }, alias: 'nb_commandes' },
+                { tableId: 'a', genre: 'synthese', synthese: { ...synthese, mode: 'values', nomColonne: 'montant' }, alias: 'montants' },
+                { tableId: 'a', genre: 'synthese', synthese: { ...synthese, mode: 'first', nomColonne: 'montant', n: 2 } }
+            ]
+        }),
+        contexte
+    );
+    assert.match(
+        sql,
+        /\(SELECT COUNT\(\*\) FROM "t_b" s WHERE NULLIF\(UPPER\(TRIM\(CAST\(s\."id_client" AS VARCHAR\)\)\), ''\) = NULLIF\(UPPER\(TRIM\(CAST\(t0\."id_client" AS VARCHAR\)\)\), ''\)\) AS "nb_commandes"/
+    );
+    assert.match(sql, /string_agg\(DISTINCT NULLIF\(TRIM\(CAST\(s\."montant" AS VARCHAR\)\), ''\), ' \| '\)/);
+    assert.deepEqual(alias, ['nom', 'nb_commandes', 'montants', 'commandes_1', 'commandes_2']);
+    assert.doesNotMatch(sql, /JOIN/);
+});
+
+test('hiérarchie aplatie : CTE récursive, jointure sur l’identifiant normalisé, une colonne par niveau', () => {
+    const { sql, alias } = construireSql(
+        specification({
+            colonnes: [
+                { tableId: 'a', nomColonne: 'nom' },
+                {
+                    tableId: 'a',
+                    genre: 'hierarchie',
+                    hierarchie: { idColonne: 'id', parentColonne: 'parent', attributs: ['nom'], profondeur: 3 },
+                    alias: 'chemin'
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.match(sql, /^WITH RECURSIVE hierarchie0\(k, chain\) AS \(/);
+    assert.match(sql, /LEFT JOIN hierarchie0 ON hierarchie0\.k = NULLIF\(UPPER\(TRIM\(CAST\(t0\."id" AS VARCHAR\)\)\), ''\)/);
+    assert.deepEqual(alias, ['nom', 'chemin_niv1', 'chemin_niv2', 'chemin_niv3']);
+});
+
+test('filtre sur liste fournie : valeurs normalisées, sens « exclure », liste vide neutre', () => {
+    assert.equal(
+        conditionFiltre('t0', { nomColonne: 'ville', op: 'list', liste: [' paris', 'Lyon', 'lyon', ''] }),
+        `NULLIF(UPPER(TRIM(CAST(t0."ville" AS VARCHAR))), '') IN ('PARIS', 'LYON')`
+    );
+    assert.match(conditionFiltre('t0', { nomColonne: 'ville', op: 'list', liste: ['Paris'], exclure: true }), /NOT IN \('PARIS'\)/);
+    assert.equal(conditionFiltre('t0', { nomColonne: 'ville', op: 'list', liste: [] }), 'TRUE');
+});

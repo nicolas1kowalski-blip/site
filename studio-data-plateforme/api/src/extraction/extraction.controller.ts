@@ -6,6 +6,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Res } from '@nestjs/co
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { Readable } from 'node:stream';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { EspaceAvecRole, EspaceCourant, RoleEspaceRequis, UtilisateurCourant } from '../authentification/contexte-requete';
 import { Utilisateur } from '../base-de-donnees/schema';
@@ -14,9 +15,12 @@ import { valider } from '../commun/validation';
 import { DocumentsService } from '../documents/documents.service';
 import { EspacesService } from '../espaces/espaces.service';
 import { JournalService } from '../journal/journal.service';
+import { identifiantSql } from '../espaces/moteur-duckdb';
 import { SourcesService } from '../sources/sources.service';
+import { MODES_SYNTHESE } from './constructeur-avance';
 import {
     AGREGATS,
+    GENRES_COLONNE,
     ContexteConstruction,
     ErreurSpecification,
     OPERATEURS_FILTRE,
@@ -29,6 +33,7 @@ import {
 const LIMITE_APERCU = 200;
 
 const schemaApercu = z.object({ specification: schemaSpecification, limite: z.number().int().positive().max(5000).default(LIMITE_APERCU) });
+const schemaMaterialisation = z.object({ specification: schemaSpecification, nom: z.string().trim().min(1).max(120) });
 const schemaExport = z.object({ specification: schemaSpecification, nomFichier: z.string().trim().min(1).max(120).default('extraction') });
 const schemaModele = z.object({
     nom: z.string().trim().min(1, 'nom requis').max(120),
@@ -67,7 +72,13 @@ export class ExtractionController {
     @RoleEspaceRequis('lecteur')
     @ApiOperation({ summary: 'Opérateurs de filtre, transformations et agrégats disponibles, avec leurs libellés.' })
     vocabulaire() {
-        return { operateurs: OPERATEURS_FILTRE, transformations: TRANSFORMATIONS, agregats: AGREGATS };
+        return {
+            operateurs: OPERATEURS_FILTRE,
+            transformations: TRANSFORMATIONS,
+            agregats: AGREGATS,
+            genresColonne: GENRES_COLONNE,
+            modesSynthese: MODES_SYNTHESE
+        };
     }
 
     @Post('sql')
@@ -129,6 +140,48 @@ export class ExtractionController {
             .type('text/csv; charset=utf-8')
             .header('content-disposition', `attachment; filename="${nomFichier}"`)
             .send(Readable.from(lignesCsv()));
+    }
+
+    @Post('materialiser')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({ summary: 'Enregistre le résultat de l’extraction comme une source de l’espace (table DuckDB), réutilisable partout.' })
+    async materialiser(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Body(valider(schemaMaterialisation)) corps: z.infer<typeof schemaMaterialisation>
+    ) {
+        const { sql } = await this.construire(espace, corps.specification);
+        const sources = await this.sources.lister(espace.id);
+        const homonyme = sources.find(candidat => candidat.name === corps.nom);
+        if (homonyme && homonyme.type !== 'extraction') throw erreurRequete(`Le nom « ${corps.nom} » est déjà celui d'une source déposée.`);
+        const id = homonyme?.id || 'tb_' + randomBytes(6).toString('hex');
+        const { moteur } = await this.espaces.ressources(espace);
+        await moteur.abandonner('t_' + id);
+        await moteur.executer(
+            `CREATE TABLE ${identifiantSql('t_' + id)} AS SELECT row_number() OVER () AS __rn, * FROM (\n${sql}\n) extraction`
+        );
+        const [structure, total] = await Promise.all([
+            moteur.executer(`SELECT * EXCLUDE (__rn) FROM ${identifiantSql('t_' + id)} LIMIT 0`),
+            moteur.executer(`SELECT COUNT(*)::BIGINT FROM ${identifiantSql('t_' + id)}`)
+        ]);
+        const colonnes = structure.colonnes.map(colonne => colonne.nom);
+        await this.sources.ecrire(espace.id, id, {
+            id,
+            name: corps.nom,
+            type: 'extraction',
+            storage: 'table',
+            size: 0,
+            headers: colonnes,
+            origine: 'extraction',
+            specification: corps.specification
+        });
+        await this.journal.consigner({
+            espaceId: espace.id,
+            utilisateurId: utilisateur.id,
+            action: 'extraction.materialisation',
+            cible: corps.nom
+        });
+        return { sourceId: id, nom: corps.nom, lignes: Number(total.lignes[0][0]), colonnes };
     }
 
     // ---- modèles d'extraction enregistrés ----
@@ -194,7 +247,8 @@ export class ExtractionController {
                 if (!parId.has(tableId)) throw erreurRequete(`Source inconnue dans l'extraction : ${tableId}`);
                 return 't_' + tableId;
             },
-            nomSourceDe: tableId => parId.get(tableId)?.name ?? tableId
+            nomSourceDe: tableId => parId.get(tableId)?.name ?? tableId,
+            colonnesDe: tableId => parId.get(tableId)?.headers ?? []
         };
         try {
             return construireSql(specification, contexte);

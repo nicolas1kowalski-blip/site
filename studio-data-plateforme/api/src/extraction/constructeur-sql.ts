@@ -11,6 +11,17 @@
 import { z } from 'zod';
 import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
 import { cleNormalisee } from '../modele/modele.service';
+import {
+    ErreurFormule,
+    Hierarchie,
+    MODES_SYNTHESE,
+    Synthese,
+    conditionListe,
+    cteHierarchie,
+    expressionsHierarchie,
+    expressionsSynthese,
+    formuleEnSql
+} from './constructeur-avance';
 
 export const OPERATEURS_FILTRE = {
     '=': 'égal à',
@@ -24,7 +35,8 @@ export const OPERATEURS_FILTRE = {
     dfrom: 'à partir du (date AAAA-MM-JJ)',
     dto: "jusqu'au (date AAAA-MM-JJ)",
     empty: 'est vide',
-    notempty: "n'est pas vide"
+    notempty: "n'est pas vide",
+    list: 'dans une liste fournie (fichier ou texte collé)'
 } as const;
 
 export const TRANSFORMATIONS = {
@@ -44,9 +56,39 @@ export const AGREGATS = {
     values: 'valeurs (liste)'
 } as const;
 
+export const GENRES_COLONNE = {
+    colonne: "colonne d'une table",
+    calcul: 'colonne calculée (formule)',
+    synthese: "synthèse d'une table liée",
+    hierarchie: 'hiérarchie aplatie'
+} as const;
+
+const schemaSynthese = z.object({
+    /** Table résumée (non jointe : les lignes ne sont pas multipliées). */
+    tableId: z.string().min(1),
+    /** Table présente dans l'extraction qui porte la clé, et les deux colonnes de la relation. */
+    deTableId: z.string().min(1),
+    deColonne: z.string().min(1),
+    versColonne: z.string().min(1),
+    mode: z.enum(Object.keys(MODES_SYNTHESE) as ['count', 'countd', 'values', 'first']).default('count'),
+    nomColonne: z.string().default(''),
+    n: z.number().int().min(1).max(12).default(3)
+});
+const schemaHierarchie = z.object({
+    idColonne: z.string().min(1),
+    parentColonne: z.string().min(1),
+    attributs: z.array(z.string()).default([]),
+    profondeur: z.number().int().min(1).max(20).default(5)
+});
 const schemaColonne = z.object({
     tableId: z.string().min(1),
-    nomColonne: z.string().min(1),
+    /** Vide pour une colonne calculée, une synthèse ou une hiérarchie. */
+    nomColonne: z.string().default(''),
+    genre: z.enum(['colonne', 'calcul', 'synthese', 'hierarchie']).default('colonne'),
+    /** Colonne calculée : formule avec les colonnes entre crochets, [ville] ou [commandes.montant]. */
+    formule: z.string().optional(),
+    synthese: schemaSynthese.optional(),
+    hierarchie: schemaHierarchie.optional(),
     alias: z.string().trim().min(1).optional(),
     transformation: z.enum(['none', 'trim', 'upper', 'lower', 'noaccent']).default('none'),
     /** Renseigné en mode regroupé : la colonne devient une mesure ; absent : elle fait partie de la clé de regroupement. */
@@ -55,9 +97,12 @@ const schemaColonne = z.object({
 const schemaFiltre = z.object({
     tableId: z.string().min(1),
     nomColonne: z.string().min(1),
-    op: z.enum(['=', '!=', 'contains', 'startsWith', 'in', '>=', '<=', 'between', 'dfrom', 'dto', 'empty', 'notempty']),
+    op: z.enum(['=', '!=', 'contains', 'startsWith', 'in', '>=', '<=', 'between', 'dfrom', 'dto', 'empty', 'notempty', 'list']),
     valeur: z.string().optional(),
-    valeur2: z.string().optional()
+    valeur2: z.string().optional(),
+    /** Opérateur « list » : les valeurs fournies (fichier ou texte collé) et le sens (garder ou exclure). */
+    liste: z.array(z.string()).max(200_000).default([]),
+    exclure: z.boolean().default(false)
 });
 const schemaJointure = z.object({
     /** Table déjà présente dans l'extraction. */
@@ -87,6 +132,8 @@ export type ContexteConstruction = {
     nomTableDe: (tableId: string) => string;
     /** Nom lisible d'une source (pour les alias par défaut et les messages). */
     nomSourceDe: (tableId: string) => string;
+    /** Colonnes d'une source (pour résoudre les [références] des formules) ; facultatif. */
+    colonnesDe?: (tableId: string) => string[];
 };
 
 export class ErreurSpecification extends Error {}
@@ -94,6 +141,9 @@ export class ErreurSpecification extends Error {}
 /** Alias SQL d'une colonne : celui demandé, sinon « colonne » pour la table de départ et « table.colonne » ailleurs. */
 export function aliasParDefaut(colonne: ColonneExtraction, specification: Specification, contexte: ContexteConstruction): string {
     if (colonne.alias) return colonne.alias;
+    if (colonne.genre === 'calcul') return 'calcul';
+    if (colonne.genre === 'synthese') return contexte.nomSourceDe(colonne.synthese?.tableId || colonne.tableId).replace(/\.[^.]+$/, '');
+    if (colonne.genre === 'hierarchie') return contexte.nomSourceDe(colonne.tableId).replace(/\.[^.]+$/, '') + '_hier';
     const nomColonne = colonne.agregat && colonne.agregat !== 'values' ? `${colonne.nomColonne}_${colonne.agregat}` : colonne.nomColonne;
     return colonne.tableId === specification.baseId
         ? nomColonne
@@ -136,7 +186,10 @@ function expressionAgregee(expression: string, agregat: NonNullable<ColonneExtra
 }
 
 /** Condition SQL d'un filtre, avec la même tolérance que l'application classique (texte normalisé, nombres et dates convertis). */
-export function conditionFiltre(alias: string, filtre: FiltreExtraction): string {
+export type FiltreSaisi = Pick<FiltreExtraction, 'nomColonne' | 'op' | 'valeur' | 'valeur2'> &
+    Partial<Pick<FiltreExtraction, 'tableId' | 'liste' | 'exclure'>>;
+
+export function conditionFiltre(alias: string, filtre: FiltreSaisi): string {
     const brut = `CAST(${alias}.${identifiantSql(filtre.nomColonne)} AS VARCHAR)`;
     const normalisee = `UPPER(TRIM(${brut}))`;
     const valeur = String(filtre.valeur ?? '');
@@ -172,6 +225,8 @@ export function conditionFiltre(alias: string, filtre: FiltreExtraction): string
             return `${date} >= ${litteralSql(valeur)}::DATE`;
         case 'dto':
             return `${date} <= ${litteralSql(valeur)}::DATE`;
+        case 'list':
+            return conditionListe(`${alias}.${identifiantSql(filtre.nomColonne)}`, filtre.liste || [], !!filtre.exclure);
     }
 }
 
@@ -187,9 +242,62 @@ function nombreSql(texte: string): string {
  */
 export function construireSql(specification: Specification, contexte: ContexteConstruction): { sql: string; alias: string[] } {
     const aliasDe = new Map<string, string>([[specification.baseId, 't0']]);
-    const clausesFrom = [`${identifiantSql(contexte.nomTableDe(specification.baseId))} AS t0`];
+    const clausesFrom = [
+        `${identifiantSql(contexte.nomTableDe(specification.baseId))} AS t0`,
+        ...clausesJointures(specification, contexte, aliasDe)
+    ];
+    const aliasSortie: string[] = [];
+    const selections: string[] = [];
+    const clesRegroupement: string[] = [];
+    const ctes: string[] = [];
+    const jointuresHierarchie: string[] = [];
+    const resoudreReference = resolveurDeReferences(specification, contexte, aliasDe);
+    for (const colonne of specification.colonnes) {
+        const aliasTable = aliasDe.get(colonne.tableId);
+        if (!aliasTable)
+            throw new ErreurSpecification(
+                `La colonne « ${colonne.nomColonne || colonne.alias || colonne.genre} » vient d'une table absente de l'extraction.`
+            );
+        const aliasColonne = aliasParDefaut(colonne, specification, contexte);
+        const items = expressionsColonne(
+            colonne,
+            aliasTable,
+            aliasColonne,
+            contexte,
+            aliasDe,
+            resoudreReference,
+            ctes,
+            jointuresHierarchie
+        );
+        for (const item of items) {
+            if (aliasSortie.includes(item.alias))
+                throw new ErreurSpecification(`Deux colonnes portent le même nom en sortie : « ${item.alias} ».`);
+            aliasSortie.push(item.alias);
+            let expression = item.expression;
+            if (specification.regrouper && colonne.agregat && (colonne.genre === 'colonne' || colonne.genre === 'calcul'))
+                expression = expressionAgregee(expression, colonne.agregat);
+            else if (specification.regrouper) clesRegroupement.push(expression);
+            selections.push(`${expression} AS ${identifiantSql(item.alias)}`);
+        }
+    }
+    clausesFrom.push(...jointuresHierarchie);
+    const conditions = specification.filtres.map(filtre => {
+        const aliasTable = aliasDe.get(filtre.tableId);
+        if (!aliasTable) throw new ErreurSpecification(`Le filtre sur « ${filtre.nomColonne} » vise une table absente de l'extraction.`);
+        return conditionFiltre(aliasTable, filtre);
+    });
+    const prologue = ctes.length ? `WITH RECURSIVE ${ctes.join(',\n')}\n` : '';
+    const distinct = specification.dedoublonner && !specification.regrouper ? 'DISTINCT ' : '';
+    let sql = `${prologue}SELECT ${distinct}${selections.join(', ')}\nFROM ${clausesFrom.join('\n')}`;
+    if (conditions.length) sql += `\nWHERE ${conditions.join('\n  AND ')}`;
+    if (specification.regrouper && clesRegroupement.length) sql += `\nGROUP BY ${clesRegroupement.join(', ')}`;
+    return { sql: sql + clausesTriEtLimite(specification, aliasSortie), alias: aliasSortie };
+}
+
+/** Une clause JOIN par table liée ; attribue les alias t1, t2… et refuse une jointure incohérente. */
+function clausesJointures(specification: Specification, contexte: ContexteConstruction, aliasDe: Map<string, string>): string[] {
     const jointure = specification.typeJointure === 'inner' ? 'INNER JOIN' : 'LEFT JOIN';
-    specification.jointures.forEach((lien, index) => {
+    return specification.jointures.map((lien, index) => {
         const aliasDepart = aliasDe.get(lien.deTableId);
         if (!aliasDepart)
             throw new ErreurSpecification(
@@ -199,33 +307,13 @@ export function construireSql(specification: Specification, contexte: ContexteCo
             throw new ErreurSpecification(`La table « ${contexte.nomSourceDe(lien.versTableId)} » est jointe deux fois.`);
         const alias = 't' + (index + 1);
         aliasDe.set(lien.versTableId, alias);
-        clausesFrom.push(
-            `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${cleNormalisee(`${alias}.${identifiantSql(lien.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deColonne)}`)}`
-        );
+        return `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${cleNormalisee(`${alias}.${identifiantSql(lien.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deColonne)}`)}`;
     });
-    const aliasSortie: string[] = [];
-    const selections: string[] = [];
-    const clesRegroupement: string[] = [];
-    for (const colonne of specification.colonnes) {
-        const aliasTable = aliasDe.get(colonne.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`La colonne « ${colonne.nomColonne} » vient d'une table absente de l'extraction.`);
-        const aliasColonne = aliasParDefaut(colonne, specification, contexte);
-        if (aliasSortie.includes(aliasColonne))
-            throw new ErreurSpecification(`Deux colonnes portent le même nom en sortie : « ${aliasColonne} ».`);
-        aliasSortie.push(aliasColonne);
-        let expression = expressionTransformee(`${aliasTable}.${identifiantSql(colonne.nomColonne)}`, colonne.transformation);
-        if (specification.regrouper && colonne.agregat) expression = expressionAgregee(expression, colonne.agregat);
-        else if (specification.regrouper) clesRegroupement.push(expression);
-        selections.push(`${expression} AS ${identifiantSql(aliasColonne)}`);
-    }
-    const conditions = specification.filtres.map(filtre => {
-        const aliasTable = aliasDe.get(filtre.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`Le filtre sur « ${filtre.nomColonne} » vise une table absente de l'extraction.`);
-        return conditionFiltre(aliasTable, filtre);
-    });
-    let sql = `SELECT ${specification.dedoublonner && !specification.regrouper ? 'DISTINCT ' : ''}${selections.join(', ')}\nFROM ${clausesFrom.join('\n')}`;
-    if (conditions.length) sql += `\nWHERE ${conditions.join('\n  AND ')}`;
-    if (specification.regrouper && clesRegroupement.length) sql += `\nGROUP BY ${clesRegroupement.join(', ')}`;
+}
+
+/** ORDER BY et LIMIT ; un tri doit viser une colonne de la sortie. */
+function clausesTriEtLimite(specification: Specification, aliasSortie: string[]): string {
+    let sql = '';
     if (specification.tri.length) {
         for (const critere of specification.tri)
             if (!aliasSortie.includes(critere.alias))
@@ -233,5 +321,88 @@ export function construireSql(specification: Specification, contexte: ContexteCo
         sql += `\nORDER BY ${specification.tri.map(critere => `${identifiantSql(critere.alias)} ${critere.sens.toUpperCase()}`).join(', ')}`;
     }
     if (specification.limite) sql += `\nLIMIT ${specification.limite}`;
-    return { sql, alias: aliasSortie };
+    return sql;
+}
+
+type ItemSortie = { expression: string; alias: string };
+
+/**
+ * Résout une [référence] de formule : « colonne » cherche d'abord dans la table de départ puis dans les tables
+ * jointes ; « table.colonne » vise une table présente par son nom (avec ou sans extension de fichier).
+ */
+function resolveurDeReferences(
+    specification: Specification,
+    contexte: ContexteConstruction,
+    aliasDe: Map<string, string>
+): (reference: string) => string | null {
+    const tables = [specification.baseId, ...specification.jointures.map(jointure => jointure.versTableId)];
+    const nomsDe = (tableId: string) => {
+        const nom = contexte.nomSourceDe(tableId);
+        return [nom, nom.replace(/\.[^.]+$/, '')].map(candidat => candidat.toLowerCase());
+    };
+    const possede = (tableId: string, colonne: string) => !contexte.colonnesDe || contexte.colonnesDe(tableId).includes(colonne);
+    return reference => {
+        const point = reference.lastIndexOf('.');
+        const tableCherchee = point > 0 ? reference.slice(0, point).trim().toLowerCase() : null;
+        const colonne = point > 0 ? reference.slice(point + 1).trim() : reference;
+        const candidates = tableCherchee ? tables.filter(tableId => nomsDe(tableId).includes(tableCherchee)) : tables;
+        const tableId =
+            candidates.find(candidat => possede(candidat, colonne)) ??
+            (tableCherchee ? null : contexte.colonnesDe ? null : specification.baseId);
+        return tableId ? `${aliasDe.get(tableId)}.${identifiantSql(colonne)}` : null;
+    };
+}
+
+/** Les expressions produites par une colonne (une, ou plusieurs pour une synthèse « N premières » et une hiérarchie). */
+function expressionsColonne(
+    colonne: ColonneExtraction,
+    aliasTable: string,
+    aliasColonne: string,
+    contexte: ContexteConstruction,
+    aliasDe: Map<string, string>,
+    resoudreReference: (reference: string) => string | null,
+    ctes: string[],
+    jointuresHierarchie: string[]
+): ItemSortie[] {
+    try {
+        switch (colonne.genre) {
+            case 'calcul':
+                return [{ expression: `(${formuleEnSql(colonne.formule || '', resoudreReference)})`, alias: aliasColonne }];
+            case 'synthese': {
+                const synthese = colonne.synthese as Synthese | undefined;
+                if (!synthese) throw new ErreurSpecification('Synthèse incomplète : table liée et relation requises.');
+                const aliasParent = aliasDe.get(synthese.deTableId);
+                if (!aliasParent)
+                    throw new ErreurSpecification(`La synthèse « ${aliasColonne} » s'ancre sur une table absente de l'extraction.`);
+                return expressionsSynthese(
+                    synthese,
+                    contexte.nomTableDe(synthese.tableId),
+                    `${aliasParent}.${identifiantSql(synthese.deColonne)}`,
+                    aliasColonne
+                );
+            }
+            case 'hierarchie': {
+                const hierarchie = colonne.hierarchie as Hierarchie | undefined;
+                if (!hierarchie) throw new ErreurSpecification('Hiérarchie incomplète : colonnes identifiant et parent requises.');
+                const nomCte = 'hierarchie' + ctes.length;
+                ctes.push(cteHierarchie(nomCte, contexte.nomTableDe(colonne.tableId), hierarchie));
+                jointuresHierarchie.push(
+                    `LEFT JOIN ${nomCte} ON ${nomCte}.k = ${cleNormalisee(`${aliasTable}.${identifiantSql(hierarchie.idColonne)}`)}`
+                );
+                return expressionsHierarchie(nomCte, hierarchie, aliasColonne);
+            }
+            default: {
+                if (!colonne.nomColonne) throw new ErreurSpecification('Colonne sans nom.');
+                return [
+                    {
+                        expression: expressionTransformee(`${aliasTable}.${identifiantSql(colonne.nomColonne)}`, colonne.transformation),
+                        alias: aliasColonne
+                    }
+                ];
+            }
+        }
+    } catch (erreur) {
+        if (erreur instanceof ErreurFormule) throw new ErreurSpecification(erreur.message);
+        throw erreur;
+    }
 }
