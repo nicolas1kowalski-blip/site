@@ -20,6 +20,8 @@ import { ModeleModule } from './modele/modele.module';
 import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
 import { SauvegardeModule } from './sauvegarde/sauvegarde.module';
+import { CockpitModule } from './cockpit/cockpit.module';
+import { PreparationModule } from './preparation/preparation.module';
 import { SourcesModule } from './sources/sources.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
 import { TablesConcuesModule } from './tables-concues/tables-concues.module';
@@ -50,7 +52,9 @@ export class AppModule {
                 ExploitationModule,
                 CatalogueModule,
                 SurveillanceModule,
-                SauvegardeModule
+                SauvegardeModule,
+                CockpitModule,
+                PreparationModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],

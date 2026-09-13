@@ -8,6 +8,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     AuditQualite,
@@ -597,6 +598,9 @@ export class QualiteComponent {
     });
 
     constructor() {
+        // L'entrée de menu « Règles & score » ouvre directement l'onglet des règles (/qualite/regles).
+        const onglet = inject(ActivatedRoute).snapshot.paramMap.get('onglet');
+        if (onglet && this.onglets.some(candidat => candidat.cle === onglet)) this.ongletActif.set(onglet as Onglet);
         this.charger();
     }
 

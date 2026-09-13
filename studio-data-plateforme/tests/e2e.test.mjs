@@ -76,10 +76,18 @@ try {
         /Espace par défaut \(administrateur\)/.test(await page.textContent('.selection-espace')) &&
             /administrateur/.test(await page.textContent('.utilisateur'))
     );
-    await page.waitForFunction(() => /v\d+\.\d+/.test(document.querySelector('.kpis')?.textContent || ''));
+    await page.waitForFunction(() => /v\d+\.\d+/.test(document.querySelector('app-accueil')?.textContent || ''));
+    await page.waitForFunction(
+        () =>
+            /sources et tables/.test(document.querySelector('.kpis')?.textContent || '') &&
+            !/…/.test(document.querySelector('.kpis')?.textContent || '')
+    );
     verifier(
-        'accueil : indicateurs du serveur (version DuckDB, base référentielle PGlite, sources)',
-        /moteur DuckDB/.test(await page.textContent('.kpis')) && /pglite/.test(await page.textContent('.kpis'))
+        'cockpit : indicateurs du serveur (version DuckDB, base référentielle PGlite), compteurs de l’espace et points d’attention',
+        /moteur DuckDB/.test(await page.textContent('app-accueil')) &&
+            /pglite/.test(await page.textContent('app-accueil')) &&
+            /0\s*sources et tables/.test(await page.textContent('.kpis')) &&
+            /Aucun point d'attention/.test(await page.textContent('app-accueil'))
     );
     await capture('accueil');
 
@@ -508,6 +516,61 @@ try {
             /Comparaison clients\.csv vs Clients consolidés/.test(await page.textContent('app-comparateur h2'))
     );
 
+    // ---- exploitation : statistiques, explorateur 360°, préparation ----
+    await page.click('a[href="/statistiques"]');
+    await page.waitForSelector('app-statistiques');
+    await page.selectOption('app-statistiques select[name=table]', { label: 'clients.csv' });
+    await page.selectOption('app-statistiques select[name=dimension]', 'ville');
+    await page.click('app-statistiques button.principal');
+    await page.waitForSelector('app-statistiques app-graphique-svg');
+    verifier(
+        'statistiques : clients par ville — trois barres et trois lignes dans le tableau des valeurs (Paris en tête avec 2)',
+        (await page.$$('app-statistiques app-graphique-svg rect')).length === 3 &&
+            /Paris\s*2/.test(await page.textContent('app-statistiques table.tableau'))
+    );
+    await capture('statistiques');
+
+    await page.click('a[href="/explorateur-360"]');
+    await page.waitForSelector('app-explorateur-360');
+    await page.selectOption('app-explorateur-360 select[name=table]', { label: 'clients.csv' });
+    await page.selectOption('app-explorateur-360 select[name=colonne]', 'nom');
+    await page.fill('app-explorateur-360 input[name=valeur]', 'ana');
+    await page.click('app-explorateur-360 button.principal');
+    await page.waitForSelector('app-explorateur-360 app-graphe-svg');
+    verifier(
+        'explorateur 360° : depuis « Ana », le graphe montre la cliente et ses deux commandes reliées par le modèle (id_client)',
+        (await page.$$('app-explorateur-360 app-graphe-svg .noeud')).length === 3 &&
+            /3 ligne\(s\) · 2 lien\(s\)/.test(await page.textContent('app-explorateur-360')) &&
+            /Ana/.test(await page.textContent('app-explorateur-360 aside'))
+    );
+    await capture('explorateur-360');
+
+    await page.click('a[href="/preparation"]');
+    await page.waitForSelector('app-preparation');
+    await page.click('app-preparation button:has-text("+ Préparation")');
+    await page.fill('app-preparation input[name=nom-0]', 'Clients propres');
+    await page.selectOption('app-preparation select[name=source-0]', { label: 'clients.csv' });
+    await page.fill('app-preparation input[name=sortie-0]', 'PROPRE_CLIENTS');
+    await page.click('app-preparation .ajout-etape button:has-text("Nettoyer")');
+    await page.selectOption('app-preparation select[name=col-0-0]', 'ville');
+    await page.selectOption('app-preparation select[name=action-0-0]', 'upper');
+    await page.click('app-preparation .ajout-etape button:has-text("Dédoublonner")');
+    await page.fill('app-preparation input[name=keys-0-1]', 'id_client');
+    await page.click('app-preparation button:has-text("👁") >> nth=1');
+    await page.waitForSelector('app-preparation .apercu');
+    const apercuPreparation = await page.textContent('app-preparation .apercu');
+    verifier(
+        'préparation : l’aperçu après le dédoublonnage montre 4 lignes avec les villes en majuscules',
+        /4 ligne\(s\)/.test(apercuPreparation) && /PARIS/.test(apercuPreparation) && !/Paris/.test(apercuPreparation)
+    );
+    await page.click('app-preparation button.principal:has-text("Exécuter")');
+    await page.waitForSelector('app-preparation .badge.succes');
+    verifier(
+        'préparation : la table propre « PROPRE_CLIENTS » est produite (4 lignes) et devient une source',
+        /4 lignes/.test(await page.textContent('app-preparation .badge.succes'))
+    );
+    await capture('preparation');
+
     // ---- catalogue, surveillance des sources, sauvegarde ----
     await page.click('a[href="/catalogue"]');
     await page.waitForSelector('app-catalogue .entree');
@@ -561,10 +624,10 @@ try {
     await page.waitForSelector('app-sauvegarde');
     const exportEspace = await page.evaluate(async () => await (await fetch('/api/sauvegarde/export')).json());
     verifier(
-        'sauvegarde : l’export de l’espace contient les documents partagés et les 4 sources',
+        'sauvegarde : l’export de l’espace contient les documents partagés et les 5 sources',
         exportEspace.kind === 'studio-data-espace' &&
             exportEspace.documents.appState.governance.businessObjects.length === 1 &&
-            exportEspace.sources.length === 4
+            exportEspace.sources.length === 5
     );
     const dossierHtml = await page.evaluate(async () => await (await fetch('/api/sauvegarde/dossier')).text());
     verifier(
@@ -662,10 +725,10 @@ try {
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     verifier(
-        'application classique : les deux sources déposées depuis Angular, la table conçue et la comparaison sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 4 &&
+        'application classique : les deux sources déposées depuis Angular, la table conçue, la comparaison et la table préparée sont restaurées prêtes (sans ré-ingestion)',
+        classique.tables.length === 5 &&
             classique.tables.every(table => table.status === 'ready') &&
-            classique.tables.filter(table => table.headers === 3).length === 2 &&
+            classique.tables.filter(table => table.headers === 3).length === 3 &&
             classique.tables.some(table => table.name === 'Clients consolidés' && table.type === 'designed' && table.headers === 6) &&
             classique.tables.some(table => table.name.startsWith('Comparaison ') && table.type === 'extraction')
     );

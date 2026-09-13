@@ -222,6 +222,7 @@ export class SourcesComponent {
             });
             this.notifications.succes(`« ${fichier.name} » chargée : ${headers.length} colonne(s).`);
             await this.reconstruireTablesConcuesDependantes(fichier.name);
+            await this.rejouerPreparations(fichier.name);
         } catch (erreur) {
             this.notifications.erreur(`« ${fichier.name} » : ${(erreur as Error).message}`);
         } finally {
@@ -237,6 +238,18 @@ export class SourcesComponent {
                 this.notifications.succes(`Table(s) conçue(s) reconstruite(s) : ${resultat.reconstruites.join(', ')}.`);
             for (const echec of resultat.erreurs) this.notifications.erreur(`Table conçue « ${echec.table} » : ${echec.erreur}`);
             if (resultat.reconstruites.length) await this.recharger();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** Les préparations attachées à cette source sont rejouées : leurs tables propres suivent le nouveau contenu. */
+    private async rejouerPreparations(nomSource: string): Promise<void> {
+        try {
+            const resultat = await this.api.executerPreparationsPourSource(nomSource);
+            if (resultat.executees.length) this.notifications.succes(`Préparation(s) rejouée(s) : ${resultat.executees.join(', ')}.`);
+            for (const echec of resultat.erreurs) this.notifications.erreur(`Préparation « ${echec.preparation} » : ${echec.erreur}`);
+            if (resultat.executees.length) await this.recharger();
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

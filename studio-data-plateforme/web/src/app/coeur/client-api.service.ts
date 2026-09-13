@@ -10,6 +10,16 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
+    Cockpit,
+    ApercuPreparation,
+    ExecutionPreparation,
+    Ligne360,
+    ParametresStatistiques,
+    RecettePreparation,
+    RelancePreparations,
+    ResultatStatistiques,
+    VocabulairePreparation,
+    Voisins360,
     Actif,
     Alerte,
     AnalyseImpact,
@@ -129,6 +139,9 @@ export class ClientApiService {
     }
 
     // ---- santé ----
+    cockpit(): Promise<Cockpit> {
+        return firstValueFrom(this.http.get<Cockpit>(`${this.racine}/cockpit`));
+    }
     sante(): Promise<Sante> {
         return firstValueFrom(this.http.get<Sante>(`${this.racine}/sante`));
     }
@@ -461,6 +474,48 @@ export class ClientApiService {
     }
 
     // ---- exploitation ----
+    // ---- statistiques et explorateur 360° ----
+    statistiques(parametres: ParametresStatistiques): Promise<ResultatStatistiques> {
+        return firstValueFrom(this.http.post<ResultatStatistiques>(`${this.racine}/exploitation/statistiques`, parametres));
+    }
+    rechercher360(table: string, colonne: string, valeur: string): Promise<Ligne360[]> {
+        return firstValueFrom(this.http.post<Ligne360[]>(`${this.racine}/exploitation/explorer-360`, { table, colonne, valeur }));
+    }
+    voisins360(table: string, ligne: Ligne360): Promise<Voisins360[]> {
+        return firstValueFrom(this.http.post<Voisins360[]>(`${this.racine}/exploitation/explorer-360/voisins`, { table, ligne }));
+    }
+
+    // ---- préparation (recettes de nettoyage) ----
+    vocabulairePreparation(): Promise<VocabulairePreparation> {
+        return firstValueFrom(this.http.get<VocabulairePreparation>(`${this.racine}/preparation/vocabulaire`));
+    }
+    recettesPreparation(): Promise<RecettePreparation[]> {
+        return firstValueFrom(this.http.get<RecettePreparation[]>(`${this.racine}/preparation/recettes`));
+    }
+    enregistrerRecettePreparation(recette: RecettePreparation): Promise<RecettePreparation> {
+        const { id, ...corps } = recette;
+        return firstValueFrom(this.http.put<RecettePreparation>(`${this.racine}/preparation/recettes/${encodeURIComponent(id)}`, corps));
+    }
+    supprimerRecettePreparation(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/preparation/recettes/${encodeURIComponent(id)}`));
+    }
+    apercuPreparation(id: string, jusquA?: number): Promise<ApercuPreparation> {
+        return firstValueFrom(
+            this.http.post<ApercuPreparation>(
+                `${this.racine}/preparation/recettes/${encodeURIComponent(id)}/apercu`,
+                jusquA == null ? {} : { jusquA }
+            )
+        );
+    }
+    executerPreparation(id: string): Promise<ExecutionPreparation> {
+        return firstValueFrom(
+            this.http.post<ExecutionPreparation>(`${this.racine}/preparation/recettes/${encodeURIComponent(id)}/executer`, {})
+        );
+    }
+    executerPreparationsPourSource(nomSource: string): Promise<RelancePreparations> {
+        return firstValueFrom(this.http.post<RelancePreparations>(`${this.racine}/preparation/executer-pour-source`, { nomSource }));
+    }
+
     vocabulaireExploitation(): Promise<VocabulaireExploitation> {
         return firstValueFrom(this.http.get<VocabulaireExploitation>(`${this.racine}/exploitation/vocabulaire`));
     }

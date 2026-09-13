@@ -16,6 +16,7 @@ import { CompteComponent } from './pages/compte/compte.component';
 import { DictionnaireComponent } from './pages/dictionnaire/dictionnaire.component';
 import { EspacesComponent } from './pages/espaces/espaces.component';
 import { ExplorateurComponent } from './pages/explorateur/explorateur.component';
+import { Explorateur360Component } from './pages/explorateur-360/explorateur-360.component';
 import { ExtractionComponent } from './pages/extraction/extraction.component';
 import { GlossaireComponent } from './pages/glossaire/glossaire.component';
 import { JournalComponent } from './pages/journal/journal.component';
@@ -25,6 +26,7 @@ import { ModeleComponent } from './pages/modele/modele.component';
 import { ObjetsMetierComponent } from './pages/objets-metier/objets-metier.component';
 import { PerimetresComponent } from './pages/perimetres/perimetres.component';
 import { PersonnesComponent } from './pages/personnes/personnes.component';
+import { PreparationComponent } from './pages/preparation/preparation.component';
 import { PropositionsComponent } from './pages/propositions/propositions.component';
 import { QualiteComponent } from './pages/qualite/qualite.component';
 import { RapprochementComponent } from './pages/rapprochement/rapprochement.component';
@@ -32,6 +34,7 @@ import { SauvegardeComponent } from './pages/sauvegarde/sauvegarde.component';
 import { SensibiliteComponent } from './pages/sensibilite/sensibilite.component';
 import { SeriesTemporellesComponent } from './pages/series-temporelles/series-temporelles.component';
 import { SourcesComponent } from './pages/sources/sources.component';
+import { StatistiquesComponent } from './pages/statistiques/statistiques.component';
 import { SurveillanceComponent } from './pages/surveillance/surveillance.component';
 import { TableauxDeBordComponent } from './pages/tableaux-de-bord/tableaux-de-bord.component';
 import { TablesConcuesComponent } from './pages/tables-concues/tables-concues.component';
@@ -53,11 +56,15 @@ export const routes: Routes = [
             { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
+            { path: 'preparation', component: PreparationComponent, title: 'Préparation — Studio Data' },
+            { path: 'statistiques', component: StatistiquesComponent, title: 'Statistiques — Studio Data' },
+            { path: 'explorateur-360', component: Explorateur360Component, title: 'Explorateur 360° — Studio Data' },
             { path: 'tableaux-de-bord', component: TableauxDeBordComponent, title: 'Tableaux de bord — Studio Data' },
             { path: 'comparateur', component: ComparateurComponent, title: 'Comparateur — Studio Data' },
             { path: 'series-temporelles', component: SeriesTemporellesComponent, title: 'Séries temporelles — Studio Data' },
             { path: 'rapprochement', component: RapprochementComponent, title: 'Rapprochement — Studio Data' },
             { path: 'qualite', component: QualiteComponent, title: 'Qualité & Audit — Studio Data' },
+            { path: 'qualite/:onglet', component: QualiteComponent, title: 'Qualité & Audit — Studio Data' },
             { path: 'glossaire', component: GlossaireComponent, title: 'Glossaire — Studio Data' },
             { path: 'dictionnaire', component: DictionnaireComponent, title: 'Dictionnaire — Studio Data' },
             { path: 'objets-metier', component: ObjetsMetierComponent, title: 'Objets métier — Studio Data' },

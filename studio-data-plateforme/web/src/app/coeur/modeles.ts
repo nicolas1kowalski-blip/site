@@ -606,6 +606,7 @@ export type PaireCandidate = {
 export type VocabulaireExploitation = {
     genresTuile: Record<GenreTuile, string>;
     agregats: Record<AgregatTuile, string>;
+    agregatsStatistiques: Record<AgregatStatistique, string>;
     methodes: Record<MethodeComparaison, string>;
     pas: Record<string, string>;
     mailles: Record<string, string>;
@@ -709,3 +710,54 @@ export type AnalyseImpact = {
     downstream: string[];
     related: string[];
 };
+
+// ---- cockpit (accueil) ----
+export type PointAttention = { gravite: 'alerte' | 'info'; message: string; lien: string };
+export type Cockpit = {
+    sources: number;
+    lignes: number;
+    domaines: number;
+    liens: number;
+    objetsMetier: number;
+    audits: number;
+    scoreQualite: number | null;
+    dernierAudit: { source: string; date: string; lignes: number; completude: number | null; doublons: number | null } | null;
+    pointsAttention: PointAttention[];
+    volumetrie: { nom: string; lignes: number; domaine: string }[];
+};
+
+// ---- statistiques, explorateur 360°, préparation ----
+export type AgregatStatistique = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';
+export type ParametresStatistiques = { table: string; dimension: string; agregat: AgregatStatistique; mesure: string; limite: number };
+export type ResultatStatistiques = { points: { d: string; v: number }[]; sql: string };
+export type Ligne360 = Record<string, unknown>;
+export type Voisins360 = { table: string; libelle: string; lignes: Ligne360[] };
+
+export type TypeEtapePreparation = 'filter' | 'clean' | 'normalize' | 'std' | 'enrich' | 'calc' | 'dedup' | 'rename' | 'drop';
+export type EtapePreparation = {
+    id: string;
+    type: TypeEtapePreparation;
+    enabled: boolean;
+    p: Record<string, string>;
+    lastMatch?: number | null;
+};
+export type RecettePreparation = {
+    id: string;
+    name: string;
+    src: string;
+    out: string;
+    steps: EtapePreparation[];
+    targetId?: string | null;
+    lastRows?: number | null;
+    lastAt?: number | null;
+};
+export type VocabulairePreparation = {
+    typesEtape: Record<TypeEtapePreparation, string>;
+    actionsNettoyage: Record<string, string>;
+    formats: Record<string, string>;
+    standardisations: Record<string, string>;
+    referentiels: Record<string, { label: string; cols: string[] }>;
+};
+export type ApercuPreparation = { sql: string; colonnes: string[]; lignes: unknown[][]; total: number };
+export type ExecutionPreparation = { recette: RecettePreparation; sourceId: string; lignes: number; colonnes: string[] };
+export type RelancePreparations = { executees: string[]; erreurs: { preparation: string; erreur: string }[] };

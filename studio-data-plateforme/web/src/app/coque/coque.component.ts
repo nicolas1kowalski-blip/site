@@ -24,7 +24,7 @@ type Lien = { chemin: string; libelle: string; icone: string; administrateur?: b
                                 <a
                                     [routerLink]="lien.chemin"
                                     routerLinkActive="actif"
-                                    [routerLinkActiveOptions]="{ exact: lien.chemin === '/' }"
+                                    [routerLinkActiveOptions]="{ exact: lien.chemin === '/' || lien.chemin === '/qualite' }"
                                 >
                                     <span class="icone">{{ lien.icone }}</span
                                     >{{ lien.libelle }}
@@ -205,49 +205,54 @@ export class CoqueComponent {
     readonly notifications = inject(NotificationsService);
     private readonly routeur = inject(Router);
 
+    /** Même découpage que l'application classique : Données & Modèle, Exploitation, Qualité & Audit, Gouvernance. */
     readonly groupes: { titre: string; liens: Lien[] }[] = [
         {
-            titre: 'Données',
+            titre: 'Données & Modèle',
             liens: [
-                { chemin: '/', libelle: 'Accueil', icone: '⌂' },
-                { chemin: '/catalogue', libelle: 'Catalogue', icone: '⌕' },
+                { chemin: '/', libelle: 'Cockpit', icone: '⌂' },
                 { chemin: '/sources', libelle: 'Sources', icone: '▤' },
+                { chemin: '/tables-concues', libelle: 'Tables conçues', icone: '🧱' },
                 { chemin: '/modele', libelle: 'Modèle de données', icone: '⇄' },
-                { chemin: '/tables-concues', libelle: 'Tables conçues', icone: '🧱' }
+                { chemin: '/series-temporelles', libelle: 'Séries temporelles', icone: '∿' }
             ]
         },
         {
             titre: 'Exploitation',
             liens: [
-                { chemin: '/extraction', libelle: 'Extraction', icone: '⤓' },
-                { chemin: '/explorateur', libelle: 'Explorateur SQL', icone: '⌕' },
+                { chemin: '/extraction', libelle: 'Extraire', icone: '⤓' },
+                { chemin: '/preparation', libelle: 'Préparation', icone: '🧹' },
                 { chemin: '/tableaux-de-bord', libelle: 'Tableaux de bord', icone: '▤' },
-                { chemin: '/comparateur', libelle: 'Comparateur', icone: '⇆' },
-                { chemin: '/rapprochement', libelle: 'Rapprochement', icone: '⚭' }
+                { chemin: '/comparateur', libelle: 'Comparer', icone: '⇆' },
+                { chemin: '/explorateur', libelle: 'Explorer (SQL)', icone: '⌕' },
+                { chemin: '/statistiques', libelle: 'Statistiques', icone: '📊' },
+                { chemin: '/explorateur-360', libelle: 'Explorateur 360°', icone: '🕸' }
             ]
         },
         {
-            titre: 'Qualité',
+            titre: 'Qualité & Audit',
             liens: [
                 { chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' },
-                { chemin: '/series-temporelles', libelle: 'Séries temporelles', icone: '∿' },
+                { chemin: '/qualite/regles', libelle: 'Règles & score', icone: '📏' },
+                { chemin: '/rapprochement', libelle: 'Rapprochement', icone: '⚭' },
                 { chemin: '/surveillance', libelle: 'Surveillance des sources', icone: '⌚' }
             ]
         },
         {
             titre: 'Gouvernance',
             liens: [
-                { chemin: '/glossaire', libelle: 'Glossaire', icone: '✎' },
+                { chemin: '/catalogue', libelle: 'Catalogue', icone: '🧭' },
                 { chemin: '/dictionnaire', libelle: 'Dictionnaire', icone: '☰' },
-                { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛' },
                 { chemin: '/actifs', libelle: 'Applications & processus', icone: '⚙' },
-                { chemin: '/perimetres', libelle: 'Périmètres', icone: '◫' },
-                { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '≡' },
-                { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🛡' },
                 { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '☺' },
-                { chemin: '/propositions', libelle: 'Propositions à valider', icone: '✔' },
+                { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛' },
+                { chemin: '/glossaire', libelle: 'Glossaire', icone: '✎' },
+                { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '≡' },
+                { chemin: '/perimetres', libelle: 'Périmètres', icone: '◫' },
+                { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🛡' },
                 { chemin: '/lineage', libelle: 'Lineage', icone: '⇢' },
-                { chemin: '/journal', libelle: 'Journal', icone: '⏱' }
+                { chemin: '/propositions', libelle: 'À valider', icone: '✔' },
+                { chemin: '/journal', libelle: 'Historique', icone: '⏱' }
             ]
         },
         { titre: 'Application complète', liens: [{ chemin: '/classique', libelle: 'Tous les écrans (classique)', icone: '⧉' }] },
