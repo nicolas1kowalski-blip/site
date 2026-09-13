@@ -35,7 +35,21 @@ Ce qu'il faut avant de commencer :
    l'adresse dans le champ « current ip »). Vérifier depuis votre poste : `ping votre-domaine` doit répondre
    avec l'adresse de la machine.
 
-## 2. Installer Docker et la plateforme
+## 2. Installer la plateforme en une commande
+
+Sur la machine (session SSH), une seule commande fait tout : Docker, pare-feu, dépôt, configuration, lancement,
+sauvegarde nocturne. Elle pose trois questions (jeton GitHub, mot de passe administrateur, nom de domaine).
+
+```bash
+curl -fsSL -H "Authorization: token VOTRE_JETON_GITHUB" \
+  https://raw.githubusercontent.com/nicolas1kowalski-blip/site/claude/studio-data-v3/studio-data-plateforme/deploiement/installer.sh | bash
+```
+
+Le jeton GitHub se crée sur GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic),
+portée `repo`. Relancer la même commande met la plateforme à jour. Les étapes détaillées ci-dessous sont
+l'équivalent manuel.
+
+## 2 bis. Installer à la main
 
 ```bash
 sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
