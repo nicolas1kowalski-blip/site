@@ -238,7 +238,9 @@ Resources:
             echo "== Studio Data : installation ($(date)) =="
             export DEBIAN_FRONTEND=noninteractive
             apt-get update
-            apt-get install -y docker.io docker-compose-v2 git awscli curl
+            apt-get install -y docker.io docker-compose-v2 git curl
+            # L'outil aws (copie des sauvegardes vers S3) n'est plus un paquet apt sur Ubuntu 24.04 : snap.
+            snap install aws-cli --classic || echo "aws-cli non installé : les sauvegardes resteront sur la machine"
             usermod -aG docker ubuntu
 
             # Petite machine (plan gratuit, 1 Go) : un fichier d'échange de 4 Go rend la construction possible.
