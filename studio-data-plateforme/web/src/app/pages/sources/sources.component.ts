@@ -390,6 +390,27 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
                                     <td class="discret">{{ formaterDate(source.enregistreLe) }}</td>
                                     <td class="actions">
                                         <button class="bouton petit" (click)="apercevoir(source)">Aperçu</button>
+                                        <button
+                                            class="bouton petit"
+                                            (click)="ouvrirDictionnaire(source)"
+                                            title="Fiche de la source dans le dictionnaire"
+                                        >
+                                            Dictionnaire
+                                        </button>
+                                        <button
+                                            class="bouton petit"
+                                            (click)="ouvrirLineage(source)"
+                                            title="Ce qui est en amont et en aval de cette table"
+                                        >
+                                            Lineage
+                                        </button>
+                                        <button
+                                            class="bouton petit"
+                                            (click)="ouvrirQualite(source)"
+                                            title="Profiler, chercher les doublons, gérer les règles"
+                                        >
+                                            Qualité
+                                        </button>
                                         @if (session.peutEditer()) {
                                             <label
                                                 class="bouton petit"
@@ -683,6 +704,16 @@ export class SourcesComponent {
     }
     ouvrirObjetMetier(source: Source): void {
         void this.router.navigate(['/objets-metier'], { queryParams: { source: source.name } });
+    }
+    /** Liens croisés vers les écrans qui parlent de la même source (comme les boutons « Voir dans… » du classique). */
+    ouvrirDictionnaire(source: Source): void {
+        void this.router.navigate(['/dictionnaire'], { queryParams: { source: source.name } });
+    }
+    ouvrirLineage(source: Source): void {
+        void this.router.navigate(['/lineage'], { queryParams: { table: source.name } });
+    }
+    ouvrirQualite(source: Source): void {
+        void this.router.navigate(['/qualite'], { queryParams: { source: source.id } });
     }
     colonnesDe(sourceId: string | undefined): string[] {
         return this.sources().find(source => source.id === sourceId)?.headers || [];

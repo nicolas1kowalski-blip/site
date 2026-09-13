@@ -197,6 +197,26 @@ test('export CSV en flux : BOM, en-têtes, point-virgule, guillemets, nom de fic
     assert.equal(lignes.length, 6);
 });
 
+test('bilan qualité d’une extraction : nombre de lignes et complétude de chaque colonne du résultat', async () => {
+    const bilan = json(
+        await appel({
+            method: 'POST',
+            url: '/api/extraction/bilan',
+            payload: { ...specificationJointe, filtres: [], tri: [] }
+        })
+    );
+    assert.equal(bilan.total, 5, 'jointure gauche : 4 commandes + le client sans commande');
+    assert.deepEqual(
+        bilan.colonnes.map((colonne: { nom: string; renseignees: number }) => [colonne.nom, colonne.renseignees]),
+        [
+            ['nom', 5],
+            ['ville', 5],
+            ['Montant', 4]
+        ]
+    );
+    assert.equal(bilan.colonnes[2].part, 0.8);
+});
+
 test('modèles d’extraction : enregistrement, liste, suppression ; le vocabulaire est publié', async () => {
     const modele = json(
         await appel({

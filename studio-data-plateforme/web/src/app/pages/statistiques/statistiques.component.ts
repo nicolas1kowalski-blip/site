@@ -103,7 +103,7 @@ import { GenreGraphique, GraphiqueSvgComponent } from '../../composants/graphiqu
                 @if (resultat.points.length === 0) {
                     <p class="discret">Aucune valeur.</p>
                 } @else {
-                    <app-graphique-svg [points]="resultat.points" [genre]="genre" />
+                    <app-graphique-svg [points]="resultat.points" [genre]="genre" [outils]="true" [nomImage]="titre()" />
                     <div class="defilement-x" style="margin-top: 10px">
                         <table class="tableau">
                             <thead>

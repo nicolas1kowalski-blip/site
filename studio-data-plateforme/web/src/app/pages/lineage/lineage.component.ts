@@ -8,6 +8,7 @@
  * Le dessin est confié au composant graphe SVG (disposition en couches, déplacement, zoom).
  */
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
@@ -176,6 +177,7 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
                 <div>
                     @if (noeudsCarte().length) {
                         <app-graphe-svg
+                            nomImage="lineage-carte-des-flux"
                             [noeuds]="noeudsCarte()"
                             [liens]="liensCarte()"
                             [hauteur]="560"
@@ -682,6 +684,13 @@ export class LineageComponent {
     );
 
     constructor() {
+        // Lien « Lineage » de l'écran Sources : /lineage?table=nom ouvre directement « Autour d'une table ».
+        const tableDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('table');
+        if (tableDemandee) {
+            this.nomTable = tableDemandee;
+            this.onglet.set('table');
+            void this.chargerLineageTable();
+        }
         void this.recharger();
     }
 

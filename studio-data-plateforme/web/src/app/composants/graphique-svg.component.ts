@@ -2,7 +2,9 @@
  * Graphique SVG simple, sans bibliothèque : barres, courbe ou camembert à partir de couples (libellé, valeur).
  * Suffit aux tuiles des tableaux de bord ; les couleurs suivent la palette de l'application.
  */
-import { Component, computed, input } from '@angular/core';
+import { Component, ElementRef, computed, inject, input, viewChild } from '@angular/core';
+import { exporterSvgEnImage } from '../coeur/export-image';
+import { NotificationsService } from '../coeur/notifications.service';
 
 export type PointGraphique = { d: string; v: number };
 export type GenreGraphique = 'bar' | 'line' | 'pie';
@@ -31,7 +33,12 @@ type Secteur = { chemin: string; couleur: string; libelle: string; valeur: numbe
 @Component({
     selector: 'app-graphique-svg',
     template: `
-        <svg class="graphique" [attr.viewBox]="'0 0 ' + largeur + ' ' + hauteur" preserveAspectRatio="xMidYMid meet">
+        @if (outils()) {
+            <div class="outils">
+                <button type="button" class="bouton petit" (click)="exporterImage()" title="Exporter l'image (PNG)">📷 Image</button>
+            </div>
+        }
+        <svg #zone class="graphique" [attr.viewBox]="'0 0 ' + largeur + ' ' + hauteur" preserveAspectRatio="xMidYMid meet">
             @if (genre() === 'pie') {
                 <g [attr.transform]="'translate(' + hauteur / 2 + ' ' + hauteur / 2 + ')'">
                     @for (secteur of secteurs(); track secteur.libelle) {
@@ -105,6 +112,12 @@ type Secteur = { chemin: string; couleur: string; libelle: string; valeur: numbe
     styles: `
         :host {
             display: block;
+            position: relative;
+        }
+        .outils {
+            position: absolute;
+            top: 0;
+            right: 0;
         }
         .graphique {
             width: 100%;
@@ -119,6 +132,11 @@ type Secteur = { chemin: string; couleur: string; libelle: string; valeur: numbe
 export class GraphiqueSvgComponent {
     readonly points = input<PointGraphique[]>([]);
     readonly genre = input<GenreGraphique>('bar');
+    /** Bouton d'export en image (désactivé par défaut : les tuiles des tableaux de bord restent sobres). */
+    readonly outils = input(false);
+    readonly nomImage = input('graphique');
+    private readonly zone = viewChild.required<ElementRef<SVGSVGElement>>('zone');
+    private readonly notifications = inject(NotificationsService);
     readonly largeur = LARGEUR;
     readonly hauteur = HAUTEUR;
     readonly marge = MARGE;
@@ -172,6 +190,14 @@ export class GraphiqueSvgComponent {
             return { chemin, couleur: PALETTE[index % PALETTE.length], libelle: point.d, valeur: point.v, part };
         });
     });
+
+    async exporterImage(): Promise<void> {
+        try {
+            await exporterSvgEnImage(this.zone().nativeElement, `${this.nomImage()}.png`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
 
     formater(valeur: number): string {
         return Number.isInteger(valeur) ? valeur.toLocaleString('fr-FR') : valeur.toLocaleString('fr-FR', { maximumFractionDigits: 2 });

@@ -12,7 +12,7 @@ export function nomDeFichierSur(nomFichier: string): string {
         .replace(/^_+|_+$/g, '');
 }
 
-function telechargerBlob(nomFichier: string, blob: Blob): void {
+export function telechargerBlob(nomFichier: string, blob: Blob): void {
     const lien = document.createElement('a');
     lien.href = URL.createObjectURL(blob);
     lien.download = nomDeFichierSur(nomFichier);

@@ -11,6 +11,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { creerApplication } from '../src/application';
+import { lireFeuilleExcel, nomsDesFeuilles } from '../src/importation/classeur-excel';
 import { lireConfiguration } from '../src/configuration/configuration';
 import { anomaliesDuProfil } from '../src/qualite/anomalies';
 import { sqlAnalyseCle, sqlSourceCle } from '../src/qualite/cle-fonctionnelle';
@@ -19,7 +20,13 @@ import { expressionCoherence, sqlEvaluation, verifierConditionSql } from '../src
 const dossierTemporaire = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-data-qualite-avancee-'));
 let app: NestFastifyApplication;
 let cookies: Record<string, string> = {};
-type Reponse = { statusCode: number; body: string; cookies: { name: string; value: string }[] };
+type Reponse = {
+    statusCode: number;
+    body: string;
+    rawPayload: Buffer;
+    headers: Record<string, unknown>;
+    cookies: { name: string; value: string }[];
+};
 const json = (reponse: Reponse) => JSON.parse(reponse.body);
 const appel = (options: { method: string; url: string; payload?: unknown; headers?: Record<string, string> }) =>
     app.inject({ ...options, cookies } as never) as unknown as Promise<Reponse>;
@@ -437,4 +444,34 @@ test('clés fonctionnelles : profils enregistrés dans le dictionnaire ; doublon
     assert.equal(audits[0].genre, 'doublons-approches');
     assert.equal(audits[0].resume.profils, 4);
     assert.equal((await appel({ method: 'POST', url: '/api/qualite/doublons-approches', payload: { sourceId: 'tb_k' } })).statusCode, 400);
+});
+
+test('lignes en double par type (strictes, normalisées, paires floues) et classeur Excel à quatre onglets', async () => {
+    const doublons = json(
+        await appel({ method: 'POST', url: '/api/qualite/doublons-approches/lignes', payload: { sourceId: 'tb_c', seuil: 0.85 } })
+    );
+    assert.deepEqual(doublons.colonnes.slice(0, 3), ['id', 'nom', 'ville'], 'les colonnes techniques (clés, __rn) sont retirées');
+    const parType = (type: string) => doublons.lignes.filter((ligne: { type: string }) => ligne.type === type);
+    const strictes = parType('stricte').filter((ligne: { profil: string }) => ligne.profil === 'p_nom_ville');
+    assert.equal(strictes.length, 2, 'Martin · Lyon ×2');
+    assert.equal(strictes[0].cle, 'Martin · Lyon');
+    const normalisees = parType('normalisee').filter((ligne: { profil: string }) => ligne.profil === 'p_nom_ville');
+    assert.equal(normalisees.length, 3, 'Martin, MARTIN, Martin : trois écritures d’une même clé normalisée');
+    const floues = parType('floue').filter((ligne: { profil: string }) => ligne.profil === 'p_nom_ville');
+    assert.equal(floues.length, 2, 'Dupont ~ Dupond : les deux lignes de la paire');
+    assert.match(floues[0].groupe, /^paire 1 \(similarité/);
+    assert.equal(doublons.erreurs.length, 1, 'le profil sur la table inconnue est signalé');
+    const classeur = await appel({
+        method: 'POST',
+        url: '/api/qualite/doublons-approches/export.xlsx',
+        payload: { sourceId: 'tb_c', seuil: 0.85 }
+    });
+    assert.equal(classeur.statusCode, 201, classeur.body);
+    assert.match(classeur.headers['content-disposition'] as string, /Doublons_clients_csv\.xlsx/);
+    const contenu = Buffer.from(classeur.rawPayload);
+    assert.deepEqual(nomsDesFeuilles(contenu), ['Synthèse', 'Stricts', 'Casse-accents tolérés', 'Paires floues']);
+    const strictesExcel = lireFeuilleExcel(contenu, 'Stricts');
+    assert.deepEqual(strictesExcel.lignes[0].slice(0, 4), ['PROFIL', 'GROUPE', 'CLE_FONCTIONNELLE', 'id']);
+    assert.equal(strictesExcel.lignes.length, 3, 'en-tête + 2 lignes strictes');
+    assert.equal(lireFeuilleExcel(contenu, 'Synthèse').lignes[0][1], 'clients.csv');
 });

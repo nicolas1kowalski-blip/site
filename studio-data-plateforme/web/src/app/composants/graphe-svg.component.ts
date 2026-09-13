@@ -5,8 +5,11 @@
  *   2. ordre barycentrique dans chaque colonne (quatre passes) pour limiter les croisements ;
  *   3. une colonne trop haute est repliée en sous-colonnes ; chaque colonne est centrée verticalement.
  * Déplacement (glisser le fond), zoom (molette), sélection d'un nœud ou d'un lien (clic) → événements.
+ * Barre d'outils (comme dans l'application classique) : zoom avant / arrière, recentrer, plein écran, export en image.
  */
-import { Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { exporterSvgEnImage } from '../coeur/export-image';
+import { NotificationsService } from '../coeur/notifications.service';
 
 export type NoeudDessine = { id: string; titre: string; detail?: string; couleur?: string; bordure?: string; selectionne?: boolean };
 export type LienDessine = {
@@ -170,77 +173,106 @@ function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: n
 @Component({
     selector: 'app-graphe-svg',
     template: `
-        <svg
-            #zone
-            class="graphe"
-            [attr.height]="hauteur()"
-            (wheel)="zoomer($event)"
-            (pointerdown)="commencerDeplacement($event)"
-            (pointermove)="deplacer($event)"
-            (pointerup)="finirDeplacement()"
-            (pointerleave)="finirDeplacement()"
-        >
-            <defs>
-                <marker id="fleche" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--texte-2)" />
-                </marker>
-            </defs>
-            <g [attr.transform]="'translate(' + translationX() + ' ' + translationY() + ') scale(' + echelle() + ')'">
-                @for (lien of liensPlaces(); track $index) {
-                    <g class="lien" (click)="lienChoisi.emit(lien.lien); $event.stopPropagation()">
-                        <path
-                            [attr.d]="lien.chemin"
-                            fill="none"
-                            [attr.stroke]="lien.lien.couleur || 'var(--texte-2)'"
-                            [attr.stroke-width]="lien.lien.epaisseur || 1.5"
-                            [attr.stroke-dasharray]="lien.lien.pointille ? '4 3' : null"
-                            marker-end="url(#fleche)"
-                        />
-                        <path [attr.d]="lien.chemin" fill="none" stroke="transparent" stroke-width="12" />
-                        @if (lien.libelle) {
-                            <text [attr.x]="lien.milieuX" [attr.y]="lien.milieuY - 4" class="libelle-lien" text-anchor="middle">
-                                {{ lien.libelle }}
-                            </text>
-                        }
-                    </g>
-                }
-                @for (noeud of noeudsPlaces(); track noeud.noeud.id) {
-                    <g
-                        class="noeud"
-                        [class.selectionne]="noeud.noeud.selectionne"
-                        (click)="noeudChoisi.emit(noeud.noeud); $event.stopPropagation()"
-                    >
-                        <rect
-                            [attr.x]="noeud.place.x - noeud.place.largeur / 2"
-                            [attr.y]="noeud.place.y - noeud.place.hauteur / 2"
-                            [attr.width]="noeud.place.largeur"
-                            [attr.height]="noeud.place.hauteur"
-                            rx="8"
-                            [attr.fill]="noeud.noeud.couleur || 'var(--surface)'"
-                            [attr.stroke]="noeud.noeud.bordure || 'var(--bordure)'"
-                            [attr.stroke-width]="noeud.noeud.selectionne ? 3 : 1.5"
-                        />
-                        <text
-                            [attr.x]="noeud.place.x"
-                            [attr.y]="noeud.place.y + (noeud.noeud.detail ? -3 : 5)"
-                            text-anchor="middle"
-                            class="titre"
+        <div #conteneur class="conteneur">
+            @if (outils()) {
+                <div class="outils">
+                    <button type="button" class="bouton petit" (click)="zoomerDe(1.25)" title="Zoom avant">+</button>
+                    <button type="button" class="bouton petit" (click)="zoomerDe(0.8)" title="Zoom arrière">−</button>
+                    <button type="button" class="bouton petit" (click)="ajuster()" title="Recentrer et réorganiser">⤢</button>
+                    <button type="button" class="bouton petit" (click)="pleinEcran()" title="Plein écran (Échap pour sortir)">⛶</button>
+                    <button type="button" class="bouton petit" (click)="exporterImage()" title="Exporter l'image (PNG)">📷</button>
+                </div>
+            }
+            <svg
+                #zone
+                class="graphe"
+                [attr.height]="hauteur()"
+                (wheel)="zoomer($event)"
+                (pointerdown)="commencerDeplacement($event)"
+                (pointermove)="deplacer($event)"
+                (pointerup)="finirDeplacement()"
+                (pointerleave)="finirDeplacement()"
+            >
+                <defs>
+                    <marker id="fleche" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--texte-2)" />
+                    </marker>
+                </defs>
+                <g [attr.transform]="'translate(' + translationX() + ' ' + translationY() + ') scale(' + echelle() + ')'">
+                    @for (lien of liensPlaces(); track $index) {
+                        <g class="lien" (click)="lienChoisi.emit(lien.lien); $event.stopPropagation()">
+                            <path
+                                [attr.d]="lien.chemin"
+                                fill="none"
+                                [attr.stroke]="lien.lien.couleur || 'var(--texte-2)'"
+                                [attr.stroke-width]="lien.lien.epaisseur || 1.5"
+                                [attr.stroke-dasharray]="lien.lien.pointille ? '4 3' : null"
+                                marker-end="url(#fleche)"
+                            />
+                            <path [attr.d]="lien.chemin" fill="none" stroke="transparent" stroke-width="12" />
+                            @if (lien.libelle) {
+                                <text [attr.x]="lien.milieuX" [attr.y]="lien.milieuY - 4" class="libelle-lien" text-anchor="middle">
+                                    {{ lien.libelle }}
+                                </text>
+                            }
+                        </g>
+                    }
+                    @for (noeud of noeudsPlaces(); track noeud.noeud.id) {
+                        <g
+                            class="noeud"
+                            [class.selectionne]="noeud.noeud.selectionne"
+                            (click)="noeudChoisi.emit(noeud.noeud); $event.stopPropagation()"
                         >
-                            {{ noeud.noeud.titre }}
-                        </text>
-                        @if (noeud.noeud.detail) {
-                            <text [attr.x]="noeud.place.x" [attr.y]="noeud.place.y + 14" text-anchor="middle" class="detail">
-                                {{ noeud.noeud.detail }}
+                            <rect
+                                [attr.x]="noeud.place.x - noeud.place.largeur / 2"
+                                [attr.y]="noeud.place.y - noeud.place.hauteur / 2"
+                                [attr.width]="noeud.place.largeur"
+                                [attr.height]="noeud.place.hauteur"
+                                rx="8"
+                                [attr.fill]="noeud.noeud.couleur || 'var(--surface)'"
+                                [attr.stroke]="noeud.noeud.bordure || 'var(--bordure)'"
+                                [attr.stroke-width]="noeud.noeud.selectionne ? 3 : 1.5"
+                            />
+                            <text
+                                [attr.x]="noeud.place.x"
+                                [attr.y]="noeud.place.y + (noeud.noeud.detail ? -3 : 5)"
+                                text-anchor="middle"
+                                class="titre"
+                            >
+                                {{ noeud.noeud.titre }}
                             </text>
-                        }
-                    </g>
-                }
-            </g>
-        </svg>
+                            @if (noeud.noeud.detail) {
+                                <text [attr.x]="noeud.place.x" [attr.y]="noeud.place.y + 14" text-anchor="middle" class="detail">
+                                    {{ noeud.noeud.detail }}
+                                </text>
+                            }
+                        </g>
+                    }
+                </g>
+            </svg>
+        </div>
     `,
     styles: `
         :host {
             display: block;
+        }
+        .conteneur {
+            position: relative;
+        }
+        .outils {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 2;
+        }
+        .conteneur:fullscreen {
+            background: var(--fond);
+            padding: 12px;
+        }
+        .conteneur:fullscreen .graphe {
+            height: calc(100vh - 24px);
         }
         .graphe {
             width: 100%;
@@ -279,9 +311,14 @@ export class GrapheSvgComponent {
     readonly noeuds = input<NoeudDessine[]>([]);
     readonly liens = input<LienDessine[]>([]);
     readonly hauteur = input(520);
+    /** Barre d'outils (zoom, recentrer, plein écran, image) ; nom de fichier de l'image exportée. */
+    readonly outils = input(true);
+    readonly nomImage = input('graphe');
     readonly noeudChoisi = output<NoeudDessine>();
     readonly lienChoisi = output<LienDessine>();
     private readonly zone = viewChild.required<ElementRef<SVGSVGElement>>('zone');
+    private readonly conteneur = viewChild.required<ElementRef<HTMLDivElement>>('conteneur');
+    private readonly notifications = inject(NotificationsService);
 
     readonly echelle = signal(1);
     readonly translationX = signal(30);
@@ -322,6 +359,31 @@ export class GrapheSvgComponent {
         this.translationX.set(sourisX - ((sourisX - this.translationX()) * nouvelle) / this.echelle());
         this.translationY.set(sourisY - ((sourisY - this.translationY()) * nouvelle) / this.echelle());
         this.echelle.set(nouvelle);
+    }
+
+    /** Zoom par les boutons : le centre de la zone reste fixe. */
+    zoomerDe(facteur: number): void {
+        const nouvelle = Math.min(3, Math.max(0.3, this.echelle() * facteur));
+        const rectangle = this.zone().nativeElement.getBoundingClientRect();
+        const centreX = rectangle.width / 2;
+        const centreY = rectangle.height / 2;
+        this.translationX.set(centreX - ((centreX - this.translationX()) * nouvelle) / this.echelle());
+        this.translationY.set(centreY - ((centreY - this.translationY()) * nouvelle) / this.echelle());
+        this.echelle.set(nouvelle);
+    }
+
+    pleinEcran(): void {
+        const conteneur = this.conteneur().nativeElement;
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void conteneur.requestFullscreen().then(() => setTimeout(() => this.ajuster(), 100));
+    }
+
+    async exporterImage(): Promise<void> {
+        try {
+            await exporterSvgEnImage(this.zone().nativeElement, `${this.nomImage()}.png`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
     }
 
     commencerDeplacement(evenement: PointerEvent): void {

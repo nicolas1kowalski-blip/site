@@ -167,6 +167,30 @@ try {
     );
     await capture('modele');
     verifier('modèle : le graphe SVG dessine les deux tables reliées', (await page.$$('app-modele app-graphe-svg .noeud')).length === 2);
+    const transformationAvant = await page.getAttribute('app-modele app-graphe-svg svg > g', 'transform');
+    await page.click('app-modele app-graphe-svg button[title="Zoom avant"]');
+    const agrandi = await page
+        .waitForFunction(
+            avant => document.querySelector('app-modele app-graphe-svg svg > g')?.getAttribute('transform') !== avant,
+            transformationAvant,
+            { timeout: 5000 }
+        )
+        .then(
+            () => true,
+            () => false
+        );
+    verifier('graphe : le bouton « + » de la barre d’outils agrandit le dessin', agrandi);
+    const telechargementImage = page.waitForEvent('download');
+    await page.click('app-modele app-graphe-svg button[title*="Exporter l\'image"]');
+    const fichierImage = await telechargementImage;
+    const enTeteImage = fs
+        .readFileSync(await fichierImage.path())
+        .subarray(0, 8)
+        .toString('hex');
+    verifier(
+        'graphe : « Exporter l’image » télécharge un PNG du modèle de données',
+        fichierImage.suggestedFilename() === 'modele-de-donnees.png' && enTeteImage === '89504e470d0a1a0a'
+    );
     await page.click('app-modele button:has-text("Mesurer sur les données")');
     await page.waitForSelector('app-modele .badge:has-text("mesuré N-1")');
     verifier(
@@ -216,6 +240,14 @@ try {
         'extraction : 4 lignes au total (jointure gauche, filtre ville dans paris;lyon)',
         /4 ligne\(s\) au total/.test(await page.textContent('app-extraction .badge'))
     );
+    await page.click('app-extraction button:has-text("Bilan qualité")');
+    await page.waitForSelector('app-extraction .bilan');
+    const bilanExtraction = await page.textContent('app-extraction .bilan');
+    verifier(
+        'extraction : le bilan qualité du résultat donne 4 lignes et 100 % de complétude sur les 3 colonnes',
+        /4 ligne\(s\), 3 colonne\(s\)/.test(bilanExtraction) && (bilanExtraction.match(/100 %/g) || []).length === 3
+    );
+    await capture('extraction-bilan');
     const [telechargement] = await Promise.all([
         page.waitForEvent('download'),
         page.click('app-extraction button:has-text("Exporter en CSV")')
@@ -344,6 +376,25 @@ try {
     await page.selectOption('app-tables-concues select[name=enrichissement-colonne-0]', 'montant');
     await page.selectOption('app-tables-concues select[name=enrichissement-accroche-0]', 'id_client');
     await page.selectOption('app-tables-concues select[name=enrichissement-cle-0]', 'id_client');
+    // Assistant pas à pas : un second enrichissement (id_commande, accès direct), vérifié puis retiré.
+    await page.click('app-tables-concues button:has-text("Assistant pas à pas")');
+    await page.selectOption('app-assistant-enrichissement select[name=assistant-table]', { label: 'commandes.csv' });
+    await page.selectOption('app-assistant-enrichissement select[name=assistant-colonne]', 'id_commande');
+    await page.check('app-assistant-enrichissement input[name=assistant-acces][value=direct]');
+    await page.selectOption('app-assistant-enrichissement select[name=assistant-accroche]', 'id_client');
+    await page.selectOption('app-assistant-enrichissement select[name=assistant-cle]', 'id_client');
+    await capture('tables-concues-assistant');
+    await page.click('app-assistant-enrichissement button:has-text("Ajouter cet enrichissement")');
+    await page.waitForSelector('app-tables-concues select[name=enrichissement-source-1]');
+    verifier(
+        'tables conçues : l’assistant pas à pas ajoute un enrichissement complet (commandes.csv.id_commande par id_client)',
+        (await page.inputValue('app-tables-concues select[name=enrichissement-source-1]')) === 'commandes.csv' &&
+            (await page.inputValue('app-tables-concues select[name=enrichissement-colonne-1]')) === 'id_commande' &&
+            (await page.inputValue('app-tables-concues input[name=enrichissement-nom-1]')) === 'id_commande' &&
+            (await page.inputValue('app-tables-concues select[name=enrichissement-cle-1]')) === 'id_client'
+    );
+    await page.click('app-tables-concues .bloc-source:has(select[name=enrichissement-source-1]) button.danger:has-text("✕")');
+    await page.waitForSelector('app-tables-concues select[name=enrichissement-source-1]', { state: 'detached' });
     // Colonne calculée et clé étrangère.
     await page.click('app-tables-concues button:has-text("+ colonne calculée")');
     await page.fill('app-tables-concues input[name=calcul-nom-0]', 'Etiquette');
@@ -562,6 +613,35 @@ try {
         'qualité avancée : le profil de clé est enregistré dans le dictionnaire de gouvernance (2 composants)',
         profilsCle.length === 1 && profilsCle[0].parts.length === 2 && profilsCle[0].parts[1].table === 'commandes.csv'
     );
+    // Exports des lignes en double : un profil sur la ville (Paris ×2), CSV des lignes et classeur Excel.
+    await page.click('app-cles-fonctionnelles button:has-text("Ajouter un profil")');
+    await page.selectOption('app-cles-fonctionnelles select[name=composant-colonne-1-0]', 'ville');
+    await page.click('app-cles-fonctionnelles button:has-text("Analyser les doublons")');
+    await page.waitForFunction(() => document.querySelectorAll('app-cles-fonctionnelles h2').length >= 3);
+    const telechargementLignes = page.waitForEvent('download');
+    await page.click('app-cles-fonctionnelles button:has-text("Toutes les lignes en double (CSV)")');
+    const fichierLignes = await telechargementLignes;
+    const csvLignes = fs
+        .readFileSync(await fichierLignes.path(), 'utf8')
+        .trim()
+        .split(/\r?\n/);
+    verifier(
+        'qualité (écrans) : « Toutes les lignes en double (CSV) » exporte les 2 lignes de Paris avec profil, type et clé',
+        csvLignes.length === 3 &&
+            /"PROFIL";"TYPE";"GROUPE";"CLE_FONCTIONNELLE";"id_client"/.test(csvLignes[0]) &&
+            /"Strict"/.test(csvLignes[1])
+    );
+    const telechargementClasseur = page.waitForEvent('download');
+    await page.click('app-cles-fonctionnelles button:has-text("Lignes en double (Excel, 3 onglets)")');
+    const fichierClasseur = await telechargementClasseur;
+    verifier(
+        'qualité (écrans) : « Lignes en double (Excel, 3 onglets) » télécharge un classeur .xlsx (archive ZIP)',
+        fichierClasseur.suggestedFilename() === 'Doublons_clients.csv.xlsx' &&
+            fs
+                .readFileSync(await fichierClasseur.path())
+                .subarray(0, 2)
+                .toString() === 'PK'
+    );
     await page.click('app-qualite .onglets button:has-text("Objet métier")');
     await page.selectOption('app-audit-objet select[name=objet]', { label: 'Client' });
     await page.click('app-audit-objet button:has-text("Auditer l\'objet")');
@@ -572,6 +652,37 @@ try {
         /4 ligne\(s\)/.test(auditObjet) && /\(2 règle\(s\)\)/.test(auditObjet) && /Au plus 1 client par ville/.test(auditObjet)
     );
     await capture('qualite-avancee');
+
+    // ---- confort : densité compacte, liens croisés depuis l'écran Sources ----
+    await page.click('header button:has-text("Compact")');
+    verifier(
+        'confort : le bouton « Compact » resserre l’affichage (classe compact sur la page)',
+        await page.$eval('body', corps => corps.classList.contains('compact'))
+    );
+    await page.click('header button:has-text("Confort")');
+    verifier('confort : « Confort » rétablit l’affichage aéré', !(await page.$eval('body', corps => corps.classList.contains('compact'))));
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('table.sources tbody tr');
+    await page.click('table.sources tr:has-text("clients.csv") button:has-text("Dictionnaire")');
+    await page.waitForSelector('app-dictionnaire h2:has-text("clients.csv")');
+    verifier('confort : « Dictionnaire » depuis Sources ouvre directement la fiche de clients.csv', true);
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('table.sources tbody tr');
+    await page.click('table.sources tr:has-text("clients.csv") button:has-text("Lineage")');
+    await page.waitForSelector('app-lineage select[name=table]');
+    verifier(
+        'confort : « Lineage » depuis Sources ouvre « Autour d’une table » sur clients.csv',
+        (await page.inputValue('app-lineage select[name=table]')) === 'clients.csv'
+    );
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('table.sources tbody tr');
+    await page.click('table.sources tr:has-text("clients.csv") button:has-text("Qualité")');
+    await page.waitForSelector('app-qualite button:has-text("Profiler la source")');
+    verifier(
+        'confort : « Qualité » depuis Sources choisit directement clients.csv',
+        (await page.$eval('app-qualite select[name=source]', choix => choix.options[choix.selectedIndex].textContent.trim())) ===
+            'clients.csv'
+    );
 
     await page.click('a[href="/actifs"]');
     await page.waitForSelector('app-actifs');

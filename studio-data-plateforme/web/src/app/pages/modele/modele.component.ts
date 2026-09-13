@@ -73,6 +73,7 @@ type BrouillonRegle = {
             </div>
             @if (sources().length) {
                 <app-graphe-svg
+                    nomImage="modele-de-donnees"
                     [noeuds]="noeuds()"
                     [liens]="liens()"
                     [hauteur]="vue === 'schema' ? 520 : 360"

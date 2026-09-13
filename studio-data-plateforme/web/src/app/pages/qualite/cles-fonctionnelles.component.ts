@@ -9,13 +9,28 @@
 import { Component, OnInit, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
-import { ComposantCle, ModeAppariement, ProfilCle, Relation, ResultatProfilCle, Source, VocabulaireQualite } from '../../coeur/modeles';
+import {
+    ComposantCle,
+    LignesEnDouble,
+    ModeAppariement,
+    ProfilCle,
+    Relation,
+    ResultatProfilCle,
+    Source,
+    TypeDoublon,
+    VocabulaireQualite
+} from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
-import { telechargerJson } from '../../coeur/telechargement';
+import { telechargerBlob, telechargerCsv, telechargerJson } from '../../coeur/telechargement';
 import { FiltresAuditComponent } from './filtres-audit.component';
 
 const SEUIL_PAR_DEFAUT = 0.92;
+const LIBELLE_TYPE_DOUBLON: Record<TypeDoublon, string> = {
+    stricte: 'Strict',
+    normalisee: 'Casse-accents tolérés',
+    floue: 'Paire floue'
+};
 
 @Component({
     selector: 'app-cles-fonctionnelles',
@@ -171,6 +186,17 @@ const SEUIL_PAR_DEFAUT = 0.92;
                     }
                     <span class="espace"></span>
                     <button class="bouton petit" type="button" (click)="exporter()">Exporter (JSON)</button>
+                    @if ($first) {
+                        <button class="bouton petit" type="button" (click)="exporterClesEnDouble()" [disabled]="enCours()">
+                            Toutes les clés en double (CSV)
+                        </button>
+                        <button class="bouton petit" type="button" (click)="exporterLignesEnDouble()" [disabled]="enCours()">
+                            Toutes les lignes en double (CSV)
+                        </button>
+                        <button class="bouton petit" type="button" (click)="exporterClasseur()" [disabled]="enCours()">
+                            Lignes en double (Excel, 3 onglets)
+                        </button>
+                    }
                 </div>
                 @if (resultat.erreur) {
                     <div class="badge erreur">{{ resultat.erreur }}</div>
@@ -337,5 +363,66 @@ export class ClesFonctionnellesComponent implements OnInit {
             seuil: this.seuil,
             resultats: this.resultats()
         });
+    }
+
+    // ---- exports des lignes en double (toutes les lignes, pas seulement les exemples) ----
+    private async avecLignesEnDouble(action: (doublons: LignesEnDouble) => void): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const doublons = await this.api.lignesEnDouble(this.source().id, Number(this.seuil) || SEUIL_PAR_DEFAUT);
+            for (const erreur of doublons.erreurs) this.notifications.erreur(erreur);
+            if (!doublons.lignes.length) this.notifications.info('Aucune ligne en double à exporter.');
+            else action(doublons);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+    /** Une ligne par clé en double : profil, type de rapprochement, groupe, clé, nombre de lignes. */
+    exporterClesEnDouble(): void {
+        void this.avecLignesEnDouble(doublons => {
+            const comptes = new Map<string, { profil: string; type: string; groupe: string; cle: string; nombre: number }>();
+            for (const ligne of doublons.lignes) {
+                const identifiant = [ligne.profil, ligne.type, ligne.groupe].join('¦');
+                const compte = comptes.get(identifiant) || {
+                    profil: ligne.profil,
+                    type: LIBELLE_TYPE_DOUBLON[ligne.type],
+                    groupe: ligne.groupe,
+                    cle: ligne.cle,
+                    nombre: 0
+                };
+                compte.nombre++;
+                comptes.set(identifiant, compte);
+            }
+            telechargerCsv(
+                `${this.source().name} - cles en double.csv`,
+                ['PROFIL', 'TYPE', 'GROUPE', 'CLE_FONCTIONNELLE', 'LIGNES'],
+                [...comptes.values()].map(compte => [compte.profil, compte.type, compte.groupe, compte.cle, compte.nombre])
+            );
+            this.notifications.succes(`${comptes.size} clé(s) en double exportée(s).`);
+        });
+    }
+    exporterLignesEnDouble(): void {
+        void this.avecLignesEnDouble(doublons => {
+            telechargerCsv(
+                `${this.source().name} - lignes en double.csv`,
+                ['PROFIL', 'TYPE', 'GROUPE', 'CLE_FONCTIONNELLE', ...doublons.colonnes],
+                doublons.lignes.map(ligne => [ligne.profil, LIBELLE_TYPE_DOUBLON[ligne.type], ligne.groupe, ligne.cle, ...ligne.valeurs])
+            );
+            this.notifications.succes(`${doublons.lignes.length} ligne(s) en double exportée(s).`);
+        });
+    }
+    async exporterClasseur(): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const classeur = await this.api.classeurDoublons(this.source().id, Number(this.seuil) || SEUIL_PAR_DEFAUT);
+            telechargerBlob(`Doublons ${this.source().name}.xlsx`, classeur);
+            this.notifications.succes('Classeur Excel téléchargé : synthèse, stricts, casse-accents tolérés, paires floues.');
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
     }
 }

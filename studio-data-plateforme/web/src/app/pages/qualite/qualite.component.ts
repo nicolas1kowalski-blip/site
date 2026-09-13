@@ -660,6 +660,8 @@ export class QualiteComponent {
         return alertes;
     });
 
+    private readonly sourceDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('source') || '';
+
     constructor() {
         // L'entrée de menu « Règles & score » ouvre directement l'onglet des règles (/qualite/regles).
         const onglet = inject(ActivatedRoute).snapshot.paramMap.get('onglet');
@@ -683,6 +685,9 @@ export class QualiteComponent {
             this.relations.set(relations);
             this.objets.set(objets);
             this.listesValeurs.set(listesValeurs);
+            // Lien « Qualité » de l'écran Sources : /qualite?source=identifiant choisit directement la source.
+            if (this.sourceDemandee && !this.sourceId() && sources.some(source => source.id === this.sourceDemandee))
+                await this.choisirSource(this.sourceDemandee);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

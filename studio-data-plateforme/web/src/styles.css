@@ -89,3 +89,14 @@ label.etiquette { display: block; font-size: 12px; font-weight: 600; color: var(
 .entete-page { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .entete-page .espace { flex: 1; }
 .defilement-x { overflow-x: auto; }
+
+/* ---- densité compacte (bouton « Compact » de l'en-tête) ---- */
+body.compact { font-size: 13px; }
+body.compact .tableau { font-size: 12px; }
+body.compact .tableau th, body.compact .tableau td { padding: 4px 6px; }
+body.compact .carte { padding: 10px 12px; }
+body.compact .kpi { padding: 8px 10px; }
+body.compact .kpi b { font-size: 18px; }
+body.compact .champ, body.compact select.champ { padding: 5px 8px; }
+body.compact .bouton { padding: 5px 9px; }
+body.compact .entete-page { margin-bottom: 8px; }

@@ -201,6 +201,8 @@ export type SpecificationExtraction = {
     limite?: number;
 };
 export type ApercuExtraction = { sql: string; colonnes: ColonneResultat[]; lignes: unknown[][]; limite: number };
+/** Bilan qualité du résultat d'une extraction : lignes et complétude de chaque colonne. */
+export type BilanExtraction = { total: number; colonnes: { nom: string; renseignees: number; part: number }[] };
 export type ModeleExtraction = {
     id: string;
     nom: string;
@@ -429,6 +431,15 @@ export type RegleDansAudit = {
 /** Composant d'une clé fonctionnelle : colonne de la table auditée ou d'une table liée (avec condition facultative). */
 export type ComposantCle = { table: string; col: string; whereCol: string; whereVal: string; match: ModeAppariement };
 export type ProfilCle = { id: string; scope: FiltreAudit[]; parts: ComposantCle[] };
+/** Les lignes en double des profils de clé, par type : strictes, normalisées (écritures différentes), paires floues. */
+export type TypeDoublon = 'stricte' | 'normalisee' | 'floue';
+export type LignesEnDouble = {
+    source: string;
+    seuil: number;
+    colonnes: string[];
+    lignes: { profil: string; type: TypeDoublon; groupe: string; cle: string; valeurs: (string | null)[] }[];
+    erreurs: string[];
+};
 export type ResultatProfilCle = {
     profil: ProfilCle;
     totalLignes: number;

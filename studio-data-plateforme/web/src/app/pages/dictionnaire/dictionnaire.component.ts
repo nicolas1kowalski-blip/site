@@ -5,6 +5,7 @@
  */
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { FicheDictionnaire, Source } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -178,6 +179,9 @@ export class DictionnaireComponent {
     readonly edition = signal<FicheEnEdition | null>(null);
     readonly sensibilites = SENSIBILITES;
 
+    /** Source à ouvrir directement (lien « Dictionnaire » de l'écran Sources : /dictionnaire?source=nom). */
+    private readonly sourceDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('source') || '';
+
     constructor() {
         this.recharger();
     }
@@ -187,6 +191,8 @@ export class DictionnaireComponent {
             const [sources, fiches] = await Promise.all([this.api.sources(), this.api.dictionnaire()]);
             this.sources.set(sources);
             this.fiches.set(fiches);
+            const demandee = sources.find(source => source.name === this.sourceDemandee);
+            if (demandee && !this.edition()) this.ouvrir(demandee);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

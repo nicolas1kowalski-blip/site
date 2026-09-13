@@ -23,6 +23,7 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import {
     Agregat,
     ApercuExtraction,
+    BilanExtraction,
     ColonneExtraction,
     FiltreExtraction,
     GenreColonneExtraction,
@@ -523,6 +524,14 @@ const MODELES_FORMULE = [
                         </button>
                         <button class="bouton" (click)="compter()" [disabled]="!specificationPrete() || enCours()">Compter</button>
                         <button class="bouton" (click)="exporter()" [disabled]="!specificationPrete() || enCours()">Exporter en CSV</button>
+                        <button
+                            class="bouton"
+                            (click)="bilanQualite()"
+                            [disabled]="!specificationPrete() || enCours()"
+                            title="Nombre de lignes du résultat et taux de complétude de chaque colonne"
+                        >
+                            Bilan qualité
+                        </button>
                         <span class="espace"></span>
                         @if (total() !== null) {
                             <span class="badge">{{ total() }} ligne(s) au total</span>
@@ -534,6 +543,32 @@ const MODELES_FORMULE = [
                     }
                     @if (afficherSql && apercu()) {
                         <pre class="sql">{{ apercu()!.sql }}</pre>
+                    }
+                    @if (bilan(); as bilan) {
+                        <div class="bilan">
+                            <div class="discret" style="margin: 10px 0 6px">
+                                Bilan qualité du résultat — {{ bilan.total }} ligne(s), {{ bilan.colonnes.length }} colonne(s) · taux de
+                                complétude par colonne :
+                            </div>
+                            <div class="kpis">
+                                @for (colonne of bilan.colonnes; track colonne.nom) {
+                                    <div class="kpi" [title]="colonne.nom">
+                                        <span class="nom-colonne">{{ colonne.nom }}</span>
+                                        <b
+                                            [style.color]="
+                                                colonne.part >= 0.95
+                                                    ? 'var(--succes)'
+                                                    : colonne.part >= 0.7
+                                                      ? 'var(--alerte)'
+                                                      : 'var(--erreur)'
+                                            "
+                                            >{{ (100 * colonne.part).toFixed(0) }} %</b
+                                        >
+                                        <span>{{ colonne.renseignees }} / {{ bilan.total }}</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     }
                 </div>
                 @if (apercu(); as apercu) {
@@ -651,6 +686,21 @@ const MODELES_FORMULE = [
             font-weight: 600;
             margin-top: 8px;
         }
+        .bilan .kpi {
+            padding: 8px 10px;
+        }
+        .bilan .kpi b {
+            font-size: 18px;
+        }
+        .nom-colonne {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--texte-2);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .sql {
             margin: 10px 0 0;
             padding: 10px;
@@ -725,6 +775,7 @@ export class ExtractionComponent {
 
     readonly apercu = signal<ApercuExtraction | null>(null);
     readonly total = signal<number | null>(null);
+    readonly bilan = signal<BilanExtraction | null>(null);
     readonly erreur = signal('');
     readonly enCours = signal(false);
     readonly deuxValeurs = OPERATEUR_DEUX_VALEURS;
@@ -1013,6 +1064,10 @@ export class ExtractionComponent {
     }
     async compter(): Promise<void> {
         await this.executer(async () => this.total.set((await this.api.compterExtraction(this.specification())).total));
+    }
+    /** Bilan qualité du résultat (repris de l'application classique) : complétude de chaque colonne produite. */
+    async bilanQualite(): Promise<void> {
+        await this.executer(async () => this.bilan.set(await this.api.bilanExtraction(this.specification())));
     }
     async exporter(): Promise<void> {
         await this.executer(async () => {

@@ -111,6 +111,30 @@ export class ExtractionController {
         return { total: Number(resultat.lignes[0][0]) };
     }
 
+    @Post('bilan')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Bilan qualité du résultat : nombre de lignes et taux de complétude de chaque colonne.' })
+    async bilan(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaSpecification)) specification: Specification) {
+        const { sql } = await this.construire(espace, { ...specification, limite: undefined, tri: [] });
+        const { moteur } = await this.espaces.ressources(espace);
+        const colonnes = (await moteur.executer(`SELECT * FROM (${sql}) AS extraction LIMIT 0`)).colonnes.map(colonne => colonne.nom);
+        const comptes = colonnes.map(
+            colonne =>
+                `COUNT(*) FILTER (WHERE ${identifiantSql(colonne)} IS NOT NULL AND TRIM(CAST(${identifiantSql(colonne)} AS VARCHAR)) <> '')::BIGINT`
+        );
+        const ligne = (
+            await moteur.executer(`SELECT COUNT(*)::BIGINT${comptes.length ? ', ' + comptes.join(', ') : ''} FROM (${sql}) AS extraction`)
+        ).lignes[0];
+        const total = Number(ligne[0]);
+        return {
+            total,
+            colonnes: colonnes.map((nom, index) => {
+                const renseignees = Number(ligne[index + 1]);
+                return { nom, renseignees, part: total ? renseignees / total : 1 };
+            })
+        };
+    }
+
     @Post('export.csv')
     @RoleEspaceRequis('lecteur')
     @ApiOperation({ summary: 'Export CSV complet en flux (séparateur ;, UTF-8 avec BOM pour Excel).' })

@@ -26,6 +26,7 @@ import {
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { exporterTableEnCsv } from '../../coeur/telechargement';
+import { AssistantEnrichissementComponent } from './assistant-enrichissement.component';
 
 const RECETTE_VIDE = (): Recette => ({
     name: '',
@@ -68,7 +69,7 @@ type GroupeEcarts = { cle: string; attributs: { attribut: string; valeurs: { sou
 
 @Component({
     selector: 'app-tables-concues',
-    imports: [FormsModule],
+    imports: [FormsModule, AssistantEnrichissementComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -600,7 +601,19 @@ type GroupeEcarts = { cle: string; attributs: { attribut: string; valeurs: { sou
                             </div>
                         </div>
                     }
+                    @if (assistantOuvert()) {
+                        <app-assistant-enrichissement
+                            [sources]="sourcesPourEnrichir()"
+                            [colonnesProduites]="colonnesProduites()"
+                            [operateurs]="operateurs()"
+                            (ajouter)="ajouterEnrichissementAssiste($event)"
+                            (annuler)="assistantOuvert.set(false)"
+                        />
+                    }
                     <button class="bouton petit" (click)="ajouterEnrichissement()">+ enrichissement</button>
+                    <button class="bouton petit principal" (click)="assistantOuvert.set(true)" [disabled]="assistantOuvert()">
+                        🧭 Assistant pas à pas
+                    </button>
 
                     <!-- colonnes calculées -->
                     <h3>4. Colonnes calculées <span class="discret">(SQL DuckDB, attributs entre crochets : [Prix] * [Quantité])</span></h3>
@@ -840,6 +853,7 @@ export class TablesConcuesComponent {
     /** Sources utilisables comme cible d'enrichissement ou de clé étrangère : toutes sauf la table en cours. */
     readonly sourcesPourEnrichir = computed(() => this.sources().filter(source => source.id !== this.brouillon()?.targetId));
     readonly groupesEcarts = computed(() => grouperEcarts(this.ecarts()?.ecarts || []));
+    readonly assistantOuvert = signal(false);
 
     constructor() {
         void this.recharger();
@@ -1060,6 +1074,15 @@ export class TablesConcuesComponent {
     // ---- éditeur : enrichissements, calculs, clés étrangères ----
     ajouterEnrichissement(): void {
         this.brouillon()?.joins.push(ENRICHISSEMENT_VIDE());
+        this.rafraichir();
+    }
+    /** L'assistant pas à pas a produit un enrichissement complet : on l'ajoute tel quel à la recette. */
+    ajouterEnrichissementAssiste(enrichissement: Enrichissement): void {
+        this.brouillon()?.joins.push(enrichissement);
+        this.assistantOuvert.set(false);
+        this.notifications.succes(
+            `Enrichissement ajouté : la colonne « ${enrichissement.as} » sera ramenée depuis « ${enrichissement.src} ». Pour aller un niveau plus loin, relancez l'assistant en vous accrochant à « ${enrichissement.as} ».`
+        );
         this.rafraichir();
     }
 

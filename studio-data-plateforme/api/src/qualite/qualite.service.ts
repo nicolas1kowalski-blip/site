@@ -19,7 +19,16 @@ import { ModeleService } from '../modele/modele.service';
 import { DocumentSource, SourcesService } from '../sources/sources.service';
 import { FiltreSource, conditionFiltreSource } from '../tables-concues/constructeur-table-concue';
 import { Anomalie, GenreAnomalie, anomaliesDuProfil, sqlLignesAnomalie } from './anomalies';
-import { ContexteCle, ProfilCle, SEPARATEUR_COMPOSANTS, sqlAnalyseCle, sqlSourceCle } from './cle-fonctionnelle';
+import { FeuilleAEcrire, classeurExcel } from '../commun/classeur-excel-ecriture';
+import {
+    COLONNES_TECHNIQUES_CLE,
+    ContexteCle,
+    ProfilCle,
+    SEPARATEUR_COMPOSANTS,
+    sqlAnalyseCle,
+    sqlLignesEnDouble,
+    sqlSourceCle
+} from './cle-fonctionnelle';
 import { DetailColonne, assemblerDetailColonne, sqlMotifsFrequents, sqlStatistiquesColonne } from './detail-colonne';
 import {
     ProfilColonne,
@@ -70,6 +79,15 @@ export type ResultatProfilCle = {
     proches: { groupes: number; exemples: { cle: string; nombre: number; ecritures: string[] }[] };
     floues: { exemple1: string; exemple2: string; nombre1: number; nombre2: number; similarite: number }[];
     erreur?: string;
+};
+
+export type TypeDoublon = 'stricte' | 'normalisee' | 'floue';
+export type LignesEnDouble = {
+    source: string;
+    seuil: number;
+    colonnes: string[];
+    lignes: { profil: string; type: TypeDoublon; groupe: string; cle: string; valeurs: (string | null)[] }[];
+    erreurs: string[];
 };
 
 const TAILLE_PAGE = 50;
@@ -335,6 +353,116 @@ export class QualiteService {
 
     /** Analyse chaque profil de clé fonctionnelle d'une source : doublons exacts, proches (normalisés) et flous. */
     async doublonsApproches(espace: EspaceAvecRole, sourceId: string, seuilFlou: number, auteurId: string): Promise<ResultatProfilCle[]> {
+        const { source, profils, contexte } = await this.preparerAnalyseCle(espace, sourceId);
+        const { moteur } = await this.espaces.ressources(espace);
+        const resultats: ResultatProfilCle[] = [];
+        for (const profil of profils) resultats.push(await this.analyserProfilCle(moteur, source, profil, contexte, seuilFlou));
+        await this.enregistrerAudit(
+            espace.id,
+            auteurId,
+            source,
+            'doublons-approches',
+            resultats[0]?.totalLignes || 0,
+            {
+                profils: resultats.length,
+                groupesExacts: resultats.reduce((somme, resultat) => somme + resultat.exactes.groupes, 0),
+                pairesFloues: resultats.reduce((somme, resultat) => somme + resultat.floues.length, 0)
+            },
+            { resultats }
+        );
+        return resultats;
+    }
+
+    /**
+     * Les lignes en double de tous les profils d'une source, par type (strictes, normalisées, paires floues) :
+     * de quoi retravailler la donnée à l'extérieur. Chaque ligne porte le profil, le type, le groupe et la clé.
+     */
+    async lignesEnDouble(espace: EspaceAvecRole, sourceId: string, seuilFlou: number): Promise<LignesEnDouble> {
+        const { source, profils, contexte } = await this.preparerAnalyseCle(espace, sourceId);
+        const { moteur } = await this.espaces.ressources(espace);
+        const resultat: LignesEnDouble = { source: source.name, seuil: seuilFlou, colonnes: [], lignes: [], erreurs: [] };
+        for (const profil of profils) {
+            try {
+                const avecFlou = profil.parts.some(composant => (composant.match || 'fuzzy') === 'fuzzy');
+                const requetes = sqlLignesEnDouble(
+                    sqlSourceCle('t_' + source.id, source.name, profil, contexte, true),
+                    seuilFlou,
+                    avecFlou
+                );
+                const [strictes, normalisees, floues] = await Promise.all([
+                    moteur.executer(requetes.strictes),
+                    moteur.executer(requetes.normalisees),
+                    requetes.floues ? moteur.executer(requetes.floues) : Promise.resolve(null)
+                ]);
+                const versLignes = (jeu: { colonnes: { nom: string }[]; lignes: unknown[][] }, type: TypeDoublon) => {
+                    const noms = jeu.colonnes.map(colonne => colonne.nom);
+                    const indexUtiles = noms
+                        .map((nom, index) => (COLONNES_TECHNIQUES_CLE.has(nom) ? -1 : index))
+                        .filter(index => index >= 0);
+                    if (!resultat.colonnes.length) resultat.colonnes = indexUtiles.map(index => noms[index]);
+                    const colonne = (ligne: unknown[], nom: string) => ligne[noms.indexOf(nom)];
+                    for (const ligne of jeu.lignes) {
+                        const groupe =
+                            type === 'floue'
+                                ? `paire ${colonne(ligne, '__pid')} (similarité ${(100 * nombre(colonne(ligne, '__sim'))).toFixed(1)} %)`
+                                : cleLisible(colonne(ligne, type === 'stricte' ? 'ke' : 'kn'));
+                        resultat.lignes.push({
+                            profil: profil.id,
+                            type,
+                            groupe,
+                            cle: cleLisible(colonne(ligne, 'ke')),
+                            valeurs: indexUtiles.map(index =>
+                                ligne[index] === null || ligne[index] === undefined ? null : String(ligne[index])
+                            )
+                        });
+                    }
+                };
+                versLignes(strictes, 'stricte');
+                versLignes(normalisees, 'normalisee');
+                if (floues) versLignes(floues, 'floue');
+            } catch (erreur) {
+                resultat.erreurs.push(`${profil.id} : ${messageUtilisateur(erreur)}`);
+            }
+        }
+        return resultat;
+    }
+
+    /** Le classeur Excel des lignes en double : une feuille de synthèse puis une feuille par type. */
+    async classeurDoublons(espace: EspaceAvecRole, sourceId: string, seuilFlou: number): Promise<{ nomFichier: string; contenu: Buffer }> {
+        const doublons = await this.lignesEnDouble(espace, sourceId, seuilFlou);
+        const parType = (type: TypeDoublon) => doublons.lignes.filter(ligne => ligne.type === type);
+        const enTete = ['PROFIL', 'GROUPE', 'CLE_FONCTIONNELLE', ...doublons.colonnes];
+        const feuille = (nom: string, type: TypeDoublon): FeuilleAEcrire => {
+            const lignes = parType(type).map(ligne => [ligne.profil, ligne.groupe, ligne.cle, ...ligne.valeurs]);
+            return { nom, lignes: lignes.length ? [enTete, ...lignes] : [['Aucune ligne pour ce rapprochement.']] };
+        };
+        const synthese: unknown[][] = [
+            ['Table', doublons.source],
+            ['Exporté le', new Date().toLocaleString('fr-FR')],
+            ['Seuil de similarité (flou)', seuilFlou],
+            [],
+            ['Onglet', 'Rapprochement', 'Lignes'],
+            ['Stricts', 'Clé strictement identique', parType('stricte').length],
+            ['Casse-accents tolérés', 'Identique une fois casse, accents, espaces et ponctuation tolérés', parType('normalisee').length],
+            ['Paires floues', 'Paires suspectes au-dessus du seuil (les 2 lignes de chaque paire)', parType('floue').length],
+            ...doublons.erreurs.map(erreur => ['Profil en erreur', erreur])
+        ];
+        return {
+            nomFichier: `Doublons_${doublons.source.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`,
+            contenu: classeurExcel([
+                { nom: 'Synthèse', lignes: synthese },
+                feuille('Stricts', 'stricte'),
+                feuille('Casse-accents tolérés', 'normalisee'),
+                feuille('Paires floues', 'floue')
+            ])
+        };
+    }
+
+    /** Source, profils de clé enregistrés et contexte (tables et relations) d'une analyse de clé fonctionnelle. */
+    private async preparerAnalyseCle(
+        espace: EspaceAvecRole,
+        sourceId: string
+    ): Promise<{ source: DocumentSource; profils: ProfilCle[]; contexte: ContexteCle }> {
         const source = await this.sourceDe(espace, sourceId);
         const profils = (await this.profilsCle(espace.id, source.name)).filter(profil => profil.parts.length);
         if (!profils.length) throw erreurRequete('Composez au moins un profil de clé fonctionnelle.');
@@ -359,23 +487,7 @@ export class QualiteService {
                 };
             }
         };
-        const { moteur } = await this.espaces.ressources(espace);
-        const resultats: ResultatProfilCle[] = [];
-        for (const profil of profils) resultats.push(await this.analyserProfilCle(moteur, source, profil, contexte, seuilFlou));
-        await this.enregistrerAudit(
-            espace.id,
-            auteurId,
-            source,
-            'doublons-approches',
-            resultats[0]?.totalLignes || 0,
-            {
-                profils: resultats.length,
-                groupesExacts: resultats.reduce((somme, resultat) => somme + resultat.exactes.groupes, 0),
-                pairesFloues: resultats.reduce((somme, resultat) => somme + resultat.floues.length, 0)
-            },
-            { resultats }
-        );
-        return resultats;
+        return { source, profils, contexte };
     }
 
     private async analyserProfilCle(

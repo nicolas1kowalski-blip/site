@@ -71,6 +71,7 @@ import {
     GenreAnomalie,
     PageLignes,
     ProfilCle,
+    LignesEnDouble,
     ResultatProfilCle,
     Classification,
     ColonnePersonnelle,
@@ -87,6 +88,7 @@ import {
     Recette,
     TableConcue,
     VocabulaireTablesConcues,
+    BilanExtraction,
     DefinitionRegle,
     DetailColonne,
     ExecutionRegles,
@@ -307,6 +309,9 @@ export class ClientApiService {
     compterExtraction(specification: SpecificationExtraction): Promise<{ total: number }> {
         return firstValueFrom(this.http.post<{ total: number }>(`${this.racine}/extraction/compter`, specification));
     }
+    bilanExtraction(specification: SpecificationExtraction): Promise<BilanExtraction> {
+        return firstValueFrom(this.http.post<BilanExtraction>(`${this.racine}/extraction/bilan`, specification));
+    }
     materialiserExtraction(specification: SpecificationExtraction, nom: string): Promise<Materialisation> {
         return firstValueFrom(this.http.post<Materialisation>(`${this.racine}/extraction/materialiser`, { specification, nom }));
     }
@@ -366,6 +371,14 @@ export class ClientApiService {
     }
     enregistrerProfilsCle(nomSource: string, profils: ProfilCle[]): Promise<ProfilCle[]> {
         return firstValueFrom(this.http.put<ProfilCle[]>(`${this.racine}/qualite/cles/${encodeURIComponent(nomSource)}`, { profils }));
+    }
+    lignesEnDouble(sourceId: string, seuil: number): Promise<LignesEnDouble> {
+        return firstValueFrom(this.http.post<LignesEnDouble>(`${this.racine}/qualite/doublons-approches/lignes`, { sourceId, seuil }));
+    }
+    classeurDoublons(sourceId: string, seuil: number): Promise<Blob> {
+        return firstValueFrom(
+            this.http.post(`${this.racine}/qualite/doublons-approches/export.xlsx`, { sourceId, seuil }, { responseType: 'blob' })
+        );
     }
     doublonsApproches(sourceId: string, seuil: number): Promise<ResultatProfilCle[]> {
         return firstValueFrom(this.http.post<ResultatProfilCle[]>(`${this.racine}/qualite/doublons-approches`, { sourceId, seuil }));

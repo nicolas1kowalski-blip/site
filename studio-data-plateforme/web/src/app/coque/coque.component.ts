@@ -2,12 +2,15 @@
  * Coque de l'application : rail de navigation à gauche (les quatre phases de Studio Data plus
  * l'administration), en-tête avec le choix de l'espace de travail et l'utilisateur, zone de page, notifications.
  */
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NotificationsService } from '../coeur/notifications.service';
 import { SessionService } from '../coeur/session.service';
 
 type Lien = { chemin: string; libelle: string; icone: string; administrateur?: boolean };
+
+/** Clé de stockage local de la densité choisie (préférence propre au navigateur). */
+const CLE_DENSITE = 'studio-data.densite';
 
 @Component({
     selector: 'app-coque',
@@ -53,6 +56,10 @@ type Lien = { chemin: string; libelle: string; icone: string; administrateur?: b
                         </select>
                     </label>
                     <span class="espace"></span>
+                    <span class="densite" title="Densité de l'affichage : tableaux et cartes plus serrés ou plus aérés">
+                        <button class="bouton petit" [class.actif]="!compact()" (click)="choisirDensite(false)">Confort</button>
+                        <button class="bouton petit" [class.actif]="compact()" (click)="choisirDensite(true)">Compact</button>
+                    </span>
                     <a routerLink="/compte" class="utilisateur"
                         >{{ session.utilisateur()?.nomAffiche }}
                         <span class="badge neutre">{{ session.utilisateur()?.roleGlobal }}</span></a
@@ -62,14 +69,19 @@ type Lien = { chemin: string; libelle: string; icone: string; administrateur?: b
                 <main class="page"><router-outlet /></main>
             </div>
             <div class="notifications" aria-live="polite">
-                @for (notification of notifications.liste(); track notification.id) {
+                @for (notification of notifications.visibles(); track notification.id) {
                     <div
                         class="notification"
                         [class]="'notification ' + notification.genre"
                         (click)="notifications.fermer(notification.id)"
+                        title="Cliquer pour fermer"
                     >
-                        {{ notification.message }}
+                        <span class="espace">{{ notification.message }}</span>
+                        <span class="fermer" aria-label="Fermer">✕</span>
                     </div>
+                }
+                @if (notifications.liste().length > 1) {
+                    <button class="bouton petit tout-fermer" (click)="notifications.toutFermer()">Tout fermer</button>
                 }
             </div>
         </div>
@@ -183,6 +195,27 @@ type Lien = { chemin: string; libelle: string; icone: string; administrateur?: b
             max-width: 420px;
             cursor: pointer;
         }
+        .notification .fermer {
+            color: var(--texte-2);
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        .notification {
+            display: flex;
+            align-items: center;
+        }
+        .tout-fermer {
+            align-self: flex-end;
+        }
+        .densite {
+            display: inline-flex;
+            gap: 2px;
+        }
+        .densite .bouton.actif {
+            background: var(--accent-2);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
         .notification.succes {
             border-color: var(--succes);
         }
@@ -204,6 +237,29 @@ export class CoqueComponent {
     readonly session = inject(SessionService);
     readonly notifications = inject(NotificationsService);
     private readonly routeur = inject(Router);
+    /** Densité compacte : tableaux, cartes et tuiles resserrés (classe « compact » posée sur le corps de la page). */
+    readonly compact = signal(false);
+
+    constructor() {
+        let memorisee = '';
+        try {
+            memorisee = localStorage.getItem(CLE_DENSITE) || '';
+        } catch {
+            memorisee = '';
+        }
+        this.choisirDensite(memorisee === 'compact', false);
+    }
+
+    choisirDensite(compact: boolean, memoriser = true): void {
+        this.compact.set(compact);
+        document.body.classList.toggle('compact', compact);
+        if (!memoriser) return;
+        try {
+            localStorage.setItem(CLE_DENSITE, compact ? 'compact' : 'confort');
+        } catch {
+            // Stockage local indisponible (navigation privée) : la préférence vaut pour la session seulement.
+        }
+    }
 
     /** Même découpage que l'application classique : Données & Modèle, Exploitation, Qualité & Audit, Gouvernance. */
     readonly groupes: { titre: string; liens: Lien[] }[] = [

@@ -2,8 +2,9 @@
  * Routes qualité : profilage (avec filtres d'audit), inspecteur d'anomalies, doublons exacts et approchés, clés
  * fonctionnelles, règles (CRUD, exécution, lignes en échec), audit d'un objet métier, audits enregistrés, vocabulaire.
  */
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { EspaceAvecRole, EspaceCourant, RoleEspaceRequis, UtilisateurCourant } from '../authentification/contexte-requete';
 import { Utilisateur } from '../base-de-donnees/schema';
@@ -167,6 +168,31 @@ export class QualiteController {
             details: { profils: resultats.length, seuil: corps.seuil }
         });
         return resultats;
+    }
+
+    @Post('doublons-approches/lignes')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Toutes les lignes en double des profils de clé (strictes, normalisées, paires floues).' })
+    lignesEnDouble(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @Body(valider(schemaDoublonsApproches)) corps: z.infer<typeof schemaDoublonsApproches>
+    ) {
+        return this.qualite.lignesEnDouble(espace, corps.sourceId, corps.seuil);
+    }
+
+    @Post('doublons-approches/export.xlsx')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Classeur Excel des lignes en double : synthèse, strictes, casse-accents tolérés, paires floues.' })
+    async classeurDoublons(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @Body(valider(schemaDoublonsApproches)) corps: z.infer<typeof schemaDoublonsApproches>,
+        @Res() reponse: FastifyReply
+    ) {
+        const classeur = await this.qualite.classeurDoublons(espace, corps.sourceId, corps.seuil);
+        reponse
+            .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('content-disposition', `attachment; filename="${classeur.nomFichier}"`)
+            .send(classeur.contenu);
     }
 
     // ---- règles ----

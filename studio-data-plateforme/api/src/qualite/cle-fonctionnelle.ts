@@ -114,6 +114,38 @@ export function sqlSourceCle(
 
 const CLE_RENSEIGNEE = `TRIM(REPLACE(ke, chr(31), '')) <> ''`;
 
+/** Colonnes techniques des requêtes de clé, à retirer des lignes exportées. */
+export const COLONNES_TECHNIQUES_CLE = new Set(['ke', 'kn', 'kb', 'kf', '__rn', '__pid', '__sim']);
+
+/** Au-delà, l'export s'arrête (le fichier reste exploitable ; le serveur est ménagé). */
+export const LIGNES_EN_DOUBLE_MAXIMUM = 50000;
+
+/**
+ * Les LIGNES en double d'un profil (et non plus seulement les comptes) : strictes (même clé exacte), normalisées
+ * (même clé une fois casse, accents et ponctuation tolérés, mais écritures différentes) et paires floues
+ * (similarité de Jaro-Winkler au-dessus du seuil ; chaque paire est numérotée par __pid avec sa similarité __sim).
+ * La requête source doit avoir été bâtie « avec lignes » (toutes les colonnes de la table).
+ */
+export function sqlLignesEnDouble(sqlSourceAvecLignes: string, seuilFlou: number, avecFlou: boolean) {
+    const avec = (requete: string, ctesSupplementaires = '') => `WITH src AS (${sqlSourceAvecLignes})${ctesSupplementaires}\n${requete}`;
+    return {
+        strictes: avec(
+            `SELECT * FROM src WHERE ${CLE_RENSEIGNEE} AND ke IN (SELECT ke FROM src WHERE ${CLE_RENSEIGNEE} GROUP BY 1 HAVING COUNT(*) > 1) ORDER BY ke, __rn LIMIT ${LIGNES_EN_DOUBLE_MAXIMUM}`
+        ),
+        normalisees: avec(
+            `SELECT * FROM src WHERE ${CLE_RENSEIGNEE} AND kn IN (SELECT kn FROM src WHERE ${CLE_RENSEIGNEE} GROUP BY 1 HAVING COUNT(*) > 1 AND COUNT(DISTINCT ke) > 1) ORDER BY kn, ke, __rn LIMIT ${LIGNES_EN_DOUBLE_MAXIMUM}`
+        ),
+        floues: avecFlou
+            ? avec(
+                  `SELECT pn.__pid, pn.s AS __sim, src.* FROM pn JOIN src ON src.kb = pn.kb AND (src.kf = pn.kf1 OR src.kf = pn.kf2) ORDER BY pn.__pid, src.__rn LIMIT ${LIGNES_EN_DOUBLE_MAXIMUM}`,
+                  `, d AS (SELECT kb, kf, COUNT(*)::BIGINT AS n FROM src WHERE ${CLE_RENSEIGNEE} AND LENGTH(kf) >= 3 GROUP BY 1, 2)` +
+                      `, pr AS (SELECT a.kb AS kb, a.kf AS kf1, b.kf AS kf2, jaro_winkler_similarity(a.kf, b.kf) AS s FROM d a JOIN d b ON a.kb = b.kb AND left(a.kf, 4) = left(b.kf, 4) AND a.kf < b.kf WHERE jaro_winkler_similarity(a.kf, b.kf) >= ${seuilFlou} ORDER BY s DESC LIMIT 2000)` +
+                      `, pn AS (SELECT row_number() OVER (ORDER BY s DESC) AS __pid, * FROM pr)`
+              )
+            : null
+    };
+}
+
 /** Les requêtes d'analyse d'un profil, toutes bâties sur la requête source (`WITH src AS (...)`). */
 export function sqlAnalyseCle(sqlSource: string, seuilFlou: number, avecFlou: boolean) {
     /** Préfixe la requête par la CTE source ; `ctesSupplementaires` s'ajoutent après elle (« , d AS (...) »). */
