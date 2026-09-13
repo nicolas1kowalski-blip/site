@@ -378,6 +378,79 @@ try {
     );
     await capture('objets-metier');
 
+    // ---- qualité avancée : périmètre d'audit, anomalies, règle par groupe et lignes en échec, clé fonctionnelle, objet métier ----
+    await page.click('a[href="/qualite"]');
+    await page.waitForSelector('app-qualite');
+    await page.selectOption('app-qualite select[name=source]', { label: 'clients.csv' });
+    await page.click('app-qualite button:has-text("Profiler la source")');
+    await page.waitForSelector('app-inspecteur-anomalies');
+    verifier(
+        'qualité avancée : l’inspecteur d’anomalies ne signale rien sur clients.csv (données propres)',
+        /Aucune anomalie/.test(await page.textContent('app-inspecteur-anomalies'))
+    );
+    await page.click('app-qualite button:has-text("Restreindre le périmètre (filtre)")');
+    await page.selectOption('app-qualite select[name=profil-colonne-0]', 'ville');
+    await page.fill('app-qualite input[name=profil-valeur-0]', 'Paris');
+    await page.click('app-qualite button:has-text("Profiler la source")');
+    await page.waitForSelector('app-qualite .badge:has-text("périmètre : 1 filtre(s)")');
+    verifier(
+        'qualité avancée : le profilage restreint au périmètre ville = Paris ne compte que 2 lignes',
+        /2 ligne\(s\)/.test(await page.textContent('app-qualite .carte .entete-page'))
+    );
+    await page.click('app-qualite .onglets button:has-text("Règles")');
+    await page.click('app-qualite button:has-text("Nouvelle règle")');
+    await page.fill('app-formulaire-regle input[name=nom]', 'Au plus 1 client par ville');
+    await page.selectOption('app-formulaire-regle select[name=type]', 'groupe');
+    await page.click('app-formulaire-regle label.case:has-text("ville") input');
+    await page.fill('app-formulaire-regle input[name=seuil]', '1');
+    await page.click('app-formulaire-regle button[type=submit]:has-text("Enregistrer")');
+    await page.waitForSelector('app-qualite tbody tr:has-text("Au plus 1 client par ville")');
+    await page.click('app-qualite button:has-text("Exécuter les règles")');
+    await page.waitForSelector('app-qualite .score');
+    const ligneGroupe = await page.textContent('app-qualite tbody tr:has-text("Au plus 1 client par ville")');
+    verifier(
+        'qualité avancée : la règle d’agrégat par groupe (au plus 1 client par ville) trouve 1 groupe en échec sur 3 (Paris ×2)',
+        /1 échec\(s\) \/ 3/.test(ligneGroupe) && /par ville/.test(ligneGroupe)
+    );
+    await page.click('app-qualite tbody tr:has-text("Au plus 1 client par ville") button:has-text("Voir les lignes")');
+    await page.waitForSelector('app-page-lignes tbody tr');
+    const lignesEnEchec = await page.textContent('app-page-lignes');
+    verifier(
+        'qualité avancée : « Voir les lignes » montre le groupe en échec (Paris, 2 clients)',
+        /Lignes en échec/.test(lignesEnEchec) && /Paris/.test(lignesEnEchec) && /1 ligne\(s\)/.test(lignesEnEchec)
+    );
+    await page.click('app-qualite .onglets button:has-text("Clé fonctionnelle")');
+    await page.waitForSelector('app-cles-fonctionnelles');
+    await page.click('app-cles-fonctionnelles button:has-text("Ajouter un profil")');
+    await page.selectOption('app-cles-fonctionnelles select[name=composant-colonne-0-0]', 'nom');
+    await page.click('app-cles-fonctionnelles button:has-text("Ajouter un composant")');
+    await page.selectOption('app-cles-fonctionnelles select[name=composant-table-0-1]', 'commandes.csv');
+    await page.selectOption('app-cles-fonctionnelles select[name=composant-colonne-0-1]', 'montant');
+    await page.click('app-cles-fonctionnelles button:has-text("Analyser les doublons")');
+    await page.waitForSelector('app-cles-fonctionnelles h2:has-text("Résultat")');
+    const resultatCle = await page.textContent('app-cles-fonctionnelles');
+    verifier(
+        'qualité avancée : clé fonctionnelle nom + montant (table liée commandes.csv) analysée sur 4 lignes, sans doublon',
+        /4 ligne\(s\) analysée/.test(resultatCle) &&
+            /0 clé\(s\) en doublon exact/.test(resultatCle) &&
+            !/non chargée|Aucune relation/.test(resultatCle)
+    );
+    const profilsCle = await page.evaluate(async () => await (await fetch('/api/qualite/cles/clients.csv')).json());
+    verifier(
+        'qualité avancée : le profil de clé est enregistré dans le dictionnaire de gouvernance (2 composants)',
+        profilsCle.length === 1 && profilsCle[0].parts.length === 2 && profilsCle[0].parts[1].table === 'commandes.csv'
+    );
+    await page.click('app-qualite .onglets button:has-text("Objet métier")');
+    await page.selectOption('app-audit-objet select[name=objet]', { label: 'Client' });
+    await page.click('app-audit-objet button:has-text("Auditer l\'objet")');
+    await page.waitForSelector('app-audit-objet h2:has-text("table maître clients.csv")');
+    const auditObjet = await page.textContent('app-audit-objet');
+    verifier(
+        'qualité avancée : l’audit de l’objet « Client » profile la table maître (4 lignes) et exécute les 2 règles de son périmètre',
+        /4 ligne\(s\)/.test(auditObjet) && /\(2 règle\(s\)\)/.test(auditObjet) && /Au plus 1 client par ville/.test(auditObjet)
+    );
+    await capture('qualite-avancee');
+
     await page.click('a[href="/actifs"]');
     await page.waitForSelector('app-actifs');
     await page.click('app-actifs button:has-text("Nouvelle application")');
@@ -630,8 +703,8 @@ try {
     await page.waitForSelector('app-catalogue .fiche');
     const ficheCatalogue = await page.textContent('app-catalogue .fiche');
     verifier(
-        'catalogue : la couche « tout » montre la table clients.csv, sa fiche affiche la qualité mesurée (75 %) et la sensibilité',
-        /Qualité\s*75 %/.test(ficheCatalogue) && /données personnelles/.test(ficheCatalogue)
+        'catalogue : la couche « tout » montre la table clients.csv, sa fiche affiche la qualité mesurée (71 % après la règle par groupe) et la sensibilité',
+        /Qualité\s*71 %/.test(ficheCatalogue) && /données personnelles/.test(ficheCatalogue)
     );
     await capture('catalogue');
 

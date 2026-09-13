@@ -51,7 +51,13 @@ import {
     NoeudFlux,
     ResultatReconciliation,
     VocabulaireLineage,
+    AuditObjet,
     AuditQualite,
+    FiltreAudit,
+    GenreAnomalie,
+    PageLignes,
+    ProfilCle,
+    ResultatProfilCle,
     Classification,
     ColonnePersonnelle,
     ControleListe,
@@ -245,11 +251,41 @@ export class ClientApiService {
     vocabulaireQualite(): Promise<VocabulaireQualite> {
         return firstValueFrom(this.http.get<VocabulaireQualite>(`${this.racine}/qualite/vocabulaire`));
     }
-    profilerSource(sourceId: string): Promise<ProfilSource> {
-        return firstValueFrom(this.http.post<ProfilSource>(`${this.racine}/qualite/profil`, { sourceId }));
+    profilerSource(sourceId: string, filtres: FiltreAudit[] = []): Promise<ProfilSource> {
+        return firstValueFrom(this.http.post<ProfilSource>(`${this.racine}/qualite/profil`, { sourceId, filtres }));
     }
-    chercherDoublons(sourceId: string, cle: string[]): Promise<ResultatDoublons> {
-        return firstValueFrom(this.http.post<ResultatDoublons>(`${this.racine}/qualite/doublons`, { sourceId, cle }));
+    lignesAnomalie(
+        sourceId: string,
+        genre: GenreAnomalie,
+        colonne: string,
+        offset: number,
+        filtres: FiltreAudit[] = []
+    ): Promise<PageLignes> {
+        return firstValueFrom(
+            this.http.post<PageLignes>(`${this.racine}/qualite/anomalies/lignes`, { sourceId, genre, colonne, offset, filtres })
+        );
+    }
+    chercherDoublons(sourceId: string, cle: string[], filtres: FiltreAudit[] = []): Promise<ResultatDoublons> {
+        return firstValueFrom(this.http.post<ResultatDoublons>(`${this.racine}/qualite/doublons`, { sourceId, cle, filtres }));
+    }
+    profilsCle(nomSource: string): Promise<ProfilCle[]> {
+        return firstValueFrom(this.http.get<ProfilCle[]>(`${this.racine}/qualite/cles/${encodeURIComponent(nomSource)}`));
+    }
+    enregistrerProfilsCle(nomSource: string, profils: ProfilCle[]): Promise<ProfilCle[]> {
+        return firstValueFrom(this.http.put<ProfilCle[]>(`${this.racine}/qualite/cles/${encodeURIComponent(nomSource)}`, { profils }));
+    }
+    doublonsApproches(sourceId: string, seuil: number): Promise<ResultatProfilCle[]> {
+        return firstValueFrom(this.http.post<ResultatProfilCle[]>(`${this.racine}/qualite/doublons-approches`, { sourceId, seuil }));
+    }
+    auditerObjet(objetId: string, filtres: FiltreAudit[] = []): Promise<AuditObjet> {
+        return firstValueFrom(this.http.post<AuditObjet>(`${this.racine}/qualite/objet`, { objetId, filtres }));
+    }
+    lignesRegle(id: string, offset: number): Promise<PageLignes> {
+        return firstValueFrom(
+            this.http.get<PageLignes>(`${this.racine}/qualite/regles/${encodeURIComponent(id)}/lignes`, {
+                params: { offset: String(offset) }
+            })
+        );
     }
     reglesQualite(sourceId?: string): Promise<RegleQualite[]> {
         return firstValueFrom(this.http.get<RegleQualite[]>(`${this.racine}/qualite/regles`, { params: sourceId ? { sourceId } : {} }));

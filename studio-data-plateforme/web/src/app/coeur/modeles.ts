@@ -203,7 +203,26 @@ export type ProfilColonne = {
     partMotifMajoritaire: number;
     motifsDistincts: number;
     valeursFrequentes: { valeur: string | null; nombre: number }[];
+    /** Hygiène (reprise de l'application classique) : espaces multiples, bouche-trous, casses, valeurs aberrantes. */
+    espacesMultiples?: number;
+    boucheTrous?: number;
+    cassesIncoherentes?: number;
+    aberrantes?: number;
+    moyenne?: number | null;
+    ecartType?: number | null;
 };
+/** Condition sur les lignes d'une source (même forme que les filtres des recettes) : périmètre d'audit. */
+export type FiltreAudit = { col: string; op: OperateurFiltreSource; val: string };
+export type GenreAnomalie =
+    | 'lignesIdentiques'
+    | 'lignesVides'
+    | 'espacesParasites'
+    | 'espacesMultiples'
+    | 'boucheTrous'
+    | 'casseIncoherente'
+    | 'aberrantes'
+    | 'valeursVides';
+export type Anomalie = { genre: GenreAnomalie; colonne: string; libelle: string; nombre: number };
 export type ProfilSource = {
     sourceId: string;
     sourceNom: string;
@@ -211,15 +230,36 @@ export type ProfilSource = {
     colonnes: ProfilColonne[];
     completudeMoyenne: number;
     doublonsExacts: number;
+    lignesVides?: number;
+    filtres?: FiltreAudit[];
+    anomalies?: Anomalie[];
 };
+/** Une page de lignes (50 par page) : lignes d'une anomalie ou lignes en échec d'une règle. */
+export type PageLignes = { colonnes: string[]; lignes: unknown[][]; total: number; offset: number };
 export type ResultatDoublons = {
     cle: string[];
     groupes: number;
     lignes: number;
     exemples: { valeurs: (string | null)[]; nombre: number }[];
 };
-export type TypeRegle = 'nonVide' | 'unique' | 'format' | 'dansListe' | 'plage' | 'longueur' | 'dateValide' | 'reference';
+export type TypeRegle =
+    | 'nonVide'
+    | 'unique'
+    | 'format'
+    | 'dansListe'
+    | 'listeValeurs'
+    | 'plage'
+    | 'longueur'
+    | 'dateValide'
+    | 'fraicheur'
+    | 'reference'
+    | 'condition'
+    | 'expression'
+    | 'sql'
+    | 'groupe';
 export type Criticite = 'bloquante' | 'majeure' | 'mineure';
+export type OperateurCondition = 'renseigne' | 'vide' | 'dans';
+export type AgregatGroupe = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';
 export type ParametresRegle = {
     expression?: string;
     valeurs?: string[];
@@ -227,6 +267,27 @@ export type ParametresRegle = {
     maximum?: number;
     sourceCibleId?: string;
     colonneCible?: string;
+    /** unique : colonnes supplémentaires de la clé composite. */
+    colonnes?: string[];
+    /** listeValeurs : liste de valeurs de la gouvernance. */
+    listeId?: string;
+    /** fraicheur : âge maximal en jours. */
+    jours?: number;
+    /** condition : si (colonne) opérateur [valeurs] alors (alorsColonne) opérateur [valeurs]. */
+    siOperateur?: OperateurCondition;
+    siValeurs?: string[];
+    alorsColonne?: string;
+    alorsOperateur?: OperateurCondition;
+    alorsValeurs?: string[];
+    /** expression : formule booléenne avec [colonnes] ; sql : condition SQL libre. */
+    formule?: string;
+    condition?: string;
+    /** groupe : clé de regroupement, agrégat, comparaison au seuil. */
+    colonnesGroupe?: string[];
+    agregat?: AgregatGroupe;
+    colonneAgregee?: string;
+    operateur?: string;
+    seuil?: number;
 };
 export type ResultatRegle = { total: number; echecs: number; taux: number; executeLe: string; exemples: string[] };
 export type RegleQualite = {
@@ -247,13 +308,51 @@ export type AuditQualite = {
     id: string;
     sourceId: string;
     sourceNom: string;
-    genre: 'profilage' | 'doublons' | 'regles';
+    genre: 'profilage' | 'doublons' | 'regles' | 'doublons-approches';
     lanceLe: string;
     lignes: number;
     resume: Record<string, unknown>;
     detail?: unknown;
 };
-export type VocabulaireQualite = { typesRegle: Record<TypeRegle, string>; criticites: Record<Criticite, number> };
+export type ModeAppariement = 'exact' | 'norm' | 'fuzzy';
+export type VocabulaireQualite = {
+    typesRegle: Record<TypeRegle, string>;
+    typesSansColonne: TypeRegle[];
+    criticites: Record<Criticite, number>;
+    operateursCondition: Record<OperateurCondition, string>;
+    agregatsGroupe: Record<AgregatGroupe, string>;
+    operateursGroupe: string[];
+    genresAnomalie: Record<GenreAnomalie, string>;
+    modesAppariement: Record<ModeAppariement, string>;
+};
+/** Composant d'une clé fonctionnelle : colonne de la table auditée ou d'une table liée (avec condition facultative). */
+export type ComposantCle = { table: string; col: string; whereCol: string; whereVal: string; match: ModeAppariement };
+export type ProfilCle = { id: string; scope: FiltreAudit[]; parts: ComposantCle[] };
+export type ResultatProfilCle = {
+    profil: ProfilCle;
+    totalLignes: number;
+    exactes: { groupes: number; lignes: number; exemples: { cle: string; nombre: number }[] };
+    proches: { groupes: number; exemples: { cle: string; nombre: number; ecritures: string[] }[] };
+    floues: { exemple1: string; exemple2: string; nombre1: number; nombre2: number; similarite: number }[];
+    erreur?: string;
+};
+/** Audit d'un objet métier : profil de la table maître, règles du périmètre, cardinalité 1–1 des facettes. */
+export type ResultatFacette = {
+    nom: string;
+    table: string;
+    total: number;
+    sansLigne: number;
+    plusieurs: number;
+    exemples: string[];
+    erreur?: string;
+};
+export type AuditObjet = {
+    objet: { id: string; name: string };
+    tableMaitre: string;
+    profil: ProfilSource;
+    regles: ExecutionRegles;
+    facettes: ResultatFacette[];
+};
 
 // ---- tables conçues (recette au format de l'application classique, voir l'en-tête et le README) ----
 export type FormatAttribut = '' | 'int' | 'dec' | 'date' | 'bool' | 'code';

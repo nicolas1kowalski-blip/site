@@ -1,4 +1,7 @@
-/** Routes qualité : profilage, doublons, règles (CRUD et exécution), audits enregistrés, vocabulaire. */
+/**
+ * Routes qualité : profilage (avec filtres d'audit), inspecteur d'anomalies, doublons exacts et approchés, clés
+ * fonctionnelles, règles (CRUD, exécution, lignes en échec), audit d'un objet métier, audits enregistrés, vocabulaire.
+ */
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -6,12 +9,39 @@ import { EspaceAvecRole, EspaceCourant, RoleEspaceRequis, UtilisateurCourant } f
 import { Utilisateur } from '../base-de-donnees/schema';
 import { valider } from '../commun/validation';
 import { JournalService } from '../journal/journal.service';
+import { schemaFiltreSource } from '../tables-concues/constructeur-table-concue';
+import { GENRES_ANOMALIE } from './anomalies';
+import { MODES_APPARIEMENT, schemaProfilCle } from './cle-fonctionnelle';
 import { QualiteService } from './qualite.service';
-import { CRITICITES, TYPES_REGLE, schemaRegle } from './regles';
+import {
+    AGREGATS_GROUPE,
+    CRITICITES,
+    OPERATEURS_CONDITION,
+    OPERATEURS_GROUPE,
+    TYPES_REGLE,
+    TYPES_SANS_COLONNE,
+    schemaRegle
+} from './regles';
 
-const schemaSource = z.object({ sourceId: z.string().min(1, 'source requise') });
-const schemaDoublons = z.object({ sourceId: z.string().min(1), cle: z.array(z.string().min(1)).min(1, 'au moins une colonne') });
+/** Filtres d'audit : conditions sur les lignes de la source, pour n'auditer qu'un périmètre. */
+const schemaFiltres = z.array(schemaFiltreSource).default([]);
+const schemaSource = z.object({ sourceId: z.string().min(1, 'source requise'), filtres: schemaFiltres });
+const schemaDoublons = z.object({
+    sourceId: z.string().min(1),
+    cle: z.array(z.string().min(1)).min(1, 'au moins une colonne'),
+    filtres: schemaFiltres
+});
+const schemaLignesAnomalie = z.object({
+    sourceId: z.string().min(1),
+    genre: z.enum(Object.keys(GENRES_ANOMALIE) as [keyof typeof GENRES_ANOMALIE, ...(keyof typeof GENRES_ANOMALIE)[]]),
+    colonne: z.string().default(''),
+    offset: z.number().int().min(0).default(0),
+    filtres: schemaFiltres
+});
 const schemaExecution = z.object({ sourceId: z.string().optional() });
+const schemaAuditObjet = z.object({ objetId: z.string().min(1, 'objet métier requis'), filtres: schemaFiltres });
+const schemaProfilsCle = z.object({ profils: z.array(schemaProfilCle).default([]) });
+const schemaDoublonsApproches = z.object({ sourceId: z.string().min(1), seuil: z.number().min(0.5).max(1).default(0.92) });
 
 @ApiTags('Qualité')
 @Controller('api/qualite')
@@ -24,28 +54,49 @@ export class QualiteController {
     @Get('vocabulaire')
     @RoleEspaceRequis('lecteur')
     vocabulaire() {
-        return { typesRegle: TYPES_REGLE, criticites: CRITICITES };
+        return {
+            typesRegle: TYPES_REGLE,
+            typesSansColonne: TYPES_SANS_COLONNE,
+            criticites: CRITICITES,
+            operateursCondition: OPERATEURS_CONDITION,
+            agregatsGroupe: AGREGATS_GROUPE,
+            operateursGroupe: OPERATEURS_GROUPE,
+            genresAnomalie: GENRES_ANOMALIE,
+            modesAppariement: MODES_APPARIEMENT
+        };
     }
 
+    // ---- profilage et anomalies ----
     @Post('profil')
     @RoleEspaceRequis('lecteur')
-    @ApiOperation({ summary: 'Profile une source colonne par colonne et enregistre l’audit.' })
+    @ApiOperation({ summary: 'Profile une source colonne par colonne (périmètre filtrable), liste ses anomalies et enregistre l’audit.' })
     async profiler(
         @EspaceCourant() espace: EspaceAvecRole,
         @UtilisateurCourant() utilisateur: Utilisateur,
         @Body(valider(schemaSource)) corps: z.infer<typeof schemaSource>
     ) {
-        const profil = await this.qualite.profiler(espace, corps.sourceId, utilisateur.id);
+        const profil = await this.qualite.profiler(espace, corps.sourceId, utilisateur.id, corps.filtres);
         await this.journal.consigner({
             espaceId: espace.id,
             utilisateurId: utilisateur.id,
             action: 'qualite.profilage',
             cible: profil.sourceNom,
-            details: { lignes: profil.lignes }
+            details: { lignes: profil.lignes, filtres: corps.filtres.length }
         });
         return profil;
     }
 
+    @Post('anomalies/lignes')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Les lignes concernées par une anomalie du profil (page de 50).' })
+    lignesAnomalie(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @Body(valider(schemaLignesAnomalie)) corps: z.infer<typeof schemaLignesAnomalie>
+    ) {
+        return this.qualite.lignesAnomalie(espace, corps.sourceId, corps.genre, corps.colonne, corps.offset, corps.filtres);
+    }
+
+    // ---- doublons ----
     @Post('doublons')
     @RoleEspaceRequis('lecteur')
     @ApiOperation({ summary: 'Cherche les doublons d’une source sur une clé (une ou plusieurs colonnes).' })
@@ -54,7 +105,7 @@ export class QualiteController {
         @UtilisateurCourant() utilisateur: Utilisateur,
         @Body(valider(schemaDoublons)) corps: z.infer<typeof schemaDoublons>
     ) {
-        const resultat = await this.qualite.doublons(espace, corps.sourceId, corps.cle, utilisateur.id);
+        const resultat = await this.qualite.doublons(espace, corps.sourceId, corps.cle, utilisateur.id, corps.filtres);
         await this.journal.consigner({
             espaceId: espace.id,
             utilisateurId: utilisateur.id,
@@ -65,6 +116,45 @@ export class QualiteController {
         return resultat;
     }
 
+    @Get('cles/:nomSource')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Les profils de clé fonctionnelle d’une source (dictionnaire de gouvernance).' })
+    profilsCle(@EspaceCourant() espace: EspaceAvecRole, @Param('nomSource') nomSource: string) {
+        return this.qualite.profilsCle(espace.id, nomSource);
+    }
+
+    @Put('cles/:nomSource')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({ summary: 'Remplace les profils de clé fonctionnelle d’une source.' })
+    async enregistrerProfilsCle(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Param('nomSource') nomSource: string,
+        @Body(valider(schemaProfilsCle)) corps: z.infer<typeof schemaProfilsCle>
+    ) {
+        return this.qualite.enregistrerProfilsCle(espace, utilisateur, nomSource, corps.profils);
+    }
+
+    @Post('doublons-approches')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Analyse chaque profil de clé : doublons exacts, écritures différentes, clés ressemblantes.' })
+    async doublonsApproches(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Body(valider(schemaDoublonsApproches)) corps: z.infer<typeof schemaDoublonsApproches>
+    ) {
+        const resultats = await this.qualite.doublonsApproches(espace, corps.sourceId, corps.seuil, utilisateur.id);
+        await this.journal.consigner({
+            espaceId: espace.id,
+            utilisateurId: utilisateur.id,
+            action: 'qualite.doublons-approches',
+            cible: corps.sourceId,
+            details: { profils: resultats.length, seuil: corps.seuil }
+        });
+        return resultats;
+    }
+
+    // ---- règles ----
     @Get('regles')
     @RoleEspaceRequis('lecteur')
     regles(@EspaceCourant() espace: EspaceAvecRole, @Query('sourceId') sourceId?: string) {
@@ -138,6 +228,34 @@ export class QualiteController {
         return execution;
     }
 
+    @Get('regles/:id/lignes')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Les lignes qui ne respectent pas une règle (page de 50).' })
+    lignesRegle(@EspaceCourant() espace: EspaceAvecRole, @Param('id') id: string, @Query('offset') offset?: string) {
+        return this.qualite.lignesRegle(espace, id, offset ? Number(offset) : 0);
+    }
+
+    // ---- objet métier ----
+    @Post('objet')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Audit d’un objet métier : profil de la table maître, règles du périmètre, cardinalité des facettes.' })
+    async auditObjet(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Body(valider(schemaAuditObjet)) corps: z.infer<typeof schemaAuditObjet>
+    ) {
+        const audit = await this.qualite.auditObjet(espace, corps.objetId, utilisateur.id, corps.filtres);
+        await this.journal.consigner({
+            espaceId: espace.id,
+            utilisateurId: utilisateur.id,
+            action: 'qualite.objet',
+            cible: audit.objet.name,
+            details: { score: audit.regles.score, facettes: audit.facettes.length }
+        });
+        return audit;
+    }
+
+    // ---- audits enregistrés ----
     @Get('audits')
     @RoleEspaceRequis('lecteur')
     audits(@EspaceCourant() espace: EspaceAvecRole, @Query('sourceId') sourceId?: string, @Query('limite') limite?: string) {

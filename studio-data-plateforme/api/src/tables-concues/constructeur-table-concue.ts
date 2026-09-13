@@ -55,7 +55,7 @@ export type OperateurFiltreSource = keyof typeof OPERATEURS_FILTRE_SOURCE;
 
 export const MODES_VALIDITE = { '': 'toutes les lignes', status: 'valides par statut', period: "période active (aujourd'hui)" } as const;
 
-const schemaFiltreSource = z.object({
+export const schemaFiltreSource = z.object({
     col: z.string().default(''),
     op: z.enum(['eq', 'neq', 'contains', 'ncontains', 'starts', 'ends', 'empty', 'nempty', 'gt', 'gte', 'lt', 'lte']).default('eq'),
     val: z.string().default('')

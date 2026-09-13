@@ -1,10 +1,15 @@
 /**
  * Qualité & Audit : pour une source choisie,
- *   • Profilage — mesures par colonne (complétude, valeurs distinctes, formats, valeurs fréquentes), alertes ;
- *   • Doublons — sur une clé composée d'une ou plusieurs colonnes ;
- *   • Règles & score — règles de qualité de la source, exécution, score pondéré par criticité ;
- *   • Historique — audits enregistrés (profilages, doublons, exécutions de règles).
- * Tout le calcul est fait par le serveur (DuckDB) ; l'écran compose et affiche.
+ *   • Profilage — périmètre filtrable, mesures par colonne (complétude, distinctes, formats, valeurs fréquentes,
+ *     hygiène), alertes, inspecteur d'anomalies (voir / exporter les lignes concernées) ;
+ *   • Doublons — sur une clé composée d'une ou plusieurs colonnes, dans le périmètre choisi ;
+ *   • Clé fonctionnelle — profils de clé composite et doublons approchés ;
+ *   • Règles & score — règles de qualité de la source (quatorze types), exécution, score pondéré, lignes en échec ;
+ *   • Objet métier — audit d'un objet de la gouvernance (table maître, règles du périmètre, facettes) ;
+ *   • Historique — audits enregistrés.
+ * Tout le calcul est fait par le serveur (DuckDB) ; l'écran compose et affiche. Les sections lourdes sont des
+ * composants dédiés du même dossier (filtres-audit, inspecteur-anomalies, formulaire-regle, cles-fonctionnelles,
+ * audit-objet, page-lignes).
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -15,9 +20,14 @@ import {
     Criticite,
     DefinitionRegle,
     ExecutionRegles,
+    FiltreAudit,
+    ListeValeurs,
+    ObjetMetier,
+    PageLignes,
     ProfilColonne,
     ProfilSource,
     RegleQualite,
+    Relation,
     ResultatDoublons,
     Source,
     TypeRegle,
@@ -26,8 +36,15 @@ import {
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { telechargerCsv } from '../../coeur/telechargement';
+import { AuditObjetComponent } from './audit-objet.component';
+import { ClesFonctionnellesComponent } from './cles-fonctionnelles.component';
+import { FiltresAuditComponent } from './filtres-audit.component';
+import { BrouillonRegle, FormulaireRegleComponent } from './formulaire-regle.component';
+import { InspecteurAnomaliesComponent } from './inspecteur-anomalies.component';
+import { PageLignesComponent, TAILLE_PAGE_LIGNES } from './page-lignes.component';
 
-type Onglet = 'profil' | 'doublons' | 'regles' | 'historique';
+type Onglet = 'profil' | 'doublons' | 'cles' | 'regles' | 'objet' | 'historique';
 
 const REGLE_VIDE = (): DefinitionRegle => ({
     nom: '',
@@ -41,34 +58,49 @@ const REGLE_VIDE = (): DefinitionRegle => ({
 
 @Component({
     selector: 'app-qualite',
-    imports: [FormsModule],
+    imports: [
+        FormsModule,
+        FiltresAuditComponent,
+        InspecteurAnomaliesComponent,
+        FormulaireRegleComponent,
+        ClesFonctionnellesComponent,
+        AuditObjetComponent,
+        PageLignesComponent
+    ],
     template: `
         <div class="entete-page">
             <div class="espace">
                 <h1>Qualité & Audit</h1>
-                <p class="discret">Profilage, doublons, règles et score — calculés par le serveur, enregistrés dans l'historique.</p>
+                <p class="discret">
+                    Profilage, anomalies, doublons, clés fonctionnelles, règles et score — calculés par le serveur, enregistrés dans
+                    l'historique.
+                </p>
             </div>
-            <select
-                class="champ"
-                style="width: auto; min-width: 220px"
-                [ngModel]="sourceId()"
-                (ngModelChange)="choisirSource($event)"
-                name="source"
-            >
-                <option value="">Choisir une source…</option>
-                @for (source of sources(); track source.id) {
-                    <option [value]="source.id">{{ source.name }}</option>
-                }
-            </select>
+            @if (ongletActif() !== 'objet') {
+                <select
+                    class="champ"
+                    style="width: auto; min-width: 220px"
+                    [ngModel]="sourceId()"
+                    (ngModelChange)="choisirSource($event)"
+                    name="source"
+                >
+                    <option value="">Choisir une source…</option>
+                    @for (source of sources(); track source.id) {
+                        <option [value]="source.id">{{ source.name }}</option>
+                    }
+                </select>
+            }
         </div>
 
-        @if (source(); as source) {
-            <div class="onglets">
-                @for (onglet of onglets; track onglet.cle) {
-                    <button [class.actif]="ongletActif() === onglet.cle" (click)="ongletActif.set(onglet.cle)">{{ onglet.libelle }}</button>
-                }
-            </div>
+        <div class="onglets">
+            @for (onglet of onglets; track onglet.cle) {
+                <button [class.actif]="ongletActif() === onglet.cle" (click)="ongletActif.set(onglet.cle)">{{ onglet.libelle }}</button>
+            }
+        </div>
 
+        @if (ongletActif() === 'objet') {
+            <app-audit-objet [objets]="objets()" [sources]="sources()" />
+        } @else if (source(); as source) {
             <!-- ---- profilage ---- -->
             @if (ongletActif() === 'profil') {
                 <div class="carte">
@@ -87,7 +119,15 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                             <span class="badge" [class.succes]="profil.doublonsExacts === 0" [class.erreur]="profil.doublonsExacts > 0"
                                 >{{ profil.doublonsExacts }} doublon(s) exact(s)</span
                             >
+                            @if (profil.filtres?.length) {
+                                <span class="badge neutre">périmètre : {{ profil.filtres!.length }} filtre(s)</span>
+                            }
+                            <span class="espace"></span>
+                            <button class="bouton petit" (click)="exporterProfil()">Exporter le profil (CSV)</button>
                         }
+                    </div>
+                    <div style="margin-top: 10px">
+                        <app-filtres-audit [colonnes]="source.headers" prefixe="profil" [(filtres)]="filtresProfil" />
                     </div>
                     @if (alertes().length) {
                         <ul class="alertes">
@@ -137,7 +177,19 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                         </td>
                                         <td>{{ colonne.distinctes }}</td>
                                         <td class="discret">{{ colonne.longueurMin ?? '—' }} – {{ colonne.longueurMax ?? '—' }}</td>
-                                        <td>{{ typeDominant(colonne) }}</td>
+                                        <td>
+                                            {{ typeDominant(colonne) }}
+                                            @if (
+                                                typeDominant(colonne) === 'nombre' &&
+                                                colonne.moyenne !== null &&
+                                                colonne.moyenne !== undefined
+                                            ) {
+                                                <div class="discret">
+                                                    moyenne {{ arrondir(colonne.moyenne) }} · écart-type
+                                                    {{ arrondir(colonne.ecartType ?? 0) }}
+                                                </div>
+                                            }
+                                        </td>
                                         <td>
                                             @if (colonne.motifMajoritaire) {
                                                 <code>{{ colonne.motifMajoritaire }}</code>
@@ -159,6 +211,12 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                             </tbody>
                         </table>
                     </div>
+                    <app-inspecteur-anomalies
+                        [sourceId]="source.id"
+                        [sourceNom]="source.name"
+                        [anomalies]="profil.anomalies || []"
+                        [filtres]="profil.filtres || []"
+                    />
                 }
             }
 
@@ -176,6 +234,9 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                 <code>{{ colonne }}</code></label
                             >
                         }
+                    </div>
+                    <div style="margin-top: 10px">
+                        <app-filtres-audit [colonnes]="source.headers" prefixe="doublons" [(filtres)]="filtresDoublons" />
                     </div>
                     <button
                         class="bouton principal"
@@ -222,6 +283,11 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                 }
             }
 
+            <!-- ---- clé fonctionnelle ---- -->
+            @if (ongletActif() === 'cles' && vocabulaire(); as vocabulaire) {
+                <app-cles-fonctionnelles [source]="source" [sources]="sources()" [relations]="relations()" [vocabulaire]="vocabulaire" />
+            }
+
             <!-- ---- règles & score ---- -->
             @if (ongletActif() === 'regles') {
                 <div class="carte">
@@ -237,6 +303,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                 [class.mauvais]="(execution.score ?? 0) < 70"
                                 >Score {{ execution.score ?? '—' }} / 100</span
                             >
+                            <button class="bouton petit" (click)="exporterResultats()">Exporter les résultats (CSV)</button>
                         }
                         <span class="espace"></span>
                         @if (session.peutEditer()) {
@@ -244,139 +311,22 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                         }
                     </div>
                 </div>
-                @if (brouillon(); as edition) {
-                    <form class="carte" (ngSubmit)="enregistrerRegle()">
-                        <h2>{{ edition.id ? 'Modifier la règle' : 'Nouvelle règle' }}</h2>
-                        <div class="formulaire-ligne">
-                            <div>
-                                <label class="etiquette">Nom</label
-                                ><input class="champ" name="nom" [(ngModel)]="edition.definition.nom" required />
-                            </div>
-                            <div>
-                                <label class="etiquette">Colonne</label>
-                                <select class="champ" name="colonne" [(ngModel)]="edition.definition.colonne" required>
-                                    @for (colonne of source.headers; track colonne) {
-                                        <option [value]="colonne">{{ colonne }}</option>
-                                    }
-                                </select>
-                            </div>
-                            <div>
-                                <label class="etiquette">Type</label>
-                                <select class="champ" name="type" [(ngModel)]="edition.definition.type">
-                                    @for (type of typesRegle(); track type[0]) {
-                                        <option [value]="type[0]">{{ type[1] }}</option>
-                                    }
-                                </select>
-                            </div>
-                            <div style="flex: 0 0 140px">
-                                <label class="etiquette">Criticité</label>
-                                <select class="champ" name="criticite" [(ngModel)]="edition.definition.criticite">
-                                    <option value="bloquante">bloquante</option>
-                                    <option value="majeure">majeure</option>
-                                    <option value="mineure">mineure</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="formulaire-ligne" style="margin-top: 8px">
-                            @switch (edition.definition.type) {
-                                @case ('format') {
-                                    <div>
-                                        <label class="etiquette">Expression régulière</label
-                                        ><input
-                                            class="champ"
-                                            name="expression"
-                                            [(ngModel)]="edition.definition.parametres.expression"
-                                            placeholder="^[0-9]{5}$"
-                                        />
-                                    </div>
-                                }
-                                @case ('dansListe') {
-                                    <div>
-                                        <label class="etiquette">Valeurs autorisées (séparées par ;)</label
-                                        ><input
-                                            class="champ"
-                                            name="valeurs"
-                                            [ngModel]="edition.valeursTexte"
-                                            (ngModelChange)="edition.valeursTexte = $event"
-                                            placeholder="Paris;Lyon"
-                                        />
-                                    </div>
-                                }
-                                @case ('plage') {
-                                    <div>
-                                        <label class="etiquette">Minimum</label
-                                        ><input
-                                            class="champ"
-                                            type="number"
-                                            name="minimum"
-                                            [(ngModel)]="edition.definition.parametres.minimum"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="etiquette">Maximum</label
-                                        ><input
-                                            class="champ"
-                                            type="number"
-                                            name="maximum"
-                                            [(ngModel)]="edition.definition.parametres.maximum"
-                                        />
-                                    </div>
-                                }
-                                @case ('longueur') {
-                                    <div>
-                                        <label class="etiquette">Longueur minimale</label
-                                        ><input
-                                            class="champ"
-                                            type="number"
-                                            name="minimum"
-                                            [(ngModel)]="edition.definition.parametres.minimum"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="etiquette">Longueur maximale</label
-                                        ><input
-                                            class="champ"
-                                            type="number"
-                                            name="maximum"
-                                            [(ngModel)]="edition.definition.parametres.maximum"
-                                        />
-                                    </div>
-                                }
-                                @case ('reference') {
-                                    <div>
-                                        <label class="etiquette">Source cible</label>
-                                        <select
-                                            class="champ"
-                                            name="sourceCibleId"
-                                            [(ngModel)]="edition.definition.parametres.sourceCibleId"
-                                        >
-                                            @for (candidate of sources(); track candidate.id) {
-                                                <option [value]="candidate.id">{{ candidate.name }}</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="etiquette">Colonne cible</label>
-                                        <select class="champ" name="colonneCible" [(ngModel)]="edition.definition.parametres.colonneCible">
-                                            @for (colonne of colonnesDe(edition.definition.parametres.sourceCibleId); track colonne) {
-                                                <option [value]="colonne">{{ colonne }}</option>
-                                            }
-                                        </select>
-                                    </div>
-                                }
-                            }
-                        </div>
-                        <div class="formulaire-ligne" style="margin-top: 10px">
-                            <button class="bouton principal" type="submit" style="flex: 0">Enregistrer</button>
-                            <button class="bouton" type="button" style="flex: 0" (click)="brouillon.set(null)">Annuler</button>
-                        </div>
-                    </form>
+                @if (brouillon() && vocabulaire(); as vocabulaire) {
+                    <app-formulaire-regle
+                        [brouillon]="brouillon()!"
+                        [source]="source"
+                        [sources]="sources()"
+                        [vocabulaire]="vocabulaire"
+                        [listesValeurs]="listesValeurs()"
+                        (enregistrer)="enregistrerRegle($event)"
+                        (annuler)="brouillon.set(null)"
+                    />
                 }
                 <div class="carte">
                     @if (regles().length === 0) {
                         <div class="vide">
                             Aucune règle pour cette source. Créez-en une : non vide, unique, format, liste, plage, longueur, date,
-                            référence.
+                            fraîcheur, référence, condition, cohérence, SQL, agrégat par groupe.
                         </div>
                     } @else {
                         <table class="tableau">
@@ -400,7 +350,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                             }
                                         </td>
                                         <td>
-                                            <code>{{ regle.colonne }}</code>
+                                            <code>{{ regle.colonne || descriptionSansColonne(regle) }}</code>
                                         </td>
                                         <td>{{ libelleType(regle.type) }}</td>
                                         <td>
@@ -424,6 +374,9 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                                 @if (resultat.exemples.length) {
                                                     <div class="discret">ex. {{ resultat.exemples.join(' · ') }}</div>
                                                 }
+                                                @if (resultat.echecs > 0) {
+                                                    <button class="bouton petit" (click)="voirLignesRegle(regle)">Voir les lignes</button>
+                                                }
                                             } @else {
                                                 <span class="discret">jamais exécutée</span>
                                             }
@@ -440,6 +393,18 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                         </table>
                     }
                 </div>
+                @if (pageRegle()) {
+                    <div class="carte">
+                        <app-page-lignes
+                            [titre]="'Lignes en échec — ' + (regleInspectee()?.nom || '')"
+                            [page]="pageRegle()"
+                            [enCours]="enCours()"
+                            (changerOffset)="chargerLignesRegle($event)"
+                            (exporter)="exporterLignesRegle()"
+                            (fermer)="pageRegle.set(null)"
+                        />
+                    </div>
+                }
             }
 
             <!-- ---- historique ---- -->
@@ -485,6 +450,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
             gap: 4px;
             margin-bottom: 12px;
             border-bottom: 1px solid var(--bordure);
+            flex-wrap: wrap;
         }
         .onglets button {
             border: 0;
@@ -554,13 +520,18 @@ export class QualiteComponent {
     private readonly notifications = inject(NotificationsService);
 
     readonly onglets: { cle: Onglet; libelle: string }[] = [
-        { cle: 'profil', libelle: 'Profilage' },
+        { cle: 'profil', libelle: 'Profilage & anomalies' },
         { cle: 'doublons', libelle: 'Doublons' },
+        { cle: 'cles', libelle: 'Clé fonctionnelle' },
         { cle: 'regles', libelle: 'Règles & score' },
+        { cle: 'objet', libelle: 'Objet métier' },
         { cle: 'historique', libelle: 'Historique' }
     ];
     readonly sources = signal<Source[]>([]);
     readonly vocabulaire = signal<VocabulaireQualite | null>(null);
+    readonly relations = signal<Relation[]>([]);
+    readonly objets = signal<ObjetMetier[]>([]);
+    readonly listesValeurs = signal<ListeValeurs[]>([]);
     readonly sourceId = signal('');
     readonly ongletActif = signal<Onglet>('profil');
     readonly enCours = signal(false);
@@ -569,18 +540,23 @@ export class QualiteComponent {
     readonly doublons = signal<ResultatDoublons | null>(null);
     readonly regles = signal<RegleQualite[]>([]);
     readonly execution = signal<ExecutionRegles | null>(null);
-    readonly brouillon = signal<{ id: string | null; definition: DefinitionRegle; valeursTexte: string } | null>(null);
+    readonly brouillon = signal<BrouillonRegle | null>(null);
+    readonly regleInspectee = signal<RegleQualite | null>(null);
+    readonly pageRegle = signal<PageLignes | null>(null);
     readonly audits = signal<AuditQualite[]>([]);
     readonly formaterDate = formaterDate;
+    /** Périmètres d'audit (filtres) du profilage et de la recherche de doublons. */
+    filtresProfil: FiltreAudit[] = [];
+    filtresDoublons: FiltreAudit[] = [];
 
     readonly source = computed(() => this.sources().find(source => source.id === this.sourceId()) || null);
-    readonly typesRegle = computed(() => Object.entries(this.vocabulaire()?.typesRegle || {}) as [TypeRegle, string][]);
     /** Alertes lisibles déduites du profil : complétude faible, formats hétérogènes, espaces parasites, doublons. */
     readonly alertes = computed(() => {
         const profil = this.profil();
         if (!profil) return [];
         const alertes: string[] = [];
         if (profil.doublonsExacts > 0) alertes.push(`${profil.doublonsExacts} ligne(s) strictement identique(s) à une autre.`);
+        if (profil.lignesVides) alertes.push(`${profil.lignesVides} ligne(s) entièrement vide(s).`);
         for (const colonne of profil.colonnes) {
             if (colonne.completude < 0.9)
                 alertes.push(
@@ -606,9 +582,18 @@ export class QualiteComponent {
 
     private async charger(): Promise<void> {
         try {
-            const [sources, vocabulaire] = await Promise.all([this.api.sources(), this.api.vocabulaireQualite()]);
+            const [sources, vocabulaire, relations, objets, listesValeurs] = await Promise.all([
+                this.api.sources(),
+                this.api.vocabulaireQualite(),
+                this.api.relations(),
+                this.api.objetsMetier(),
+                this.api.listesValeurs()
+            ]);
             this.sources.set(sources);
             this.vocabulaire.set(vocabulaire);
+            this.relations.set(relations);
+            this.objets.set(objets);
+            this.listesValeurs.set(listesValeurs);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
@@ -621,6 +606,9 @@ export class QualiteComponent {
         this.cle.set([]);
         this.execution.set(null);
         this.brouillon.set(null);
+        this.pageRegle.set(null);
+        this.filtresProfil = [];
+        this.filtresDoublons = [];
         if (!sourceId) return;
         await Promise.all([this.rechargerRegles(), this.rechargerAudits()]);
     }
@@ -628,24 +616,34 @@ export class QualiteComponent {
     pourcent(valeur: number): string {
         return (100 * valeur).toFixed(1) + ' %';
     }
+    arrondir(valeur: number): string {
+        return (Math.round(valeur * 100) / 100).toString();
+    }
     typeDominant(colonne: ProfilColonne): string {
         if (colonne.total === colonne.vides) return 'vide';
         if (colonne.partDate >= 0.9) return 'date';
         if (colonne.partNumerique >= 0.9) return 'nombre';
         return 'texte';
     }
-    colonnesDe(sourceId: string | undefined): string[] {
-        return this.sources().find(source => source.id === sourceId)?.headers || [];
-    }
     libelleType(type: TypeRegle): string {
         return this.vocabulaire()?.typesRegle[type] || type;
+    }
+    /** Ce qu'une règle sans colonne contrôle : sa formule, sa condition SQL ou sa clé de regroupement. */
+    descriptionSansColonne(regle: RegleQualite): string {
+        const parametres = regle.parametres;
+        if (regle.type === 'expression') return parametres.formule || '';
+        if (regle.type === 'sql') return parametres.condition || '';
+        if (regle.type === 'groupe') return 'par ' + (parametres.colonnesGroupe || []).join(' + ');
+        return '';
     }
     syntheseAudit(audit: AuditQualite): string {
         const resume = audit.resume as Record<string, unknown>;
         if (audit.genre === 'profilage')
-            return `complétude moyenne ${this.pourcent(Number(resume['completudeMoyenne']))}, ${resume['doublonsExacts']} doublon(s) exact(s), ${resume['colonnesIncompletes']} colonne(s) incomplète(s)`;
+            return `complétude moyenne ${this.pourcent(Number(resume['completudeMoyenne']))}, ${resume['doublonsExacts']} doublon(s) exact(s), ${resume['colonnesIncompletes']} colonne(s) incomplète(s)${resume['filtres'] ? `, ${resume['filtres']} filtre(s)` : ''}`;
         if (audit.genre === 'doublons')
             return `clé ${(resume['cle'] as string[]).join(' + ')} : ${resume['groupes']} groupe(s), ${resume['lignes']} ligne(s)`;
+        if (audit.genre === 'doublons-approches')
+            return `${resume['profils']} profil(s) de clé : ${resume['groupesExacts']} clé(s) en doublon exact, ${resume['pairesFloues']} paire(s) ressemblante(s)`;
         return `score ${resume['score'] ?? '—'} / 100 sur ${resume['regles']} règle(s), ${resume['enEchec']} en échec`;
     }
 
@@ -660,23 +658,50 @@ export class QualiteComponent {
         }
     }
 
+    // ---- profilage ----
     async profiler(): Promise<void> {
         await this.executer(async () => {
-            this.profil.set(await this.api.profilerSource(this.sourceId()));
+            this.profil.set(await this.api.profilerSource(this.sourceId(), this.filtresProfil));
             await this.rechargerAudits();
         });
     }
+    exporterProfil(): void {
+        const profil = this.profil();
+        if (!profil) return;
+        const colonnes = [
+            'colonne',
+            'total',
+            'vides',
+            'completude',
+            'distinctes',
+            'longueurMin',
+            'longueurMax',
+            'espacesParasites',
+            'espacesMultiples',
+            'boucheTrous',
+            'cassesIncoherentes',
+            'aberrantes',
+            'partNumerique',
+            'partDate',
+            'motifMajoritaire',
+            'motifsDistincts'
+        ];
+        const lignes = profil.colonnes.map(colonne => colonnes.map(champ => (colonne as unknown as Record<string, unknown>)[champ]));
+        telechargerCsv(`profil ${profil.sourceNom}.csv`, colonnes, lignes);
+    }
 
+    // ---- doublons ----
     basculerCle(colonne: string): void {
         this.cle.update(cle => (cle.includes(colonne) ? cle.filter(candidat => candidat !== colonne) : [...cle, colonne]));
     }
     async chercherDoublons(): Promise<void> {
         await this.executer(async () => {
-            this.doublons.set(await this.api.chercherDoublons(this.sourceId(), this.cle()));
+            this.doublons.set(await this.api.chercherDoublons(this.sourceId(), this.cle(), this.filtresDoublons));
             await this.rechargerAudits();
         });
     }
 
+    // ---- règles ----
     async rechargerRegles(): Promise<void> {
         try {
             this.regles.set(await this.api.reglesQualite(this.sourceId()));
@@ -693,11 +718,7 @@ export class QualiteComponent {
     }
     nouvelleRegle(): void {
         const source = this.source();
-        this.brouillon.set({
-            id: null,
-            definition: { ...REGLE_VIDE(), sourceId: this.sourceId(), colonne: source?.headers[0] || '' },
-            valeursTexte: ''
-        });
+        this.brouillon.set({ id: null, definition: { ...REGLE_VIDE(), sourceId: this.sourceId(), colonne: source?.headers[0] || '' } });
     }
     modifierRegle(regle: RegleQualite): void {
         this.brouillon.set({
@@ -710,23 +731,12 @@ export class QualiteComponent {
                 parametres: { ...regle.parametres },
                 criticite: regle.criticite as Criticite,
                 active: regle.active
-            },
-            valeursTexte: (regle.parametres.valeurs || []).join(';')
+            }
         });
     }
-    async enregistrerRegle(): Promise<void> {
+    async enregistrerRegle(definition: DefinitionRegle): Promise<void> {
         const brouillon = this.brouillon();
         if (!brouillon) return;
-        const definition: DefinitionRegle = { ...brouillon.definition, parametres: { ...brouillon.definition.parametres } };
-        if (definition.type === 'dansListe')
-            definition.parametres.valeurs = brouillon.valeursTexte
-                .split(';')
-                .map(valeur => valeur.trim())
-                .filter(Boolean);
-        for (const champ of ['minimum', 'maximum'] as const) {
-            const valeur = definition.parametres[champ] as unknown;
-            definition.parametres[champ] = valeur === '' || valeur === null || valeur === undefined ? undefined : Number(valeur);
-        }
         try {
             if (brouillon.id) await this.api.modifierRegleQualite(brouillon.id, definition);
             else await this.api.creerRegleQualite(definition);
@@ -750,6 +760,56 @@ export class QualiteComponent {
         await this.executer(async () => {
             this.execution.set(await this.api.executerReglesQualite(this.sourceId()));
             await Promise.all([this.rechargerRegles(), this.rechargerAudits()]);
+        });
+    }
+    exporterResultats(): void {
+        const execution = this.execution();
+        if (!execution) return;
+        const colonnes = ['regle', 'type', 'colonne', 'criticite', 'total', 'echecs', 'taux', 'exemples', 'erreur'];
+        const lignes = execution.regles.map(regle => [
+            regle.nom,
+            regle.type,
+            regle.colonne,
+            regle.criticite,
+            regle.resultat?.total ?? '',
+            regle.resultat?.echecs ?? '',
+            regle.resultat ? this.pourcent(regle.resultat.taux) : '',
+            (regle.resultat?.exemples || []).join(' | '),
+            regle.erreur || ''
+        ]);
+        telechargerCsv(`regles ${this.source()?.name || ''} - score ${execution.score ?? ''}.csv`, colonnes, lignes);
+    }
+
+    // ---- lignes en échec d'une règle ----
+    async voirLignesRegle(regle: RegleQualite): Promise<void> {
+        this.regleInspectee.set(regle);
+        await this.chargerLignesRegle(0);
+    }
+    async chargerLignesRegle(offset: number): Promise<void> {
+        const regle = this.regleInspectee();
+        if (!regle) return;
+        await this.executer(async () => {
+            this.pageRegle.set(await this.api.lignesRegle(regle.id, Math.max(0, offset)));
+        });
+    }
+    async exporterLignesRegle(): Promise<void> {
+        const regle = this.regleInspectee();
+        if (!regle) return;
+        await this.executer(async () => {
+            const lignes: unknown[][] = [];
+            let colonnes: string[] = [];
+            let offset = 0;
+            let total = 0;
+            do {
+                const page = await this.api.lignesRegle(regle.id, offset);
+                colonnes = page.colonnes;
+                total = page.total;
+                lignes.push(...page.lignes);
+                offset += TAILLE_PAGE_LIGNES;
+                if (!page.lignes.length) break;
+            } while (offset < total && lignes.length < 5000);
+            telechargerCsv(`echecs ${regle.nom}.csv`, colonnes, lignes);
+            this.notifications.succes(`${lignes.length} ligne(s) exportée(s).`);
         });
     }
 }
