@@ -15,7 +15,7 @@ import { valider } from '../commun/validation';
 import { DocumentsService } from '../documents/documents.service';
 import { EspacesService } from '../espaces/espaces.service';
 import { JournalService } from '../journal/journal.service';
-import { identifiantSql } from '../espaces/moteur-duckdb';
+import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
 import { SourcesService } from '../sources/sources.service';
 import { MODES_SYNTHESE } from './constructeur-avance';
 import {
@@ -31,6 +31,16 @@ import {
 } from './constructeur-sql';
 
 const LIMITE_APERCU = 200;
+/** Une extraction ne lit jamais : un SQL personnalisé qui ne commence pas ainsi est refusé. */
+const LECTURE_SEULE = /^\s*(SELECT|WITH)\b/i;
+/** Nombre de valeurs proposées dans les listes déroulantes des filtres. */
+const VALEURS_SUGGEREES = 200;
+
+const schemaValeurs = z.object({
+    tableId: z.string().min(1),
+    nomColonne: z.string().min(1),
+    debut: z.string().trim().max(200).default('')
+});
 
 const schemaApercu = z.object({ specification: schemaSpecification, limite: z.number().int().positive().max(5000).default(LIMITE_APERCU) });
 const schemaMaterialisation = z.object({ specification: schemaSpecification, nom: z.string().trim().min(1).max(120) });
@@ -79,6 +89,24 @@ export class ExtractionController {
             genresColonne: GENRES_COLONNE,
             modesSynthese: MODES_SYNTHESE
         };
+    }
+
+    @Post('valeurs')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Valeurs les plus fréquentes d’une colonne, pour les suggérer dans les filtres.' })
+    async valeurs(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaValeurs)) corps: z.infer<typeof schemaValeurs>) {
+        const sources = await this.sources.lister(espace.id);
+        const source = sources.find(candidat => String(candidat.id) === corps.tableId);
+        if (!source) throw erreurIntrouvable('Source inconnue.');
+        if (!(source.headers || []).includes(corps.nomColonne)) throw erreurRequete(`Colonne inconnue : « ${corps.nomColonne} ».`);
+        const colonne = `TRIM(CAST(${identifiantSql(corps.nomColonne)} AS VARCHAR))`;
+        const commence = corps.debut ? `AND LOWER(${colonne}) LIKE ${litteralSql(corps.debut.toLowerCase())} || '%'` : '';
+        const { moteur } = await this.espaces.ressources(espace);
+        const resultat = await moteur.executer(
+            `SELECT ${colonne} AS valeur, COUNT(*)::BIGINT AS lignes FROM ${identifiantSql('t_' + corps.tableId)}` +
+                ` WHERE ${colonne} <> '' ${commence} GROUP BY 1 ORDER BY lignes DESC, valeur LIMIT ${VALEURS_SUGGEREES}`
+        );
+        return resultat.lignes.map(ligne => ({ valeur: String(ligne[0]), lignes: Number(ligne[1]) }));
     }
 
     @Post('sql')
@@ -264,6 +292,9 @@ export class ExtractionController {
 
     /** Résout les identifiants de sources et construit le SQL ; une spécification incohérente répond 400. */
     private async construire(espace: EspaceAvecRole, specification: Specification): Promise<{ sql: string; alias: string[] }> {
+        // Le SQL personnalisé est une requête écrite par l'utilisateur : seule la lecture est acceptée.
+        if (specification.sqlPersonnalise.trim() && !LECTURE_SEULE.test(specification.sqlPersonnalise))
+            throw erreurRequete('SQL personnalisé : seules les requêtes de lecture (SELECT, WITH) sont acceptées.');
         const sources = await this.sources.lister(espace.id);
         const parId = new Map(sources.map(source => [String(source.id), source]));
         const contexte: ContexteConstruction = {

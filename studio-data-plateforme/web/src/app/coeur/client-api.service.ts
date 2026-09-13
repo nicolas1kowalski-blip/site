@@ -115,6 +115,7 @@ import {
     SpecificationExtraction,
     TermeGlossaire,
     Utilisateur,
+    ValeurSuggeree,
     VocabulaireExtraction,
     VocabulaireQualite
 } from './modeles';
@@ -308,6 +309,13 @@ export class ClientApiService {
     }
     apercuExtraction(specification: SpecificationExtraction, limite = 200): Promise<ApercuExtraction> {
         return firstValueFrom(this.http.post<ApercuExtraction>(`${this.racine}/extraction/apercu`, { specification, limite }));
+    }
+    /** Valeurs les plus fréquentes d'une colonne, proposées dans les filtres ; « debut » restreint à un préfixe. */
+    valeursColonne(tableId: string, nomColonne: string, debut = ''): Promise<ValeurSuggeree[]> {
+        return firstValueFrom(this.http.post<ValeurSuggeree[]>(`${this.racine}/extraction/valeurs`, { tableId, nomColonne, debut }));
+    }
+    sqlExtraction(specification: SpecificationExtraction): Promise<{ sql: string }> {
+        return firstValueFrom(this.http.post<{ sql: string }>(`${this.racine}/extraction/sql`, specification));
     }
     compterExtraction(specification: SpecificationExtraction): Promise<{ total: number }> {
         return firstValueFrom(this.http.post<{ total: number }>(`${this.racine}/extraction/compter`, specification));

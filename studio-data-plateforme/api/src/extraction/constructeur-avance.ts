@@ -22,13 +22,35 @@ export type ModeSynthese = keyof typeof MODES_SYNTHESE;
 export type Synthese = {
     tableId: string;
     deTableId: string;
+    /** Route de la table d'ancrage, quand elle est ramenée plusieurs fois par des liens différents. */
+    deRoute: string;
     deColonne: string;
     versColonne: string;
     mode: ModeSynthese;
     nomColonne: string;
     n: number;
 };
-export type Hierarchie = { idColonne: string; parentColonne: string; attributs: string[]; profondeur: number };
+/**
+ * Hiérarchie aplatie. Deux façons de connaître le parent d'une ligne :
+ *   • « simple » : une colonne parent dans la table elle-même (COD_PARENT à côté de COD) ;
+ *   • « liaison » : une table de rattachement enfant → parent, éventuellement datée (valide du / au),
+ *     que l'on lit à une date de référence — c'est le cas des organigrammes qui changent dans le temps.
+ */
+export type Hierarchie = {
+    idColonne: string;
+    parentColonne: string;
+    attributs: string[];
+    profondeur: number;
+    type: 'simple' | 'liaison';
+    /** Type « liaison » : les colonnes de la table de rattachement (la table elle-même est passée à part). */
+    liaisonEnfant: string;
+    liaisonParent: string;
+    /** Colonnes de début et de fin de validité du rattachement (facultatives). */
+    valideDu: string;
+    valideAu: string;
+    /** Date à laquelle lire le rattachement (AAAA-MM-JJ) ; vide = aujourd'hui. */
+    dateReference: string;
+};
 
 export class ErreurFormule extends Error {}
 
@@ -93,26 +115,70 @@ export function expressionsSynthese(
 }
 
 /**
- * CTE récursive d'une hiérarchie : `nomCte(k, chain)` où k est l'identifiant normalisé et chain la liste des
- * étiquettes de la racine jusqu'à la ligne (un scalaire par niveau, ou un struct {a0, a1…} si plusieurs attributs).
+ * Condition de validité d'un rattachement daté, lue à la date de référence : une borne vide ne limite rien.
+ * Sans date de référence, on lit le rattachement du jour.
  */
-export function cteHierarchie(nomCte: string, nomTable: string, hierarchie: Hierarchie): string {
+function conditionValidite(hierarchie: Hierarchie, alias: string): string {
+    const reference = hierarchie.dateReference ? `${litteralSql(hierarchie.dateReference)}::DATE` : 'current_date';
+    const bornes: string[] = [];
+    const renseignee = (colonne: string) =>
+        `${alias}.${identifiantSql(colonne)} IS NOT NULL AND TRIM(CAST(${alias}.${identifiantSql(colonne)} AS VARCHAR)) <> ''`;
+    if (hierarchie.valideDu)
+        bornes.push(
+            `(NOT (${renseignee(hierarchie.valideDu)}) OR TRY_CAST(${alias}.${identifiantSql(hierarchie.valideDu)} AS DATE) <= ${reference})`
+        );
+    if (hierarchie.valideAu)
+        bornes.push(
+            `(NOT (${renseignee(hierarchie.valideAu)}) OR TRY_CAST(${alias}.${identifiantSql(hierarchie.valideAu)} AS DATE) >= ${reference})`
+        );
+    return bornes.length ? bornes.join(' AND ') : 'TRUE';
+}
+
+/**
+ * Définitions à placer dans le WITH pour une hiérarchie. La dernière est toujours `nomCte(k, chain)`, où k est
+ * l'identifiant normalisé et chain la liste des étiquettes de la racine jusqu'à la ligne (un scalaire par niveau,
+ * ou un struct {a0, a1…} si plusieurs attributs sont demandés). Le type « liaison » ajoute devant une définition
+ * `nomCte_liens(enfant, parent)` : les rattachements retenus à la date de référence.
+ */
+export function cteHierarchie(nomCte: string, nomTable: string, hierarchie: Hierarchie, nomTableLiaison?: string): string[] {
     const table = identifiantSql(nomTable);
     const identifiant = identifiantSql(hierarchie.idColonne);
-    const parent = identifiantSql(hierarchie.parentColonne);
     const attributs = hierarchie.attributs.length ? hierarchie.attributs : [hierarchie.idColonne];
     const etiquette = (alias: string) =>
         attributs.length > 1
             ? `{ ${attributs.map((attribut, index) => `'a${index}': TRIM(CAST(${alias}.${identifiantSql(attribut)} AS VARCHAR))`).join(', ')} }`
             : `TRIM(CAST(${alias}.${identifiantSql(attributs[0])} AS VARCHAR))`;
     const profondeur = Math.max(1, Math.min(20, hierarchie.profondeur || 5));
-    return (
+    const definitions: string[] = [];
+    // Comment reconnaître une racine, et comment rattacher un enfant « c » à un parent déjà placé « p ».
+    let racines: string;
+    let rattachement: string;
+    if (hierarchie.type === 'liaison') {
+        if (!nomTableLiaison) throw new ErreurFormule('Hiérarchie par table de liaison : la table de rattachement est requise.');
+        if (!hierarchie.liaisonEnfant || !hierarchie.liaisonParent)
+            throw new ErreurFormule('Hiérarchie par table de liaison : les colonnes enfant et parent sont requises.');
+        const liens = `${nomCte}_liens`;
+        definitions.push(
+            `${liens}(enfant, parent) AS (\n` +
+                `  SELECT ${cleNormalisee('l.' + identifiantSql(hierarchie.liaisonEnfant))}, ${cleNormalisee('l.' + identifiantSql(hierarchie.liaisonParent))}\n` +
+                `  FROM ${identifiantSql(nomTableLiaison)} l WHERE ${conditionValidite(hierarchie, 'l')}\n)`
+        );
+        racines = `NOT EXISTS (SELECT 1 FROM ${liens} r WHERE r.enfant = ${cleNormalisee('t.' + identifiant)} AND r.parent IS NOT NULL)`;
+        rattachement = `JOIN ${liens} li ON li.enfant = ${cleNormalisee('c.' + identifiant)} JOIN ${nomCte} p ON p.k = li.parent`;
+    } else {
+        if (!hierarchie.parentColonne) throw new ErreurFormule('Hiérarchie : la colonne parent est requise.');
+        const parent = identifiantSql(hierarchie.parentColonne);
+        racines = `t.${parent} IS NULL OR TRIM(CAST(t.${parent} AS VARCHAR)) = ''`;
+        rattachement = `JOIN ${nomCte} p ON p.k = ${cleNormalisee('c.' + parent)}`;
+    }
+    definitions.push(
         `${nomCte}(k, chain) AS (\n` +
-        `  SELECT ${cleNormalisee('t.' + identifiant)}, [${etiquette('t')}] FROM ${table} t WHERE t.${parent} IS NULL OR TRIM(CAST(t.${parent} AS VARCHAR)) = ''\n` +
-        `  UNION ALL\n` +
-        `  SELECT ${cleNormalisee('c.' + identifiant)}, list_append(p.chain, ${etiquette('c')}) FROM ${table} c JOIN ${nomCte} p ON ${cleNormalisee('c.' + parent)} = p.k` +
-        ` WHERE len(p.chain) < ${profondeur} AND NOT list_contains(p.chain, ${etiquette('c')})\n)`
+            `  SELECT ${cleNormalisee('t.' + identifiant)}, [${etiquette('t')}] FROM ${table} t WHERE ${racines}\n` +
+            `  UNION ALL\n` +
+            `  SELECT ${cleNormalisee('c.' + identifiant)}, list_append(p.chain, ${etiquette('c')}) FROM ${table} c ${rattachement}` +
+            ` WHERE len(p.chain) < ${profondeur} AND NOT list_contains(p.chain, ${etiquette('c')})\n)`
     );
+    return definitions;
 }
 
 /** Une colonne de sortie par niveau (et par attribut) : `alias_niv1`, `alias_niv2`… */

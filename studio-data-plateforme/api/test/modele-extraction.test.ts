@@ -287,3 +287,218 @@ test('extraction avancée par l’API : synthèse, colonne calculée, filtre sur
         'pas d’écrasement d’une source déposée'
     );
 });
+
+test('deux liens vers la même table : le SQL s’exécute et ramène deux colonnes distinctes', async () => {
+    // Des mouvements qui désignent deux fois la table des clients : l’émetteur et le destinataire.
+    await deposerSource('tb_mouvements', 'mouvements.csv', 'id;de;vers\nm1;1;2\nm2;4;3\n', ['id', 'de', 'vers']);
+    const reponse = await appel({
+        method: 'POST',
+        url: '/api/extraction/apercu',
+        payload: {
+            specification: {
+                baseId: 'tb_mouvements',
+                jointures: [
+                    { cle: 'emetteur', deTableId: 'tb_mouvements', deColonne: 'de', versTableId: 'tb_clients', versColonne: 'id_client' },
+                    {
+                        cle: 'destinataire',
+                        deTableId: 'tb_mouvements',
+                        deColonne: 'vers',
+                        versTableId: 'tb_clients',
+                        versColonne: 'id_client'
+                    }
+                ],
+                colonnes: [
+                    { tableId: 'tb_mouvements', nomColonne: 'id' },
+                    { tableId: 'tb_clients', route: 'emetteur', nomColonne: 'nom', alias: 'Émetteur' },
+                    { tableId: 'tb_clients', route: 'destinataire', nomColonne: 'nom', alias: 'Destinataire' }
+                ]
+            },
+            limite: 10
+        }
+    });
+    assert.equal(reponse.statusCode, 201, reponse.body);
+    const resultat = json(reponse);
+    assert.deepEqual(
+        resultat.colonnes.map((colonne: { nom: string }) => colonne.nom),
+        ['id', 'Émetteur', 'Destinataire']
+    );
+    assert.deepEqual(resultat.lignes, [
+        ['m1', 'Ana', 'Bob'],
+        ['m2', 'Idris', 'Zoé']
+    ]);
+});
+
+test('dédoublonnage par clé fonctionnelle : une ligne par client, première ou dernière commande', async () => {
+    const parClient = async (garder: string) => {
+        const reponse = await appel({
+            method: 'POST',
+            url: '/api/extraction/apercu',
+            payload: {
+                specification: {
+                    baseId: 'tb_commandes',
+                    jointures: [
+                        {
+                            deTableId: 'tb_commandes',
+                            deColonne: 'id_client',
+                            versTableId: 'tb_clients',
+                            versColonne: 'id_client'
+                        }
+                    ],
+                    colonnes: [
+                        { tableId: 'tb_clients', nomColonne: 'nom', alias: 'Client' },
+                        { tableId: 'tb_commandes', nomColonne: 'id_commande', alias: 'Commande' }
+                    ],
+                    dedoublonnage: { actif: true, cles: ['Client'], garder }
+                },
+                limite: 50
+            }
+        });
+        assert.equal(reponse.statusCode, 201, reponse.body);
+        return json(reponse).lignes;
+    };
+    // Ana a deux commandes (100 puis 101) : on n’en garde qu’une, au choix la première ou la dernière.
+    const premieres = await parClient('premiere');
+    assert.equal(premieres.length, 3, 'un client par ligne');
+    assert.deepEqual(
+        premieres.find((ligne: string[]) => ligne[0] === 'Ana'),
+        ['Ana', '100']
+    );
+    const dernieres = await parClient('derniere');
+    assert.deepEqual(
+        dernieres.find((ligne: string[]) => ligne[0] === 'Ana'),
+        ['Ana', '101']
+    );
+});
+
+test('regroupement avec mesures à critères : NB.SI.ENS et SOMME.SI.ENS façon tableur', async () => {
+    const reponse = await appel({
+        method: 'POST',
+        url: '/api/extraction/apercu',
+        payload: {
+            specification: {
+                baseId: 'tb_clients',
+                jointures: [{ deTableId: 'tb_clients', deColonne: 'id_client', versTableId: 'tb_commandes', versColonne: 'id_client' }],
+                colonnes: [{ tableId: 'tb_clients', nomColonne: 'ville', alias: 'Ville' }],
+                regrouper: true,
+                mesures: [
+                    { fn: 'count', nomColonne: 'id_commande', tableId: 'tb_commandes', alias: 'Commandes' },
+                    { fn: 'sum', tableId: 'tb_commandes', nomColonne: 'montant', alias: 'Total' },
+                    {
+                        fn: 'sum',
+                        tableId: 'tb_commandes',
+                        nomColonne: 'montant',
+                        alias: 'Total gros',
+                        criteres: [{ tableId: 'tb_commandes', nomColonne: 'montant', op: '>=', valeur: '20' }]
+                    }
+                ],
+                tri: [{ alias: 'Ville', sens: 'asc' }]
+            },
+            limite: 50
+        }
+    });
+    assert.equal(reponse.statusCode, 201, reponse.body);
+    const lignes = json(reponse).lignes;
+    const paris = lignes.find((ligne: unknown[]) => ligne[0] === 'Paris');
+    assert.equal(Number(paris[1]), 3, 'Ana (2 commandes) et Idris (1)');
+    assert.equal(Number(paris[2]), 42.5, '25.5 + 12 + 5');
+    assert.equal(Number(paris[3]), 25.5, 'seule la commande d’au moins 20 est retenue');
+});
+
+test('valeurs suggérées d’une colonne : les plus fréquentes d’abord, filtrées par le début saisi', async () => {
+    const toutes = json(
+        await appel({ method: 'POST', url: '/api/extraction/valeurs', payload: { tableId: 'tb_clients', nomColonne: 'ville' } })
+    );
+    assert.deepEqual(toutes[0], { valeur: 'Paris', lignes: 2 }, 'la valeur la plus fréquente en tête');
+    assert.equal(toutes.length, 3);
+    const commencantParL = json(
+        await appel({
+            method: 'POST',
+            url: '/api/extraction/valeurs',
+            payload: { tableId: 'tb_clients', nomColonne: 'ville', debut: 'l' }
+        })
+    );
+    assert.deepEqual(commencantParL.map((entree: { valeur: string }) => entree.valeur).sort(), ['Lille', 'Lyon']);
+    const colonneInconnue = await appel({
+        method: 'POST',
+        url: '/api/extraction/valeurs',
+        payload: { tableId: 'tb_clients', nomColonne: 'inexistante' }
+    });
+    assert.equal(colonneInconnue.statusCode, 400);
+});
+
+test('SQL personnalisé : exécuté tel quel, refusé s’il n’est pas en lecture', async () => {
+    const specification = {
+        baseId: 'tb_clients',
+        colonnes: [{ tableId: 'tb_clients', nomColonne: 'nom' }],
+        sqlPersonnalise: `SELECT upper(nom) AS cri FROM "t_tb_clients" ORDER BY nom LIMIT 2`
+    };
+    const apercu = json(await appel({ method: 'POST', url: '/api/extraction/apercu', payload: { specification, limite: 10 } }));
+    assert.deepEqual(apercu.lignes, [['ANA'], ['BOB']]);
+    assert.equal(apercu.colonnes[0].nom, 'cri');
+    const total = json(await appel({ method: 'POST', url: '/api/extraction/compter', payload: specification }));
+    assert.equal(total.total, 2, 'le comptage porte sur la requête personnalisée');
+    const ecriture = await appel({
+        method: 'POST',
+        url: '/api/extraction/apercu',
+        payload: { specification: { ...specification, sqlPersonnalise: 'DROP TABLE "t_tb_clients"' }, limite: 10 }
+    });
+    assert.equal(ecriture.statusCode, 400);
+    assert.match(json(ecriture).erreur, /lecture/);
+});
+
+test('hiérarchie par table de liaison datée : l’organigramme est aplati à la date de référence', async () => {
+    // Des services, et une table de rattachement qui change dans le temps : Études passe sous Technique en 2026.
+    await deposerSource('tb_services', 'services.csv', 'code;libelle\nDG;Direction\nTEC;Technique\nETU;Études\n', ['code', 'libelle']);
+    await deposerSource(
+        'tb_rattachements',
+        'rattachements.csv',
+        'enfant;parent;debut;fin\nTEC;DG;2020-01-01;\nETU;DG;2020-01-01;2025-12-31\nETU;TEC;2026-01-01;\n',
+        ['enfant', 'parent', 'debut', 'fin']
+    );
+    const aplatir = async (dateReference: string) => {
+        const reponse = await appel({
+            method: 'POST',
+            url: '/api/extraction/apercu',
+            payload: {
+                specification: {
+                    baseId: 'tb_services',
+                    colonnes: [
+                        { tableId: 'tb_services', nomColonne: 'libelle', alias: 'Service' },
+                        {
+                            tableId: 'tb_services',
+                            genre: 'hierarchie',
+                            alias: 'org',
+                            hierarchie: {
+                                idColonne: 'code',
+                                attributs: ['libelle'],
+                                profondeur: 3,
+                                type: 'liaison',
+                                liaisonTableId: 'tb_rattachements',
+                                liaisonEnfant: 'enfant',
+                                liaisonParent: 'parent',
+                                valideDu: 'debut',
+                                valideAu: 'fin',
+                                dateReference
+                            }
+                        }
+                    ],
+                    tri: [{ alias: 'Service', sens: 'asc' }]
+                },
+                limite: 50
+            }
+        });
+        assert.equal(reponse.statusCode, 201, reponse.body);
+        return json(reponse).lignes;
+    };
+    const en2024 = await aplatir('2024-06-30');
+    assert.deepEqual(
+        en2024.find((ligne: string[]) => ligne[0] === 'Études'),
+        ['Études', 'Direction', 'Études', null]
+    );
+    const en2026 = await aplatir('2026-06-30');
+    assert.deepEqual(
+        en2026.find((ligne: string[]) => ligne[0] === 'Études'),
+        ['Études', 'Direction', 'Technique', 'Études'],
+        'après le changement, Études est au troisième niveau'
+    );
+});

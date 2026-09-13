@@ -161,15 +161,35 @@ export type ModeSynthese = 'count' | 'countd' | 'values' | 'first';
 export type SyntheseExtraction = {
     tableId: string;
     deTableId: string;
+    /** Route de la table d'ancrage, quand elle est ramenée plusieurs fois par des liens différents. */
+    deRoute?: string;
     deColonne: string;
     versColonne: string;
     mode: ModeSynthese;
     nomColonne: string;
     n: number;
 };
-export type HierarchieExtraction = { idColonne: string; parentColonne: string; attributs: string[]; profondeur: number };
+/**
+ * Hiérarchie aplatie. Le parent d'une ligne se trouve soit dans une colonne de la table elle-même (« simple »),
+ * soit dans une table de rattachement enfant → parent, éventuellement datée (« liaison »).
+ */
+export type HierarchieExtraction = {
+    idColonne: string;
+    parentColonne: string;
+    attributs: string[];
+    profondeur: number;
+    type?: 'simple' | 'liaison';
+    liaisonTableId?: string;
+    liaisonEnfant?: string;
+    liaisonParent?: string;
+    valideDu?: string;
+    valideAu?: string;
+    dateReference?: string;
+};
 export type ColonneExtraction = {
     tableId: string;
+    /** Route de jointure d'où vient la colonne (vide = la première route posée sur cette table). */
+    route?: string;
     nomColonne: string;
     genre?: GenreColonneExtraction;
     formule?: string;
@@ -181,6 +201,7 @@ export type ColonneExtraction = {
 };
 export type FiltreExtraction = {
     tableId: string;
+    route?: string;
     nomColonne: string;
     op: OperateurFiltre;
     valeur?: string;
@@ -188,7 +209,31 @@ export type FiltreExtraction = {
     liste?: string[];
     exclure?: boolean;
 };
-export type JointureExtraction = { deTableId: string; deColonne: string; versTableId: string; versColonne: string };
+/**
+ * Une jointure porte une clé de route : deux jointures vers la même table par des liens différents cohabitent,
+ * ce qui permet de ramener côte à côte, par exemple, le nom du souscripteur et celui du bénéficiaire.
+ */
+export type JointureExtraction = {
+    cle?: string;
+    depuis?: string;
+    deTableId: string;
+    deColonne: string;
+    versTableId: string;
+    versColonne: string;
+};
+/** Fonction d'agrégation d'une mesure (« valeurs » n'a de sens que sur une colonne cochée, pas sur une mesure). */
+export type FonctionMesure = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';
+/** Mesure d'un regroupement, avec ses critères : c'est le NB.SI.ENS / SOMME.SI.ENS du tableur. */
+export type MesureExtraction = {
+    fn: FonctionMesure;
+    tableId: string;
+    route?: string;
+    nomColonne: string;
+    alias: string;
+    criteres: FiltreExtraction[];
+};
+/** Dédoublonnage par clé fonctionnelle : une seule ligne par valeur de clé. */
+export type DedoublonnageExtraction = { actif: boolean; cles: string[]; garder: 'premiere' | 'derniere' };
 export type SpecificationExtraction = {
     baseId: string;
     jointures: JointureExtraction[];
@@ -196,10 +241,15 @@ export type SpecificationExtraction = {
     colonnes: ColonneExtraction[];
     filtres: FiltreExtraction[];
     regrouper: boolean;
+    mesures?: MesureExtraction[];
     dedoublonner: boolean;
+    dedoublonnage?: DedoublonnageExtraction;
     tri: { alias: string; sens: 'asc' | 'desc' }[];
     limite?: number;
+    sqlPersonnalise?: string;
 };
+/** Valeur proposée dans un filtre, avec le nombre de lignes qui la portent. */
+export type ValeurSuggeree = { valeur: string; lignes: number };
 export type ApercuExtraction = { sql: string; colonnes: ColonneResultat[]; lignes: unknown[][]; limite: number };
 /** Bilan qualité du résultat d'une extraction : lignes et complétude de chaque colonne. */
 export type BilanExtraction = { total: number; colonnes: { nom: string; renseignees: number; part: number }[] };

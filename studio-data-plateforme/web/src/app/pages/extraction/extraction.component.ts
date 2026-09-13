@@ -1,20 +1,23 @@
 /**
- * Extraction : composer une requête sans écrire de SQL.
+ * Extraction avancée — le même écran que l'application classique, dans le même ordre :
  *
- *   1. Table de départ.
- *   2. Tables liées : proposées d'après les liens du modèle de données, à partir des tables déjà présentes ;
- *      chaque table ajoutée devient une jointure (gauche par défaut : les lignes de départ sont conservées).
- *   3. Colonnes : cochées table par table, avec un nom de sortie, une transformation, et un agrégat en mode regroupé ;
- *      plus les colonnes avancées de l'application classique : colonnes calculées (formule avec [colonne]),
- *      synthèses d'une table liée (compter, lister, N premières valeurs, sans multiplier les lignes) et
- *      hiérarchies aplaties (identifiant / parent → une colonne par niveau).
- *   4. Filtres : une condition par ligne, avec les opérateurs de l'application classique, dont « dans une liste
- *      fournie » (fichier ou texte collé).
- *   5. Aperçu (200 lignes, défilement virtuel), comptage complet, export CSV, SQL généré, modèles enregistrés,
- *      résultat enregistré comme source (réutilisable dans Comparer, Qualité, Statistiques…).
- *   Une extraction peut être pré-remplie depuis un objet métier : ses attributs deviennent les colonnes.
+ *   💾 Paramétrages d'extraction  — enregistrer la configuration et la rejouer plus tard (charger, renommer, supprimer).
+ *   🏛️ Partir d'un objet métier   — jointures, filtres de facettes et noms métier pré-remplis.
+ *      Table de départ            — le point d'entrée de l'extraction.
+ *   🔗 Quel lien utiliser ?        — quand deux tables sont reliées plusieurs fois, on choisit le lien par défaut,
+ *                                    et colonne par colonne avec le sélecteur « via ».
+ *   1. Colonnes en sortie          — tableau ordonné (source, nom en sortie, transformation, clé), ajout d'une
+ *                                    colonne, de toutes, ou de plusieurs d'un coup ; puis les trois assistants
+ *                                    Σ synthèse d'une table liée, 🌳 hiérarchie aplatie, ƒx colonne calculée.
+ *   2. Filtres                     — puces, avec les opérateurs du classique, les valeurs suggérées de la colonne
+ *                                    et le filtre « dans une liste fournie » (fichier ou texte collé).
+ *   3. Options                     — 🎯 dédoublonner par clé fonctionnelle, 🧮 regrouper & agréger avec des
+ *                                    mesures à critères (NB.SI.ENS, SOMME.SI.ENS).
+ *   4. Actions                     — compter, prévisualiser, bilan qualité, voir (et éditer) le SQL, type de
+ *                                    jointure, aperçu rapide, générer le CSV, enregistrer le résultat en source.
  *
- * La spécification est envoyée au serveur, qui la valide, construit le SQL et l'exécute (api/src/extraction).
+ * Toute la traduction en SQL est faite par le serveur (api/src/extraction) : l'écran ne compose qu'une
+ * spécification. Les chemins de jointure sont calculés par ./chemins.ts à partir du modèle de données.
  */
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Component, computed, inject, signal } from '@angular/core';
@@ -25,12 +28,13 @@ import {
     ApercuExtraction,
     BilanExtraction,
     ColonneExtraction,
+    DedoublonnageExtraction,
     FiltreExtraction,
-    GenreColonneExtraction,
-    JointureExtraction,
+    FonctionMesure,
+    MesureExtraction,
     ModeSynthese,
-    ObjetMetier,
     ModeleExtraction,
+    ObjetMetier,
     OPERATEURS_SANS_VALEUR,
     OPERATEUR_DEUX_VALEURS,
     OperateurFiltre,
@@ -38,14 +42,15 @@ import {
     Source,
     SpecificationExtraction,
     Transformation,
+    ValeurSuggeree,
     VocabulaireExtraction,
     genererIdentifiant
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
-
-/** Table proposée pour une jointure : le lien du modèle qui la relie à une table déjà présente. */
-type TableProposee = { source: Source; jointure: JointureExtraction; relation: Relation };
+import { AssistantsColonnesComponent } from './assistants-colonnes.component';
+import { Chemin, cheminParCle, cheminsVers, cleChemin, libelleChemin, planifierJointures, tablesAccessibles } from './chemins';
+import { SelecteurColonneComponent } from './selecteur-colonne.component';
 
 /** Une valeur par ligne ; sur chaque ligne, seule la première cellule compte (séparateurs ; , tabulation, |). */
 export function valeursDeListe(texte: string): string[] {
@@ -95,596 +100,829 @@ export function filtresDesFacettes(
     return filtres;
 }
 
-/** Équivalents des fonctions de tableur, en SQL DuckDB (les colonnes sont remplacées par celles de la table de départ). */
-const MODELES_FORMULE = [
-    { nom: 'CONCATENER', description: 'assembler deux colonnes', formule: "[colonne] || ' ' || [colonne2]" },
-    { nom: 'GAUCHE', description: 'les N premiers caractères', formule: 'left([colonne], 3)' },
-    { nom: 'DROITE', description: 'les N derniers caractères', formule: 'right([colonne], 3)' },
-    { nom: 'STXT', description: 'un morceau (début, longueur)', formule: 'substr([colonne], 1, 5)' },
-    { nom: 'NBCAR', description: 'longueur du texte', formule: 'length([colonne])' },
-    { nom: 'MAJUSCULE', description: 'en majuscules', formule: 'upper([colonne])' },
-    { nom: 'MINUSCULE', description: 'en minuscules', formule: 'lower([colonne])' },
-    { nom: 'SUPPRESPACE', description: 'sans espaces autour', formule: 'trim([colonne])' },
-    { nom: 'SI', description: 'si… alors… sinon', formule: "CASE WHEN [colonne] > 0 THEN 'oui' ELSE 'non' END" },
-    { nom: 'ARRONDI', description: 'arrondi à N décimales', formule: 'round(CAST([colonne] AS DOUBLE), 2)' },
-    { nom: 'ANNEE', description: 'année d’une date', formule: 'year(TRY_CAST([colonne] AS DATE))' },
-    { nom: 'MOIS', description: 'mois d’une date', formule: 'month(TRY_CAST([colonne] AS DATE))' },
-    {
-        nom: 'DIFFERENCE_JOURS',
-        description: 'jours entre deux dates',
-        formule: "date_diff('day', TRY_CAST([colonne] AS DATE), TRY_CAST([colonne2] AS DATE))"
-    }
-];
+/** Fonctions proposées pour une mesure de regroupement, avec le libellé de l'application classique. */
+const FONCTIONS_MESURE: Record<FonctionMesure, string> = {
+    count: 'Nombre de lignes (NB / NB.SI.ENS)',
+    countd: 'Nombre distinct',
+    sum: 'Somme (SOMME.SI.ENS)',
+    avg: 'Moyenne (MOYENNE.SI.ENS)',
+    min: 'Minimum',
+    max: 'Maximum'
+};
+
+/** Nombre de lignes du mode « aperçu rapide ». */
+const LIGNES_APERCU_RAPIDE = 500;
 
 @Component({
     selector: 'app-extraction',
-    imports: [FormsModule, ScrollingModule],
+    imports: [FormsModule, ScrollingModule, SelecteurColonneComponent, AssistantsColonnesComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
                 <h1>Extraction</h1>
-                <p class="discret">Composez une extraction sans SQL : tables liées, colonnes, filtres, regroupement.</p>
+                <p class="discret">
+                    Décrivez colonnes, filtres, dédoublonnage et agrégats : le SQL est généré, comptez et prévisualisez avant de lancer.
+                </p>
             </div>
-            <select
-                class="champ"
-                style="width: auto"
-                [ngModel]="''"
-                (ngModelChange)="chargerModele($event)"
-                name="modeleCharge"
-                title="Charger un modèle enregistré"
-            >
-                <option value="">Charger un modèle…</option>
-                @for (modele of modeles(); track modele.id) {
-                    <option [value]="modele.id">{{ modele.nom }}</option>
+        </div>
+
+        <!-- 💾 Paramétrages d'extraction enregistrés -->
+        <div class="bloc parametrages">
+            <div class="titre-bloc">
+                💾 Paramétrages d'extraction
+                <span class="discret">— enregistrez la configuration ci-dessous et rejouez-la plus tard</span>
+            </div>
+            <div class="ligne-champs">
+                @if (modeles().length) {
+                    <select class="champ petit large" [(ngModel)]="modeleChoisi" name="modeleChoisi">
+                        @for (modele of modeles(); track modele.id) {
+                            <option [value]="modele.id">{{ modele.nom }}</option>
+                        }
+                    </select>
+                    <button class="bouton petit principal" type="button" name="chargerModele" (click)="chargerModele(modeleChoisi())">
+                        📂 Charger
+                    </button>
+                    <button class="bouton petit" type="button" title="Renommer le paramétrage sélectionné" (click)="renommerModele()">
+                        ✎
+                    </button>
+                    <button
+                        class="bouton petit danger"
+                        type="button"
+                        title="Supprimer le paramétrage sélectionné"
+                        (click)="supprimerModele()"
+                    >
+                        🗑
+                    </button>
+                    <span class="separateur">|</span>
                 }
-            </select>
-            <select
-                class="champ"
-                style="width: auto"
-                [ngModel]="''"
-                (ngModelChange)="chargerObjetMetier($event)"
-                name="objetMetier"
-                title="Pré-remplir depuis un objet métier"
-            >
-                <option value="">Depuis un objet métier…</option>
-                @for (objet of objetsMetier(); track objet.id) {
-                    <option [value]="objet.id">{{ objet.name }}</option>
+                @if (session.peutEditer()) {
+                    <button class="bouton petit" type="button" name="enregistrerModele" (click)="enregistrerModele()">
+                        💾 Enregistrer le paramétrage actuel
+                    </button>
                 }
-            </select>
-            @if (session.peutEditer()) {
-                <button class="bouton" (click)="enregistrerModele()" [disabled]="!specificationPrete()">Enregistrer le modèle</button>
-                <button class="bouton" (click)="materialiser()" [disabled]="!specificationPrete() || enCours()">
-                    Enregistrer le résultat comme source
-                </button>
+                @if (!modeles().length) {
+                    <span class="discret">Aucun paramétrage enregistré pour l'instant.</span>
+                }
+            </div>
+        </div>
+
+        <!-- 🏛️ Partir d'un objet métier -->
+        <div class="bloc gouvernance">
+            <div class="titre-bloc">
+                🏛️ Partir d'un objet métier
+                <span class="discret">— jointures, filtres de facettes et noms métier pré-remplis</span>
+            </div>
+            @if (objetsMetier().length) {
+                <div class="ligne-champs">
+                    <select class="champ petit large" [(ngModel)]="objetChoisi" name="objetChoisi">
+                        @for (objet of objetsMetier(); track objet.id) {
+                            <option [value]="objet.id">{{ objet.name }}</option>
+                        }
+                    </select>
+                    <button class="bouton petit principal" type="button" name="chargerObjet" (click)="chargerObjetMetier(objetChoisi())">
+                        Charger cet objet
+                    </button>
+                    <span class="discret">écrase la configuration ci-dessous</span>
+                </div>
+            } @else {
+                <p class="discret">
+                    Aucun objet métier défini (écran Gouvernance). Vous pouvez construire l'extraction manuellement ci-dessous.
+                </p>
             }
         </div>
 
-        <div class="disposition">
-            <section class="colonne-gauche">
-                <!-- 1. table de départ -->
-                <div class="carte">
-                    <h2>1 · Table de départ</h2>
-                    <select class="champ" [ngModel]="baseId()" (ngModelChange)="choisirBase($event)" name="base">
-                        <option value="">—</option>
-                        @for (source of sources(); track source.id) {
-                            <option [value]="source.id">{{ source.name }}</option>
-                        }
-                    </select>
+        <!-- Table de départ -->
+        <div class="ligne-depart">
+            <span class="etiquette-forte">Table de départ :</span>
+            <select class="champ petit large" [ngModel]="baseId()" (ngModelChange)="choisirBase($event)" name="base">
+                <option value="">—</option>
+                @for (source of sources(); track source.id) {
+                    <option [value]="source.id">{{ source.name }}</option>
+                }
+            </select>
+            @if (baseId()) {
+                <span class="badge">{{ tablesAtteignables().length - 1 }} table(s) liée(s) atteignable(s)</span>
+            }
+        </div>
+
+        @if (baseId()) {
+            <!-- 🔗 Quel lien utiliser ? -->
+            @if (tablesAmbigues().length) {
+                <div class="bloc ambiguite">
+                    <div class="titre-bloc">🔗 Quel lien utiliser ?</div>
+                    <p class="discret">
+                        Ces tables sont reliées par <b>plusieurs liens</b>. Choisissez ici le lien <b>par défaut</b> — et pour ramener
+                        <b>la même table par plusieurs liens à la fois</b> (par exemple le nom du souscripteur ET celui du bénéficiaire),
+                        précisez le lien <b>colonne par colonne</b> avec le sélecteur « via » de la ligne d'ajout.
+                    </p>
+                    @for (table of tablesAmbigues(); track table.id) {
+                        <div class="ligne-champs">
+                            <span class="badge neutre">{{ nomDe(table.id) }}</span>
+                            <select
+                                class="champ petit large"
+                                [ngModel]="routesParDefaut()[table.id] || ''"
+                                (ngModelChange)="choisirLienParDefaut(table.id, $event)"
+                                [name]="'defaut_' + table.id"
+                                [attr.name]="'defaut_' + table.id"
+                            >
+                                @for (chemin of table.chemins; track cleChemin(chemin)) {
+                                    <option [value]="cleChemin(chemin)">{{ libelle(chemin) }}</option>
+                                }
+                            </select>
+                            <span class="discret">{{ table.chemins.length }} liens possibles</span>
+                        </div>
+                    }
                 </div>
+            }
 
-                <!-- 2. tables liées -->
-                @if (baseId()) {
-                    <div class="carte">
-                        <h2>2 · Tables liées</h2>
-                        @for (jointure of jointures(); track jointure.versTableId) {
-                            <div class="ligne-table">
-                                <span>
-                                    <b>{{ nomDe(jointure.versTableId) }}</b>
-                                    <span class="discret"
-                                        >via {{ nomDe(jointure.deTableId) }}.{{ jointure.deColonne }} = {{ jointure.versColonne }}</span
-                                    >
-                                </span>
-                                <button class="bouton petit" (click)="retirerTable(jointure.versTableId)">Retirer</button>
-                            </div>
-                        }
-                        @for (proposition of tablesProposees(); track proposition.source.id) {
-                            <div class="ligne-table proposee">
-                                <span>
-                                    {{ proposition.source.name }}
-                                    <span class="discret"
-                                        >via {{ proposition.jointure.deColonne }} → {{ proposition.jointure.versColonne }}</span
-                                    >
-                                </span>
-                                <button class="bouton petit" (click)="ajouterTable(proposition)">Ajouter</button>
-                            </div>
-                        }
-                        @if (!jointures().length && !tablesProposees().length) {
-                            <p class="discret">Aucun lien ne part de cette table : déclarez-en dans le Modèle de données.</p>
-                        }
-                        <label class="etiquette" style="margin-top: 8px">Type de jointure</label>
-                        <select class="champ" [(ngModel)]="typeJointure" name="typeJointure">
-                            <option value="left">gauche — garder toutes les lignes de la table de départ</option>
-                            <option value="inner">interne — garder seulement les lignes reliées</option>
-                        </select>
-                    </div>
-
-                    <!-- 3. colonnes -->
-                    <div class="carte">
-                        <h2>3 · Colonnes</h2>
-                        <label class="case"
-                            ><input type="checkbox" [(ngModel)]="regrouper" name="regrouper" /> Regrouper (les colonnes sans agrégat forment
-                            la clé)</label
-                        >
-                        <label class="case"
-                            ><input type="checkbox" [(ngModel)]="dedoublonner" name="dedoublonner" [disabled]="regrouper" /> Dédoublonner
-                            les lignes identiques</label
-                        >
-                        @for (tableId of tablesPresentes(); track tableId) {
-                            <details open>
-                                <summary>
-                                    <b>{{ nomDe(tableId) }}</b>
-                                    <span class="discret">{{ nombreCochees(tableId) }} / {{ colonnesDe(tableId).length }}</span>
-                                    <button class="bouton petit" type="button" (click)="toutCocher(tableId)">tout</button>
-                                    <button class="bouton petit" type="button" (click)="toutDecocher(tableId)">rien</button>
-                                </summary>
-                                @for (colonne of colonnesDe(tableId); track colonne) {
-                                    <div class="ligne-colonne">
-                                        <label class="case">
-                                            <input
-                                                type="checkbox"
-                                                [checked]="estCochee(tableId, colonne)"
-                                                (change)="basculer(tableId, colonne)"
-                                            />
-                                            <code>{{ colonne }}</code>
-                                        </label>
-                                        @if (choixDe(tableId, colonne); as choix) {
+            <!-- 1. Colonnes en sortie -->
+            <div class="carte">
+                <div class="titre-section">
+                    1. Colonnes en sortie
+                    @if (regrouper()) {
+                        <span class="discret">(dimensions du regroupement)</span>
+                    }
+                </div>
+                @if (colonnes().length) {
+                    <div class="defilement-x">
+                        <table class="tableau">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Nom en sortie (alias métier)</th>
+                                    <th>Transformation</th>
+                                    @if (regrouper()) {
+                                        <th>Agrégat</th>
+                                    }
+                                    @if (cleActive()) {
+                                        <th class="centre">Clé</th>
+                                    }
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (colonne of colonnes(); track $index; let index = $index) {
+                                    <tr>
+                                        <td class="source-colonne">
+                                            @if (colonne.genre && colonne.genre !== 'colonne') {
+                                                <span class="badge neutre">{{ libelleGenre(colonne.genre) }}</span>
+                                            }
+                                            <code>{{ libelleColonne(colonne) }}</code>
+                                        </td>
+                                        <td>
                                             <input
                                                 class="champ petit"
-                                                placeholder="nom en sortie"
-                                                [(ngModel)]="choix.alias"
-                                                [name]="'alias_' + tableId + colonne"
-                                                [attr.name]="'alias_' + tableId + colonne"
+                                                [ngModel]="colonne.alias"
+                                                (ngModelChange)="modifierColonne(index, { alias: $event })"
+                                                [name]="'alias_' + index"
+                                                [attr.name]="'alias_' + index"
+                                                placeholder="auto"
                                             />
-                                            <select
-                                                class="champ petit"
-                                                [(ngModel)]="choix.transformation"
-                                                [name]="'tr_' + tableId + colonne"
-                                                [attr.name]="'tr_' + tableId + colonne"
-                                            >
-                                                @for (entree of transformations(); track entree[0]) {
-                                                    <option [value]="entree[0]">{{ entree[1] }}</option>
-                                                }
-                                            </select>
-                                            @if (regrouper) {
+                                        </td>
+                                        <td>
+                                            @if (colonne.genre === 'colonne' || !colonne.genre) {
                                                 <select
                                                     class="champ petit"
-                                                    [(ngModel)]="choix.agregat"
-                                                    [name]="'ag_' + tableId + colonne"
-                                                    [attr.name]="'ag_' + tableId + colonne"
+                                                    [ngModel]="colonne.transformation"
+                                                    (ngModelChange)="modifierColonne(index, { transformation: $event })"
+                                                    [name]="'tr_' + index"
+                                                    [attr.name]="'tr_' + index"
                                                 >
-                                                    <option [ngValue]="undefined">clé de regroupement</option>
+                                                    @for (entree of transformations(); track entree[0]) {
+                                                        <option [value]="entree[0]">{{ entree[1] }}</option>
+                                                    }
+                                                </select>
+                                            } @else if (colonne.genre === 'calcul') {
+                                                <input
+                                                    class="champ petit formule"
+                                                    [ngModel]="colonne.formule"
+                                                    (ngModelChange)="modifierColonne(index, { formule: $event })"
+                                                    [name]="'formule_' + index"
+                                                    [attr.name]="'formule_' + index"
+                                                    title="Formule : les colonnes s'écrivent entre crochets, le reste est du SQL"
+                                                />
+                                            } @else {
+                                                <span class="discret">—</span>
+                                            }
+                                        </td>
+                                        @if (regrouper()) {
+                                            <td>
+                                                <select
+                                                    class="champ petit"
+                                                    [ngModel]="colonne.agregat || ''"
+                                                    (ngModelChange)="modifierColonne(index, { agregat: $event || undefined })"
+                                                    [name]="'ag_' + index"
+                                                    [attr.name]="'ag_' + index"
+                                                >
+                                                    <option value="">clé de regroupement</option>
                                                     @for (entree of agregats(); track entree[0]) {
                                                         <option [value]="entree[0]">{{ entree[1] }}</option>
                                                     }
                                                 </select>
-                                            }
+                                            </td>
                                         }
-                                    </div>
-                                }
-                            </details>
-                        }
-                    </div>
-
-                    <!-- 3 bis. colonnes avancées -->
-                    <div class="carte">
-                        <h2>3 bis · Colonnes avancées</h2>
-                        @for (colonne of colonnesAvancees(); track $index; let index = $index) {
-                            <div class="bloc-avance">
-                                <div class="ligne-avance">
-                                    <span class="badge neutre">{{ libelleGenre(colonne.genre!) }}</span>
-                                    <input
-                                        class="champ petit"
-                                        [(ngModel)]="colonne.alias"
-                                        [name]="'av_alias_' + index"
-                                        [attr.name]="'av_alias_' + index"
-                                        placeholder="nom en sortie"
-                                    />
-                                    <button class="bouton petit" type="button" (click)="retirerColonneAvancee(colonne)">✕</button>
-                                </div>
-                                @switch (colonne.genre) {
-                                    @case ('calcul') {
-                                        <input
-                                            class="champ petit"
-                                            [(ngModel)]="colonne.formule"
-                                            [name]="'av_formule_' + index"
-                                            [attr.name]="'av_formule_' + index"
-                                            placeholder="ex : [prix] * [qte]   ou   upper([nom]) || ' ' || [commandes.montant]"
-                                        />
-                                        <div class="ligne-avance">
-                                            <span class="discret">ƒx façon tableur :</span>
-                                            <select
-                                                class="champ petit"
-                                                [name]="'av_modele_' + index"
-                                                [attr.name]="'av_modele_' + index"
-                                                [ngModel]="''"
-                                                (ngModelChange)="insererModeleFormule(colonne, $event)"
-                                            >
-                                                <option value="">choisir une fonction…</option>
-                                                @for (modele of modelesFormule; track modele.nom) {
-                                                    <option [value]="modele.nom">{{ modele.nom }} — {{ modele.description }}</option>
-                                                }
-                                            </select>
-                                        </div>
-                                        <p class="discret">
-                                            Les colonnes s'écrivent entre crochets ; le reste est du SQL (opérateurs, fonctions, CASE WHEN …
-                                            END).
-                                        </p>
-                                    }
-                                    @case ('synthese') {
-                                        <div class="ligne-avance">
-                                            <span class="discret">table liée</span>
-                                            <b>{{ nomDe(colonne.synthese!.tableId) }}</b>
-                                            <span class="discret"
-                                                >via {{ nomDe(colonne.synthese!.deTableId) }}.{{ colonne.synthese!.deColonne }} =
-                                                {{ colonne.synthese!.versColonne }}</span
-                                            >
-                                        </div>
-                                        <div class="ligne-avance">
-                                            <select
-                                                class="champ petit"
-                                                [(ngModel)]="colonne.synthese!.mode"
-                                                [name]="'av_mode_' + index"
-                                                [attr.name]="'av_mode_' + index"
-                                            >
-                                                @for (mode of modesSynthese(); track mode[0]) {
-                                                    <option [value]="mode[0]">{{ mode[1] }}</option>
-                                                }
-                                            </select>
-                                            @if (colonne.synthese!.mode !== 'count') {
-                                                <select
-                                                    class="champ petit"
-                                                    [(ngModel)]="colonne.synthese!.nomColonne"
-                                                    [name]="'av_col_' + index"
-                                                    [attr.name]="'av_col_' + index"
-                                                >
-                                                    <option value="">colonne…</option>
-                                                    @for (nom of colonnesDe(colonne.synthese!.tableId); track nom) {
-                                                        <option [value]="nom">{{ nom }}</option>
-                                                    }
-                                                </select>
-                                            }
-                                            @if (colonne.synthese!.mode === 'first') {
+                                        @if (cleActive()) {
+                                            <td class="centre">
                                                 <input
-                                                    class="champ petit"
-                                                    type="number"
-                                                    min="1"
-                                                    max="12"
-                                                    [(ngModel)]="colonne.synthese!.n"
-                                                    [name]="'av_n_' + index"
-                                                    [attr.name]="'av_n_' + index"
-                                                    style="width: 70px"
+                                                    type="checkbox"
+                                                    [checked]="estCle(colonne)"
+                                                    (change)="basculerCle(colonne)"
+                                                    [attr.name]="'cle_' + index"
+                                                    title="Faire partie de la clé de dédoublonnage"
                                                 />
-                                            }
-                                        </div>
-                                    }
-                                    @case ('hierarchie') {
-                                        <div class="ligne-avance">
-                                            <span class="discret">table</span>
-                                            <b>{{ nomDe(colonne.tableId) }}</b>
-                                            <select
-                                                class="champ petit"
-                                                [(ngModel)]="colonne.hierarchie!.idColonne"
-                                                [name]="'av_id_' + index"
-                                                [attr.name]="'av_id_' + index"
-                                            >
-                                                <option value="">identifiant…</option>
-                                                @for (nom of colonnesDe(colonne.tableId); track nom) {
-                                                    <option [value]="nom">{{ nom }}</option>
-                                                }
-                                            </select>
-                                            <select
-                                                class="champ petit"
-                                                [(ngModel)]="colonne.hierarchie!.parentColonne"
-                                                [name]="'av_parent_' + index"
-                                                [attr.name]="'av_parent_' + index"
-                                            >
-                                                <option value="">parent…</option>
-                                                @for (nom of colonnesDe(colonne.tableId); track nom) {
-                                                    <option [value]="nom">{{ nom }}</option>
-                                                }
-                                            </select>
-                                            <select
-                                                class="champ petit"
-                                                [ngModel]="colonne.hierarchie!.attributs[0] || ''"
-                                                (ngModelChange)="colonne.hierarchie!.attributs = $event ? [$event] : []"
-                                                [name]="'av_attr_' + index"
-                                                [attr.name]="'av_attr_' + index"
-                                            >
-                                                <option value="">étiquette = identifiant</option>
-                                                @for (nom of colonnesDe(colonne.tableId); track nom) {
-                                                    <option [value]="nom">étiquette : {{ nom }}</option>
-                                                }
-                                            </select>
-                                            <input
-                                                class="champ petit"
-                                                type="number"
-                                                min="1"
-                                                max="20"
-                                                [(ngModel)]="colonne.hierarchie!.profondeur"
-                                                [name]="'av_prof_' + index"
-                                                [attr.name]="'av_prof_' + index"
-                                                style="width: 70px"
-                                                title="niveaux"
-                                            />
-                                        </div>
-                                    }
+                                            </td>
+                                        }
+                                        <td class="droite">
+                                            <button class="bouton petit danger" type="button" (click)="retirerColonne(index)">✕</button>
+                                        </td>
+                                    </tr>
                                 }
-                            </div>
-                        }
-                        <div class="ligne-avance" style="margin-top: 6px">
-                            <button class="bouton petit" type="button" (click)="ajouterCalcul()">+ colonne calculée</button>
-                            @for (proposition of tablesProposees(); track proposition.source.id) {
-                                <button class="bouton petit" type="button" (click)="ajouterSynthese(proposition)">
-                                    + synthèse de {{ proposition.source.name }}
-                                </button>
-                            }
-                            @for (tableId of tablesPresentes(); track tableId) {
-                                <button class="bouton petit" type="button" (click)="ajouterHierarchie(tableId)">
-                                    + hiérarchie de {{ nomDe(tableId) }}
-                                </button>
+                            </tbody>
+                        </table>
+                    </div>
+                } @else {
+                    <p class="discret">Aucune colonne. Ajoutez-en ci-dessous.</p>
+                }
+
+                <div class="ligne-ajout">
+                    <app-selecteur-colonne
+                        identifiant="ajout"
+                        [sources]="sources()"
+                        [chemins]="cheminsParTable()"
+                        [routesParDefaut]="routesParDefaut()"
+                        [(tableId)]="ajoutTableId"
+                        [(route)]="ajoutRoute"
+                        [(nomColonne)]="ajoutColonne"
+                    />
+                    <button class="bouton petit principal" type="button" name="ajouterColonne" (click)="ajouterColonne()">+ Colonne</button>
+                    <button class="bouton petit" type="button" name="ajouterToutes" (click)="ajouterToutesLesColonnes()">+ Toutes</button>
+                    <button class="bouton petit" type="button" name="ouvrirPlusieurs" (click)="basculerChoixMultiple()">
+                        ➕ Plusieurs colonnes…
+                    </button>
+                </div>
+
+                @if (choixMultipleOuvert()) {
+                    <div class="bloc choix-multiple">
+                        <div class="ligne-champs">
+                            <input
+                                class="champ petit"
+                                [(ngModel)]="rechercheColonnes"
+                                name="rechercheColonnes"
+                                placeholder="filtrer les colonnes…"
+                            />
+                            <span class="discret">{{ colonnesAChoisir().length }} colonne(s) — {{ nomDe(ajoutTableId()) }}</span>
+                            <span class="espace"></span>
+                            <button class="bouton petit principal" type="button" name="appliquerPlusieurs" (click)="ajouterLesCochees()">
+                                Ajouter les {{ colonnesCochees().length }} colonne(s) cochée(s)
+                            </button>
+                        </div>
+                        <div class="grille-colonnes">
+                            @for (colonne of colonnesAChoisir(); track colonne) {
+                                <label class="case">
+                                    <input
+                                        type="checkbox"
+                                        [checked]="colonnesCochees().includes(colonne)"
+                                        (change)="basculerCochee(colonne)"
+                                    />
+                                    <span>{{ colonne }}</span>
+                                </label>
                             }
                         </div>
                     </div>
+                }
 
-                    <!-- 4. filtres -->
-                    <div class="carte">
-                        <h2>4 · Filtres</h2>
+                <app-assistants-colonnes
+                    [sources]="sources()"
+                    [chemins]="cheminsParTable()"
+                    [baseId]="baseId()"
+                    [modesSynthese]="modesSynthese()"
+                    (ajouter)="ajouterColonneAvancee($event)"
+                />
+            </div>
+
+            <!-- 2. Filtres -->
+            <div class="carte">
+                <div class="titre-section">2. Filtres</div>
+                @if (filtres().length) {
+                    <div class="puces">
                         @for (filtre of filtres(); track $index; let index = $index) {
-                            <div class="ligne-filtre">
-                                <select
-                                    class="champ petit"
-                                    [(ngModel)]="filtre.tableId"
-                                    (ngModelChange)="filtre.nomColonne = ''"
-                                    [name]="'ft_' + index"
-                                    [attr.name]="'ft_' + index"
-                                >
-                                    @for (tableId of tablesPresentes(); track tableId) {
-                                        <option [value]="tableId">{{ nomDe(tableId) }}</option>
-                                    }
-                                </select>
-                                <select
-                                    class="champ petit"
-                                    [(ngModel)]="filtre.nomColonne"
-                                    [name]="'fc_' + index"
-                                    [attr.name]="'fc_' + index"
-                                >
-                                    <option value="">colonne…</option>
-                                    @for (colonne of colonnesDe(filtre.tableId); track colonne) {
-                                        <option [value]="colonne">{{ colonne }}</option>
-                                    }
-                                </select>
-                                <select class="champ petit" [(ngModel)]="filtre.op" [name]="'fo_' + index" [attr.name]="'fo_' + index">
-                                    @for (entree of operateurs(); track entree[0]) {
-                                        <option [value]="entree[0]">{{ entree[1] }}</option>
-                                    }
-                                </select>
-                                @if (!sansValeur(filtre.op)) {
-                                    <input
-                                        class="champ petit"
-                                        [(ngModel)]="filtre.valeur"
-                                        [name]="'fv_' + index"
-                                        [attr.name]="'fv_' + index"
-                                        placeholder="valeur"
-                                    />
-                                }
+                            <span class="puce">
+                                <b>{{ libelleFiltre(filtre) }}</b>
                                 @if (filtre.op === 'list') {
-                                    <span class="liste-fournie">
-                                        <span class="badge neutre">{{ (filtre.liste || []).length }} valeur(s)</span>
-                                        <label class="bouton petit"
-                                            >fichier<input
-                                                type="file"
-                                                hidden
-                                                accept=".csv,.txt,.tsv"
-                                                (change)="chargerListe(filtre, $event)"
-                                        /></label>
-                                        <button class="bouton petit" type="button" (click)="collerListe(filtre)">coller</button>
-                                        <label class="case"
-                                            ><input
-                                                type="checkbox"
-                                                [(ngModel)]="filtre.exclure"
-                                                [name]="'fx_' + index"
-                                                [attr.name]="'fx_' + index"
-                                            />
-                                            exclure</label
-                                        >
-                                    </span>
+                                    <span class="badge neutre">{{ (filtre.liste || []).length }} valeur(s)</span>
+                                    <label class="bouton petit">
+                                        fichier<input type="file" hidden accept=".csv,.txt,.tsv" (change)="chargerListe(filtre, $event)" />
+                                    </label>
+                                    <button class="bouton petit" type="button" (click)="collerListe(filtre)">coller</button>
+                                    <label class="case">
+                                        <input
+                                            type="checkbox"
+                                            [ngModel]="filtre.exclure"
+                                            (ngModelChange)="filtre.exclure = $event"
+                                            [name]="'fx_' + index"
+                                            [attr.name]="'fx_' + index"
+                                        />
+                                        exclure
+                                    </label>
                                 }
-                                @if (filtre.op === deuxValeurs) {
-                                    <input
-                                        class="champ petit"
-                                        [(ngModel)]="filtre.valeur2"
-                                        [name]="'fv2_' + index"
-                                        [attr.name]="'fv2_' + index"
-                                        placeholder="et"
-                                    />
-                                }
-                                <button class="bouton petit" type="button" (click)="retirerFiltre(index)">✕</button>
-                            </div>
+                                <button class="lien-retirer" type="button" (click)="retirerFiltre(index)">✕</button>
+                            </span>
                         }
-                        <button class="bouton petit" type="button" (click)="ajouterFiltre()">+ Ajouter un filtre</button>
                     </div>
                 }
-            </section>
-
-            <section>
-                <div class="carte">
-                    <div class="entete-page" style="margin: 0">
-                        <button class="bouton principal" (click)="apercevoir()" [disabled]="!specificationPrete() || enCours()">
-                            {{ enCours() ? 'Exécution…' : 'Aperçu (200 lignes)' }}
-                        </button>
-                        <button class="bouton" (click)="compter()" [disabled]="!specificationPrete() || enCours()">Compter</button>
-                        <button class="bouton" (click)="exporter()" [disabled]="!specificationPrete() || enCours()">Exporter en CSV</button>
-                        <button
-                            class="bouton"
-                            (click)="bilanQualite()"
-                            [disabled]="!specificationPrete() || enCours()"
-                            title="Nombre de lignes du résultat et taux de complétude de chaque colonne"
-                        >
-                            Bilan qualité
-                        </button>
-                        <span class="espace"></span>
-                        @if (total() !== null) {
-                            <span class="badge">{{ total() }} ligne(s) au total</span>
+                <div class="ligne-ajout">
+                    <app-selecteur-colonne
+                        identifiant="filtre"
+                        [sources]="sources()"
+                        [chemins]="cheminsParTable()"
+                        [routesParDefaut]="routesParDefaut()"
+                        [(tableId)]="filtreTableId"
+                        [(route)]="filtreRoute"
+                        [(nomColonne)]="filtreColonne"
+                    />
+                    <select class="champ petit" [(ngModel)]="filtreOperateur" name="filtreOperateur">
+                        @for (entree of operateurs(); track entree[0]) {
+                            <option [value]="entree[0]">{{ entree[1] }}</option>
                         }
-                        <label class="case"><input type="checkbox" [(ngModel)]="afficherSql" name="afficherSql" /> SQL</label>
-                    </div>
-                    @if (erreur()) {
-                        <p class="erreur">{{ erreur() }}</p>
+                    </select>
+                    @if (!sansValeur(filtreOperateur())) {
+                        <input
+                            class="champ petit"
+                            [(ngModel)]="filtreValeur"
+                            name="filtreValeur"
+                            list="valeurs-suggerees"
+                            (focus)="proposerValeurs()"
+                            (input)="proposerValeurs()"
+                            placeholder="choisir ou saisir…"
+                        />
+                        <datalist id="valeurs-suggerees">
+                            @for (suggestion of valeursSuggerees(); track suggestion.valeur) {
+                                <option [value]="suggestion.valeur">{{ suggestion.lignes }} ligne(s)</option>
+                            }
+                        </datalist>
                     }
-                    @if (afficherSql && apercu()) {
-                        <pre class="sql">{{ apercu()!.sql }}</pre>
+                    @if (filtreOperateur() === deuxValeurs) {
+                        <input class="champ petit court" [(ngModel)]="filtreValeur2" name="filtreValeur2" placeholder="et" />
                     }
-                    @if (bilan(); as bilan) {
-                        <div class="bilan">
-                            <div class="discret" style="margin: 10px 0 6px">
-                                Bilan qualité du résultat — {{ bilan.total }} ligne(s), {{ bilan.colonnes.length }} colonne(s) · taux de
-                                complétude par colonne :
+                    <button class="bouton petit principal" type="button" name="ajouterFiltre" (click)="ajouterFiltre()">+ Filtre</button>
+                </div>
+            </div>
+
+            <!-- 3. Options : dédoublonnage et regroupement -->
+            <div class="grille deux">
+                <div class="carte">
+                    <label class="case forte">
+                        <input
+                            type="checkbox"
+                            [ngModel]="dedoublonnageActif()"
+                            (ngModelChange)="basculerDedoublonnage($event)"
+                            name="dedoublonner"
+                            [disabled]="regrouper()"
+                        />
+                        🎯 Dédoublonner par clé fonctionnelle
+                    </label>
+                    @if (dedoublonnageActif() && !regrouper()) {
+                        <p class="discret">
+                            Cochez les colonnes « Clé » ci-dessus ({{ dedoublonnage().cles.length }} sélectionnée(s)). Conserver :
+                            <select
+                                class="champ petit"
+                                [ngModel]="dedoublonnage().garder"
+                                (ngModelChange)="choisirLigneGardee($event)"
+                                name="garder"
+                            >
+                                <option value="premiere">1re ligne</option>
+                                <option value="derniere">dernière ligne</option>
+                            </select>
+                        </p>
+                    } @else if (regrouper()) {
+                        <p class="discret">Indisponible avec le regroupement.</p>
+                    }
+                    <label class="case">
+                        <input type="checkbox" [(ngModel)]="dedoublonnerLignes" name="dedoublonnerLignes" [disabled]="regrouper()" />
+                        Supprimer aussi les lignes en tous points identiques
+                    </label>
+                </div>
+
+                <div class="carte">
+                    <label class="case forte">
+                        <input type="checkbox" [(ngModel)]="regrouper" name="regrouper" />
+                        🧮 Regrouper &amp; agréger (group by)
+                    </label>
+                    @if (regrouper()) {
+                        <p class="discret">
+                            Sans colonne en sortie = totaux globaux (une seule ligne). Ajoutez des <b>critères</b> à une mesure pour
+                            reproduire NB.SI.ENS / SOMME.SI.ENS.
+                        </p>
+                        @for (mesure of mesures(); track $index; let index = $index) {
+                            <div class="ligne-mesure">
+                                <b>{{ libelleFonction(mesure.fn) }}</b>
+                                <code>{{ libelleCibleMesure(mesure) }}</code>
+                                @if (mesure.criteres.length) {
+                                    <span class="badge alerte">SI {{ libelleCriteres(mesure.criteres) }}</span>
+                                }
+                                →
+                                <input
+                                    class="champ petit"
+                                    [ngModel]="mesure.alias"
+                                    (ngModelChange)="mesure.alias = $event"
+                                    [name]="'mes_' + index"
+                                    [attr.name]="'mes_' + index"
+                                />
+                                <button class="bouton petit danger" type="button" (click)="retirerMesure(index)">✕</button>
                             </div>
-                            <div class="kpis">
-                                @for (colonne of bilan.colonnes; track colonne.nom) {
-                                    <div class="kpi" [title]="colonne.nom">
-                                        <span class="nom-colonne">{{ colonne.nom }}</span>
-                                        <b
-                                            [style.color]="
-                                                colonne.part >= 0.95
-                                                    ? 'var(--succes)'
-                                                    : colonne.part >= 0.7
-                                                      ? 'var(--alerte)'
-                                                      : 'var(--erreur)'
-                                            "
-                                            >{{ (100 * colonne.part).toFixed(0) }} %</b
-                                        >
-                                        <span>{{ colonne.renseignees }} / {{ bilan.total }}</span>
-                                    </div>
+                        }
+                        @if (criteresEnAttente().length) {
+                            <div class="puces">
+                                @for (critere of criteresEnAttente(); track $index; let index = $index) {
+                                    <span class="puce alerte">
+                                        critère : {{ libelleFiltre(critere) }}
+                                        <button class="lien-retirer" type="button" (click)="retirerCritereEnAttente(index)">✕</button>
+                                    </span>
                                 }
                             </div>
+                        }
+                        <div class="ligne-ajout critere">
+                            <span class="etiquette">Critères (optionnel, NB.SI.ENS)</span>
+                            <app-selecteur-colonne
+                                identifiant="critere"
+                                [sources]="sources()"
+                                [chemins]="cheminsParTable()"
+                                [routesParDefaut]="routesParDefaut()"
+                                [(tableId)]="critereTableId"
+                                [(route)]="critereRoute"
+                                [(nomColonne)]="critereColonne"
+                            />
+                            <select class="champ petit" [(ngModel)]="critereOperateur" name="critereOperateur">
+                                @for (entree of operateurs(); track entree[0]) {
+                                    <option [value]="entree[0]">{{ entree[1] }}</option>
+                                }
+                            </select>
+                            @if (!sansValeur(critereOperateur())) {
+                                <input class="champ petit" [(ngModel)]="critereValeur" name="critereValeur" placeholder="valeur…" />
+                            }
+                            <button class="bouton petit" type="button" name="ajouterCritere" (click)="ajouterCritereEnAttente()">
+                                + Critère
+                            </button>
+                        </div>
+                        <div class="ligne-ajout">
+                            <select class="champ petit large" [(ngModel)]="mesureFonction" name="mesureFonction">
+                                @for (entree of fonctionsMesure; track entree[0]) {
+                                    <option [value]="entree[0]">{{ entree[1] }}</option>
+                                }
+                            </select>
+                            <app-selecteur-colonne
+                                identifiant="mesure"
+                                [sources]="sources()"
+                                [chemins]="cheminsParTable()"
+                                [routesParDefaut]="routesParDefaut()"
+                                [(tableId)]="mesureTableId"
+                                [(route)]="mesureRoute"
+                                [(nomColonne)]="mesureColonne"
+                            />
+                            <button class="bouton petit principal" type="button" name="ajouterMesure" (click)="ajouterMesure()">
+                                + Agrégat{{ criteresEnAttente().length ? ' (avec ' + criteresEnAttente().length + ' critère(s))' : '' }}
+                            </button>
                         </div>
                     }
                 </div>
-                @if (apercu(); as apercu) {
-                    <div class="carte resultat">
-                        <div class="ligne entete-colonnes">
-                            @for (colonne of apercu.colonnes; track colonne.nom) {
-                                <div class="cellule" [title]="colonne.type">
-                                    <b>{{ colonne.nom }}</b
-                                    ><span class="discret">{{ colonne.type }}</span>
+            </div>
+
+            <!-- 4. Actions et aperçu -->
+            <div class="carte">
+                <div class="ligne-actions">
+                    <button class="bouton" type="button" name="compter" (click)="compter()" [disabled]="!prete() || enCours()">
+                        🔢 Compter
+                    </button>
+                    <span class="total">{{ total() === null ? '—' : total()!.toLocaleString('fr-FR') }}</span>
+                    <button
+                        class="bouton principal"
+                        type="button"
+                        name="previsualiser"
+                        (click)="apercevoir()"
+                        [disabled]="!prete() || enCours()"
+                    >
+                        👁️ {{ enCours() ? 'Exécution…' : 'Prévisualiser' }}
+                    </button>
+                    <button class="bouton" type="button" name="bilan" (click)="bilanQualite()" [disabled]="!prete() || enCours()">
+                        ✅ Bilan qualité
+                    </button>
+                    <button class="bouton" type="button" name="voirSql" (click)="basculerSql()" [disabled]="!prete()">
+                        📝 Voir le SQL
+                    </button>
+                </div>
+
+                @if (erreur()) {
+                    <p class="erreur">{{ erreur() }}</p>
+                }
+
+                @if (sqlVisible()) {
+                    <div class="zone-sql">
+                        <label class="case">
+                            <input
+                                type="checkbox"
+                                [ngModel]="sqlPersonnaliseActif()"
+                                (ngModelChange)="basculerSqlPersonnalise($event)"
+                                name="sqlPersonnalise"
+                            />
+                            SQL personnalisé (éditer librement la requête)
+                        </label>
+                        <textarea
+                            class="champ sql"
+                            [ngModel]="sqlAffiche()"
+                            (ngModelChange)="ecrireSql($event)"
+                            [readonly]="!sqlPersonnaliseActif()"
+                            name="sql"
+                            rows="10"
+                        ></textarea>
+                    </div>
+                }
+
+                @if (bilan(); as bilan) {
+                    <div class="bilan">
+                        <div class="discret">
+                            Bilan qualité du résultat — {{ bilan.total.toLocaleString('fr-FR') }} ligne(s), {{ bilan.colonnes.length }}
+                            colonne(s) · taux de complétude par colonne :
+                        </div>
+                        <div class="kpis">
+                            @for (colonne of bilan.colonnes; track colonne.nom) {
+                                <div class="kpi" [title]="colonne.nom">
+                                    <span class="nom-colonne">{{ colonne.nom }}</span>
+                                    <b [style.color]="couleurCompletude(colonne.part)">{{ (100 * colonne.part).toFixed(0) }} %</b>
+                                    <span>{{ colonne.renseignees }} / {{ bilan.total }}</span>
                                 </div>
                             }
                         </div>
-                        <cdk-virtual-scroll-viewport itemSize="30" class="corps">
-                            <div
-                                class="ligne"
-                                *cdkVirtualFor="let ligne of apercu.lignes; let index = index"
-                                [class.paire]="index % 2 === 0"
-                            >
-                                @for (valeur of ligne; track $index) {
-                                    <div class="cellule">{{ valeur === null ? '∅' : valeur }}</div>
-                                }
-                            </div>
-                        </cdk-virtual-scroll-viewport>
-                        <div class="discret" style="padding: 6px 10px">
-                            {{ apercu.lignes.length }} ligne(s) affichée(s){{
-                                apercu.lignes.length >= apercu.limite ? ' (aperçu limité)' : ''
-                            }}
-                        </div>
                     </div>
-                } @else if (!baseId()) {
-                    <div class="carte vide">Choisissez une table de départ pour commencer.</div>
                 }
-            </section>
-        </div>
+
+                <div class="ligne-options">
+                    <span class="etiquette-forte">Jointures :</span>
+                    <label class="case">
+                        <input
+                            type="radio"
+                            name="typeJointure"
+                            value="left"
+                            [ngModel]="typeJointure()"
+                            (ngModelChange)="typeJointure.set($event)"
+                        />
+                        Conserver tout (left join)
+                    </label>
+                    <label class="case">
+                        <input
+                            type="radio"
+                            name="typeJointure"
+                            value="inner"
+                            [ngModel]="typeJointure()"
+                            (ngModelChange)="typeJointure.set($event)"
+                        />
+                        Intersection (inner join)
+                    </label>
+                    <label class="case avertissement">
+                        <input type="checkbox" [(ngModel)]="apercuRapide" name="apercuRapide" />
+                        Mode « aperçu rapide » — limiter à {{ lignesApercuRapide }} lignes
+                    </label>
+                </div>
+
+                <div class="ligne-generer">
+                    <button
+                        class="bouton principal"
+                        type="button"
+                        name="genererCsv"
+                        (click)="exporter()"
+                        [disabled]="!prete() || enCours()"
+                    >
+                        ⬇️ Générer le CSV
+                    </button>
+                    @if (session.peutEditer()) {
+                        <label class="case">
+                            <input type="checkbox" [(ngModel)]="ajouterCommeSource" name="ajouterCommeSource" />
+                            Ajouter aussi comme nouvelle source
+                        </label>
+                        <input
+                            class="champ petit"
+                            [(ngModel)]="nomSourceProduite"
+                            name="nomSourceProduite"
+                            placeholder="Nom de la source (optionnel)"
+                        />
+                    }
+                </div>
+            </div>
+
+            @if (apercu(); as apercu) {
+                <div class="carte resultat">
+                    <div class="ligne entete-colonnes">
+                        @for (colonne of apercu.colonnes; track colonne.nom) {
+                            <div class="cellule" [title]="colonne.type">
+                                <b>{{ colonne.nom }}</b
+                                ><span class="discret">{{ colonne.type }}</span>
+                            </div>
+                        }
+                    </div>
+                    <cdk-virtual-scroll-viewport itemSize="30" class="corps">
+                        <div class="ligne" *cdkVirtualFor="let ligne of apercu.lignes; let index = index" [class.paire]="index % 2 === 0">
+                            @for (valeur of ligne; track $index) {
+                                <div class="cellule">{{ valeur === null ? '∅' : valeur }}</div>
+                            }
+                        </div>
+                    </cdk-virtual-scroll-viewport>
+                    <div class="discret pied-resultat">
+                        {{ apercu.lignes.length }} ligne(s) affichée(s){{ apercu.lignes.length >= apercu.limite ? ' (aperçu limité)' : '' }}
+                    </div>
+                </div>
+            }
+        } @else {
+            <div class="carte vide">Choisissez une table de départ pour commencer.</div>
+        }
     `,
     styles: `
-        .disposition {
-            display: grid;
-            grid-template-columns: minmax(340px, 460px) 1fr;
-            gap: 14px;
-            align-items: start;
+        .bloc {
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            background: var(--surface-2);
         }
-        .colonne-gauche {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
+        .titre-bloc {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 6px;
         }
-        .colonne-gauche .carte + .carte {
-            margin-top: 0;
+        .bloc.parametrages .titre-bloc {
+            color: var(--accent);
         }
-        .ligne-table {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 6px 0;
-            border-bottom: 1px solid var(--bordure);
+        .bloc.gouvernance .titre-bloc {
+            color: var(--succes);
         }
-        .ligne-table.proposee {
+        .bloc.ambiguite {
+            border-color: var(--alerte);
+        }
+        .bloc.ambiguite .titre-bloc {
+            color: var(--alerte);
+        }
+        .titre-bloc .discret {
+            text-transform: none;
+            font-weight: 500;
+        }
+        .titre-section {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
             color: var(--texte-2);
+            margin-bottom: 8px;
+        }
+        .ligne-champs,
+        .ligne-ajout,
+        .ligne-actions,
+        .ligne-options,
+        .ligne-generer,
+        .ligne-depart,
+        .ligne-mesure {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+        .ligne-depart {
+            margin-bottom: 12px;
+        }
+        .ligne-ajout {
+            background: var(--surface-2);
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 6px 8px;
+            margin-top: 8px;
+        }
+        .ligne-ajout.critere {
+            background: color-mix(in srgb, var(--alerte) 8%, transparent);
+        }
+        .ligne-actions {
+            margin-bottom: 8px;
+        }
+        .ligne-options,
+        .ligne-generer {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .ligne-generer {
+            background: color-mix(in srgb, var(--accent) 8%, transparent);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .ligne-mesure {
+            font-size: 12px;
+            background: var(--surface-2);
+            border-radius: 6px;
+            padding: 4px 6px;
+            margin-bottom: 4px;
         }
         .case {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 6px;
             cursor: pointer;
         }
-        .ligne-colonne {
-            display: grid;
-            grid-template-columns: minmax(120px, 1fr) 1fr 1fr auto;
-            gap: 6px;
-            align-items: center;
-            padding: 3px 0;
+        .case.forte {
+            font-weight: 700;
         }
-        .ligne-filtre {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr auto auto;
-            gap: 6px;
-            align-items: center;
-            margin-bottom: 6px;
+        .case.avertissement {
+            background: color-mix(in srgb, var(--alerte) 12%, transparent);
+            border-radius: 6px;
+            padding: 3px 8px;
+        }
+        .etiquette-forte {
+            font-weight: 700;
+            color: var(--texte-2);
+            font-size: 12px;
         }
         .champ.petit {
             padding: 4px 6px;
             font-size: 12px;
+            width: auto;
         }
-        .bloc-avance {
-            border: 1px solid var(--bordure);
-            border-radius: 6px;
-            padding: 6px 8px;
-            margin-bottom: 6px;
+        .champ.petit.large {
+            min-width: 220px;
         }
-        .ligne-avance {
+        .champ.petit.court {
+            width: 90px;
+        }
+        .champ.petit.formule {
+            min-width: 260px;
+            font-family: ui-monospace, monospace;
+        }
+        .separateur {
+            color: var(--bordure);
+        }
+        .puces {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            align-items: center;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
-        .liste-fournie {
-            display: flex;
-            gap: 4px;
+        .puce {
+            display: inline-flex;
             align-items: center;
-            flex-wrap: wrap;
-            grid-column: span 2;
+            gap: 6px;
+            font-size: 11px;
+            border: 1px solid var(--bordure);
+            border-radius: 999px;
+            padding: 3px 10px;
+            background: var(--surface);
         }
-        details summary {
+        .puce.alerte {
+            border-color: var(--alerte);
+        }
+        .lien-retirer {
+            border: 0;
+            background: none;
             cursor: pointer;
+            color: var(--erreur);
+            padding: 0;
+        }
+        .source-colonne {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin: 8px 0 4px;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .centre {
+            text-align: center;
+        }
+        .droite {
+            text-align: right;
+        }
+        .choix-multiple {
+            margin-top: 8px;
+        }
+        .grille-colonnes {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 2px 10px;
+            max-height: 260px;
+            overflow: auto;
+            margin-top: 6px;
+        }
+        .total {
+            font-weight: 800;
+            font-size: 15px;
+            color: var(--accent);
+            min-width: 60px;
+        }
+        .zone-sql {
+            margin: 8px 0;
+        }
+        .champ.sql {
+            width: 100%;
+            font-family: ui-monospace, monospace;
+            font-size: 12px;
+            margin-top: 4px;
         }
         .erreur {
             color: var(--erreur);
             font-weight: 600;
-            margin-top: 8px;
+        }
+        .bilan {
+            margin: 10px 0;
         }
         .bilan .kpi {
             padding: 8px 10px;
@@ -700,14 +938,6 @@ const MODELES_FORMULE = [
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-        }
-        .sql {
-            margin: 10px 0 0;
-            padding: 10px;
-            background: var(--surface-2);
-            border-radius: 8px;
-            font-size: 12px;
-            white-space: pre-wrap;
         }
         .resultat {
             padding: 0;
@@ -743,10 +973,18 @@ const MODELES_FORMULE = [
             background: color-mix(in srgb, var(--surface-2) 50%, transparent);
         }
         .corps {
-            height: 55vh;
+            height: 45vh;
+        }
+        .pied-resultat {
+            padding: 6px 10px;
+        }
+        .grille.deux {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
         @media (max-width: 900px) {
-            .disposition {
+            .grille.deux {
                 grid-template-columns: 1fr;
             }
         }
@@ -765,60 +1003,88 @@ export class ExtractionComponent {
 
     // ---- la spécification en cours de composition ----
     readonly baseId = signal('');
-    readonly jointures = signal<JointureExtraction[]>([]);
     readonly colonnes = signal<ColonneExtraction[]>([]);
     readonly filtres = signal<FiltreExtraction[]>([]);
-    typeJointure: 'left' | 'inner' = 'left';
-    regrouper = false;
-    dedoublonner = false;
-    afficherSql = false;
+    readonly mesures = signal<MesureExtraction[]>([]);
+    readonly criteresEnAttente = signal<FiltreExtraction[]>([]);
+    readonly dedoublonnage = signal<DedoublonnageExtraction>({ actif: false, cles: [], garder: 'premiere' });
+    readonly dedoublonnerLignes = signal(false);
+    readonly regrouper = signal(false);
+    readonly typeJointure = signal<'left' | 'inner'>('left');
+    readonly apercuRapide = signal(false);
+    readonly routesParDefaut = signal<Record<string, string>>({});
+    readonly sqlVisible = signal(false);
+    readonly sqlAffiche = signal('');
+    readonly sqlPersonnaliseActif = signal(false);
 
+    // ---- lignes d'ajout ----
+    readonly ajoutTableId = signal('');
+    readonly ajoutRoute = signal('');
+    readonly ajoutColonne = signal('');
+    readonly choixMultipleOuvert = signal(false);
+    readonly rechercheColonnes = signal('');
+    readonly colonnesCochees = signal<string[]>([]);
+    readonly filtreTableId = signal('');
+    readonly filtreRoute = signal('');
+    readonly filtreColonne = signal('');
+    readonly filtreOperateur = signal<OperateurFiltre>('=');
+    readonly filtreValeur = signal('');
+    readonly filtreValeur2 = signal('');
+    readonly valeursSuggerees = signal<ValeurSuggeree[]>([]);
+    readonly critereTableId = signal('');
+    readonly critereRoute = signal('');
+    readonly critereColonne = signal('');
+    readonly critereOperateur = signal<OperateurFiltre>('=');
+    readonly critereValeur = signal('');
+    readonly mesureFonction = signal<FonctionMesure>('count');
+    readonly mesureTableId = signal('');
+    readonly mesureRoute = signal('');
+    readonly mesureColonne = signal('');
+    readonly modeleChoisi = signal('');
+    readonly objetChoisi = signal('');
+    readonly ajouterCommeSource = signal(false);
+    readonly nomSourceProduite = signal('');
+
+    // ---- résultats ----
     readonly apercu = signal<ApercuExtraction | null>(null);
     readonly total = signal<number | null>(null);
     readonly bilan = signal<BilanExtraction | null>(null);
     readonly erreur = signal('');
     readonly enCours = signal(false);
-    readonly deuxValeurs = OPERATEUR_DEUX_VALEURS;
 
-    readonly tablesPresentes = computed(() =>
-        this.baseId() ? [this.baseId(), ...this.jointures().map(jointure => jointure.versTableId)] : []
-    );
-    readonly specificationPrete = computed(() => !!this.baseId() && this.colonnes().length > 0);
+    readonly deuxValeurs = OPERATEUR_DEUX_VALEURS;
+    readonly lignesApercuRapide = LIGNES_APERCU_RAPIDE;
+    readonly fonctionsMesure = Object.entries(FONCTIONS_MESURE) as [FonctionMesure, string][];
+    readonly cleChemin = cleChemin;
+
     readonly operateurs = computed(() => Object.entries(this.vocabulaire()?.operateurs || {}) as [OperateurFiltre, string][]);
     readonly transformations = computed(() => Object.entries(this.vocabulaire()?.transformations || {}) as [Transformation, string][]);
     readonly agregats = computed(() => Object.entries(this.vocabulaire()?.agregats || {}) as [Agregat, string][]);
     readonly modesSynthese = computed(() => Object.entries(this.vocabulaire()?.modesSynthese || {}) as [ModeSynthese, string][]);
-    /** Les colonnes calculées, synthèses et hiérarchies (les colonnes simples sont cochées table par table). */
-    readonly colonnesAvancees = computed(() => this.colonnes().filter(colonne => colonne.genre && colonne.genre !== 'colonne'));
-    /** Fonctions « façon tableur » : chaque modèle est une formule prête à adapter (colonnes entre crochets). */
-    readonly modelesFormule = MODELES_FORMULE;
-    insererModeleFormule(colonne: ColonneExtraction, nomModele: string): void {
-        const modele = MODELES_FORMULE.find(candidat => candidat.nom === nomModele);
-        if (!modele) return;
-        const entetes = this.sources().find(source => source.id === this.baseId())?.headers || [];
-        const premiere = entetes[0] || 'colonne';
-        const seconde = entetes[1] || premiere;
-        colonne.formule = modele.formule.replace(/\[colonne2\]/g, `[${seconde}]`).replace(/\[colonne\]/g, `[${premiere}]`);
-    }
 
-    /** Tables joignables : un lien du modèle entre une table présente et une table absente, dans un sens ou l'autre. */
-    readonly tablesProposees = computed<TableProposee[]>(() => {
-        const presentes = new Set(this.tablesPresentes());
-        const propositions: TableProposee[] = [];
-        for (const relation of this.relations()) {
-            if (!relation.sourceId || !relation.targetId) continue;
-            const candidats: [string, string, string, string][] = [
-                [relation.sourceId, relation.sourceCol, relation.targetId, relation.targetCol],
-                [relation.targetId, relation.targetCol, relation.sourceId, relation.sourceCol]
-            ];
-            for (const [deTableId, deColonne, versTableId, versColonne] of candidats) {
-                if (!presentes.has(deTableId) || presentes.has(versTableId)) continue;
-                if (propositions.some(candidat => candidat.source.id === versTableId)) continue;
-                const source = this.sources().find(candidat => candidat.id === versTableId);
-                if (source) propositions.push({ source, jointure: { deTableId, deColonne, versTableId, versColonne }, relation });
-            }
-        }
-        return propositions;
+    /** Les tables que l'on peut atteindre depuis la table de départ, la table de départ comprise. */
+    readonly tablesAtteignables = computed(() => (this.baseId() ? tablesAccessibles(this.baseId(), this.relations()) : []));
+    /** Tous les chemins vers chaque table atteignable : c'est la matière du sélecteur « via ». */
+    readonly cheminsParTable = computed(() => {
+        const parTable = new Map<string, Chemin[]>();
+        for (const tableId of this.tablesAtteignables()) parTable.set(tableId, cheminsVers(this.baseId(), tableId, this.relations()));
+        return parTable;
+    });
+    /** Les tables reliées de plusieurs façons : celles pour lesquelles il faut choisir un lien. */
+    readonly tablesAmbigues = computed(() => {
+        const ambigues: { id: string; chemins: Chemin[] }[] = [];
+        for (const [tableId, chemins] of this.cheminsParTable()) if (chemins.length > 1) ambigues.push({ id: tableId, chemins });
+        return ambigues;
+    });
+    readonly prete = computed(
+        () => !!this.baseId() && (this.colonnes().length > 0 || this.mesures().length > 0 || this.sqlPersonnaliseActif())
+    );
+    readonly dedoublonnageActif = computed(() => this.dedoublonnage().actif);
+    readonly cleActive = computed(() => this.dedoublonnage().actif && !this.regrouper());
+    /** Les colonnes proposées dans le panneau « Plusieurs colonnes… », filtrées par la recherche. */
+    readonly colonnesAChoisir = computed(() => {
+        const recherche = this.rechercheColonnes().trim().toLowerCase();
+        return this.colonnesDe(this.ajoutTableId()).filter(colonne => !recherche || colonne.toLowerCase().includes(recherche));
     });
 
     constructor() {
@@ -839,6 +1105,8 @@ export class ExtractionComponent {
             this.vocabulaire.set(vocabulaire);
             this.modeles.set(modeles);
             this.objetsMetier.set(objets);
+            this.modeleChoisi.set(modeles[0]?.id || '');
+            this.objetChoisi.set(objets[0]?.id || '');
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
@@ -850,94 +1118,190 @@ export class ExtractionComponent {
     colonnesDe(tableId: string): string[] {
         return this.sources().find(source => source.id === tableId)?.headers || [];
     }
-
-    choisirBase(tableId: string): void {
-        this.baseId.set(tableId);
-        this.jointures.set([]);
-        this.colonnes.set([]);
-        this.filtres.set([]);
-        this.apercu.set(null);
-        this.total.set(null);
+    libelle(chemin: Chemin): string {
+        return libelleChemin(chemin, tableId => this.nomDe(tableId));
     }
-
-    ajouterTable(proposition: TableProposee): void {
-        this.jointures.update(liste => [...liste, proposition.jointure]);
-    }
-    /** Retire une table et, par cohérence, tout ce qui en dépend : jointures qui en partent, colonnes et filtres. */
-    retirerTable(tableId: string): void {
-        const aRetirer = new Set([tableId]);
-        let changement = true;
-        while (changement) {
-            changement = false;
-            for (const jointure of this.jointures()) {
-                if (aRetirer.has(jointure.deTableId) && !aRetirer.has(jointure.versTableId)) {
-                    aRetirer.add(jointure.versTableId);
-                    changement = true;
-                }
-            }
-        }
-        this.jointures.update(liste => liste.filter(jointure => !aRetirer.has(jointure.versTableId)));
-        this.colonnes.update(liste => liste.filter(colonne => !aRetirer.has(colonne.tableId)));
-        this.filtres.update(liste => liste.filter(filtre => !aRetirer.has(filtre.tableId)));
-    }
-
-    choixDe(tableId: string, nomColonne: string): ColonneExtraction | undefined {
-        return this.colonnes().find(
-            colonne => (colonne.genre ?? 'colonne') === 'colonne' && colonne.tableId === tableId && colonne.nomColonne === nomColonne
-        );
-    }
-
-    // ---- colonnes avancées ----
-    libelleGenre(genre: GenreColonneExtraction): string {
+    libelleGenre(genre: NonNullable<ColonneExtraction['genre']>): string {
         return this.vocabulaire()?.genresColonne[genre] || genre;
     }
-    ajouterCalcul(): void {
-        this.colonnes.update(liste => [
-            ...liste,
-            { tableId: this.baseId(), nomColonne: '', genre: 'calcul', formule: '', alias: '', transformation: 'none' }
-        ]);
+    libelleFonction(fonction: FonctionMesure): string {
+        return FONCTIONS_MESURE[fonction].split(' (')[0];
     }
-    /** Une synthèse résume une table reliée à une table présente, sans la joindre (les lignes ne sont pas multipliées). */
-    ajouterSynthese(proposition: TableProposee): void {
-        const jointure = proposition.jointure;
-        this.colonnes.update(liste => [
-            ...liste,
-            {
-                tableId: jointure.deTableId,
-                nomColonne: '',
-                genre: 'synthese',
-                alias: '',
-                transformation: 'none',
-                synthese: {
-                    tableId: jointure.versTableId,
-                    deTableId: jointure.deTableId,
-                    deColonne: jointure.deColonne,
-                    versColonne: jointure.versColonne,
-                    mode: 'count',
-                    nomColonne: '',
-                    n: 3
-                }
-            }
-        ]);
-    }
-    ajouterHierarchie(tableId: string): void {
-        this.colonnes.update(liste => [
-            ...liste,
-            {
-                tableId,
-                nomColonne: '',
-                genre: 'hierarchie',
-                alias: '',
-                transformation: 'none',
-                hierarchie: { idColonne: '', parentColonne: '', attributs: [], profondeur: 5 }
-            }
-        ]);
-    }
-    retirerColonneAvancee(colonne: ColonneExtraction): void {
-        this.colonnes.update(liste => liste.filter(candidat => candidat !== colonne));
+    couleurCompletude(part: number): string {
+        return part >= 0.95 ? 'var(--succes)' : part >= 0.7 ? 'var(--alerte)' : 'var(--erreur)';
     }
 
-    // ---- filtre sur une liste fournie ----
+    /** Le chemin d'un élément, retrouvé à partir de sa table et de sa route. */
+    cheminDe(tableId: string, route = ''): Chemin {
+        const chemins = this.cheminsParTable().get(tableId) || [];
+        return cheminParCle(chemins, route) || chemins[0] || [];
+    }
+    /** Suffixe « via … » affiché quand l'élément n'emprunte pas le premier chemin de sa table. */
+    private suffixeVia(tableId: string, route = ''): string {
+        const chemins = this.cheminsParTable().get(tableId) || [];
+        if (chemins.length < 2) return '';
+        return ` (via ${this.libelle(this.cheminDe(tableId, route))})`;
+    }
+    libelleColonne(colonne: ColonneExtraction): string {
+        const via = this.suffixeVia(colonne.tableId, colonne.route);
+        if (colonne.genre === 'calcul') return 'formule' + via;
+        if (colonne.genre === 'synthese') return `${this.nomDe(colonne.synthese!.tableId)} — ${colonne.synthese!.mode}` + via;
+        if (colonne.genre === 'hierarchie') return `${this.nomDe(colonne.tableId)} — hiérarchie` + via;
+        return `${this.nomDe(colonne.tableId)}.${colonne.nomColonne}` + via;
+    }
+    libelleFiltre(filtre: FiltreExtraction): string {
+        const operateur = this.vocabulaire()?.operateurs[filtre.op] || filtre.op;
+        const valeur = this.sansValeur(filtre.op) ? '' : ` « ${filtre.valeur || ''} »`;
+        return `${this.nomDe(filtre.tableId)}.${filtre.nomColonne}${this.suffixeVia(filtre.tableId, filtre.route)} ${operateur}${valeur}`;
+    }
+    libelleCriteres(criteres: FiltreExtraction[]): string {
+        return criteres.map(critere => this.libelleFiltre(critere)).join(' ET ');
+    }
+    libelleCibleMesure(mesure: MesureExtraction): string {
+        if (mesure.fn === 'count' && !mesure.nomColonne) return 'toutes les lignes';
+        return `${this.nomDe(mesure.tableId)}.${mesure.nomColonne}${this.suffixeVia(mesure.tableId, mesure.route)}`;
+    }
+
+    // ---- table de départ et liens par défaut ----
+    choisirBase(tableId: string): void {
+        this.baseId.set(tableId);
+        this.colonnes.set([]);
+        this.filtres.set([]);
+        this.mesures.set([]);
+        this.criteresEnAttente.set([]);
+        this.dedoublonnage.set({ actif: false, cles: [], garder: 'premiere' });
+        this.apercu.set(null);
+        this.total.set(null);
+        this.bilan.set(null);
+        this.sqlPersonnaliseActif.set(false);
+        for (const selecteur of [this.ajoutTableId, this.filtreTableId, this.critereTableId, this.mesureTableId]) selecteur.set(tableId);
+        for (const selecteur of [this.ajoutRoute, this.filtreRoute, this.critereRoute, this.mesureRoute]) selecteur.set('');
+        const premiere = this.colonnesDe(tableId)[0] || '';
+        for (const selecteur of [this.ajoutColonne, this.filtreColonne, this.critereColonne, this.mesureColonne]) selecteur.set(premiere);
+    }
+    choisirLienParDefaut(tableId: string, route: string): void {
+        this.routesParDefaut.update(defauts => ({ ...defauts, [tableId]: route }));
+        if (this.ajoutTableId() === tableId) this.ajoutRoute.set(route);
+    }
+
+    // ---- colonnes en sortie ----
+    ajouterColonne(): void {
+        if (!this.ajoutColonne()) return;
+        this.colonnes.update(liste => [
+            ...liste,
+            { tableId: this.ajoutTableId(), route: this.ajoutRoute(), nomColonne: this.ajoutColonne(), alias: '', transformation: 'none' }
+        ]);
+    }
+    ajouterToutesLesColonnes(): void {
+        for (const nomColonne of this.colonnesDe(this.ajoutTableId())) this.ajouterUneColonneNommee(nomColonne);
+    }
+    private ajouterUneColonneNommee(nomColonne: string): void {
+        const dejaPresente = this.colonnes().some(
+            colonne => colonne.tableId === this.ajoutTableId() && colonne.route === this.ajoutRoute() && colonne.nomColonne === nomColonne
+        );
+        if (dejaPresente) return;
+        this.colonnes.update(liste => [
+            ...liste,
+            { tableId: this.ajoutTableId(), route: this.ajoutRoute(), nomColonne, alias: '', transformation: 'none' }
+        ]);
+    }
+    basculerChoixMultiple(): void {
+        this.choixMultipleOuvert.update(ouvert => !ouvert);
+        this.colonnesCochees.set([]);
+        this.rechercheColonnes.set('');
+    }
+    basculerCochee(nomColonne: string): void {
+        this.colonnesCochees.update(liste =>
+            liste.includes(nomColonne) ? liste.filter(candidat => candidat !== nomColonne) : [...liste, nomColonne]
+        );
+    }
+    ajouterLesCochees(): void {
+        for (const nomColonne of this.colonnesCochees()) this.ajouterUneColonneNommee(nomColonne);
+        this.notifications.info(`${this.colonnesCochees().length} colonne(s) ajoutée(s).`);
+        this.choixMultipleOuvert.set(false);
+        this.colonnesCochees.set([]);
+    }
+    ajouterColonneAvancee(colonne: ColonneExtraction): void {
+        this.colonnes.update(liste => [...liste, colonne]);
+    }
+    modifierColonne(index: number, changement: Partial<ColonneExtraction>): void {
+        this.colonnes.update(liste => liste.map((colonne, position) => (position === index ? { ...colonne, ...changement } : colonne)));
+    }
+    retirerColonne(index: number): void {
+        const partante = this.colonnes()[index];
+        this.colonnes.update(liste => liste.filter((_, position) => position !== index));
+        if (partante) this.oublierCle(partante);
+    }
+
+    // ---- dédoublonnage par clé fonctionnelle ----
+    /**
+     * La clé retenue est le nom en sortie : c'est lui que le serveur retrouve dans le résultat. Sans alias saisi,
+     * il faut donc reproduire exactement le nom par défaut du serveur (voir aliasParDefaut, côté API) : le seul
+     * nom de la colonne pour la table de départ, « table.colonne » ailleurs, et un nom dédié pour les colonnes
+     * avancées.
+     */
+    private nomEnSortie(colonne: ColonneExtraction): string {
+        if (colonne.alias?.trim()) return colonne.alias.trim();
+        const nomCourt = (tableId: string) => this.nomDe(tableId).replace(/\.[^.]+$/, '');
+        if (colonne.genre === 'calcul') return 'calcul';
+        if (colonne.genre === 'synthese') return nomCourt(colonne.synthese?.tableId || colonne.tableId);
+        if (colonne.genre === 'hierarchie') return nomCourt(colonne.tableId) + '_hier';
+        return colonne.tableId === this.baseId() ? colonne.nomColonne : `${nomCourt(colonne.tableId)}.${colonne.nomColonne}`;
+    }
+    estCle(colonne: ColonneExtraction): boolean {
+        return this.dedoublonnage().cles.includes(this.nomEnSortie(colonne));
+    }
+    basculerCle(colonne: ColonneExtraction): void {
+        const nom = this.nomEnSortie(colonne);
+        this.dedoublonnage.update(etat => ({
+            ...etat,
+            cles: etat.cles.includes(nom) ? etat.cles.filter(candidat => candidat !== nom) : [...etat.cles, nom]
+        }));
+    }
+    private oublierCle(colonne: ColonneExtraction): void {
+        const nom = this.nomEnSortie(colonne);
+        this.dedoublonnage.update(etat => ({ ...etat, cles: etat.cles.filter(candidat => candidat !== nom) }));
+    }
+    basculerDedoublonnage(actif: boolean): void {
+        this.dedoublonnage.update(etat => ({ ...etat, actif }));
+    }
+    choisirLigneGardee(garder: 'premiere' | 'derniere'): void {
+        this.dedoublonnage.update(etat => ({ ...etat, garder }));
+    }
+
+    // ---- filtres ----
+    ajouterFiltre(): void {
+        if (!this.filtreColonne()) return;
+        this.filtres.update(liste => [...liste, this.filtreSaisi(this.filtreOperateur(), this.filtreValeur(), this.filtreValeur2())]);
+        this.filtreValeur.set('');
+        this.filtreValeur2.set('');
+    }
+    private filtreSaisi(op: OperateurFiltre, valeur: string, valeur2 = ''): FiltreExtraction {
+        return {
+            tableId: this.filtreTableId(),
+            route: this.filtreRoute(),
+            nomColonne: this.filtreColonne(),
+            op,
+            valeur,
+            valeur2,
+            ...(op === 'list' ? { liste: [], exclure: false } : {})
+        };
+    }
+    retirerFiltre(index: number): void {
+        this.filtres.update(liste => liste.filter((_, position) => position !== index));
+    }
+    sansValeur(op: OperateurFiltre): boolean {
+        return OPERATEURS_SANS_VALEUR.includes(op);
+    }
+    /** Propose les valeurs les plus fréquentes de la colonne filtrée, comme la liste déroulante du classique. */
+    async proposerValeurs(): Promise<void> {
+        if (!this.filtreColonne()) return;
+        try {
+            this.valeursSuggerees.set(await this.api.valeursColonne(this.filtreTableId(), this.filtreColonne(), this.filtreValeur()));
+        } catch {
+            this.valeursSuggerees.set([]);
+        }
+    }
     /** Lit la première colonne d'un fichier CSV / texte : une valeur par ligne (séparateur ; , tab ou |). */
     async chargerListe(filtre: FiltreExtraction, evenement: Event): Promise<void> {
         const champ = evenement.target as HTMLInputElement;
@@ -956,122 +1320,133 @@ export class ExtractionComponent {
         filtre.liste = valeursDeListe(texte);
     }
 
-    // ---- pilotage par un objet métier ----
-    /** Table de départ = source maître de l'objet ; colonnes = attributs alimentés par des colonnes ; filtres = périmètres des facettes. */
-    chargerObjetMetier(id: string): void {
-        const objet = this.objetsMetier().find(candidat => candidat.id === id);
-        if (!objet) return;
-        const nomMaitre = (objet.sources.find(source => source.role === 'maitre') || objet.sources[0])?.table;
-        const maitre = this.sources().find(source => source.name === nomMaitre);
-        if (!maitre) {
-            this.notifications.erreur(`L'objet « ${objet.name} » n'a pas de source maître chargée.`);
-            return;
-        }
-        this.choisirBase(maitre.id);
-        const colonnes: ColonneExtraction[] = [];
-        for (const attribut of objet.elements) {
-            const correspondance = attribut.mappings.find(candidat => this.sources().some(source => source.name === candidat.table));
-            if (!correspondance) continue;
-            const tableId = this.sources().find(source => source.name === correspondance.table)!.id;
-            if (!this.tablesPresentes().includes(tableId)) {
-                const proposition = this.tablesProposees().find(candidat => candidat.source.id === tableId);
-                if (!proposition) continue;
-                this.ajouterTable(proposition);
+    // ---- regroupement : mesures et critères ----
+    ajouterCritereEnAttente(): void {
+        if (!this.critereColonne()) return;
+        this.criteresEnAttente.update(liste => [
+            ...liste,
+            {
+                tableId: this.critereTableId(),
+                route: this.critereRoute(),
+                nomColonne: this.critereColonne(),
+                op: this.critereOperateur(),
+                valeur: this.critereValeur()
             }
-            colonnes.push({ tableId, nomColonne: correspondance.col, alias: attribut.name, transformation: 'none' });
+        ]);
+        this.critereValeur.set('');
+    }
+    retirerCritereEnAttente(index: number): void {
+        this.criteresEnAttente.update(liste => liste.filter((_, position) => position !== index));
+    }
+    /** « Nombre de lignes » ne porte sur aucune colonne : les autres fonctions mesurent la colonne choisie. */
+    ajouterMesure(): void {
+        const sansColonne = this.mesureFonction() === 'count';
+        const nom = this.libelleFonction(this.mesureFonction());
+        this.mesures.update(liste => [
+            ...liste,
+            {
+                fn: this.mesureFonction(),
+                tableId: sansColonne ? '' : this.mesureTableId(),
+                route: sansColonne ? '' : this.mesureRoute(),
+                nomColonne: sansColonne ? '' : this.mesureColonne(),
+                alias: this.nomLibreDeMesure(sansColonne ? nom : `${nom} ${this.mesureColonne()}`),
+                criteres: this.criteresEnAttente()
+            }
+        ]);
+        this.criteresEnAttente.set([]);
+    }
+    /** Deux mesures ne peuvent pas porter le même nom en sortie : on numérote à partir de la deuxième. */
+    private nomLibreDeMesure(souhaite: string): string {
+        const pris = this.mesures().map(mesure => mesure.alias);
+        if (!pris.includes(souhaite)) return souhaite;
+        let rang = 2;
+        while (pris.includes(`${souhaite} ${rang}`)) rang++;
+        return `${souhaite} ${rang}`;
+    }
+    retirerMesure(index: number): void {
+        this.mesures.update(liste => liste.filter((_, position) => position !== index));
+    }
+
+    // ---- SQL affiché et SQL personnalisé ----
+    async basculerSql(): Promise<void> {
+        this.sqlVisible.update(visible => !visible);
+        if (this.sqlVisible() && !this.sqlPersonnaliseActif()) await this.rafraichirSql();
+    }
+    private async rafraichirSql(): Promise<void> {
+        try {
+            this.sqlAffiche.set((await this.api.sqlExtraction(this.specification())).sql);
+        } catch (erreur) {
+            this.erreur.set((erreur as Error).message);
         }
-        this.colonnes.set(colonnes);
-        this.filtres.set(filtresDesFacettes(objet, nom => this.sources().find(source => source.name === nom)?.id, this.tablesPresentes()));
-        this.notifications.succes(
-            `Extraction pré-remplie depuis « ${objet.name} » : ${colonnes.length} colonne(s), ${this.filtres().length} filtre(s).`
-        );
+    }
+    basculerSqlPersonnalise(actif: boolean): void {
+        this.sqlPersonnaliseActif.set(actif);
+        if (!actif) this.rafraichirSql();
+    }
+    ecrireSql(sql: string): void {
+        if (this.sqlPersonnaliseActif()) this.sqlAffiche.set(sql);
     }
 
-    async materialiser(): Promise<void> {
-        const nom = prompt('Nom de la source produite :', this.nomDe(this.baseId()).replace(/\.[^.]+$/, '') + ' — extraction');
-        if (!nom) return;
-        await this.executer(async () => {
-            const resultat = await this.api.materialiserExtraction(this.specification(), nom.trim());
-            this.notifications.succes(
-                `Source « ${resultat.nom} » enregistrée : ${resultat.lignes.toLocaleString('fr-FR')} ligne(s), ${resultat.colonnes.length} colonne(s).`
-            );
-        });
+    // ---- spécification envoyée au serveur ----
+    /** Les chemins effectivement empruntés : ils déterminent les jointures à poser, et elles seules. */
+    private cheminsUtilises(): Chemin[] {
+        const criteres = this.mesures().flatMap(mesure => mesure.criteres);
+        const elements = [...this.colonnes(), ...this.filtres(), ...this.mesures(), ...criteres];
+        return elements.filter(element => element.tableId).map(element => this.cheminDe(element.tableId, element.route));
     }
-    estCochee(tableId: string, nomColonne: string): boolean {
-        return !!this.choixDe(tableId, nomColonne);
-    }
-    nombreCochees(tableId: string): number {
-        return this.colonnes().filter(colonne => colonne.tableId === tableId).length;
-    }
-    basculer(tableId: string, nomColonne: string): void {
-        if (this.estCochee(tableId, nomColonne))
-            this.colonnes.update(liste => liste.filter(colonne => !(colonne.tableId === tableId && colonne.nomColonne === nomColonne)));
-        else this.colonnes.update(liste => [...liste, { tableId, nomColonne, alias: '', transformation: 'none' }]);
-    }
-    toutCocher(tableId: string): void {
-        for (const nomColonne of this.colonnesDe(tableId)) if (!this.estCochee(tableId, nomColonne)) this.basculer(tableId, nomColonne);
-    }
-    toutDecocher(tableId: string): void {
-        this.colonnes.update(liste => liste.filter(colonne => colonne.tableId !== tableId));
-    }
-
-    ajouterFiltre(): void {
-        this.filtres.update(liste => [...liste, { tableId: this.baseId(), nomColonne: '', op: '=', valeur: '' }]);
-    }
-    retirerFiltre(index: number): void {
-        this.filtres.update(liste => liste.filter((_, position) => position !== index));
-    }
-    sansValeur(op: OperateurFiltre): boolean {
-        return OPERATEURS_SANS_VALEUR.includes(op);
-    }
-
-    /** La spécification telle que l'API l'attend (alias vides omis, filtres incomplets ignorés). */
     specification(limite?: number): SpecificationExtraction {
+        const limiteRetenue = limite ?? (this.apercuRapide() ? LIGNES_APERCU_RAPIDE : undefined);
         return {
             baseId: this.baseId(),
-            jointures: this.jointures(),
-            typeJointure: this.typeJointure,
-            colonnes: this.colonnes().map(colonne => ({
-                tableId: colonne.tableId,
-                nomColonne: colonne.nomColonne,
-                transformation: colonne.transformation,
-                ...(colonne.genre && colonne.genre !== 'colonne' ? { genre: colonne.genre } : {}),
-                ...(colonne.formule ? { formule: colonne.formule } : {}),
-                ...(colonne.synthese ? { synthese: { ...colonne.synthese, n: Number(colonne.synthese.n) || 3 } } : {}),
-                ...(colonne.hierarchie
-                    ? { hierarchie: { ...colonne.hierarchie, profondeur: Number(colonne.hierarchie.profondeur) || 5 } }
-                    : {}),
-                ...(colonne.alias?.trim() ? { alias: colonne.alias.trim() } : {}),
-                ...(this.regrouper && colonne.agregat ? { agregat: colonne.agregat } : {})
-            })),
-            filtres: this.filtres()
-                .filter(filtre => filtre.nomColonne)
-                .map(filtre => ({
-                    ...filtre,
-                    ...(filtre.op === 'list'
-                        ? { liste: filtre.liste || [], exclure: !!filtre.exclure }
-                        : { liste: undefined, exclure: undefined })
-                })),
-            regrouper: this.regrouper,
-            dedoublonner: this.dedoublonner,
+            jointures: planifierJointures(this.cheminsUtilises(), this.baseId()),
+            typeJointure: this.typeJointure(),
+            colonnes: this.colonnes().map(colonne => this.colonnePourLeServeur(colonne)),
+            filtres: this.filtres().filter(filtre => filtre.nomColonne),
+            regrouper: this.regrouper(),
+            mesures: this.regrouper() ? this.mesures() : [],
+            dedoublonner: this.dedoublonnerLignes(),
+            dedoublonnage: this.dedoublonnage(),
             tri: [],
-            ...(limite ? { limite } : {})
+            ...(limiteRetenue ? { limite: limiteRetenue } : {}),
+            ...(this.sqlPersonnaliseActif() ? { sqlPersonnalise: this.sqlAffiche() } : {})
+        };
+    }
+    /** Les champs vides sont omis : le serveur applique alors ses valeurs par défaut. */
+    private colonnePourLeServeur(colonne: ColonneExtraction): ColonneExtraction {
+        return {
+            tableId: colonne.tableId,
+            route: colonne.route || '',
+            nomColonne: colonne.nomColonne,
+            transformation: colonne.transformation,
+            ...(colonne.genre && colonne.genre !== 'colonne' ? { genre: colonne.genre } : {}),
+            ...(colonne.formule ? { formule: colonne.formule } : {}),
+            ...(colonne.synthese ? { synthese: { ...colonne.synthese, n: Number(colonne.synthese.n) || 3 } } : {}),
+            ...(colonne.hierarchie
+                ? { hierarchie: { ...colonne.hierarchie, profondeur: Number(colonne.hierarchie.profondeur) || 5 } }
+                : {}),
+            ...(colonne.alias?.trim() ? { alias: colonne.alias.trim() } : {}),
+            ...(this.regrouper() && colonne.agregat ? { agregat: colonne.agregat } : {})
         };
     }
 
+    // ---- actions ----
     async apercevoir(): Promise<void> {
-        await this.executer(async () => this.apercu.set(await this.api.apercuExtraction(this.specification(), 200)));
+        await this.executer(async () => {
+            this.apercu.set(await this.api.apercuExtraction(this.specification(), this.apercuRapide() ? LIGNES_APERCU_RAPIDE : 200));
+            if (this.sqlVisible() && !this.sqlPersonnaliseActif()) this.sqlAffiche.set(this.apercu()!.sql);
+        });
     }
     async compter(): Promise<void> {
+        // Le serveur retire la limite pour compter : le total porte toujours sur l'ensemble du résultat.
         await this.executer(async () => this.total.set((await this.api.compterExtraction(this.specification())).total));
     }
-    /** Bilan qualité du résultat (repris de l'application classique) : complétude de chaque colonne produite. */
     async bilanQualite(): Promise<void> {
         await this.executer(async () => this.bilan.set(await this.api.bilanExtraction(this.specification())));
     }
+    /** Génère le CSV et, si la case est cochée, enregistre aussi le résultat comme nouvelle source. */
     async exporter(): Promise<void> {
         await this.executer(async () => {
-            const nom = this.nomDe(this.baseId()).replace(/\.[^.]+$/, '') + '_extraction';
+            const nom = this.nomDeSortie();
             const blob = await this.api.exporterExtractionCsv(this.specification(), nom);
             const lien = document.createElement('a');
             lien.href = URL.createObjectURL(blob);
@@ -1079,7 +1454,17 @@ export class ExtractionComponent {
             lien.click();
             URL.revokeObjectURL(lien.href);
             this.notifications.succes('Export CSV téléchargé.');
+            if (this.ajouterCommeSource()) await this.materialiser(nom);
         });
+    }
+    private nomDeSortie(): string {
+        return this.nomSourceProduite().trim() || this.nomDe(this.baseId()).replace(/\.[^.]+$/, '') + '_extraction';
+    }
+    private async materialiser(nom: string): Promise<void> {
+        const resultat = await this.api.materialiserExtraction(this.specification(), nom);
+        this.notifications.succes(
+            `Source « ${resultat.nom} » enregistrée : ${resultat.lignes.toLocaleString('fr-FR')} ligne(s), ${resultat.colonnes.length} colonne(s).`
+        );
     }
     private async executer(action: () => Promise<void>): Promise<void> {
         this.erreur.set('');
@@ -1093,23 +1478,41 @@ export class ExtractionComponent {
         }
     }
 
-    // ---- modèles enregistrés ----
+    // ---- paramétrages enregistrés ----
     async enregistrerModele(): Promise<void> {
-        const nom = prompt("Nom du modèle d'extraction :", this.nomDe(this.baseId()).replace(/\.[^.]+$/, ''));
+        const nom = prompt("Nom du paramétrage d'extraction :", this.nomDe(this.baseId()).replace(/\.[^.]+$/, ''));
         if (!nom) return;
+        await this.ecrireModele(this.modeles().find(modele => modele.nom === nom)?.id || genererIdentifiant('ex_'), nom);
+    }
+    async renommerModele(): Promise<void> {
+        const modele = this.modeles().find(candidat => candidat.id === this.modeleChoisi());
+        if (!modele) return;
+        const nom = prompt('Nouveau nom du paramétrage :', modele.nom);
+        if (!nom || nom === modele.nom) return;
+        await this.ecrireModele(modele.id, nom, modele.specification);
+    }
+    private async ecrireModele(id: string, nom: string, specification = this.specification()): Promise<void> {
         try {
-            const existant = this.modeles().find(modele => modele.nom === nom);
-            const modele = await this.api.enregistrerModeleExtraction(existant ? existant.id : genererIdentifiant('ex_'), {
-                nom,
-                description: '',
-                specification: this.specification()
-            });
+            const modele = await this.api.enregistrerModeleExtraction(id, { nom, description: '', specification });
             this.modeles.update(liste =>
                 [...liste.filter(candidat => candidat.id !== modele.id), modele].sort((premier, second) =>
                     premier.nom.localeCompare(second.nom, 'fr')
                 )
             );
-            this.notifications.succes(`Modèle « ${nom} » enregistré.`);
+            this.modeleChoisi.set(modele.id);
+            this.notifications.succes(`Paramétrage « ${nom} » enregistré.`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+    async supprimerModele(): Promise<void> {
+        const modele = this.modeles().find(candidat => candidat.id === this.modeleChoisi());
+        if (!modele || !confirm(`Supprimer le paramétrage « ${modele.nom} » ?`)) return;
+        try {
+            await this.api.supprimerModeleExtraction(modele.id);
+            this.modeles.update(liste => liste.filter(candidat => candidat.id !== modele.id));
+            this.modeleChoisi.set(this.modeles()[0]?.id || '');
+            this.notifications.succes(`Paramétrage « ${modele.nom} » supprimé.`);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
@@ -1118,15 +1521,53 @@ export class ExtractionComponent {
         const modele = this.modeles().find(candidat => candidat.id === id);
         if (!modele) return;
         const specification = modele.specification;
-        this.baseId.set(specification.baseId);
-        this.jointures.set([...specification.jointures]);
+        this.choisirBase(specification.baseId);
         this.colonnes.set(specification.colonnes.map(colonne => ({ ...colonne, alias: colonne.alias || '' })));
         this.filtres.set(specification.filtres.map(filtre => ({ ...filtre })));
-        this.typeJointure = specification.typeJointure;
-        this.regrouper = specification.regrouper;
-        this.dedoublonner = specification.dedoublonner;
-        this.apercu.set(null);
-        this.total.set(null);
-        this.notifications.info(`Modèle « ${modele.nom} » chargé.`);
+        this.mesures.set((specification.mesures || []).map(mesure => ({ ...mesure })));
+        this.typeJointure.set(specification.typeJointure);
+        this.regrouper.set(specification.regrouper);
+        this.dedoublonnerLignes.set(specification.dedoublonner);
+        this.dedoublonnage.set(specification.dedoublonnage || { actif: false, cles: [], garder: 'premiere' });
+        this.notifications.info(`Paramétrage « ${modele.nom} » chargé.`);
+    }
+
+    // ---- pilotage par un objet métier ----
+    /** Table de départ = source maître de l'objet ; colonnes = attributs alimentés ; filtres = périmètres des facettes. */
+    chargerObjetMetier(id: string): void {
+        const objet = this.objetsMetier().find(candidat => candidat.id === id);
+        if (!objet) return;
+        const nomMaitre = (objet.sources.find(source => source.role === 'maitre') || objet.sources[0])?.table;
+        const maitre = this.sources().find(source => source.name === nomMaitre);
+        if (!maitre) {
+            this.notifications.erreur(`L'objet « ${objet.name} » n'a pas de source maître chargée.`);
+            return;
+        }
+        this.choisirBase(maitre.id);
+        this.colonnes.set(this.colonnesDeLObjet(objet));
+        this.filtres.set(
+            filtresDesFacettes(objet, nom => this.sources().find(source => source.name === nom)?.id, this.tablesAtteignables())
+        );
+        this.notifications.succes(
+            `Extraction pré-remplie depuis « ${objet.name} » : ${this.colonnes().length} colonne(s), ${this.filtres().length} filtre(s).`
+        );
+    }
+    /** Chaque attribut de l'objet devient une colonne, si sa table est atteignable depuis la table de départ. */
+    private colonnesDeLObjet(objet: ObjetMetier): ColonneExtraction[] {
+        const colonnes: ColonneExtraction[] = [];
+        for (const attribut of objet.elements) {
+            const correspondance = attribut.mappings.find(candidat => this.sources().some(source => source.name === candidat.table));
+            if (!correspondance) continue;
+            const tableId = this.sources().find(source => source.name === correspondance.table)!.id;
+            if (!this.tablesAtteignables().includes(tableId)) continue;
+            colonnes.push({
+                tableId,
+                route: cleChemin(this.cheminDe(tableId, this.routesParDefaut()[tableId] || '')),
+                nomColonne: correspondance.col,
+                alias: attribut.name,
+                transformation: 'none'
+            });
+        }
+        return colonnes;
     }
 }

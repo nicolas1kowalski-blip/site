@@ -61,6 +61,15 @@ page.on('pageerror', erreur => erreursPage.push(String(erreur)));
 page.on('console', message => {
     if (message.type() === 'error' && !/Failed to load resource/.test(message.text())) erreursPage.push('console : ' + message.text());
 });
+/** Les lignes du tableau de résultat d'une extraction, cellules séparées par « | ». */
+const lignesDuResultat = async cible =>
+    cible.$$eval('app-extraction .resultat .corps .ligne', lignes =>
+        lignes.map(ligne =>
+            Array.from(ligne.querySelectorAll('.cellule'))
+                .map(cellule => cellule.textContent.trim())
+                .join('|')
+        )
+    );
 const capture = async nom => {
     if (!process.env.SHOTS) return;
     fs.mkdirSync(path.join(dossierTests, 'captures'), { recursive: true });
@@ -222,99 +231,178 @@ try {
     );
     await capture('modele-regles');
 
-    // ---- extraction : jointure, colonnes, filtre, aperçu, comptage, export, modèle ----
+    // ---- extraction : colonnes, filtre, aperçu, comptage, bilan, export, paramétrage ----
     await page.click('a[href="/extraction"]');
     await page.waitForSelector('app-extraction');
     await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
-    await page.waitForSelector('app-extraction .ligne-table.proposee');
-    await page.click('app-extraction .ligne-table.proposee button');
-    await page.waitForFunction(() => document.querySelectorAll('app-extraction details').length === 2);
-    const cases = await page.$$('app-extraction details input[type=checkbox]');
-    verifier('extraction : la table commandes est proposée par le lien du modèle puis jointe ; 6 colonnes disponibles', cases.length === 6);
-    // Cases dans l'ordre d'affichage : clients (id_client, nom, ville) puis commandes (id_commande, id_client, montant).
-    for (const position of [1, 2, 5]) await cases[position].click();
-    await page.click('app-extraction button:has-text("Ajouter un filtre")');
-    await page.selectOption('app-extraction select[name="fc_0"]', 'ville');
-    await page.selectOption('app-extraction select[name="fo_0"]', 'in');
-    await page.fill('app-extraction input[name="fv_0"]', 'paris;lyon');
-    await page.click('app-extraction button:has-text("Aperçu (200 lignes)")');
+    await page.waitForSelector('app-extraction select[name=ajout_table]');
+    for (const colonne of ['nom', 'ville']) {
+        await page.selectOption('app-extraction select[name=ajout_colonne]', colonne);
+        await page.click('app-extraction button[name=ajouterColonne]');
+    }
+    await page.selectOption('app-extraction select[name=ajout_table]', { label: 'commandes.csv' });
+    await page.selectOption('app-extraction select[name=ajout_colonne]', 'montant');
+    await page.click('app-extraction button[name=ajouterColonne]');
+    await page.waitForFunction(() => document.querySelectorAll('app-extraction table.tableau tbody tr').length === 3);
+    verifier(
+        'extraction : commandes.csv est atteignable par le lien du modèle ; 3 colonnes en sortie',
+        (await page.$$('app-extraction table.tableau tbody tr')).length === 3
+    );
+    await page.selectOption('app-extraction select[name=filtre_colonne]', 'ville');
+    await page.selectOption('app-extraction select[name=filtreOperateur]', 'in');
+    await page.fill('app-extraction input[name=filtreValeur]', 'paris;lyon');
+    await page.click('app-extraction button[name=ajouterFiltre]');
+    await page.click('app-extraction button[name=previsualiser]');
     await page.waitForSelector('app-extraction .resultat');
     const enTetes = await page.$$eval('app-extraction .entete-colonnes .cellule b', cellules =>
         cellules.map(cellule => cellule.textContent)
     );
     verifier('extraction : aperçu avec les colonnes nom, ville et commandes.montant', enTetes.join() === 'nom,ville,commandes.montant');
-    await page.click('app-extraction button:has-text("Compter")');
-    await page.waitForSelector('app-extraction .badge:has-text("ligne(s) au total")');
+    await page.click('app-extraction button[name=compter]');
+    await page.waitForFunction(() => /^[0-9]/.test(document.querySelector('app-extraction .total')?.textContent?.trim() || ''));
     verifier(
         'extraction : 4 lignes au total (jointure gauche, filtre ville dans paris;lyon)',
-        /4 ligne\(s\) au total/.test(await page.textContent('app-extraction .badge'))
+        (await page.textContent('app-extraction .total')).trim() === '4'
     );
-    await page.click('app-extraction button:has-text("Bilan qualité")');
+    await page.click('app-extraction button[name=bilan]');
     await page.waitForSelector('app-extraction .bilan');
     const bilanExtraction = await page.textContent('app-extraction .bilan');
     verifier(
         'extraction : le bilan qualité du résultat donne 4 lignes et 100 % de complétude sur les 3 colonnes',
         /4 ligne\(s\), 3 colonne\(s\)/.test(bilanExtraction) && (bilanExtraction.match(/100 %/g) || []).length === 3
     );
+    await page.click('app-extraction button[name=voirSql]');
+    await page.waitForSelector('app-extraction textarea[name=sql]');
+    const sqlGenere = await page.inputValue('app-extraction textarea[name=sql]');
+    verifier(
+        'extraction : le SQL généré est affiché, avec la jointure gauche et le filtre',
+        /LEFT JOIN/.test(sqlGenere) && /IN \('PARIS', 'LYON'\)/.test(sqlGenere)
+    );
     await capture('extraction-bilan');
-    const [telechargement] = await Promise.all([
-        page.waitForEvent('download'),
-        page.click('app-extraction button:has-text("Exporter en CSV")')
-    ]);
+    const [telechargement] = await Promise.all([page.waitForEvent('download'), page.click('app-extraction button[name=genererCsv]')]);
     const contenuCsv = fs.readFileSync(await telechargement.path(), 'utf8');
     verifier(
         'extraction : export CSV téléchargé (en-têtes, 4 lignes, point-virgule)',
         telechargement.suggestedFilename() === 'clients_extraction.csv' &&
-            contenuCsv.startsWith('\ufeff"nom";"ville";"commandes.montant"') &&
+            contenuCsv.startsWith('﻿"nom";"ville";"commandes.montant"') &&
             contenuCsv.trim().split('\n').length === 5
     );
     page.once('dialog', dialogue => dialogue.accept('Clients Paris Lyon'));
-    await page.click('app-extraction button:has-text("Enregistrer le modèle")');
-    await page.waitForSelector('.notification.succes:has-text("Modèle")');
+    await page.click('app-extraction button[name=enregistrerModele]');
+    await page.waitForSelector('.notification.succes:has-text("Paramétrage")');
     verifier(
-        'extraction : modèle enregistré et proposé dans la liste',
+        'extraction : paramétrage enregistré et proposé dans la liste',
         (
-            await page.$$eval('app-extraction select[name=modeleCharge] option', options => options.map(option => option.textContent))
+            await page.$$eval('app-extraction select[name=modeleChoisi] option', options => options.map(option => option.textContent))
         ).includes('Clients Paris Lyon')
     );
     await capture('extraction');
 
-    // ---- extraction avancée : colonne calculée, synthèse d'une table liée, filtre sur liste, résultat enregistré comme source ----
+    // ---- extraction : dédoublonnage par clé fonctionnelle (une ligne par client) ----
     await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
-    const casesClients = await page.$$('app-extraction details input[type=checkbox]');
-    await casesClients[1].click();
-    await casesClients[2].click();
-    await page.click('app-extraction button:has-text("+ colonne calculée")');
-    await page.fill('app-extraction input[name=av_alias_0]', 'etiquette');
-    await page.fill('app-extraction input[name=av_formule_0]', "upper([nom]) || ' (' || [ville] || ')'");
-    await page.click('app-extraction button:has-text("+ synthèse de commandes.csv")');
-    await page.fill('app-extraction input[name=av_alias_1]', 'nb_commandes');
-    await page.click('app-extraction button:has-text("Ajouter un filtre")');
-    await page.selectOption('app-extraction select[name="fc_0"]', 'ville');
-    await page.selectOption('app-extraction select[name="fo_0"]', 'list');
-    page.once('dialog', dialogue => dialogue.accept('paris\nLILLE'));
-    await page.click('app-extraction button:has-text("coller")');
-    await page.click('app-extraction button:has-text("Aperçu (200 lignes)")');
-    await page.waitForFunction(() => /nb_commandes/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
-    const lignesAvancees = await page.$$eval('app-extraction .resultat .corps .ligne', lignes =>
-        lignes.map(ligne =>
-            Array.from(ligne.querySelectorAll('.cellule'))
-                .map(cellule => cellule.textContent.trim())
-                .join('|')
-        )
-    );
+    await page.selectOption('app-extraction select[name=ajout_colonne]', 'nom');
+    await page.click('app-extraction button[name=ajouterColonne]');
+    await page.selectOption('app-extraction select[name=ajout_table]', { label: 'commandes.csv' });
+    await page.selectOption('app-extraction select[name=ajout_colonne]', 'id_commande');
+    await page.click('app-extraction button[name=ajouterColonne]');
+    await page.click('app-extraction input[name=dedoublonner]');
+    await page.click('app-extraction table.tableau tbody tr:first-child input[type=checkbox]');
+    await page.click('app-extraction button[name=previsualiser]');
+    await page.waitForFunction(() => /id_commande/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
+    const lignesDedoublonnees = await lignesDuResultat(page);
     verifier(
-        'extraction avancée : étiquette calculée, nombre de commandes par client (synthèse sans jointure), filtre « dans la liste » paris + lille → 3 clients',
-        lignesAvancees.length === 3 &&
-            lignesAvancees.includes('Ana|Paris|ANA (Paris)|2') &&
-            lignesAvancees.includes('Zoé|Lille|ZOÉ (Lille)|0')
+        'extraction : dédoublonnage par la clé « nom » — une ligne par client, la première commande retenue (Ana → 100)',
+        lignesDedoublonnees.length === 4 && lignesDedoublonnees.includes('Ana|100')
     );
-    page.once('dialog', dialogue => dialogue.accept('Clients Paris Lille'));
-    await page.click('app-extraction button:has-text("Enregistrer le résultat comme source")');
+    await page.selectOption('app-extraction select[name=garder]', 'derniere');
+    await page.click('app-extraction button[name=previsualiser]');
+    await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('app-extraction .resultat .corps .ligne')).some(ligne => /101/.test(ligne.textContent))
+    );
+    const lignesDernieres = await lignesDuResultat(page);
+    verifier(
+        'extraction : en conservant la dernière ligne, Ana ressort avec sa commande 101 (toujours une ligne par client)',
+        lignesDernieres.length === 4 && lignesDernieres.includes('Ana|101') && !lignesDernieres.includes('Ana|100')
+    );
+    await capture('extraction-dedoublonnage');
+
+    // ---- extraction : regroupement avec une mesure à critères (NB.SI.ENS) ----
+    await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
+    await page.selectOption('app-extraction select[name=ajout_colonne]', 'ville');
+    await page.click('app-extraction button[name=ajouterColonne]');
+    await page.click('app-extraction input[name=regrouper]');
+    await page.waitForSelector('app-extraction select[name=mesureFonction]');
+    await page.selectOption('app-extraction select[name=critere_table]', { label: 'commandes.csv' });
+    await page.selectOption('app-extraction select[name=critere_colonne]', 'montant');
+    await page.selectOption('app-extraction select[name=critereOperateur]', '>=');
+    await page.fill('app-extraction input[name=critereValeur]', '20');
+    await page.click('app-extraction button[name=ajouterCritere]');
+    await page.click('app-extraction button[name=ajouterMesure]');
+    await page.click('app-extraction button[name=previsualiser]');
+    await page.waitForFunction(() => /Nombre de lignes/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
+    const lignesRegroupees = await lignesDuResultat(page);
+    verifier(
+        'extraction : regroupement par ville avec « nombre de lignes SI montant ≥ 20 » — Paris 1 (25,5), Lyon 1 (99,9), Lille 0',
+        lignesRegroupees.includes('Paris|1') && lignesRegroupees.includes('Lyon|1') && lignesRegroupees.includes('Lille|0')
+    );
+    await capture('extraction-regroupement');
+
+    // ---- extraction avancée : assistants (colonne calculée, synthèse), filtre sur liste, résultat enregistré comme source ----
+    await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
+    for (const colonne of ['nom', 'ville']) {
+        await page.selectOption('app-extraction select[name=ajout_colonne]', colonne);
+        await page.click('app-extraction button[name=ajouterColonne]');
+    }
+    await page.click('app-extraction details.calcul summary');
+    await page.selectOption('app-extraction select[name=calc_fn]', 'concat');
+    for (const colonne of ['nom', 'ville']) {
+        await page.selectOption('app-extraction select[name=calc_colonne]', colonne);
+        await page.click('app-extraction details.calcul button:has-text("ajouter cette colonne")');
+    }
+    await page.fill('app-extraction input[name=calc_alias]', 'etiquette');
+    await page.click('app-extraction button[name=ajouterCalcul]');
+    await page.click('app-extraction details.synthese summary');
+    await page.fill('app-extraction input[name=synthese_alias]', 'nb_commandes');
+    await page.click('app-extraction button[name=ajouterSynthese]');
+    await page.waitForFunction(() => document.querySelectorAll('app-extraction table.tableau tbody tr').length === 4);
+    verifier(
+        'extraction : les assistants ƒx et Σ ajoutent une colonne calculée et une synthèse (4 colonnes en sortie)',
+        (await page.$$('app-extraction table.tableau tbody tr')).length === 4
+    );
+    await page.selectOption('app-extraction select[name=filtre_colonne]', 'ville');
+    await page.selectOption('app-extraction select[name=filtreOperateur]', 'list');
+    await page.click('app-extraction button[name=ajouterFiltre]');
+    page.once('dialog', dialogue => dialogue.accept('paris\nLILLE'));
+    await page.click('app-extraction .puce button:has-text("coller")');
+    await page.click('app-extraction button[name=previsualiser]');
+    await page.waitForFunction(() => /nb_commandes/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
+    const lignesAvancees = await lignesDuResultat(page);
+    verifier(
+        'extraction avancée : étiquette concaténée, nombre de commandes par client (synthèse sans jointure), filtre « dans la liste » paris + lille → 3 clients',
+        lignesAvancees.length === 3 && lignesAvancees.includes('Ana|Paris|Ana Paris|2') && lignesAvancees.includes('Zoé|Lille|Zoé Lille|0')
+    );
+    await capture('extraction-assistants');
+    await page.click('app-extraction input[name=ajouterCommeSource]');
+    await page.fill('app-extraction input[name=nomSourceProduite]', 'Clients Paris Lille');
+    await Promise.all([page.waitForEvent('download'), page.click('app-extraction button[name=genererCsv]')]);
     await page.waitForSelector('.notification.succes:has-text("Source « Clients Paris Lille »")');
     verifier(
-        'extraction avancée : le résultat est enregistré comme source (3 lignes, 4 colonnes)',
+        'extraction avancée : le résultat est aussi enregistré comme source (3 lignes, 4 colonnes)',
         /3 ligne\(s\), 4 colonne\(s\)/.test(await page.textContent('.notification.succes:has-text("Source « Clients Paris Lille »")'))
+    );
+
+    // ---- extraction : SQL personnalisé, à partir de la requête générée ----
+    const sqlDeBase = await page.inputValue('app-extraction textarea[name=sql]');
+    await page.click('app-extraction input[name=sqlPersonnalise]');
+    await page.fill(
+        'app-extraction textarea[name=sql]',
+        `SELECT upper("nom") AS cri FROM (\n${sqlDeBase}\n) AS extraction ORDER BY cri LIMIT 2`
+    );
+    await page.click('app-extraction button[name=previsualiser]');
+    await page.waitForFunction(() => /cri/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
+    verifier(
+        'extraction : le SQL personnalisé, dérivé de la requête générée, est exécuté tel quel (ANA puis IDRIS)',
+        (await lignesDuResultat(page)).join() === 'ANA,IDRIS'
     );
 
     // ---- qualité : profilage, doublons, règle et score ----

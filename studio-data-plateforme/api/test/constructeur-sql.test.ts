@@ -186,3 +186,187 @@ test('filtre sur liste fournie : valeurs normalisées, sens « exclure », liste
     assert.match(conditionFiltre('t0', { nomColonne: 'ville', op: 'list', liste: ['Paris'], exclure: true }), /NOT IN \('PARIS'\)/);
     assert.equal(conditionFiltre('t0', { nomColonne: 'ville', op: 'list', liste: [] }), 'TRUE');
 });
+
+test('même table ramenée deux fois par des liens différents : deux routes, deux alias SQL', () => {
+    // Le cas classique : le nom du souscripteur ET celui du bénéficiaire, tous deux dans la table des personnes.
+    const { sql, alias } = construireSql(
+        specification({
+            jointures: [
+                { cle: 'souscripteur', deTableId: 'a', deColonne: 'id_souscripteur', versTableId: 'b', versColonne: 'id' },
+                { cle: 'beneficiaire', deTableId: 'a', deColonne: 'id_beneficiaire', versTableId: 'b', versColonne: 'id' }
+            ],
+            colonnes: [
+                { tableId: 'b', route: 'souscripteur', nomColonne: 'nom', alias: 'Souscripteur' },
+                { tableId: 'b', route: 'beneficiaire', nomColonne: 'nom', alias: 'Bénéficiaire' }
+            ]
+        }),
+        contexte
+    );
+    assert.deepEqual(alias, ['Souscripteur', 'Bénéficiaire']);
+    assert.match(sql, /t1\."nom" AS "Souscripteur"/);
+    assert.match(sql, /t2\."nom" AS "Bénéficiaire"/);
+    assert.match(sql, /LEFT JOIN "t_b" AS t1 ON .*t0\."id_souscripteur"/s);
+    assert.match(sql, /LEFT JOIN "t_b" AS t2 ON .*t0\."id_beneficiaire"/s);
+});
+
+test('routes : une jointure en chaîne part d’une route, et deux fois la même clé est refusée', () => {
+    const enChaine = construireSql(
+        specification({
+            jointures: [
+                { cle: 'commandes', deTableId: 'a', deColonne: 'id', versTableId: 'b', versColonne: 'id_client' },
+                { cle: 'lignes', depuis: 'commandes', deTableId: 'b', deColonne: 'id', versTableId: 'c', versColonne: 'id_commande' }
+            ],
+            colonnes: [{ tableId: 'c', route: 'lignes', nomColonne: 'quantite' }]
+        }),
+        contexte
+    );
+    assert.match(enChaine.sql, /LEFT JOIN "t_c" AS t2 ON .*t1\."id"/s, 'la deuxième jointure part bien de la première');
+    assert.throws(
+        () =>
+            construireSql(
+                specification({
+                    jointures: [
+                        { deTableId: 'a', deColonne: 'id', versTableId: 'b', versColonne: 'id_client' },
+                        { deTableId: 'a', deColonne: 'autre', versTableId: 'b', versColonne: 'id_client' }
+                    ]
+                }),
+                contexte
+            ),
+        /jointe deux fois/
+    );
+});
+
+test('dédoublonnage par clé fonctionnelle : une ligne par clé, première ou dernière au choix', () => {
+    const parCle = (garder: string) =>
+        construireSql(
+            specification({
+                colonnes: [
+                    { tableId: 'a', nomColonne: 'siren', alias: 'SIREN' },
+                    { tableId: 'a', nomColonne: 'nom' }
+                ],
+                dedoublonnage: { actif: true, cles: ['SIREN'], garder }
+            }),
+            contexte
+        ).sql;
+    const premiere = parCle('premiere');
+    assert.match(premiere, /ROW_NUMBER\(\) OVER \(PARTITION BY "SIREN" ORDER BY __ordre_t0\)/);
+    assert.match(premiere, /t0\."__rn" AS __ordre_t0/, 'le rang de la table de départ sert d’ordre');
+    assert.match(premiere, /WHERE __rang = 1$/);
+    assert.match(premiere, /^SELECT "SIREN", "nom" FROM \(/, 'les colonnes techniques ne ressortent pas');
+    assert.match(parCle('derniere'), /ORDER BY __ordre_t0 DESC/);
+    // Une clé qui ne désigne aucune colonne de la sortie est ignorée : la requête reste celle de base.
+    const cleInconnue = construireSql(specification({ dedoublonnage: { actif: true, cles: ['absente'] } }), contexte).sql;
+    assert.doesNotMatch(cleInconnue, /ROW_NUMBER/);
+});
+
+test('mesures d’un regroupement : nombre de lignes, somme, et critères façon NB.SI.ENS', () => {
+    const { sql, alias } = construireSql(
+        specification({
+            regrouper: true,
+            colonnes: [{ tableId: 'a', nomColonne: 'region' }],
+            mesures: [
+                { fn: 'count', alias: 'Nombre' },
+                { fn: 'sum', tableId: 'a', nomColonne: 'montant', alias: 'Total' },
+                {
+                    fn: 'count',
+                    alias: 'Nombre au Nord',
+                    criteres: [{ tableId: 'a', nomColonne: 'region', op: '=', valeur: 'Nord' }]
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.deepEqual(alias, ['region', 'Nombre', 'Total', 'Nombre au Nord']);
+    assert.match(sql, /COUNT\(\*\) AS "Nombre"/);
+    assert.match(sql, /SUM\(TRY_CAST\(t0\."montant" AS DOUBLE\)\) AS "Total"/);
+    assert.match(sql, /COUNT\(\*\) FILTER \(WHERE UPPER\(TRIM\(CAST\(t0\."region" AS VARCHAR\)\)\) = 'NORD'\) AS "Nombre au Nord"/);
+    assert.match(sql, /GROUP BY t0\."region"/);
+    // Hors regroupement, les mesures ne sont pas produites.
+    assert.doesNotMatch(construireSql(specification({ mesures: [{ fn: 'count', alias: 'Nombre' }] }), contexte).sql, /COUNT/);
+});
+
+test('mesure incohérente refusée : colonne manquante, table absente, nom en double', () => {
+    const avecMesure = (mesure: object) => specification({ regrouper: true, mesures: [mesure] });
+    assert.throws(() => construireSql(avecMesure({ fn: 'sum', tableId: 'a', alias: 'Total' }), contexte), /colonne à mesurer/);
+    assert.throws(() => construireSql(avecMesure({ fn: 'sum', tableId: 'b', nomColonne: 'x', alias: 'T' }), contexte), /table absente/);
+    assert.throws(() => construireSql(avecMesure({ fn: 'count', alias: 'nom' }), contexte), /même nom/);
+});
+
+test('hiérarchie par table de liaison : rattachement daté lu à une date de référence', () => {
+    const { sql, alias } = construireSql(
+        specification({
+            colonnes: [
+                {
+                    tableId: 'a',
+                    genre: 'hierarchie',
+                    alias: 'org',
+                    hierarchie: {
+                        idColonne: 'code',
+                        attributs: ['libelle'],
+                        profondeur: 2,
+                        type: 'liaison',
+                        liaisonTableId: 'b',
+                        liaisonEnfant: 'code_enfant',
+                        liaisonParent: 'code_parent',
+                        valideDu: 'debut',
+                        valideAu: 'fin',
+                        dateReference: '2026-01-01'
+                    }
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.match(sql, /hierarchie0_liens\(enfant, parent\) AS \(/, 'les rattachements retenus sont isolés dans leur CTE');
+    assert.match(sql, /FROM "t_b" l WHERE/);
+    assert.match(sql, /TRY_CAST\(l\."debut" AS DATE\) <= '2026-01-01'::DATE/);
+    assert.match(sql, /TRY_CAST\(l\."fin" AS DATE\) >= '2026-01-01'::DATE/);
+    assert.match(sql, /JOIN hierarchie0_liens li ON li\.enfant =/, 'la récursion suit la table de liaison');
+    assert.deepEqual(alias, ['org_niv1', 'org_niv2']);
+    // Sans table de liaison choisie, la spécification est refusée avec un message clair.
+    assert.throws(
+        () =>
+            construireSql(
+                specification({
+                    colonnes: [{ tableId: 'a', genre: 'hierarchie', alias: 'o', hierarchie: { idColonne: 'code', type: 'liaison' } }]
+                }),
+                contexte
+            ),
+        /table de rattachement/
+    );
+});
+
+test('hiérarchie simple sans colonne parent : refusée avec un message clair', () => {
+    assert.throws(
+        () =>
+            construireSql(
+                specification({ colonnes: [{ tableId: 'a', genre: 'hierarchie', alias: 'h', hierarchie: { idColonne: 'code' } }] }),
+                contexte
+            ),
+        /colonne parent est requise/
+    );
+});
+
+test('SQL personnalisé : la requête écrite à la main remplace la requête construite', () => {
+    const { sql, alias } = construireSql(specification({ sqlPersonnalise: '  SELECT 1 AS un  ' }), contexte);
+    assert.equal(sql, 'SELECT 1 AS un');
+    assert.deepEqual(alias, [], 'aucun alias connu : le tri et le dédoublonnage ne s’appliquent plus');
+});
+
+test('dédoublonnage avec une jointure : l’ordre est départagé table par table, jamais arbitraire', () => {
+    // Deux commandes d’un même client partagent le rang du client : sans le rang des commandes, « la première »
+    // et « la dernière » désigneraient la même ligne au hasard.
+    const { sql } = construireSql(
+        specification({
+            jointures: [{ deTableId: 'a', deColonne: 'id', versTableId: 'b', versColonne: 'id_client' }],
+            colonnes: [
+                { tableId: 'a', nomColonne: 'nom', alias: 'Client' },
+                { tableId: 'b', nomColonne: 'id_commande', alias: 'Commande' }
+            ],
+            dedoublonnage: { actif: true, cles: ['Client'], garder: 'derniere' }
+        }),
+        contexte
+    );
+    assert.match(sql, /t0\."__rn" AS __ordre_t0, t1\."__rn" AS __ordre_t1/);
+    assert.match(sql, /ORDER BY __ordre_t0 DESC, __ordre_t1 DESC/);
+});
