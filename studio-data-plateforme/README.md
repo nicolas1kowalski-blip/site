@@ -46,7 +46,7 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | **Statistiques** et **Explorateur 360°** en Angular : graphique dimension × agrégat calculé par le serveur ; exploration d'une valeur de table en table par les liens du modèle (graphe, détail, extension) | **livré** | `api/src/exploitation/exploration.ts`, `web/src/app/pages/{statistiques,explorateur-360}` |
 | **Analyse d'impact** (onglet du lineage) : applications touchées directement, via le lineage des tables conçues, via les relations du modèle ; tables en aval | **livré** | `api/src/lineage/lineage.service.ts`, onglet « impact » de `web/src/app/pages/lineage` |
 | Application classique (tous les écrans historiques) intégrée dans la coque, sur les mêmes données | **livré** | `web-classique`, route `/classique` |
-| Tests : 85 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact, le cockpit, les préparations, les statistiques et l'explorateur 360°), 59 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
+| Tests : 85 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact, le cockpit, les préparations, les statistiques et l'explorateur 360°), 58 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
 | Docker, Caddy, guide Oracle Cloud, pile AWS CloudFormation (EC2 Graviton, RDS optionnel, S3, Systems Manager), TLS vérifié vers PostgreSQL (`SD_POSTGRES_CA`) | **livré** | `Dockerfile`, `docker-compose.yml`, `deploiement/oracle-cloud.md`, `deploiement/aws.md`, `deploiement/aws/pile.yaml` |
 | Fonctions avancées restées dans l'application classique (liste ci-dessous) | **optionnel** | `web-classique` |
 | Connexion à l'annuaire de l'entreprise (OpenID Connect) | à faire | remplacer `api/src/authentification` (contrat : poser `request.contexte`) |
@@ -181,7 +181,7 @@ l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté se
 ```bash
 npm run tester:api                                  # 85 tests, PGlite
 SD_POSTGRES_URL_TEST=postgres://… npm run tester:api # les mêmes sur PostgreSQL
-npm run tester:e2e                                  # 59 assertions, Chromium (Playwright de l'environnement)
+npm run tester:e2e                                  # 58 assertions, Chromium (Playwright de l'environnement)
 npm run verifier                                    # Prettier --check + ESLint (typescript-eslint)
 ```
 
