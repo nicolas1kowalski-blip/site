@@ -140,6 +140,16 @@ export class LineageController {
         return this.lineage.parcoursAttribut(espace.id, boId, elId);
     }
 
+    @Get('impact')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({
+        summary: 'Analyse d’impact : processus touchés par une table (ou une colonne), directement, via le lineage, via les relations.'
+    })
+    impact(@EspaceCourant() espace: EspaceAvecRole, @Query('table') table?: string, @Query('col') colonne?: string) {
+        if (!table) throw erreurRequete('Paramètre table requis.');
+        return this.lineage.impact(espace.id, table, colonne || undefined);
+    }
+
     @Get('table/:nom')
     @RoleEspaceRequis('lecteur')
     @ApiOperation({ summary: 'Amont et aval d’une table dans la carte des flux.' })

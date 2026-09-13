@@ -508,6 +508,70 @@ try {
             /Comparaison clients\.csv vs Clients consolidés/.test(await page.textContent('app-comparateur h2'))
     );
 
+    // ---- catalogue, surveillance des sources, sauvegarde ----
+    await page.click('a[href="/catalogue"]');
+    await page.waitForSelector('app-catalogue .entree');
+    await page.fill('app-catalogue input[name=recherche]', 'client');
+    await page.waitForFunction(
+        () =>
+            /résultat\(s\)/.test(document.querySelector('app-catalogue')?.textContent || '') &&
+            document.querySelector('app-catalogue .entree strong')?.textContent.trim() === 'Client'
+    );
+    const catalogueTexte = await page.textContent('app-catalogue');
+    verifier(
+        'catalogue : « client » trouve l’objet métier Client en tête, avec ses signaux, et signale les données techniques masquées',
+        /Objet métier/.test(catalogueTexte) && /donnée\(s\) technique\(s\) masquée\(s\)/.test(catalogueTexte)
+    );
+    await page.click('app-catalogue label.case:has-text("tout (tables") input');
+    await page.waitForFunction(() => /clients\.csv/.test(document.querySelector('app-catalogue .cartes')?.textContent || ''));
+    // La carte de la table elle-même (son titre est exactement « clients.csv »), pas celle d'une de ses colonnes (« dans clients.csv »).
+    await page.locator('app-catalogue .entree', { has: page.locator('strong', { hasText: /^clients\.csv$/ }) }).click();
+    await page.waitForSelector('app-catalogue .fiche');
+    const ficheCatalogue = await page.textContent('app-catalogue .fiche');
+    verifier(
+        'catalogue : la couche « tout » montre la table clients.csv, sa fiche affiche la qualité mesurée (75 %) et la sensibilité',
+        /Qualité\s*75 %/.test(ficheCatalogue) && /données personnelles/.test(ficheCatalogue)
+    );
+    await capture('catalogue');
+
+    await page.click('a[href="/surveillance"]');
+    await page.waitForSelector('app-surveillance tbody tr');
+    await page
+        .locator('app-surveillance tr', { has: page.locator('strong', { hasText: /^clients\.csv$/ }) })
+        .locator('button:has-text("Prendre un instantané")')
+        .click();
+    await page.waitForSelector('.notification.succes');
+    await page.click('app-surveillance .onglets button:has-text("Réconciliation")');
+    await page.selectOption('app-surveillance select[name=sourceA]', { label: 'clients.csv' });
+    await page.selectOption('app-surveillance select[name=cleA]', 'id_client');
+    await page.selectOption('app-surveillance select[name=sourceB]', { label: 'commandes.csv' });
+    await page.selectOption('app-surveillance select[name=cleB]', 'id_client');
+    await page.click('app-surveillance button:has-text("Réconcilier")');
+    await page.waitForSelector('app-surveillance .synthese');
+    const reconciliationValeurs = await page.$$eval('app-surveillance .synthese .valeur', valeurs =>
+        valeurs.map(valeur => valeur.textContent.trim())
+    );
+    verifier(
+        'surveillance : réconciliation clients / commandes — 4 et 4 lignes, 3 clés communes, 1 client sans commande (Zoé), 0 orpheline',
+        reconciliationValeurs.join('|') === '4 / 4|3|1|0'
+    );
+    await capture('surveillance');
+
+    await page.click('a[href="/sauvegarde"]');
+    await page.waitForSelector('app-sauvegarde');
+    const exportEspace = await page.evaluate(async () => await (await fetch('/api/sauvegarde/export')).json());
+    verifier(
+        'sauvegarde : l’export de l’espace contient les documents partagés et les 4 sources',
+        exportEspace.kind === 'studio-data-espace' &&
+            exportEspace.documents.appState.governance.businessObjects.length === 1 &&
+            exportEspace.sources.length === 4
+    );
+    const dossierHtml = await page.evaluate(async () => await (await fetch('/api/sauvegarde/dossier')).text());
+    verifier(
+        'sauvegarde : le dossier de gouvernance HTML liste l’objet Client et le terme du glossaire',
+        /<h3>Client /.test(dossierHtml) && /Clients consolidés/.test(dossierHtml)
+    );
+
     // ---- explorateur SQL ----
     await page.click('a[href="/explorateur"]');
     await page.waitForSelector('app-explorateur .table');

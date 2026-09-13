@@ -610,3 +610,102 @@ export type VocabulaireExploitation = {
     pas: Record<string, string>;
     mailles: Record<string, string>;
 };
+
+// ---- catalogue, surveillance des sources, sauvegarde, analyse d'impact ----
+export type TypeCatalogue =
+    'bo' | 'attr' | 'term' | 'asset' | 'perimeter' | 'valuelist' | 'rule' | 'report' | 'series' | 'table' | 'view' | 'column' | 'linkage';
+export type EntreeCatalogue = {
+    type: TypeCatalogue;
+    id: string;
+    titre: string;
+    sousTitre: string;
+    description: string;
+    domaine: string;
+    proprietaire: string;
+    qualite: number | null;
+    sensibilite: 'perso' | 'conf' | 'non' | null;
+    validation: 'ok' | 'pending' | null;
+    etiquettes: string[];
+    motsCles: string[];
+    lien: string;
+};
+export type Facette = { valeur: string; nombre: number };
+export type ResultatCatalogue = {
+    resultats: EntreeCatalogue[];
+    facettes: Record<'type' | 'domaine' | 'sensibilite' | 'proprietaire', Facette[]>;
+    techniquesMasquees: number;
+    types: Record<TypeCatalogue, string>;
+    total: number;
+};
+export type FiltresCatalogue = {
+    q?: string;
+    type?: string[];
+    domaine?: string[];
+    sensibilite?: string[];
+    proprietaire?: string[];
+    couche?: 'metier' | 'tout';
+};
+export type ColonneSchema = { name: string; type: string };
+export type Instantane = { ts: number; rows: number; schema: ColonneSchema[] };
+export type Contrat = { cols: (ColonneSchema & { required: boolean })[]; at: number };
+export type Derive = {
+    added: string[];
+    removed: string[];
+    retyped: string[];
+    rowsDelta: number;
+    rowsPct: number | null;
+    from: number;
+    to: number;
+    schemaChanged: boolean;
+};
+export type EtatSurveillance = {
+    nom: string;
+    id: string;
+    fraicheur: Fraicheur;
+    dernierInstantane: Instantane | null;
+    nombreInstantanes: number;
+    derive: Derive | null;
+    contrat: Contrat | null;
+    donneesFigees: { ts: number; rows: number } | null;
+};
+export type VerificationContrat = {
+    missing: string[];
+    extra: string[];
+    retyped: string[];
+    emptyRequired: { col: string; vides: number }[];
+    conforme: boolean;
+};
+export type ResultatDelta = {
+    table: string;
+    cle: string;
+    at: number;
+    snapTs: number;
+    added: number;
+    removed: number;
+    changed: number;
+    same: number;
+    colonnesComparees: number;
+};
+export type ResultatReconciliationSources = {
+    at: number;
+    a: string;
+    b: string;
+    ta: number;
+    tb: number;
+    onlyA: number;
+    onlyB: number;
+    common: number;
+};
+export type RapportImport = {
+    documents: number;
+    sources: number;
+    tablesConcues: { reconstruites: string[]; erreurs: { table: string; erreur: string }[] };
+};
+export type ActifImpacte = { id: string; name: string; criticality: string; owner: string };
+export type AnalyseImpact = {
+    direct: ActifImpacte[];
+    viaLineage: ActifImpacte[];
+    viaRelations: ActifImpacte[];
+    downstream: string[];
+    related: string[];
+};

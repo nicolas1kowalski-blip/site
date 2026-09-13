@@ -5,6 +5,7 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { AuthentificationModule } from './authentification/authentification.module';
 import { BaseDeDonneesModule } from './base-de-donnees/base-de-donnees.module';
+import { CatalogueModule } from './catalogue/catalogue.module';
 import { CONFIGURATION, Configuration } from './configuration/configuration';
 import { DocumentsModule } from './documents/documents.module';
 import { EspacesModule } from './espaces/espaces.module';
@@ -18,7 +19,9 @@ import { LineageModule } from './lineage/lineage.module';
 import { ModeleModule } from './modele/modele.module';
 import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
+import { SauvegardeModule } from './sauvegarde/sauvegarde.module';
 import { SourcesModule } from './sources/sources.module';
+import { SurveillanceModule } from './surveillance/surveillance.module';
 import { TablesConcuesModule } from './tables-concues/tables-concues.module';
 import { SqlController } from './sql/sql.controller';
 import { UtilisateursModule } from './utilisateurs/utilisateurs.module';
@@ -44,7 +47,10 @@ export class AppModule {
                 QualiteModule,
                 TablesConcuesModule,
                 LineageModule,
-                ExploitationModule
+                ExploitationModule,
+                CatalogueModule,
+                SurveillanceModule,
+                SauvegardeModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],

@@ -7,6 +7,7 @@
 import {
     BadRequestException,
     ForbiddenException,
+    HttpException,
     NotFoundException,
     PayloadTooLargeException,
     UnauthorizedException
@@ -17,6 +18,19 @@ export const erreurIntrouvable = (message: string) => new NotFoundException({ er
 export const erreurTropVolumineux = (message: string) => new PayloadTooLargeException({ erreur: message });
 export const erreurNonAuthentifie = (message = 'Connexion requise.') => new UnauthorizedException({ erreur: message });
 export const erreurInterdit = (message = 'Action non autorisée pour votre rôle.') => new ForbiddenException({ erreur: message });
+
+/**
+ * Message lisible d'une erreur quelconque : le texte « erreur » porté par nos exceptions NestJS (leur .message ne vaut
+ * que « Bad Request Exception »), sinon le .message classique, sinon la valeur convertie en texte.
+ */
+export function messageUtilisateur(erreur: unknown): string {
+    if (erreur instanceof HttpException) {
+        const corps = erreur.getResponse();
+        if (typeof corps === 'object' && corps && 'erreur' in corps) return String((corps as { erreur: unknown }).erreur);
+        return erreur.message;
+    }
+    return String((erreur as { message?: string })?.message || erreur);
+}
 
 /** Nom de fichier ou clé accepté par l'API : un seul segment, lettres, chiffres, _ . - ; jamais de « .. ». */
 const NOM_SUR = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/;

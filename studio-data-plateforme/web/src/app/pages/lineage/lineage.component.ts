@@ -11,6 +11,7 @@ import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
+    AnalyseImpact,
     CarteFlux,
     Graphe,
     LienFlux,
@@ -28,7 +29,7 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { GrapheSvgComponent, LienDessine, NoeudDessine } from '../../composants/graphe-svg.component';
 
-type Onglet = 'carte' | 'attribut' | 'table';
+type Onglet = 'carte' | 'attribut' | 'table' | 'impact';
 
 const COULEUR_ROLE: Record<string, { fond: string; bord: string }> = {
     app: { fond: '#e2e8f0', bord: '#334155' },
@@ -62,7 +63,58 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
             <button [class.actif]="onglet() === 'carte'" (click)="onglet.set('carte')">Carte des flux</button>
             <button [class.actif]="onglet() === 'attribut'" (click)="onglet.set('attribut')">Parcours d'un attribut</button>
             <button [class.actif]="onglet() === 'table'" (click)="onglet.set('table')">Autour d'une table</button>
+            <button [class.actif]="onglet() === 'impact'" (click)="onglet.set('impact')">Analyse d'impact</button>
         </div>
+
+        <!-- ---- analyse d'impact ---- -->
+        @if (onglet() === 'impact') {
+            <div class="carte">
+                <p class="discret">
+                    Quels processus sont touchés si cette table (ou cette colonne) change : directement, via le lineage (tables construites
+                    en aval), via les relations du modèle de données (tables jointes).
+                </p>
+                <div class="formulaire-ligne" style="max-width: 640px">
+                    <select class="champ" name="tableImpact" [(ngModel)]="tableImpact" (ngModelChange)="colonneImpact = ''">
+                        <option value="">— table —</option>
+                        @for (source of sources(); track source.id) {
+                            <option [value]="source.name">{{ source.name }}</option>
+                        }
+                    </select>
+                    <select class="champ" name="colonneImpact" [(ngModel)]="colonneImpact">
+                        <option value="">Toute la table</option>
+                        @for (colonne of colonnesDeSource(tableImpact); track colonne) {
+                            <option [value]="colonne">{{ colonne }}</option>
+                        }
+                    </select>
+                    <button class="bouton principal" (click)="analyserImpact()" [disabled]="!tableImpact" style="flex: 0 0 auto">
+                        Analyser
+                    </button>
+                </div>
+                @if (impact(); as impact) {
+                    @if (!impact.direct.length && !impact.viaLineage.length && !impact.viaRelations.length) {
+                        <p class="discret" style="margin-top: 10px">
+                            Aucun processus déclaré n'utilise cette donnée (écran Applications & processus).
+                        </p>
+                    }
+                    @for (bloc of blocsImpact(impact); track bloc.titre) {
+                        @if (bloc.actifs.length) {
+                            <h3>{{ bloc.titre }}</h3>
+                            <ul class="impact">
+                                @for (actif of bloc.actifs; track actif.id) {
+                                    <li>
+                                        <strong>{{ actif.name }}</strong>
+                                        @if (actif.criticality) {
+                                            <span class="badge neutre">{{ actif.criticality }}</span>
+                                        }
+                                        <span class="discret">{{ actif.owner }}</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    }
+                }
+            </div>
+        }
 
         <!-- ---- carte des flux ---- -->
         @if (onglet() === 'carte') {
@@ -557,6 +609,19 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
         .paire .champ {
             min-width: 100px;
         }
+        h3 {
+            margin: 12px 0 4px;
+            font-size: 14px;
+        }
+        .impact {
+            margin: 0;
+            padding-left: 18px;
+        }
+        .impact li {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
     `
 })
 export class LineageComponent {
@@ -577,6 +642,9 @@ export class LineageComponent {
     readonly brouillonLien = signal<(Partial<LienFlux> & { source: string; target: string }) | null>(null);
     readonly grapheAttribut = signal<Graphe | null>(null);
     readonly grapheTable = signal<Graphe | null>(null);
+    readonly impact = signal<AnalyseImpact | null>(null);
+    tableImpact = '';
+    colonneImpact = '';
     readonly enCours = signal(false);
     objetId = '';
     attributId = '';
@@ -768,6 +836,30 @@ export class LineageComponent {
         if (valeur === 'none') paire.xform = { kind: 'none' };
         else if (valeur.startsWith('agg:')) paire.xform = { kind: 'agg', fn: valeur.slice(4) };
         else paire.xform = { kind: 'scalar', op: valeur.slice(7), param: paire.xform?.param || '' };
+    }
+
+    // ---- analyse d'impact ----
+    colonnesDeSource(nomSource: string): string[] {
+        return this.sources().find(source => source.name === nomSource)?.headers || [];
+    }
+
+    async analyserImpact(): Promise<void> {
+        try {
+            this.impact.set(await this.api.analyseImpact(this.tableImpact, this.colonneImpact || undefined));
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    blocsImpact(impact: AnalyseImpact): { titre: string; actifs: AnalyseImpact['direct'] }[] {
+        return [
+            { titre: 'Impact direct (utilise cette donnée)', actifs: impact.direct },
+            { titre: `Via le lineage (tables alimentées : ${impact.downstream.join(', ') || '—'})`, actifs: impact.viaLineage },
+            {
+                titre: `Via les relations du modèle de données (tables jointes : ${impact.related.join(', ') || '—'})`,
+                actifs: impact.viaRelations
+            }
+        ];
     }
 
     // ---- parcours et table ----

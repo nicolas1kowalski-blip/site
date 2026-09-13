@@ -26,6 +26,7 @@ import {
     fraicheurTable,
     genreNoeud,
     normaliserFlux,
+    relationLien,
     roleNoeud,
     santeLien,
     statutDistorsion,
@@ -47,6 +48,14 @@ export type NoeudGraphe = {
 };
 export type LienGraphe = { source: string; target: string; libelle?: string };
 export type Graphe = { noeuds: NoeudGraphe[]; liens: LienGraphe[] };
+export type ActifImpacte = { id: string; name: string; criticality: string; owner: string };
+export type AnalyseImpact = {
+    direct: ActifImpacte[];
+    viaLineage: ActifImpacte[];
+    viaRelations: ActifImpacte[];
+    downstream: string[];
+    related: string[];
+};
 
 type Attribut = { id: string; name: string; mappings?: { table: string; col: string }[]; usedBy?: string[]; sourceApp?: string };
 type ObjetMetier = {
@@ -386,6 +395,77 @@ export class LineageService {
                 .filter(lien => retenus.has(lien.source) && retenus.has(lien.target))
                 .map(lien => ({ source: lien.source, target: lien.target, libelle: lien.type }))
         };
+    }
+
+    /**
+     * Analyse d'impact : processus touchés directement par une table (ou une colonne), via le lineage (tables
+     * conçues et alimentations en aval) ou via les relations du modèle de données (tables jointes).
+     */
+    async impact(espaceId: string, nomTable: string, colonne?: string): Promise<AnalyseImpact> {
+        const [etat, sources] = await Promise.all([this.gouvernance.etat(espaceId), this.sources.lister(espaceId)]);
+        const processus = (etat.governance.assets as unknown as Actif[]).filter(actif => actif.kind === 'process');
+        const touche = (actif: Actif, table: string, colonneVisee?: string) =>
+            colonneVisee
+                ? (actif.columns || []).some(candidat => candidat.table === table && (candidat as { col?: string }).col === colonneVisee)
+                : (actif.tables || []).includes(table) || (actif.columns || []).some(candidat => candidat.table === table);
+        const direct = processus.filter(actif => touche(actif, nomTable, colonne));
+        const aval = this.tablesEnAval(nomTable, sources, this.fluxDe(etat));
+        const viaLineage = processus.filter(actif => !direct.includes(actif) && aval.some(table => touche(actif, table)));
+        const reliees = new Set<string>();
+        for (const relation of (etat['relations'] as {
+            sourceTable: string;
+            sourceCol: string;
+            targetTable: string;
+            targetCol: string;
+        }[]) || []) {
+            if (relation.sourceTable === nomTable && (!colonne || relation.sourceCol === colonne)) reliees.add(relation.targetTable);
+            if (relation.targetTable === nomTable && (!colonne || relation.targetCol === colonne)) reliees.add(relation.sourceTable);
+        }
+        reliees.delete(nomTable);
+        const viaRelations = processus.filter(
+            actif => !direct.includes(actif) && !viaLineage.includes(actif) && [...reliees].some(table => touche(actif, table))
+        );
+        const resume = (actifs: Actif[]) =>
+            actifs.map(actif => ({
+                id: actif.id,
+                name: actif.name,
+                criticality: String((actif as { criticality?: string }).criticality || ''),
+                owner: String((actif as { owner?: string }).owner || '')
+            }));
+        return {
+            direct: resume(direct),
+            viaLineage: resume(viaLineage),
+            viaRelations: resume(viaRelations),
+            downstream: aval,
+            related: [...reliees]
+        };
+    }
+
+    /** Tables construites (directement ou en cascade) à partir d'une table : recettes des tables conçues et alimentations de la carte. */
+    private tablesEnAval(nomTable: string, sources: DocumentSource[], flux: Flux): string[] {
+        const alimente = new Map<string, Set<string>>();
+        const ajouter = (amont: string, aval: string) => {
+            if (!alimente.has(amont)) alimente.set(amont, new Set());
+            alimente.get(amont)!.add(aval);
+        };
+        for (const table of this.contexte({ governance: { dictionary: {} } } as unknown as EtatApplication, sources).tablesConcues)
+            for (const contributrice of table.sourcesContributrices) ajouter(contributrice, table.name);
+        for (const lien of flux.edges) {
+            const source = flux.nodes.find(noeud => noeud.id === lien.source);
+            const cible = flux.nodes.find(noeud => noeud.id === lien.target);
+            if (source?.tableName && cible?.tableName && relationLien(flux, lien) === 'feeds') ajouter(source.tableName, cible.tableName);
+        }
+        const aval = new Set<string>();
+        const file = [nomTable];
+        while (file.length) {
+            const courant = file.shift()!;
+            for (const suivante of alimente.get(courant) || [])
+                if (!aval.has(suivante)) {
+                    aval.add(suivante);
+                    file.push(suivante);
+                }
+        }
+        return [...aval];
     }
 
     private fluxDe(etat: EtatApplication): Flux {

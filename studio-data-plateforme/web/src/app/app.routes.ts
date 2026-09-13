@@ -9,6 +9,7 @@ import { ConnexionComponent } from './coque/connexion.component';
 import { CoqueComponent } from './coque/coque.component';
 import { AccueilComponent } from './pages/accueil/accueil.component';
 import { ActifsComponent } from './pages/actifs/actifs.component';
+import { CatalogueComponent } from './pages/catalogue/catalogue.component';
 import { ClassiqueComponent } from './pages/classique/classique.component';
 import { ComparateurComponent } from './pages/comparateur/comparateur.component';
 import { CompteComponent } from './pages/compte/compte.component';
@@ -27,9 +28,11 @@ import { PersonnesComponent } from './pages/personnes/personnes.component';
 import { PropositionsComponent } from './pages/propositions/propositions.component';
 import { QualiteComponent } from './pages/qualite/qualite.component';
 import { RapprochementComponent } from './pages/rapprochement/rapprochement.component';
+import { SauvegardeComponent } from './pages/sauvegarde/sauvegarde.component';
 import { SensibiliteComponent } from './pages/sensibilite/sensibilite.component';
 import { SeriesTemporellesComponent } from './pages/series-temporelles/series-temporelles.component';
 import { SourcesComponent } from './pages/sources/sources.component';
+import { SurveillanceComponent } from './pages/surveillance/surveillance.component';
 import { TableauxDeBordComponent } from './pages/tableaux-de-bord/tableaux-de-bord.component';
 import { TablesConcuesComponent } from './pages/tables-concues/tables-concues.component';
 import { UtilisateursComponent } from './pages/utilisateurs/utilisateurs.component';
@@ -42,6 +45,9 @@ export const routes: Routes = [
         canActivate: [gardeConnecte],
         children: [
             { path: '', component: AccueilComponent, title: 'Accueil — Studio Data' },
+            { path: 'catalogue', component: CatalogueComponent, title: 'Catalogue — Studio Data' },
+            { path: 'surveillance', component: SurveillanceComponent, title: 'Surveillance des sources — Studio Data' },
+            { path: 'sauvegarde', component: SauvegardeComponent, title: 'Sauvegarde et partage — Studio Data' },
             { path: 'sources', component: SourcesComponent, title: 'Sources — Studio Data' },
             { path: 'modele', component: ModeleComponent, title: 'Modèle de données — Studio Data' },
             { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },

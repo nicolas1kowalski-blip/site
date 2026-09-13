@@ -12,6 +12,17 @@ import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
 import {
     Actif,
     Alerte,
+    AnalyseImpact,
+    Contrat,
+    Derive,
+    EtatSurveillance,
+    FiltresCatalogue,
+    Instantane,
+    RapportImport,
+    ResultatCatalogue,
+    ResultatDelta,
+    ResultatReconciliationSources,
+    VerificationContrat,
     AnalyseSerie,
     ApercuExtraction,
     ConfigurationSerie,
@@ -514,6 +525,72 @@ export class ClientApiService {
                 `${this.racine}/exploitation/rapprochements/${encodeURIComponent(id)}/golden`,
                 {}
             )
+        );
+    }
+
+    // ---- catalogue ----
+    catalogue(filtres: FiltresCatalogue): Promise<ResultatCatalogue> {
+        const params: Record<string, string> = {};
+        if (filtres.q) params['q'] = filtres.q;
+        if (filtres.couche) params['couche'] = filtres.couche;
+        for (const nom of ['type', 'domaine', 'sensibilite', 'proprietaire'] as const)
+            if (filtres[nom]?.length) params[nom] = filtres[nom]!.join(',');
+        return firstValueFrom(this.http.get<ResultatCatalogue>(`${this.racine}/catalogue`, { params }));
+    }
+
+    // ---- surveillance des sources ----
+    etatSurveillance(): Promise<EtatSurveillance[]> {
+        return firstValueFrom(this.http.get<EtatSurveillance[]>(`${this.racine}/surveillance`));
+    }
+    prendreInstantane(nom: string): Promise<{ instantane: Instantane; derive: Derive | null }> {
+        return firstValueFrom(
+            this.http.post<{ instantane: Instantane; derive: Derive | null }>(
+                `${this.racine}/surveillance/${encodeURIComponent(nom)}/instantane`,
+                {}
+            )
+        );
+    }
+    genererContrat(nom: string): Promise<Contrat> {
+        return firstValueFrom(this.http.post<Contrat>(`${this.racine}/surveillance/${encodeURIComponent(nom)}/contrat/generer`, {}));
+    }
+    enregistrerContrat(nom: string, contrat: Contrat): Promise<Contrat> {
+        return firstValueFrom(this.http.put<Contrat>(`${this.racine}/surveillance/${encodeURIComponent(nom)}/contrat`, contrat));
+    }
+    verifierContrat(nom: string): Promise<VerificationContrat> {
+        return firstValueFrom(
+            this.http.post<VerificationContrat>(`${this.racine}/surveillance/${encodeURIComponent(nom)}/contrat/verifier`, {})
+        );
+    }
+    figerDonnees(nom: string): Promise<{ ts: number; rows: number }> {
+        return firstValueFrom(
+            this.http.post<{ ts: number; rows: number }>(`${this.racine}/surveillance/${encodeURIComponent(nom)}/figer`, {})
+        );
+    }
+    calculerDelta(nom: string, cle: string): Promise<ResultatDelta> {
+        return firstValueFrom(this.http.post<ResultatDelta>(`${this.racine}/surveillance/${encodeURIComponent(nom)}/delta`, { cle }));
+    }
+    reconcilierSources(a: string, cleA: string, b: string, cleB: string): Promise<ResultatReconciliationSources> {
+        return firstValueFrom(
+            this.http.post<ResultatReconciliationSources>(`${this.racine}/surveillance/reconcilier`, { a, cleA, b, cleB })
+        );
+    }
+
+    // ---- sauvegarde et partage ----
+    importerSauvegarde(fichier: unknown): Promise<RapportImport> {
+        return firstValueFrom(this.http.post<RapportImport>(`${this.racine}/sauvegarde/import`, fichier));
+    }
+    /** Adresse de téléchargement d'un export (le navigateur y joint la session). */
+    adresseExport(format: 'plateforme' | 'classique'): string {
+        return `${this.racine}/sauvegarde/export?telecharger=1${format === 'classique' ? '&format=classique' : ''}`;
+    }
+    adresseDossier(telecharger: boolean): string {
+        return `${this.racine}/sauvegarde/dossier${telecharger ? '?telecharger=1' : ''}`;
+    }
+
+    // ---- analyse d'impact ----
+    analyseImpact(table: string, colonne?: string): Promise<AnalyseImpact> {
+        return firstValueFrom(
+            this.http.get<AnalyseImpact>(`${this.racine}/lineage/impact`, { params: { table, ...(colonne ? { col: colonne } : {}) } })
         );
     }
 

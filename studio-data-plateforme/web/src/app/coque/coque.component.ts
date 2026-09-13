@@ -210,6 +210,7 @@ export class CoqueComponent {
             titre: 'Données',
             liens: [
                 { chemin: '/', libelle: 'Accueil', icone: '⌂' },
+                { chemin: '/catalogue', libelle: 'Catalogue', icone: '⌕' },
                 { chemin: '/sources', libelle: 'Sources', icone: '▤' },
                 { chemin: '/modele', libelle: 'Modèle de données', icone: '⇄' },
                 { chemin: '/tables-concues', libelle: 'Tables conçues', icone: '🧱' }
@@ -229,7 +230,8 @@ export class CoqueComponent {
             titre: 'Qualité',
             liens: [
                 { chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' },
-                { chemin: '/series-temporelles', libelle: 'Séries temporelles', icone: '∿' }
+                { chemin: '/series-temporelles', libelle: 'Séries temporelles', icone: '∿' },
+                { chemin: '/surveillance', libelle: 'Surveillance des sources', icone: '⌚' }
             ]
         },
         {
@@ -252,6 +254,7 @@ export class CoqueComponent {
         {
             titre: 'Administration',
             liens: [
+                { chemin: '/sauvegarde', libelle: 'Sauvegarde et partage', icone: '⇩' },
                 { chemin: '/espaces', libelle: 'Espaces et membres', icone: '⬚' },
                 { chemin: '/utilisateurs', libelle: 'Utilisateurs', icone: '☺', administrateur: true }
             ]

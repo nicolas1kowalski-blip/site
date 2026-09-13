@@ -8,6 +8,7 @@
  *   • documentation OpenAPI sur /api/docs ;
  *   • fronts statiques : Angular à la racine (avec repli sur index.html), application classique sous /classique/.
  */
+import { messageUtilisateur } from './commun/erreurs';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
@@ -28,10 +29,7 @@ class FiltreErreurs implements ExceptionFilter {
     catch(exception: unknown, hote: ArgumentsHost): void {
         const reponse = hote.switchToHttp().getResponse<FastifyReply>();
         if (exception instanceof HttpException) {
-            const corps = exception.getResponse();
-            const message =
-                typeof corps === 'object' && corps && 'erreur' in corps ? (corps as { erreur: string }).erreur : exception.message;
-            reponse.status(exception.getStatus()).send({ erreur: message });
+            reponse.status(exception.getStatus()).send({ erreur: messageUtilisateur(exception) });
             return;
         }
         const statut = (exception as { statusCode?: number }).statusCode;

@@ -38,10 +38,14 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | **Lineage** en Angular : carte des flux dérivée des données (tables conçues, applications, dictionnaire, objets métier) et complétée à la main, rôles déduits (maître, source, référentiel, consommateur), fraîcheur (fréquence du dictionnaire, SLA du lien), réconciliation d'une alimentation dans DuckDB (clé, attributs contrôlés, transformations, écarts et exemples), contrôles de cohérence du modèle, parcours d'un attribut, amont et aval d'une table ; composant graphe SVG (couches, barycentre, zoom, déplacement) | **livré** | `api/src/lineage`, `web/src/app/composants/graphe-svg.component.ts`, `web/src/app/pages/lineage` |
 | **Gouvernance** en Angular : objets métier (attributs alimentés par les colonnes, sources et rôles, actifs producteurs et consommateurs, références, complétude, historique, initialisation depuis une source), applications & processus & restitutions, périmètres, listes de valeurs (en clair ou par source, contrôle d'une colonne, rattachement au dictionnaire), sensibilité (classification par colonne, actions par niveau, détection RGPD), personnes & rôles & domaines, propositions à valider (dépôt, validation appliquée, refus, retrait, trace dans l'historique) — toutes dans le document appState partagé avec l'application classique | **livré** | `api/src/gouvernance`, `web/src/app/pages/{objets-metier,actifs,perimetres,listes-valeurs,sensibilite,personnes,propositions}` |
 | **Qualité et audit** en Angular : profilage colonne par colonne (complétude, distinctes, longueurs, espaces parasites, part numérique et date, motif majoritaire, valeurs fréquentes), doublons exacts et sur une clé, règles de qualité (8 types, criticité, activation), score pondéré, historique des audits en PostgreSQL | **livré** | `api/src/qualite`, `web/src/app/pages/qualite` |
+| **Catalogue** en Angular : recherche plein texte sur tout ce que l'espace décrit (objets métier, attributs, termes, applications, périmètres, listes de valeurs, règles, tableaux de bord, séries, rapprochements, tables, vues, colonnes), facettes vivantes (type, domaine, sensibilité, propriétaire), signaux de confiance (qualité mesurée par le dernier audit, sensibilité, validation), couche métier par défaut et couche technique à la demande, fiche et lien vers l'écran d'édition | **livré** | `api/src/catalogue`, `web/src/app/pages/catalogue` |
+| **Surveillance des sources** en Angular : moniteur (instantanés de schéma et de volume, dérive entre deux instantanés, fraîcheur d'après la fréquence du dictionnaire), contrat de données (généré depuis la source, colonnes obligatoires, vérification : manquantes, en trop, retypées, obligatoires vides), suivi des changements (données figées dans DuckDB, delta par clé : ajoutées, supprimées, modifiées, identiques), réconciliation amont / aval (volumétries, clés orphelines) | **livré** | `api/src/surveillance`, `web/src/app/pages/surveillance` |
+| **Sauvegarde et partage** en Angular : export de l'espace (documents partagés, métadonnées des sources, recettes) au format plateforme ou au format de l'application classique, import des deux formats avec reconstruction des tables conçues, dossier de gouvernance HTML autonome et imprimable | **livré** | `api/src/sauvegarde`, `web/src/app/pages/sauvegarde` |
+| **Analyse d'impact** (onglet du lineage) : applications touchées directement, via le lineage des tables conçues, via les relations du modèle ; tables en aval | **livré** | `api/src/lineage/lineage.service.ts`, onglet « impact » de `web/src/app/pages/lineage` |
 | Application classique (tous les écrans historiques) intégrée dans la coque, sur les mêmes données | **livré** | `web-classique`, route `/classique` |
-| Tests : 58 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues, la gouvernance, le lineage et l'exploitation), 49 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
+| Tests : 71 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact), 54 assertions de bout en bout dans Chromium | **livré** | `api/test`, `tests` |
 | Docker, Caddy, guide Oracle Cloud | **livré** | `Dockerfile`, `docker-compose.yml`, `deploiement` |
-| Réécriture en Angular des écrans restants (catalogue, surveillance des sources, historique, export/import ; extraction avancée : synthèses de tables liées, hiérarchies, colonnes calculées) | **à faire, écran par écran** | plan ci-dessous |
+| Fonctions avancées restées dans l'application classique (liste ci-dessous) | **optionnel** | `web-classique` |
 | Connexion à l'annuaire de l'entreprise (OpenID Connect) | à faire | remplacer `api/src/authentification` (contrat : poser `request.contexte`) |
 
 ## Architecture
@@ -132,7 +136,27 @@ classique :
 6. ~~**Tableaux de bord, comparateur, séries temporelles, rapprochement**~~ — livré : `exploitation/` (SQL pur testé
    pour chaque écran). Les statistiques BI de l'application classique sont couvertes par les tuiles des tableaux
    de bord ; les huit contrôles de règles sur séries (trou, saut, monotonie…) restent côté classique.
-7. Retrait de `web-classique` et éclatement du document `appState` en tables.
+7. ~~**Catalogue, surveillance des sources, sauvegarde et partage, analyse d'impact**~~ — livré : `catalogue/catalogue.ts`
+   (normalisation, pertinence, facettes — fonctions pures testées), `surveillance/surveillance.ts` (dérive, contrat,
+   SQL de delta et de réconciliation), `sauvegarde/dossier.ts` (dossier HTML pur), état de surveillance dans
+   `appState.governance.srcWatch` comme dans l'application classique.
+8. Retrait de `web-classique` et éclatement du document `appState` en tables.
+
+### Ce qui est migré et ce qui reste dans l'application classique
+
+Tous les écrans du quotidien sont en Angular. L'application classique reste accessible dans la coque (`/classique`),
+sur les mêmes données, pour les fonctions avancées suivantes, plus rares, qui n'ont pas été réécrites :
+
+| Domaine | Migré en Angular | Resté dans l'application classique |
+|---|---|---|
+| Sources et exploration | dépôt, aperçu, optimisation, explorateur SQL, export | classeurs Excel lus dans le navigateur, connecteurs distants, dépôt ZIP |
+| Modèle et extraction | liens, détection, extraction jointe avec filtres et agrégats, modèles enregistrés | synthèses d'une table liée (compter, transposer), hiérarchies aplaties, colonnes calculées, filtre « dans le fichier », préparation et recettes de nettoyage |
+| Tables conçues | recette complète, construction, reconstruction, contributions, écarts | — |
+| Qualité | profilage, doublons, règles, score, historique | anonymisation |
+| Gouvernance | objets métier, applications, périmètres, listes de valeurs, sensibilité, personnes, propositions, glossaire, dictionnaire | concepteur d'objets et audits d'objet (hiérarchies, règles métier, couverture), import en masse |
+| Lineage | carte, parcours d'attribut, amont / aval, réconciliation d'un lien, impact | repli de la carte par objet ou par application, journal des contrôles |
+| Exploitation | tableaux de bord, comparateur, séries temporelles, rapprochement | les huit contrôles de règles sur séries (trou, saut, monotonie…), explorateur 360 |
+| Catalogue, surveillance, sauvegarde | recherche et facettes, moniteur, contrat, delta, réconciliation, export / import, dossier | — |
 
 Comment un écran est migré (méthode suivie pour le modèle et l'extraction) :
 - la logique métier passe dans l'API, en TypeScript testé sans navigateur (fonctions pures quand c'est possible :
@@ -148,14 +172,16 @@ l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté se
 ## Tests et qualité
 
 ```bash
-npm run tester:api                                  # 58 tests, PGlite
+npm run tester:api                                  # 71 tests, PGlite
 SD_POSTGRES_URL_TEST=postgres://… npm run tester:api # les mêmes sur PostgreSQL
-npm run tester:e2e                                  # 49 assertions, Chromium (Playwright de l'environnement)
+npm run tester:e2e                                  # 54 assertions, Chromium (Playwright de l'environnement)
 npm run verifier                                    # Prettier --check + ESLint (typescript-eslint)
 ```
 
 Le test de bout en bout enchaîne : connexion, dépôt de deux CSV depuis Angular, aperçu, détection et ajout d'un
 lien dans le modèle, extraction jointe avec filtre (aperçu, comptage, export CSV téléchargé, modèle enregistré),
+qualité, table conçue, gouvernance (objets métier, applications, personnes, listes de valeurs, sensibilité,
+propositions), lineage, tableaux de bord, comparateur, catalogue, surveillance, sauvegarde,
 explorateur, glossaire, dictionnaire, création d'une utilisatrice, ajout comme lectrice, application classique
 dans la coque (sources, lien et gouvernance identiques), journal, puis vérification des droits de la lectrice.
 
