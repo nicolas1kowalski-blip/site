@@ -18,6 +18,7 @@ import { ImportationModule } from './importation/importation.module';
 import { JournalModule } from './journal/journal.module';
 import { LineageModule } from './lineage/lineage.module';
 import { ModeleModule } from './modele/modele.module';
+import { DemonstrationModule } from './demonstration/demonstration.module';
 import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
 import { SauvegardeModule } from './sauvegarde/sauvegarde.module';
@@ -56,7 +57,8 @@ export class AppModule {
                 SurveillanceModule,
                 SauvegardeModule,
                 CockpitModule,
-                PreparationModule
+                PreparationModule,
+                DemonstrationModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],
             providers: [{ provide: CONFIGURATION, useValue: configuration }],

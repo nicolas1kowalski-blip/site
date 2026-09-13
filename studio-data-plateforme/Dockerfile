@@ -24,7 +24,8 @@ ENV NODE_ENV=production \
     SD_PORT=8430 \
     SD_DONNEES=/donnees \
     SD_WEB=/application/web \
-    SD_WEB_CLASSIQUE=/application/web-classique
+    SD_WEB_CLASSIQUE=/application/web-classique \
+    SD_DEMONSTRATION=/application/donnees-demo
 WORKDIR /application
 COPY --from=construction /construction/studio-data-plateforme/api/package.json ./api/package.json
 COPY --from=construction /construction/studio-data-plateforme/api/node_modules ./api/node_modules
@@ -32,6 +33,8 @@ COPY --from=construction /construction/studio-data-plateforme/api/dist ./api/dis
 COPY --from=construction /construction/studio-data-plateforme/api/migrations ./api/migrations
 COPY --from=construction /construction/studio-data-plateforme/web/dist/studio-data/browser ./web
 COPY --from=construction /construction/studio-data-plateforme/web-classique/dist ./web-classique
+# Le jeu de démonstration voyage avec l'image : le mode démonstration l'installe en un clic.
+COPY --from=construction /construction/studio-data-plateforme/donnees-demo/fichiers ./donnees-demo
 RUN mkdir -p /donnees && chown -R node:node /donnees /application
 USER node
 VOLUME ["/donnees"]

@@ -14,6 +14,7 @@ import { ClassiqueComponent } from './pages/classique/classique.component';
 import { ComparateurComponent } from './pages/comparateur/comparateur.component';
 import { CompteComponent } from './pages/compte/compte.component';
 import { DictionnaireComponent } from './pages/dictionnaire/dictionnaire.component';
+import { DemonstrationComponent } from './pages/demonstration/demonstration.component';
 import { EspacesComponent } from './pages/espaces/espaces.component';
 import { ExplorateurComponent } from './pages/explorateur/explorateur.component';
 import { Explorateur360Component } from './pages/explorateur-360/explorateur-360.component';
@@ -83,6 +84,12 @@ export const routes: Routes = [
             { path: 'classique', component: ClassiqueComponent, title: 'Application complète — Studio Data' },
             { path: 'espaces', component: EspacesComponent, title: 'Espaces — Studio Data' },
             { path: 'compte', component: CompteComponent, title: 'Mon compte — Studio Data' },
+            {
+                path: 'demonstration',
+                component: DemonstrationComponent,
+                canActivate: [gardeAdministrateur],
+                title: 'Mode démonstration — Studio Data'
+            },
             {
                 path: 'utilisateurs',
                 component: UtilisateursComponent,

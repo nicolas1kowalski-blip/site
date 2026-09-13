@@ -51,7 +51,11 @@ const CLE_DENSITE = 'studio-data.densite';
                                 <option value="">Aucun espace</option>
                             }
                             @for (espace of session.espaces(); track espace.code) {
-                                <option [value]="espace.code">{{ espace.nom }} ({{ espace.role }})</option>
+                                <!-- « selected » en plus de la valeur du select : sans lui, un changement d'espace
+                                     laisserait la liste affichée sur sa première entrée. -->
+                                <option [value]="espace.code" [selected]="espace.code === session.espaceCourant()?.code">
+                                    {{ espace.nom }} ({{ espace.role }})
+                                </option>
                             }
                         </select>
                     </label>
@@ -319,7 +323,8 @@ export class CoqueComponent {
             liens: [
                 { chemin: '/sauvegarde', libelle: 'Sauvegarde et partage', icone: '⇩' },
                 { chemin: '/espaces', libelle: 'Espaces et membres', icone: '⬚' },
-                { chemin: '/utilisateurs', libelle: 'Utilisateurs', icone: '☺', administrateur: true }
+                { chemin: '/utilisateurs', libelle: 'Utilisateurs', icone: '☺', administrateur: true },
+                { chemin: '/demonstration', libelle: 'Mode démonstration', icone: '✨', administrateur: true }
             ]
         }
     ];

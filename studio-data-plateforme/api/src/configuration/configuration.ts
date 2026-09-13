@@ -32,6 +32,8 @@ const schemaEnvironnement = z.object({
     SD_WEB: z.string().default(path.join(RACINE_API, '..', 'web', 'dist', 'studio-data', 'browser')),
     /** Dossier de l'application classique construite (web-classique/dist). */
     SD_WEB_CLASSIQUE: z.string().default(path.join(RACINE_API, '..', 'web-classique', 'dist')),
+    /** Dossier des fichiers du jeu de démonstration (donnees-demo/fichiers), utilisé par le mode démonstration. */
+    SD_DEMONSTRATION: z.string().default(path.join(RACINE_API, '..', 'donnees-demo', 'fichiers')),
     SD_DUCKDB_THREADS: z.string().default(''),
     SD_DUCKDB_MEMOIRE: z.string().default(''),
     SD_LIMITE_LIGNES: z.coerce.number().int().positive().default(1_000_000),
@@ -57,6 +59,7 @@ export type Configuration = {
     postgresCa: string;
     dossierWeb: string;
     dossierWebClassique: string;
+    dossierDemonstration: string;
     duckdb: { threads: string; memoire: string };
     limiteLignesParReponse: number;
     tailleMaxFichierOctets: number;
@@ -80,6 +83,7 @@ export function lireConfiguration(environnement: NodeJS.ProcessEnv = process.env
         postgresCa: valeurs.SD_POSTGRES_CA,
         dossierWeb: path.resolve(valeurs.SD_WEB),
         dossierWebClassique: path.resolve(valeurs.SD_WEB_CLASSIQUE),
+        dossierDemonstration: path.resolve(valeurs.SD_DEMONSTRATION),
         duckdb: { threads: valeurs.SD_DUCKDB_THREADS, memoire: valeurs.SD_DUCKDB_MEMOIRE },
         limiteLignesParReponse: valeurs.SD_LIMITE_LIGNES,
         tailleMaxFichierOctets: valeurs.SD_TAILLE_MAX_FICHIER_MO * 1024 * 1024,

@@ -73,7 +73,12 @@ Les liens à déclarer dans **Modèle de données** (le bouton « Détecter les 
 
 ## 2. Charger le jeu
 
-Trois entrées possibles, selon ce que l'on veut montrer :
+**Le plus simple : le mode démonstration.** En administrateur, *Administration → Mode démonstration* installe
+tout dans un espace dédié — les douze sources, les liens du modèle, le dictionnaire, les listes de valeurs,
+l'objet métier, la série, les tableaux de bord et les règles de qualité déjà exécutées. Les étapes 1 et 2 du
+scénario ci-dessous sont alors déjà faites, et la démonstration peut commencer par la qualité.
+
+Pour montrer l'import lui-même, trois entrées manuelles :
 
 1. **Les fichiers un par un** — écran **Sources**, glisser-déposer les CSV de `fichiers/`. C'est le chemin
    normal ; commencez par `communes.csv`, `clients.csv`, `contacts.csv`, `commandes.csv`.

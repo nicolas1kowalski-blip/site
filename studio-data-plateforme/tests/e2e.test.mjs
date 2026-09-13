@@ -37,7 +37,16 @@ for (const [fichier, message] of [
 }
 
 const dossierTemporaire = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-data-plateforme-e2e-'));
-const configuration = lireConfiguration({ SD_DONNEES: dossierTemporaire, SD_JOURNAL: 'silent', SD_ADMIN_MOT_DE_PASSE: 'MotDePasseAdmin1' });
+// Le mode démonstration est essayé sur un jeu « petite taille » produit ici même, pour ne pas alourdir le test.
+const dossierDemonstration = path.join(dossierTemporaire, 'jeu-demo');
+const { genererLeJeuDeDemonstration } = await import(path.join(racineProjet, 'donnees-demo', 'generer.mjs'));
+genererLeJeuDeDemonstration(['--taille', 'petite', '--dossier', dossierDemonstration, '--silencieux']);
+const configuration = lireConfiguration({
+    SD_DONNEES: dossierTemporaire,
+    SD_JOURNAL: 'silent',
+    SD_ADMIN_MOT_DE_PASSE: 'MotDePasseAdmin1',
+    SD_DEMONSTRATION: dossierDemonstration
+});
 const app = await creerApplication(configuration);
 await app.listen(0, '127.0.0.1');
 const adresse = `http://127.0.0.1:${app.getHttpServer().address().port}`;
@@ -73,8 +82,8 @@ try {
     await page.waitForSelector('.rail');
     verifier(
         'connexion réussie : coque affichée, espace « Espace par défaut » sélectionné, rôle administrateur visible',
-        /Espace par défaut \(administrateur\)/.test(await page.textContent('.selection-espace')) &&
-            /administrateur/.test(await page.textContent('.utilisateur'))
+        (await page.$eval('.selection-espace select', liste => liste.options[liste.selectedIndex].textContent.trim())) ===
+            'Espace par défaut (administrateur)' && /administrateur/.test(await page.textContent('.utilisateur'))
     );
     await page.waitForFunction(() => /v\d+\.\d+/.test(document.querySelector('app-accueil')?.textContent || ''));
     await page.waitForFunction(
@@ -1206,6 +1215,48 @@ try {
         ['source.ajout', 'glossaire.ajout', 'dictionnaire.modification', 'espace.membre'].every(action => journal.includes(action)) &&
             /Administrateur/.test(journal)
     );
+
+    // ---- mode démonstration : tout l'espace installé en un clic ----
+    await page.click('a[href="/demonstration"]');
+    // L'écran affiche « Lecture de l'état… » tant que le serveur n'a pas répondu : on attend l'interrupteur.
+    await page.waitForSelector('app-demonstration button[name=installer]');
+    verifier(
+        'mode démonstration : les douze fichiers du jeu sont trouvés et l’espace n’est pas encore installé',
+        /12 fichier\(s\) trouvé\(s\)/.test(await page.textContent('app-demonstration .entete-page')) &&
+            /Démonstration non installée/.test(await page.textContent('app-demonstration'))
+    );
+    await page.click('app-demonstration button[name=installer]');
+    await page.waitForSelector('app-demonstration h2:has-text("Installation terminée")', { timeout: 120000 });
+    const rapportDemonstration = await page.textContent('app-demonstration');
+    verifier(
+        'mode démonstration : l’installation charge 12 sources, pose 12 liens, 12 règles, 2 tableaux de bord et calcule un score',
+        /12 source\(s\)/.test(rapportDemonstration) &&
+            /12 lien\(s\)/.test(rapportDemonstration) &&
+            /12 règle\(s\)/.test(rapportDemonstration) &&
+            /2 tableau\(x\) de bord/.test(rapportDemonstration) &&
+            /score qualité \d+ \/ 100/.test(rapportDemonstration)
+    );
+    await capture('demonstration');
+    await page.click('app-demonstration button:has-text("Ouvrir l\'espace de démonstration")');
+    await page.waitForSelector('app-accueil');
+    verifier(
+        'mode démonstration : l’espace « Démonstration » est ouvert (en-tête et cockpit)',
+        (await page.$eval('.selection-espace select', liste => liste.value)) === 'demo' &&
+            /source/.test(await page.textContent('app-accueil'))
+    );
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources table.sources tbody tr');
+    const sourcesDemonstration = await page.$$eval('app-sources table.sources tbody tr', lignes => lignes.length);
+    verifier('mode démonstration : les douze sources du jeu sont dans l’espace, avec leur domaine', sourcesDemonstration === 12);
+    await page.click('a[href="/qualite/regles"]');
+    await page.waitForSelector('app-qualite .onglets');
+    await page.selectOption('app-qualite select[name=source]', { label: 'clients.csv' });
+    await page.waitForSelector('app-qualite tbody tr:has-text("SIRET attendu pour les professionnels")');
+    verifier(
+        'mode démonstration : les règles de clients.csv sont posées et déjà exécutées (des échecs sont visibles)',
+        /échec\(s\)/.test(await page.textContent('app-qualite tbody tr:has-text("SIRET attendu pour les professionnels")'))
+    );
+    await capture('demonstration-qualite');
 
     // ---- lectrice : droits limités ----
     await page.click('button:has-text("Se déconnecter")');

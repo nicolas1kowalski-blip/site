@@ -1052,3 +1052,23 @@ export type VocabulairePreparation = {
 export type ApercuPreparation = { sql: string; colonnes: string[]; lignes: unknown[][]; total: number };
 export type ExecutionPreparation = { recette: RecettePreparation; sourceId: string; lignes: number; colonnes: string[] };
 export type RelancePreparations = { executees: string[]; erreurs: { preparation: string; erreur: string }[] };
+
+// ---- mode démonstration ----
+/** Ce que l'écran d'administration sait avant d'installer : fichiers trouvés et espace déjà installé. */
+export type EtatDemonstration = {
+    dossier: string;
+    fichiersPresents: string[];
+    fichiersManquants: string[];
+    pretAInstaller: boolean;
+    espace: { code: string; nom: string; sources: number; installeLe: string | null } | null;
+};
+/** Le compte rendu d'une installation : ce qui a été chargé et posé. */
+export type RapportDemonstration = {
+    espace: { code: string; nom: string };
+    sources: { nom: string; lignes: number; colonnes: number }[];
+    liens: number;
+    regles: number;
+    tableaux: number;
+    score: number | null;
+    dureeMs: number;
+};

@@ -93,6 +93,7 @@ import {
     DetailColonne,
     ExecutionRegles,
     EntreeJournal,
+    EtatDemonstration,
     Espace,
     FicheDictionnaire,
     Identite,
@@ -101,6 +102,7 @@ import {
     Materialisation,
     ProfilSource,
     PropositionLien,
+    RapportDemonstration,
     RegleQualite,
     Relation,
     ResultatDoublons,
@@ -421,6 +423,19 @@ export class ClientApiService {
             this.http.get<AuditQualite[]>(`${this.racine}/qualite/audits`, {
                 params: { limite: String(limite), ...(sourceId ? { sourceId } : {}) }
             })
+        );
+    }
+
+    // ---- mode démonstration ----
+    etatDemonstration(code: string): Promise<EtatDemonstration> {
+        return firstValueFrom(this.http.get<EtatDemonstration>(`${this.racine}/demonstration/etat`, { params: { code } }));
+    }
+    installerDemonstration(options: { code: string; remplacer: boolean }): Promise<RapportDemonstration> {
+        return firstValueFrom(this.http.post<RapportDemonstration>(`${this.racine}/demonstration/installer`, options));
+    }
+    viderDemonstration(code: string): Promise<{ sourcesSupprimees: number }> {
+        return firstValueFrom(
+            this.http.delete<{ sourcesSupprimees: number }>(`${this.racine}/demonstration/contenu`, { params: { code } })
         );
     }
 

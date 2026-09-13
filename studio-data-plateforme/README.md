@@ -45,6 +45,7 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | **Modèle de données** au niveau du classique : graphe SVG des tables (couleur par domaine, vue compacte ou schéma complet), cardinalité déclarée et nature du lien (composition, agrégation, référence) modifiables, mesure d'un lien sur les données (cardinalité constatée, orphelins, écart avec le déclaré), règles métier sur les liens (cardinalités conditionnelles) testables avec lignes en défaut | **livré** | `api/src/modele/regles-liens.ts`, `web/src/app/pages/modele` |
 | **Navigateur de données** (écran « Explorer » du classique) : filtre par colonne, tri par en-tête, saut vers la table liée par un clic sur une valeur reliée, export CSV ; **tableaux de bord** : dupliquer, tout actualiser, export HTML autonome, rapport global HTML (indicateurs et seuils, dernier score qualité) ; **comparateur** : rapport CSV complet ; **tables conçues** : export CSV ; **extraction** : fonctions « façon tableur » (CONCATENER, GAUCHE, STXT, SI, ANNEE…) qui remplissent la formule | **livré** | `web/src/app/pages/navigateur`, `web/src/app/pages/tableaux-de-bord/export-html.ts` |
 | **Écran Qualité** au niveau du classique : analyse d'une colonne (type sémantique, quartiles, moyenne, écart-type, somme, dates extrêmes et futures, valeurs fréquentes et formats en barres, hygiène, signaux : clé candidate, constante, faible cardinalité, asymétrie), volume analysé (premières lignes d'une source volumineuse), export JSON de l'audit ; règles : exécution d'une seule règle, duplication, explication « quoi / comment » de chaque type, dettes qualité (échecs × poids de la criticité), tendance du score et comparaison de deux exécutions règle par règle, scorecard JSON | **livré** | `api/src/qualite/detail-colonne.ts`, `web/src/app/pages/qualite` |
+| **Mode démonstration** : un interrupteur dans l'administration installe le jeu complet dans un espace dédié — sources chargées dans DuckDB, modèle, dictionnaire, listes de valeurs, objet métier, série, tableaux de bord et règles de qualité écrits dans PostgreSQL, règles exécutées et premier audit ; réinstallation et vidage | **livré** | `api/src/demonstration`, `web/src/app/pages/demonstration` |
 | **Jeu de données de démonstration** : générateur reproductible et 14 Mo de fichiers prêts à charger — référentiel de 105 communes réelles, 2 500 clients et leurs établissements, 8 880 contacts avec trois familles de doublons (stricts, normalisés, flous), réseau commercial hiérarchisé, catalogue, trois ans de commandes saisonnières, lignes, factures, tickets et un an de relevés horaires ; défauts semés volontairement et comptés dans un manifeste, livraison ZIP et classeur Excel | **livré** | `donnees-demo` |
 | **Finitions qualité, exploitation et confort** : exports des lignes en double par type (clés en double CSV, lignes en double CSV, classeur Excel à quatre onglets écrit sans dépendance), bilan qualité du résultat d'une extraction (complétude par colonne), assistant pas à pas des enrichissements d'une table conçue, barre d'outils des graphes (zoom, recentrer, plein écran, export PNG) et export image des graphiques, densité compacte mémorisée, liens croisés Sources → Dictionnaire / Lineage / Qualité, notifications limitées et fermables | **livré** | `api/src/commun/classeur-excel-ecriture.ts`, `web/src/app/composants`, `web/src/app/coeur/export-image.ts` |
 | **Importation** : classeurs Excel lus côté serveur (feuille au choix, dates reconnues), mise à jour d'une source existante (même identifiant, colonnes disparues et impact signalés, tables conçues et préparations rejouées), fusion de fichiers et de sources (colonnes alignées par nom, provenance conservée), livraison ZIP (inventaire puis import ou mise à jour par fichier), import par adresse (CSV, JSON avec chemin, Parquet, Google Sheets ; en-tête d'authentification ; différentiel ajoutées / disparues / modifiées ; mode ajout des nouvelles clés) | **livré** | `api/src/importation`, `web/src/app/pages/sources` |
@@ -54,7 +55,7 @@ Déploiement : `docker-compose.yml` (PostgreSQL + API + Caddy avec TLS automatiq
 | **Statistiques** et **Explorateur 360°** en Angular : graphique dimension × agrégat calculé par le serveur ; exploration d'une valeur de table en table par les liens du modèle (graphe, détail, extension) | **livré** | `api/src/exploitation/exploration.ts`, `web/src/app/pages/{statistiques,explorateur-360}` |
 | **Analyse d'impact** (onglet du lineage) : applications touchées directement, via le lineage des tables conçues, via les relations du modèle ; tables en aval | **livré** | `api/src/lineage/lineage.service.ts`, onglet « impact » de `web/src/app/pages/lineage` |
 | Application classique (tous les écrans historiques) intégrée dans la coque, sur les mêmes données | **livré** | `web-classique`, route `/classique` |
-| Tests : 114 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité et la qualité avancée, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact, le cockpit, les préparations, les statistiques et l'explorateur 360°, l'importation et la couverture), 7 tests du générateur du jeu de démonstration, 105 assertions de bout en bout dans Chromium | **livré** | `api/test`, `donnees-demo`, `tests` |
+| Tests : 119 tests d'API (PGlite et PostgreSQL, dont les constructeurs SQL, l'extraction jointe, la qualité et la qualité avancée, les tables conçues, la gouvernance, le lineage, l'exploitation, le catalogue, la surveillance, la sauvegarde et l'analyse d'impact, le cockpit, les préparations, les statistiques et l'explorateur 360°, l'importation et la couverture, le mode démonstration), 7 tests du générateur du jeu de démonstration, 110 assertions de bout en bout dans Chromium | **livré** | `api/test`, `donnees-demo`, `tests` |
 | Docker, Caddy, guide Oracle Cloud, pile AWS CloudFormation (EC2 Graviton, RDS optionnel, S3, Systems Manager), TLS vérifié vers PostgreSQL (`SD_POSTGRES_CA`) | **livré** | `Dockerfile`, `docker-compose.yml`, `deploiement/oracle-cloud.md`, `deploiement/aws.md`, `deploiement/aws/pile.yaml` |
 | Fonctions avancées restées dans l'application classique (liste ci-dessous) | **optionnel** | `web-classique` |
 | Connexion à l'annuaire de l'entreprise (OpenID Connect) | à faire | remplacer `api/src/authentification` (contrat : poser `request.contexte`) |
@@ -190,6 +191,13 @@ l'écran Sources Angular accepte CSV, TXT, Parquet et JSON. Pour Excel côté se
 
 ## Jeu de données de démonstration
 
+**Le plus simple : le mode démonstration.** Connectez-vous en administrateur, ouvrez *Administration → Mode
+démonstration* et cliquez sur « Installer la démonstration ». En quelques secondes, un espace dédié (« demo »)
+est créé avec les douze sources chargées, les douze liens du modèle, le dictionnaire, les listes de valeurs,
+l'objet métier, la série temporelle, deux tableaux de bord, douze règles de qualité **déjà exécutées** et un
+premier audit dans l'historique. Aucun autre espace n'est touché ; « Réinstaller » remet le jeu à neuf et
+« Vider l'espace » le nettoie.
+
 `donnees-demo/fichiers/` contient une base complète et volontairement imparfaite : communes réelles, clients et
 établissements situés dessus, contacts en doublon, réseau commercial, catalogue, trois ans de commandes et de
 factures, tickets et relevés horaires. Elle sert à montrer toutes les fonctions de l'application, du profilage au
@@ -201,12 +209,16 @@ npm run demo                                        # régénère le jeu (graine
 node donnees-demo/generer.mjs --taille grande       # 20 000 clients, 250 000 commandes
 ```
 
+Les fichiers peuvent aussi être déposés à la main (écran Sources), pour montrer l'import lui-même. Le mode
+démonstration lit le dossier indiqué par `SD_DEMONSTRATION` (par défaut `donnees-demo/fichiers`), ce qui permet
+d'installer une taille différente : régénérez le jeu ailleurs et pointez la variable dessus.
+
 ## Tests et qualité
 
 ```bash
-npm run tester:api                                  # 114 tests, PGlite
+npm run tester:api                                  # 119 tests, PGlite
 SD_POSTGRES_URL_TEST=postgres://… npm run tester:api # les mêmes sur PostgreSQL
-npm run tester:e2e                                  # 105 assertions, Chromium (Playwright de l'environnement)
+npm run tester:e2e                                  # 110 assertions, Chromium (Playwright de l'environnement)
 npm run tester:demo                                 # 7 tests du générateur du jeu de démonstration
 npm run verifier                                    # Prettier --check + ESLint (typescript-eslint)
 ```
