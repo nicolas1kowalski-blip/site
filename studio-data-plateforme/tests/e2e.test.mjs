@@ -458,6 +458,7 @@ try {
         'qualité (écrans) : le détail de la colonne nom est textuel et liste ses valeurs les plus fréquentes',
         /Valeurs les plus fréquentes/.test(await page.textContent('app-detail-colonne'))
     );
+    await capture('qualite-colonne');
     await page.selectOption('app-qualite select[name=echantillon]', { label: '1 000 premières lignes' });
     await page.click('app-qualite button:has-text("Profiler la source")');
     await page.waitForSelector('app-qualite .badge:has-text("volume analysé : 1000 premières lignes")');
@@ -530,6 +531,7 @@ try {
             typeof scorecard.score === 'number' &&
             scorecard.regles.some(regle => regle.nom === 'Au plus 1 client par ville' && regle.echecs === 1)
     );
+    await capture('qualite-regles');
     await page.click('app-qualite tbody tr:has-text("Ville autorisée") button:has-text("Dupliquer")');
     await page.waitForSelector('app-qualite tbody tr:has-text("Ville autorisée (copie)")');
     verifier(
