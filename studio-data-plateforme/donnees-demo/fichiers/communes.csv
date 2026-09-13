@@ -1,0 +1,106 @@
+code_insee;commune;code_postal;departement;nom_departement;region;latitude;longitude;population
+75056;Paris;75001;75;Paris;Île-de-France;48.86;2.35;2133111
+92012;Boulogne-Billancourt;92100;92;Hauts-de-Seine;Île-de-France;48.84;2.24;121334
+93066;Saint-Denis;93200;93;Seine-Saint-Denis;Île-de-France;48.94;2.36;112091
+95018;Argenteuil;95100;95;Val-d’Oise;Île-de-France;48.95;2.25;110388
+93048;Montreuil;93100;93;Seine-Saint-Denis;Île-de-France;48.86;2.44;109914
+92050;Nanterre;92000;92;Hauts-de-Seine;Île-de-France;48.89;2.2;96807
+94028;Créteil;94000;94;Val-de-Marne;Île-de-France;48.79;2.46;92646
+78646;Versailles;78000;78;Yvelines;Île-de-France;48.8;2.13;85205
+92040;Issy-les-Moulineaux;92130;92;Hauts-de-Seine;Île-de-France;48.82;2.27;68451
+95127;Cergy;95000;95;Val-d’Oise;Île-de-France;49.04;2.06;66300
+77284;Meaux;77100;77;Seine-et-Marne;Île-de-France;48.96;2.88;55750
+91228;Évry-Courcouronnes;91000;91;Essonne;Île-de-France;48.63;2.44;67558
+59350;Lille;59000;59;Nord;Hauts-de-France;50.63;3.06;236234
+80021;Amiens;80000;80;Somme;Hauts-de-France;49.89;2.3;133448
+59512;Roubaix;59100;59;Nord;Hauts-de-France;50.69;3.17;98828
+59183;Dunkerque;59140;59;Nord;Hauts-de-France;51.03;2.38;86279
+62193;Calais;62100;62;Pas-de-Calais;Hauts-de-France;50.95;1.86;72929
+60057;Beauvais;60000;60;Oise;Hauts-de-France;49.43;2.08;56020
+02691;Saint-Quentin;02100;02;Aisne;Hauts-de-France;49.85;3.29;53000
+67482;Strasbourg;67000;67;Bas-Rhin;Grand Est;48.57;7.75;287228
+51454;Reims;51100;51;Marne;Grand Est;49.26;4.03;182460
+57463;Metz;57000;57;Moselle;Grand Est;49.12;6.18;116429
+68224;Mulhouse;68100;68;Haut-Rhin;Grand Est;47.75;7.34;108312
+54395;Nancy;54000;54;Meurthe-et-Moselle;Grand Est;48.69;6.18;104885
+68066;Colmar;68000;68;Haut-Rhin;Grand Est;48.08;7.36;68784
+10387;Troyes;10000;10;Aube;Grand Est;48.3;4.08;61996
+08105;Charleville-Mézières;08000;08;Ardennes;Grand Est;49.77;4.72;46000
+76351;Le Havre;76600;76;Seine-Maritime;Normandie;49.49;0.11;165830
+76540;Rouen;76000;76;Seine-Maritime;Normandie;49.44;1.1;112321
+14118;Caen;14000;14;Calvados;Normandie;49.18;-0.37;105512
+50129;Cherbourg-en-Cotentin;50100;50;Manche;Normandie;49.64;-1.62;78549
+27229;Évreux;27000;27;Eure;Normandie;49.02;1.15;46893
+35238;Rennes;35000;35;Ille-et-Vilaine;Bretagne;48.11;-1.68;222485
+29019;Brest;29200;29;Finistère;Bretagne;48.39;-4.49;139926
+29232;Quimper;29000;29;Finistère;Bretagne;48;-4.1;63283
+56121;Lorient;56100;56;Morbihan;Bretagne;47.75;-3.37;57149
+56260;Vannes;56000;56;Morbihan;Bretagne;47.66;-2.76;53719
+35288;Saint-Malo;35400;35;Ille-et-Vilaine;Bretagne;48.65;-2.03;46097
+22278;Saint-Brieuc;22000;22;Côtes-d’Armor;Bretagne;48.51;-2.77;44372
+44109;Nantes;44000;44;Loire-Atlantique;Pays de la Loire;47.22;-1.55;320732
+49007;Angers;49000;49;Maine-et-Loire;Pays de la Loire;47.47;-0.55;155850
+72181;Le Mans;72000;72;Sarthe;Pays de la Loire;48.01;0.2;145047
+44184;Saint-Nazaire;44600;44;Loire-Atlantique;Pays de la Loire;47.28;-2.21;72925
+85191;La Roche-sur-Yon;85000;85;Vendée;Pays de la Loire;46.67;-1.43;55199
+49099;Cholet;49300;49;Maine-et-Loire;Pays de la Loire;47.06;-0.88;54121
+53130;Laval;53000;53;Mayenne;Pays de la Loire;48.07;-0.77;49492
+37261;Tours;37000;37;Indre-et-Loire;Centre-Val de Loire;47.39;0.69;137658
+45234;Orléans;45000;45;Loiret;Centre-Val de Loire;47.9;1.9;116269
+18033;Bourges;18000;18;Cher;Centre-Val de Loire;47.08;2.4;64551
+41018;Blois;41000;41;Loir-et-Cher;Centre-Val de Loire;47.59;1.33;46086
+36044;Châteauroux;36000;36;Indre;Centre-Val de Loire;46.81;1.69;43442
+28085;Chartres;28000;28;Eure-et-Loir;Centre-Val de Loire;48.44;1.49;38534
+21231;Dijon;21000;21;Côte-d’Or;Bourgogne-Franche-Comté;47.32;5.04;158002
+25056;Besançon;25000;25;Doubs;Bourgogne-Franche-Comté;47.24;6.02;119198
+90010;Belfort;90000;90;Territoire de Belfort;Bourgogne-Franche-Comté;47.64;6.86;46443
+71076;Chalon-sur-Saône;71100;71;Saône-et-Loire;Bourgogne-Franche-Comté;46.78;4.85;45219
+89024;Auxerre;89000;89;Yonne;Bourgogne-Franche-Comté;47.8;3.57;34634
+58194;Nevers;58000;58;Nièvre;Bourgogne-Franche-Comté;46.99;3.16;32416
+69123;Lyon;69001;69;Rhône;Auvergne-Rhône-Alpes;45.76;4.84;522969
+42218;Saint-Étienne;42000;42;Loire;Auvergne-Rhône-Alpes;45.44;4.39;174000
+38185;Grenoble;38000;38;Isère;Auvergne-Rhône-Alpes;45.19;5.72;158454
+69266;Villeurbanne;69100;69;Rhône;Auvergne-Rhône-Alpes;45.77;4.88;152212
+63113;Clermont-Ferrand;63000;63;Puy-de-Dôme;Auvergne-Rhône-Alpes;45.78;3.08;147865
+74010;Annecy;74000;74;Haute-Savoie;Auvergne-Rhône-Alpes;45.9;6.13;130721
+26362;Valence;26000;26;Drôme;Auvergne-Rhône-Alpes;44.93;4.89;65028
+73065;Chambéry;73000;73;Savoie;Auvergne-Rhône-Alpes;45.56;5.92;59490
+01053;Bourg-en-Bresse;01000;01;Ain;Auvergne-Rhône-Alpes;46.2;5.23;41527
+42187;Roanne;42300;42;Loire;Auvergne-Rhône-Alpes;46.04;4.07;34366
+33063;Bordeaux;33000;33;Gironde;Nouvelle-Aquitaine;44.84;-0.58;259809
+87085;Limoges;87000;87;Haute-Vienne;Nouvelle-Aquitaine;45.83;1.26;130876
+86194;Poitiers;86000;86;Vienne;Nouvelle-Aquitaine;46.58;0.34;88291
+64445;Pau;64000;64;Pyrénées-Atlantiques;Nouvelle-Aquitaine;43.3;-0.37;77215
+17300;La Rochelle;17000;17;Charente-Maritime;Nouvelle-Aquitaine;46.16;-1.15;77205
+33281;Mérignac;33700;33;Gironde;Nouvelle-Aquitaine;44.84;-0.65;71322
+79191;Niort;79000;79;Deux-Sèvres;Nouvelle-Aquitaine;46.32;-0.46;58707
+64102;Bayonne;64100;64;Pyrénées-Atlantiques;Nouvelle-Aquitaine;43.49;-1.48;51894
+16015;Angoulême;16000;16;Charente;Nouvelle-Aquitaine;45.65;0.16;41740
+47001;Agen;47000;47;Lot-et-Garonne;Nouvelle-Aquitaine;44.2;0.62;32485
+24322;Périgueux;24000;24;Dordogne;Nouvelle-Aquitaine;45.18;0.72;29958
+31555;Toulouse;31000;31;Haute-Garonne;Occitanie;43.6;1.44;493465
+34172;Montpellier;34000;34;Hérault;Occitanie;43.61;3.88;295542
+30189;Nîmes;30000;30;Gard;Occitanie;43.84;4.36;148561
+66136;Perpignan;66000;66;Pyrénées-Orientales;Occitanie;42.7;2.9;119656
+34032;Béziers;34500;34;Hérault;Occitanie;43.34;3.22;78116
+82121;Montauban;82000;82;Tarn-et-Garonne;Occitanie;44.02;1.35;60810
+11262;Narbonne;11100;11;Aude;Occitanie;43.18;3;55516
+81004;Albi;81000;81;Tarn;Occitanie;43.93;2.15;49531
+11069;Carcassonne;11000;11;Aude;Occitanie;43.21;2.35;47068
+34301;Sète;34200;34;Hérault;Occitanie;43.4;3.7;43000
+65440;Tarbes;65000;65;Hautes-Pyrénées;Occitanie;43.23;0.07;40600
+12202;Rodez;12000;12;Aveyron;Occitanie;44.35;2.57;24000
+13055;Marseille;13001;13;Bouches-du-Rhône;Provence-Alpes-Côte d’Azur;43.3;5.37;873076
+06088;Nice;06000;06;Alpes-Maritimes;Provence-Alpes-Côte d’Azur;43.71;7.26;342669
+83137;Toulon;83000;83;Var;Provence-Alpes-Côte d’Azur;43.12;5.93;176198
+13001;Aix-en-Provence;13100;13;Bouches-du-Rhône;Provence-Alpes-Côte d’Azur;43.53;5.45;143097
+84007;Avignon;84000;84;Vaucluse;Provence-Alpes-Côte d’Azur;43.95;4.81;91729
+06029;Cannes;06400;06;Alpes-Maritimes;Provence-Alpes-Côte d’Azur;43.55;7.02;74152
+06004;Antibes;06600;06;Alpes-Maritimes;Provence-Alpes-Côte d’Azur;43.58;7.13;72999
+83061;Fréjus;83600;83;Var;Provence-Alpes-Côte d’Azur;43.43;6.74;54023
+13004;Arles;13200;13;Bouches-du-Rhône;Provence-Alpes-Côte d’Azur;43.68;4.63;52439
+13103;Salon-de-Provence;13300;13;Bouches-du-Rhône;Provence-Alpes-Côte d’Azur;43.64;5.1;45528
+06069;Grasse;06130;06;Alpes-Maritimes;Provence-Alpes-Côte d’Azur;43.66;6.92;50396
+05061;Gap;05000;05;Hautes-Alpes;Provence-Alpes-Côte d’Azur;44.56;6.08;40895
+2A004;Ajaccio;20000;2A;Corse-du-Sud;Corse;41.93;8.74;71361
+2B033;Bastia;20200;2B;Haute-Corse;Corse;42.7;9.45;48280

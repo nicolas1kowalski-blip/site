@@ -1,0 +1,181 @@
+id_produit;reference;libelle;famille;sous_famille;unite;prix_unitaire;taux_tva;actif;date_lancement
+PRD-0001;MOB-0001;Rangement grand format;Mobilier;Rangement;palette;603.89;20;oui;2023-05-26
+PRD-0002;MOB-0002;Rangement professionnel;Mobilier;Rangement;mètre;224.1;20;oui;2026-02-08
+PRD-0003;OUT-0003;Mesure standard;Outillage;Mesure;lot de 10;522.66;20;oui;2017-04-15
+PRD-0004;INF-0004;Consommable économique;Informatique;Consommable;mètre;869.98;20;oui;2020-11-15
+PRD-0005;EMB-0005;Film premium;Emballage;Film;carton;17.88;20;oui;2019-07-29
+PRD-0006;EMB-0006;Film standard;Emballage;Film;lot de 10;30.94;20;oui;2018-06-17
+PRD-0007;INF-0007;Périphérique standard;Informatique;Périphérique;mètre;1276.11;20;oui;2020-09-20
+PRD-0008;MOB-0008;Rangement premium;Mobilier;Rangement;pièce;461.47;20;oui;2018-04-16
+PRD-0009;INF-0009;Réseau compact;Informatique;Réseau;carton;483.76;20;oui;2025-08-06
+PRD-0010;OUT-0010;Main renforcé;Outillage;Main;palette;222.39;20;oui;2020-01-24
+PRD-0011;MOB-0011;Siège professionnel;Mobilier;Siège;palette;397.13;20;non;2025-05-30
+PRD-0012;INF-0012;Consommable standard;Informatique;Consommable;lot de 10;432.89;20;oui;2020-08-09
+PRD-0013;ENT-0013;Protection économique;Entretien;Protection;pièce;36.28;20;oui;2023-05-03
+PRD-0014;ENT-0014;Nettoyage économique;Entretien;Nettoyage;pièce;34.88;20;oui;2026-04-03
+PRD-0015;PAP-0015;Papier premium;Papeterie;Papier;mètre;25.04;5.5;non;2018-09-18
+PRD-0016;INF-0016;Consommable recyclé;Informatique;Consommable;carton;654.03;20;oui;2025-11-03
+PRD-0017;EMB-0017;Film recyclé;Emballage;Film;palette;35.22;20;oui;2026-06-27
+PRD-0018;MOB-0018;Siège standard;Mobilier;Siège;pièce;484.37;20;oui;2026-02-26
+PRD-0019;EMB-0019;Film compact;Emballage;Film;pièce;41.29;20;oui;2018-08-01
+PRD-0020;INF-0020;Périphérique recyclé;Informatique;Périphérique;mètre;0;20;oui;2018-04-10
+PRD-0021;EMB-0021;Film professionnel;Emballage;Film;pièce;31.13;20;oui;2025-07-07
+PRD-0022;PAP-0022;Classement standard;Papeterie;Classement;carton;4.05;20;oui;2023-01-13
+PRD-0023;ENT-0023;Nettoyage compact;Entretien;Nettoyage;palette;109.63;5.5;non;2026-06-15
+PRD-0024;ENT-0024;Protection économique;Entretien;Protection;palette;91.05;20;oui;2025-09-21
+PRD-0025;PAP-0025;Écriture compact;Papeterie;Écriture;lot de 10;15.91;20;oui;2018-04-27
+PRD-0026;ENT-0026;Protection compact;Entretien;Protection;palette;14.12;20;oui;2025-08-06
+PRD-0027;EMB-0027;Palette premium;Emballage;Palette;pièce;40.14;20;oui;2025-04-13
+PRD-0028;PAP-0028;Écriture économique;Papeterie;Écriture;lot de 10;25.16;20;oui;2022-05-29
+PRD-0029;OUT-0029;Électroportatif premium;Outillage;Électroportatif;pièce;0;20;oui;2024-08-26
+PRD-0030;INF-0030;Réseau renforcé;Informatique;Réseau;palette;436.15;20;oui;2019-03-18
+PRD-0031;MOB-0031;Bureau compact;Mobilier;Bureau;lot de 10;0;20;non;2020-11-04
+PRD-0032;MOB-0032;Bureau premium;Mobilier;Bureau;carton;517.88;20;oui;2025-01-28
+PRD-0033;EMB-0033;Palette renforcé;Emballage;Palette;mètre;10.07;20;oui;2018-06-29
+PRD-0034;PAP-0034;Classement compact;Papeterie;Classement;pièce;19.92;20;non;2017-04-18
+PRD-0035;PAP-0035;Classement compact;Papeterie;Classement;mètre;29.18;20;oui;2023-10-23
+PRD-0036;MOB-0036;Rangement grand format;Mobilier;Rangement;carton;419.56;20;oui;2017-12-10
+PRD-0037;ENT-0037;Protection grand format;Entretien;Protection;pièce;61.86;20;oui;2020-12-01
+PRD-0038;EMB-0038;Film renforcé;Emballage;Film;lot de 10;28.5;20;non;2026-05-22
+PRD-0039;MOB-0039;Siège professionnel;Mobilier;Siège;carton;479.93;20;oui;2019-04-09
+PRD-0040;EMB-0040;Film standard;Emballage;Film;mètre;24.86;20;oui;2023-02-03
+PRD-0041;OUT-0041;Main renforcé;Outillage;Main;pièce;369.33;20;oui;2021-12-19
+PRD-0042;EMB-0042;Carton renforcé;Emballage;Carton;lot de 10;4.52;20;oui;2026-06-21
+PRD-0043;EMB-0043;Carton renforcé;Emballage;Carton;carton;7.59;20;oui;2017-12-14
+PRD-0044;MOB-0044;Siège grand format;Mobilier;Siège;lot de 10;914.38;20;oui;2019-09-11
+PRD-0045;EMB-0045;Carton compact;Emballage;Carton;pièce;25.31;5.5;oui;2021-09-18
+PRD-0046;INF-0046;Consommable grand format;Informatique;Consommable;pièce;1058.85;20;oui;2020-02-04
+PRD-0047;PAP-0047;Papier recyclé;Papeterie;Papier;palette;18.64;20;oui;2025-12-12
+PRD-0048;MOB-0048;Siège renforcé;Mobilier;Siège;pièce;733.01;20;oui;2021-12-13
+PRD-0049;ENT-0049;Nettoyage professionnel;Entretien;Nettoyage;pièce;27.78;20;oui;2024-12-21
+PRD-0050;MOB-0050;Bureau standard;Mobilier;Bureau;pièce;308.09;20;oui;2017-06-29
+PRD-0051;OUT-0051;Électroportatif premium;Outillage;Électroportatif;carton;292.9;20;non;2018-03-01
+PRD-0052;INF-0052;Réseau premium;Informatique;Réseau;palette;284.48;20;oui;2025-09-15
+PRD-0053;MOB-0053;Bureau grand format;Mobilier;Bureau;palette;299.81;20;oui;2025-06-22
+PRD-0054;OUT-0054;Main renforcé;Outillage;Main;pièce;260.86;20;oui;2026-06-10
+PRD-0055;OUT-0055;Électroportatif recyclé;Outillage;Électroportatif;palette;176.8;20;non;2020-11-21
+PRD-0056;OUT-0056;Électroportatif standard;Outillage;Électroportatif;mètre;117.95;20;oui;2018-03-20
+PRD-0057;ENT-0057;Nettoyage compact;Entretien;Nettoyage;mètre;16.81;20;oui;2024-07-29
+PRD-0058;ENT-0058;Nettoyage premium;Entretien;Nettoyage;carton;22.04;20;oui;2025-09-24
+PRD-0059;PAP-0059;Écriture renforcé;Papeterie;Écriture;mètre;23.3;5.5;oui;2024-05-17
+PRD-0060;INF-0060;Réseau recyclé;Informatique;Réseau;mètre;415.19;20;oui;2026-05-27
+PRD-0061;ENT-0061;Nettoyage grand format;Entretien;Nettoyage;lot de 10;92.93;20;oui;2023-08-14
+PRD-0062;MOB-0062;Bureau recyclé;Mobilier;Bureau;carton;562.7;20;non;2019-06-14
+PRD-0063;ENT-0063;Nettoyage renforcé;Entretien;Nettoyage;carton;86.74;5.5;oui;2018-01-12
+PRD-0064;PAP-0064;Classement économique;Papeterie;Classement;lot de 10;17.73;20;non;2026-05-29
+PRD-0065;PAP-0065;Écriture compact;Papeterie;Écriture;pièce;9.13;20;oui;2019-10-02
+PRD-0066;OUT-0066;Main compact;Outillage;Main;carton;567.84;20;oui;2017-10-13
+PRD-0067;EMB-0067;Film compact;Emballage;Film;carton;16.18;20;oui;2020-01-14
+PRD-0068;EMB-0068;Carton économique;Emballage;Carton;carton;4.47;20;non;2019-07-31
+PRD-0069;ENT-0069;Protection professionnel;Entretien;Protection;pièce;59.74;20;oui;2026-04-19
+PRD-0070;OUT-0070;Mesure standard;Outillage;Mesure;palette;348.54;20;oui;2020-12-11
+PRD-0071;INF-0071;Périphérique économique;Informatique;Périphérique;palette;1370.97;20;oui;2020-05-02
+PRD-0072;EMB-0072;Film recyclé;Emballage;Film;mètre;36.87;20;oui;2021-07-19
+PRD-0073;INF-0073;Périphérique professionnel;Informatique;Périphérique;carton;1490.22;20;oui;2025-09-29
+PRD-0074;MOB-0074;Siège renforcé;Mobilier;Siège;carton;152.11;20;non;2016-12-19
+PRD-0075;PAP-0075;Classement renforcé;Papeterie;Classement;carton;5.19;20;oui;2024-09-01
+PRD-0076;PAP-0076;Classement économique;Papeterie;Classement;lot de 10;18.64;20;oui;2021-08-30
+PRD-0077;OUT-0077;Électroportatif premium;Outillage;Électroportatif;lot de 10;147.99;20;oui;2017-07-21
+PRD-0078;PAP-0078;Classement grand format;Papeterie;Classement;lot de 10;2.37;20;oui;2022-06-06
+PRD-0079;MOB-0079;Rangement premium;Mobilier;Rangement;carton;734.76;5.5;oui;2024-07-29
+PRD-0080;OUT-0080;Main économique;Outillage;Main;lot de 10;533.87;20;oui;2019-04-26
+PRD-0081;ENT-0081;Nettoyage standard;Entretien;Nettoyage;mètre;19.45;20;oui;2020-07-08
+PRD-0082;OUT-0082;Main grand format;Outillage;Main;mètre;272.98;20;oui;2024-11-04
+PRD-0083;PAP-0083;Écriture renforcé;Papeterie;Écriture;palette;26.72;20;oui;2022-09-18
+PRD-0084;EMB-0084;Carton renforcé;Emballage;Carton;lot de 10;21.84;20;oui;2020-04-23
+PRD-0085;ENT-0085;Protection économique;Entretien;Protection;mètre;86.66;20;non;2021-12-09
+PRD-0086;EMB-0086;Film économique;Emballage;Film;lot de 10;12.18;20;oui;2021-06-12
+PRD-0087;EMB-0087;Palette économique;Emballage;Palette;lot de 10;2.84;20;oui;2022-04-25
+PRD-0088;ENT-0088;Hygiène professionnel;Entretien;Hygiène;carton;97.96;20;oui;2020-10-19
+PRD-0089;OUT-0089;Main professionnel;Outillage;Main;carton;94.19;20;oui;2016-12-09
+PRD-0090;PAP-0090;Écriture renforcé;Papeterie;Écriture;palette;25.08;20;oui;2018-11-06
+PRD-0091;OUT-0091;Électroportatif standard;Outillage;Électroportatif;pièce;199.24;20;oui;2018-08-20
+PRD-0092;ENT-0092;Nettoyage standard;Entretien;Nettoyage;mètre;66.06;20;oui;2022-08-12
+PRD-0093;EMB-0093;Film premium;Emballage;Film;carton;33.18;20;oui;2020-08-21
+PRD-0094;ent-0094;Protection grand format;Entretien;Protection;mètre;34.3;20;oui;2019-02-28
+PRD-0095;EMB-0095;Palette standard;Emballage;Palette;pièce;25.99;5.5;oui;2019-10-06
+PRD-0096;OUT-0096;Électroportatif premium;Outillage;Électroportatif;carton;14.07;20;oui;2024-08-06
+PRD-0097;INF-0097;Consommable grand format;Informatique;Consommable;pièce;65.95;20;oui;2025-10-13
+PRD-0098;PAP-0098;Classement renforcé;Papeterie;Classement;lot de 10;7.78;20;non;2018-04-06
+PRD-0099;EMB-0099;Film renforcé;Emballage;Film;lot de 10;20.67;20;oui;2020-03-18
+PRD-0100;INF-0100;Périphérique compact;Informatique;Périphérique;pièce;768.68;20;non;2025-10-05
+PRD-0101;ENT-0101;Protection standard;Entretien;Protection;pièce;24.12;20;oui;2020-03-11
+PRD-0102;MOB-0102;Bureau standard;Mobilier;Bureau;lot de 10;340.64;20;oui;2017-06-04
+PRD-0103;MOB-0103;Bureau grand format;Mobilier;Bureau;pièce;905.69;20;oui;2020-07-19
+PRD-0104;ENT-0104;Protection renforcé;Entretien;Protection;palette;7.67;20;oui;2023-01-02
+PRD-0105;EMB-0105;Carton économique;Emballage;Carton;palette;42.64;20;non;2020-01-29
+PRD-0106;EMB-0106;Palette économique;Emballage;Palette;palette;20.34;20;non;2023-03-09
+PRD-0107;inf-0107;Consommable grand format;Informatique;Consommable;mètre;1385.27;20;non;2022-05-07
+PRD-0108;OUT-0108;Mesure recyclé;Outillage;Mesure;pièce;429.07;20;oui;2026-04-13
+PRD-0109;ENT-0109;Hygiène professionnel;Entretien;Hygiène;carton;34.75;20;oui;2020-01-27
+PRD-0110;OUT-0110;Mesure renforcé;Outillage;Mesure;lot de 10;142.33;20;oui;2024-05-04
+PRD-0111;PAP-0111;Classement standard;Papeterie;Classement;pièce;21.78;20;oui;2022-05-06
+PRD-0112;ENT-0112;Hygiène standard;Entretien;Hygiène;carton;26.56;20;oui;2019-12-31
+PRD-0113;OUT-0113;Main professionnel;Outillage;Main;lot de 10;272.38;20;oui;2017-11-30
+PRD-0114;OUT-0114;Mesure recyclé;Outillage;Mesure;palette;141.07;20;oui;2017-02-24
+PRD-0115;MOB-0115;Siège grand format;Mobilier;Siège;lot de 10;121.28;20;non;2023-09-04
+PRD-0116;PAP-0116;Classement grand format;Papeterie;Classement;lot de 10;8.02;5.5;oui;2018-08-17
+PRD-0117;ENT-0117;Hygiène professionnel;Entretien;Hygiène;lot de 10;89.98;20;oui;2023-06-08
+PRD-0118;INF-0118;Réseau compact;Informatique;Réseau;mètre;842.75;20;oui;2024-03-10
+PRD-0119;OUT-0119;Mesure recyclé;Outillage;Mesure;pièce;358.78;20;oui;2019-05-26
+PRD-0120;ENT-0120;Hygiène standard;Entretien;Hygiène;palette;8.56;20;non;2023-10-22
+PRD-0121;MOB-0121;Bureau standard;Mobilier;Bureau;lot de 10;732.7;20;oui;2025-03-05
+PRD-0122;ENT-0122;Nettoyage compact;Entretien;Nettoyage;carton;24.86;20;oui;2026-02-17
+PRD-0123;PAP-0123;Classement professionnel;Papeterie;Classement;mètre;8.95;20;oui;2020-12-07
+PRD-0124;INF-0124;Consommable renforcé;Informatique;Consommable;mètre;807.68;5.5;oui;2019-01-14
+PRD-0125;MOB-0125;Bureau compact;Mobilier;Bureau;mètre;471.82;20;non;2026-03-25
+PRD-0126;EMB-0126;Carton économique;Emballage;Carton;mètre;37.56;20;oui;2019-01-15
+PRD-0127;INF-0127;Périphérique recyclé;Informatique;Périphérique;lot de 10;1658.24;20;non;2024-02-21
+PRD-0128;OUT-0128;Électroportatif économique;Outillage;Électroportatif;lot de 10;185.02;5.5;oui;2017-07-08
+PRD-0129;EMB-0129;Film économique;Emballage;Film;carton;32.32;20;oui;2026-05-30
+PRD-0130;EMB-0130;Carton professionnel;Emballage;Carton;lot de 10;9.94;20;oui;2025-04-29
+PRD-0131;EMB-0131;Film recyclé;Emballage;Film;pièce;14.54;20;non;2017-03-28
+PRD-0132;PAP-0132;Écriture standard;Papeterie;Écriture;mètre;2.36;20;oui;2020-10-03
+PRD-0133;EMB-0133;Carton standard;Emballage;Carton;palette;16.73;20;oui;2017-07-20
+PRD-0134;MOB-0134;Bureau compact;Mobilier;Bureau;pièce;627.92;20;oui;2018-06-05
+PRD-0135;ENT-0135;Protection recyclé;Entretien;Protection;palette;79.53;20;oui;2016-12-01
+PRD-0136;MOB-0136;Bureau économique;Mobilier;Bureau;lot de 10;64.4;20;oui;2019-02-13
+PRD-0137;OUT-0137;Électroportatif économique;Outillage;Électroportatif;carton;599.46;20;oui;2024-03-23
+PRD-0138;ENT-0138;Nettoyage économique;Entretien;Nettoyage;lot de 10;79.5;20;oui;2019-12-06
+PRD-0139;PAP-0139;Classement grand format;Papeterie;Classement;carton;10.37;20;oui;2023-05-29
+PRD-0140;INF-0140;Périphérique recyclé;Informatique;Périphérique;carton;577.61;20;oui;2025-11-09
+PRD-0141;ENT-0141;Hygiène compact;Entretien;Hygiène;pièce;32.54;5.5;non;2018-10-28
+PRD-0142;EMB-0142;Film premium;Emballage;Film;pièce;14.13;20;oui;2017-11-28
+PRD-0143;INF-0143;Consommable standard;Informatique;Consommable;carton;212.9;20;oui;2020-03-21
+PRD-0144;INF-0144;Réseau professionnel;Informatique;Réseau;mètre;1782.85;20;oui;2023-10-10
+PRD-0145;MOB-0145;Siège professionnel;Mobilier;Siège;pièce;221.36;5.5;oui;2025-07-09
+PRD-0146;ENT-0146;Hygiène recyclé;Entretien;Hygiène;mètre;67.78;20;oui;2018-07-18
+PRD-0147;PAP0147;Papier économique;Papeterie;Papier;lot de 10;4.13;20;oui;2019-10-06
+PRD-0148;PAP-0148;Écriture compact;Papeterie;Écriture;pièce;5.55;20;oui;2026-02-23
+PRD-0149;PAP-0149;Papier standard;Papeterie;Papier;pièce;5.61;20;oui;2020-05-17
+PRD-0150;OUT-0150;Main renforcé;Outillage;Main;carton;93.49;20;oui;2022-11-29
+PRD-0151;OUT-0151;Main recyclé;Outillage;Main;mètre;124.66;5.5;oui;2026-06-04
+PRD-0152;INF-0152;Consommable recyclé;Informatique;Consommable;palette;530.77;20;oui;2020-05-03
+PRD-0153;PAP-0153;Papier grand format;Papeterie;Papier;palette;5.11;20;oui;2023-02-07
+PRD-0154;INF-0154;Réseau recyclé;Informatique;Réseau;lot de 10;1289.28;5.5;oui;2021-04-07
+PRD-0155;EMB-0155;Palette compact;Emballage;Palette;mètre;27.98;20;oui;2023-02-14
+PRD-0156;INF-0156;Consommable premium;Informatique;Consommable;lot de 10;1310.31;20;oui;2024-04-05
+PRD-0157;ENT-0157;Hygiène renforcé;Entretien;Hygiène;mètre;81.39;20;oui;2020-06-07
+PRD-0158;MOB-0158;Bureau renforcé;Mobilier;Bureau;mètre;449.01;20;oui;2017-02-03
+PRD-0159;INF-0159;Consommable économique;Informatique;Consommable;mètre;276.27;20;oui;2021-08-24
+PRD-0160;INF-0160;Périphérique compact;Informatique;Périphérique;pièce;493.39;20;non;2020-10-26
+PRD-0161;MOB-0161;Siège recyclé;Mobilier;Siège;palette;216.91;20;oui;2025-03-11
+PRD-0162;OUT-0162;Mesure compact;Outillage;Mesure;palette;425.65;20;oui;2024-02-28
+PRD-0163;OUT-0163;Mesure grand format;Outillage;Mesure;mètre;422.36;20;oui;2022-03-02
+PRD-0164;OUT-0164;Électroportatif recyclé;Outillage;Électroportatif;lot de 10;76.3;20;oui;2026-03-07
+PRD-0165;OUT-0165;Mesure renforcé;Outillage;Mesure;pièce;260.45;20;oui;2017-11-08
+PRD-0166;OUT-0166;Main renforcé;Outillage;Main;palette;243.67;20;oui;2019-07-10
+PRD-0167;MOB-0167;Bureau économique;Mobilier;Bureau;mètre;380.04;20;oui;2025-12-01
+PRD-0168;EMB-0168;Palette premium;Emballage;Palette;carton;34.74;20;oui;2019-09-13
+PRD-0169;OUT-0169;Mesure premium;Outillage;Mesure;pièce;46.72;20;oui;2020-09-07
+PRD-0170;EMB-0170;Film premium;Emballage;Film;pièce;26.78;20;oui;2021-05-22
+PRD-0171;OUT-0171;Main compact;Outillage;Main;carton;204.21;5.5;oui;2022-12-06
+PRD-0172;MOB-0172;Rangement recyclé;Mobilier;Rangement;pièce;502.43;5.5;non;2026-02-05
+PRD-0173;OUT-0173;Électroportatif professionnel;Outillage;Électroportatif;lot de 10;20.89;20;oui;2024-09-25
+PRD-0174;pap-0174;Classement grand format;Papeterie;Classement;mètre;14.31;5.5;oui;2022-08-18
+PRD-0175;EMB-0175;Film grand format;Emballage;Film;pièce;19.42;5.5;oui;2023-04-02
+PRD-0176;ENT-0176;Hygiène économique;Entretien;Hygiène;mètre;59.86;20;oui;2021-06-24
+PRD-0177;ENT-0177;Nettoyage premium;Entretien;Nettoyage;carton;103.15;20;oui;2024-12-13
+PRD-0178;MOB-0178;Bureau compact;Mobilier;Bureau;pièce;407.96;20;oui;2024-10-04
+PRD-0179;INF-0179;Consommable grand format;Informatique;Consommable;carton;369.05;5.5;oui;2025-06-10
+PRD-0180;MOB-0180;Siège grand format;Mobilier;Siège;carton;382.49;20;oui;2020-08-09

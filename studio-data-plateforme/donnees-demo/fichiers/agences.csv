@@ -1,0 +1,13 @@
+id_agence;libelle;ville;code_postal;region;latitude;longitude;directeur
+AG-IDF;Agence Île-de-France;Paris;75001;Île-de-France;48.86;2.35;Léa Rousseau
+AG-NORD;Agence Nord;Lille;59000;Hauts-de-France;50.63;3.06;Isabelle François
+AG-EST;Agence Est;Strasbourg;67000;Grand Est;48.57;7.75;Laure Dumont
+AG-OUEST;Agence Ouest;Nantes;44000;Pays de la Loire;47.22;-1.55;Damien Robin
+AG-BRET;Agence Bretagne;Rennes;35000;Bretagne;48.11;-1.68;Mathieu Bernard
+AG-NORM;Agence Normandie;Rouen;76000;Normandie;49.44;1.1;Aurélie Vincent
+AG-CENTRE;Agence Centre;Tours;37000;Centre-Val de Loire;47.39;0.69;Antoine Guérin
+AG-BFC;Agence Bourgogne-Franche-Comté;Dijon;21000;Bourgogne-Franche-Comté;47.32;5.04;Catherine Legrand
+AG-ARA;Agence Auvergne-Rhône-Alpes;Lyon;69001;Auvergne-Rhône-Alpes;45.76;4.84;Catherine Bernard
+AG-NAQ;Agence Nouvelle-Aquitaine;Bordeaux;33000;Nouvelle-Aquitaine;44.84;-0.58;Michel André
+AG-OCC;Agence Occitanie;Toulouse;31000;Occitanie;43.6;1.44;David Fontaine
+AG-PACA;Agence Provence;Marseille;13001;Provence-Alpes-Côte d’Azur;43.3;5.37;Vincent Thomas

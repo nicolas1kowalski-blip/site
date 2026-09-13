@@ -1,0 +1,139 @@
+{
+  "genereLe": "2026-09-13T18:58:29.445Z",
+  "graine": 20260910,
+  "taille": "demo",
+  "dateReference": "2026-09-10",
+  "fichiers": [
+    {
+      "fichier": "communes.csv",
+      "colonnes": 9,
+      "lignes": 105,
+      "octets": 7441
+    },
+    {
+      "fichier": "agences.csv",
+      "colonnes": 8,
+      "lignes": 12,
+      "octets": 1073
+    },
+    {
+      "fichier": "commerciaux.csv",
+      "colonnes": 9,
+      "lignes": 60,
+      "octets": 6526
+    },
+    {
+      "fichier": "produits.csv",
+      "colonnes": 10,
+      "lignes": 180,
+      "octets": 16101
+    },
+    {
+      "fichier": "clients.csv",
+      "colonnes": 22,
+      "lignes": 2542,
+      "octets": 577488
+    },
+    {
+      "fichier": "sites.csv",
+      "colonnes": 15,
+      "lignes": 3139,
+      "octets": 447309
+    },
+    {
+      "fichier": "contacts.csv",
+      "colonnes": 15,
+      "lignes": 8880,
+      "octets": 1491515
+    },
+    {
+      "fichier": "commandes.csv",
+      "colonnes": 15,
+      "lignes": 24000,
+      "octets": 2982013
+    },
+    {
+      "fichier": "lignes_commande.csv",
+      "colonnes": 8,
+      "lignes": 59414,
+      "octets": 4095855
+    },
+    {
+      "fichier": "factures.csv",
+      "colonnes": 11,
+      "lignes": 22730,
+      "octets": 2528336
+    },
+    {
+      "fichier": "tickets_support.csv",
+      "colonnes": 11,
+      "lignes": 6000,
+      "octets": 611281
+    },
+    {
+      "fichier": "releves_consommation.csv",
+      "colonnes": 7,
+      "lignes": 26081,
+      "octets": 1678850
+    },
+    {
+      "fichier": "clients-mise-a-jour.csv",
+      "colonnes": 21,
+      "lignes": 1700,
+      "octets": 382116
+    },
+    {
+      "fichier": "livraison-mensuelle.zip",
+      "octets": 13892
+    },
+    {
+      "fichier": "catalogue-produits.xlsx",
+      "octets": 10639
+    }
+  ],
+  "defautsSemes": {
+    "produits.prix_nul": 3,
+    "produits.reference_mal_formee": 4,
+    "clients.ville_casse_incoherente": 197,
+    "clients.email_invalide": 111,
+    "clients.date_maj_ancienne": 131,
+    "clients.siret_manquant_sur_professionnel": 143,
+    "clients.code_postal_incoherent": 46,
+    "clients.siret_bouche_trous": 21,
+    "clients.raison_sociale_espaces": 55,
+    "clients.date_maj_future": 10,
+    "clients.statut_hors_liste": 36,
+    "clients.chiffre_affaires_aberrant": 5,
+    "clients.chiffre_affaires_negatif": 7,
+    "clients.ligne_dupliquee": 30,
+    "clients.ligne_vide": 12,
+    "sites.periode_incoherente": 20,
+    "sites.coordonnees_manquantes": 15,
+    "contacts.doublon_strict": 240,
+    "contacts.doublon_normalise": 280,
+    "contacts.doublon_flou": 240,
+    "contacts.client_inconnu": 120,
+    "lignes_commande.total_incoherent": 589,
+    "lignes_commande.quantite_invalide": 168,
+    "commandes.date_a_la_francaise": 717,
+    "commandes.client_inconnu": 149,
+    "commandes.livraison_avant_commande": 269,
+    "commandes.statut_hors_liste": 234,
+    "commandes.montant_negatif": 75,
+    "commandes.montant_aberrant": 23,
+    "commandes.reference_en_double": 96,
+    "factures.montant_different_de_la_commande": 446,
+    "factures.commande_inconnue": 268,
+    "tickets.satisfaction_hors_bornes": 33,
+    "tickets.cloture_avant_ouverture": 40,
+    "tickets.priorite_hors_liste": 44,
+    "releves.horodatage_en_double": 51,
+    "releves.heure_manquante": 106,
+    "releves.saut_brutal": 34,
+    "releves.journee_manquante": 6,
+    "releves.valeur_figee": 24,
+    "mise_a_jour.client_corrige": 573,
+    "mise_a_jour.client_nouveau": 50,
+    "livraison.contact_deja_connu": 32
+  }
+}
