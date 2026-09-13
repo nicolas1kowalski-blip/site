@@ -4,7 +4,7 @@ Tout tient dans un modèle CloudFormation, `deploiement/aws/pile.yaml`, qui cré
 
 | Élément | Rôle |
 |---|---|
-| Une machine EC2 ARM Graviton (Ubuntu 24.04, disque chiffré gp3) | exécute l'application avec Docker : API + front, Caddy pour le HTTPS |
+| Une machine EC2 (Ubuntu 24.04, disque chiffré gp3 ; t3.micro sur le plan gratuit, ARM Graviton au-delà) | exécute l'application avec Docker : API + front, Caddy pour le HTTPS |
 | Une adresse IP publique fixe (Elastic IP) | cible de l'enregistrement DNS du domaine |
 | Un groupe de sécurité web | seuls les ports 80 et 443 sont ouverts ; **pas de port 22** |
 | Un rôle IAM + Systems Manager | terminal sur la machine depuis la console AWS, sans clé SSH ; écriture des sauvegardes dans S3 |

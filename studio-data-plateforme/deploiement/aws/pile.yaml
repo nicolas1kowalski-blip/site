@@ -48,18 +48,25 @@ Parameters:
     Default: claude/studio-data-v3
   TypeInstance:
     Type: String
-    Default: t4g.medium
-    AllowedValues: [t4g.small, t4g.medium, t4g.large, t4g.xlarge, m7g.large, m7g.xlarge]
-    Description: Machines ARM Graviton. t4g.medium (2 vCPU, 4 Go) suffit pour une démonstration ; m7g.large pour une équipe.
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium, t3.large, t4g.small, t4g.medium, t4g.large, m7g.large]
+    Description: >-
+      Plan gratuit AWS : t3.micro (2 vCPU, 1 Go : de la mémoire d'échange est ajoutée automatiquement, la
+      construction dure 15 à 25 minutes). Compte payant ou crédits : t4g.medium (ARM, 4 Go) pour une démonstration
+      confortable, m7g.large pour une équipe.
   TailleDisqueGo:
     Type: Number
     Default: 100
     MinValue: 30
     Description: Disque de la machine (Go, gp3) ; il héberge les bases DuckDB et les fichiers déposés.
-  ImageUbuntu:
+  ImageUbuntuArm:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
-    Description: Dernière image Ubuntu 24.04 ARM publiée par Canonical (ne pas modifier).
+    Description: Dernière image Ubuntu 24.04 ARM publiée par Canonical, pour les machines t4g et m7g (ne pas modifier).
+  ImageUbuntuX86:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Dernière image Ubuntu 24.04 x86 publiée par Canonical, pour les machines t3 (ne pas modifier).
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Réseau (VPC) ; le VPC par défaut du compte convient pour une démonstration.
@@ -72,7 +79,20 @@ Parameters:
       Deux sous-réseaux au moins, dans deux zones, pour Amazon RDS (mode entreprise). En mode demo, indiquer
       tout de même deux sous-réseaux : ils ne seront pas utilisés.
 
+# Architecture de chaque type de machine : l'image Ubuntu doit correspondre.
+Mappings:
+  Architectures:
+    t3.micro: { arch: x86 }
+    t3.small: { arch: x86 }
+    t3.medium: { arch: x86 }
+    t3.large: { arch: x86 }
+    t4g.small: { arch: arm }
+    t4g.medium: { arch: arm }
+    t4g.large: { arch: arm }
+    m7g.large: { arch: arm }
+
 Conditions:
+  MachineArm: !Equals [!FindInMap [Architectures, !Ref TypeInstance, arch], arm]
   ModeEntreprise: !Equals [!Ref ModeBaseDeDonnees, entreprise]
   AvecDomaine: !Not [!Equals [!Ref NomDomaine, ""]]
 
@@ -196,7 +216,7 @@ Resources:
   Machine:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref ImageUbuntu
+      ImageId: !If [MachineArm, !Ref ImageUbuntuArm, !Ref ImageUbuntuX86]
       InstanceType: !Ref TypeInstance
       SubnetId: !Ref SousReseauMachine
       SecurityGroupIds: [!Ref GroupeSecuriteMachine]
@@ -219,6 +239,12 @@ Resources:
             apt-get update
             apt-get install -y docker.io docker-compose-v2 git awscli curl
             usermod -aG docker ubuntu
+
+            # Petite machine (plan gratuit, 1 Go) : un fichier d'échange de 4 Go rend la construction possible.
+            if [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" -lt 6000 ] && ! swapon --show | grep -q .; then
+              fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+              echo '/swapfile none swap sw 0 0' >> /etc/fstab
+            fi
 
             DOSSIER=/home/ubuntu/site
             if [ -n "${JetonGitHub}" ]; then
