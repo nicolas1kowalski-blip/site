@@ -10,6 +10,7 @@ import { EspaceAvecRole, EspaceCourant, Public } from '../authentification/conte
 import { BASE_DE_DONNEES, BaseDeDonnees } from '../base-de-donnees/connexion';
 import { CONNEXION_BASE } from '../base-de-donnees/base-de-donnees.module';
 import { ConnexionBase } from '../base-de-donnees/connexion';
+import { CONFIGURATION, Configuration } from '../configuration/configuration';
 import { EspacesService } from '../espaces/espaces.service';
 
 const { version: VERSION_API } = require('../../../package.json') as { version: string };
@@ -20,6 +21,7 @@ export class SanteController {
     constructor(
         @Inject(BASE_DE_DONNEES) private readonly base: BaseDeDonnees,
         @Inject(CONNEXION_BASE) private readonly connexion: ConnexionBase,
+        @Inject(CONFIGURATION) private readonly configuration: Configuration,
         private readonly espaces: EspacesService
     ) {}
 
@@ -36,6 +38,9 @@ export class SanteController {
         const reponse: Record<string, unknown> = {
             ok: baseOk,
             serveur: VERSION_API,
+            // Permet de vérifier d'un coup d'œil, après une mise à jour, quel code tourne réellement.
+            revision: this.configuration.versionDeployee.revision,
+            construitLe: this.configuration.versionDeployee.construitLe,
             baseReferentielle: { pilote: this.connexion.pilote, ok: baseOk },
             memoireProcessusMo: Math.round(process.memoryUsage().rss / 1048576)
         };

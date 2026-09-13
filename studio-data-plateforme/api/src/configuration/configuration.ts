@@ -48,7 +48,14 @@ const schemaEnvironnement = z.object({
     /** Identifiant et mot de passe du premier administrateur, créés au premier démarrage si la base est vide. */
     SD_ADMIN_IDENTIFIANT: z.string().default('admin'),
     SD_ADMIN_MOT_DE_PASSE: z.string().default(''),
-    SD_JOURNAL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info')
+    SD_JOURNAL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
+    /**
+     * Identité du code réellement en service : numéro de commit Git et date de construction, inscrits dans
+     * l'image Docker au moment du « docker compose build ». Ils apparaissent dans /api/sante, ce qui permet de
+     * vérifier après une mise à jour que le serveur exécute bien la nouvelle version et pas l'ancienne.
+     */
+    SD_REVISION: z.string().default(''),
+    SD_CONSTRUIT_LE: z.string().default('')
 });
 
 export type Configuration = {
@@ -67,6 +74,8 @@ export type Configuration = {
     cookieSecurise: boolean;
     administrateurInitial: { identifiant: string; motDePasse: string };
     journal: 'debug' | 'info' | 'warn' | 'error' | 'silent';
+    /** Code en service : « inconnue » quand l'application n'a pas été construite par Docker (développement). */
+    versionDeployee: { revision: string; construitLe: string };
 };
 
 /** Jeton d'injection NestJS de la configuration. */
@@ -90,6 +99,10 @@ export function lireConfiguration(environnement: NodeJS.ProcessEnv = process.env
         sessionDureeMs: valeurs.SD_SESSION_DUREE_HEURES * 3600 * 1000,
         cookieSecurise: valeurs.SD_COOKIE_SECURISE,
         administrateurInitial: { identifiant: valeurs.SD_ADMIN_IDENTIFIANT, motDePasse: valeurs.SD_ADMIN_MOT_DE_PASSE },
-        journal: valeurs.SD_JOURNAL
+        journal: valeurs.SD_JOURNAL,
+        versionDeployee: {
+            revision: valeurs.SD_REVISION || 'inconnue',
+            construitLe: valeurs.SD_CONSTRUIT_LE || 'inconnue'
+        }
     };
 }

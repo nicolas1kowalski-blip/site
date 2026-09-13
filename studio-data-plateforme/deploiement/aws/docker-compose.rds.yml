@@ -8,6 +8,10 @@ services:
     build:
       context: ..
       dockerfile: studio-data-plateforme/Dockerfile
+      # Identité du code construit, renvoyée par /api/sante (deploiement/mettre-a-jour.sh les renseigne).
+      args:
+        SD_REVISION: ${SD_REVISION:-}
+        SD_CONSTRUIT_LE: ${SD_CONSTRUIT_LE:-}
     restart: unless-stopped
     environment:
       SD_POSTGRES_URL: ${SD_POSTGRES_URL:?définir SD_POSTGRES_URL dans .env}

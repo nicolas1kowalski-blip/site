@@ -19,7 +19,13 @@ RUN cd studio-data-plateforme && node web-classique/construire.mjs
 RUN cd studio-data-plateforme/api && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
-ENV NODE_ENV=production \
+# Identité du code embarqué dans l'image, transmise par docker compose (voir docker-compose.yml) et renvoyée
+# par /api/sante : c'est ce qui permet de vérifier qu'une mise à jour est bien arrivée jusqu'au serveur.
+ARG SD_REVISION=""
+ARG SD_CONSTRUIT_LE=""
+ENV SD_REVISION=$SD_REVISION \
+    SD_CONSTRUIT_LE=$SD_CONSTRUIT_LE \
+    NODE_ENV=production \
     SD_HOTE=0.0.0.0 \
     SD_PORT=8430 \
     SD_DONNEES=/donnees \

@@ -63,6 +63,9 @@ test('santé sans session : serveur et base référentielle répondent', async (
     const corps = json(reponse);
     assert.equal(corps.ok, true);
     assert.equal(corps.baseReferentielle.pilote, process.env.SD_POSTGRES_URL_TEST ? 'postgresql' : 'pglite');
+    // La révision permet de vérifier après un déploiement quel code tourne ; hors image Docker, elle est « inconnue ».
+    assert.equal(corps.revision, 'inconnue');
+    assert.equal(corps.construitLe, 'inconnue');
     assert.equal(corps.duckdb, undefined);
 });
 

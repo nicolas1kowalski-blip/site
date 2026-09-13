@@ -92,8 +92,11 @@ Si quelque chose ne va pas :
 
 ## 3. Exploiter
 
-- **Mises à jour** : `cd ~/site/studio-data-plateforme && git pull && docker compose up -d --build`. Les migrations
-  de base s'appliquent toutes seules au démarrage de l'API.
+- **Mises à jour** : `cd ~/site/studio-data-plateforme && ./deploiement/mettre-a-jour.sh`. Le script sauvegarde,
+  récupère le code, reconstruit l'image et vérifie ensuite que `/api/sante` annonce bien le nouveau commit — un
+  `git pull` en échec (jeton expiré) ne passe donc plus inaperçu. Les migrations de base s'appliquent toutes
+  seules au démarrage de l'API. Si l'écran paraît inchangé alors que `revision` est bon, forcez le rechargement
+  du navigateur (Ctrl+Maj+R).
 - **Sauvegardes** : le script `deploiement/sauvegarder.sh` archive PostgreSQL (`pg_dump`) et le volume des données
   (DuckDB, fichiers) dans `~/sauvegardes` et garde 14 jours. À planifier chaque nuit :
   ```bash

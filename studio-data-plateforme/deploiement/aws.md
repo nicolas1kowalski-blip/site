@@ -81,9 +81,25 @@ sudo /usr/local/bin/studio-data-installer
 - **Restaurer** : récupérer l'archive voulue (`aws s3 cp s3://<compartiment>/postgres-DATE.sql.gz .`) puis
   suivre la procédure de restauration du guide Oracle (`deploiement/oracle-cloud.md`, section 3) ; pour RDS,
   `gunzip -c postgres-DATE.sql.gz | docker run --rm -i postgres:17-alpine psql "$SD_POSTGRES_URL"`.
-- **Mises à jour** : dans le terminal, `cd /home/ubuntu/site && sudo -u ubuntu git pull` (le jeton GitHub est
-  redemandé), puis `sudo /usr/local/bin/studio-data-installer` : l'image est reconstruite et l'API redémarre
-  avec ses migrations.
+- **Mises à jour** : une seule commande dans le terminal Session Manager :
+
+  ```bash
+  cd /home/ubuntu/site/studio-data-plateforme
+  sudo ./deploiement/mettre-a-jour.sh          # sauvegarde, récupère le code, reconstruit, vérifie
+  ```
+
+  Le script demande le jeton GitHub (le dépôt est privé et le jeton n'est **pas** conservé sur la machine après
+  l'installation), choisit tout seul le bon fichier compose selon le mode, puis compare le commit récupéré à
+  celui que le serveur annonce dans `/api/sante`. S'ils diffèrent, il le dit : c'est la garantie qu'une mise à
+  jour n'a pas été « reconstruite » à l'identique.
+
+  **Si l'application ne change pas après une mise à jour**, la cause est presque toujours l'une des trois :
+
+  | Symptôme | Vérification | Remède |
+  |---|---|---|
+  | Le code n'est jamais arrivé sur la machine (jeton GitHub expiré : `git pull` échoue sans bloquer la suite) | `git -C /home/ubuntu/site log -1 --oneline` | régénérer un jeton et relancer `mettre-a-jour.sh` |
+  | L'image a été reconstruite mais l'ancien conteneur tourne toujours | `curl -s http://127.0.0.1:8430/api/sante` → champ `revision` | `docker compose up -d --force-recreate` |
+  | Le navigateur ressert l'ancienne page | l'API annonce le bon `revision` mais l'écran est inchangé | Ctrl+Maj+R (ou fenêtre de navigation privée) |
 - **Supervision** : Route 53 Health Check ou CloudWatch Synthetics sur `https://votre-domaine/api/sante` ; les
   journaux Docker sont lisibles avec `sudo docker compose logs --since 1h api`.
 - **Supprimer** : CloudFormation → Delete stack. Le compartiment S3 et l'instantané final de RDS sont conservés

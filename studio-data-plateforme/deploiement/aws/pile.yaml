@@ -277,6 +277,11 @@ Resources:
               fi
             } > .env
             chown ubuntu:ubuntu .env && chmod 600 .env
+            # Identité du code construit : /api/sante la renvoie, ce qui permet de vérifier qu'une mise à jour
+            # est bien arrivée jusqu'au serveur.
+            # safe.directory : le script tourne en root dans un dépôt appartenant à ubuntu, Git refuse sinon.
+            export SD_REVISION="$(git -c safe.directory='*' rev-parse --short=12 HEAD 2>/dev/null || echo inconnue)"
+            export SD_CONSTRUIT_LE="$(date -u +%FT%TZ)"
             if [ "$MODE" = "entreprise" ]; then
               mkdir -p deploiement/aws/certificats
               curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o deploiement/aws/certificats/rds-ca.pem
