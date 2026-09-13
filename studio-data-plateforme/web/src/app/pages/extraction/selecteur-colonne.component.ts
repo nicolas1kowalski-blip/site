@@ -59,11 +59,19 @@ import { Chemin, cleChemin, libelleChemin } from './chemins';
         }
     `,
     styles: `
+        /* « contents » : les trois listes se rangent directement dans la ligne du parent, sans boîte intermédiaire. */
         :host {
             display: contents;
         }
+        /* Les styles du parent ne traversent pas la frontière du composant : la taille des listes est fixée ici. */
+        .champ {
+            width: auto;
+            min-width: 110px;
+            max-width: 240px;
+            padding: 4px 6px;
+            font-size: 12px;
+        }
         .via {
-            max-width: 220px;
             color: var(--texte-2);
         }
     `
