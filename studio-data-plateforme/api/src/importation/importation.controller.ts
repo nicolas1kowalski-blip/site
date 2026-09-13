@@ -11,7 +11,7 @@ import { Utilisateur } from '../base-de-donnees/schema';
 import { verifierNomSur } from '../commun/erreurs';
 import { valider } from '../commun/validation';
 import { ImportationService } from './importation.service';
-import { EXTENSIONS_ACCEPTEES } from './ingestion';
+import { ENCODAGES_CSV, EXTENSIONS_ACCEPTEES, SEPARATEURS_CSV } from './ingestion';
 
 const schemaFichierDepose = z.object({
     nomServeur: z.string().min(1),
@@ -22,6 +22,17 @@ const schemaFichierDepose = z.object({
 });
 const schemaImportFichier = schemaFichierDepose.extend({ sourceId: z.string().optional() });
 const schemaFeuilles = z.object({ nomServeur: z.string().min(1) });
+const schemaRelecture = z.object({
+    sourceId: z.string().min(1),
+    config: z
+        .object({
+            delim: z.string().optional(),
+            enc: z.string().optional(),
+            quote: z.string().optional(),
+            ignoreErrors: z.boolean().optional()
+        })
+        .default({})
+});
 const schemaFusion = z.object({
     nom: z.string().trim().min(1, 'nom de la source fusionnée requis'),
     fichiers: z.array(schemaFichierDepose).default([]),
@@ -56,7 +67,7 @@ export class ImportationController {
     @Get('vocabulaire')
     @RoleEspaceRequis('lecteur')
     vocabulaire() {
-        return { extensions: EXTENSIONS_ACCEPTEES };
+        return { extensions: EXTENSIONS_ACCEPTEES, separateurs: SEPARATEURS_CSV, encodages: ENCODAGES_CSV };
     }
 
     @Post('fichier')
@@ -74,6 +85,19 @@ export class ImportationController {
             { ...fichier, nomServeur: verifierNomSur(fichier.nomServeur, 'nom de fichier') },
             sourceId
         );
+    }
+
+    @Post('relire')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({
+        summary: 'Relit le fichier d’une source avec d’autres paramètres (séparateur, encodage, guillemets, lignes en erreur).'
+    })
+    relire(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Body(valider(schemaRelecture)) corps: z.infer<typeof schemaRelecture>
+    ) {
+        return this.importation.relire(espace, utilisateur, corps.sourceId, corps.config);
     }
 
     @Post('excel/feuilles')

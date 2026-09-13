@@ -40,6 +40,10 @@ export type Source = {
     srcModified?: number | null;
     enregistreLe?: string;
     config?: Record<string, unknown>;
+    /** Date de la dernière mise à jour du contenu (relecture, nouveau fichier, adresse). */
+    derniereMiseAJour?: string;
+    /** Domaine (groupe de sources : Achats, Référentiels…), même champ que l'application classique. */
+    theme?: string;
     /** Provenance particulière : « fusion » (plusieurs fichiers), « adresse » (import par URL), « preparation », « extraction ». */
     origine?: string;
     /** Paramètres mémorisés d'un import par adresse (pour le relancer). */
@@ -109,9 +113,36 @@ export type Relation = {
     targetCol: string;
     cardinality?: string;
     kind?: string;
+    /** Mesure sur les données (cardinalité constatée, orphelins), si elle a été faite. */
+    measured?: MesureRelation | null;
     sourceId: string | null;
     targetId: string | null;
 };
+export type MesureRelation = {
+    stotal: number;
+    ttotal: number;
+    smax: number;
+    tmax: number;
+    sorph: number;
+    torph: number;
+    suggested: string;
+    date: string;
+};
+/** Règle métier sur un lien : « 1 parent doit avoir exactement / au plus / au moins N enfants [condition] ». */
+export type RegleLien = {
+    id: string;
+    parentTable: string;
+    parentCol: string;
+    childTable: string;
+    childCol: string;
+    cond: { col: string; op: string; val: string } | null;
+    expect: '=' | '<=' | '>=';
+    n: number;
+    label: string;
+    libelle?: string;
+};
+export type ResultatRegleLien = { total: number; violations: number; exemples: string[] };
+export type VocabulaireReglesLiens = { operateursAttendu: Record<string, string>; operateursCondition: Record<string, string> };
 export type PropositionLien = Omit<Relation, 'id' | 'sourceId' | 'targetId'> & {
     sourceId: string;
     targetId: string;
@@ -410,6 +441,10 @@ export type EntreeLivraisonZip = {
 };
 export type ActionEntreeZip = 'importer' | 'mettreAJour' | 'ignorer';
 export type BilanZip = { importees: string[]; misesAJour: string[]; ignorees: string[]; erreurs: { nom: string; erreur: string }[] };
+
+/** Paramètres de lecture d'un CSV (mêmes noms que l'application classique). */
+export type OptionsLectureCsv = { delim?: string; enc?: string; quote?: string; ignoreErrors?: boolean };
+export type VocabulaireImportation = { extensions: string[]; separateurs: Record<string, string>; encodages: Record<string, string> };
 
 // ---- analyse de couverture ----
 export type ParametresCouverture = {

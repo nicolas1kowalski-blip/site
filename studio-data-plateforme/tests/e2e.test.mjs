@@ -100,10 +100,8 @@ try {
         cellules.map(cellule => cellule.textContent.trim())
     );
     verifier(
-        'sources : clients.csv déposé depuis Angular, type csv, stockage table, 3 colonnes (' +
-            cellulesSource.slice(0, 4).join(' | ') +
-            ')',
-        cellulesSource[0] === 'clients.csv' && cellulesSource[1] === 'csv' && cellulesSource[2] === 'table' && cellulesSource[3] === '3'
+        'sources : clients.csv déposé depuis Angular, type csv, 4 lignes, 3 colonnes (' + cellulesSource.slice(0, 4).join(' | ') + ')',
+        cellulesSource[0] === 'clients.csv' && cellulesSource[1] === 'csv' && cellulesSource[3] === '4' && cellulesSource[4].startsWith('3')
     );
     const doublon = await page.evaluate(async () => {
         const reponse = await fetch('/api/tables');
@@ -122,6 +120,33 @@ try {
         /4 ligne/.test(await page.textContent('app-sources h2:has-text("Aperçu")')) && /Ana/.test(await page.textContent('app-sources'))
     );
     await capture('sources');
+    await page.fill('app-sources input[name=recherche]', 'comm');
+    await page.waitForFunction(() => document.querySelectorAll('app-sources table.sources tbody tr').length === 1);
+    verifier(
+        'sources : la recherche « comm » ne garde que commandes.csv',
+        /commandes\.csv/.test(await page.textContent('app-sources tbody'))
+    );
+    await page.fill('app-sources input[name=recherche]', '');
+    await page.waitForFunction(() => document.querySelectorAll('app-sources table.sources tbody tr').length === 2);
+    const ligneClientsDomaine = page.locator('app-sources tbody tr', { has: page.locator('td b', { hasText: /^clients\.csv$/ }) });
+    await ligneClientsDomaine.locator('input[name^=domaine-]').fill('Ventes');
+    await ligneClientsDomaine.locator('input[name^=domaine-]').press('Tab');
+    await page.waitForFunction(async () => (await (await fetch('/api/tables')).json()).some(source => source.theme === 'Ventes'));
+    await ligneClientsDomaine.locator('button:has-text("voir")').click();
+    await ligneClientsDomaine.locator('.colonnes').waitFor();
+    verifier(
+        'sources : domaine « Ventes » enregistré sur clients.csv, colonnes dépliées (id_client, nom, ville), nombre de lignes affiché',
+        /id_client/.test(await ligneClientsDomaine.textContent()) &&
+            (await ligneClientsDomaine.locator('td').nth(3).textContent()).trim() === '4'
+    );
+    await page.locator('app-sources input[name=parametres]').check({ force: true });
+    await page.waitForSelector('app-sources tr.parametres');
+    verifier(
+        'sources : les paramètres de lecture CSV (séparateur, encodage, guillemets, lignes en erreur) sont proposés',
+        /Séparateur/.test(await page.textContent('app-sources tr.parametres')) &&
+            /Encodage/.test(await page.textContent('app-sources tr.parametres'))
+    );
+    await capture('sources-parametres');
 
     // ---- modèle de données : détection et ajout d'un lien ----
     await page.click('a[href="/modele"]');
@@ -141,6 +166,28 @@ try {
         relations.length === 1 && relations[0].sourceTable === 'commandes.csv' && relations[0].targetCol === 'id_client'
     );
     await capture('modele');
+    verifier('modèle : le graphe SVG dessine les deux tables reliées', (await page.$$('app-modele app-graphe-svg .noeud')).length === 2);
+    await page.click('app-modele button:has-text("Mesurer sur les données")');
+    await page.waitForSelector('app-modele .badge:has-text("mesuré N-1")');
+    verifier(
+        'modèle : la mesure sur les données constate N-1, 0 commande sans client et 1 client sans commande (Zoé)',
+        /0 ligne\(s\) de commandes\.csv sans correspondance/.test(await page.textContent('app-modele tbody')) &&
+            /1 orpheline\(s\) de clients\.csv/.test(await page.textContent('app-modele tbody'))
+    );
+    await page.selectOption('app-modele select[name^=nature-]', 'composition');
+    await page.waitForFunction(async () => (await (await fetch('/api/modele/relations')).json())[0].kind === 'composition');
+    verifier('modèle : la nature du lien (composition) est enregistrée', true);
+    await page.selectOption('app-modele select[name=regle-attendu]', '>=');
+    await page.click('app-modele button:has-text("+ Règle")');
+    await page.waitForSelector('app-modele .regle');
+    await page.click('app-modele .regle button:has-text("Tester")');
+    await page.waitForSelector('app-modele .regle .badge:has-text("violation(s)")');
+    const regleLien = await page.textContent('app-modele .regle');
+    verifier(
+        'modèle : la règle métier « 1 clients.csv doit avoir au moins 1 commandes.csv » trouve 1 violation sur 4 (Zoé)',
+        /1 violation\(s\) sur 4 parent\(s\)/.test(regleLien) && /au moins/.test(regleLien) && /Zoé|3/.test(regleLien)
+    );
+    await capture('modele-regles');
 
     // ---- extraction : jointure, colonnes, filtre, aperçu, comptage, export, modèle ----
     await page.click('a[href="/extraction"]');

@@ -7,11 +7,20 @@
  * d'un côté et que la grande majorité des valeurs de l'autre côté s'y retrouvent, un lien N-1 est proposé.
  */
 import { Injectable } from '@nestjs/common';
-import { erreurRequete } from '../commun/erreurs';
+import { erreurIntrouvable, erreurRequete } from '../commun/erreurs';
 import { DocumentsService } from '../documents/documents.service';
 import { EspacesService, RessourcesEspace } from '../espaces/espaces.service';
 import { identifiantSql } from '../espaces/moteur-duckdb';
 import { DocumentSource, SourcesService } from '../sources/sources.service';
+import {
+    MesureRelation,
+    RegleLien,
+    ResultatRegleLien,
+    mesureDepuisLigne,
+    sqlLignesEnDefautRegleLien,
+    sqlMesureRelation,
+    sqlTestRegleLien
+} from './regles-liens';
 
 /** Lien tel qu'il est enregistré par l'application classique (par nom de table). */
 export type RelationEnregistree = {
@@ -35,7 +44,11 @@ export type PropositionLien = RelationEnregistree & {
     valeursSource: number;
 };
 
-type EtatApplication = { relations?: RelationEnregistree[]; [autre: string]: unknown };
+type EtatApplication = {
+    relations?: RelationEnregistree[];
+    governance?: { rules?: RegleLien[]; [autre: string]: unknown };
+    [autre: string]: unknown;
+};
 
 /** Identifiant stable d'un lien, dérivé de ses quatre composantes (la classique n'en persiste pas). */
 export function identifiantRelation(relation: RelationEnregistree): string {
@@ -100,6 +113,113 @@ export class ModeleService {
         });
         await this.enregistrer(espaceId, etat, auteurId);
         return true;
+    }
+
+    /** Modifie la cardinalité déclarée ou la nature (composition, agrégation, référence) d'un lien. */
+    async modifier(
+        espaceId: string,
+        id: string,
+        changements: { cardinality?: string; kind?: string },
+        auteurId: string
+    ): Promise<Relation[]> {
+        const etat = await this.etat(espaceId);
+        const relation = etat.relations!.find(candidat => identifiantRelation(candidat) === id);
+        if (!relation) throw erreurIntrouvable('Lien inconnu.');
+        if (changements.cardinality !== undefined) relation.cardinality = changements.cardinality;
+        if (changements.kind !== undefined) relation.kind = changements.kind;
+        await this.enregistrer(espaceId, etat, auteurId);
+        return this.relations(espaceId);
+    }
+
+    /** Mesure un lien sur les données : cardinalité constatée, orphelins de chaque côté ; mémorisée sur le lien. */
+    async mesurer(espace: { id: string; code: string }, id: string, auteurId: string): Promise<MesureRelation> {
+        const etat = await this.etat(espace.id);
+        const relation = etat.relations!.find(candidat => identifiantRelation(candidat) === id);
+        if (!relation) throw erreurIntrouvable('Lien inconnu.');
+        const nomTableDe = await this.resolveurDeTables(espace.id);
+        const ressources = await this.espaces.ressources(espace);
+        const resultat = await ressources.moteur.executer(
+            sqlMesureRelation(nomTableDe(relation.sourceTable), relation.sourceCol, nomTableDe(relation.targetTable), relation.targetCol)
+        );
+        const mesure = mesureDepuisLigne(resultat.lignes[0]);
+        relation.measured = mesure;
+        if (!relation.cardinality) relation.cardinality = mesure.suggested;
+        await this.enregistrer(espace.id, etat, auteurId);
+        return mesure;
+    }
+
+    // ---- règles métier sur les liens (governance.rules) ----
+    async reglesLiens(espaceId: string): Promise<RegleLien[]> {
+        return this.listeRegles(await this.etat(espaceId));
+    }
+
+    async ecrireRegleLien(espaceId: string, regle: RegleLien, auteurId: string): Promise<RegleLien[]> {
+        const etat = await this.etat(espaceId);
+        const regles = this.listeRegles(etat);
+        const position = regles.findIndex(candidat => candidat.id === regle.id);
+        if (position >= 0) regles[position] = regle;
+        else regles.push(regle);
+        await this.enregistrer(espaceId, etat, auteurId);
+        return regles;
+    }
+
+    async supprimerRegleLien(espaceId: string, id: string, auteurId: string): Promise<RegleLien[]> {
+        const etat = await this.etat(espaceId);
+        const regles = this.listeRegles(etat).filter(candidat => candidat.id !== id);
+        etat.governance!.rules = regles;
+        await this.enregistrer(espaceId, etat, auteurId);
+        return regles;
+    }
+
+    /** Contrôle une règle sur les données : parents en défaut et exemples. */
+    async testerRegleLien(espace: { id: string; code: string }, id: string): Promise<ResultatRegleLien> {
+        const regle = (await this.reglesLiens(espace.id)).find(candidat => candidat.id === id);
+        if (!regle) throw erreurIntrouvable('Règle inconnue.');
+        const nomTableDe = await this.resolveurDeTables(espace.id);
+        const ressources = await this.espaces.ressources(espace);
+        const resultat = await ressources.moteur.executer(
+            sqlTestRegleLien(regle, nomTableDe(regle.parentTable), nomTableDe(regle.childTable))
+        );
+        const [total, violations, exemples] = resultat.lignes[0];
+        return {
+            total: Number(total),
+            violations: Number(violations || 0),
+            exemples: (Array.isArray(exemples) ? (exemples as string[]) : []).filter(Boolean).slice(0, 5)
+        };
+    }
+
+    /** Lignes du parent qui ne respectent pas une règle (page de 50). */
+    async lignesRegleLien(
+        espace: { id: string; code: string },
+        id: string,
+        offset: number
+    ): Promise<{ colonnes: string[]; lignes: unknown[][]; total: number; offset: number }> {
+        const regle = (await this.reglesLiens(espace.id)).find(candidat => candidat.id === id);
+        if (!regle) throw erreurIntrouvable('Règle inconnue.');
+        const nomTableDe = await this.resolveurDeTables(espace.id);
+        const ressources = await this.espaces.ressources(espace);
+        const requete = sqlLignesEnDefautRegleLien(regle, nomTableDe(regle.parentTable), nomTableDe(regle.childTable));
+        const [page, total] = await Promise.all([
+            ressources.moteur.executer(`SELECT * FROM (${requete}) AS defauts LIMIT 50 OFFSET ${Math.max(0, Math.floor(offset))}`),
+            ressources.moteur.executer(`SELECT COUNT(*)::BIGINT FROM (${requete}) AS defauts`)
+        ]);
+        return { colonnes: page.colonnes.map(colonne => colonne.nom), lignes: page.lignes, total: Number(total.lignes[0][0]), offset };
+    }
+
+    private listeRegles(etat: EtatApplication): RegleLien[] {
+        etat.governance ||= {};
+        if (!Array.isArray(etat.governance.rules)) etat.governance.rules = [];
+        return etat.governance.rules;
+    }
+
+    /** Nom de table DuckDB d'une source désignée par son nom ; erreur explicite si elle n'est pas chargée. */
+    private async resolveurDeTables(espaceId: string): Promise<(nomSource: string) => string> {
+        const sources = await this.sources.lister(espaceId);
+        return nomSource => {
+            const source = sources.find(candidat => candidat.name === nomSource);
+            if (!source) throw erreurRequete(`Table « ${nomSource} » non chargée.`);
+            return 't_' + source.id;
+        };
     }
 
     async supprimer(espaceId: string, id: string, auteurId: string): Promise<boolean> {

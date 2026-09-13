@@ -25,6 +25,7 @@ import {
     adresseExportGoogleSheets,
     extensionAcceptee,
     extensionDe,
+    OptionsLectureCsv,
     lectureDuckDB,
     lectureSourceExistante,
     nomDepuisAdresse,
@@ -111,6 +112,39 @@ export class ImportationService {
             }
         });
         return source;
+    }
+
+    /** Relit le fichier d'une source avec de nouveaux paramètres de lecture (séparateur, encodage, guillemets, erreurs). */
+    async relire(espace: EspaceAvecRole, utilisateur: Utilisateur, sourceId: string, options: OptionsLectureCsv): Promise<ResultatImport> {
+        const existante = await this.sources.lire(espace.id, sourceId);
+        const fichier = (existante.fichier || {}) as { nom?: string; name?: string; feuille?: string };
+        const nomServeur = fichier.nom || 'src_' + existante.id;
+        const extension = extensionDe(fichier.name || existante.name);
+        if (!extensionAcceptee(extension)) throw erreurRequete(`« ${existante.name} » : format .${extension} non pris en charge.`);
+        const { moteur, fichiers } = await this.espaces.ressources(espace);
+        await fichiers.decrire(nomServeur).catch(() => {
+            throw erreurRequete(
+                `Le fichier d'origine de « ${existante.name} » n'est plus sur le serveur : mettez la source à jour avec un nouveau fichier.`
+            );
+        });
+        const lecture =
+            extension === 'xlsx'
+                ? await this.lectureDe(fichiers, nomServeur, extension, fichier.feuille)
+                : lectureDuckDB(nomServeur, extension, options);
+        try {
+            await moteur.executer(sqlCreationTable(String(existante.id), lecture));
+        } catch (erreur) {
+            throw erreurRequete(`Lecture impossible avec ces paramètres : ${(erreur as Error).message}`);
+        }
+        return this.enregistrerSource(espace, utilisateur, moteur, {
+            id: String(existante.id),
+            existante,
+            nom: existante.name,
+            type: existante.type || typeSourceDe(extension),
+            taille: Number(existante.size) || 0,
+            fichier: existante.fichier as Record<string, unknown>,
+            config: { ...((existante.config as Record<string, unknown>) || {}), ...options }
+        });
     }
 
     /** Feuilles d'un classeur Excel déposé (pour laisser choisir l'onglet). */
@@ -397,10 +431,11 @@ export class ImportationService {
             headers,
             optimized: false,
             pqSize: null,
-            config: (existante?.config as Record<string, unknown>) || { delim: '', enc: 'UTF-8' },
+            config: (complements['config'] as Record<string, unknown>) ||
+                (existante?.config as Record<string, unknown>) || { delim: '', enc: 'UTF-8' },
             fichier: fichier || existante?.fichier || null,
             srcModified: (fichier?.lastModified as number) || Date.now(),
-            derniereMiseAJour: new Date().toISOString()
+            derniereMiseAJour: existante ? new Date().toISOString() : undefined
         };
         delete document.id;
         delete document.enregistreLe;

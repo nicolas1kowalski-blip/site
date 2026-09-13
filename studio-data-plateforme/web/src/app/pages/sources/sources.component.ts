@@ -8,11 +8,15 @@
  * serveur le lit dans DuckDB en table t_<id> et enregistre les métadonnées (POST /api/importation/fichier).
  * Après tout chargement, les tables conçues et les préparations qui dépendent de la source sont rejouées.
  */
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService, progressionDe } from '../../coeur/client-api.service';
 import {
     ActionEntreeZip,
+    AuditQualite,
+    OptionsLectureCsv,
+    VocabulaireImportation,
     EntreeLivraisonZip,
     GenreAdresse,
     ParametresAdresse,
@@ -27,6 +31,13 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 
 type Depot = { nom: string; progression: number; etape: string };
+
+/** Texte comparable pour la recherche : minuscules, sans accents. */
+const normaliserTexte = (texte: string) =>
+    texte
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
 type Livraison = { nomServeur: string; nomArchive: string; entrees: (EntreeLivraisonZip & { action: ActionEntreeZip })[] };
 type Fusion = { nom: string; fichiers: File[]; sourceIds: string[]; retirerOrigines: boolean };
 
@@ -272,68 +283,208 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
             </form>
         }
 
-        <div class="carte defilement-x">
+        <div class="carte">
+            <div class="entete-page" style="margin: 0 0 8px">
+                <input
+                    class="champ"
+                    style="max-width: 360px"
+                    name="recherche"
+                    [(ngModel)]="recherche"
+                    placeholder="🔍 Rechercher une source (nom, domaine, colonne)…"
+                />
+                <span class="discret">{{ recherche ? sourcesVisibles().length + ' / ' : '' }}{{ sources().length }} source(s)</span>
+                <span class="espace"></span>
+                @if (session.peutEditer()) {
+                    <label class="case"
+                        ><input type="checkbox" name="parametres" [(ngModel)]="parametresVisibles" /> paramètres de lecture</label
+                    >
+                }
+            </div>
             @if (sources().length === 0) {
                 <div class="vide">
                     Aucune source. Déposez un fichier CSV, TXT, Parquet, JSON, Excel ou une livraison ZIP pour commencer.
                 </div>
+            } @else if (!sourcesVisibles().length) {
+                <div class="vide">Aucune source ne correspond à « {{ recherche }} ».</div>
             } @else {
-                <table class="tableau">
-                    <thead>
-                        <tr>
-                            <th>Nom</th>
-                            <th>Type</th>
-                            <th>Stockage</th>
-                            <th>Colonnes</th>
-                            <th>Taille</th>
-                            <th>Enregistrée</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @for (source of sources(); track source.id) {
+                <div class="defilement-x">
+                    <table class="tableau sources">
+                        <thead>
                             <tr>
-                                <td>
-                                    <b>{{ source.name }}</b>
-                                    @if (source.origine === 'fusion') {
-                                        <span class="badge neutre">fusion</span>
-                                    }
-                                    @if (source.origine === 'adresse') {
-                                        <span class="badge neutre">adresse</span>
-                                    }
-                                </td>
-                                <td>
-                                    <span class="badge neutre">{{ source.type }}</span>
-                                </td>
-                                <td>
-                                    <span class="badge" [class.succes]="source.storage === 'parquet'">{{ source.storage }}</span>
-                                </td>
-                                <td class="discret" [title]="source.headers.join(', ')">{{ source.headers.length }}</td>
-                                <td>{{ formaterOctets(source.size) }}</td>
-                                <td class="discret">{{ formaterDate(source.enregistreLe) }}</td>
-                                <td class="actions">
-                                    <button class="bouton petit" (click)="apercevoir(source)">Aperçu</button>
-                                    @if (session.peutEditer()) {
-                                        <label
-                                            class="bouton petit"
-                                            title="Recharger cette source depuis un nouveau fichier (même identifiant)"
-                                        >
-                                            Mettre à jour
-                                            <input type="file" hidden [accept]="accept" (change)="mettreAJour($event, source)" />
-                                        </label>
-                                        @if (source.origine === 'adresse') {
-                                            <button class="bouton petit" (click)="relancerAdresse(source)">Relancer l'adresse</button>
-                                        }
-                                        @if (source.storage !== 'parquet') {
-                                            <button class="bouton petit" (click)="optimiser(source)">Optimiser</button>
-                                        }
-                                        <button class="bouton petit danger" (click)="supprimer(source)">Supprimer</button>
-                                    }
-                                </td>
+                                <th>Nom</th>
+                                <th>Type</th>
+                                <th>Domaine</th>
+                                <th>Lignes</th>
+                                <th>Colonnes</th>
+                                <th>Complétude (dernier audit)</th>
+                                <th>Taille</th>
+                                <th>Enregistrée</th>
+                                <th></th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @for (source of sourcesVisibles(); track source.id) {
+                                <tr>
+                                    <td>
+                                        <b>{{ source.name }}</b>
+                                        @if (source.origine === 'fusion') {
+                                            <span class="badge neutre">fusion</span>
+                                        }
+                                        @if (source.origine === 'adresse') {
+                                            <span class="badge neutre">adresse</span>
+                                        }
+                                        @if (source.storage === 'parquet') {
+                                            <span class="badge succes" title="Convertie en Parquet compressé : analyses plus rapides"
+                                                >optimisée</span
+                                            >
+                                        }
+                                        @if (source.derniereMiseAJour) {
+                                            <div class="discret">maj {{ formaterDate(source.derniereMiseAJour) }}</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge neutre">{{ source.type }}</span>
+                                    </td>
+                                    <td>
+                                        <input
+                                            class="champ"
+                                            style="min-width: 120px"
+                                            list="domaines-connus"
+                                            [attr.name]="'domaine-' + source.id"
+                                            [ngModel]="source.theme || ''"
+                                            (change)="changerDomaine(source, $any($event.target).value)"
+                                            placeholder="ex : Achats"
+                                            [disabled]="!session.peutEditer()"
+                                            title="Groupe de sources : zones et couleurs dans le modèle de données"
+                                        />
+                                    </td>
+                                    <td>{{ lignesDe(source) ?? '—' }}</td>
+                                    <td>
+                                        <span class="discret">{{ source.headers.length }}</span>
+                                        <button class="bouton petit" (click)="basculerColonnes(source.id)">
+                                            {{ colonnesDepliees().has(source.id) ? 'masquer' : 'voir' }}
+                                        </button>
+                                        @if (colonnesDepliees().has(source.id)) {
+                                            <div class="colonnes">
+                                                @for (colonne of source.headers; track colonne) {
+                                                    <code>{{ colonne }}</code>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (completudeDe(source); as completude) {
+                                            <span
+                                                class="badge"
+                                                [class.succes]="completude.valeur >= 0.95"
+                                                [class.alerte]="completude.valeur < 0.95 && completude.valeur >= 0.8"
+                                                [class.erreur]="completude.valeur < 0.8"
+                                                [title]="'audit du ' + formaterDate(completude.date)"
+                                                >{{ (completude.valeur * 100).toFixed(0) }} %</span
+                                            >
+                                        } @else {
+                                            <span class="discret">jamais auditée</span>
+                                        }
+                                    </td>
+                                    <td>{{ formaterOctets(source.size) }}</td>
+                                    <td class="discret">{{ formaterDate(source.enregistreLe) }}</td>
+                                    <td class="actions">
+                                        <button class="bouton petit" (click)="apercevoir(source)">Aperçu</button>
+                                        @if (session.peutEditer()) {
+                                            <label
+                                                class="bouton petit"
+                                                title="Recharger cette source depuis un nouveau fichier (même identifiant)"
+                                            >
+                                                Mettre à jour
+                                                <input type="file" hidden [accept]="accept" (change)="mettreAJour($event, source)" />
+                                            </label>
+                                            @if (source.origine === 'adresse') {
+                                                <button class="bouton petit" (click)="relancerAdresse(source)">Relancer l'adresse</button>
+                                            }
+                                            @if (source.storage !== 'parquet') {
+                                                <button class="bouton petit" (click)="optimiser(source)">Optimiser</button>
+                                            }
+                                            <button
+                                                class="bouton petit"
+                                                (click)="ouvrirObjetMetier(source)"
+                                                title="Constituer ou rattacher un objet métier depuis cette source"
+                                            >
+                                                Objet métier
+                                            </button>
+                                            <button class="bouton petit danger" (click)="supprimer(source)">Supprimer</button>
+                                        }
+                                    </td>
+                                </tr>
+                                @if (parametresVisibles && estUnCsv(source)) {
+                                    <tr class="parametres">
+                                        <td colspan="9">
+                                            <div class="formulaire-ligne" style="align-items: center">
+                                                <span class="discret">Lecture de « {{ source.name }} » :</span>
+                                                <label class="etiquette" style="margin: 0">Séparateur</label>
+                                                <select
+                                                    class="champ"
+                                                    style="width: auto"
+                                                    [attr.name]="'separateur-' + source.id"
+                                                    [ngModel]="configDe(source).delim"
+                                                    (ngModelChange)="relire(source, { delim: $event })"
+                                                >
+                                                    @for (separateur of separateurs(); track separateur[0]) {
+                                                        <option [value]="separateur[0]">{{ separateur[1] }}</option>
+                                                    }
+                                                </select>
+                                                <label
+                                                    class="etiquette"
+                                                    style="margin: 0"
+                                                    title="À changer si les accents s'affichent mal (é → Ã© ou �)"
+                                                    >Encodage</label
+                                                >
+                                                <select
+                                                    class="champ"
+                                                    style="width: auto"
+                                                    [attr.name]="'encodage-' + source.id"
+                                                    [ngModel]="configDe(source).enc"
+                                                    (ngModelChange)="relire(source, { enc: $event })"
+                                                >
+                                                    @for (encodage of encodages(); track encodage[0]) {
+                                                        <option [value]="encodage[0]">{{ encodage[1] }}</option>
+                                                    }
+                                                </select>
+                                                <label class="etiquette" style="margin: 0">Guillemets</label>
+                                                <select
+                                                    class="champ"
+                                                    style="width: auto"
+                                                    [attr.name]="'guillemets-' + source.id"
+                                                    [ngModel]="configDe(source).quote"
+                                                    (ngModelChange)="relire(source, { quote: $event })"
+                                                >
+                                                    <option value="">automatique (")</option>
+                                                    <option value="none">aucun</option>
+                                                </select>
+                                                <label class="case"
+                                                    ><input
+                                                        type="checkbox"
+                                                        [attr.name]="'erreurs-' + source.id"
+                                                        [ngModel]="configDe(source).ignoreErrors"
+                                                        (ngModelChange)="relire(source, { ignoreErrors: $event })"
+                                                    />
+                                                    ignorer les lignes en erreur</label
+                                                >
+                                                @if (relectureEnCours() === source.id) {
+                                                    <span class="discret">relecture…</span>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <datalist id="domaines-connus">
+                    @for (domaine of domainesConnus(); track domaine) {
+                        <option [value]="domaine"></option>
+                    }
+                </datalist>
             }
         </div>
         @if (apercu(); as apercu) {
@@ -382,6 +533,16 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
             flex-wrap: wrap;
             gap: 6px 14px;
         }
+        .colonnes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-width: 360px;
+            margin-top: 4px;
+        }
+        .parametres td {
+            background: color-mix(in srgb, var(--accent) 5%, transparent);
+        }
         .case {
             display: flex;
             align-items: center;
@@ -407,6 +568,41 @@ export class SourcesComponent {
     readonly adresse$ = signal<ParametresAdresse | null>(null);
     readonly adresse = this.adresse$;
     readonly accept = EXTENSIONS_ACCEPTEES.map(extension => '.' + extension).join(',');
+    private readonly router = inject(Router);
+    readonly vocabulaire = signal<VocabulaireImportation | null>(null);
+    /** Nombre de lignes par nom de source (volumétrie du cockpit) et dernier profilage par identifiant de source. */
+    readonly lignesParNom = signal<Record<string, number>>({});
+    readonly dernierProfilage = signal<Record<string, AuditQualite>>({});
+    readonly colonnesDepliees = signal(new Set<string>());
+    readonly relectureEnCours = signal('');
+    readonly rechercheSaisie = signal('');
+    parametresVisibles = false;
+    /** Sources filtrées par la recherche (nom, domaine ou colonne, casse et accents ignorés). */
+    readonly sourcesVisibles = computed(() => {
+        const question = normaliserTexte(this.rechercheSaisie());
+        if (!question) return this.sources();
+        return this.sources().filter(
+            source =>
+                normaliserTexte(source.name).includes(question) ||
+                normaliserTexte(source.theme || '').includes(question) ||
+                source.headers.some(colonne => normaliserTexte(colonne).includes(question))
+        );
+    });
+    readonly domainesConnus = computed(() =>
+        [
+            ...new Set(
+                this.sources()
+                    .map(source => source.theme || '')
+                    .filter(Boolean)
+            )
+        ].sort()
+    );
+    get recherche(): string {
+        return this.rechercheSaisie();
+    }
+    set recherche(valeur: string) {
+        this.rechercheSaisie.set(valeur);
+    }
     readonly genresAdresse = Object.entries(GENRES_ADRESSE) as [GenreAdresse, string][];
     readonly formaterOctets = formaterOctets;
     readonly formaterDate = formaterDate;
@@ -417,10 +613,76 @@ export class SourcesComponent {
 
     async recharger(): Promise<void> {
         try {
-            this.sources.set(await this.api.sources());
+            const [sources, cockpit, audits] = await Promise.all([
+                this.api.sources(),
+                this.api.cockpit(),
+                this.api.auditsQualite(undefined, 500)
+            ]);
+            this.sources.set(sources);
+            this.lignesParNom.set(Object.fromEntries(cockpit.volumetrie.map(ligne => [ligne.nom, ligne.lignes])));
+            const profilages: Record<string, AuditQualite> = {};
+            for (const audit of audits) if (audit.genre === 'profilage' && !profilages[audit.sourceId]) profilages[audit.sourceId] = audit;
+            this.dernierProfilage.set(profilages);
+            if (!this.vocabulaire()) this.vocabulaire.set(await this.api.vocabulaireImportation());
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
+    }
+    lignesDe(source: Source): number | undefined {
+        return this.lignesParNom()[source.name];
+    }
+    completudeDe(source: Source): { valeur: number; date: string } | null {
+        const audit = this.dernierProfilage()[source.id];
+        const valeur = audit ? Number((audit.resume as Record<string, unknown>)['completudeMoyenne']) : NaN;
+        return Number.isFinite(valeur) ? { valeur, date: audit.lanceLe } : null;
+    }
+    basculerColonnes(sourceId: string): void {
+        this.colonnesDepliees.update(ensemble => {
+            const copie = new Set(ensemble);
+            if (copie.has(sourceId)) copie.delete(sourceId);
+            else copie.add(sourceId);
+            return copie;
+        });
+    }
+    estUnCsv(source: Source): boolean {
+        return ['csv', 'txt', 'tsv'].includes(source.type) && !!source.fichier;
+    }
+    configDe(source: Source): Required<OptionsLectureCsv> {
+        const config = (source.config || {}) as OptionsLectureCsv;
+        return { delim: config.delim || '', enc: config.enc || 'UTF-8', quote: config.quote || '', ignoreErrors: !!config.ignoreErrors };
+    }
+    separateurs(): [string, string][] {
+        return Object.entries(this.vocabulaire()?.separateurs || { '': 'automatique' });
+    }
+    encodages(): [string, string][] {
+        return Object.entries(this.vocabulaire()?.encodages || { 'UTF-8': 'UTF-8' });
+    }
+
+    /** Le domaine (groupe de sources) est une métadonnée : on réenregistre le document de la source. */
+    async changerDomaine(source: Source, domaine: string): Promise<void> {
+        try {
+            const { id, ...document } = source;
+            await this.api.enregistrerSource(id, { ...document, theme: domaine.trim() });
+            await this.recharger();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+    /** Relit le fichier avec un paramètre changé ; les tables conçues et préparations dépendantes suivent. */
+    async relire(source: Source, changement: OptionsLectureCsv): Promise<void> {
+        this.relectureEnCours.set(source.id);
+        try {
+            const resultat = await this.api.relireSource(source.id, { ...this.configDe(source), ...changement });
+            await this.terminerImport(resultat, 'relue');
+            await this.recharger();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.relectureEnCours.set('');
+        }
+    }
+    ouvrirObjetMetier(source: Source): void {
+        void this.router.navigate(['/objets-metier'], { queryParams: { source: source.name } });
     }
     colonnesDe(sourceId: string | undefined): string[] {
         return this.sources().find(source => source.id === sourceId)?.headers || [];

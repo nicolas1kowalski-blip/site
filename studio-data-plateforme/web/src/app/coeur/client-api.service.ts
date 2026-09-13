@@ -58,6 +58,12 @@ import {
     EntreeLivraisonZip,
     FichierDepose,
     LigneCouverture,
+    MesureRelation,
+    OptionsLectureCsv,
+    RegleLien,
+    ResultatRegleLien,
+    VocabulaireImportation,
+    VocabulaireReglesLiens,
     ParametresAdresse,
     ParametresCouverture,
     ResultatImport,
@@ -197,6 +203,12 @@ export class ClientApiService {
             this.http.post<ResultatImport>(`${this.racine}/importation/fichier`, { ...fichier, ...(sourceId ? { sourceId } : {}) })
         );
     }
+    vocabulaireImportation(): Promise<VocabulaireImportation> {
+        return firstValueFrom(this.http.get<VocabulaireImportation>(`${this.racine}/importation/vocabulaire`));
+    }
+    relireSource(sourceId: string, config: OptionsLectureCsv): Promise<ResultatImport> {
+        return firstValueFrom(this.http.post<ResultatImport>(`${this.racine}/importation/relire`, { sourceId, config }));
+    }
     feuillesExcel(nomServeur: string): Promise<string[]> {
         return firstValueFrom(this.http.post<string[]>(`${this.racine}/importation/excel/feuilles`, { nomServeur }));
     }
@@ -249,6 +261,36 @@ export class ClientApiService {
     }
     supprimerRelation(id: string): Promise<Relation[]> {
         return firstValueFrom(this.http.delete<Relation[]>(`${this.racine}/modele/relations/${encodeURIComponent(id)}`));
+    }
+    modifierRelation(id: string, changements: { cardinality?: string; kind?: string }): Promise<Relation[]> {
+        return firstValueFrom(this.http.put<Relation[]>(`${this.racine}/modele/relations/${encodeURIComponent(id)}`, changements));
+    }
+    mesurerRelation(id: string): Promise<MesureRelation> {
+        return firstValueFrom(this.http.post<MesureRelation>(`${this.racine}/modele/relations/${encodeURIComponent(id)}/mesurer`, {}));
+    }
+    vocabulaireReglesLiens(): Promise<VocabulaireReglesLiens> {
+        return firstValueFrom(this.http.get<VocabulaireReglesLiens>(`${this.racine}/modele/regles/vocabulaire`));
+    }
+    reglesLiens(): Promise<RegleLien[]> {
+        return firstValueFrom(this.http.get<RegleLien[]>(`${this.racine}/modele/regles`));
+    }
+    ecrireRegleLien(regle: RegleLien): Promise<RegleLien[]> {
+        // Le libellé calculé n'est pas renvoyé : le serveur le recalcule.
+        const corps = { ...regle, id: undefined, libelle: undefined };
+        return firstValueFrom(this.http.put<RegleLien[]>(`${this.racine}/modele/regles/${encodeURIComponent(regle.id)}`, corps));
+    }
+    supprimerRegleLien(id: string): Promise<RegleLien[]> {
+        return firstValueFrom(this.http.delete<RegleLien[]>(`${this.racine}/modele/regles/${encodeURIComponent(id)}`));
+    }
+    testerRegleLien(id: string): Promise<ResultatRegleLien> {
+        return firstValueFrom(this.http.post<ResultatRegleLien>(`${this.racine}/modele/regles/${encodeURIComponent(id)}/tester`, {}));
+    }
+    lignesRegleLien(id: string, offset: number): Promise<PageLignes> {
+        return firstValueFrom(
+            this.http.get<PageLignes>(`${this.racine}/modele/regles/${encodeURIComponent(id)}/lignes`, {
+                params: { offset: String(offset) }
+            })
+        );
     }
     detecterRelations(): Promise<PropositionLien[]> {
         return firstValueFrom(this.http.post<PropositionLien[]>(`${this.racine}/modele/relations/detecter`, {}));

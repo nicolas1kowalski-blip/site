@@ -11,6 +11,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     Actif,
@@ -573,8 +574,15 @@ export class ObjetsMetierComponent {
     );
     readonly autresObjets = computed(() => this.objets().filter(objet => objet.id !== this.selectionId()));
 
+    /** Source demandée dans l'adresse (?source=nom) : l'objet est initialisé depuis elle dès le chargement. */
+    private readonly sourceDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('source') || '';
+
     constructor() {
-        void this.recharger();
+        void this.recharger().then(() => {
+            if (!this.sourceDemandee || !this.sources().some(source => source.name === this.sourceDemandee)) return;
+            this.sourceInitiale = this.sourceDemandee;
+            this.initialiserDepuisSource();
+        });
     }
 
     async recharger(): Promise<void> {

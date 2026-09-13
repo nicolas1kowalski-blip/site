@@ -24,12 +24,29 @@ export function typeSourceDe(extension: string): string {
     return extension;
 }
 
+/** Paramètres de lecture d'un CSV (mêmes noms que l'application classique : delim, enc, quote, ignoreErrors). */
+export type OptionsLectureCsv = { delim?: string; enc?: string; quote?: string; ignoreErrors?: boolean };
+export const SEPARATEURS_CSV = {
+    '': 'automatique',
+    ';': 'point-virgule (;)',
+    ',': 'virgule (,)',
+    '|': 'barre verticale (|)',
+    '\t': 'tabulation'
+} as const;
+export const ENCODAGES_CSV = { 'UTF-8': 'UTF-8 (recommandé)', 'ISO-8859-1': 'Windows / ANSI (Latin-1)', 'UTF-16': 'UTF-16' } as const;
+
 /** Expression DuckDB qui lit le fichier ; les CSV sont lus tout en texte pour ne rien perdre. */
-export function lectureDuckDB(nomFichier: string, extension: string): string {
+export function lectureDuckDB(nomFichier: string, extension: string, options: OptionsLectureCsv = {}): string {
     const nom = litteralSql(nomFichier);
     if (extension === 'parquet') return `read_parquet(${nom})`;
     if (extension === 'json' || extension === 'ndjson') return `read_json_auto(${nom})`;
-    return `read_csv_auto(${nom}, header=true, all_varchar=true)`;
+    let lecture = `read_csv_auto(${nom}, header=true, all_varchar=true`;
+    if (options.delim) lecture += `, delim=${litteralSql(options.delim)}`;
+    if (options.enc === 'ISO-8859-1') lecture += `, encoding='latin-1'`;
+    else if (options.enc === 'UTF-16') lecture += `, encoding='utf-16'`;
+    if (options.quote === 'none') lecture += `, quote=''`;
+    if (options.ignoreErrors) lecture += `, ignore_errors=true`;
+    return lecture + ')';
 }
 
 export function nomTableDuckDB(idSource: string): string {
