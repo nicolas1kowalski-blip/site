@@ -123,8 +123,9 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    # Pas de nom fixe : le compartiment est conservé à la suppression de la pile (Retain), un nom fixe empêcherait
+    # de recréer la pile. Le nom généré est affiché dans les sorties.
     Properties:
-      BucketName: !Sub "studio-data-sauvegardes-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
