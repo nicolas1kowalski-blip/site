@@ -10,6 +10,7 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { AuditObjet, FiltreAudit, ObjetMetier, Source } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { telechargerJson } from '../../coeur/telechargement';
+import { cibleDeLaRegle } from './description-regle';
 import { FiltresAuditComponent } from './filtres-audit.component';
 import { InspecteurAnomaliesComponent } from './inspecteur-anomalies.component';
 
@@ -153,7 +154,7 @@ import { InspecteurAnomaliesComponent } from './inspecteur-anomalies.component';
                                         <b>{{ regle.nom }}</b>
                                     </td>
                                     <td>
-                                        <code>{{ regle.colonne }}</code>
+                                        <code>{{ cibleDeLaRegle(regle) }}</code>
                                     </td>
                                     <td>{{ regle.criticite }}</td>
                                     <td>
@@ -187,6 +188,7 @@ export class AuditObjetComponent {
     readonly objets = input<ObjetMetier[]>([]);
     readonly sources = input<Source[]>([]);
 
+    readonly cibleDeLaRegle = cibleDeLaRegle;
     objetId = '';
     filtres: FiltreAudit[] = [];
     readonly audit = signal<AuditObjet | null>(null);

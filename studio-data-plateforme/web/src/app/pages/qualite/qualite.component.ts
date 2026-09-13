@@ -38,6 +38,7 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { telechargerCsv } from '../../coeur/telechargement';
 import { AuditObjetComponent } from './audit-objet.component';
+import { cibleDeLaRegle } from './description-regle';
 import { ClesFonctionnellesComponent } from './cles-fonctionnelles.component';
 import { FiltresAuditComponent } from './filtres-audit.component';
 import { BrouillonRegle, FormulaireRegleComponent } from './formulaire-regle.component';
@@ -350,7 +351,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                                             }
                                         </td>
                                         <td>
-                                            <code>{{ regle.colonne || descriptionSansColonne(regle) }}</code>
+                                            <code>{{ cibleDeLaRegle(regle) }}</code>
                                         </td>
                                         <td>{{ libelleType(regle.type) }}</td>
                                         <td>
@@ -628,14 +629,7 @@ export class QualiteComponent {
     libelleType(type: TypeRegle): string {
         return this.vocabulaire()?.typesRegle[type] || type;
     }
-    /** Ce qu'une règle sans colonne contrôle : sa formule, sa condition SQL ou sa clé de regroupement. */
-    descriptionSansColonne(regle: RegleQualite): string {
-        const parametres = regle.parametres;
-        if (regle.type === 'expression') return parametres.formule || '';
-        if (regle.type === 'sql') return parametres.condition || '';
-        if (regle.type === 'groupe') return 'par ' + (parametres.colonnesGroupe || []).join(' + ');
-        return '';
-    }
+    readonly cibleDeLaRegle = cibleDeLaRegle;
     syntheseAudit(audit: AuditQualite): string {
         const resume = audit.resume as Record<string, unknown>;
         if (audit.genre === 'profilage')
