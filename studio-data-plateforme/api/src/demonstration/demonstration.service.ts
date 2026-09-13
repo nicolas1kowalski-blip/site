@@ -2,11 +2,17 @@
  * Mode démonstration : installer, en une fois, un espace de travail entièrement prêt.
  *
  * Charger douze fichiers à la main puis déclarer les liens, les listes de valeurs, les règles et les tableaux de
- * bord prend une demi-heure ; ce service le fait en quelques secondes. Il lit les fichiers du jeu de
- * démonstration (`donnees-demo/fichiers`, voir son README), les ingère dans DuckDB comme n'importe quel fichier
- * déposé, puis écrit dans PostgreSQL tout ce qui fait qu'une application de gouvernance est vivante : sources et
- * leurs domaines, dictionnaire, modèle de données, listes de valeurs, objet métier, séries, tableaux de bord,
- * règles de qualité, et un premier audit pour que les écrans aient déjà une histoire.
+ * bord prend une demi-heure ; ce service le fait en quelques secondes.
+ *
+ * Le jeu de démonstration vit dans PostgreSQL : chaque fichier y est rangé compressé, une fois pour toutes
+ * (table `jeu_demonstration`). L'installation n'a donc besoin d'aucun fichier sur le disque du serveur — le jeu
+ * suit la base, donc les sauvegardes et les réplications. Le dossier `donnees-demo/fichiers` ne sert plus qu'à
+ * garnir la base la première fois, automatiquement s'il est là.
+ *
+ * L'installation ingère ensuite ces contenus dans DuckDB comme n'importe quel fichier déposé, puis écrit dans
+ * PostgreSQL tout ce qui fait qu'une application de gouvernance est vivante : sources et leurs domaines,
+ * dictionnaire, modèle de données, listes de valeurs, objet métier, séries, tableaux de bord, règles de
+ * qualité, et un premier audit pour que les écrans aient déjà une histoire.
  *
  * L'installation vise un espace dédié (« demo » par défaut) : rien n'est touché dans les espaces de travail.
  */
@@ -15,9 +21,11 @@ import { and, eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { EspaceAvecRole } from '../authentification/contexte-requete';
 import { BASE_DE_DONNEES, BaseDeDonnees } from '../base-de-donnees/connexion';
-import { Utilisateur, auditsQualite, documents, reglesQualite } from '../base-de-donnees/schema';
+import { Utilisateur, auditsQualite, documents, jeuDemonstration, reglesQualite } from '../base-de-donnees/schema';
 import { erreurRequete } from '../commun/erreurs';
 import { CONFIGURATION, Configuration } from '../configuration/configuration';
 import { EspacesService } from '../espaces/espaces.service';
@@ -42,14 +50,19 @@ import {
 } from './catalogue-demonstration';
 
 export type EtatDemonstration = {
-    /** Le dossier où le service va chercher les fichiers, et ce qu'il y trouve. */
+    /** Le jeu tel qu'il est rangé dans la base : c'est lui qui sert à installer. */
+    jeuEnBase: { fichiers: number; octets: number; octetsCompresses: number; chargeLe: string | null };
+    /** Le dossier de garnissage (donnees-demo/fichiers) et ce qu'il contient encore, s'il est là. */
     dossier: string;
-    fichiersPresents: string[];
+    fichiersSurDisque: string[];
     fichiersManquants: string[];
     pretAInstaller: boolean;
     /** L'espace de démonstration, s'il existe déjà. */
     espace: { code: string; nom: string; sources: number; installeLe: string | null } | null;
 };
+
+/** Compte rendu du garnissage de la base à partir des fichiers du dossier. */
+export type RapportChargement = { fichiers: number; octets: number; octetsCompresses: number };
 
 export type RapportInstallation = {
     espace: { code: string; nom: string };
@@ -84,7 +97,8 @@ export class DemonstrationService {
 
     /** Ce que l'écran d'administration a besoin de savoir avant de proposer l'interrupteur. */
     async etat(code: string): Promise<EtatDemonstration> {
-        const presents = FICHIERS.filter(entree => fs.existsSync(path.join(this.dossier, entree.fichier)));
+        const enBase = await this.jeuEnBase();
+        const surDisque = FICHIERS.filter(entree => fs.existsSync(path.join(this.dossier, entree.fichier)));
         const espace = (await this.espaces.lister()).find(candidat => candidat.code === code) || null;
         const installation = espace
             ? await this.base
@@ -93,11 +107,20 @@ export class DemonstrationService {
                   .where(and(eq(documents.espaceId, espace.id), eq(documents.cle, CLE_INSTALLATION)))
                   .limit(1)
             : [];
+        const nomsEnBase = new Set(enBase.map(fichier => fichier.nom));
         return {
+            jeuEnBase: {
+                fichiers: enBase.length,
+                octets: enBase.reduce((somme, fichier) => somme + fichier.tailleOctets, 0),
+                octetsCompresses: enBase.reduce((somme, fichier) => somme + fichier.tailleCompresseeOctets, 0),
+                chargeLe: enBase.length ? enBase[0].chargeLe.toISOString() : null
+            },
             dossier: this.dossier,
-            fichiersPresents: presents.map(entree => entree.fichier),
-            fichiersManquants: FICHIERS.filter(entree => !presents.includes(entree)).map(entree => entree.fichier),
-            pretAInstaller: presents.length === FICHIERS.length,
+            fichiersSurDisque: surDisque.map(entree => entree.fichier),
+            fichiersManquants: FICHIERS.filter(entree => !nomsEnBase.has(entree.fichier) && !surDisque.includes(entree)).map(
+                entree => entree.fichier
+            ),
+            pretAInstaller: FICHIERS.every(entree => nomsEnBase.has(entree.fichier) || surDisque.includes(entree)),
             espace: espace
                 ? {
                       code: espace.code,
@@ -109,14 +132,68 @@ export class DemonstrationService {
         };
     }
 
-    /** Installe (ou réinstalle) la démonstration : fichiers, gouvernance, règles, premier audit. */
-    async installer(utilisateur: Utilisateur, options: { code: string; nom: string; remplacer: boolean }): Promise<RapportInstallation> {
-        const debut = Date.now();
+    /** Les fichiers du jeu rangés dans la base, sans leur contenu (la liste sert à l'écran et aux contrôles). */
+    async jeuEnBase(): Promise<{ nom: string; tailleOctets: number; tailleCompresseeOctets: number; chargeLe: Date }[]> {
+        return this.base
+            .select({
+                nom: jeuDemonstration.nom,
+                tailleOctets: jeuDemonstration.tailleOctets,
+                tailleCompresseeOctets: jeuDemonstration.tailleCompresseeOctets,
+                chargeLe: jeuDemonstration.chargeLe
+            })
+            .from(jeuDemonstration)
+            .orderBy(jeuDemonstration.nom);
+    }
+
+    /**
+     * Range le jeu dans la base à partir du dossier : chaque fichier est compressé puis enregistré. Une fois
+     * fait, les fichiers du disque ne servent plus à rien — l'installation lit la base.
+     */
+    async chargerLeJeuEnBase(): Promise<RapportChargement> {
         const manquants = FICHIERS.filter(entree => !fs.existsSync(path.join(this.dossier, entree.fichier)));
         if (manquants.length)
             throw erreurRequete(
-                `Fichiers du jeu de démonstration introuvables dans ${this.dossier} : ${manquants.map(entree => entree.fichier).join(', ')}. Lancez « npm run demo » pour les produire.`
+                `Fichiers introuvables dans ${this.dossier} : ${manquants.map(entree => entree.fichier).join(', ')}. Lancez « npm run demo » pour les produire.`
             );
+        let octets = 0;
+        let octetsCompresses = 0;
+        for (const entree of FICHIERS) {
+            const contenu = await fsp.readFile(path.join(this.dossier, entree.fichier));
+            const comprime = gzipSync(contenu, { level: 9 });
+            octets += contenu.length;
+            octetsCompresses += comprime.length;
+            const valeurs = {
+                nom: entree.fichier,
+                tailleOctets: contenu.length,
+                contenu: comprime,
+                tailleCompresseeOctets: comprime.length,
+                chargeLe: new Date()
+            };
+            await this.base.insert(jeuDemonstration).values(valeurs).onConflictDoUpdate({ target: jeuDemonstration.nom, set: valeurs });
+        }
+        return { fichiers: FICHIERS.length, octets, octetsCompresses };
+    }
+
+    /** Retire le jeu de la base (l'espace déjà installé, lui, n'est pas touché). */
+    async viderLeJeuEnBase(): Promise<number> {
+        const enBase = await this.jeuEnBase();
+        await this.base.delete(jeuDemonstration);
+        return enBase.length;
+    }
+
+    /** Le contenu d'un fichier du jeu, décompressé, tel qu'il a été chargé. */
+    private async contenuDuFichier(nom: string): Promise<Buffer> {
+        const ligne = (await this.base.select().from(jeuDemonstration).where(eq(jeuDemonstration.nom, nom)).limit(1))[0];
+        if (!ligne) throw erreurRequete(`Le fichier « ${nom} » n'est pas dans le jeu de démonstration de la base.`);
+        return gunzipSync(ligne.contenu);
+    }
+
+    /** Installe (ou réinstalle) la démonstration : fichiers, gouvernance, règles, premier audit. */
+    async installer(utilisateur: Utilisateur, options: { code: string; nom: string; remplacer: boolean }): Promise<RapportInstallation> {
+        const debut = Date.now();
+        // Le jeu vit dans la base ; s'il n'y est pas encore, on l'y range depuis le dossier de garnissage.
+        const nomsEnBase = new Set((await this.jeuEnBase()).map(fichier => fichier.nom));
+        if (!FICHIERS.every(entree => nomsEnBase.has(entree.fichier))) await this.chargerLeJeuEnBase();
         const espace = await this.espaceDeDemonstration(utilisateur, options);
         if (options.remplacer) await this.vider(espace);
         else if ((await this.sources.lister(espace.id)).length)
@@ -182,18 +259,17 @@ export class DemonstrationService {
         return { ...espace, role: 'administrateur' };
     }
 
-    /** Copie chaque fichier dans le dépôt de l'espace, l'ingère, puis pose son domaine. */
+    /** Sort chaque fichier de la base, le pose dans le dépôt de l'espace, l'ingère, puis lui donne son domaine. */
     private async chargerLesFichiers(espace: EspaceAvecRole, utilisateur: Utilisateur): Promise<RapportInstallation['sources']> {
         const { fichiers } = await this.espaces.ressources(espace);
         const rapport: RapportInstallation['sources'] = [];
         for (const entree of FICHIERS) {
-            const chemin = path.join(this.dossier, entree.fichier);
-            const taille = (await fsp.stat(chemin)).size;
-            await fichiers.ecrireDepuisFlux('src_' + entree.id, fs.createReadStream(chemin));
+            const contenu = await this.contenuDuFichier(entree.fichier);
+            await fichiers.ecrireDepuisFlux('src_' + entree.id, Readable.from(contenu));
             const importe = await this.importation.importerFichier(espace, utilisateur, {
                 nomServeur: 'src_' + entree.id,
                 nomFichier: entree.fichier,
-                taille
+                taille: contenu.length
             });
             const source = await this.sources.lire(espace.id, entree.id);
             await this.sources.ecrire(espace.id, entree.id, { ...source, theme: entree.domaine });

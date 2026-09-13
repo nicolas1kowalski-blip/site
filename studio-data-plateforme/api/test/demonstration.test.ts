@@ -51,13 +51,24 @@ after(async () => {
     fs.rmSync(dossierTemporaire, { recursive: true, force: true });
 });
 
-test('état avant installation : les douze fichiers du jeu sont trouvés, aucun espace de démonstration', async () => {
+test('état avant installation : le jeu est encore sur le disque, la base est vide, aucun espace', async () => {
     const etat = json(await appel({ method: 'GET', url: '/api/demonstration/etat' }));
-    assert.equal(etat.pretAInstaller, true);
+    assert.equal(etat.pretAInstaller, true, 'les fichiers du dossier suffisent pour installer');
     assert.equal(etat.fichiersManquants.length, 0);
-    assert.equal(etat.fichiersPresents.length, 12);
+    assert.equal(etat.fichiersSurDisque.length, 12);
+    assert.equal(etat.jeuEnBase.fichiers, 0, 'rien en base tant qu’on n’a pas installé');
     assert.equal(etat.espace, null);
     assert.equal(etat.dossier, dossierDuJeu);
+});
+
+test('le jeu se range dans la base : douze fichiers compressés, plus légers que les originaux', async () => {
+    const chargement = json(await appel({ method: 'POST', url: '/api/demonstration/jeu' }));
+    assert.equal(chargement.fichiers, 12);
+    assert.ok(chargement.octetsCompresses < chargement.octets / 2, 'la compression divise le volume par plus de deux');
+    const etat = json(await appel({ method: 'GET', url: '/api/demonstration/etat' }));
+    assert.equal(etat.jeuEnBase.fichiers, 12);
+    assert.equal(etat.jeuEnBase.octets, chargement.octets);
+    assert.ok(etat.jeuEnBase.chargeLe, 'la date de chargement est connue');
 });
 
 test('installation : un espace prêt à l’emploi — sources, modèle, gouvernance, règles exécutées', async () => {
@@ -131,4 +142,24 @@ test('réinstallation : refusée sans « remplacer », acceptée avec — puis l
     assert.equal(vidage.sourcesSupprimees, 12);
     assert.equal(json(await appel({ method: 'GET', url: '/api/tables' })).length, 0);
     assert.equal(json(await appel({ method: 'GET', url: '/api/qualite/regles' })).length, 0);
+});
+
+test('le jeu vit dans la base : l’installation marche encore une fois les fichiers du disque effacés', async () => {
+    fs.rmSync(dossierDuJeu, { recursive: true, force: true });
+    const etat = json(await appel({ method: 'GET', url: '/api/demonstration/etat' }));
+    assert.equal(etat.fichiersSurDisque.length, 0, 'plus rien sur le disque');
+    assert.equal(etat.jeuEnBase.fichiers, 12);
+    assert.equal(etat.pretAInstaller, true, 'la base suffit');
+    const installation = await appel({ method: 'POST', url: '/api/demonstration/installer', payload: { remplacer: true } });
+    assert.equal(installation.statusCode, 201, installation.body);
+    assert.equal(json(installation).sources.length, 12);
+    assert.equal(json(await appel({ method: 'GET', url: '/api/tables' })).length, 12);
+    // Sans jeu en base ni fichiers, l'installation dit clairement ce qui manque.
+    assert.equal(json(await appel({ method: 'DELETE', url: '/api/demonstration/jeu' })).fichiersRetires, 12);
+    const sansJeu = json(await appel({ method: 'GET', url: '/api/demonstration/etat' }));
+    assert.equal(sansJeu.pretAInstaller, false);
+    assert.equal(sansJeu.fichiersManquants.length, 12);
+    const refus = await appel({ method: 'POST', url: '/api/demonstration/installer', payload: { remplacer: true } });
+    assert.equal(refus.statusCode, 400);
+    assert.match(json(refus).erreur, /npm run demo/);
 });

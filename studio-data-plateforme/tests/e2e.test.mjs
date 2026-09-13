@@ -1221,8 +1221,8 @@ try {
     // L'écran affiche « Lecture de l'état… » tant que le serveur n'a pas répondu : on attend l'interrupteur.
     await page.waitForSelector('app-demonstration button[name=installer]');
     verifier(
-        'mode démonstration : les douze fichiers du jeu sont trouvés et l’espace n’est pas encore installé',
-        /12 fichier\(s\) trouvé\(s\)/.test(await page.textContent('app-demonstration .entete-page')) &&
+        'mode démonstration : le jeu est prêt (douze fichiers) et l’espace n’est pas encore installé',
+        /jeu prêt : 12 fichier\(s\)/.test(await page.textContent('app-demonstration .entete-page')) &&
             /Démonstration non installée/.test(await page.textContent('app-demonstration'))
     );
     await page.click('app-demonstration button[name=installer]');
@@ -1235,6 +1235,11 @@ try {
             /12 règle\(s\)/.test(rapportDemonstration) &&
             /2 tableau\(x\) de bord/.test(rapportDemonstration) &&
             /score qualité \d+ \/ 100/.test(rapportDemonstration)
+    );
+    const etatApresInstallation = await page.textContent('app-demonstration');
+    verifier(
+        'mode démonstration : le jeu a été rangé dans PostgreSQL pendant l’installation (plus besoin des fichiers)',
+        /en base : 12 fichier\(s\)/.test(etatApresInstallation) && /Jeu rangé dans la base le/.test(etatApresInstallation)
     );
     await capture('demonstration');
     await page.click('app-demonstration button:has-text("Ouvrir l\'espace de démonstration")');

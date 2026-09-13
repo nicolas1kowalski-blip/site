@@ -93,6 +93,7 @@ import {
     DetailColonne,
     ExecutionRegles,
     EntreeJournal,
+    ChargementDemonstration,
     EtatDemonstration,
     Espace,
     FicheDictionnaire,
@@ -432,6 +433,12 @@ export class ClientApiService {
     }
     installerDemonstration(options: { code: string; remplacer: boolean }): Promise<RapportDemonstration> {
         return firstValueFrom(this.http.post<RapportDemonstration>(`${this.racine}/demonstration/installer`, options));
+    }
+    chargerJeuDemonstration(): Promise<ChargementDemonstration> {
+        return firstValueFrom(this.http.post<ChargementDemonstration>(`${this.racine}/demonstration/jeu`, {}));
+    }
+    viderJeuDemonstration(): Promise<{ fichiersRetires: number }> {
+        return firstValueFrom(this.http.delete<{ fichiersRetires: number }>(`${this.racine}/demonstration/jeu`));
     }
     viderDemonstration(code: string): Promise<{ sourcesSupprimees: number }> {
         return firstValueFrom(

@@ -8,7 +8,7 @@
  * Les migrations SQL (dossier api/migrations) sont la source de vérité de la structure ; ce fichier doit
  * leur correspondre — c'est lui qui donne les types TypeScript aux requêtes.
  */
-import { bigint, boolean, index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, customType, index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 /** Comptes des personnes qui utilisent l'application. */
 export const utilisateurs = pgTable('utilisateurs', {
@@ -183,5 +183,24 @@ export const auditsQualite = pgTable(
     table => [index('audits_qualite_espace_index').on(table.espaceId, table.sourceId, table.lanceLe)]
 );
 
+/** Colonne binaire (bytea) : Drizzle ne la déclare pas, on la décrit ici une fois pour toutes. */
+const octets = customType<{ data: Buffer; driverData: Buffer }>({
+    dataType: () => 'bytea'
+});
+
+/**
+ * Le jeu de démonstration, rangé dans la base : un enregistrement par fichier, contenu compressé (gzip).
+ * C'est ce qui permet au mode démonstration de s'installer sur n'importe quel serveur, sans dépendre de
+ * fichiers présents sur le disque : le jeu suit la base, donc les sauvegardes et les réplications.
+ */
+export const jeuDemonstration = pgTable('jeu_demonstration', {
+    nom: text('nom').primaryKey(),
+    tailleOctets: bigint('taille_octets', { mode: 'number' }).notNull(),
+    contenu: octets('contenu').notNull(),
+    tailleCompresseeOctets: bigint('taille_compressee_octets', { mode: 'number' }).notNull(),
+    chargeLe: timestamp('charge_le', { withTimezone: true }).notNull().defaultNow()
+});
+
+export type FichierDuJeu = typeof jeuDemonstration.$inferSelect;
 export type RegleQualite = typeof reglesQualite.$inferSelect;
 export type AuditQualite = typeof auditsQualite.$inferSelect;

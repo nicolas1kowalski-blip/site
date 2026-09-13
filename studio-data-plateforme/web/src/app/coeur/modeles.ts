@@ -1054,14 +1054,18 @@ export type ExecutionPreparation = { recette: RecettePreparation; sourceId: stri
 export type RelancePreparations = { executees: string[]; erreurs: { preparation: string; erreur: string }[] };
 
 // ---- mode démonstration ----
-/** Ce que l'écran d'administration sait avant d'installer : fichiers trouvés et espace déjà installé. */
+/** Ce que l'écran d'administration sait avant d'installer : le jeu rangé en base, les fichiers, l'espace. */
 export type EtatDemonstration = {
+    /** Le jeu de démonstration tel qu'il est rangé dans PostgreSQL : c'est lui qui sert à installer. */
+    jeuEnBase: { fichiers: number; octets: number; octetsCompresses: number; chargeLe: string | null };
     dossier: string;
-    fichiersPresents: string[];
+    fichiersSurDisque: string[];
     fichiersManquants: string[];
     pretAInstaller: boolean;
     espace: { code: string; nom: string; sources: number; installeLe: string | null } | null;
 };
+/** Compte rendu du rangement du jeu dans la base. */
+export type ChargementDemonstration = { fichiers: number; octets: number; octetsCompresses: number };
 /** Le compte rendu d'une installation : ce qui a été chargé et posé. */
 export type RapportDemonstration = {
     espace: { code: string; nom: string };

@@ -1,7 +1,7 @@
 /**
- * Routes du mode démonstration : savoir où en est l'installation, installer (ou réinstaller) l'espace de
- * démonstration, et le vider. Réservé aux administrateurs globaux : l'installation crée un espace de travail et
- * y écrit des données.
+ * Routes du mode démonstration : savoir où en est l'installation, ranger le jeu dans la base (ou l'en retirer),
+ * installer (ou réinstaller) l'espace de démonstration, et le vider. Réservé aux administrateurs globaux :
+ * l'installation crée un espace de travail et y écrit des données.
  */
 import { Body, Controller, Delete, Get, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -51,6 +51,20 @@ export class DemonstrationController {
         @Body(valider(schemaInstallation)) corps: z.infer<typeof schemaInstallation>
     ) {
         return this.demonstration.installer(utilisateur, corps);
+    }
+
+    @Post('jeu')
+    @AdministrateurGlobalRequis()
+    @ApiOperation({ summary: 'Range (ou remet à jour) le jeu de démonstration dans la base, depuis le dossier des fichiers.' })
+    chargerLeJeu() {
+        return this.demonstration.chargerLeJeuEnBase();
+    }
+
+    @Delete('jeu')
+    @AdministrateurGlobalRequis()
+    @ApiOperation({ summary: 'Retire le jeu de démonstration de la base (l’espace déjà installé n’est pas touché).' })
+    async viderLeJeu() {
+        return { fichiersRetires: await this.demonstration.viderLeJeuEnBase() };
     }
 
     @Delete('contenu')

@@ -73,8 +73,8 @@ Les liens à déclarer dans **Modèle de données** (le bouton « Détecter les 
 
 ## 2. Charger le jeu
 
-**Le plus simple : le mode démonstration.** En administrateur, *Administration → Mode démonstration* installe
-tout dans un espace dédié — les douze sources, les liens du modèle, le dictionnaire, les listes de valeurs,
+**Le plus simple : le mode démonstration.** En administrateur, *Administration → Mode démonstration* range le
+jeu dans PostgreSQL (une fois pour toutes) puis installe tout dans un espace dédié — les douze sources, les liens du modèle, le dictionnaire, les listes de valeurs,
 l'objet métier, la série, les tableaux de bord et les règles de qualité déjà exécutées. Les étapes 1 et 2 du
 scénario ci-dessous sont alors déjà faites, et la démonstration peut commencer par la qualité.
 

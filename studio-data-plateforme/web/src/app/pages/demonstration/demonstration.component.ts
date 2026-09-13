@@ -9,7 +9,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
-import { EtatDemonstration, RapportDemonstration, formaterDate } from '../../coeur/modeles';
+import { EtatDemonstration, RapportDemonstration, formaterDate, formaterOctets } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 
@@ -27,7 +27,12 @@ import { SessionService } from '../../coeur/session.service';
             </div>
             @if (etat(); as etat) {
                 <span class="badge" [class.succes]="etat.pretAInstaller" [class.erreur]="!etat.pretAInstaller">
-                    {{ etat.fichiersPresents.length }} fichier(s) trouvé(s)
+                    jeu prêt : {{ etat.jeuEnBase.fichiers || etat.fichiersSurDisque.length }} fichier(s)
+                </span>
+                <span class="badge neutre" title="Le jeu est rangé dans PostgreSQL : l'installation ne dépend d'aucun fichier">
+                    en base : {{ etat.jeuEnBase.fichiers }} fichier(s){{
+                        etat.jeuEnBase.fichiers ? ' · ' + formaterOctets(etat.jeuEnBase.octetsCompresses) : ''
+                    }}
                 </span>
                 @if (etat.espace) {
                     <span class="badge neutre">espace « {{ etat.espace.code }} » : {{ etat.espace.sources }} source(s)</span>
@@ -63,10 +68,31 @@ import { SessionService } from '../../coeur/session.service';
                         <button class="bouton danger" (click)="vider()" [disabled]="enCours()">Vider l'espace</button>
                     }
                 </div>
+                <div class="depot">
+                    <span class="discret">
+                        @if (etat.jeuEnBase.fichiers) {
+                            Jeu rangé dans la base le {{ formaterDate(etat.jeuEnBase.chargeLe) }} :
+                            {{ etat.jeuEnBase.fichiers }} fichier(s), {{ formaterOctets(etat.jeuEnBase.octets) }} compressés en
+                            {{ formaterOctets(etat.jeuEnBase.octetsCompresses) }}. L'installation n'a besoin d'aucun fichier sur le serveur.
+                        } @else {
+                            Le jeu n'est pas encore dans la base : il y sera rangé à la première installation, depuis
+                            <code>{{ etat.dossier }}</code
+                            >.
+                        }
+                    </span>
+                    @if (etat.fichiersSurDisque.length) {
+                        <button class="bouton petit" (click)="rechargerLeJeu()" [disabled]="enCours()">
+                            {{ etat.jeuEnBase.fichiers ? 'Remettre le jeu à jour depuis les fichiers' : 'Ranger le jeu dans la base' }}
+                        </button>
+                    }
+                    @if (etat.jeuEnBase.fichiers) {
+                        <button class="bouton petit danger" (click)="viderLeJeu()" [disabled]="enCours()">Retirer le jeu de la base</button>
+                    }
+                </div>
                 @if (!etat.pretAInstaller) {
                     <p class="manquants">
-                        Fichiers introuvables dans <code>{{ etat.dossier }}</code> : {{ etat.fichiersManquants.join(', ') }}. Produisez-les
-                        avec <code>npm run demo</code>.
+                        Jeu introuvable, ni en base ni dans <code>{{ etat.dossier }}</code> : {{ etat.fichiersManquants.join(', ') }}.
+                        Produisez les fichiers avec <code>npm run demo</code>.
                     </p>
                 }
             </div>
@@ -147,6 +173,15 @@ import { SessionService } from '../../coeur/session.service';
             padding: 10px 12px;
             background: var(--surface-2);
         }
+        .depot {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--bordure);
+        }
         .manquants {
             margin-top: 10px;
             color: var(--erreur);
@@ -164,6 +199,7 @@ export class DemonstrationComponent {
     readonly rapport = signal<RapportDemonstration | null>(null);
     readonly enCours = signal(false);
     readonly formaterDate = formaterDate;
+    readonly formaterOctets = formaterOctets;
     code = 'demo';
 
     /** Ce que l'écran annonce : la promesse de l'installation, en clair. */
@@ -212,6 +248,36 @@ export class DemonstrationComponent {
             this.notifications.succes(
                 `Démonstration installée : ${rapport.sources.length} source(s), ${rapport.regles} règle(s), score ${rapport.score ?? '—'} / 100.`
             );
+            await this.recharger();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+
+    /** Range (ou remet à jour) le jeu dans la base à partir des fichiers du serveur. */
+    async rechargerLeJeu(): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const chargement = await this.api.chargerJeuDemonstration();
+            this.notifications.succes(
+                `Jeu rangé dans la base : ${chargement.fichiers} fichier(s), ${formaterOctets(chargement.octetsCompresses)} compressés.`
+            );
+            await this.recharger();
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+
+    async viderLeJeu(): Promise<void> {
+        if (!confirm('Retirer le jeu de démonstration de la base ? Il faudra le recharger depuis les fichiers pour réinstaller.')) return;
+        this.enCours.set(true);
+        try {
+            const bilan = await this.api.viderJeuDemonstration();
+            this.notifications.succes(`${bilan.fichiersRetires} fichier(s) retiré(s) de la base.`);
             await this.recharger();
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
