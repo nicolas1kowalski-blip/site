@@ -74,7 +74,7 @@ construitLe="$(date -u +%FT%TZ)"
 if [ "$commitAvant" = "$commitApres" ]; then
     ok "déjà à jour : $(git -C "$DEPOT" log -1 --format='%h %s')"
     echo "  Rien à reconstruire. Si l'application semble pourtant ancienne, videz le cache du navigateur"
-    echo "  (Ctrl+Maj+R) et comparez : curl -s http://127.0.0.1:8430/api/sante"
+    echo "  (Ctrl+Maj+R), et vérifiez la révision en service : curl -s https://VOTRE-DOMAINE/api/sante"
     exit 0
 fi
 ok "nouveau code : $(git -C "$DEPOT" log -1 --format='%h %s')"
@@ -87,15 +87,21 @@ export SD_CONSTRUIT_LE="$construitLe"
 composer up -d --build
 
 # ---- 4. Attente de l'API ------------------------------------------------------------------------------------
+# Le port 8430 n'est ouvert que dans le réseau Docker (« expose », pas « ports ») : depuis la machine, on
+# interroge donc l'API à l'intérieur de son conteneur. Depuis l'extérieur, elle est servie par Caddy en 80/443.
+interrogerSante() {
+    composer exec -T api node -e \
+        "fetch('http://127.0.0.1:8430/api/sante').then(r=>r.text()).then(t=>console.log(t)).catch(()=>process.exit(1))" 2>/dev/null
+}
 gras "4/5 Redémarrage"
 printf '  attente de la réponse de l’API'
 santeJson=""
 for tentative in $(seq 1 60); do
-    santeJson="$(curl -fsS http://127.0.0.1:8430/api/sante 2>/dev/null || true)"
+    santeJson="$(interrogerSante || true)"
     if [ -n "$santeJson" ]; then echo; ok "l'API répond"; break; fi
     printf '.'; sleep 5
 done
-[ -n "$santeJson" ] || { echo; echec "l'API ne répond pas : composer logs -f api (les migrations peuvent être en cause)"; }
+[ -n "$santeJson" ] || { echo; echec "l'API ne répond pas ; regardez le journal (les migrations peuvent être en cause)"; }
 
 # ---- 5. Vérification de la version en service ---------------------------------------------------------------
 gras "5/5 Vérification"
@@ -104,13 +110,14 @@ if [ "$revisionServie" = "$SD_REVISION" ]; then
     ok "le serveur exécute bien le commit $revisionServie (construit le $construitLe)"
 else
     attention "le serveur annonce « ${revisionServie:-inconnue} » au lieu de « $SD_REVISION »"
-    attention "l'ancien conteneur est peut-être resté : composer up -d --force-recreate"
+    attention "l'ancien conteneur est peut-être resté en service : relancez avec --force-recreate"
 fi
 echo
-echo "  Santé   : curl -s http://127.0.0.1:8430/api/sante"
 if grep -q '^SD_POSTGRES_URL=' .env; then
+    echo "  Santé   : ./deploiement/aws/composer.sh exec -T api node -e \"fetch('http://127.0.0.1:8430/api/sante').then(r=>r.text()).then(console.log)\""
     echo "  Journal : ./deploiement/aws/composer.sh logs -f api"
 else
+    echo "  Santé   : docker compose exec -T api node -e \"fetch('http://127.0.0.1:8430/api/sante').then(r=>r.text()).then(console.log)\""
     echo "  Journal : docker compose logs -f api"
 fi
 echo "  Côté navigateur, forcez le rechargement (Ctrl+Maj+R) pour abandonner l'ancienne page en cache."

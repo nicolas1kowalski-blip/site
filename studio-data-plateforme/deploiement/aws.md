@@ -58,7 +58,9 @@ sudo tail -f /var/log/studio-data-installation.log      # jusqu'à « == termin�
 cd /home/ubuntu/site/studio-data-plateforme
 sudo docker compose ps                                  # mode demo : postgres, api, caddy en running (healthy)
 sudo ./deploiement/aws/composer.sh ps                   # mode entreprise : api, caddy
-curl -s http://127.0.0.1:8430/api/sante                 # {"ok":true,…}
+# L'API n'ouvre son port que dans le réseau Docker : on l'interroge depuis son conteneur.
+sudo docker compose exec -T api node -e "fetch('http://127.0.0.1:8430/api/sante').then(r=>r.text()).then(console.log)"
+curl -sk https://localhost/api/sante                    # ou par Caddy : {"ok":true,…}
 ```
 
 Puis ouvrir l'URL de l'onglet Outputs : identifiant `admin`, le mot de passe choisi. Premier geste : **Mon
@@ -84,8 +86,8 @@ sudo /usr/local/bin/studio-data-installer
 - **Mises à jour** : une seule commande dans le terminal Session Manager :
 
   ```bash
-  cd /home/ubuntu/site/studio-data-plateforme
-  sudo ./deploiement/mettre-a-jour.sh          # sauvegarde, récupère le code, reconstruit, vérifie
+  # Chemin absolu : le compte de Session Manager (ssm-user) ne peut pas entrer dans /home/ubuntu.
+  sudo /home/ubuntu/site/studio-data-plateforme/deploiement/mettre-a-jour.sh
   ```
 
   Le script demande le jeton GitHub (le dépôt est privé et le jeton n'est **pas** conservé sur la machine après
@@ -98,7 +100,7 @@ sudo /usr/local/bin/studio-data-installer
   | Symptôme | Vérification | Remède |
   |---|---|---|
   | Le code n'est jamais arrivé sur la machine (jeton GitHub expiré : `git pull` échoue sans bloquer la suite) | `git -C /home/ubuntu/site log -1 --oneline` | régénérer un jeton et relancer `mettre-a-jour.sh` |
-  | L'image a été reconstruite mais l'ancien conteneur tourne toujours | `curl -s http://127.0.0.1:8430/api/sante` → champ `revision` | `docker compose up -d --force-recreate` |
+  | L'image a été reconstruite mais l'ancien conteneur tourne toujours | `curl -sk https://localhost/api/sante` → champ `revision` | `sudo docker compose up -d --force-recreate` |
   | Le navigateur ressert l'ancienne page | l'API annonce le bon `revision` mais l'écran est inchangé | Ctrl+Maj+R (ou fenêtre de navigation privée) |
 - **Supervision** : Route 53 Health Check ou CloudWatch Synthetics sur `https://votre-domaine/api/sante` ; les
   journaux Docker sont lisibles avec `sudo docker compose logs --since 1h api`.
