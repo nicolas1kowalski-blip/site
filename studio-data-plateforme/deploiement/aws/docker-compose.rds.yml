@@ -1,0 +1,45 @@
+# Plateforme avec une base PostgreSQL externe (Amazon RDS ou base d'entreprise) : API/front + Caddy seulement.
+# À lancer depuis studio-data-plateforme via deploiement/aws/composer.sh, qui fixe le dossier du projet pour
+# que les chemins ci-dessous (contexte de construction, Caddyfile, .env) soient les mêmes que docker-compose.yml.
+# Variables lues dans .env : SD_POSTGRES_URL (avec ?sslmode=require), SD_ADMIN_MOT_DE_PASSE, SD_DOMAINE ;
+# SD_POSTGRES_CA pointe vers le certificat monté depuis deploiement/aws/certificats/.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: studio-data-plateforme/Dockerfile
+    restart: unless-stopped
+    environment:
+      SD_POSTGRES_URL: ${SD_POSTGRES_URL:?définir SD_POSTGRES_URL dans .env}
+      SD_POSTGRES_CA: ${SD_POSTGRES_CA:-}
+      SD_ADMIN_IDENTIFIANT: ${SD_ADMIN_IDENTIFIANT:-admin}
+      SD_ADMIN_MOT_DE_PASSE: ${SD_ADMIN_MOT_DE_PASSE:?définir SD_ADMIN_MOT_DE_PASSE dans .env}
+      SD_COOKIE_SECURISE: ${SD_COOKIE_SECURISE:-true}
+      SD_DUCKDB_THREADS: ${SD_DUCKDB_THREADS:-}
+      SD_DUCKDB_MEMOIRE: ${SD_DUCKDB_MEMOIRE:-}
+      SD_JOURNAL: ${SD_JOURNAL:-info}
+    volumes:
+      - donnees:/donnees
+      - ./deploiement/aws/certificats:/certificats:ro
+    expose:
+      - "8430"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SD_DOMAINE: ${SD_DOMAINE:-localhost}
+    volumes:
+      - ./deploiement/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_donnees:/data
+      - caddy_config:/config
+
+volumes:
+  donnees:
+  caddy_donnees:
+  caddy_config:

@@ -1,0 +1,301 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Studio Data sur AWS : une machine EC2 (ARM Graviton, Ubuntu 24.04) qui exécute la plateforme avec Docker,
+  une base PostgreSQL locale (mode « demo ») ou Amazon RDS (mode « entreprise »), un compartiment S3 pour les
+  sauvegardes, l'accès à la machine par Systems Manager (sans clé SSH ni port 22), HTTPS automatique par Caddy.
+
+# ----------------------------------------------------------------------------------------------------------
+# Paramètres demandés à la création de la pile (console CloudFormation → Create stack → Upload a template).
+# ----------------------------------------------------------------------------------------------------------
+Parameters:
+  ModeBaseDeDonnees:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, entreprise]
+    Description: >-
+      demo = PostgreSQL dans un conteneur sur la machine (le plus simple) ;
+      entreprise = Amazon RDS for PostgreSQL (base gérée, chiffrée, sauvegardée automatiquement 7 jours).
+  NomDomaine:
+    Type: String
+    Default: ""
+    Description: >-
+      Nom de domaine qui pointera vers la machine (ex. studio-data.exemple.fr) : Caddy obtient le certificat
+      HTTPS tout seul. Vide = accès en HTTP sur l'adresse publique, pour une démonstration seulement.
+  MotDePasseAdmin:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: Mot de passe initial de l'administrateur « admin » de l'application (12 caractères au moins).
+  MotDePasseBase:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    AllowedPattern: "[A-Za-z0-9_.-]{16,}"
+    Description: Mot de passe de la base PostgreSQL (16 caractères au moins ; lettres, chiffres, _ . - uniquement).
+  JetonGitHub:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: >-
+      Jeton d'accès personnel GitHub (portée « repo ») pour cloner le dépôt privé. Vide = la machine est
+      préparée (Docker, dossiers) et le clonage se fait à la main par Systems Manager.
+  DepotGit:
+    Type: String
+    Default: github.com/nicolas1kowalski-blip/site.git
+    Description: Dépôt Git de l'application, sans https://.
+  Branche:
+    Type: String
+    Default: claude/studio-data-v3
+  TypeInstance:
+    Type: String
+    Default: t4g.medium
+    AllowedValues: [t4g.small, t4g.medium, t4g.large, t4g.xlarge, m7g.large, m7g.xlarge]
+    Description: Machines ARM Graviton. t4g.medium (2 vCPU, 4 Go) suffit pour une démonstration ; m7g.large pour une équipe.
+  TailleDisqueGo:
+    Type: Number
+    Default: 100
+    MinValue: 30
+    Description: Disque de la machine (Go, gp3) ; il héberge les bases DuckDB et les fichiers déposés.
+  ImageUbuntu:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+    Description: Dernière image Ubuntu 24.04 ARM publiée par Canonical (ne pas modifier).
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Réseau (VPC) ; le VPC par défaut du compte convient pour une démonstration.
+  SousReseauMachine:
+    Type: AWS::EC2::Subnet::Id
+    Description: Sous-réseau public de la machine (avec passerelle Internet).
+  SousReseauxBase:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >-
+      Deux sous-réseaux au moins, dans deux zones, pour Amazon RDS (mode entreprise). En mode demo, indiquer
+      tout de même deux sous-réseaux : ils ne seront pas utilisés.
+
+Conditions:
+  ModeEntreprise: !Equals [!Ref ModeBaseDeDonnees, entreprise]
+  AvecDomaine: !Not [!Equals [!Ref NomDomaine, ""]]
+
+Resources:
+  # ---- Réseau : la machine n'expose que le web ; la base n'accepte que la machine ------------------------
+  GroupeSecuriteMachine:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Studio Data - web (80, 443) depuis Internet ; administration par Systems Manager, pas de SSH
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: "HTTP (obtention du certificat et redirection)" }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS }
+      Tags: [{ Key: Name, Value: studio-data-machine }]
+
+  GroupeSecuriteBase:
+    Type: AWS::EC2::SecurityGroup
+    Condition: ModeEntreprise
+    Properties:
+      GroupDescription: Studio Data - PostgreSQL accessible uniquement depuis la machine applicative
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref GroupeSecuriteMachine }
+      Tags: [{ Key: Name, Value: studio-data-base }]
+
+  # ---- Sauvegardes : un compartiment privé, archives conservées 35 jours ---------------------------------
+  CompartimentSauvegardes:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "studio-data-sauvegardes-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - { Id: expiration-35-jours, Status: Enabled, ExpirationInDays: 35 }
+
+  # ---- Droits de la machine : Systems Manager (console sans SSH) et écriture des sauvegardes -------------
+  RoleMachine:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: sauvegardes-s3
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:ListBucket, s3:DeleteObject]
+                Resource:
+                  - !GetAtt CompartimentSauvegardes.Arn
+                  - !Sub "${CompartimentSauvegardes.Arn}/*"
+
+  ProfilMachine:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref RoleMachine]
+
+  # ---- Base gérée (mode entreprise) --------------------------------------------------------------------
+  GroupeSousReseauxBase:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: ModeEntreprise
+    Properties:
+      DBSubnetGroupDescription: Sous-réseaux de la base Studio Data
+      SubnetIds: !Ref SousReseauxBase
+
+  BaseDeDonnees:
+    Type: AWS::RDS::DBInstance
+    Condition: ModeEntreprise
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: studio-data
+      Engine: postgres
+      EngineVersion: "17.6"
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: studio_data
+      MasterUsername: studio
+      # Le mot de passe passe par un paramètre NoEcho ; dans un compte d'entreprise, le remplacer par une référence
+      # dynamique Secrets Manager ('{{resolve:secretsmanager:...}}') et ManageMasterUserPassword.
+      MasterUserPassword: !Ref MotDePasseBase
+      DBSubnetGroupName: !Ref GroupeSousReseauxBase
+      VPCSecurityGroups: [!Ref GroupeSecuriteBase]
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: "02:00-03:00"
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+      Tags: [{ Key: Name, Value: studio-data }]
+
+  # ---- La machine de l'application ----------------------------------------------------------------------
+  AdressePublique:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags: [{ Key: Name, Value: studio-data }]
+
+  AssociationAdresse:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt AdressePublique.AllocationId
+      InstanceId: !Ref Machine
+
+  Machine:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageUbuntu
+      InstanceType: !Ref TypeInstance
+      SubnetId: !Ref SousReseauMachine
+      SecurityGroupIds: [!Ref GroupeSecuriteMachine]
+      IamInstanceProfile: !Ref ProfilMachine
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: { VolumeSize: !Ref TailleDisqueGo, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      MetadataOptions: { HttpTokens: required }
+      Tags: [{ Key: Name, Value: studio-data }]
+      # Script de premier démarrage : Docker, clonage du dépôt, configuration, lancement, sauvegarde nocturne.
+      # Journal complet dans /var/log/studio-data-installation.log sur la machine.
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash
+            set -euo pipefail
+            exec > /var/log/studio-data-installation.log 2>&1
+            echo "== Studio Data : installation ($(date)) =="
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y docker.io docker-compose-v2 git awscli curl
+            usermod -aG docker ubuntu
+
+            DOSSIER=/home/ubuntu/site
+            if [ -n "${JetonGitHub}" ]; then
+              sudo -u ubuntu git clone --branch "${Branche}" "https://${JetonGitHub}@${DepotGit}" "$DOSSIER"
+              # Le jeton ne reste pas dans la configuration Git ; il sera redemandé pour les mises à jour.
+              sudo -u ubuntu git -C "$DOSSIER" remote set-url origin "https://${DepotGit}"
+            else
+              echo "Pas de jeton GitHub : cloner le dépôt à la main dans $DOSSIER puis relancer /usr/local/bin/studio-data-installer"
+            fi
+
+            cat > /usr/local/bin/studio-data-installer <<'INSTALLER'
+            #!/bin/bash
+            # Configure et lance la plateforme depuis le dépôt cloné (relançable sans risque).
+            set -euo pipefail
+            DOSSIER=/home/ubuntu/site/studio-data-plateforme
+            cd "$DOSSIER"
+            . /etc/studio-data.env
+            {
+              echo "POSTGRES_PASSWORD=$MOT_DE_PASSE_BASE"
+              echo "SD_ADMIN_MOT_DE_PASSE=$MOT_DE_PASSE_ADMIN"
+              echo "SD_DOMAINE=$DOMAINE"
+              echo "SD_COOKIE_SECURISE=$COOKIE_SECURISE"
+              echo "SD_SAUVEGARDES_S3=s3://$COMPARTIMENT"
+              if [ "$MODE" = "entreprise" ]; then
+                echo "SD_POSTGRES_URL=postgres://studio:$MOT_DE_PASSE_BASE@$HOTE_BASE:5432/studio_data?sslmode=require"
+                echo "SD_POSTGRES_CA=/certificats/rds-ca.pem"
+              fi
+            } > .env
+            chown ubuntu:ubuntu .env && chmod 600 .env
+            if [ "$MODE" = "entreprise" ]; then
+              mkdir -p deploiement/aws/certificats
+              curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o deploiement/aws/certificats/rds-ca.pem
+              ./deploiement/aws/composer.sh up -d --build
+            else
+              docker compose up -d --build
+            fi
+            chmod +x deploiement/sauvegarder.sh deploiement/aws/sauvegarder-aws.sh
+            echo "0 3 * * * root cd $DOSSIER && ./deploiement/aws/sauvegarder-aws.sh >> /var/log/studio-data-sauvegarde.log 2>&1" > /etc/cron.d/studio-data-sauvegarde
+            echo "Plateforme lancée : $(docker compose ps --format '{{.Name}} {{.Status}}' 2>/dev/null | tr '\n' ' ')"
+            INSTALLER
+            chmod +x /usr/local/bin/studio-data-installer
+
+            cat > /etc/studio-data.env <<ENV
+            MODE=${ModeBaseDeDonnees}
+            DOMAINE=${DomaineEffectif}
+            COOKIE_SECURISE=${CookieSecurise}
+            MOT_DE_PASSE_ADMIN=${MotDePasseAdmin}
+            MOT_DE_PASSE_BASE=${MotDePasseBase}
+            HOTE_BASE=${HoteBase}
+            COMPARTIMENT=${CompartimentSauvegardes}
+            ENV
+            chmod 600 /etc/studio-data.env
+
+            if [ -d "$DOSSIER/studio-data-plateforme" ]; then
+              /usr/local/bin/studio-data-installer
+            fi
+            echo "== terminé ($(date)) =="
+          - DomaineEffectif: !If [AvecDomaine, !Ref NomDomaine, ":80"]
+            CookieSecurise: !If [AvecDomaine, "true", "false"]
+            HoteBase: !If [ModeEntreprise, !GetAtt BaseDeDonnees.Endpoint.Address, ""]
+
+Outputs:
+  AdresseIp:
+    Description: Adresse publique fixe de la machine (à mettre dans l'enregistrement DNS du domaine)
+    Value: !Ref AdressePublique
+  Url:
+    Description: Adresse de l'application
+    Value: !If [AvecDomaine, !Sub "https://${NomDomaine}", !Sub "http://${AdressePublique}"]
+  Console:
+    Description: Ouvrir un terminal sur la machine sans SSH (Session Manager)
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${Machine}?region=${AWS::Region}"
+  JournalInstallation:
+    Description: Dans le terminal Session Manager, suivre l'installation avec cette commande
+    Value: "sudo tail -f /var/log/studio-data-installation.log"
+  Sauvegardes:
+    Description: Compartiment S3 des sauvegardes nocturnes
+    Value: !Ref CompartimentSauvegardes
+  BaseDeDonnees:
+    Description: Point d'accès PostgreSQL (mode entreprise) ou base locale sur la machine (mode demo)
+    Value: !If [ModeEntreprise, !GetAtt BaseDeDonnees.Endpoint.Address, "conteneur postgres sur la machine"]

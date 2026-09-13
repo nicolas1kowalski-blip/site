@@ -23,6 +23,11 @@ const schemaEnvironnement = z.object({
      * le développement et les tests, à ne pas utiliser en production multi-utilisateurs.
      */
     SD_POSTGRES_URL: z.string().default(''),
+    /**
+     * Chemin d'un fichier PEM de certificats d'autorité pour vérifier le serveur PostgreSQL (ex. le paquet
+     * global d'Amazon RDS). Vide = pas de vérification ; le chiffrement dépend alors de `sslmode` dans l'URL.
+     */
+    SD_POSTGRES_CA: z.string().default(''),
     /** Dossier du front Angular construit (web/dist/studio-data/browser). */
     SD_WEB: z.string().default(path.join(RACINE_API, '..', 'web', 'dist', 'studio-data', 'browser')),
     /** Dossier de l'application classique construite (web-classique/dist). */
@@ -49,6 +54,7 @@ export type Configuration = {
     port: number;
     dossierDonnees: string;
     postgresUrl: string;
+    postgresCa: string;
     dossierWeb: string;
     dossierWebClassique: string;
     duckdb: { threads: string; memoire: string };
@@ -71,6 +77,7 @@ export function lireConfiguration(environnement: NodeJS.ProcessEnv = process.env
         port: valeurs.SD_PORT,
         dossierDonnees: path.resolve(valeurs.SD_DONNEES),
         postgresUrl: valeurs.SD_POSTGRES_URL,
+        postgresCa: valeurs.SD_POSTGRES_CA,
         dossierWeb: path.resolve(valeurs.SD_WEB),
         dossierWebClassique: path.resolve(valeurs.SD_WEB_CLASSIQUE),
         duckdb: { threads: valeurs.SD_DUCKDB_THREADS, memoire: valeurs.SD_DUCKDB_MEMOIRE },

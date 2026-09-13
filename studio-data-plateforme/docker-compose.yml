@@ -30,7 +30,7 @@ services:
       SD_POSTGRES_URL: postgres://studio:${POSTGRES_PASSWORD}@postgres:5432/studio_data
       SD_ADMIN_IDENTIFIANT: ${SD_ADMIN_IDENTIFIANT:-admin}
       SD_ADMIN_MOT_DE_PASSE: ${SD_ADMIN_MOT_DE_PASSE:?définir SD_ADMIN_MOT_DE_PASSE dans .env}
-      SD_COOKIE_SECURISE: "true"
+      SD_COOKIE_SECURISE: ${SD_COOKIE_SECURISE:-true}   # false seulement pour une démonstration en HTTP sans domaine
       SD_DUCKDB_THREADS: ${SD_DUCKDB_THREADS:-}
       SD_DUCKDB_MEMOIRE: ${SD_DUCKDB_MEMOIRE:-}
       SD_JOURNAL: ${SD_JOURNAL:-info}

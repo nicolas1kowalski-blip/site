@@ -16,7 +16,11 @@ const CONNEXION_BASE = Symbol('CONNEXION_BASE');
             provide: CONNEXION_BASE,
             inject: [CONFIGURATION],
             useFactory: async (configuration: Configuration): Promise<ConnexionBase> => {
-                const connexion = await ouvrirBaseDeDonnees(configuration.postgresUrl, configuration.dossierDonnees);
+                const connexion = await ouvrirBaseDeDonnees(
+                    configuration.postgresUrl,
+                    configuration.dossierDonnees,
+                    configuration.postgresCa
+                );
                 await appliquerMigrations(connexion.base);
                 return connexion;
             }
