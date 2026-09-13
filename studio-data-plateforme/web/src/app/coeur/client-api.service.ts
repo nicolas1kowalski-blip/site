@@ -51,8 +51,16 @@ import {
     NoeudFlux,
     ResultatReconciliation,
     VocabulaireLineage,
+    ActionEntreeZip,
     AuditObjet,
     AuditQualite,
+    BilanZip,
+    EntreeLivraisonZip,
+    FichierDepose,
+    LigneCouverture,
+    ParametresAdresse,
+    ParametresCouverture,
+    ResultatImport,
     FiltreAudit,
     GenreAnomalie,
     PageLignes,
@@ -181,6 +189,36 @@ export class ClientApiService {
         return firstValueFrom(
             this.http.post<{ fichier: string; taille: number }>(`${this.racine}/tables/${encodeURIComponent(id)}/optimiser`, {})
         );
+    }
+
+    // ---- importation (le fichier est d'abord déposé par deposerFichier) ----
+    importerFichier(fichier: FichierDepose, sourceId?: string): Promise<ResultatImport> {
+        return firstValueFrom(
+            this.http.post<ResultatImport>(`${this.racine}/importation/fichier`, { ...fichier, ...(sourceId ? { sourceId } : {}) })
+        );
+    }
+    feuillesExcel(nomServeur: string): Promise<string[]> {
+        return firstValueFrom(this.http.post<string[]>(`${this.racine}/importation/excel/feuilles`, { nomServeur }));
+    }
+    fusionnerSources(parametres: {
+        nom: string;
+        fichiers: FichierDepose[];
+        sourceIds: string[];
+        retirerOrigines: boolean;
+    }): Promise<ResultatImport> {
+        return firstValueFrom(this.http.post<ResultatImport>(`${this.racine}/importation/fusion`, parametres));
+    }
+    importerDepuisAdresse(parametres: ParametresAdresse): Promise<ResultatImport> {
+        return firstValueFrom(this.http.post<ResultatImport>(`${this.racine}/importation/adresse`, parametres));
+    }
+    inventaireZip(nomServeur: string): Promise<EntreeLivraisonZip[]> {
+        return firstValueFrom(this.http.post<EntreeLivraisonZip[]>(`${this.racine}/importation/zip/inventaire`, { nomServeur }));
+    }
+    importerZip(nomServeur: string, choix: { nom: string; action: ActionEntreeZip; nomSource?: string }[]): Promise<BilanZip> {
+        return firstValueFrom(this.http.post<BilanZip>(`${this.racine}/importation/zip/importer`, { nomServeur, choix }));
+    }
+    couverture(parametres: ParametresCouverture): Promise<LigneCouverture[]> {
+        return firstValueFrom(this.http.post<LigneCouverture[]>(`${this.racine}/exploitation/couverture`, parametres));
     }
 
     // ---- gouvernance ----

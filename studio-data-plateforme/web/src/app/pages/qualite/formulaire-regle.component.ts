@@ -6,8 +6,9 @@
  * la définition prête à envoyer au serveur.
  */
 import { Component, OnInit, input, output, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DefinitionRegle, ListeValeurs, Source, TypeRegle, VocabulaireQualite } from '../../coeur/modeles';
+import { ConfigurationSerie, DefinitionRegle, ListeValeurs, Source, TypeRegle, VocabulaireQualite } from '../../coeur/modeles';
 
 export type BrouillonRegle = { id: string | null; definition: DefinitionRegle };
 
@@ -21,7 +22,7 @@ const enTexte = (liste: string[] | undefined) => (liste || []).join(';');
 
 @Component({
     selector: 'app-formulaire-regle',
-    imports: [FormsModule],
+    imports: [FormsModule, NgTemplateOutlet],
     template: `
         <form class="carte" (ngSubmit)="soumettre()">
             <h2>{{ brouillon().id ? 'Modifier la règle' : 'Nouvelle règle' }}</h2>
@@ -208,6 +209,113 @@ const enTexte = (liste: string[] | undefined) => (liste || []).join(';');
                             />
                         </div>
                     }
+                    @case ('serieTrou') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                    }
+                    @case ('serieDoublon') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                    }
+                    @case ('seriePlateau') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">Points identiques d'affilée (min.)</label
+                            ><input
+                                class="champ"
+                                type="number"
+                                name="longueurMinimale"
+                                [(ngModel)]="definition.parametres.longueurMinimale"
+                                placeholder="3"
+                            />
+                        </div>
+                    }
+                    @case ('serieSaut') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">Écart absolu maximal</label
+                            ><input
+                                class="champ"
+                                type="number"
+                                step="any"
+                                name="sautAbsolu"
+                                [(ngModel)]="definition.parametres.sautAbsolu"
+                            />
+                        </div>
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">ou variation maximale (%)</label
+                            ><input
+                                class="champ"
+                                type="number"
+                                step="any"
+                                name="sautPourcent"
+                                [(ngModel)]="definition.parametres.sautPourcent"
+                            />
+                        </div>
+                    }
+                    @case ('serieMonotonie') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">Sens attendu</label>
+                            <select class="champ" name="sens" [(ngModel)]="definition.parametres.sens">
+                                <option value="croissant">croissant</option>
+                                <option value="decroissant">décroissant</option>
+                            </select>
+                        </div>
+                    }
+                    @case ('serieFraicheur') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">Retard maximal (heures)</label
+                            ><input
+                                class="champ"
+                                type="number"
+                                name="ageMaximalHeures"
+                                [(ngModel)]="definition.parametres.ageMaximalHeures"
+                                placeholder="24"
+                            />
+                        </div>
+                        <div style="flex: 0 0 200px">
+                            <label class="etiquette">Comparé à</label>
+                            <select class="champ" name="reference" [(ngModel)]="definition.parametres.reference">
+                                <option value="fichier">au point le plus récent du fichier</option>
+                                <option value="maintenant">à maintenant</option>
+                            </select>
+                        </div>
+                    }
+                    @case ('serieSaisonnalite') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">Créneau</label>
+                            <select class="champ" name="creneau" [(ngModel)]="definition.parametres.creneau">
+                                @for (creneau of creneauxSaison(); track creneau[0]) {
+                                    <option [value]="creneau[0]">{{ creneau[1] }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div style="flex: 0 0 120px">
+                            <label class="etiquette">Sensibilité k</label
+                            ><input
+                                class="champ"
+                                type="number"
+                                step="any"
+                                name="sensibilite"
+                                [(ngModel)]="definition.parametres.sensibilite"
+                                placeholder="4"
+                            />
+                        </div>
+                    }
+                    @case ('serieCouverture') {
+                        <ng-container *ngTemplateOutlet="choixSerie" />
+                        <div style="flex: 0 0 160px">
+                            <label class="etiquette">Couverture minimale (%)</label
+                            ><input
+                                class="champ"
+                                type="number"
+                                name="couvertureMinimale"
+                                [(ngModel)]="definition.parametres.couvertureMinimale"
+                                placeholder="95"
+                            />
+                        </div>
+                    }
                     @case ('groupe') {
                         <div style="flex: 1 1 100%">
                             <label class="etiquette">Regrouper par</label>
@@ -266,6 +374,19 @@ const enTexte = (liste: string[] | undefined) => (liste || []).join(';');
                     }
                 }
             </div>
+            <ng-template #choixSerie>
+                <div>
+                    <label class="etiquette">Série temporelle déclarée (sur cette source)</label>
+                    <select class="champ" name="serieId" [(ngModel)]="definition.parametres.serieId">
+                        @for (serie of seriesDeLaSource(); track serie.id) {
+                            <option [value]="serie.id">{{ serie.name }}</option>
+                        }
+                    </select>
+                    @if (!seriesDeLaSource().length) {
+                        <div class="discret">Aucune série sur cette source : déclarez-en une dans Séries temporelles.</div>
+                    }
+                </div>
+            </ng-template>
             <div class="formulaire-ligne" style="margin-top: 10px">
                 <button class="bouton principal" type="submit" style="flex: 0">Enregistrer</button>
                 <button class="bouton" type="button" style="flex: 0" (click)="annuler.emit()">Annuler</button>
@@ -292,6 +413,7 @@ export class FormulaireRegleComponent implements OnInit {
     readonly sources = input<Source[]>([]);
     readonly vocabulaire = input.required<VocabulaireQualite>();
     readonly listesValeurs = input<ListeValeurs[]>([]);
+    readonly series = input<ConfigurationSerie[]>([]);
     readonly enregistrer = output<DefinitionRegle>();
     readonly annuler = output<void>();
 
@@ -323,6 +445,13 @@ export class FormulaireRegleComponent implements OnInit {
     agregatsGroupe(): [string, string][] {
         return Object.entries(this.vocabulaire().agregatsGroupe);
     }
+    creneauxSaison(): [string, string][] {
+        return Object.entries(this.vocabulaire().creneauxSaison || {});
+    }
+    /** Les séries temporelles déclarées sur la source de la règle. */
+    seriesDeLaSource(): ConfigurationSerie[] {
+        return this.series().filter(serie => serie.table === this.source().name);
+    }
     sansColonne(): boolean {
         return this.vocabulaire().typesSansColonne.includes(this.definition.type);
     }
@@ -352,6 +481,12 @@ export class FormulaireRegleComponent implements OnInit {
             parametres.operateur ||= '<=';
         }
         if (this.definition.type === 'fraicheur') parametres.jours ||= 365;
+        if (this.definition.type.startsWith('serie')) {
+            parametres.serieId ||= this.seriesDeLaSource()[0]?.id;
+            parametres.sens ||= 'croissant';
+            parametres.reference ||= 'fichier';
+            parametres.creneau ||= 'heure';
+        }
         if (this.definition.type === 'listeValeurs') parametres.listeId ||= this.listesValeurs()[0]?.id;
         if (this.definition.type === 'reference') parametres.sourceCibleId ||= this.sources()[0]?.id;
     }
@@ -368,7 +503,18 @@ export class FormulaireRegleComponent implements OnInit {
         if (definition.type === 'unique') parametres.colonnes = this.colonnesSupplementaires();
         if (definition.type === 'groupe') parametres.colonnesGroupe = this.colonnesGroupe();
         if (this.sansColonne()) definition.colonne = '';
-        for (const champ of ['minimum', 'maximum', 'jours', 'seuil'] as const) {
+        for (const champ of [
+            'minimum',
+            'maximum',
+            'jours',
+            'seuil',
+            'longueurMinimale',
+            'sautAbsolu',
+            'sautPourcent',
+            'ageMaximalHeures',
+            'sensibilite',
+            'couvertureMinimale'
+        ] as const) {
             const valeur = parametres[champ] as unknown;
             parametres[champ] = valeur === '' || valeur === null || valeur === undefined ? undefined : Number(valeur);
         }

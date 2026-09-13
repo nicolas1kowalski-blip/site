@@ -94,7 +94,7 @@ try {
     // ---- dépôt d'un CSV depuis Angular ----
     await page.click('a[href="/sources"]');
     await page.waitForSelector('app-sources');
-    await page.setInputFiles('app-sources input[type=file]', path.join(dossierTests, 'donnees', 'clients.csv'));
+    await page.setInputFiles('app-sources .entete-page input[type=file]', path.join(dossierTests, 'donnees', 'clients.csv'));
     await page.waitForSelector('app-sources tbody tr');
     const cellulesSource = await page.$$eval('app-sources tbody tr:first-child td', cellules =>
         cellules.map(cellule => cellule.textContent.trim())
@@ -113,7 +113,7 @@ try {
         'la source est enregistrée dans PostgreSQL avec le fichier déposé (src_<id>) et ses en-têtes',
         doublon.length === 1 && doublon[0].fichier.nom === 'src_' + doublon[0].id && doublon[0].headers.join() === 'id_client,nom,ville'
     );
-    await page.setInputFiles('app-sources input[type=file]', path.join(dossierTests, 'donnees', 'commandes.csv'));
+    await page.setInputFiles('app-sources .entete-page input[type=file]', path.join(dossierTests, 'donnees', 'commandes.csv'));
     await page.waitForFunction(() => document.querySelectorAll('app-sources tbody tr').length === 2);
     await page.click('app-sources tbody tr:first-child button:has-text("Aperçu")');
     await page.waitForSelector('app-sources h2:has-text("Aperçu")');
@@ -766,6 +766,68 @@ try {
     );
     await capture('explorateur');
 
+    // ---- données avancées : mise à jour d'une source, livraison ZIP, fusion, analyse de couverture ----
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources tbody tr');
+    // La ligne dont le nom est exactement « clients.csv » (pas la comparaison ni la table conçue qui la citent).
+    const ligneClients = page.locator('app-sources tbody tr', { has: page.locator('td b', { hasText: /^clients\.csv$/ }) });
+    await ligneClients.locator('input[type=file]').setInputFiles(path.join(dossierTests, 'donnees', 'clients.csv'));
+    await page.waitForSelector('.notification.succes:has-text("« clients.csv » mise à jour")');
+    verifier(
+        'sources : la mise à jour de clients.csv par un nouveau fichier garde la source (4 lignes, 3 colonnes) et rejoue la table conçue qui en dépend',
+        /4 ligne\(s\), 3 colonne\(s\)/.test(await page.textContent('.notification.succes:has-text("« clients.csv » mise à jour")')) &&
+            (await page.waitForSelector('.notification.succes:has-text("reconstruite")')) !== null
+    );
+    await page.setInputFiles('app-sources .entete-page input[type=file]', path.join(dossierTests, 'donnees', 'livraison.zip'));
+    await page.waitForSelector('app-sources h2:has-text("Livraison « livraison.zip »")');
+    const inventaire = await page.textContent('app-sources h2:has-text("Livraison « livraison.zip »")');
+    const actionClients = await page.inputValue('app-sources tr:has-text("clients.csv") select[name=action-0]');
+    verifier(
+        'sources : la livraison ZIP est inventoriée (2 fichiers) et clients.csv, déjà chargée, est proposée en mise à jour',
+        /2 fichier\(s\)/.test(inventaire) && actionClients === 'mettreAJour'
+    );
+    await page.click('app-sources button:has-text("Importer la livraison")');
+    await page.waitForSelector('.notification.succes:has-text("Livraison « livraison.zip »")');
+    await page.waitForSelector('app-sources tbody tr:has-text("produits.csv")');
+    verifier(
+        'sources : l’import de la livraison met à jour clients.csv et crée produits.csv',
+        /1 import\(s\), 1 mise\(s\) à jour/.test(await page.textContent('.notification.succes:has-text("Livraison « livraison.zip »")'))
+    );
+    await page.click('app-sources button:has-text("Fusionner des fichiers")');
+    await page.fill('app-sources input[name=fusion-nom]', 'Clients et produits');
+    await page
+        .locator('app-sources label.case', { hasText: /^\s*clients\.csv\s*$/ })
+        .locator('input')
+        .click();
+    await page
+        .locator('app-sources label.case', { hasText: /^\s*produits\.csv\s*$/ })
+        .locator('input')
+        .click();
+    await page.click('app-sources button[type=submit]:has-text("Fusionner")');
+    await page.waitForSelector('.notification.succes:has-text("« Clients et produits » créée par fusion")');
+    verifier(
+        'sources : la fusion de clients.csv et produits.csv donne une source de 6 lignes (colonnes alignées par nom, provenance conservée)',
+        /6 ligne\(s\)/.test(await page.textContent('.notification.succes:has-text("« Clients et produits » créée par fusion")')) &&
+            /fusion/.test(await page.textContent('app-sources tbody tr:has-text("Clients et produits")'))
+    );
+    await capture('sources-avancees');
+
+    await page.click('a[href="/couverture"]');
+    await page.waitForSelector('app-couverture');
+    await page.selectOption('app-couverture select[name=base]', 'clients.csv');
+    await page.selectOption('app-couverture select[name=dimensionColonne]', 'ville');
+    await page.selectOption('app-couverture select[name=liee]', 'commandes.csv');
+    await page.click('app-couverture button:has-text("Analyser la couverture")');
+    await page.waitForSelector('app-couverture tbody tr');
+    const couverture = await page.textContent('app-couverture');
+    verifier(
+        'couverture : clients par ville avec ou sans commande — Paris 2 avec, Lyon 1 avec, Lille 1 sans ; 3 clients couverts sur 4',
+        /Paris\s*2\s*0\s*2/.test(couverture.replace(/\s+/g, ' ')) &&
+            /Lille\s*0\s*1\s*1/.test(couverture.replace(/\s+/g, ' ')) &&
+            /3\s*avec élément lié \(75\.0 %\)/.test(couverture)
+    );
+    await capture('couverture');
+
     // ---- glossaire et dictionnaire ----
     await page.click('a[href="/glossaire"]');
     await page.click('app-glossaire button:has-text("Nouveau terme")');
@@ -836,10 +898,11 @@ try {
         pastille: (document.getElementById('sdServeurChip') || {}).textContent
     }));
     verifier(
-        'application classique : les deux sources déposées depuis Angular, la table conçue, la comparaison, la table préparée et l’extraction enregistrée sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 6 &&
+        'application classique : les sources déposées depuis Angular (dont la livraison ZIP et la fusion), la table conçue, la comparaison, la table préparée et l’extraction enregistrée sont restaurées prêtes (sans ré-ingestion)',
+        classique.tables.length === 8 &&
             classique.tables.every(table => table.status === 'ready') &&
-            classique.tables.filter(table => table.headers === 3).length === 3 &&
+            classique.tables.filter(table => table.headers === 3).length === 4 &&
+            classique.tables.some(table => table.name === 'Clients et produits' && table.headers === 7) &&
             classique.tables.some(table => table.name === 'Clients consolidés' && table.type === 'designed' && table.headers === 6) &&
             classique.tables.some(table => table.name.startsWith('Comparaison ') && table.type === 'extraction')
     );

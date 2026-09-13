@@ -10,5 +10,6 @@ export function cibleDeLaRegle(regle: Pick<RegleQualite, 'type' | 'colonne' | 'p
     if (regle.type === 'expression') return parametres.formule || '';
     if (regle.type === 'sql') return parametres.condition || '';
     if (regle.type === 'groupe') return 'par ' + (parametres.colonnesGroupe || []).join(' + ');
+    if (regle.type.startsWith('serie')) return 'série ' + (parametres.serieId || '');
     return '';
 }

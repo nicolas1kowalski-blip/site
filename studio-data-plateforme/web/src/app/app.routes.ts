@@ -33,6 +33,7 @@ import { RapprochementComponent } from './pages/rapprochement/rapprochement.comp
 import { SauvegardeComponent } from './pages/sauvegarde/sauvegarde.component';
 import { SensibiliteComponent } from './pages/sensibilite/sensibilite.component';
 import { SeriesTemporellesComponent } from './pages/series-temporelles/series-temporelles.component';
+import { CouvertureComponent } from './pages/couverture/couverture.component';
 import { SourcesComponent } from './pages/sources/sources.component';
 import { StatistiquesComponent } from './pages/statistiques/statistiques.component';
 import { SurveillanceComponent } from './pages/surveillance/surveillance.component';
@@ -53,6 +54,7 @@ export const routes: Routes = [
             { path: 'sauvegarde', component: SauvegardeComponent, title: 'Sauvegarde et partage — Studio Data' },
             { path: 'sources', component: SourcesComponent, title: 'Sources — Studio Data' },
             { path: 'modele', component: ModeleComponent, title: 'Modèle de données — Studio Data' },
+            { path: 'couverture', component: CouvertureComponent, title: 'Analyse de couverture — Studio Data' },
             { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },

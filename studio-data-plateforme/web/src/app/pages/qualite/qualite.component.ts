@@ -17,6 +17,7 @@ import { ActivatedRoute } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     AuditQualite,
+    ConfigurationSerie,
     Criticite,
     DefinitionRegle,
     ExecutionRegles,
@@ -319,6 +320,7 @@ const REGLE_VIDE = (): DefinitionRegle => ({
                         [sources]="sources()"
                         [vocabulaire]="vocabulaire"
                         [listesValeurs]="listesValeurs()"
+                        [series]="series()"
                         (enregistrer)="enregistrerRegle($event)"
                         (annuler)="brouillon.set(null)"
                     />
@@ -533,6 +535,7 @@ export class QualiteComponent {
     readonly relations = signal<Relation[]>([]);
     readonly objets = signal<ObjetMetier[]>([]);
     readonly listesValeurs = signal<ListeValeurs[]>([]);
+    readonly series = signal<ConfigurationSerie[]>([]);
     readonly sourceId = signal('');
     readonly ongletActif = signal<Onglet>('profil');
     readonly enCours = signal(false);
@@ -583,13 +586,15 @@ export class QualiteComponent {
 
     private async charger(): Promise<void> {
         try {
-            const [sources, vocabulaire, relations, objets, listesValeurs] = await Promise.all([
+            const [sources, vocabulaire, relations, objets, listesValeurs, series] = await Promise.all([
                 this.api.sources(),
                 this.api.vocabulaireQualite(),
                 this.api.relations(),
                 this.api.objetsMetier(),
-                this.api.listesValeurs()
+                this.api.listesValeurs(),
+                this.api.series()
             ]);
+            this.series.set(series);
             this.sources.set(sources);
             this.vocabulaire.set(vocabulaire);
             this.relations.set(relations);

@@ -40,6 +40,10 @@ export type Source = {
     srcModified?: number | null;
     enregistreLe?: string;
     config?: Record<string, unknown>;
+    /** Provenance particulière : « fusion » (plusieurs fichiers), « adresse » (import par URL), « preparation », « extraction ». */
+    origine?: string;
+    /** Paramètres mémorisés d'un import par adresse (pour le relancer). */
+    adresse?: ParametresAdresse;
     /** Recette d'une table conçue (type « designed »). */
     design?: Recette;
 };
@@ -256,7 +260,19 @@ export type TypeRegle =
     | 'condition'
     | 'expression'
     | 'sql'
-    | 'groupe';
+    | 'groupe'
+    | TypeRegleSerie;
+/** Contrôles sur une série temporelle déclarée (règles de série). */
+export type TypeRegleSerie =
+    | 'serieTrou'
+    | 'serieDoublon'
+    | 'seriePlateau'
+    | 'serieSaut'
+    | 'serieMonotonie'
+    | 'serieFraicheur'
+    | 'serieSaisonnalite'
+    | 'serieCouverture';
+export type CreneauSaison = 'heure' | 'jourSemaine' | 'mois';
 export type Criticite = 'bloquante' | 'majeure' | 'mineure';
 export type OperateurCondition = 'renseigne' | 'vide' | 'dans';
 export type AgregatGroupe = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';
@@ -288,6 +304,17 @@ export type ParametresRegle = {
     colonneAgregee?: string;
     operateur?: string;
     seuil?: number;
+    /** règles de série : la série déclarée et les seuils propres à chaque contrôle. */
+    serieId?: string;
+    longueurMinimale?: number;
+    sautAbsolu?: number;
+    sautPourcent?: number;
+    sens?: 'croissant' | 'decroissant';
+    ageMaximalHeures?: number;
+    reference?: 'fichier' | 'maintenant';
+    sensibilite?: number;
+    creneau?: CreneauSaison;
+    couvertureMinimale?: number;
 };
 export type ResultatRegle = { total: number; echecs: number; taux: number; executeLe: string; exemples: string[] };
 export type RegleQualite = {
@@ -324,6 +351,8 @@ export type VocabulaireQualite = {
     operateursGroupe: string[];
     genresAnomalie: Record<GenreAnomalie, string>;
     modesAppariement: Record<ModeAppariement, string>;
+    typesRegleSerie: Record<TypeRegleSerie, string>;
+    creneauxSaison: Record<CreneauSaison, string>;
 };
 /** Composant d'une clé fonctionnelle : colonne de la table auditée ou d'une table liée (avec condition facultative). */
 export type ComposantCle = { table: string; col: string; whereCol: string; whereVal: string; match: ModeAppariement };
@@ -353,6 +382,48 @@ export type AuditObjet = {
     regles: ExecutionRegles;
     facettes: ResultatFacette[];
 };
+
+// ---- importation (fichiers déposés, Excel, fusion, adresses, livraisons ZIP) ----
+/** Un fichier déjà déposé sur le serveur, à transformer en source. */
+export type FichierDepose = { nomServeur: string; nomFichier: string; taille?: number; modifieLe?: number; feuille?: string };
+export type DifferentielImport = { ajoutees: number; disparues: number; modifiees: number | null; cle: string | null };
+export type ResultatImport = { source: Source; lignes: number; colonnesDisparues: string[]; differentiel?: DifferentielImport };
+export type GenreAdresse = 'csv' | 'json' | 'parquet' | 'gsheet';
+export type ParametresAdresse = {
+    adresse: string;
+    genre: GenreAdresse;
+    nom?: string;
+    cheminJson?: string;
+    enTeteNom?: string;
+    enTeteValeur?: string;
+    sourceId?: string;
+    colonneCle?: string;
+    mode?: 'remplacer' | 'ajouter';
+};
+export type EntreeLivraisonZip = {
+    nom: string;
+    dossier: string;
+    nomCourt: string;
+    taille: number;
+    modifieLe: string;
+    sourceExistante: string | null;
+};
+export type ActionEntreeZip = 'importer' | 'mettreAJour' | 'ignorer';
+export type BilanZip = { importees: string[]; misesAJour: string[]; ignorees: string[]; erreurs: { nom: string; erreur: string }[] };
+
+// ---- analyse de couverture ----
+export type ParametresCouverture = {
+    base: string;
+    dimensionTable: string;
+    dimensionColonne: string;
+    dimensionParAnnee: boolean;
+    liee: string;
+    filtresBase: FiltreAudit[];
+    filtresLiee: FiltreAudit[];
+    dimension2Table: string;
+    dimension2Colonne: string;
+};
+export type LigneCouverture = { dimension: string; dimension2: string; avec: number; sans: number; total: number };
 
 // ---- tables conçues (recette au format de l'application classique, voir l'en-tête et le README) ----
 export type FormatAttribut = '' | 'int' | 'dec' | 'date' | 'bool' | 'code';

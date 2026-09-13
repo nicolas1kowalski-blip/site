@@ -11,6 +11,7 @@ import { BASE_DE_DONNEES, BaseDeDonnees } from '../base-de-donnees/connexion';
 import { AuditQualite, RegleQualite, Utilisateur, auditsQualite, reglesQualite } from '../base-de-donnees/schema';
 import { erreurIntrouvable, erreurRequete, messageUtilisateur } from '../commun/erreurs';
 import { EspacesService } from '../espaces/espaces.service';
+import { ConfigurationSerie } from '../exploitation/series-temporelles';
 import { MoteurDuckDB, identifiantSql } from '../espaces/moteur-duckdb';
 import { GouvernanceService } from '../gouvernance/gouvernance.service';
 import { ListeValeurs, sqlCodesAutorises } from '../gouvernance/listes-valeurs';
@@ -437,6 +438,8 @@ export class QualiteService {
         const parId = new Map(sources.map(source => [String(source.id), source]));
         const parNom = new Map(sources.map(source => [source.name, source]));
         const listes = (etat.governance.valueLists || []) as unknown as ListeValeurs[];
+        // Les séries temporelles déclarées vivent dans governance.series (format de l'application classique).
+        const series = ((etat.governance as Record<string, unknown>)['series'] || []) as ConfigurationSerie[];
         return {
             parId,
             contexte: {
@@ -447,7 +450,8 @@ export class QualiteService {
                 sqlListeValeurs: listeId => {
                     const liste = listes.find(candidat => candidat.id === listeId);
                     return liste ? sqlCodesAutorises(liste, nom => (parNom.has(nom) ? 't_' + parNom.get(nom)!.id : null)) : null;
-                }
+                },
+                configurationSerie: serieId => series.find(candidat => candidat.id === serieId) || null
             }
         };
     }

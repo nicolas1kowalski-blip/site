@@ -10,6 +10,8 @@
  */
 import { z } from 'zod';
 import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
+import { ConfigurationSerie } from '../exploitation/series-temporelles';
+import { ErreurRegleSerie, TYPES_REGLE_SERIE, TypeRegleSerie, estTypeSerie, sqlEvaluationSerie } from './regles-series';
 import { formuleEnSql } from '../extraction/constructeur-avance';
 
 export const TYPES_REGLE = {
@@ -26,12 +28,13 @@ export const TYPES_REGLE = {
     condition: 'condition : si… alors…',
     expression: 'cohérence : expression entre colonnes',
     sql: 'condition SQL libre (avancé)',
-    groupe: 'agrégat par groupe (avancé)'
+    groupe: 'agrégat par groupe (avancé)',
+    ...TYPES_REGLE_SERIE
 } as const;
 export type TypeRegle = keyof typeof TYPES_REGLE;
 
 /** Types qui ne portent pas sur une colonne précise (l'expression ou la condition cite ses colonnes). */
-export const TYPES_SANS_COLONNE: TypeRegle[] = ['expression', 'sql', 'groupe'];
+export const TYPES_SANS_COLONNE: TypeRegle[] = ['expression', 'sql', 'groupe', ...(Object.keys(TYPES_REGLE_SERIE) as TypeRegleSerie[])];
 
 export const OPERATEURS_CONDITION = { renseigne: 'est renseignée', vide: 'est vide', dans: 'vaut (liste ;)' } as const;
 export const AGREGATS_GROUPE = {
@@ -80,7 +83,18 @@ export const schemaRegle = z.object({
             agregat: z.enum(['count', 'countd', 'sum', 'avg', 'min', 'max']).optional(),
             colonneAgregee: z.string().optional(),
             operateur: z.enum(OPERATEURS_GROUPE).optional(),
-            seuil: z.number().optional()
+            seuil: z.number().optional(),
+            /** règles de série : la série déclarée et les seuils propres à chaque contrôle. */
+            serieId: z.string().optional(),
+            longueurMinimale: z.number().optional(),
+            sautAbsolu: z.number().optional(),
+            sautPourcent: z.number().optional(),
+            sens: z.enum(['croissant', 'decroissant']).optional(),
+            ageMaximalHeures: z.number().optional(),
+            reference: z.enum(['fichier', 'maintenant']).optional(),
+            sensibilite: z.number().optional(),
+            creneau: z.enum(['heure', 'jourSemaine', 'mois']).optional(),
+            couvertureMinimale: z.number().optional()
         })
         .default({}),
     criticite: z.enum(['bloquante', 'majeure', 'mineure']).default('majeure'),
@@ -97,6 +111,8 @@ export type ContexteRegle = {
     nomTableDe: (sourceId: string) => string;
     /** SQL renvoyant les codes autorisés (une colonne « c »), ou null si la liste est inconnue. */
     sqlListeValeurs?: (listeId: string) => string | null;
+    /** Configuration d'une série temporelle déclarée (règles de série), ou null si elle est inconnue. */
+    configurationSerie?: (serieId: string) => ConfigurationSerie | null;
 };
 
 const cleNormalisee = (expression: string) => `NULLIF(UPPER(TRIM(CAST(${expression} AS VARCHAR))), '')`;
@@ -366,6 +382,19 @@ export function sqlEvaluation(
 ): { total: string; echecs: string; exemples: string; lignes: string } {
     const environnement: ContexteRegle = typeof contexte === 'function' ? { nomTableDe: contexte } : contexte;
     const table = identifiantSql(environnement.nomTableDe(regle.sourceId));
+    if (estTypeSerie(regle.type)) {
+        const serie =
+            regle.parametres.serieId && environnement.configurationSerie
+                ? environnement.configurationSerie(regle.parametres.serieId)
+                : null;
+        if (!serie) throw new ErreurRegle('Règle de série : choisissez une série temporelle déclarée.');
+        try {
+            return sqlEvaluationSerie(regle.type, regle.parametres, serie, environnement.nomTableDe(regle.sourceId));
+        } catch (erreur) {
+            if (erreur instanceof ErreurRegleSerie) throw new ErreurRegle(erreur.message);
+            throw erreur;
+        }
+    }
     if (regle.type === 'groupe') {
         const groupes = sqlGroupes(regle, table);
         const base = `SELECT *, ${groupes.conforme} AS conforme FROM (${groupes.groupes}) AS agregats`;

@@ -181,7 +181,8 @@ test('vocabulaire : types de règles, opérateurs, genres d’anomalie et modes 
     const vocabulaire = json(await appel({ method: 'GET', url: '/api/qualite/vocabulaire' }));
     for (const type of ['condition', 'expression', 'sql', 'groupe', 'fraicheur', 'listeValeurs'])
         assert.ok(vocabulaire.typesRegle[type], type);
-    assert.deepEqual(vocabulaire.typesSansColonne, ['expression', 'sql', 'groupe']);
+    assert.ok(['expression', 'sql', 'groupe', 'serieTrou'].every(type => vocabulaire.typesSansColonne.includes(type)));
+    assert.ok(vocabulaire.typesRegleSerie.serieCouverture && vocabulaire.creneauxSaison.heure);
     assert.ok(vocabulaire.genresAnomalie.boucheTrous);
     assert.ok(vocabulaire.modesAppariement.fuzzy);
     assert.ok(vocabulaire.agregatsGroupe.avg);

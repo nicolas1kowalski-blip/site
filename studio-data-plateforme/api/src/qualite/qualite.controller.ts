@@ -13,6 +13,7 @@ import { schemaFiltreSource } from '../tables-concues/constructeur-table-concue'
 import { GENRES_ANOMALIE } from './anomalies';
 import { MODES_APPARIEMENT, schemaProfilCle } from './cle-fonctionnelle';
 import { QualiteService } from './qualite.service';
+import { CRENEAUX_SAISON, TYPES_REGLE_SERIE } from './regles-series';
 import {
     AGREGATS_GROUPE,
     CRITICITES,
@@ -62,7 +63,9 @@ export class QualiteController {
             agregatsGroupe: AGREGATS_GROUPE,
             operateursGroupe: OPERATEURS_GROUPE,
             genresAnomalie: GENRES_ANOMALIE,
-            modesAppariement: MODES_APPARIEMENT
+            modesAppariement: MODES_APPARIEMENT,
+            typesRegleSerie: TYPES_REGLE_SERIE,
+            creneauxSaison: CRENEAUX_SAISON
         };
     }
 

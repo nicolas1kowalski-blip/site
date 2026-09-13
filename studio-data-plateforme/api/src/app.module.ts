@@ -14,6 +14,7 @@ import { ExtractionModule } from './extraction/extraction.module';
 import { FichiersController } from './fichiers/fichiers.controller';
 import { FrontController } from './front/front.controller';
 import { GouvernanceModule } from './gouvernance/gouvernance.module';
+import { ImportationModule } from './importation/importation.module';
 import { JournalModule } from './journal/journal.module';
 import { LineageModule } from './lineage/lineage.module';
 import { ModeleModule } from './modele/modele.module';
@@ -43,6 +44,7 @@ export class AppModule {
                 UtilisateursModule,
                 DocumentsModule,
                 SourcesModule,
+                ImportationModule,
                 GouvernanceModule,
                 ModeleModule,
                 ExtractionModule,
