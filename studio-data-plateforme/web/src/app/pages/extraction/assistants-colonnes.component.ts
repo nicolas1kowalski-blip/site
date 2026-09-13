@@ -116,290 +116,308 @@ export function formuleDeLaSaisie(saisie: SaisieCalcul, references: string[]): s
     imports: [FormsModule, SelecteurColonneComponent],
     template: `
         <!-- Σ Synthèse d'une table liée -->
-        <details class="assistant synthese">
-            <summary>
-                Σ Synthèse d'une table liée
-                <span class="discret">— compter les lignes, compter les valeurs uniques, transposer en texte ou en colonnes</span>
-            </summary>
-            <div class="corps-assistant">
-                <div class="champ-guide">
-                    <label class="etiquette">Table liée</label>
-                    <div class="ligne-champs">
-                        <app-selecteur-colonne
-                            identifiant="synthese"
-                            [sources]="sources()"
-                            [chemins]="cheminsLies()"
-                            [avecColonne]="false"
-                            [(tableId)]="syntheseTableId"
-                            [(route)]="syntheseRoute"
-                        />
-                    </div>
-                </div>
-                <div class="champ-guide">
-                    <label class="etiquette">Mode</label>
-                    <select class="champ petit" [(ngModel)]="syntheseMode" name="synthese_mode">
-                        @for (mode of modesSynthese(); track mode[0]) {
-                            <option [value]="mode[0]">{{ mode[1] }}</option>
-                        }
-                    </select>
-                </div>
-                @if (syntheseMode() !== 'count') {
+        @if (mode() === 'tous' || mode() === 'synthese') {
+            <details class="assistant synthese" [open]="mode() !== 'tous'">
+                <summary>
+                    Σ Synthèse d'une table liée
+                    <span class="discret">— compter les lignes, compter les valeurs uniques, transposer en texte ou en colonnes</span>
+                </summary>
+                <div class="corps-assistant">
                     <div class="champ-guide">
-                        <label class="etiquette">Colonne</label>
-                        <select class="champ petit" [(ngModel)]="syntheseColonne" name="synthese_colonne">
-                            <option value="">—</option>
-                            @for (colonne of colonnesDe(syntheseTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
+                        <label class="etiquette">Table liée</label>
+                        <div class="ligne-champs">
+                            <app-selecteur-colonne
+                                identifiant="synthese"
+                                [sources]="sources()"
+                                [avecLienIndifferent]="false"
+                                [chemins]="cheminsLies()"
+                                [avecColonne]="false"
+                                [(tableId)]="syntheseTableId"
+                                [(route)]="syntheseRoute"
+                            />
+                        </div>
+                    </div>
+                    <div class="champ-guide">
+                        <label class="etiquette">Mode</label>
+                        <select class="champ petit" [(ngModel)]="syntheseMode" name="synthese_mode">
+                            @for (mode of modesSynthese(); track mode[0]) {
+                                <option [value]="mode[0]">{{ mode[1] }}</option>
                             }
                         </select>
                     </div>
-                }
-                @if (syntheseMode() === 'first') {
+                    @if (syntheseMode() !== 'count') {
+                        <div class="champ-guide">
+                            <label class="etiquette">Colonne</label>
+                            <select class="champ petit" [(ngModel)]="syntheseColonne" name="synthese_colonne">
+                                <option value="">—</option>
+                                @for (colonne of colonnesDe(syntheseTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    @if (syntheseMode() === 'first') {
+                        <div class="champ-guide">
+                            <label class="etiquette">N colonnes</label>
+                            <input
+                                class="champ petit court"
+                                type="number"
+                                min="1"
+                                max="12"
+                                [(ngModel)]="syntheseNombre"
+                                name="synthese_n"
+                            />
+                        </div>
+                    }
                     <div class="champ-guide">
-                        <label class="etiquette">N colonnes</label>
-                        <input class="champ petit court" type="number" min="1" max="12" [(ngModel)]="syntheseNombre" name="synthese_n" />
+                        <label class="etiquette">Nom en sortie</label>
+                        <input class="champ petit" placeholder="auto" [(ngModel)]="syntheseAlias" name="synthese_alias" />
                     </div>
-                }
-                <div class="champ-guide">
-                    <label class="etiquette">Nom en sortie</label>
-                    <input class="champ petit" placeholder="auto" [(ngModel)]="syntheseAlias" name="synthese_alias" />
+                    <button class="bouton petit principal" type="button" name="ajouterSynthese" (click)="ajouterSynthese()">
+                        + Synthèse
+                    </button>
+                    <p class="discret note">1 ligne par ligne de la table de départ — jamais de multiplication de lignes.</p>
                 </div>
-                <button class="bouton petit principal" type="button" name="ajouterSynthese" (click)="ajouterSynthese()">+ Synthèse</button>
-                <p class="discret note">1 ligne par ligne de la table de départ — jamais de multiplication de lignes.</p>
-            </div>
-        </details>
+            </details>
+        }
 
         <!-- 🌳 Hiérarchie aplatie -->
-        <details class="assistant hierarchie">
-            <summary>
-                🌳 Hiérarchie aplatie
-                <span class="discret"
-                    >— colonnes niveau 1…N (dans la même table ou via une table de liaison, avec période de validité)</span
-                >
-            </summary>
-            <div class="corps-assistant">
-                <div class="champ-guide">
-                    <label class="etiquette">Table hiérarchique</label>
-                    <div class="ligne-champs">
-                        <app-selecteur-colonne
-                            identifiant="hier"
-                            [sources]="sources()"
-                            [chemins]="chemins()"
-                            [avecColonne]="false"
-                            [(tableId)]="hierTableId"
-                            [(route)]="hierRoute"
-                        />
-                    </div>
-                </div>
-                <div class="champ-guide">
-                    <label class="etiquette">Type</label>
-                    <select class="champ petit" [(ngModel)]="hierType" name="hier_type">
-                        <option value="simple">Parent dans la même table</option>
-                        <option value="liaison">Via table de liaison</option>
-                    </select>
-                </div>
-                <div class="champ-guide">
-                    <label class="etiquette">Identifiant</label>
-                    <select class="champ petit" [(ngModel)]="hierIdentifiant" name="hier_id">
-                        @for (colonne of colonnesDe(hierTableId()); track colonne) {
-                            <option [value]="colonne">{{ colonne }}</option>
-                        }
-                    </select>
-                </div>
-                @if (hierType() === 'simple') {
+        @if (mode() === 'tous' || mode() === 'hierarchie') {
+            <details class="assistant hierarchie" [open]="mode() !== 'tous'">
+                <summary>
+                    🌳 Hiérarchie aplatie
+                    <span class="discret"
+                        >— colonnes niveau 1…N (dans la même table ou via une table de liaison, avec période de validité)</span
+                    >
+                </summary>
+                <div class="corps-assistant">
                     <div class="champ-guide">
-                        <label class="etiquette">Parent</label>
-                        <select class="champ petit" [(ngModel)]="hierParent" name="hier_parent">
-                            @for (colonne of colonnesDe(hierTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
-                            }
-                        </select>
-                    </div>
-                } @else {
-                    <div class="champ-guide">
-                        <label class="etiquette">Table de liaison</label>
-                        <select
-                            class="champ petit"
-                            [ngModel]="hierLiaisonTableId()"
-                            (ngModelChange)="changerTableDeLiaison($event)"
-                            name="hier_ltable"
-                        >
-                            <option value="">—</option>
-                            @for (source of sources(); track source.id) {
-                                <option [value]="source.id">{{ source.name }}</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Enfant</label>
-                        <select class="champ petit" [(ngModel)]="hierLiaisonEnfant" name="hier_lenfant">
-                            @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Parent</label>
-                        <select class="champ petit" [(ngModel)]="hierLiaisonParent" name="hier_lparent">
-                            @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Valide du</label>
-                        <select class="champ petit" [(ngModel)]="hierValideDu" name="hier_du">
-                            <option value="">— non utilisé —</option>
-                            @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Valide au</label>
-                        <select class="champ petit" [(ngModel)]="hierValideAu" name="hier_au">
-                            <option value="">— non utilisé —</option>
-                            @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Date de réf.</label>
-                        <input class="champ petit" type="date" [(ngModel)]="hierDateReference" name="hier_date" />
-                    </div>
-                }
-                <div class="champ-guide large">
-                    <label class="etiquette" title="Colonnes de la table hiérarchique à restituer par niveau (ex. code ET libellé).">
-                        Attributs à extraire par niveau (1 ou plusieurs)
-                    </label>
-                    <div class="ligne-champs">
-                        <select class="champ petit" [(ngModel)]="hierAttributChoisi" name="hier_attr">
-                            <option value="">— l'identifiant —</option>
-                            @for (colonne of colonnesDe(hierTableId()); track colonne) {
-                                <option [value]="colonne">{{ colonne }}</option>
-                            }
-                        </select>
-                        <button class="bouton petit" type="button" (click)="ajouterAttribut()">➕ ajouter l'attribut</button>
-                        @for (attribut of hierAttributs(); track $index; let index = $index) {
-                            <span class="badge neutre">
-                                {{ attribut }}
-                                <button class="lien-retirer" type="button" (click)="retirerAttribut(index)">✕</button>
-                            </span>
-                        }
-                    </div>
-                </div>
-                <div class="champ-guide">
-                    <label class="etiquette">Profondeur</label>
-                    <input class="champ petit court" type="number" min="1" max="20" [(ngModel)]="hierProfondeur" name="hier_prof" />
-                </div>
-                <div class="champ-guide">
-                    <label class="etiquette">Préfixe en sortie</label>
-                    <input class="champ petit" placeholder="auto" [(ngModel)]="hierAlias" name="hier_alias" />
-                </div>
-                <button class="bouton petit principal" type="button" name="ajouterHierarchie" (click)="ajouterHierarchie()">
-                    + Hiérarchie
-                </button>
-            </div>
-        </details>
-
-        <!-- ƒx Colonne calculée -->
-        <details class="assistant calcul">
-            <summary>
-                ƒx Colonne calculée
-                <span class="discret">— façon tableur (CONCATENER, GAUCHE, DROITE, STXT, NBCAR, SI)</span>
-            </summary>
-            <div class="corps-assistant">
-                <div class="champ-guide">
-                    <label class="etiquette">Fonction</label>
-                    <select class="champ petit" [(ngModel)]="calculFonction" name="calc_fn">
-                        @for (fonction of fonctions; track fonction[0]) {
-                            <option [value]="fonction[0]">{{ fonction[1] }}</option>
-                        }
-                    </select>
-                </div>
-                <div class="champ-guide large">
-                    <label class="etiquette">Colonne source</label>
-                    <div class="ligne-champs">
-                        <app-selecteur-colonne
-                            identifiant="calc"
-                            [sources]="sources()"
-                            [chemins]="chemins()"
-                            [(tableId)]="calculTableId"
-                            [(route)]="calculRoute"
-                            [(nomColonne)]="calculColonne"
-                        />
-                    </div>
-                </div>
-                @if (calculFonction() === 'concat') {
-                    <div class="champ-guide large">
-                        <label class="etiquette"
-                            >Colonnes à concaténer (choisissez « Colonne source » puis ➕, dans l'ordre — 2 ou plus)</label
-                        >
+                        <label class="etiquette">Table hiérarchique</label>
                         <div class="ligne-champs">
-                            <button class="bouton petit" type="button" (click)="ajouterPartie()">➕ ajouter cette colonne</button>
-                            @if (!calculParties().length) {
-                                <span class="discret">Empilez au moins 2 colonnes (dans l'ordre).</span>
+                            <app-selecteur-colonne
+                                identifiant="hier"
+                                [sources]="sources()"
+                                [avecLienIndifferent]="false"
+                                [chemins]="chemins()"
+                                [avecColonne]="false"
+                                [(tableId)]="hierTableId"
+                                [(route)]="hierRoute"
+                            />
+                        </div>
+                    </div>
+                    <div class="champ-guide">
+                        <label class="etiquette">Type</label>
+                        <select class="champ petit" [(ngModel)]="hierType" name="hier_type">
+                            <option value="simple">Parent dans la même table</option>
+                            <option value="liaison">Via table de liaison</option>
+                        </select>
+                    </div>
+                    <div class="champ-guide">
+                        <label class="etiquette">Identifiant</label>
+                        <select class="champ petit" [(ngModel)]="hierIdentifiant" name="hier_id">
+                            @for (colonne of colonnesDe(hierTableId()); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
                             }
-                            @for (partie of calculParties(); track $index; let index = $index) {
+                        </select>
+                    </div>
+                    @if (hierType() === 'simple') {
+                        <div class="champ-guide">
+                            <label class="etiquette">Parent</label>
+                            <select class="champ petit" [(ngModel)]="hierParent" name="hier_parent">
+                                @for (colonne of colonnesDe(hierTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                        </div>
+                    } @else {
+                        <div class="champ-guide">
+                            <label class="etiquette">Table de liaison</label>
+                            <select
+                                class="champ petit"
+                                [ngModel]="hierLiaisonTableId()"
+                                (ngModelChange)="changerTableDeLiaison($event)"
+                                name="hier_ltable"
+                            >
+                                <option value="">—</option>
+                                @for (source of sources(); track source.id) {
+                                    <option [value]="source.id">{{ source.name }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Enfant</label>
+                            <select class="champ petit" [(ngModel)]="hierLiaisonEnfant" name="hier_lenfant">
+                                @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Parent</label>
+                            <select class="champ petit" [(ngModel)]="hierLiaisonParent" name="hier_lparent">
+                                @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Valide du</label>
+                            <select class="champ petit" [(ngModel)]="hierValideDu" name="hier_du">
+                                <option value="">— non utilisé —</option>
+                                @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Valide au</label>
+                            <select class="champ petit" [(ngModel)]="hierValideAu" name="hier_au">
+                                <option value="">— non utilisé —</option>
+                                @for (colonne of colonnesDe(hierLiaisonTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Date de réf.</label>
+                            <input class="champ petit" type="date" [(ngModel)]="hierDateReference" name="hier_date" />
+                        </div>
+                    }
+                    <div class="champ-guide large">
+                        <label class="etiquette" title="Colonnes de la table hiérarchique à restituer par niveau (ex. code ET libellé).">
+                            Attributs à extraire par niveau (1 ou plusieurs)
+                        </label>
+                        <div class="ligne-champs">
+                            <select class="champ petit" [(ngModel)]="hierAttributChoisi" name="hier_attr">
+                                <option value="">— l'identifiant —</option>
+                                @for (colonne of colonnesDe(hierTableId()); track colonne) {
+                                    <option [value]="colonne">{{ colonne }}</option>
+                                }
+                            </select>
+                            <button class="bouton petit" type="button" (click)="ajouterAttribut()">➕ ajouter l'attribut</button>
+                            @for (attribut of hierAttributs(); track $index; let index = $index) {
                                 <span class="badge neutre">
-                                    {{ partie.libelle }}
-                                    <button class="lien-retirer" type="button" (click)="retirerPartie(index)">✕</button>
+                                    {{ attribut }}
+                                    <button class="lien-retirer" type="button" (click)="retirerAttribut(index)">✕</button>
                                 </span>
                             }
                         </div>
                     </div>
                     <div class="champ-guide">
-                        <label class="etiquette">Séparateur</label>
-                        <input class="champ petit court" [(ngModel)]="calculSeparateur" name="calc_sep" />
+                        <label class="etiquette">Profondeur</label>
+                        <input class="champ petit court" type="number" min="1" max="20" [(ngModel)]="hierProfondeur" name="hier_prof" />
                     </div>
-                }
-                @if (calculFonction() === 'mid') {
                     <div class="champ-guide">
-                        <label class="etiquette">Début</label>
-                        <input class="champ petit court" type="number" min="1" [(ngModel)]="calculDebut" name="calc_debut" />
+                        <label class="etiquette">Préfixe en sortie</label>
+                        <input class="champ petit" placeholder="auto" [(ngModel)]="hierAlias" name="hier_alias" />
                     </div>
-                }
-                @if (calculFonction() === 'left' || calculFonction() === 'right' || calculFonction() === 'mid') {
+                    <button class="bouton petit principal" type="button" name="ajouterHierarchie" (click)="ajouterHierarchie()">
+                        + Hiérarchie
+                    </button>
+                </div>
+            </details>
+        }
+
+        <!-- ƒx Colonne calculée -->
+        @if (mode() === 'tous' || mode() === 'calcul') {
+            <details class="assistant calcul" [open]="mode() !== 'tous'">
+                <summary>
+                    ƒx Colonne calculée
+                    <span class="discret">— façon tableur (CONCATENER, GAUCHE, DROITE, STXT, NBCAR, SI)</span>
+                </summary>
+                <div class="corps-assistant">
                     <div class="champ-guide">
-                        <label class="etiquette">N caractères</label>
-                        <input class="champ petit court" type="number" min="1" [(ngModel)]="calculNombre" name="calc_n" />
-                    </div>
-                }
-                @if (calculFonction() === 'si') {
-                    <div class="champ-guide">
-                        <label class="etiquette">Opérateur</label>
-                        <select class="champ petit" [(ngModel)]="calculOperateur" name="calc_op">
-                            @for (operateur of operateursSi; track operateur[0]) {
-                                <option [value]="operateur[0]">{{ operateur[1] }}</option>
+                        <label class="etiquette">Fonction</label>
+                        <select class="champ petit" [(ngModel)]="calculFonction" name="calc_fn">
+                            @for (fonction of fonctions; track fonction[0]) {
+                                <option [value]="fonction[0]">{{ fonction[1] }}</option>
                             }
                         </select>
                     </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Valeur test</label>
-                        <input class="champ petit" [(ngModel)]="calculValeurTest" name="calc_test" />
+                    <div class="champ-guide large">
+                        <label class="etiquette">Colonne source</label>
+                        <div class="ligne-champs">
+                            <app-selecteur-colonne
+                                identifiant="calc"
+                                [sources]="sources()"
+                                [avecLienIndifferent]="false"
+                                [chemins]="chemins()"
+                                [(tableId)]="calculTableId"
+                                [(route)]="calculRoute"
+                                [(nomColonne)]="calculColonne"
+                            />
+                        </div>
                     </div>
+                    @if (calculFonction() === 'concat') {
+                        <div class="champ-guide large">
+                            <label class="etiquette"
+                                >Colonnes à concaténer (choisissez « Colonne source » puis ➕, dans l'ordre — 2 ou plus)</label
+                            >
+                            <div class="ligne-champs">
+                                <button class="bouton petit" type="button" (click)="ajouterPartie()">➕ ajouter cette colonne</button>
+                                @if (!calculParties().length) {
+                                    <span class="discret">Empilez au moins 2 colonnes (dans l'ordre).</span>
+                                }
+                                @for (partie of calculParties(); track $index; let index = $index) {
+                                    <span class="badge neutre">
+                                        {{ partie.libelle }}
+                                        <button class="lien-retirer" type="button" (click)="retirerPartie(index)">✕</button>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Séparateur</label>
+                            <input class="champ petit court" [(ngModel)]="calculSeparateur" name="calc_sep" />
+                        </div>
+                    }
+                    @if (calculFonction() === 'mid') {
+                        <div class="champ-guide">
+                            <label class="etiquette">Début</label>
+                            <input class="champ petit court" type="number" min="1" [(ngModel)]="calculDebut" name="calc_debut" />
+                        </div>
+                    }
+                    @if (calculFonction() === 'left' || calculFonction() === 'right' || calculFonction() === 'mid') {
+                        <div class="champ-guide">
+                            <label class="etiquette">N caractères</label>
+                            <input class="champ petit court" type="number" min="1" [(ngModel)]="calculNombre" name="calc_n" />
+                        </div>
+                    }
+                    @if (calculFonction() === 'si') {
+                        <div class="champ-guide">
+                            <label class="etiquette">Opérateur</label>
+                            <select class="champ petit" [(ngModel)]="calculOperateur" name="calc_op">
+                                @for (operateur of operateursSi; track operateur[0]) {
+                                    <option [value]="operateur[0]">{{ operateur[1] }}</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Valeur test</label>
+                            <input class="champ petit" [(ngModel)]="calculValeurTest" name="calc_test" />
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Alors</label>
+                            <input class="champ petit court" [(ngModel)]="calculAlors" name="calc_alors" />
+                        </div>
+                        <div class="champ-guide">
+                            <label class="etiquette">Sinon</label>
+                            <input class="champ petit court" [(ngModel)]="calculSinon" name="calc_sinon" />
+                        </div>
+                    }
                     <div class="champ-guide">
-                        <label class="etiquette">Alors</label>
-                        <input class="champ petit court" [(ngModel)]="calculAlors" name="calc_alors" />
+                        <label class="etiquette">Nom en sortie</label>
+                        <input class="champ petit" placeholder="auto" [(ngModel)]="calculAlias" name="calc_alias" />
                     </div>
-                    <div class="champ-guide">
-                        <label class="etiquette">Sinon</label>
-                        <input class="champ petit court" [(ngModel)]="calculSinon" name="calc_sinon" />
-                    </div>
-                }
-                <div class="champ-guide">
-                    <label class="etiquette">Nom en sortie</label>
-                    <input class="champ petit" placeholder="auto" [(ngModel)]="calculAlias" name="calc_alias" />
+                    <button class="bouton petit principal" type="button" name="ajouterCalcul" (click)="ajouterCalcul()">
+                        + Colonne calculée
+                    </button>
+                    <p class="discret note">
+                        Aperçu de la formule : <code>{{ apercuFormule() }}</code>
+                    </p>
                 </div>
-                <button class="bouton petit principal" type="button" name="ajouterCalcul" (click)="ajouterCalcul()">
-                    + Colonne calculée
-                </button>
-                <p class="discret note">
-                    Aperçu de la formule : <code>{{ apercuFormule() }}</code>
-                </p>
-            </div>
-        </details>
+            </details>
+        }
     `,
     styles: `
         .assistant {
@@ -477,6 +495,11 @@ export class AssistantsColonnesComponent {
     readonly chemins = input.required<Map<string, Chemin[]>>();
     readonly baseId = input.required<string>();
     readonly modesSynthese = input.required<[ModeSynthese, string][]>();
+    /**
+     * Assistant affiché. « tous » les empile en dépliants (disposition d'origine) ; sinon un seul est montré,
+     * déjà ouvert : c'est ainsi qu'ils servent d'onglets dans le panneau « Ajouter une colonne ».
+     */
+    readonly mode = input<'tous' | 'colonne' | 'synthese' | 'hierarchie' | 'calcul'>('tous');
     /** La colonne composée par l'assistant, prête à être ajoutée au tableau des colonnes en sortie. */
     readonly ajouter = output<ColonneExtraction>();
 

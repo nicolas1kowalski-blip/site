@@ -195,6 +195,14 @@ export type ContexteConstruction = {
 
 export class ErreurSpecification extends Error {}
 
+/**
+ * Route particulière : « le lien renseigné, quel qu'il soit ». Quand une table est atteignable par plusieurs
+ * chemins et qu'une seule de ces routes est renseignée par ligne (un contrat rattaché soit à une personne
+ * physique, soit à une personne morale, jamais aux deux), on joint toutes les routes et on prend la première
+ * valeur non vide. C'est le comportement par défaut proposé par l'écran : on ne force pas un choix inutile.
+ */
+export const ROUTE_INDIFFERENTE = 'any';
+
 /** Alias SQL d'une colonne : celui demandé, sinon « colonne » pour la table de départ et « table.colonne » ailleurs. */
 export function aliasParDefaut(colonne: ColonneExtraction, specification: Specification, contexte: ContexteConstruction): string {
     if (colonne.alias) return colonne.alias;
@@ -246,17 +254,19 @@ function expressionAgregee(expression: string, agregat: NonNullable<ColonneExtra
 export type FiltreSaisi = Pick<FiltreExtraction, 'nomColonne' | 'op' | 'valeur' | 'valeur2'> &
     Partial<Pick<FiltreExtraction, 'tableId' | 'liste' | 'exclure'>>;
 
-export function conditionFiltre(alias: string, filtre: FiltreSaisi): string {
-    const brut = `CAST(${alias}.${identifiantSql(filtre.nomColonne)} AS VARCHAR)`;
+export function conditionFiltre(alias: string, filtre: FiltreSaisi, expressionColonne?: string): string {
+    // `expressionColonne` sert au « lien renseigné, quel qu'il soit » : la colonne devient alors un COALESCE.
+    const reference = expressionColonne ?? `${alias}.${identifiantSql(filtre.nomColonne)}`;
+    const brut = `CAST(${reference} AS VARCHAR)`;
     const normalisee = `UPPER(TRIM(${brut}))`;
     const valeur = String(filtre.valeur ?? '');
     const nombre = `TRY_CAST(REPLACE(${brut}, ',', '.') AS DOUBLE)`;
     const date = `TRY_CAST(${brut} AS DATE)`;
     switch (filtre.op) {
         case 'empty':
-            return `(${alias}.${identifiantSql(filtre.nomColonne)} IS NULL OR TRIM(${brut}) = '')`;
+            return `(${reference} IS NULL OR TRIM(${brut}) = '')`;
         case 'notempty':
-            return `(${alias}.${identifiantSql(filtre.nomColonne)} IS NOT NULL AND TRIM(${brut}) <> '')`;
+            return `(${reference} IS NOT NULL AND TRIM(${brut}) <> '')`;
         case '=':
             return `${normalisee} = ${litteralSql(valeur.trim().toUpperCase())}`;
         case '!=':
@@ -283,7 +293,7 @@ export function conditionFiltre(alias: string, filtre: FiltreSaisi): string {
         case 'dto':
             return `${date} <= ${litteralSql(valeur)}::DATE`;
         case 'list':
-            return conditionListe(`${alias}.${identifiantSql(filtre.nomColonne)}`, filtre.liste || [], !!filtre.exclure);
+            return conditionListe(reference, filtre.liste || [], !!filtre.exclure);
     }
 }
 
@@ -301,19 +311,19 @@ export function construireSql(specification: Specification, contexte: ContexteCo
     // Une requête écrite à la main remplace tout : c'est le mode « SQL personnalisé » de l'écran.
     if (specification.sqlPersonnalise.trim()) return { sql: specification.sqlPersonnalise.trim(), alias: [] };
     const aliasDe = new Map<string, string>([[specification.baseId, 't0']]);
+    // Toutes les routes posées sur chaque table : c'est la matière du « lien renseigné, quel qu'il soit ».
+    const aliasParTable = new Map<string, string[]>([[specification.baseId, ['t0']]]);
     const clausesFrom = [
         `${identifiantSql(contexte.nomTableDe(specification.baseId))} AS t0`,
-        ...clausesJointures(specification, contexte, aliasDe)
+        ...clausesJointures(specification, contexte, aliasDe, aliasParTable)
     ];
-    const sortie = colonnesEnSortie(specification, contexte, aliasDe);
+    const sortie = colonnesEnSortie(specification, contexte, aliasDe, aliasParTable);
     const { aliasSortie, selections, clesRegroupement, ctes, jointuresHierarchie } = sortie;
     if (!selections.length) throw new ErreurSpecification('Aucune colonne ni mesure en sortie.');
     clausesFrom.push(...jointuresHierarchie);
-    const conditions = specification.filtres.map(filtre => {
-        const aliasTable = aliasDeRoute(aliasDe, filtre.route, filtre.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`Le filtre sur « ${filtre.nomColonne} » vise une table absente de l'extraction.`);
-        return conditionFiltre(aliasTable, filtre);
-    });
+    const conditions = specification.filtres.map(filtre =>
+        conditionFiltre('', filtre, expressionSource(filtre, aliasDe, aliasParTable, `Le filtre sur « ${filtre.nomColonne} »`))
+    );
     const prologue = ctes.length ? `WITH RECURSIVE ${ctes.join(',\n')}\n` : '';
     const distinct = specification.dedoublonner && !specification.regrouper ? 'DISTINCT ' : '';
     // Les rangs des lignes d'origine servent à choisir « la première » ou « la dernière » lors du dédoublonnage.
@@ -344,7 +354,12 @@ type SortieConstruite = {
  * plusieurs expressions (une synthèse « N premières », une hiérarchie) ; deux noms en sortie identiques sont
  * refusés, car le résultat serait ambigu.
  */
-function colonnesEnSortie(specification: Specification, contexte: ContexteConstruction, aliasDe: Map<string, string>): SortieConstruite {
+function colonnesEnSortie(
+    specification: Specification,
+    contexte: ContexteConstruction,
+    aliasDe: Map<string, string>,
+    aliasParTable: Map<string, string[]>
+): SortieConstruite {
     const sortie: SortieConstruite = { aliasSortie: [], selections: [], clesRegroupement: [], ctes: [], jointuresHierarchie: [] };
     for (const colonne of specification.colonnes) {
         // Le résolveur est propre à la colonne : une formule parle d'abord de la route où elle est posée.
@@ -352,14 +367,13 @@ function colonnesEnSortie(specification: Specification, contexte: ContexteConstr
             route: colonne.route,
             tableId: colonne.tableId
         });
+        const quoi = `La colonne « ${colonne.nomColonne || colonne.alias || colonne.genre} »`;
         const aliasTable = aliasDeRoute(aliasDe, colonne.route, colonne.tableId);
-        if (!aliasTable)
-            throw new ErreurSpecification(
-                `La colonne « ${colonne.nomColonne || colonne.alias || colonne.genre} » vient d'une table absente de l'extraction.`
-            );
+        if (!aliasTable) throw new ErreurSpecification(`${quoi} vient d'une table absente de l'extraction.`);
         const items = expressionsColonne(
             colonne,
             aliasTable,
+            colonne.nomColonne ? expressionSource(colonne, aliasDe, aliasParTable, quoi) : '',
             aliasParDefaut(colonne, specification, contexte),
             contexte,
             aliasDe,
@@ -373,7 +387,7 @@ function colonnesEnSortie(specification: Specification, contexte: ContexteConstr
         for (const mesure of specification.mesures) {
             verifierNomLibre(sortie.aliasSortie, mesure.alias);
             sortie.aliasSortie.push(mesure.alias);
-            sortie.selections.push(`${expressionMesure(mesure, aliasDe)} AS ${identifiantSql(mesure.alias)}`);
+            sortie.selections.push(`${expressionMesure(mesure, aliasDe, aliasParTable)} AS ${identifiantSql(mesure.alias)}`);
         }
     return sortie;
 }
@@ -393,8 +407,35 @@ function verifierNomLibre(aliasSortie: string[], alias: string): void {
     if (aliasSortie.includes(alias)) throw new ErreurSpecification(`Deux colonnes portent le même nom en sortie : « ${alias} ».`);
 }
 
+/** Ce qui suffit à désigner une colonne source : sa table, sa route et son nom. */
+type ColonneDesignee = { tableId: string; route: string; nomColonne: string };
+
+/**
+ * Expression SQL d'une colonne source. Sur une route précise, c'est simplement « alias.colonne » ; avec la route
+ * indifférente, toutes les routes posées sur la table sont mises bout à bout et la première valeur non vide
+ * l'emporte — c'est le « lien renseigné, quel qu'il soit ».
+ */
+function expressionSource(
+    designation: ColonneDesignee,
+    aliasDe: Map<string, string>,
+    aliasParTable: Map<string, string[]>,
+    quoi: string
+): string {
+    const colonne = identifiantSql(designation.nomColonne);
+    if (designation.route === ROUTE_INDIFFERENTE) {
+        const alias = aliasParTable.get(designation.tableId) || [];
+        if (!alias.length) throw new ErreurSpecification(`${quoi} vise une table absente de l'extraction.`);
+        return alias.length > 1 ? `COALESCE(${alias.map(chaque => `${chaque}.${colonne}`).join(', ')})` : `${alias[0]}.${colonne}`;
+    }
+    const alias = aliasDeRoute(aliasDe, designation.route, designation.tableId);
+    if (!alias) throw new ErreurSpecification(`${quoi} vise une table absente de l'extraction.`);
+    return `${alias}.${colonne}`;
+}
+
 /** Alias SQL d'une route : la clé de jointure demandée, sinon la première route posée sur cette table. */
 function aliasDeRoute(aliasDe: Map<string, string>, route: string, tableId: string): string | undefined {
+    // Route indifférente : on retient la première route de la table (l'expression complète est bâtie à part).
+    if (route === ROUTE_INDIFFERENTE) return aliasDe.get(tableId);
     return aliasDe.get(route || tableId);
 }
 
@@ -443,21 +484,22 @@ function colonnesDOrdre(aliasDe: Map<string, string>): ColonneDOrdre[] {
 }
 
 /** Une mesure de regroupement : la fonction demandée, restreinte aux lignes qui vérifient ses critères. */
-function expressionMesure(mesure: Specification['mesures'][number], aliasDe: Map<string, string>): string {
+function expressionMesure(
+    mesure: Specification['mesures'][number],
+    aliasDe: Map<string, string>,
+    aliasParTable: Map<string, string[]>
+): string {
+    const quoi = `La mesure « ${mesure.alias} »`;
     let expression: string;
     if (mesure.fn === 'count' && !mesure.nomColonne) expression = 'COUNT(*)';
     else {
-        const aliasTable = aliasDeRoute(aliasDe, mesure.route, mesure.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`La mesure « ${mesure.alias} » vise une table absente de l'extraction.`);
-        if (!mesure.nomColonne) throw new ErreurSpecification(`La mesure « ${mesure.alias} » n'a pas de colonne à mesurer.`);
-        expression = expressionAgregee(`${aliasTable}.${identifiantSql(mesure.nomColonne)}`, mesure.fn);
+        if (!mesure.nomColonne) throw new ErreurSpecification(`${quoi} n'a pas de colonne à mesurer.`);
+        expression = expressionAgregee(expressionSource(mesure, aliasDe, aliasParTable, quoi), mesure.fn);
     }
     if (!mesure.criteres.length) return expression;
-    const conditions = mesure.criteres.map(critere => {
-        const aliasTable = aliasDeRoute(aliasDe, critere.route, critere.tableId);
-        if (!aliasTable) throw new ErreurSpecification(`Un critère de la mesure « ${mesure.alias} » vise une table absente.`);
-        return conditionFiltre(aliasTable, critere);
-    });
+    const conditions = mesure.criteres.map(critere =>
+        conditionFiltre('', critere, expressionSource(critere, aliasDe, aliasParTable, `Un critère de ${quoi}`))
+    );
     return `${expression} FILTER (WHERE ${conditions.join(' AND ')})`;
 }
 
@@ -466,7 +508,12 @@ function expressionMesure(mesure: Specification['mesures'][number], aliasDe: Map
  * des liens différents cohabitent (t2 et t3 sur la même table), ce qui permet de ramener côte à côte, par exemple,
  * le nom du souscripteur et celui du bénéficiaire.
  */
-function clausesJointures(specification: Specification, contexte: ContexteConstruction, aliasDe: Map<string, string>): string[] {
+function clausesJointures(
+    specification: Specification,
+    contexte: ContexteConstruction,
+    aliasDe: Map<string, string>,
+    aliasParTable: Map<string, string[]>
+): string[] {
     const jointure = specification.typeJointure === 'inner' ? 'INNER JOIN' : 'LEFT JOIN';
     return specification.jointures.map((lien, index) => {
         const cle = lien.cle || lien.versTableId;
@@ -481,6 +528,7 @@ function clausesJointures(specification: Specification, contexte: ContexteConstr
         aliasDe.set(cle, alias);
         // La table reste aussi joignable par son seul identifiant : c'est la première route posée sur elle.
         if (!aliasDe.has(lien.versTableId)) aliasDe.set(lien.versTableId, alias);
+        aliasParTable.set(lien.versTableId, [...(aliasParTable.get(lien.versTableId) || []), alias]);
         return `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${cleNormalisee(`${alias}.${identifiantSql(lien.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deColonne)}`)}`;
     });
 }
@@ -539,6 +587,7 @@ function resolveurDeReferences(
 function expressionsColonne(
     colonne: ColonneExtraction,
     aliasTable: string,
+    expressionSourceColonne: string,
     aliasColonne: string,
     contexte: ContexteConstruction,
     aliasDe: Map<string, string>,
@@ -580,12 +629,7 @@ function expressionsColonne(
             }
             default: {
                 if (!colonne.nomColonne) throw new ErreurSpecification('Colonne sans nom.');
-                return [
-                    {
-                        expression: expressionTransformee(`${aliasTable}.${identifiantSql(colonne.nomColonne)}`, colonne.transformation),
-                        alias: aliasColonne
-                    }
-                ];
+                return [{ expression: expressionTransformee(expressionSourceColonne, colonne.transformation), alias: aliasColonne }];
             }
         }
     } catch (erreur) {

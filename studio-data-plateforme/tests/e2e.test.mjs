@@ -287,6 +287,8 @@ try {
             contenuCsv.startsWith('﻿"nom";"ville";"commandes.montant"') &&
             contenuCsv.trim().split('\n').length === 5
     );
+    // Les paramétrages sont rangés derrière leur bouton d'outil, comme dans le plan de travail de l'application classique.
+    await page.click('app-extraction button[name=outilParametrages]');
     page.once('dialog', dialogue => dialogue.accept('Clients Paris Lyon'));
     await page.click('app-extraction button[name=enregistrerModele]');
     await page.waitForSelector('.notification.succes:has-text("Paramétrage")');
@@ -353,15 +355,16 @@ try {
         await page.selectOption('app-extraction select[name=ajout_colonne]', colonne);
         await page.click('app-extraction button[name=ajouterColonne]');
     }
-    await page.click('app-extraction details.calcul summary');
+    // Les assistants sont des onglets du panneau « Ajouter une colonne » (plan de travail V12).
+    await page.click('app-extraction button[name=ongletAjout_calcul]');
     await page.selectOption('app-extraction select[name=calc_fn]', 'concat');
     for (const colonne of ['nom', 'ville']) {
         await page.selectOption('app-extraction select[name=calc_colonne]', colonne);
-        await page.click('app-extraction details.calcul button:has-text("ajouter cette colonne")');
+        await page.click('app-extraction .assistant.calcul button:has-text("ajouter cette colonne")');
     }
     await page.fill('app-extraction input[name=calc_alias]', 'etiquette');
     await page.click('app-extraction button[name=ajouterCalcul]');
-    await page.click('app-extraction details.synthese summary');
+    await page.click('app-extraction button[name=ongletAjout_synthese]');
     await page.fill('app-extraction input[name=synthese_alias]', 'nb_commandes');
     await page.click('app-extraction button[name=ajouterSynthese]');
     await page.waitForFunction(() => document.querySelectorAll('app-extraction table.tableau tbody tr').length === 4);

@@ -11,7 +11,7 @@
 import { Component, computed, input, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Source } from '../../coeur/modeles';
-import { Chemin, cleChemin, libelleChemin } from './chemins';
+import { Chemin, ROUTE_INDIFFERENTE, cleChemin, libelleChemin } from './chemins';
 
 @Component({
     selector: 'app-selecteur-colonne',
@@ -38,6 +38,9 @@ import { Chemin, cleChemin, libelleChemin } from './chemins';
                 [attr.name]="identifiant() + '_via'"
                 title="Par quel lien atteindre cette table"
             >
+                @if (avecLienIndifferent()) {
+                    <option [value]="routeIndifferente">🔀 Le lien renseigné, quel qu'il soit (l'un ou l'autre)</option>
+                }
                 @for (chemin of cheminsDeLaTable(); track cleChemin(chemin)) {
                     <option [value]="cleChemin(chemin)">via {{ libelle(chemin) }}</option>
                 }
@@ -87,12 +90,18 @@ export class SelecteurColonneComponent {
     readonly identifiant = input('colonne');
     /** Lien retenu par défaut pour chaque table, décidé dans le bandeau « Quel lien utiliser ? ». */
     readonly routesParDefaut = input<Record<string, string>>({});
+    /**
+     * Faux là où le chemin doit être explicite : une synthèse, une hiérarchie ou un calcul s'ancrent sur une
+     * route précise, on ne peut pas les faire porter sur plusieurs liens à la fois.
+     */
+    readonly avecLienIndifferent = input(true);
 
     readonly tableId = model('');
     readonly route = model('');
     readonly nomColonne = model('');
 
     readonly cleChemin = cleChemin;
+    readonly routeIndifferente = ROUTE_INDIFFERENTE;
 
     /** Les tables atteignables, la table de départ en tête puis les autres par ordre alphabétique. */
     readonly tables = computed(() => {
@@ -112,12 +121,17 @@ export class SelecteurColonneComponent {
         return libelleChemin(chemin, tableId => this.nomDe(tableId));
     }
 
-    /** Changer de table reprend le lien par défaut (ou le plus court) et la première colonne. */
+    /**
+     * Changer de table reprend le lien par défaut, sinon « quel qu'il soit » quand plusieurs liens existent
+     * (on n'impose pas un choix que l'utilisateur n'a pas de raison de faire), sinon l'unique chemin.
+     */
     changerTable(tableId: string): void {
         const chemins = this.chemins().get(tableId) || [];
         const defaut = this.routesParDefaut()[tableId];
+        const plusieurs = chemins.length > 1 && this.avecLienIndifferent();
         this.tableId.set(tableId);
-        this.route.set(chemins.some(chemin => cleChemin(chemin) === defaut) ? defaut : cleChemin(chemins[0] || []));
+        if (defaut && (defaut === ROUTE_INDIFFERENTE || chemins.some(chemin => cleChemin(chemin) === defaut))) this.route.set(defaut);
+        else this.route.set(plusieurs ? ROUTE_INDIFFERENTE : cleChemin(chemins[0] || []));
         this.nomColonne.set(this.sources().find(source => source.id === tableId)?.headers?.[0] || '');
     }
 }

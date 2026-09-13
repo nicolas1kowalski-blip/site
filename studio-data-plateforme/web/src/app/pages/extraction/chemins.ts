@@ -24,6 +24,14 @@ export type Chemin = EtapeChemin[];
 /** Au-delà de trois étapes, un chemin n'est plus compréhensible et les jointures deviennent coûteuses. */
 export const ETAPES_MAXIMUM = 3;
 
+/**
+ * Route particulière : « le lien renseigné, quel qu'il soit ». Quand une table est atteignable de plusieurs
+ * façons et qu'une seule est renseignée par ligne — un contrat rattaché soit à une personne physique, soit à
+ * une personne morale — imposer un choix n'aurait pas de sens : toutes les routes sont jointes et la première
+ * valeur non vide l'emporte. C'est ce que l'écran propose et présélectionne.
+ */
+export const ROUTE_INDIFFERENTE = 'any';
+
 /** Clé stable d'un chemin : les liens parcourus, dans l'ordre. Le chemin vide (la table de départ) donne ''. */
 export function cleChemin(chemin: Chemin): string {
     return chemin.map(etape => etape.relationId).join('>');

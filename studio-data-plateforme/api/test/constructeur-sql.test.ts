@@ -370,3 +370,56 @@ test('dédoublonnage avec une jointure : l’ordre est départagé table par tab
     assert.match(sql, /t0\."__rn" AS __ordre_t0, t1\."__rn" AS __ordre_t1/);
     assert.match(sql, /ORDER BY __ordre_t0 DESC, __ordre_t1 DESC/);
 });
+
+test('lien renseigné quel qu’il soit : toutes les routes jointes, première valeur non vide (COALESCE)', () => {
+    // Un contrat rattaché soit à une personne physique, soit à une personne morale : une seule route
+    // est renseignée par ligne, il serait absurde d'imposer le choix.
+    const routes = {
+        jointures: [
+            { cle: 'physique', deTableId: 'a', deColonne: 'id_physique', versTableId: 'b', versColonne: 'id' },
+            { cle: 'morale', deTableId: 'a', deColonne: 'id_morale', versTableId: 'b', versColonne: 'id' }
+        ]
+    };
+    const { sql } = construireSql(
+        specification({
+            ...routes,
+            colonnes: [{ tableId: 'b', route: 'any', nomColonne: 'ville', alias: 'Ville' }],
+            filtres: [{ tableId: 'b', route: 'any', nomColonne: 'ville', op: '=', valeur: 'Paris' }]
+        }),
+        contexte
+    );
+    assert.match(sql, /COALESCE\(t1\."ville", t2\."ville"\) AS "Ville"/);
+    assert.match(sql, /UPPER\(TRIM\(CAST\(COALESCE\(t1\."ville", t2\."ville"\) AS VARCHAR\)\)\) = 'PARIS'/, 'le filtre aussi');
+    // Avec une seule route, la valeur est prise directement : pas de COALESCE inutile.
+    const routeUnique = construireSql(
+        specification({
+            jointures: [{ deTableId: 'a', deColonne: 'id', versTableId: 'b', versColonne: 'id_client' }],
+            colonnes: [{ tableId: 'b', route: 'any', nomColonne: 'montant' }]
+        }),
+        contexte
+    ).sql;
+    assert.match(routeUnique, /t1\."montant" AS "commandes.montant"/);
+    assert.doesNotMatch(routeUnique, /COALESCE/);
+});
+
+test('lien quel qu’il soit sur un critère de mesure : la condition porte sur toutes les routes', () => {
+    const { sql } = construireSql(
+        specification({
+            jointures: [
+                { cle: 'physique', deTableId: 'a', deColonne: 'id_physique', versTableId: 'b', versColonne: 'id' },
+                { cle: 'morale', deTableId: 'a', deColonne: 'id_morale', versTableId: 'b', versColonne: 'id' }
+            ],
+            regrouper: true,
+            colonnes: [{ tableId: 'a', nomColonne: 'annee' }],
+            mesures: [
+                {
+                    fn: 'count',
+                    alias: 'Parisiens',
+                    criteres: [{ tableId: 'b', route: 'any', nomColonne: 'ville', op: '=', valeur: 'Paris' }]
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.match(sql, /COUNT\(\*\) FILTER \(WHERE UPPER\(TRIM\(CAST\(COALESCE\(t1\."ville", t2\."ville"\) AS VARCHAR\)\)\) = 'PARIS'\)/);
+});

@@ -20,7 +20,7 @@
  * spécification. Les chemins de jointure sont calculés par ./chemins.ts à partir du modèle de données.
  */
 import { ScrollingModule } from '@angular/cdk/scrolling';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
@@ -49,7 +49,16 @@ import {
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { AssistantsColonnesComponent } from './assistants-colonnes.component';
-import { Chemin, cheminParCle, cheminsVers, cleChemin, libelleChemin, planifierJointures, tablesAccessibles } from './chemins';
+import {
+    Chemin,
+    ROUTE_INDIFFERENTE,
+    cheminParCle,
+    cheminsVers,
+    cleChemin,
+    libelleChemin,
+    planifierJointures,
+    tablesAccessibles
+} from './chemins';
 import { SelecteurColonneComponent } from './selecteur-colonne.component';
 
 /** Une valeur par ligne ; sur chaque ligne, seule la première cellule compte (séparateurs ; , tabulation, |). */
@@ -110,6 +119,15 @@ const FONCTIONS_MESURE: Record<FonctionMesure, string> = {
     max: 'Maximum'
 };
 
+/** Les quatre façons d'ajouter une colonne, présentées en onglets dans le panneau « Ajouter une colonne ». */
+export type ModeAjout = 'colonne' | 'synthese' | 'hierarchie' | 'calcul';
+const ONGLETS_AJOUT: [ModeAjout, string][] = [
+    ['colonne', "Colonne d'une table"],
+    ['synthese', "Σ Synthèse d'une table liée"],
+    ['hierarchie', '🌳 Hiérarchie aplatie'],
+    ['calcul', 'ƒx Colonne calculée']
+];
+
 /** Nombre de lignes du mode « aperçu rapide ». */
 const LIGNES_APERCU_RAPIDE = 500;
 
@@ -126,495 +144,698 @@ const LIGNES_APERCU_RAPIDE = 500;
             </div>
         </div>
 
-        <!-- 💾 Paramétrages d'extraction enregistrés -->
-        <div class="bloc parametrages">
-            <div class="titre-bloc">
-                💾 Paramétrages d'extraction
-                <span class="discret">— enregistrez la configuration ci-dessous et rejouez-la plus tard</span>
+        <!-- Bandeau : ce que fait l'extraction en un coup d'œil, et les outils rangés derrière des boutons -->
+        <div class="plan-haut">
+            <div class="resume">
+                <span class="etiquette-forte">Table de départ</span>
+                <select class="champ petit large" [ngModel]="baseId()" (ngModelChange)="choisirBase($event)" name="base">
+                    <option value="">—</option>
+                    @for (source of sources(); track source.id) {
+                        <option [value]="source.id">{{ source.name }}</option>
+                    }
+                </select>
+                @for (puce of resume(); track puce.texte) {
+                    <span class="puce-resume" [class.alerte]="puce.alerte">{{ puce.texte }}</span>
+                }
             </div>
-            <div class="ligne-champs">
-                @if (modeles().length) {
-                    <select class="champ petit large" [(ngModel)]="modeleChoisi" name="modeleChoisi">
-                        @for (modele of modeles(); track modele.id) {
-                            <option [value]="modele.id">{{ modele.nom }}</option>
-                        }
-                    </select>
-                    <button class="bouton petit principal" type="button" name="chargerModele" (click)="chargerModele(modeleChoisi())">
-                        📂 Charger
-                    </button>
-                    <button class="bouton petit" type="button" title="Renommer le paramétrage sélectionné" (click)="renommerModele()">
-                        ✎
-                    </button>
-                    <button
-                        class="bouton petit danger"
-                        type="button"
-                        title="Supprimer le paramétrage sélectionné"
-                        (click)="supprimerModele()"
-                    >
-                        🗑
-                    </button>
-                    <span class="separateur">|</span>
-                }
-                @if (session.peutEditer()) {
-                    <button class="bouton petit" type="button" name="enregistrerModele" (click)="enregistrerModele()">
-                        💾 Enregistrer le paramétrage actuel
-                    </button>
-                }
-                @if (!modeles().length) {
-                    <span class="discret">Aucun paramétrage enregistré pour l'instant.</span>
-                }
+            <div class="outils">
+                <button
+                    class="bouton petit"
+                    type="button"
+                    name="outilParametrages"
+                    [class.actif]="outil() === 'parametrages'"
+                    (click)="basculerOutil('parametrages')"
+                    title="Enregistrer ou recharger un paramétrage"
+                >
+                    💾 Paramétrages
+                    @if (modeles().length) {
+                        <span class="compte">{{ modeles().length }}</span>
+                    }
+                </button>
+                <button
+                    class="bouton petit"
+                    type="button"
+                    name="outilObjet"
+                    [class.actif]="outil() === 'objet'"
+                    (click)="basculerOutil('objet')"
+                    title="Partir d'un objet métier : jointures, filtres et noms pré-remplis"
+                >
+                    🏛️ Objet métier
+                </button>
+                <button
+                    class="bouton petit"
+                    type="button"
+                    name="outilGuide"
+                    [class.actif]="outil() === 'guide'"
+                    (click)="basculerOutil('guide')"
+                    title="Comment se lit cet écran"
+                >
+                    🧭 Guide
+                </button>
             </div>
         </div>
 
-        <!-- 🏛️ Partir d'un objet métier -->
-        <div class="bloc gouvernance">
-            <div class="titre-bloc">
-                🏛️ Partir d'un objet métier
-                <span class="discret">— jointures, filtres de facettes et noms métier pré-remplis</span>
-            </div>
-            @if (objetsMetier().length) {
+        @if (outil() === 'parametrages') {
+            <div class="bloc parametrages">
+                <div class="titre-bloc">
+                    💾 Paramétrages d'extraction
+                    <span class="discret">— enregistrez la configuration ci-dessous et rejouez-la plus tard</span>
+                </div>
                 <div class="ligne-champs">
-                    <select class="champ petit large" [(ngModel)]="objetChoisi" name="objetChoisi">
-                        @for (objet of objetsMetier(); track objet.id) {
-                            <option [value]="objet.id">{{ objet.name }}</option>
-                        }
-                    </select>
-                    <button class="bouton petit principal" type="button" name="chargerObjet" (click)="chargerObjetMetier(objetChoisi())">
-                        Charger cet objet
-                    </button>
-                    <span class="discret">écrase la configuration ci-dessous</span>
-                </div>
-            } @else {
-                <p class="discret">
-                    Aucun objet métier défini (écran Gouvernance). Vous pouvez construire l'extraction manuellement ci-dessous.
-                </p>
-            }
-        </div>
-
-        <!-- Table de départ -->
-        <div class="ligne-depart">
-            <span class="etiquette-forte">Table de départ :</span>
-            <select class="champ petit large" [ngModel]="baseId()" (ngModelChange)="choisirBase($event)" name="base">
-                <option value="">—</option>
-                @for (source of sources(); track source.id) {
-                    <option [value]="source.id">{{ source.name }}</option>
-                }
-            </select>
-            @if (baseId()) {
-                <span class="badge">{{ tablesAtteignables().length - 1 }} table(s) liée(s) atteignable(s)</span>
-            }
-        </div>
-
-        @if (baseId()) {
-            <!-- 🔗 Quel lien utiliser ? -->
-            @if (tablesAmbigues().length) {
-                <div class="bloc ambiguite">
-                    <div class="titre-bloc">🔗 Quel lien utiliser ?</div>
-                    <p class="discret">
-                        Ces tables sont reliées par <b>plusieurs liens</b>. Choisissez ici le lien <b>par défaut</b> — et pour ramener
-                        <b>la même table par plusieurs liens à la fois</b> (par exemple le nom du souscripteur ET celui du bénéficiaire),
-                        précisez le lien <b>colonne par colonne</b> avec le sélecteur « via » de la ligne d'ajout.
-                    </p>
-                    @for (table of tablesAmbigues(); track table.id) {
-                        <div class="ligne-champs">
-                            <span class="badge neutre">{{ nomDe(table.id) }}</span>
-                            <select
-                                class="champ petit large"
-                                [ngModel]="routesParDefaut()[table.id] || ''"
-                                (ngModelChange)="choisirLienParDefaut(table.id, $event)"
-                                [name]="'defaut_' + table.id"
-                                [attr.name]="'defaut_' + table.id"
-                            >
-                                @for (chemin of table.chemins; track cleChemin(chemin)) {
-                                    <option [value]="cleChemin(chemin)">{{ libelle(chemin) }}</option>
-                                }
-                            </select>
-                            <span class="discret">{{ table.chemins.length }} liens possibles</span>
-                        </div>
+                    @if (modeles().length) {
+                        <select class="champ petit large" [(ngModel)]="modeleChoisi" name="modeleChoisi">
+                            @for (modele of modeles(); track modele.id) {
+                                <option [value]="modele.id">{{ modele.nom }}</option>
+                            }
+                        </select>
+                        <button class="bouton petit principal" type="button" name="chargerModele" (click)="chargerModele(modeleChoisi())">
+                            📂 Charger
+                        </button>
+                        <button class="bouton petit" type="button" title="Renommer le paramétrage sélectionné" (click)="renommerModele()">
+                            ✎
+                        </button>
+                        <button
+                            class="bouton petit danger"
+                            type="button"
+                            title="Supprimer le paramétrage sélectionné"
+                            (click)="supprimerModele()"
+                        >
+                            🗑
+                        </button>
+                        <span class="separateur">|</span>
+                    }
+                    @if (session.peutEditer()) {
+                        <button class="bouton petit" type="button" name="enregistrerModele" (click)="enregistrerModele()">
+                            💾 Enregistrer le paramétrage actuel
+                        </button>
+                    }
+                    @if (!modeles().length) {
+                        <span class="discret">Aucun paramétrage enregistré pour l'instant.</span>
                     }
                 </div>
-            }
-
-            <!-- 1. Colonnes en sortie -->
-            <div class="carte">
-                <div class="titre-section">
-                    1. Colonnes en sortie
-                    @if (regrouper()) {
-                        <span class="discret">(dimensions du regroupement)</span>
-                    }
+            </div>
+        }
+        @if (outil() === 'objet') {
+            <div class="bloc gouvernance">
+                <div class="titre-bloc">
+                    🏛️ Partir d'un objet métier
+                    <span class="discret">— jointures, filtres de facettes et noms métier pré-remplis</span>
                 </div>
-                @if (colonnes().length) {
-                    <div class="defilement-x">
-                        <table class="tableau">
-                            <thead>
-                                <tr>
-                                    <th>Source</th>
-                                    <th>Nom en sortie (alias métier)</th>
-                                    <th>Transformation</th>
-                                    @if (regrouper()) {
-                                        <th>Agrégat</th>
-                                    }
-                                    @if (cleActive()) {
-                                        <th class="centre">Clé</th>
-                                    }
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @for (colonne of colonnes(); track $index; let index = $index) {
-                                    <tr>
-                                        <td class="source-colonne">
-                                            @if (colonne.genre && colonne.genre !== 'colonne') {
-                                                <span class="badge neutre">{{ libelleGenre(colonne.genre) }}</span>
-                                            }
-                                            <code>{{ libelleColonne(colonne) }}</code>
-                                        </td>
-                                        <td>
-                                            <input
-                                                class="champ petit"
-                                                [ngModel]="colonne.alias"
-                                                (ngModelChange)="modifierColonne(index, { alias: $event })"
-                                                [name]="'alias_' + index"
-                                                [attr.name]="'alias_' + index"
-                                                placeholder="auto"
-                                            />
-                                        </td>
-                                        <td>
-                                            @if (colonne.genre === 'colonne' || !colonne.genre) {
-                                                <select
-                                                    class="champ petit"
-                                                    [ngModel]="colonne.transformation"
-                                                    (ngModelChange)="modifierColonne(index, { transformation: $event })"
-                                                    [name]="'tr_' + index"
-                                                    [attr.name]="'tr_' + index"
-                                                >
-                                                    @for (entree of transformations(); track entree[0]) {
-                                                        <option [value]="entree[0]">{{ entree[1] }}</option>
-                                                    }
-                                                </select>
-                                            } @else if (colonne.genre === 'calcul') {
-                                                <input
-                                                    class="champ petit formule"
-                                                    [ngModel]="colonne.formule"
-                                                    (ngModelChange)="modifierColonne(index, { formule: $event })"
-                                                    [name]="'formule_' + index"
-                                                    [attr.name]="'formule_' + index"
-                                                    title="Formule : les colonnes s'écrivent entre crochets, le reste est du SQL"
-                                                />
-                                            } @else {
-                                                <span class="discret">—</span>
-                                            }
-                                        </td>
-                                        @if (regrouper()) {
-                                            <td>
-                                                <select
-                                                    class="champ petit"
-                                                    [ngModel]="colonne.agregat || ''"
-                                                    (ngModelChange)="modifierColonne(index, { agregat: $event || undefined })"
-                                                    [name]="'ag_' + index"
-                                                    [attr.name]="'ag_' + index"
-                                                >
-                                                    <option value="">clé de regroupement</option>
-                                                    @for (entree of agregats(); track entree[0]) {
-                                                        <option [value]="entree[0]">{{ entree[1] }}</option>
-                                                    }
-                                                </select>
-                                            </td>
-                                        }
-                                        @if (cleActive()) {
-                                            <td class="centre">
-                                                <input
-                                                    type="checkbox"
-                                                    [checked]="estCle(colonne)"
-                                                    (change)="basculerCle(colonne)"
-                                                    [attr.name]="'cle_' + index"
-                                                    title="Faire partie de la clé de dédoublonnage"
-                                                />
-                                            </td>
-                                        }
-                                        <td class="droite">
-                                            <button class="bouton petit danger" type="button" (click)="retirerColonne(index)">✕</button>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                @if (objetsMetier().length) {
+                    <div class="ligne-champs">
+                        <select class="champ petit large" [(ngModel)]="objetChoisi" name="objetChoisi">
+                            @for (objet of objetsMetier(); track objet.id) {
+                                <option [value]="objet.id">{{ objet.name }}</option>
+                            }
+                        </select>
+                        <button
+                            class="bouton petit principal"
+                            type="button"
+                            name="chargerObjet"
+                            (click)="chargerObjetMetier(objetChoisi())"
+                        >
+                            Charger cet objet
+                        </button>
+                        <span class="discret">écrase la configuration ci-dessous</span>
                     </div>
                 } @else {
-                    <p class="discret">Aucune colonne. Ajoutez-en ci-dessous.</p>
+                    <p class="discret">
+                        Aucun objet métier défini (écran Gouvernance). Vous pouvez construire l'extraction manuellement ci-dessous.
+                    </p>
                 }
+            </div>
+        }
+        @if (outil() === 'guide') {
+            <div class="bloc guide">
+                <div class="titre-bloc">🧭 Comment se lit cet écran</div>
+                <p class="discret">
+                    L'extraction se lit de haut en bas comme une recette : <b>ce qui sort</b> (les colonnes), <b>quelles lignes</b> (les
+                    filtres), puis <b>la forme du résultat</b> (doublons, regroupement, jointures). Le panneau <b>Résultat</b>, à droite,
+                    reste à portée : comptez et prévisualisez avant de générer.
+                </p>
+                <p class="discret">
+                    Une colonne d'une table liée s'ajoute directement : le chemin de jointure est calculé pour vous. Quand une table est
+                    reliée de plusieurs façons, le sélecteur « via » propose « le lien renseigné, quel qu'il soit » — choisissez un chemin
+                    précis seulement si les liens ont des sens différents (souscripteur / bénéficiaire).
+                </p>
+            </div>
+        }
 
-                <div class="ligne-ajout">
-                    <app-selecteur-colonne
-                        identifiant="ajout"
-                        [sources]="sources()"
-                        [chemins]="cheminsParTable()"
-                        [routesParDefaut]="routesParDefaut()"
-                        [(tableId)]="ajoutTableId"
-                        [(route)]="ajoutRoute"
-                        [(nomColonne)]="ajoutColonne"
-                    />
-                    <button class="bouton petit principal" type="button" name="ajouterColonne" (click)="ajouterColonne()">+ Colonne</button>
-                    <button class="bouton petit" type="button" name="ajouterToutes" (click)="ajouterToutesLesColonnes()">+ Toutes</button>
-                    <button class="bouton petit" type="button" name="ouvrirPlusieurs" (click)="basculerChoixMultiple()">
-                        ➕ Plusieurs colonnes…
-                    </button>
-                </div>
-
-                @if (choixMultipleOuvert()) {
-                    <div class="bloc choix-multiple">
-                        <div class="ligne-champs">
-                            <input
-                                class="champ petit"
-                                [(ngModel)]="rechercheColonnes"
-                                name="rechercheColonnes"
-                                placeholder="filtrer les colonnes…"
-                            />
-                            <span class="discret">{{ colonnesAChoisir().length }} colonne(s) — {{ nomDe(ajoutTableId()) }}</span>
+        @if (baseId()) {
+            <div class="plan-grille">
+                <div class="plan-principal">
+                    <!-- ▤ Ce qui sort -->
+                    <section class="carte section-plan">
+                        <div class="tete-section">
+                            <span class="pictogramme">▤</span>
+                            <div><b>Colonnes en sortie</b><span class="discret">ce que contiendra le fichier</span></div>
                             <span class="espace"></span>
-                            <button class="bouton petit principal" type="button" name="appliquerPlusieurs" (click)="ajouterLesCochees()">
-                                Ajouter les {{ colonnesCochees().length }} colonne(s) cochée(s)
+                            <button class="bouton petit principal" type="button" name="ouvrirAjout" (click)="basculerAjout()">
+                                ＋ Ajouter une colonne
                             </button>
                         </div>
-                        <div class="grille-colonnes">
-                            @for (colonne of colonnesAChoisir(); track colonne) {
-                                <label class="case">
-                                    <input
-                                        type="checkbox"
-                                        [checked]="colonnesCochees().includes(colonne)"
-                                        (change)="basculerCochee(colonne)"
-                                    />
-                                    <span>{{ colonne }}</span>
-                                </label>
-                            }
-                        </div>
-                    </div>
-                }
-
-                <app-assistants-colonnes
-                    [sources]="sources()"
-                    [chemins]="cheminsParTable()"
-                    [baseId]="baseId()"
-                    [modesSynthese]="modesSynthese()"
-                    (ajouter)="ajouterColonneAvancee($event)"
-                />
-            </div>
-
-            <!-- 2. Filtres -->
-            <div class="carte">
-                <div class="titre-section">2. Filtres</div>
-                @if (filtres().length) {
-                    <div class="puces">
-                        @for (filtre of filtres(); track $index; let index = $index) {
-                            <span class="puce">
-                                <b>{{ libelleFiltre(filtre) }}</b>
-                                @if (filtre.op === 'list') {
-                                    <span class="badge neutre">{{ (filtre.liste || []).length }} valeur(s)</span>
-                                    <label class="bouton petit">
-                                        fichier<input type="file" hidden accept=".csv,.txt,.tsv" (change)="chargerListe(filtre, $event)" />
-                                    </label>
-                                    <button class="bouton petit" type="button" (click)="collerListe(filtre)">coller</button>
-                                    <label class="case">
-                                        <input
-                                            type="checkbox"
-                                            [ngModel]="filtre.exclure"
-                                            (ngModelChange)="filtre.exclure = $event"
-                                            [name]="'fx_' + index"
-                                            [attr.name]="'fx_' + index"
+                        @if (colonnes().length) {
+                            <div class="defilement-x">
+                                <table class="tableau">
+                                    <thead>
+                                        <tr>
+                                            <th>Source</th>
+                                            <th>Nom en sortie (alias métier)</th>
+                                            <th>Transformation</th>
+                                            @if (regrouper()) {
+                                                <th>Agrégat</th>
+                                            }
+                                            @if (cleActive()) {
+                                                <th class="centre">Clé</th>
+                                            }
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (colonne of colonnes(); track $index; let index = $index) {
+                                            <tr>
+                                                <td class="source-colonne">
+                                                    @if (colonne.genre && colonne.genre !== 'colonne') {
+                                                        <span class="badge neutre">{{ libelleGenre(colonne.genre) }}</span>
+                                                    }
+                                                    <code>{{ libelleColonne(colonne) }}</code>
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        class="champ petit"
+                                                        [ngModel]="colonne.alias"
+                                                        (ngModelChange)="modifierColonne(index, { alias: $event })"
+                                                        [name]="'alias_' + index"
+                                                        [attr.name]="'alias_' + index"
+                                                        placeholder="auto"
+                                                    />
+                                                </td>
+                                                <td>
+                                                    @if (colonne.genre === 'colonne' || !colonne.genre) {
+                                                        <select
+                                                            class="champ petit"
+                                                            [ngModel]="colonne.transformation"
+                                                            (ngModelChange)="modifierColonne(index, { transformation: $event })"
+                                                            [name]="'tr_' + index"
+                                                            [attr.name]="'tr_' + index"
+                                                        >
+                                                            @for (entree of transformations(); track entree[0]) {
+                                                                <option [value]="entree[0]">{{ entree[1] }}</option>
+                                                            }
+                                                        </select>
+                                                    } @else if (colonne.genre === 'calcul') {
+                                                        <input
+                                                            class="champ petit formule"
+                                                            [ngModel]="colonne.formule"
+                                                            (ngModelChange)="modifierColonne(index, { formule: $event })"
+                                                            [name]="'formule_' + index"
+                                                            [attr.name]="'formule_' + index"
+                                                            title="Formule : les colonnes s'écrivent entre crochets, le reste est du SQL"
+                                                        />
+                                                    } @else {
+                                                        <span class="discret">—</span>
+                                                    }
+                                                </td>
+                                                @if (regrouper()) {
+                                                    <td>
+                                                        <select
+                                                            class="champ petit"
+                                                            [ngModel]="colonne.agregat || ''"
+                                                            (ngModelChange)="modifierColonne(index, { agregat: $event || undefined })"
+                                                            [name]="'ag_' + index"
+                                                            [attr.name]="'ag_' + index"
+                                                        >
+                                                            <option value="">clé de regroupement</option>
+                                                            @for (entree of agregats(); track entree[0]) {
+                                                                <option [value]="entree[0]">{{ entree[1] }}</option>
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                }
+                                                @if (cleActive()) {
+                                                    <td class="centre">
+                                                        <input
+                                                            type="checkbox"
+                                                            [checked]="estCle(colonne)"
+                                                            (change)="basculerCle(colonne)"
+                                                            [attr.name]="'cle_' + index"
+                                                            title="Faire partie de la clé de dédoublonnage"
+                                                        />
+                                                    </td>
+                                                }
+                                                <td class="droite">
+                                                    <button class="bouton petit danger" type="button" (click)="retirerColonne(index)">
+                                                        ✕
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <p class="discret">Aucune colonne. Ajoutez-en ci-dessous.</p>
+                        }
+                        @if (ajoutOuvert()) {
+                            <div class="panneau-ajout">
+                                <div class="onglets-ajout">
+                                    @for (onglet of ongletsAjout; track onglet[0]) {
+                                        <button
+                                            class="bouton petit"
+                                            type="button"
+                                            [class.actif]="modeAjout() === onglet[0]"
+                                            [attr.name]="'ongletAjout_' + onglet[0]"
+                                            (click)="modeAjout.set(onglet[0])"
+                                        >
+                                            {{ onglet[1] }}
+                                        </button>
+                                    }
+                                    <span class="espace"></span>
+                                    <button class="bouton petit" type="button" title="Fermer" (click)="ajoutOuvert.set(false)">✕</button>
+                                </div>
+                                @if (modeAjout() === 'colonne') {
+                                    <div class="ligne-ajout">
+                                        <app-selecteur-colonne
+                                            identifiant="ajout"
+                                            [sources]="sources()"
+                                            [chemins]="cheminsParTable()"
+                                            [routesParDefaut]="routesParDefaut()"
+                                            [(tableId)]="ajoutTableId"
+                                            [(route)]="ajoutRoute"
+                                            [(nomColonne)]="ajoutColonne"
                                         />
-                                        exclure
-                                    </label>
+                                        <button
+                                            class="bouton petit principal"
+                                            type="button"
+                                            name="ajouterColonne"
+                                            (click)="ajouterColonne()"
+                                        >
+                                            + Colonne
+                                        </button>
+                                        <button
+                                            class="bouton petit"
+                                            type="button"
+                                            name="ajouterToutes"
+                                            (click)="ajouterToutesLesColonnes()"
+                                        >
+                                            + Toutes
+                                        </button>
+                                        <button class="bouton petit" type="button" name="ouvrirPlusieurs" (click)="basculerChoixMultiple()">
+                                            ➕ Plusieurs colonnes…
+                                        </button>
+                                    </div>
+                                    @if (choixMultipleOuvert()) {
+                                        <div class="bloc choix-multiple">
+                                            <div class="ligne-champs">
+                                                <input
+                                                    class="champ petit"
+                                                    [(ngModel)]="rechercheColonnes"
+                                                    name="rechercheColonnes"
+                                                    placeholder="filtrer les colonnes…"
+                                                />
+                                                <span class="discret"
+                                                    >{{ colonnesAChoisir().length }} colonne(s) — {{ nomDe(ajoutTableId()) }}</span
+                                                >
+                                                <span class="espace"></span>
+                                                <button
+                                                    class="bouton petit principal"
+                                                    type="button"
+                                                    name="appliquerPlusieurs"
+                                                    (click)="ajouterLesCochees()"
+                                                >
+                                                    Ajouter les {{ colonnesCochees().length }} colonne(s) cochée(s)
+                                                </button>
+                                            </div>
+                                            <div class="grille-colonnes">
+                                                @for (colonne of colonnesAChoisir(); track colonne) {
+                                                    <label class="case">
+                                                        <input
+                                                            type="checkbox"
+                                                            [checked]="colonnesCochees().includes(colonne)"
+                                                            (change)="basculerCochee(colonne)"
+                                                        />
+                                                        <span>{{ colonne }}</span>
+                                                    </label>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                } @else {
+                                    <app-assistants-colonnes
+                                        [sources]="sources()"
+                                        [chemins]="cheminsParTable()"
+                                        [baseId]="baseId()"
+                                        [mode]="modeAjout()"
+                                        [modesSynthese]="modesSynthese()"
+                                        (ajouter)="ajouterColonneAvancee($event)"
+                                    />
                                 }
-                                <button class="lien-retirer" type="button" (click)="retirerFiltre(index)">✕</button>
-                            </span>
-                        }
-                    </div>
-                }
-                <div class="ligne-ajout">
-                    <app-selecteur-colonne
-                        identifiant="filtre"
-                        [sources]="sources()"
-                        [chemins]="cheminsParTable()"
-                        [routesParDefaut]="routesParDefaut()"
-                        [(tableId)]="filtreTableId"
-                        [(route)]="filtreRoute"
-                        [(nomColonne)]="filtreColonne"
-                    />
-                    <select class="champ petit" [(ngModel)]="filtreOperateur" name="filtreOperateur">
-                        @for (entree of operateurs(); track entree[0]) {
-                            <option [value]="entree[0]">{{ entree[1] }}</option>
-                        }
-                    </select>
-                    @if (!sansValeur(filtreOperateur())) {
-                        <input
-                            class="champ petit"
-                            [(ngModel)]="filtreValeur"
-                            name="filtreValeur"
-                            list="valeurs-suggerees"
-                            (focus)="proposerValeurs()"
-                            (input)="proposerValeurs()"
-                            placeholder="choisir ou saisir…"
-                        />
-                        <datalist id="valeurs-suggerees">
-                            @for (suggestion of valeursSuggerees(); track suggestion.valeur) {
-                                <option [value]="suggestion.valeur">{{ suggestion.lignes }} ligne(s)</option>
-                            }
-                        </datalist>
-                    }
-                    @if (filtreOperateur() === deuxValeurs) {
-                        <input class="champ petit court" [(ngModel)]="filtreValeur2" name="filtreValeur2" placeholder="et" />
-                    }
-                    <button class="bouton petit principal" type="button" name="ajouterFiltre" (click)="ajouterFiltre()">+ Filtre</button>
-                </div>
-            </div>
-
-            <!-- 3. Options : dédoublonnage et regroupement -->
-            <div class="grille deux">
-                <div class="carte">
-                    <label class="case forte">
-                        <input
-                            type="checkbox"
-                            [ngModel]="dedoublonnageActif()"
-                            (ngModelChange)="basculerDedoublonnage($event)"
-                            name="dedoublonner"
-                            [disabled]="regrouper()"
-                        />
-                        🎯 Dédoublonner par clé fonctionnelle
-                    </label>
-                    @if (dedoublonnageActif() && !regrouper()) {
-                        <p class="discret">
-                            Cochez les colonnes « Clé » ci-dessus ({{ dedoublonnage().cles.length }} sélectionnée(s)). Conserver :
-                            <select
-                                class="champ petit"
-                                [ngModel]="dedoublonnage().garder"
-                                (ngModelChange)="choisirLigneGardee($event)"
-                                name="garder"
-                            >
-                                <option value="premiere">1re ligne</option>
-                                <option value="derniere">dernière ligne</option>
-                            </select>
-                        </p>
-                    } @else if (regrouper()) {
-                        <p class="discret">Indisponible avec le regroupement.</p>
-                    }
-                    <label class="case">
-                        <input type="checkbox" [(ngModel)]="dedoublonnerLignes" name="dedoublonnerLignes" [disabled]="regrouper()" />
-                        Supprimer aussi les lignes en tous points identiques
-                    </label>
-                </div>
-
-                <div class="carte">
-                    <label class="case forte">
-                        <input type="checkbox" [(ngModel)]="regrouper" name="regrouper" />
-                        🧮 Regrouper &amp; agréger (group by)
-                    </label>
-                    @if (regrouper()) {
-                        <p class="discret">
-                            Sans colonne en sortie = totaux globaux (une seule ligne). Ajoutez des <b>critères</b> à une mesure pour
-                            reproduire NB.SI.ENS / SOMME.SI.ENS.
-                        </p>
-                        @for (mesure of mesures(); track $index; let index = $index) {
-                            <div class="ligne-mesure">
-                                <b>{{ libelleFonction(mesure.fn) }}</b>
-                                <code>{{ libelleCibleMesure(mesure) }}</code>
-                                @if (mesure.criteres.length) {
-                                    <span class="badge alerte">SI {{ libelleCriteres(mesure.criteres) }}</span>
-                                }
-                                →
-                                <input
-                                    class="champ petit"
-                                    [ngModel]="mesure.alias"
-                                    (ngModelChange)="mesure.alias = $event"
-                                    [name]="'mes_' + index"
-                                    [attr.name]="'mes_' + index"
-                                />
-                                <button class="bouton petit danger" type="button" (click)="retirerMesure(index)">✕</button>
                             </div>
                         }
-                        @if (criteresEnAttente().length) {
+                    </section>
+
+                    <!-- ⛉ Quelles lignes -->
+                    <section class="carte section-plan">
+                        <div class="tete-section">
+                            <span class="pictogramme">⛉</span>
+                            <div><b>Filtres</b><span class="discret">quelles lignes garder — sans filtre, tout est extrait</span></div>
+                        </div>
+                        @if (filtres().length) {
                             <div class="puces">
-                                @for (critere of criteresEnAttente(); track $index; let index = $index) {
-                                    <span class="puce alerte">
-                                        critère : {{ libelleFiltre(critere) }}
-                                        <button class="lien-retirer" type="button" (click)="retirerCritereEnAttente(index)">✕</button>
+                                @for (filtre of filtres(); track $index; let index = $index) {
+                                    <span class="puce">
+                                        <b>{{ libelleFiltre(filtre) }}</b>
+                                        @if (filtre.op === 'list') {
+                                            <span class="badge neutre">{{ (filtre.liste || []).length }} valeur(s)</span>
+                                            <label class="bouton petit">
+                                                fichier<input
+                                                    type="file"
+                                                    hidden
+                                                    accept=".csv,.txt,.tsv"
+                                                    (change)="chargerListe(filtre, $event)"
+                                                />
+                                            </label>
+                                            <button class="bouton petit" type="button" (click)="collerListe(filtre)">coller</button>
+                                            <label class="case">
+                                                <input
+                                                    type="checkbox"
+                                                    [ngModel]="filtre.exclure"
+                                                    (ngModelChange)="filtre.exclure = $event"
+                                                    [name]="'fx_' + index"
+                                                    [attr.name]="'fx_' + index"
+                                                />
+                                                exclure
+                                            </label>
+                                        }
+                                        <button class="lien-retirer" type="button" (click)="retirerFiltre(index)">✕</button>
                                     </span>
                                 }
                             </div>
                         }
-                        <div class="ligne-ajout critere">
-                            <span class="etiquette">Critères (optionnel, NB.SI.ENS)</span>
+                        <div class="ligne-ajout">
                             <app-selecteur-colonne
-                                identifiant="critere"
+                                identifiant="filtre"
                                 [sources]="sources()"
                                 [chemins]="cheminsParTable()"
                                 [routesParDefaut]="routesParDefaut()"
-                                [(tableId)]="critereTableId"
-                                [(route)]="critereRoute"
-                                [(nomColonne)]="critereColonne"
+                                [(tableId)]="filtreTableId"
+                                [(route)]="filtreRoute"
+                                [(nomColonne)]="filtreColonne"
                             />
-                            <select class="champ petit" [(ngModel)]="critereOperateur" name="critereOperateur">
+                            <select class="champ petit" [(ngModel)]="filtreOperateur" name="filtreOperateur">
                                 @for (entree of operateurs(); track entree[0]) {
                                     <option [value]="entree[0]">{{ entree[1] }}</option>
                                 }
                             </select>
-                            @if (!sansValeur(critereOperateur())) {
-                                <input class="champ petit" [(ngModel)]="critereValeur" name="critereValeur" placeholder="valeur…" />
+                            @if (!sansValeur(filtreOperateur())) {
+                                <input
+                                    class="champ petit"
+                                    [(ngModel)]="filtreValeur"
+                                    name="filtreValeur"
+                                    list="valeurs-suggerees"
+                                    (focus)="proposerValeurs()"
+                                    (input)="proposerValeurs()"
+                                    placeholder="choisir ou saisir…"
+                                />
+                                <datalist id="valeurs-suggerees">
+                                    @for (suggestion of valeursSuggerees(); track suggestion.valeur) {
+                                        <option [value]="suggestion.valeur">{{ suggestion.lignes }} ligne(s)</option>
+                                    }
+                                </datalist>
                             }
-                            <button class="bouton petit" type="button" name="ajouterCritere" (click)="ajouterCritereEnAttente()">
-                                + Critère
+                            @if (filtreOperateur() === deuxValeurs) {
+                                <input class="champ petit court" [(ngModel)]="filtreValeur2" name="filtreValeur2" placeholder="et" />
+                            }
+                            <button class="bouton petit principal" type="button" name="ajouterFiltre" (click)="ajouterFiltre()">
+                                + Filtre
                             </button>
                         </div>
-                        <div class="ligne-ajout">
-                            <select class="champ petit large" [(ngModel)]="mesureFonction" name="mesureFonction">
-                                @for (entree of fonctionsMesure; track entree[0]) {
-                                    <option [value]="entree[0]">{{ entree[1] }}</option>
+                        @if (tablesAmbigues().length) {
+                            <div class="bloc ambiguite">
+                                <div class="titre-bloc">🔗 Quel lien utiliser ?</div>
+                                <p class="discret">
+                                    Ces tables sont reliées par <b>plusieurs liens</b>. Choisissez ici le lien <b>par défaut</b> — et pour
+                                    ramener <b>la même table par plusieurs liens à la fois</b> (par exemple le nom du souscripteur ET celui
+                                    du bénéficiaire), précisez le lien <b>colonne par colonne</b> avec le sélecteur « via » de la ligne
+                                    d'ajout.
+                                </p>
+                                @for (table of tablesAmbigues(); track table.id) {
+                                    <div class="ligne-champs">
+                                        <span class="badge neutre">{{ nomDe(table.id) }}</span>
+                                        <select
+                                            class="champ petit large"
+                                            [ngModel]="routesParDefaut()[table.id] || ''"
+                                            (ngModelChange)="choisirLienParDefaut(table.id, $event)"
+                                            [name]="'defaut_' + table.id"
+                                            [attr.name]="'defaut_' + table.id"
+                                        >
+                                            @for (chemin of table.chemins; track cleChemin(chemin)) {
+                                                <option [value]="cleChemin(chemin)">{{ libelle(chemin) }}</option>
+                                            }
+                                        </select>
+                                        <span class="discret">{{ table.chemins.length }} liens possibles</span>
+                                    </div>
                                 }
-                            </select>
-                            <app-selecteur-colonne
-                                identifiant="mesure"
-                                [sources]="sources()"
-                                [chemins]="cheminsParTable()"
-                                [routesParDefaut]="routesParDefaut()"
-                                [(tableId)]="mesureTableId"
-                                [(route)]="mesureRoute"
-                                [(nomColonne)]="mesureColonne"
-                            />
-                            <button class="bouton petit principal" type="button" name="ajouterMesure" (click)="ajouterMesure()">
-                                + Agrégat{{ criteresEnAttente().length ? ' (avec ' + criteresEnAttente().length + ' critère(s))' : '' }}
+                            </div>
+                        }
+                    </section>
+
+                    <!-- ◇ La forme du résultat -->
+                    <section class="carte section-plan">
+                        <div class="tete-section">
+                            <span class="pictogramme">◇</span>
+                            <div>
+                                <b>Forme du résultat</b><span class="discret">doublons, regroupement et agrégats, jointures, volume</span>
+                            </div>
+                        </div>
+                        <div class="grille deux">
+                            <div class="carte">
+                                <label class="case forte">
+                                    <input
+                                        type="checkbox"
+                                        [ngModel]="dedoublonnageActif()"
+                                        (ngModelChange)="basculerDedoublonnage($event)"
+                                        name="dedoublonner"
+                                        [disabled]="regrouper()"
+                                    />
+                                    🎯 Dédoublonner par clé fonctionnelle
+                                </label>
+                                @if (dedoublonnageActif() && !regrouper()) {
+                                    <p class="discret">
+                                        Cochez les colonnes « Clé » ci-dessus ({{ dedoublonnage().cles.length }} sélectionnée(s)). Conserver
+                                        :
+                                        <select
+                                            class="champ petit"
+                                            [ngModel]="dedoublonnage().garder"
+                                            (ngModelChange)="choisirLigneGardee($event)"
+                                            name="garder"
+                                        >
+                                            <option value="premiere">1re ligne</option>
+                                            <option value="derniere">dernière ligne</option>
+                                        </select>
+                                    </p>
+                                } @else if (regrouper()) {
+                                    <p class="discret">Indisponible avec le regroupement.</p>
+                                }
+                                <label class="case">
+                                    <input
+                                        type="checkbox"
+                                        [(ngModel)]="dedoublonnerLignes"
+                                        name="dedoublonnerLignes"
+                                        [disabled]="regrouper()"
+                                    />
+                                    Supprimer aussi les lignes en tous points identiques
+                                </label>
+                            </div>
+
+                            <div class="carte">
+                                <label class="case forte">
+                                    <input type="checkbox" [(ngModel)]="regrouper" name="regrouper" />
+                                    🧮 Regrouper &amp; agréger (group by)
+                                </label>
+                                @if (regrouper()) {
+                                    <p class="discret">
+                                        Sans colonne en sortie = totaux globaux (une seule ligne). Ajoutez des <b>critères</b> à une mesure
+                                        pour reproduire NB.SI.ENS / SOMME.SI.ENS.
+                                    </p>
+                                    @for (mesure of mesures(); track $index; let index = $index) {
+                                        <div class="ligne-mesure">
+                                            <b>{{ libelleFonction(mesure.fn) }}</b>
+                                            <code>{{ libelleCibleMesure(mesure) }}</code>
+                                            @if (mesure.criteres.length) {
+                                                <span class="badge alerte">SI {{ libelleCriteres(mesure.criteres) }}</span>
+                                            }
+                                            →
+                                            <input
+                                                class="champ petit"
+                                                [ngModel]="mesure.alias"
+                                                (ngModelChange)="mesure.alias = $event"
+                                                [name]="'mes_' + index"
+                                                [attr.name]="'mes_' + index"
+                                            />
+                                            <button class="bouton petit danger" type="button" (click)="retirerMesure(index)">✕</button>
+                                        </div>
+                                    }
+                                    @if (criteresEnAttente().length) {
+                                        <div class="puces">
+                                            @for (critere of criteresEnAttente(); track $index; let index = $index) {
+                                                <span class="puce alerte">
+                                                    critère : {{ libelleFiltre(critere) }}
+                                                    <button class="lien-retirer" type="button" (click)="retirerCritereEnAttente(index)">
+                                                        ✕
+                                                    </button>
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                    <div class="ligne-ajout critere">
+                                        <span class="etiquette">Critères (optionnel, NB.SI.ENS)</span>
+                                        <app-selecteur-colonne
+                                            identifiant="critere"
+                                            [sources]="sources()"
+                                            [chemins]="cheminsParTable()"
+                                            [routesParDefaut]="routesParDefaut()"
+                                            [(tableId)]="critereTableId"
+                                            [(route)]="critereRoute"
+                                            [(nomColonne)]="critereColonne"
+                                        />
+                                        <select class="champ petit" [(ngModel)]="critereOperateur" name="critereOperateur">
+                                            @for (entree of operateurs(); track entree[0]) {
+                                                <option [value]="entree[0]">{{ entree[1] }}</option>
+                                            }
+                                        </select>
+                                        @if (!sansValeur(critereOperateur())) {
+                                            <input
+                                                class="champ petit"
+                                                [(ngModel)]="critereValeur"
+                                                name="critereValeur"
+                                                placeholder="valeur…"
+                                            />
+                                        }
+                                        <button
+                                            class="bouton petit"
+                                            type="button"
+                                            name="ajouterCritere"
+                                            (click)="ajouterCritereEnAttente()"
+                                        >
+                                            + Critère
+                                        </button>
+                                    </div>
+                                    <div class="ligne-ajout">
+                                        <select class="champ petit large" [(ngModel)]="mesureFonction" name="mesureFonction">
+                                            @for (entree of fonctionsMesure; track entree[0]) {
+                                                <option [value]="entree[0]">{{ entree[1] }}</option>
+                                            }
+                                        </select>
+                                        <app-selecteur-colonne
+                                            identifiant="mesure"
+                                            [sources]="sources()"
+                                            [chemins]="cheminsParTable()"
+                                            [routesParDefaut]="routesParDefaut()"
+                                            [(tableId)]="mesureTableId"
+                                            [(route)]="mesureRoute"
+                                            [(nomColonne)]="mesureColonne"
+                                        />
+                                        <button class="bouton petit principal" type="button" name="ajouterMesure" (click)="ajouterMesure()">
+                                            + Agrégat{{
+                                                criteresEnAttente().length ? ' (avec ' + criteresEnAttente().length + ' critère(s))' : ''
+                                            }}
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="ligne-options">
+                            <span class="etiquette-forte">Jointures :</span>
+                            <label class="case">
+                                <input
+                                    type="radio"
+                                    name="typeJointure"
+                                    value="left"
+                                    [ngModel]="typeJointure()"
+                                    (ngModelChange)="typeJointure.set($event)"
+                                />
+                                Conserver tout (left join)
+                            </label>
+                            <label class="case">
+                                <input
+                                    type="radio"
+                                    name="typeJointure"
+                                    value="inner"
+                                    [ngModel]="typeJointure()"
+                                    (ngModelChange)="typeJointure.set($event)"
+                                />
+                                Intersection (inner join)
+                            </label>
+                            <label class="case avertissement">
+                                <input type="checkbox" [(ngModel)]="apercuRapide" name="apercuRapide" />
+                                Mode « aperçu rapide » — limiter à {{ lignesApercuRapide }} lignes
+                            </label>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ▶ Résultat : toujours à portée -->
+                <aside class="plan-cote">
+                    <section class="carte section-plan">
+                        <div class="tete-section">
+                            <span class="pictogramme">▶</span>
+                            <div><b>Résultat</b><span class="discret">vérifier, puis générer</span></div>
+                        </div>
+                        <div class="ligne-actions">
+                            <button class="bouton" type="button" name="compter" (click)="compter()" [disabled]="!prete() || enCours()">
+                                🔢 Compter
+                            </button>
+                            <span class="total">{{ total() === null ? '—' : total()!.toLocaleString('fr-FR') }}</span>
+                            <button
+                                class="bouton principal"
+                                type="button"
+                                name="previsualiser"
+                                (click)="apercevoir()"
+                                [disabled]="!prete() || enCours()"
+                            >
+                                👁️ {{ enCours() ? 'Exécution…' : 'Prévisualiser' }}
+                            </button>
+                            <button class="bouton" type="button" name="bilan" (click)="bilanQualite()" [disabled]="!prete() || enCours()">
+                                ✅ Bilan qualité
+                            </button>
+                            <button class="bouton" type="button" name="voirSql" (click)="basculerSql()" [disabled]="!prete()">
+                                📝 Voir le SQL
                             </button>
                         </div>
-                    }
-                </div>
+                        <div class="ligne-generer">
+                            <button
+                                class="bouton principal"
+                                type="button"
+                                name="genererCsv"
+                                (click)="exporter()"
+                                [disabled]="!prete() || enCours()"
+                            >
+                                ⬇️ Générer le CSV
+                            </button>
+                            @if (session.peutEditer()) {
+                                <label class="case">
+                                    <input type="checkbox" [(ngModel)]="ajouterCommeSource" name="ajouterCommeSource" />
+                                    Ajouter aussi comme nouvelle source
+                                </label>
+                                <input
+                                    class="champ petit"
+                                    [(ngModel)]="nomSourceProduite"
+                                    name="nomSourceProduite"
+                                    placeholder="Nom de la source (optionnel)"
+                                />
+                            }
+                        </div>
+                        @if (erreur()) {
+                            <p class="erreur">{{ erreur() }}</p>
+                        }
+                    </section>
+                </aside>
             </div>
 
-            <!-- 4. Actions et aperçu -->
-            <div class="carte">
-                <div class="ligne-actions">
-                    <button class="bouton" type="button" name="compter" (click)="compter()" [disabled]="!prete() || enCours()">
-                        🔢 Compter
-                    </button>
-                    <span class="total">{{ total() === null ? '—' : total()!.toLocaleString('fr-FR') }}</span>
-                    <button
-                        class="bouton principal"
-                        type="button"
-                        name="previsualiser"
-                        (click)="apercevoir()"
-                        [disabled]="!prete() || enCours()"
-                    >
-                        👁️ {{ enCours() ? 'Exécution…' : 'Prévisualiser' }}
-                    </button>
-                    <button class="bouton" type="button" name="bilan" (click)="bilanQualite()" [disabled]="!prete() || enCours()">
-                        ✅ Bilan qualité
-                    </button>
-                    <button class="bouton" type="button" name="voirSql" (click)="basculerSql()" [disabled]="!prete()">
-                        📝 Voir le SQL
-                    </button>
-                </div>
-
-                @if (erreur()) {
-                    <p class="erreur">{{ erreur() }}</p>
-                }
-
+            <!-- Aperçu, bilan et SQL : en pleine largeur, sous le plan de travail -->
+            <div class="plan-sortie" #zoneSortie>
                 @if (sqlVisible()) {
                     <div class="zone-sql">
                         <label class="case">
@@ -636,7 +857,6 @@ const LIGNES_APERCU_RAPIDE = 500;
                         ></textarea>
                     </div>
                 }
-
                 @if (bilan(); as bilan) {
                     <div class="bilan">
                         <div class="discret">
@@ -654,87 +874,180 @@ const LIGNES_APERCU_RAPIDE = 500;
                         </div>
                     </div>
                 }
-
-                <div class="ligne-options">
-                    <span class="etiquette-forte">Jointures :</span>
-                    <label class="case">
-                        <input
-                            type="radio"
-                            name="typeJointure"
-                            value="left"
-                            [ngModel]="typeJointure()"
-                            (ngModelChange)="typeJointure.set($event)"
-                        />
-                        Conserver tout (left join)
-                    </label>
-                    <label class="case">
-                        <input
-                            type="radio"
-                            name="typeJointure"
-                            value="inner"
-                            [ngModel]="typeJointure()"
-                            (ngModelChange)="typeJointure.set($event)"
-                        />
-                        Intersection (inner join)
-                    </label>
-                    <label class="case avertissement">
-                        <input type="checkbox" [(ngModel)]="apercuRapide" name="apercuRapide" />
-                        Mode « aperçu rapide » — limiter à {{ lignesApercuRapide }} lignes
-                    </label>
-                </div>
-
-                <div class="ligne-generer">
-                    <button
-                        class="bouton principal"
-                        type="button"
-                        name="genererCsv"
-                        (click)="exporter()"
-                        [disabled]="!prete() || enCours()"
-                    >
-                        ⬇️ Générer le CSV
-                    </button>
-                    @if (session.peutEditer()) {
-                        <label class="case">
-                            <input type="checkbox" [(ngModel)]="ajouterCommeSource" name="ajouterCommeSource" />
-                            Ajouter aussi comme nouvelle source
-                        </label>
-                        <input
-                            class="champ petit"
-                            [(ngModel)]="nomSourceProduite"
-                            name="nomSourceProduite"
-                            placeholder="Nom de la source (optionnel)"
-                        />
-                    }
-                </div>
-            </div>
-
-            @if (apercu(); as apercu) {
-                <div class="carte resultat">
-                    <div class="ligne entete-colonnes">
-                        @for (colonne of apercu.colonnes; track colonne.nom) {
-                            <div class="cellule" [title]="colonne.type">
-                                <b>{{ colonne.nom }}</b
-                                ><span class="discret">{{ colonne.type }}</span>
-                            </div>
-                        }
-                    </div>
-                    <cdk-virtual-scroll-viewport itemSize="30" class="corps">
-                        <div class="ligne" *cdkVirtualFor="let ligne of apercu.lignes; let index = index" [class.paire]="index % 2 === 0">
-                            @for (valeur of ligne; track $index) {
-                                <div class="cellule">{{ valeur === null ? '∅' : valeur }}</div>
+                @if (apercu(); as apercu) {
+                    <div class="carte resultat">
+                        <div class="ligne entete-colonnes">
+                            @for (colonne of apercu.colonnes; track colonne.nom) {
+                                <div class="cellule" [title]="colonne.type">
+                                    <b>{{ colonne.nom }}</b
+                                    ><span class="discret">{{ colonne.type }}</span>
+                                </div>
                             }
                         </div>
-                    </cdk-virtual-scroll-viewport>
-                    <div class="discret pied-resultat">
-                        {{ apercu.lignes.length }} ligne(s) affichée(s){{ apercu.lignes.length >= apercu.limite ? ' (aperçu limité)' : '' }}
+                        <cdk-virtual-scroll-viewport itemSize="30" class="corps">
+                            <div
+                                class="ligne"
+                                *cdkVirtualFor="let ligne of apercu.lignes; let index = index"
+                                [class.paire]="index % 2 === 0"
+                            >
+                                @for (valeur of ligne; track $index) {
+                                    <div class="cellule">{{ valeur === null ? '∅' : valeur }}</div>
+                                }
+                            </div>
+                        </cdk-virtual-scroll-viewport>
+                        <div class="discret pied-resultat">
+                            {{ apercu.lignes.length }} ligne(s) affichée(s){{
+                                apercu.lignes.length >= apercu.limite ? ' (aperçu limité)' : ''
+                            }}
+                        </div>
                     </div>
-                </div>
-            }
+                }
+            </div>
         } @else {
             <div class="carte vide">Choisissez une table de départ pour commencer.</div>
         }
     `,
     styles: `
+        /* ---- plan de travail : bandeau, grille à deux colonnes, zone de sortie ---- */
+        .plan-haut {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            background: var(--surface-2);
+        }
+        .plan-haut .resume {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            flex: 1 1 420px;
+        }
+        .plan-haut .outils {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .puce-resume {
+            font-size: 11px;
+            border: 1px solid var(--bordure);
+            border-radius: 999px;
+            padding: 3px 10px;
+            background: var(--surface);
+            color: var(--texte-2);
+        }
+        .puce-resume.alerte {
+            border-color: var(--alerte);
+            color: var(--alerte);
+            font-weight: 700;
+        }
+        .outils .bouton.actif {
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 700;
+        }
+        .outils .compte {
+            display: inline-block;
+            margin-left: 4px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 10px;
+        }
+        .plan-grille {
+            display: grid;
+            grid-template-columns: 1fr minmax(280px, 340px);
+            gap: 12px;
+            align-items: start;
+        }
+        .plan-principal {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+        }
+        .plan-cote {
+            position: sticky;
+            top: 12px;
+        }
+        .plan-principal .carte,
+        .plan-cote .carte {
+            margin: 0;
+        }
+        .tete-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--bordure);
+        }
+        .tete-section > div {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.25;
+        }
+        .tete-section b {
+            font-size: 14px;
+        }
+        .tete-section .discret {
+            font-size: 11px;
+        }
+        .pictogramme {
+            font-size: 16px;
+            color: var(--accent);
+        }
+        .panneau-ajout {
+            margin-top: 8px;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .onglets-ajout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 6px;
+        }
+        .onglets-ajout .bouton.actif {
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 700;
+        }
+        .plan-sortie {
+            margin-top: 12px;
+        }
+        .plan-cote .ligne-actions,
+        .plan-cote .ligne-generer {
+            flex-direction: column;
+            align-items: stretch;
+            margin: 0;
+        }
+        .plan-cote .ligne-generer {
+            margin-top: 10px;
+        }
+        .plan-cote .bouton {
+            justify-content: center;
+        }
+        .plan-cote .total {
+            text-align: center;
+        }
+        .bloc.guide .titre-bloc {
+            color: var(--accent);
+        }
+        @media (max-width: 1100px) {
+            .plan-grille {
+                grid-template-columns: 1fr;
+            }
+            .plan-cote {
+                position: static;
+            }
+        }
         .bloc {
             border: 1px solid var(--bordure);
             border-radius: 8px;
@@ -1013,6 +1326,12 @@ export class ExtractionComponent {
     readonly typeJointure = signal<'left' | 'inner'>('left');
     readonly apercuRapide = signal(false);
     readonly routesParDefaut = signal<Record<string, string>>({});
+    // ---- plan de travail : outil ouvert, panneau d'ajout, résumé ----
+    readonly outil = signal<'' | 'parametrages' | 'objet' | 'guide'>('');
+    readonly ajoutOuvert = signal(true);
+    readonly modeAjout = signal<ModeAjout>('colonne');
+    readonly objetCharge = signal('');
+    readonly ongletsAjout = ONGLETS_AJOUT;
     readonly sqlVisible = signal(false);
     readonly sqlAffiche = signal('');
     readonly sqlPersonnaliseActif = signal(false);
@@ -1052,6 +1371,8 @@ export class ExtractionComponent {
     readonly erreur = signal('');
     readonly enCours = signal(false);
 
+    /** La zone de sortie, sous le plan de travail : on y amène l'utilisateur après chaque vérification. */
+    private readonly zoneSortie = viewChild<ElementRef<HTMLElement>>('zoneSortie');
     readonly deuxValeurs = OPERATEUR_DEUX_VALEURS;
     readonly lignesApercuRapide = LIGNES_APERCU_RAPIDE;
     readonly fonctionsMesure = Object.entries(FONCTIONS_MESURE) as [FonctionMesure, string][];
@@ -1112,6 +1433,28 @@ export class ExtractionComponent {
         }
     }
 
+    /** Un seul outil ouvert à la fois : le rappuyer le referme. */
+    basculerOutil(nom: 'parametrages' | 'objet' | 'guide'): void {
+        this.outil.update(courant => (courant === nom ? '' : nom));
+    }
+    basculerAjout(): void {
+        this.ajoutOuvert.update(ouvert => !ouvert);
+    }
+
+    /** Le résumé du bandeau : d'un coup d'œil, ce que fait l'extraction en cours. */
+    readonly resume = computed<{ texte: string; alerte: boolean }[]>(() => {
+        const puces: { texte: string; alerte: boolean }[] = [];
+        if (this.objetCharge()) puces.push({ texte: `🏛️ objet ${this.objetCharge()}`, alerte: false });
+        puces.push({ texte: `${this.colonnes().length} colonne(s)`, alerte: !this.colonnes().length });
+        puces.push({ texte: `${this.filtres().length} filtre(s)`, alerte: false });
+        if (this.dedoublonnage().actif) puces.push({ texte: `🎯 dédoublonnage (${this.dedoublonnage().cles.length} clé)`, alerte: false });
+        if (this.regrouper()) puces.push({ texte: `🧮 regroupement · ${this.mesures().length} agrégat(s)`, alerte: false });
+        const jointure = this.typeJointure() === 'inner' ? 'intersection' : 'conserver tout';
+        puces.push({ texte: jointure + (this.apercuRapide() ? ` · ${LIGNES_APERCU_RAPIDE} lignes` : ''), alerte: false });
+        if (this.sqlPersonnaliseActif()) puces.push({ texte: '📝 SQL personnalisé', alerte: true });
+        return puces;
+    });
+
     nomDe(tableId: string): string {
         return this.sources().find(source => source.id === tableId)?.name || tableId;
     }
@@ -1140,6 +1483,7 @@ export class ExtractionComponent {
     private suffixeVia(tableId: string, route = ''): string {
         const chemins = this.cheminsParTable().get(tableId) || [];
         if (chemins.length < 2) return '';
+        if (route === ROUTE_INDIFFERENTE) return " (via l'un ou l'autre lien)";
         return ` (via ${this.libelle(this.cheminDe(tableId, route))})`;
     }
     libelleColonne(colonne: ColonneExtraction): string {
@@ -1165,6 +1509,9 @@ export class ExtractionComponent {
     // ---- table de départ et liens par défaut ----
     choisirBase(tableId: string): void {
         this.baseId.set(tableId);
+        this.objetCharge.set('');
+        this.ajoutOuvert.set(true);
+        this.modeAjout.set('colonne');
         this.colonnes.set([]);
         this.filtres.set([]);
         this.mesures.set([]);
@@ -1370,7 +1717,9 @@ export class ExtractionComponent {
     // ---- SQL affiché et SQL personnalisé ----
     async basculerSql(): Promise<void> {
         this.sqlVisible.update(visible => !visible);
-        if (this.sqlVisible() && !this.sqlPersonnaliseActif()) await this.rafraichirSql();
+        if (!this.sqlVisible()) return;
+        if (!this.sqlPersonnaliseActif()) await this.rafraichirSql();
+        this.montrerLaSortie();
     }
     private async rafraichirSql(): Promise<void> {
         try {
@@ -1392,7 +1741,14 @@ export class ExtractionComponent {
     private cheminsUtilises(): Chemin[] {
         const criteres = this.mesures().flatMap(mesure => mesure.criteres);
         const elements = [...this.colonnes(), ...this.filtres(), ...this.mesures(), ...criteres];
-        return elements.filter(element => element.tableId).map(element => this.cheminDe(element.tableId, element.route));
+        const chemins: Chemin[] = [];
+        for (const element of elements) {
+            if (!element.tableId) continue;
+            // « Le lien renseigné, quel qu'il soit » a besoin de toutes les routes : le serveur les met en COALESCE.
+            if (element.route === ROUTE_INDIFFERENTE) chemins.push(...(this.cheminsParTable().get(element.tableId) || []));
+            else chemins.push(this.cheminDe(element.tableId, element.route));
+        }
+        return chemins;
     }
     specification(limite?: number): SpecificationExtraction {
         const limiteRetenue = limite ?? (this.apercuRapide() ? LIGNES_APERCU_RAPIDE : undefined);
@@ -1430,11 +1786,16 @@ export class ExtractionComponent {
     }
 
     // ---- actions ----
+    /** Amène l'utilisateur sous le plan de travail, là où s'affichent l'aperçu, le bilan et le SQL. */
+    private montrerLaSortie(): void {
+        setTimeout(() => this.zoneSortie()?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
     async apercevoir(): Promise<void> {
         await this.executer(async () => {
             this.apercu.set(await this.api.apercuExtraction(this.specification(), this.apercuRapide() ? LIGNES_APERCU_RAPIDE : 200));
             if (this.sqlVisible() && !this.sqlPersonnaliseActif()) this.sqlAffiche.set(this.apercu()!.sql);
         });
+        this.montrerLaSortie();
     }
     async compter(): Promise<void> {
         // Le serveur retire la limite pour compter : le total porte toujours sur l'ensemble du résultat.
@@ -1442,6 +1803,7 @@ export class ExtractionComponent {
     }
     async bilanQualite(): Promise<void> {
         await this.executer(async () => this.bilan.set(await this.api.bilanExtraction(this.specification())));
+        this.montrerLaSortie();
     }
     /** Génère le CSV et, si la case est cochée, enregistre aussi le résultat comme nouvelle source. */
     async exporter(): Promise<void> {
@@ -1548,6 +1910,8 @@ export class ExtractionComponent {
         this.filtres.set(
             filtresDesFacettes(objet, nom => this.sources().find(source => source.name === nom)?.id, this.tablesAtteignables())
         );
+        this.objetCharge.set(objet.name);
+        this.outil.set('');
         this.notifications.succes(
             `Extraction pré-remplie depuis « ${objet.name} » : ${this.colonnes().length} colonne(s), ${this.filtres().length} filtre(s).`
         );
