@@ -1196,6 +1196,14 @@ try {
     await page.click('app-objets-metier button[name=supprimerVariante-0]');
     await page.click('app-objets-metier button:has-text("Enregistrer")');
     await page.waitForSelector('.notification:has-text("enregistré")');
+
+    // Tant qu'aucune application n'est déclarée, l'onglet des usages dit où aller les déclarer.
+    await page.click('app-objets-metier button[name=onglet-usages]');
+    await page.waitForSelector('app-usages-objet');
+    verifier(
+        'V13 : sans application déclarée, l’écran des usages dit où aller les déclarer',
+        /Applications & processus/.test(await page.textContent('app-usages-objet'))
+    );
     await page.click('app-objets-metier button[name=onglet-attributs]');
 
     // ---- V11 : l'assistant de création en trois étapes ----
@@ -1558,6 +1566,50 @@ try {
             (await page.inputValue('app-sensibilite select[name="niveau-clients.csv-ville"]')) === 'interne'
     );
     await capture('sensibilite');
+
+    // ---- V13 : qui se sert de quelle information, et les exemples pris dans les données ----
+    // L'application « CRM » est déclarée : la matrice a maintenant de quoi poser ses colonnes.
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier .fiche');
+    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.click('app-objets-metier button[name=onglet-usages]');
+    await page.waitForSelector('app-usages-objet table');
+    verifier(
+        'V13 : la matrice des usages montre chaque information, et signale celles que personne ne lit',
+        (await page.$$('app-usages-objet tbody tr.sans-usage')).length === 3 &&
+            /3 information\(s\) sans usage/.test(await page.textContent('app-usages-objet'))
+    );
+    await capture('objets-metier-usages');
+    // Vue par application : on choisit l'application, et on coche tout d'un geste.
+    await page.click('app-usages-objet button[name=vue-application]');
+    await page.click('app-usages-objet button[name=cocherTout]');
+    const usagesPoses = await page
+        .waitForFunction(() => /3\/3 information\(s\) cochée\(s\)/.test(document.querySelector('app-usages-objet').textContent), null, {
+            timeout: 3000
+        })
+        .then(() => true)
+        .catch(() => false);
+    verifier('V13 : « tout cocher » déclare d’un geste ce qu’une application utilise', usagesPoses);
+    await capture('objets-metier-usages-par-application');
+    // Les exemples de valeurs, pris pour toutes les informations d'un coup.
+    await page.click('app-objets-metier button[name=onglet-attributs]');
+    await page.click('app-objets-metier button[name=exemplesPourToutes]');
+    // On lit la notification du bilan, pas la première venue : les précédentes sont encore à l'écran.
+    const bilanDesExemples = await page.textContent('.notification:has-text("complétée")');
+    verifier(
+        'V13 : les exemples sont pris dans les fichiers pour toutes les informations, et le bilan est rendu',
+        /3 information\(s\) complétée\(s\)/.test(bilanDesExemples)
+    );
+    await page.click('app-objets-metier button:has-text("Enregistrer")');
+    await page.waitForSelector('.notification:has-text("enregistré")');
+    const clientAvecUsages = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json())).find(
+        objet => objet.name === 'Client'
+    );
+    verifier(
+        'V13 : usages et exemples sont conservés sur chaque information',
+        clientAvecUsages.elements.every(information => information.usedBy.length >= 1) &&
+            clientAvecUsages.elements.every(information => !!information.examples && information.examplesAuto === true)
+    );
 
     // V13 : « 💬 Proposer une correction » depuis la fiche — rien ne change avant validation du responsable.
     await page.click('a[href="/objets-metier"]');

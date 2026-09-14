@@ -20,6 +20,7 @@ import { Actif, AttributObjetMetier, ObjetMetier, OrigineInformation, Source, Te
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { CompletudeInformation, completudeInformation, definitionDejaEcrite, definitionDevinee } from './description-information';
+import { poserDesExemples } from './usages-objet';
 import {
     NATURES_ORIGINE,
     NatureOrigine,
@@ -543,7 +544,9 @@ export class FicheInformationComponent {
                 this.notifications.info('Cette colonne ne contient aucune valeur renseignée.');
                 return;
             }
-            this.attribut().examples = retenues.join(' ; ');
+            // Marqués comme venus des données : un échantillonnage ultérieur pourra les remplacer, alors
+            // qu'il ne touchera jamais à des exemples écrits à la main.
+            poserDesExemples(this.attribut(), retenues);
             this.notifications.succes(`${retenues.length} exemple(s) repris du fichier.`);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);

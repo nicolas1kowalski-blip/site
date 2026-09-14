@@ -36,6 +36,8 @@ import { ACTIONS_GROUPEES, ActionGroupee, ChoixRapide, objetApresGeste, refusDuG
 import { AssistantObjetComponent } from './assistant-objet.component';
 import { ColonneOfferte, colonneLachee, colonneTransportee, colonnesDeLObjet, informationAvecColonne } from './colonnes-a-rattacher';
 import { FicheInformationComponent } from './fiche-information.component';
+import { UsagesObjetComponent } from './usages-objet.component';
+import { BilanEchantillonnage, bilanNeuf, classerAvantEchantillonnage, phraseDuBilan, poserDesExemples } from './usages-objet';
 import {
     CARDINALITES_VARIANTE,
     GroupeDInformations,
@@ -60,7 +62,10 @@ import {
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { PropositionObjetComponent } from './proposition-objet.component';
 
-type OngletFiche = 'attributs' | 'variantes' | 'sources' | 'liens' | 'historique';
+type OngletFiche = 'attributs' | 'variantes' | 'usages' | 'sources' | 'liens' | 'historique';
+
+/** Combien de valeurs on reprend du fichier pour illustrer une information : de quoi comprendre, pas plus. */
+const EXEMPLES_PAR_INFORMATION = 4;
 
 /** Ce que l'on est en train de saisir pour ajouter un filtre de portée à une variante. */
 type FiltreEnCours = { col: string; op: string; val: string };
@@ -123,7 +128,8 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         FicheInformationComponent,
         PropositionObjetComponent,
         ProposerCorrectionComponent,
-        AssistantObjetComponent
+        AssistantObjetComponent,
+        UsagesObjetComponent
     ],
     template: `
         <div class="entete-page">
@@ -305,6 +311,17 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                     </button>
                                 }
                                 @if (session.peutEditer()) {
+                                    <!-- V13 : des exemples réels valent mieux qu'une description, et on peut les prendre tous d'un coup. -->
+                                    <button
+                                        class="bouton petit"
+                                        type="button"
+                                        name="exemplesPourToutes"
+                                        title="Prendre, pour chaque information, les valeurs les plus fréquentes de sa colonne"
+                                        [disabled]="echantillonnage()"
+                                        (click)="exemplesPourToutes(objet)"
+                                    >
+                                        {{ echantillonnage() ? '…' : '🎲' }} Exemples pour toutes
+                                    </button>
                                     <button class="bouton petit" type="button" name="actionsGroupees" (click)="basculerGeste(objet)">
                                         ☑ Actions groupées
                                     </button>
@@ -836,6 +853,11 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                         }
                     }
 
+                    <!-- V13 : qui se sert de quelle information — par application, ou en matrice complète -->
+                    @if (ongletActif() === 'usages') {
+                        <app-usages-objet [objet]="objet" [actifs]="actifs()" [modifiable]="session.peutEditer()" />
+                    }
+
                     <!-- sources -->
                     @if (ongletActif() === 'sources') {
                         <table class="tableau">
@@ -1160,12 +1182,15 @@ export class ObjetsMetierComponent {
     readonly onglets: { cle: OngletFiche; libelle: string }[] = [
         { cle: 'attributs', libelle: 'Informations' },
         { cle: 'variantes', libelle: 'Variantes' },
+        { cle: 'usages', libelle: 'Usages' },
         { cle: 'sources', libelle: 'Sources' },
         { cle: 'liens', libelle: 'Actifs et références' },
         { cle: 'historique', libelle: 'Historique' }
     ];
     /** Vrai quand les colonnes numérotées sont vues comme une seule information (comme la V13, par défaut). */
     readonly repliActif = signal(true);
+    /** Vrai pendant que l'on va chercher des exemples dans les fichiers : le bouton ne se relance pas. */
+    readonly echantillonnage = signal(false);
     readonly cardinalitesVariante = CARDINALITES_VARIANTE;
     readonly optionsNombreDeValeurs = OPTIONS_NOMBRE_DE_VALEURS;
     readonly operateursPortee = Object.entries(OPERATEURS_PORTEE).map(([cle, libelle]) => ({ cle, libelle }));
@@ -1433,6 +1458,49 @@ export class ObjetsMetierComponent {
     provenanceDuGroupe(groupe: GroupeDInformations): string {
         if (groupe.replie) return colonnesDuGroupe(groupe).join(', ');
         return this.provenance(groupe.informations[0]);
+    }
+
+    // ---- V13 : des exemples pris dans les données, pour toutes les informations d'un coup ----
+
+    /**
+     * Va chercher, pour chaque information rattachée à une colonne, les valeurs les plus fréquentes du
+     * fichier. On ne remplace jamais des exemples écrits à la main — ce serait détruire du travail — et on
+     * rend compte de tout : ce qui a été complété, ce qui a été laissé, et ce qui n'a rien donné.
+     */
+    async exemplesPourToutes(objet: ObjetMetier): Promise<void> {
+        this.echantillonnage.set(true);
+        const bilan: BilanEchantillonnage = bilanNeuf();
+        try {
+            for (const information of objet.elements || []) {
+                if (!classerAvantEchantillonnage(information, bilan)) continue;
+                const colonne = information.mappings[0];
+                const source = this.sources().find(candidat => candidat.name === colonne.table);
+                if (!source) {
+                    bilan.sansColonne++;
+                    continue;
+                }
+                const valeurs = await this.valeursDUneColonne(String(source.id), colonne.col);
+                if (!valeurs.length) {
+                    bilan.sansValeur++;
+                    continue;
+                }
+                poserDesExemples(information, valeurs);
+                bilan.completees++;
+            }
+            this.notifications.info(`${phraseDuBilan(bilan)} Enregistrez pour conserver.`);
+        } finally {
+            this.echantillonnage.set(false);
+        }
+    }
+
+    /** Les valeurs les plus fréquentes d'une colonne ; un fichier illisible ne fait pas échouer le reste. */
+    private async valeursDUneColonne(sourceId: string, colonne: string): Promise<string[]> {
+        try {
+            const valeurs = await this.api.valeursColonne(sourceId, colonne);
+            return valeurs.slice(0, EXEMPLES_PAR_INFORMATION).map(suggestion => suggestion.valeur);
+        } catch {
+            return [];
+        }
     }
 
     // ---- V13 : les variantes (« facettes ») d'un objet ----
