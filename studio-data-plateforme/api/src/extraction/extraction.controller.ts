@@ -95,7 +95,7 @@ export class ExtractionController {
     @RoleEspaceRequis('lecteur')
     @ApiOperation({ summary: 'Valeurs les plus fréquentes d’une colonne, pour les suggérer dans les filtres.' })
     async valeurs(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaValeurs)) corps: z.infer<typeof schemaValeurs>) {
-        const sources = await this.sources.lister(espace.id);
+        const sources = await this.sources.listerAvecJeux(espace.id);
         const source = sources.find(candidat => String(candidat.id) === corps.tableId);
         if (!source) throw erreurIntrouvable('Source inconnue.');
         if (!(source.headers || []).includes(corps.nomColonne)) throw erreurRequete(`Colonne inconnue : « ${corps.nomColonne} ».`);
@@ -203,7 +203,7 @@ export class ExtractionController {
         @Body(valider(schemaMaterialisation)) corps: z.infer<typeof schemaMaterialisation>
     ) {
         const { sql } = await this.construire(espace, corps.specification);
-        const sources = await this.sources.lister(espace.id);
+        const sources = await this.sources.listerAvecJeux(espace.id);
         const homonyme = sources.find(candidat => candidat.name === corps.nom);
         if (homonyme && homonyme.type !== 'extraction') throw erreurRequete(`Le nom « ${corps.nom} » est déjà celui d'une source déposée.`);
         const id = homonyme?.id || 'tb_' + randomBytes(6).toString('hex');
@@ -295,7 +295,7 @@ export class ExtractionController {
         // Le SQL personnalisé est une requête écrite par l'utilisateur : seule la lecture est acceptée.
         if (specification.sqlPersonnalise.trim() && !LECTURE_SEULE.test(specification.sqlPersonnalise))
             throw erreurRequete('SQL personnalisé : seules les requêtes de lecture (SELECT, WITH) sont acceptées.');
-        const sources = await this.sources.lister(espace.id);
+        const sources = await this.sources.listerAvecJeux(espace.id);
         const parId = new Map(sources.map(source => [String(source.id), source]));
         const contexte: ContexteConstruction = {
             nomTableDe: tableId => {

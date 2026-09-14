@@ -404,7 +404,7 @@ export class TableauxDeBordComponent {
         try {
             const [tableaux, sources, vocabulaire, vocabulaireFiltres] = await Promise.all([
                 this.api.tableauxDeBord(),
-                this.api.sources(),
+                this.api.sourcesEtJeux(),
                 this.vocabulaire() ?? this.api.vocabulaireExploitation(),
                 this.vocabulaireFiltres() ?? this.api.vocabulaireTablesConcues()
             ]);

@@ -43,9 +43,28 @@ function documentDe(ligne: Source): DocumentSource {
 export class SourcesService {
     constructor(@Inject(BASE_DE_DONNEES) private readonly base: BaseDeDonnees) {}
 
+    /**
+     * Les sources de l'espace, sans les jeux temporaires. C'est la liste que voient l'écran Sources, le modèle
+     * de données, le catalogue, la gouvernance et les sauvegardes : un jeu de session n'a rien à y faire.
+     */
     async lister(espaceId: string): Promise<DocumentSource[]> {
+        return (await this.listerAvecJeux(espaceId)).filter(document => !document.temporaire);
+    }
+
+    /**
+     * Les sources et les jeux temporaires réunis. Réservé aux écrans qui doivent pouvoir travailler sur un jeu
+     * de session — Extraire, Exploitation (comparer, statistiques, explorer, 360°, tableaux de bord) et Qualité —
+     * et à la résolution d'un identifiant de table en général.
+     */
+    async listerAvecJeux(espaceId: string): Promise<DocumentSource[]> {
         const lignes = await this.base.select().from(sources).where(eq(sources.espaceId, espaceId)).orderBy(sources.nom);
         return lignes.map(documentDe);
+    }
+
+    /** Les seuls jeux temporaires, du plus récent au plus ancien. */
+    async listerLesJeux(espaceId: string): Promise<DocumentSource[]> {
+        const jeux = (await this.listerAvecJeux(espaceId)).filter(document => document.temporaire);
+        return jeux.sort((premier, second) => String(second.enregistreLe).localeCompare(String(premier.enregistreLe)));
     }
 
     async lire(espaceId: string, id: string): Promise<DocumentSource> {

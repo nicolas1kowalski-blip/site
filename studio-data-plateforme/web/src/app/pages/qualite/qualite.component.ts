@@ -672,7 +672,7 @@ export class QualiteComponent {
     private async charger(): Promise<void> {
         try {
             const [sources, vocabulaire, relations, objets, listesValeurs, series] = await Promise.all([
-                this.api.sources(),
+                this.api.sourcesEtJeux(),
                 this.api.vocabulaireQualite(),
                 this.api.relations(),
                 this.api.objetsMetier(),

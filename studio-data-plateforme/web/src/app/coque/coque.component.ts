@@ -282,6 +282,7 @@ export class CoqueComponent {
             titre: 'Exploitation',
             liens: [
                 { chemin: '/extraction', libelle: 'Extraire', icone: '⤓' },
+                { chemin: '/jeux', libelle: 'Jeux temporaires', icone: '⏳' },
                 { chemin: '/preparation', libelle: 'Préparation', icone: '🧹' },
                 { chemin: '/tableaux-de-bord', libelle: 'Tableaux de bord', icone: '▤' },
                 { chemin: '/comparateur', libelle: 'Comparer', icone: '⇆' },

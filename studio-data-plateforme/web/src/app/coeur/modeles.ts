@@ -44,6 +44,8 @@ export type Source = {
     derniereMiseAJour?: string;
     /** Domaine (groupe de sources : Achats, Référentiels…), même champ que l'application classique. */
     theme?: string;
+    /** Vrai pour un jeu temporaire : exploitable partout, mais ni source, ni modèle, ni sauvegarde. */
+    temporaire?: boolean;
     /** Provenance particulière : « fusion » (plusieurs fichiers), « adresse » (import par URL), « preparation », « extraction ». */
     origine?: string;
     /** Paramètres mémorisés d'un import par adresse (pour le relancer). */
@@ -248,6 +250,20 @@ export type SpecificationExtraction = {
     limite?: number;
     sqlPersonnalise?: string;
 };
+/**
+ * Jeu temporaire : un tableau gardé pour l'espace de travail — résultat d'une extraction, fichier reçu,
+ * anomalies d'un audit, écarts d'une comparaison. Exploitable partout, jamais une source.
+ */
+export type JeuTemporaire = {
+    id: string;
+    nom: string;
+    origine: OrigineJeu;
+    lignes: number;
+    colonnes: string[];
+    creeLe: string;
+};
+export type OrigineJeu = 'extraction' | 'fichier' | 'anomalies' | 'ecarts' | 'requete';
+
 /** Valeur proposée dans un filtre, avec le nombre de lignes qui la portent. */
 export type ValeurSuggeree = { valeur: string; lignes: number };
 export type ApercuExtraction = { sql: string; colonnes: ColonneResultat[]; lignes: unknown[][]; limite: number };

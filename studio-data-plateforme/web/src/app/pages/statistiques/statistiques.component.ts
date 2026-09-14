@@ -163,7 +163,7 @@ export class StatistiquesComponent {
 
     private async charger(): Promise<void> {
         try {
-            const [sources, vocabulaire] = await Promise.all([this.api.sources(), this.api.vocabulaireExploitation()]);
+            const [sources, vocabulaire] = await Promise.all([this.api.sourcesEtJeux(), this.api.vocabulaireExploitation()]);
             this.sources.set(sources);
             this.vocabulaire.set(vocabulaire);
         } catch (erreur) {

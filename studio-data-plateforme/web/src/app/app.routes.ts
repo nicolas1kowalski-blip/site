@@ -19,6 +19,7 @@ import { EspacesComponent } from './pages/espaces/espaces.component';
 import { ExplorateurComponent } from './pages/explorateur/explorateur.component';
 import { Explorateur360Component } from './pages/explorateur-360/explorateur-360.component';
 import { ExtractionComponent } from './pages/extraction/extraction.component';
+import { JeuxComponent } from './pages/jeux/jeux.component';
 import { GlossaireComponent } from './pages/glossaire/glossaire.component';
 import { JournalComponent } from './pages/journal/journal.component';
 import { LineageComponent } from './pages/lineage/lineage.component';
@@ -59,6 +60,7 @@ export const routes: Routes = [
             { path: 'couverture', component: CouvertureComponent, title: 'Analyse de couverture — Studio Data' },
             { path: 'tables-concues', component: TablesConcuesComponent, title: 'Tables conçues — Studio Data' },
             { path: 'extraction', component: ExtractionComponent, title: 'Extraction — Studio Data' },
+            { path: 'jeux', component: JeuxComponent, title: 'Jeux temporaires — Studio Data' },
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
             { path: 'navigateur', component: NavigateurComponent, title: 'Navigateur de données — Studio Data' },
             { path: 'preparation', component: PreparationComponent, title: 'Préparation — Studio Data' },

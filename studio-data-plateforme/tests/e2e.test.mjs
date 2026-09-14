@@ -408,6 +408,49 @@ try {
         (await lignesDuResultat(page)).join() === 'ANA,IDRIS'
     );
 
+    // ---- jeux temporaires : garder un résultat, l'exploiter ailleurs, le promouvoir ----
+    await page.click('app-extraction input[name=sqlPersonnalise]');
+    page.once('dialog', dialogue => dialogue.accept('Clients à vérifier'));
+    await page.click('app-extraction button[name=garderJeu]');
+    await page.waitForSelector('.notification.succes:has-text("Jeu « Clients à vérifier » gardé")');
+    verifier(
+        'jeux : le résultat de l’extraction est gardé comme jeu temporaire (3 lignes, 4 colonnes)',
+        /3 ligne\(s\), 4 colonne\(s\)/.test(await page.textContent('.notification.succes:has-text("Clients à vérifier")'))
+    );
+    await page.click('a[href="/jeux"]');
+    await page.waitForSelector('app-jeux table.tableau tbody tr');
+    // Cellule par cellule : nom, origine, lignes, colonnes.
+    const cellulesJeu = await page.$$eval('app-jeux table.tableau tbody tr:first-child td', cellules =>
+        cellules.slice(0, 4).map(cellule => cellule.textContent.trim())
+    );
+    verifier(
+        'jeux : le panneau liste le jeu avec son origine et sa volumétrie',
+        cellulesJeu[0] === 'Clients à vérifier' && /extraction/.test(cellulesJeu[1]) && cellulesJeu[2] === '3' && cellulesJeu[3] === '4'
+    );
+    await capture('jeux-temporaires');
+    // Le jeu n'est pas une source : l'écran Sources ne doit pas le montrer.
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources');
+    verifier('jeux : un jeu temporaire n’apparaît pas dans les Sources', !/Clients à vérifier/.test(await page.textContent('app-sources')));
+    // …mais Qualité doit pouvoir l'auditer.
+    await page.click('a[href="/qualite"]');
+    await page.waitForSelector('app-qualite select[name=source]');
+    const sourcesAuditables = await page.$$eval('app-qualite select[name=source] option', options =>
+        options.map(option => option.textContent.trim())
+    );
+    verifier(
+        'jeux : le jeu est proposé à l’audit, aux côtés des sources',
+        sourcesAuditables.includes('Clients à vérifier') && sourcesAuditables.includes('clients.csv')
+    );
+    await page.click('a[href="/jeux"]');
+    await page.waitForSelector('app-jeux table.tableau tbody tr');
+    page.once('dialog', dialogue => dialogue.accept('Clients vérifiés'));
+    await page.click('app-jeux button:has-text("Promouvoir en source")');
+    await page.waitForSelector('.notification.succes:has-text("est désormais une source")');
+    await page.click('a[href="/sources"]');
+    await page.waitForFunction(() => /Clients vérifiés/.test(document.querySelector('app-sources')?.textContent || ''));
+    verifier('jeux : promu, le jeu devient une source de l’espace', true);
+
     // ---- qualité : profilage, doublons, règle et score ----
     await page.click('a[href="/qualite"]');
     await page.waitForSelector('app-qualite');
@@ -1090,10 +1133,10 @@ try {
     await page.waitForSelector('app-sauvegarde');
     const exportEspace = await page.evaluate(async () => await (await fetch('/api/sauvegarde/export')).json());
     verifier(
-        'sauvegarde : l’export de l’espace contient les documents partagés et les 6 sources',
+        'sauvegarde : l’export de l’espace contient les documents partagés et les 7 sources (dont le jeu promu)',
         exportEspace.kind === 'studio-data-espace' &&
             exportEspace.documents.appState.governance.businessObjects.length === 1 &&
-            exportEspace.sources.length === 6
+            exportEspace.sources.length === 7
     );
     const dossierHtml = await page.evaluate(async () => await (await fetch('/api/sauvegarde/dossier')).text());
     verifier(
@@ -1279,7 +1322,7 @@ try {
     }));
     verifier(
         'application classique : les sources déposées depuis Angular (dont la livraison ZIP et la fusion), la table conçue, la comparaison, la table préparée et l’extraction enregistrée sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 8 &&
+        classique.tables.length === 9 &&
             classique.tables.every(table => table.status === 'ready') &&
             classique.tables.filter(table => table.headers === 3).length === 4 &&
             classique.tables.some(table => table.name === 'Clients et produits' && table.headers === 7) &&

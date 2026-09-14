@@ -466,7 +466,7 @@ export class QualiteService {
         const source = await this.sourceDe(espace, sourceId);
         const profils = (await this.profilsCle(espace.id, source.name)).filter(profil => profil.parts.length);
         if (!profils.length) throw erreurRequete('Composez au moins un profil de clé fonctionnelle.');
-        const [sources, relations] = await Promise.all([this.sources.lister(espace.id), this.modele.relations(espace.id)]);
+        const [sources, relations] = await Promise.all([this.sources.listerAvecJeux(espace.id), this.modele.relations(espace.id)]);
         const contexte: ContexteCle = {
             nomTableDe: nom => {
                 const candidate = sources.find(candidat => candidat.name === nom);
@@ -621,7 +621,7 @@ export class QualiteService {
 
     /** Environnement d'évaluation : tables des sources et codes des listes de valeurs de la gouvernance. */
     private async contexteRegles(espaceId: string): Promise<{ contexte: ContexteRegle; parId: Map<string, DocumentSource> }> {
-        const [sources, etat] = await Promise.all([this.sources.lister(espaceId), this.gouvernance.etat(espaceId)]);
+        const [sources, etat] = await Promise.all([this.sources.listerAvecJeux(espaceId), this.gouvernance.etat(espaceId)]);
         const parId = new Map(sources.map(source => [String(source.id), source]));
         const parNom = new Map(sources.map(source => [source.name, source]));
         const listes = (etat.governance.valueLists || []) as unknown as ListeValeurs[];
@@ -744,7 +744,7 @@ export class QualiteService {
     async auditObjet(espace: EspaceAvecRole, objetId: string, auteurId: string, filtres?: FiltreSource[]): Promise<AuditObjet> {
         const [etat, sources, relations] = await Promise.all([
             this.gouvernance.etat(espace.id),
-            this.sources.lister(espace.id),
+            this.sources.listerAvecJeux(espace.id),
             this.modele.relations(espace.id)
         ]);
         const objet = (etat.governance.businessObjects as unknown as ObjetPourAudit[]).find(candidat => candidat.id === objetId);

@@ -168,7 +168,7 @@ export class NavigateurComponent {
     }
     private async charger(): Promise<void> {
         try {
-            const [sources, relations] = await Promise.all([this.api.sources(), this.api.relations()]);
+            const [sources, relations] = await Promise.all([this.api.sourcesEtJeux(), this.api.relations()]);
             this.sources.set(sources);
             this.relations.set(relations);
         } catch (erreur) {

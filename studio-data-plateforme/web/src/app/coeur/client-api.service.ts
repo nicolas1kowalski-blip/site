@@ -79,6 +79,7 @@ import {
     DefinitionProposition,
     ListeValeurs,
     ObjetMetier,
+    OrigineJeu,
     Perimetre,
     Personne,
     Proposition,
@@ -98,6 +99,7 @@ import {
     Espace,
     FicheDictionnaire,
     Identite,
+    JeuTemporaire,
     Membre,
     ModeleExtraction,
     Materialisation,
@@ -342,6 +344,43 @@ export class ClientApiService {
     }
     supprimerModeleExtraction(id: string): Promise<unknown> {
         return firstValueFrom(this.http.delete(`${this.racine}/extraction/modeles/${encodeURIComponent(id)}`));
+    }
+
+    // ---- jeux temporaires ----
+    jeux(): Promise<JeuTemporaire[]> {
+        return firstValueFrom(this.http.get<JeuTemporaire[]>(`${this.racine}/jeux`));
+    }
+    /**
+     * Les sources et les jeux temporaires réunis, pour les écrans qui travaillent sur les deux : les jeux
+     * portent le drapeau « temporaire », ce qui permet de les présenter à part dans les listes déroulantes.
+     */
+    async sourcesEtJeux(): Promise<Source[]> {
+        const [sources, jeux] = await Promise.all([this.sources(), this.jeux().catch(() => [] as JeuTemporaire[])]);
+        const tablesDesJeux: Source[] = jeux.map(jeu => ({
+            id: jeu.id,
+            name: jeu.nom,
+            type: 'jeu',
+            storage: 'table',
+            size: 0,
+            headers: jeu.colonnes,
+            temporaire: true
+        }));
+        return [...sources, ...tablesDesJeux];
+    }
+    creerJeu(sql: string, nom: string, origine: OrigineJeu): Promise<JeuTemporaire> {
+        return firstValueFrom(this.http.post<JeuTemporaire>(`${this.racine}/jeux`, { sql, nom, origine }));
+    }
+    renommerJeu(id: string, nom: string): Promise<JeuTemporaire> {
+        return firstValueFrom(this.http.put<JeuTemporaire>(`${this.racine}/jeux/${encodeURIComponent(id)}/nom`, { nom }));
+    }
+    promouvoirJeu(id: string, nom: string): Promise<Source> {
+        return firstValueFrom(this.http.post<Source>(`${this.racine}/jeux/${encodeURIComponent(id)}/promouvoir`, { nom }));
+    }
+    exporterJeuCsv(id: string): Promise<Blob> {
+        return firstValueFrom(this.http.post(`${this.racine}/jeux/${encodeURIComponent(id)}/export.csv`, {}, { responseType: 'blob' }));
+    }
+    supprimerJeu(id: string): Promise<unknown> {
+        return firstValueFrom(this.http.delete(`${this.racine}/jeux/${encodeURIComponent(id)}`));
     }
 
     // ---- qualité ----

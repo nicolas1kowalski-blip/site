@@ -815,6 +815,16 @@ const LIGNES_APERCU_RAPIDE = 500;
                                 ⬇️ Générer le CSV
                             </button>
                             @if (session.peutEditer()) {
+                                <button
+                                    class="bouton"
+                                    type="button"
+                                    name="garderJeu"
+                                    (click)="garderCommeJeu()"
+                                    [disabled]="!prete() || enCours()"
+                                    title="Garder le résultat pour la session, sans créer de source"
+                                >
+                                    ⏳ Garder comme jeu temporaire
+                                </button>
                                 <label class="case">
                                     <input type="checkbox" [(ngModel)]="ajouterCommeSource" name="ajouterCommeSource" />
                                     Ajouter aussi comme nouvelle source
@@ -1415,7 +1425,7 @@ export class ExtractionComponent {
     private async charger(): Promise<void> {
         try {
             const [sources, relations, vocabulaire, modeles, objets] = await Promise.all([
-                this.api.sources(),
+                this.api.sourcesEtJeux(),
                 this.api.relations(),
                 this.api.vocabulaireExtraction(),
                 this.api.modelesExtraction(),
@@ -1819,6 +1829,23 @@ export class ExtractionComponent {
             if (this.ajouterCommeSource()) await this.materialiser(nom);
         });
     }
+    /**
+     * Garde le résultat comme jeu temporaire : la requête construite est matérialisée dans une table de la
+     * session, utilisable aussitôt dans Comparer, Qualité, Statistiques, Explorer — sans créer de source.
+     */
+    async garderCommeJeu(): Promise<void> {
+        const nom = prompt('Nom du jeu temporaire :', this.nomDeSortie());
+        if (!nom) return;
+        await this.executer(async () => {
+            const { sql } = await this.api.sqlExtraction(this.specification());
+            const jeu = await this.api.creerJeu(sql, nom, 'extraction');
+            this.notifications.succes(
+                `Jeu « ${jeu.nom} » gardé : ${jeu.lignes.toLocaleString('fr-FR')} ligne(s), ${jeu.colonnes.length} colonne(s).`
+            );
+            this.sources.set(await this.api.sourcesEtJeux());
+        });
+    }
+
     private nomDeSortie(): string {
         return this.nomSourceProduite().trim() || this.nomDe(this.baseId()).replace(/\.[^.]+$/, '') + '_extraction';
     }

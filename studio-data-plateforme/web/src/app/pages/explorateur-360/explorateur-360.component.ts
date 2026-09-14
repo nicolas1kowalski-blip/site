@@ -195,7 +195,7 @@ export class Explorateur360Component {
 
     private async charger(): Promise<void> {
         try {
-            this.sources.set(await this.api.sources());
+            this.sources.set(await this.api.sourcesEtJeux());
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
