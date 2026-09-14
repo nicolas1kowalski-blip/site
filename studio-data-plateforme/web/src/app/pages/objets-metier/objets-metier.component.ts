@@ -576,9 +576,13 @@ export class ObjetsMetierComponent {
 
     /** Source demandée dans l'adresse (?source=nom) : l'objet est initialisé depuis elle dès le chargement. */
     private readonly sourceDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('source') || '';
+    /** Objet demandé dans l'adresse (?objet=identifiant) : sa fiche s'ouvre dès le chargement. */
+    private readonly objetDemande = inject(ActivatedRoute).snapshot.queryParamMap.get('objet') || '';
 
     constructor() {
         void this.recharger().then(() => {
+            const demande = this.objets().find(objet => objet.id === this.objetDemande);
+            if (demande) this.selectionner(demande);
             if (!this.sourceDemandee || !this.sources().some(source => source.name === this.sourceDemandee)) return;
             this.sourceInitiale = this.sourceDemandee;
             this.initialiserDepuisSource();

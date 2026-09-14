@@ -685,7 +685,14 @@ export class LineageComponent {
 
     constructor() {
         // Lien « Lineage » de l'écran Sources : /lineage?table=nom ouvre directement « Autour d'une table ».
-        const tableDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('table');
+        const parametres = inject(ActivatedRoute).snapshot.queryParamMap;
+        // Depuis l'accueil de la gouvernance : /lineage?objet=identifiant ouvre le parcours de cet objet.
+        const objetDemande = parametres.get('objet');
+        if (objetDemande) {
+            this.objetId = objetDemande;
+            this.onglet.set('attribut');
+        }
+        const tableDemandee = parametres.get('table');
         if (tableDemandee) {
             this.nomTable = tableDemandee;
             this.onglet.set('table');

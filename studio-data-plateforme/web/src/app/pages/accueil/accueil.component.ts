@@ -8,10 +8,11 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { Cockpit, EntreeJournal, Sante, formaterDate, formaterOctets } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { AccueilGouvernanceComponent } from './accueil-gouvernance.component';
 
 @Component({
     selector: 'app-accueil',
-    imports: [RouterLink],
+    imports: [RouterLink, AccueilGouvernanceComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -21,6 +22,7 @@ import { SessionService } from '../../coeur/session.service';
                 </p>
             </div>
         </div>
+        <app-accueil-gouvernance />
         @if (!session.espaceCourant()) {
             <div class="carte vide">Vous n'appartenez à aucun espace de travail. Demandez à un administrateur de vous y ajouter.</div>
         } @else {

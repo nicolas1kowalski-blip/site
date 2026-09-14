@@ -861,6 +861,44 @@ try {
     // On n'enregistre pas cet objet de démonstration : on revient sur « Client ».
     await page.click('app-objets-metier .liste .element:has-text("Client")');
 
+    // ---- V13 : l'accueil de la gouvernance — la question, les tâches, les mots du métier ----
+    await page.click('a[href="/"]');
+    await page.waitForSelector('app-accueil-gouvernance .question');
+    await page.fill('app-accueil-gouvernance input[name=question]', 'qui est responsable du client ?');
+    await page.click('app-accueil-gouvernance button[name=repondre]');
+    await page.waitForSelector('app-accueil-gouvernance .reponse');
+    const reponseQuestion = await page.textContent('app-accueil-gouvernance .reponse');
+    verifier(
+        'gouvernance V13 : « qui est responsable du client ? » répond Alice Martin, domaine Ventes, avec la fiche à un clic',
+        /Client/.test(reponseQuestion) &&
+            /Alice Martin/.test(reponseQuestion) &&
+            /Ventes/.test(reponseQuestion) &&
+            (await page.$$eval('app-accueil-gouvernance .reponse a', liens => liens.map(lien => lien.textContent.trim()))).join() ===
+                'Ouvrir la fiche,Voir le parcours'
+    );
+    await page.fill('app-accueil-gouvernance input[name=question]', "qu'est-ce qu'un client ?");
+    await page.click('app-accueil-gouvernance button[name=repondre]');
+    await page.waitForFunction(() =>
+        /au moins une commande/.test(document.querySelector('app-accueil-gouvernance .reponse')?.textContent || '')
+    );
+    verifier(
+        'gouvernance V13 : « qu’est-ce qu’un client ? » répond par la définition, et rien d’autre',
+        /Personne ayant passé au moins une commande/.test(await page.textContent('app-accueil-gouvernance .reponse')) &&
+            !/Responsable/.test(await page.textContent('app-accueil-gouvernance .reponse'))
+    );
+    const taches = await page.$$eval('app-accueil-gouvernance .tache', lignes => lignes.map(ligne => ligne.textContent.trim()));
+    verifier(
+        'gouvernance V13 : « Mes tâches » ne liste que ce qui manque vraiment (les deux informations sans définition)',
+        taches.some(tache => /information\(s\) sans définition\s*2/.test(tache.replace(/\s+/g, ' '))) &&
+            !taches.some(tache => /sans responsable/.test(tache))
+    );
+    verifier(
+        'gouvernance V13 : les mots du métier sont en première page, avec de quoi ajouter le premier',
+        /Les mots du métier/.test(await page.textContent('app-accueil-gouvernance')) &&
+            /Aucun mot défini/.test(await page.textContent('app-accueil-gouvernance'))
+    );
+    await capture('accueil-gouvernance');
+
     // ---- qualité avancée : périmètre d'audit, anomalies, règle par groupe et lignes en échec, clé fonctionnelle, objet métier ----
     await page.click('a[href="/qualite"]');
     await page.waitForSelector('app-qualite');
