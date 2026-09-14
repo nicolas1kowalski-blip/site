@@ -334,6 +334,43 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('app-modele app-graphe-svg .zone').length === 1, null, { timeout: 10000 });
     verifier('modèle V13 : deux tables du même domaine tiennent dans un seul cadre', true);
 
+    // ---- V13 : on prend un bloc et on le pose ailleurs ; la position est retenue ----
+    const placeDuBloc = () =>
+        page.$eval('app-modele app-graphe-svg .noeud rect', rectangle => ({
+            x: Number(rectangle.getAttribute('x')),
+            y: Number(rectangle.getAttribute('y'))
+        }));
+    const avantDeplacement = await placeDuBloc();
+    const bloc = page.locator('app-modele app-graphe-svg .noeud').first();
+    const cadreDuBloc = await bloc.boundingBox();
+    await page.mouse.move(cadreDuBloc.x + cadreDuBloc.width / 2, cadreDuBloc.y + cadreDuBloc.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(cadreDuBloc.x + cadreDuBloc.width / 2 + 120, cadreDuBloc.y + cadreDuBloc.height / 2 + 60, { steps: 8 });
+    await page.mouse.up();
+    const apresDeplacement = await placeDuBloc();
+    verifier(
+        'modèle V13 : un bloc se prend à la souris et se pose ailleurs',
+        apresDeplacement.x > avantDeplacement.x + 20 && apresDeplacement.y > avantDeplacement.y + 10
+    );
+    // La position survit au changement d'écran : c'est le schéma de la personne, pas une vue jetable.
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources table.sources tbody tr');
+    await page.click('a[href="/modele"]');
+    await page.waitForSelector('app-modele app-graphe-svg .noeud rect');
+    const apresRetour = await placeDuBloc();
+    verifier(
+        'modèle V13 : la position choisie est retenue d’un écran à l’autre',
+        Math.abs(apresRetour.x - apresDeplacement.x) < 2 && Math.abs(apresRetour.y - apresDeplacement.y) < 2
+    );
+    await capture('modele-bloc-deplace');
+    // « Ranger » oublie les déplacements et refait la disposition.
+    await page.click('app-modele app-graphe-svg button[name=ranger]');
+    await page.waitForFunction(
+        position => Math.abs(Number(document.querySelector('app-modele app-graphe-svg .noeud rect').getAttribute('x')) - position.x) > 20,
+        apresDeplacement
+    );
+    verifier('modèle V13 : « Ranger » oublie les blocs déplacés et refait la disposition', true);
+
     // ---- graphes V12.11 : tracé à angles droits, couloirs distincts, mise en avant au survol ----
     const cheminsDuModele = await page.$$eval('app-modele app-graphe-svg .lien path[stroke]:not([stroke=transparent])', chemins =>
         chemins.map(chemin => chemin.getAttribute('d'))

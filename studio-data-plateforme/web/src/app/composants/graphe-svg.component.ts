@@ -11,7 +11,17 @@ import { Component, ElementRef, computed, effect, inject, input, output, signal,
 import { exporterSvgEnImage } from '../coeur/export-image';
 import { NotificationsService } from '../coeur/notifications.service';
 import { PreferencesService } from '../coeur/preferences.service';
-import { HAUTEUR_ENTETE, HAUTEUR_LIGNE, ZoneDeDomaine, couleurDuDomaine, rangerParDomaine, tailleDuBloc, texteCoupe } from './blocs-graphe';
+import {
+    HAUTEUR_ENTETE,
+    HAUTEUR_LIGNE,
+    MARGE_ZONE,
+    PLACE_DU_NOM,
+    ZoneDeDomaine,
+    couleurDuDomaine,
+    rangerParDomaine,
+    tailleDuBloc,
+    texteCoupe
+} from './blocs-graphe';
 import { abscisseDuCouloir, cheminAAnglesDroits, cheminCourbe, pointsDAttache, surDesColonnesDistinctes } from './trace-liens';
 
 export type NoeudDessine = {
@@ -42,6 +52,8 @@ export type LienDessine = {
 type Place = { x: number; y: number; largeur: number; hauteur: number };
 type LienPlace = { lien: LienDessine; chemin: string; milieuX: number; milieuY: number; libelle: string };
 
+/** En deçà, on a cliqué ; au-delà, on a déplacé. Sans ce seuil, un clic un peu tremblant déplacerait tout. */
+const SEUIL_DE_DEPLACEMENT = 3;
 const ECART_COLONNES = 110;
 const ECART_LIGNES = 30;
 const LIGNES_MAXIMUM = 12;
@@ -173,6 +185,15 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
                     <button type="button" class="bouton petit" (click)="zoomerDe(1.25)" title="Zoom avant">+</button>
                     <button type="button" class="bouton petit" (click)="zoomerDe(0.8)" title="Zoom arrière">−</button>
                     <button type="button" class="bouton petit" (click)="ajuster()" title="Recentrer et réorganiser">⤢</button>
+                    <button
+                        type="button"
+                        class="bouton petit"
+                        name="ranger"
+                        (click)="ranger()"
+                        title="Ranger : oublier les blocs déplacés à la main et refaire la disposition"
+                    >
+                        ⌸
+                    </button>
                     <button type="button" class="bouton petit" (click)="pleinEcran()" title="Plein écran (Échap pour sortir)">⛶</button>
                     <button
                         type="button"
@@ -204,7 +225,7 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
                 <g [attr.transform]="'translate(' + translationX() + ' ' + translationY() + ') scale(' + echelle() + ')'">
                     <!-- V13 : chaque domaine a son cadre, dessiné derrière ses blocs et portant son nom. -->
                     @for (zone of zones(); track zone.domaine) {
-                        <g class="zone">
+                        <g class="zone" (pointerdown)="prendreUnDomaine($event, zone.domaine)">
                             <rect
                                 [attr.x]="zone.x"
                                 [attr.y]="zone.y"
@@ -219,6 +240,7 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
                             />
                             <text [attr.x]="zone.x + 8" [attr.y]="zone.y + 13" [attr.fill]="zone.trait" class="nom-zone">
                                 🗂 {{ zone.domaine }}
+                                <title>Glisser pour déplacer tout le domaine</title>
                             </text>
                         </g>
                     }
@@ -253,7 +275,8 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
                             [class.selectionne]="noeud.noeud.selectionne"
                             (mouseenter)="noeudSurvole.set(noeud.noeud.id)"
                             (mouseleave)="noeudSurvole.set('')"
-                            (click)="noeudChoisi.emit(noeud.noeud); $event.stopPropagation()"
+                            (pointerdown)="prendreUnNoeud($event, noeud.noeud.id)"
+                            (click)="choisirNoeud(noeud.noeud); $event.stopPropagation()"
                         >
                             <rect
                                 [attr.x]="noeud.place.x - noeud.place.largeur / 2"
@@ -390,6 +413,10 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
             fill: var(--texte-2);
         }
         /* V13 : le bloc — son titre dans l'en-tête, ses colonnes dessous. */
+        .noeud,
+        .zone {
+            cursor: grab;
+        }
         .noeud .titre-bloc {
             font-size: 12px;
             font-weight: 700;
@@ -468,6 +495,18 @@ export class GrapheSvgComponent {
     readonly translationX = signal(30);
     readonly translationY = signal(30);
     private deplacement: { x: number; y: number; translationX: number; translationY: number } | null = null;
+    /** Ce que l'on tient en ce moment : un bloc, ou le cadre d'un domaine (et tout ce qu'il contient). */
+    private saisi: {
+        quoi: 'noeud' | 'domaine';
+        cible: string;
+        depuis: { x: number; y: number };
+        bouge: number;
+        concernes?: string[];
+    } | null = null;
+    /** Vrai juste après un déplacement : le clic qui suit ne doit pas être pris pour une sélection. */
+    private vientDeBouger = false;
+    /** Positions choisies à la main : elles l'emportent sur le rangement automatique, et sont retenues. */
+    private readonly deplacees = signal<Record<string, { x: number; y: number }>>({});
 
     /**
      * Rangement des nœuds : en couches de gauche à droite (le sens des flèches prime), ou domaine par
@@ -476,6 +515,18 @@ export class GrapheSvgComponent {
     readonly disposition = input<'couches' | 'domaines'>('couches');
 
     readonly places = computed(() => {
+        const rangees = this.placesRangees();
+        const deplacees = this.deplacees();
+        if (!Object.keys(deplacees).length) return rangees;
+        // Une position choisie à la main l'emporte, mais garde la taille calculée du bloc.
+        const places: Record<string, Place> = {};
+        for (const [identifiant, place] of Object.entries(rangees))
+            places[identifiant] = deplacees[identifiant] ? { ...place, ...deplacees[identifiant] } : place;
+        return places;
+    });
+
+    /** Le rangement automatique, avant tout déplacement à la main. */
+    private readonly placesRangees = computed(() => {
         if (this.disposition() !== 'domaines') return disposer(this.noeuds(), this.liens());
         const rangement = rangerParDomaine(
             this.noeuds().map(noeud => {
@@ -492,16 +543,36 @@ export class GrapheSvgComponent {
         return places;
     });
 
-    /** Les cadres de domaine, dessinés derrière les blocs (vides hors du rangement par domaine). */
+    /**
+     * Les cadres de domaine, dessinés derrière les blocs (vides hors du rangement par domaine). Ils sont
+     * calculés sur les positions **effectives** : un bloc déplacé emmène le cadre de son domaine avec lui.
+     */
     readonly zones = computed<(ZoneDeDomaine & { trait: string })[]>(() => {
         if (this.disposition() !== 'domaines') return [];
         const domaines = this.noeuds().map(noeud => noeud.domaine || '');
-        return rangerParDomaine(
-            this.noeuds().map(noeud => {
-                const [largeur, hauteur] = tailleNoeud(noeud);
-                return { id: noeud.id, largeur, hauteur, domaine: noeud.domaine || '' };
-            })
-        ).zones.map(zone => ({ ...zone, trait: couleurDuDomaine(domaines, zone.domaine).trait }));
+        const places = this.places();
+        const cadres = new Map<string, ZoneDeDomaine>();
+        for (const noeud of this.noeuds()) {
+            const place = places[noeud.id];
+            if (!place) continue;
+            const domaine = noeud.domaine || '(sans domaine)';
+            const cadre = cadres.get(domaine);
+            const gauche = place.x - place.largeur / 2 - MARGE_ZONE;
+            const haut = place.y - place.hauteur / 2 - MARGE_ZONE - PLACE_DU_NOM;
+            const droite = place.x + place.largeur / 2 + MARGE_ZONE;
+            const bas = place.y + place.hauteur / 2 + MARGE_ZONE;
+            if (!cadre) {
+                cadres.set(domaine, { domaine, x: gauche, y: haut, largeur: droite - gauche, hauteur: bas - haut });
+                continue;
+            }
+            const nouveauGauche = Math.min(cadre.x, gauche);
+            const nouveauHaut = Math.min(cadre.y, haut);
+            cadre.largeur = Math.max(cadre.x + cadre.largeur, droite) - nouveauGauche;
+            cadre.hauteur = Math.max(cadre.y + cadre.hauteur, bas) - nouveauHaut;
+            cadre.x = nouveauGauche;
+            cadre.y = nouveauHaut;
+        }
+        return [...cadres.values()].map(zone => ({ ...zone, trait: couleurDuDomaine(domaines, zone.domaine).trait }));
     });
 
     /** Hauteurs du bloc, pour le gabarit : en-tête et ligne. */
@@ -579,6 +650,8 @@ export class GrapheSvgComponent {
 
     /** Vrai tant que la personne n'a ni déplacé ni zoomé : on peut alors recadrer sans la contrarier. */
     private cadrageLibre = true;
+    /** La clé dont les positions retenues ont déjà été relues : on ne les relit pas à chaque image. */
+    private cleDesPlacesLue = '';
 
     constructor() {
         if (this.preferences.lire('graphe.trace', 'angles') === 'courbes') this.trace.set('courbes');
@@ -586,6 +659,13 @@ export class GrapheSvgComponent {
         // navigué à la main — c'est ce que fait le classique (svgFitAll / needFit). Sans cela, un graphe
         // rangé par domaine peut s'ouvrir hors de l'écran.
         effect(() => {
+            // Les positions retenues ne peuvent être relues qu'ici : le nom du graphe, qui leur sert de clé,
+            // est une entrée du composant et n'existe pas encore au moment de sa construction.
+            const cle = this.clePlaces();
+            if (cle !== this.cleDesPlacesLue) {
+                this.cleDesPlacesLue = cle;
+                this.relireLesPlaces();
+            }
             const places = this.places();
             if (!this.cadrageLibre || !Object.keys(places).length) return;
             // Le cadrage a besoin des dimensions réelles du SVG : on attend la fin du rendu.
@@ -648,14 +728,107 @@ export class GrapheSvgComponent {
         };
     }
 
+    /**
+     * Prendre un bloc et le poser ailleurs (V13). La position choisie l'emporte alors sur le rangement
+     * automatique, et elle est retenue : on ne refait pas son schéma à chaque visite.
+     */
+    prendreUnNoeud(evenement: PointerEvent, identifiant: string): void {
+        evenement.stopPropagation();
+        evenement.preventDefault();
+        this.cadrageLibre = false;
+        this.saisi = { quoi: 'noeud', cible: identifiant, depuis: this.pointDuGraphe(evenement), bouge: 0 };
+    }
+
+    /** Prendre un domaine par son cadre : tous ses blocs suivent, leurs écarts inchangés. */
+    prendreUnDomaine(evenement: PointerEvent, domaine: string): void {
+        evenement.stopPropagation();
+        evenement.preventDefault();
+        this.cadrageLibre = false;
+        const concernes = this.noeuds()
+            .filter(noeud => (noeud.domaine || '(sans domaine)') === domaine)
+            .map(noeud => noeud.id);
+        this.saisi = { quoi: 'domaine', cible: domaine, depuis: this.pointDuGraphe(evenement), bouge: 0, concernes };
+    }
+
     deplacer(evenement: PointerEvent): void {
+        if (this.saisi) {
+            const point = this.pointDuGraphe(evenement);
+            const ecartX = point.x - this.saisi.depuis.x;
+            const ecartY = point.y - this.saisi.depuis.y;
+            this.saisi.depuis = point;
+            this.saisi.bouge += Math.abs(ecartX) + Math.abs(ecartY);
+            const concernes = this.saisi.quoi === 'noeud' ? [this.saisi.cible] : this.saisi.concernes || [];
+            const places = this.places();
+            this.deplacees.update(deplacees => {
+                const suite = { ...deplacees };
+                for (const identifiant of concernes) {
+                    const place = suite[identifiant] || places[identifiant];
+                    if (place) suite[identifiant] = { x: place.x + ecartX, y: place.y + ecartY };
+                }
+                return suite;
+            });
+            return;
+        }
         if (!this.deplacement) return;
         this.translationX.set(this.deplacement.translationX + evenement.clientX - this.deplacement.x);
         this.translationY.set(this.deplacement.translationY + evenement.clientY - this.deplacement.y);
     }
 
     finirDeplacement(): void {
+        if (this.saisi) {
+            if (this.saisi.bouge > SEUIL_DE_DEPLACEMENT) this.retenirLesPlaces();
+            // Un déplacement ne doit pas être compris comme un clic sur le bloc.
+            this.vientDeBouger = this.saisi.bouge > SEUIL_DE_DEPLACEMENT;
+            this.saisi = null;
+        }
         this.deplacement = null;
+    }
+
+    /** Le point du dessin sous la souris, une fois le déplacement et le zoom défaits. */
+    private pointDuGraphe(evenement: PointerEvent): { x: number; y: number } {
+        const rectangle = this.zone().nativeElement.getBoundingClientRect();
+        return {
+            x: (evenement.clientX - rectangle.left - this.translationX()) / this.echelle(),
+            y: (evenement.clientY - rectangle.top - this.translationY()) / this.echelle()
+        };
+    }
+
+    /** Un clic qui suit un déplacement ne choisit pas le bloc : on venait de le poser, pas de le désigner. */
+    choisirNoeud(noeud: NoeudDessine): void {
+        if (this.vientDeBouger) {
+            this.vientDeBouger = false;
+            return;
+        }
+        this.noeudChoisi.emit(noeud);
+    }
+
+    /** Range de nouveau : les positions choisies à la main sont oubliées, le rangement reprend la main. */
+    ranger(): void {
+        this.deplacees.set({});
+        this.preferences.oublier(this.clePlaces());
+        this.cadrageLibre = true;
+        setTimeout(() => this.ajuster(), 0);
+    }
+
+    private clePlaces(): string {
+        return `graphe.places.${this.nomImage()}`;
+    }
+
+    /** Retient les positions choisies, pour que le schéma se retrouve tel qu'on l'a laissé. */
+    private retenirLesPlaces(): void {
+        this.preferences.ecrire(this.clePlaces(), JSON.stringify(this.deplacees()));
+    }
+
+    /** Relit les positions retenues ; une mémoire abîmée est ignorée plutôt que de casser l'écran. */
+    private relireLesPlaces(): void {
+        const retenu = this.preferences.lire(this.clePlaces());
+        if (!retenu) return;
+        try {
+            const lues = JSON.parse(retenu) as Record<string, { x: number; y: number }>;
+            if (lues && typeof lues === 'object') this.deplacees.set(lues);
+        } catch {
+            this.preferences.oublier(this.clePlaces());
+        }
     }
 
     /** Ramène le graphe entier dans la zone visible. */

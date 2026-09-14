@@ -81,8 +81,8 @@ const ECART_BLOCS_X = 70;
 const ECART_BLOCS_Y = 80;
 const ECART_DOMAINES = 160;
 /** Marge du cadre autour des blocs, et place réservée au nom du domaine au-dessus. */
-const MARGE_ZONE = 22;
-const PLACE_DU_NOM = 16;
+export const MARGE_ZONE = 22;
+export const PLACE_DU_NOM = 16;
 
 /**
  * Range les blocs domaine par domaine : chaque domaine forme un carré de blocs, les domaines se suivent de
