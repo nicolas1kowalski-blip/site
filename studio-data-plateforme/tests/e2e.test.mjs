@@ -956,6 +956,84 @@ try {
     // On n'enregistre pas cet objet de démonstration : on revient sur « Client ».
     await page.click('app-objets-metier .liste .element:has-text("Client")');
 
+    // ---- V11 : actions groupées, glisser-déposer d'une colonne, dupliquer ----
+    await page.click('app-objets-metier button[name=actionsGroupees]');
+    await page.click('app-objets-metier button[name=choixTout]');
+    await page.selectOption('app-objets-metier select[name=gesteAction]', 'confidentialite');
+    await page.fill('app-objets-metier input[name=gesteValeur]', 'Interne');
+    await page.click('app-objets-metier button[name=appliquerGeste]');
+    // Glisser la dernière colonne du bandeau sur la première information : elle vient aussi de là.
+    const colonnes = page.locator('app-objets-metier .puce.colonne');
+    await colonnes.last().dragTo(page.locator('app-objets-metier tbody tr').first());
+    await page.waitForSelector('.notification:has-text("rattachée à")');
+    await page.click('app-objets-metier button:has-text("Enregistrer")');
+    await page.waitForSelector('.notification:has-text("enregistré")');
+    const clientApresGestes = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json()))[0];
+    verifier(
+        'confort V11 : la confidentialité posée d’un coup vaut pour les trois informations',
+        clientApresGestes.elements.every(information => information.sensitivity === 'Interne')
+    );
+    verifier(
+        'confort V11 : la colonne glissée sur une information s’ajoute à ses colonnes du fichier',
+        clientApresGestes.elements[0].mappings.length === 2
+    );
+    await capture('objets-metier-gestes-groupes');
+    // Dupliquer : la copie repart en brouillon, à renommer.
+    await page.click('app-objets-metier button[name=dupliquerObjet]');
+    await page.waitForSelector('app-objets-metier .liste .element:has-text("Client (copie)")');
+    const apresCopie = await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json());
+    const copie = apresCopie.find(objet => objet.name === 'Client (copie)');
+    verifier(
+        'confort V11 : la copie d’un objet repart en brouillon, avec ses informations et des identifiants neufs',
+        !!copie &&
+            copie.status === 'Brouillon' &&
+            copie.elements.length === clientApresGestes.elements.length &&
+            copie.elements[0].id !== clientApresGestes.elements[0].id
+    );
+    // On ne garde pas la copie : les écrans suivants comptent un seul objet métier.
+    page.once('dialog', dialogue => dialogue.accept());
+    await page.click('app-objets-metier button:has-text("Supprimer")');
+    await page.waitForFunction(() => !/Client \(copie\)/.test(document.querySelector('app-objets-metier .liste').textContent));
+
+    // ---- V11 : l'assistant de création en trois étapes ----
+    await page.click('app-objets-metier button[name=assistantObjet]');
+    await page.waitForSelector('app-assistant-objet');
+    await page.click('app-assistant-objet button[name=etapeSuivante]');
+    await page
+        .waitForFunction(() => /Donnez un nom/.test(document.querySelector('app-assistant-objet').textContent), null, { timeout: 3000 })
+        .catch(() => {});
+    verifier(
+        'confort V11 : l’assistant refuse d’avancer sans nom, et le dit',
+        /Donnez un nom/.test(await page.textContent('app-assistant-objet'))
+    );
+    await page.fill('app-assistant-objet input[name=assistantNom]', 'Site');
+    await page.fill('app-assistant-objet input[name=assistantDomaine]', 'Exploitation');
+    await page.click('app-assistant-objet button[name=etapeSuivante]');
+    await page.fill('app-assistant-objet textarea[name=assistantLibres]', 'Adresse\nVille du site');
+    await page.click('app-assistant-objet button[name=etapeSuivante]');
+    await page.fill('app-assistant-objet input[name=assistantResponsable]', 'Direction technique');
+    verifier(
+        'confort V11 : la dernière étape récapitule ce que l’on s’apprête à créer',
+        /Site · Exploitation — 2 information\(s\) écrites à la main/.test(await page.textContent('app-assistant-objet'))
+    );
+    await capture('assistant-objet');
+    await page.click('app-assistant-objet button[name=creerObjetAssistant]');
+    await page.waitForFunction(() => document.querySelector('app-objets-metier input[name=nom]')?.value === 'Site');
+    const avecSite = await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json());
+    const site = avecSite.find(objet => objet.name === 'Site');
+    verifier(
+        'confort V11 : l’assistant crée l’objet avec son domaine, son responsable et ses deux informations',
+        !!site &&
+            site.domain === 'Exploitation' &&
+            site.globalOwner === 'Direction technique' &&
+            site.elements.map(information => information.name).join() === 'Adresse,Ville du site'
+    );
+    // Objet de démonstration : on le retire, les écrans suivants comptent un seul objet métier.
+    page.once('dialog', dialogue => dialogue.accept());
+    await page.click('app-objets-metier button:has-text("Supprimer")');
+    await page.waitForFunction(() => !/Site/.test(document.querySelector('app-objets-metier .liste').textContent));
+    await page.click('app-objets-metier .liste .element:has-text("Client")');
+
     // ---- V13 : l'accueil de la gouvernance — la question, les tâches, les mots du métier ----
     await page.click('a[href="/"]');
     await page.waitForSelector('app-accueil-gouvernance .question');

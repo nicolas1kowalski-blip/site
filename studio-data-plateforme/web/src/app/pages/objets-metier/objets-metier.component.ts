@@ -16,6 +16,7 @@ import { ActivatedRoute } from '@angular/router';
 import { AnnulationService } from '../../coeur/annulation.service';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
+import { copieDUnObjet, messageDeCopie } from '../../coeur/duplication';
 import {
     Actif,
     AttributObjetMetier,
@@ -31,6 +32,9 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { completudeInformation, feuDeLObjet } from './description-information';
 import { originesValides, provenanceDe } from './origines-information';
+import { ACTIONS_GROUPEES, ActionGroupee, ChoixRapide, objetApresGeste, refusDuGeste, selonLeChoix } from './actions-groupees';
+import { AssistantObjetComponent } from './assistant-objet.component';
+import { ColonneOfferte, colonneLachee, colonneTransportee, colonnesDeLObjet, informationAvecColonne } from './colonnes-a-rattacher';
 import { FicheInformationComponent } from './fiche-information.component';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { PropositionObjetComponent } from './proposition-objet.component';
@@ -88,7 +92,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
 @Component({
     selector: 'app-objets-metier',
-    imports: [FormsModule, FicheInformationComponent, PropositionObjetComponent, ProposerCorrectionComponent],
+    imports: [FormsModule, FicheInformationComponent, PropositionObjetComponent, ProposerCorrectionComponent, AssistantObjetComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -108,9 +112,19 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                 <button class="bouton" name="decrireDepuisFichier" (click)="propositionOuverte.set(true)">
                     ✨ Décrire depuis un fichier / modèle
                 </button>
+                <button class="bouton" name="assistantObjet" (click)="assistantOuvert.set(true)">🪄 Assistant en 3 étapes</button>
                 <button class="bouton principal" (click)="nouvelObjet()">Nouvel objet</button>
             }
         </div>
+
+        @if (assistantOuvert()) {
+            <app-assistant-objet
+                [sources]="sources()"
+                [domaines]="domaines()"
+                (creerObjet)="adopterAssistant($event)"
+                (fermer)="assistantOuvert.set(false)"
+            />
+        }
 
         @if (propositionOuverte()) {
             <app-proposition-objet
@@ -151,6 +165,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                         @if (session.peutEditer()) {
                             <button class="bouton principal" (click)="enregistrer()" [disabled]="enCours()">Enregistrer</button>
                             @if (!nouveau()) {
+                                <button class="bouton" name="dupliquerObjet" (click)="dupliquer(objet)">⧉ Dupliquer</button>
                                 <button class="bouton danger" (click)="supprimer(objet)">Supprimer</button>
                             }
                         }
@@ -226,10 +241,102 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
                     <!-- informations : la liste, et la fiche en trois questions de celle qu'on ouvre (V13) -->
                     @if (ongletActif() === 'attributs') {
+                        @if (session.peutEditer() && objet.elements.length) {
+                            <div class="entete-page" style="margin: 0 0 8px">
+                                <span class="discret espace">{{ objet.elements.length }} information(s)</span>
+                                <button class="bouton petit" type="button" name="actionsGroupees" (click)="basculerGeste(objet)">
+                                    ☑ Actions groupées
+                                </button>
+                            </div>
+                        }
+                        <!-- V11 : poser le même geste sur plusieurs informations d'un coup -->
+                        @if (gesteOuvert()) {
+                            <div class="carte geste">
+                                <div class="entete-page" style="margin: 0 0 8px">
+                                    <b class="espace">Actions groupées — {{ informationsChoisies().length }} information(s) choisie(s)</b>
+                                    <button class="bouton petit" type="button" name="choixTout" (click)="choisir(objet, 'tout')">
+                                        Tout
+                                    </button>
+                                    <button class="bouton petit" type="button" name="choixAucun" (click)="choisir(objet, 'aucun')">
+                                        Aucune
+                                    </button>
+                                    <button
+                                        class="bouton petit"
+                                        type="button"
+                                        name="choixSansDefinition"
+                                        (click)="choisir(objet, 'sansDefinition')"
+                                    >
+                                        Sans définition
+                                    </button>
+                                    <button
+                                        class="bouton petit"
+                                        type="button"
+                                        name="choixSansOrigine"
+                                        (click)="choisir(objet, 'sansOrigine')"
+                                    >
+                                        Sans provenance
+                                    </button>
+                                    <button class="bouton petit" type="button" name="fermerGeste" (click)="gesteOuvert.set(false)">
+                                        Fermer
+                                    </button>
+                                </div>
+                                <div class="ligne-champs">
+                                    <select class="champ" name="gesteAction" [(ngModel)]="gesteAction">
+                                        @for (choix of actionsGroupees; track choix.action) {
+                                            <option [value]="choix.action">{{ choix.libelle }}</option>
+                                        }
+                                    </select>
+                                    @if (gesteAction === 'usage') {
+                                        <select class="champ" name="gesteValeur" [(ngModel)]="gesteValeur">
+                                            <option value="">— application ou processus —</option>
+                                            @for (actif of actifs(); track actif.id) {
+                                                <option [value]="actif.id">{{ actif.name }}</option>
+                                            }
+                                        </select>
+                                    } @else {
+                                        <input
+                                            class="champ"
+                                            name="gesteValeur"
+                                            [(ngModel)]="gesteValeur"
+                                            [placeholder]="valeurAttendue()"
+                                            [attr.list]="gesteAction === 'terme' ? 'geste-termes' : null"
+                                        />
+                                        <datalist id="geste-termes">
+                                            @for (terme of termes(); track terme.id) {
+                                                <option [value]="terme.term"></option>
+                                            }
+                                        </datalist>
+                                    }
+                                    <button class="bouton principal" type="button" name="appliquerGeste" (click)="appliquerGeste(objet)">
+                                        Appliquer
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                        <!-- V11 : les colonnes des sources de l'objet, à glisser sur une information -->
+                        @if (session.peutEditer() && colonnesOffertes(objet).length) {
+                            <div class="colonnes-a-glisser">
+                                <span class="discret">Glissez une colonne sur une information pour dire d'où elle vient :</span>
+                                @for (offerte of colonnesOffertes(objet); track offerte.table + '.' + offerte.colonne) {
+                                    <span
+                                        class="puce colonne"
+                                        [class.utilisee]="offerte.dejaRattachee"
+                                        draggable="true"
+                                        [title]="offerte.table + ' · ' + offerte.colonne"
+                                        (dragstart)="commencerGlissement($event, offerte)"
+                                    >
+                                        {{ offerte.colonne }}
+                                    </span>
+                                }
+                            </div>
+                        }
                         <div class="defilement-x">
                             <table class="tableau">
                                 <thead>
                                     <tr>
+                                        @if (gesteOuvert()) {
+                                            <th></th>
+                                        }
                                         <th title="Terme technique : attribut">Information</th>
                                         <th>Définition</th>
                                         <th title="Terme technique : mapping">D'où ça vient</th>
@@ -239,7 +346,23 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                 </thead>
                                 <tbody>
                                     @for (attribut of objet.elements; track attribut.id; let index = $index) {
-                                        <tr [class.ouverte]="attribut.id === informationOuverte()">
+                                        <tr
+                                            [class.ouverte]="attribut.id === informationOuverte()"
+                                            [class.survolee]="attribut.id === informationSurvolee()"
+                                            (dragover)="survolerInformation($event, attribut)"
+                                            (dragleave)="informationSurvolee.set('')"
+                                            (drop)="lacherSurInformation($event, attribut)"
+                                        >
+                                            @if (gesteOuvert()) {
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        [checked]="informationsChoisies().includes(attribut.id)"
+                                                        [attr.name]="'geste-' + index"
+                                                        (change)="basculerChoix(attribut.id)"
+                                                    />
+                                                </td>
+                                            }
                                             <td>
                                                 <input
                                                     class="champ"
@@ -439,6 +562,28 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         </div>
     `,
     styles: `
+        /* V11 : le bandeau des colonnes que l'on fait glisser sur une information. */
+        .colonnes-a-glisser {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .puce.colonne {
+            cursor: grab;
+        }
+        /* Une colonne déjà rattachée reste visible, mais en retrait : on voit ce qui n'a pas trouvé sa place. */
+        .puce.colonne.utilisee {
+            opacity: 0.45;
+        }
+        tr.survolee td {
+            background: var(--accent-2);
+        }
+        .carte.geste {
+            margin-bottom: 10px;
+        }
+
         /* Feu tricolore d'un objet : d'un coup d'œil, ce qui est documenté et ce qui n'a pas de responsable. */
         .feu {
             display: inline-block;
@@ -561,6 +706,17 @@ export class ObjetsMetierComponent {
     readonly edition = signal<ObjetMetier | null>(null);
     /** Identifiant de l'information dont la fiche en trois questions est ouverte ; vide = aucune. */
     readonly informationOuverte = signal('');
+    /** L'assistant en trois étapes (V11) : ouvert ou non. */
+    readonly assistantOuvert = signal(false);
+    /** Le panneau des actions groupées (V11) : ouvert ou non. */
+    readonly gesteOuvert = signal(false);
+    /** Les informations cochées pour le geste groupé. */
+    readonly informationsChoisies = signal<string[]>([]);
+    /** L'information survolée pendant un glissement de colonne : elle s'éclaire pour dire où l'on va lâcher. */
+    readonly informationSurvolee = signal('');
+    gesteAction: ActionGroupee = 'confidentialite';
+    gesteValeur = '';
+    readonly actionsGroupees = ACTIONS_GROUPEES;
     /** Vrai quand le panneau « ✨ Décrire depuis un fichier / modèle » est ouvert. */
     readonly propositionOuverte = signal(false);
     readonly nouveau = signal(false);
@@ -760,6 +916,93 @@ export class ObjetsMetierComponent {
 
     completude(objet: ObjetMetier): { score: number; aFaire: string[] } {
         return completudeObjet(objet, this.actifs().length > 0);
+    }
+
+    // ---- V11 : actions groupées sur plusieurs informations ----
+
+    basculerGeste(objet: ObjetMetier): void {
+        this.gesteOuvert.update(ouvert => !ouvert);
+        // À l'ouverture, on part de ce qui manque le plus souvent : les informations sans définition.
+        if (this.gesteOuvert()) this.choisir(objet, 'sansDefinition');
+    }
+
+    choisir(objet: ObjetMetier, choix: ChoixRapide): void {
+        this.informationsChoisies.set(selonLeChoix(objet.elements || [], choix));
+    }
+
+    basculerChoix(identifiant: string): void {
+        this.informationsChoisies.update(choisies =>
+            choisies.includes(identifiant) ? choisies.filter(autre => autre !== identifiant) : [...choisies, identifiant]
+        );
+    }
+
+    /** Ce que l'on attend comme valeur pour l'action choisie — affiché en repère dans le champ. */
+    valeurAttendue(): string {
+        return ACTIONS_GROUPEES.find(choix => choix.action === this.gesteAction)?.valeur || '';
+    }
+
+    appliquerGeste(objet: ObjetMetier): void {
+        const refus = refusDuGeste(this.informationsChoisies(), this.gesteAction, this.gesteValeur);
+        if (refus) return this.notifications.erreur(refus);
+        const apres = objetApresGeste(objet, this.informationsChoisies(), this.gesteAction, this.gesteValeur);
+        objet.elements = apres.objet.elements;
+        this.notifications.info(`${apres.modifiees} information(s) modifiée(s) — enregistrez pour conserver.`);
+    }
+
+    // ---- V11 : glisser une colonne du fichier sur une information ----
+
+    /** Les colonnes des sources de l'objet ; une méthode, car l'objet est modifié sur place dans la fiche. */
+    colonnesOffertes(objet: ObjetMetier): ColonneOfferte[] {
+        return colonnesDeLObjet(objet, this.sources());
+    }
+
+    commencerGlissement(evenement: DragEvent, offerte: ColonneOfferte): void {
+        evenement.dataTransfer?.setData('text/plain', colonneTransportee(offerte.table, offerte.colonne));
+    }
+
+    /** Sans ce « préventif », le navigateur refuse le dépôt : c'est ainsi qu'on déclare une zone d'accueil. */
+    survolerInformation(evenement: DragEvent, attribut: AttributObjetMetier): void {
+        evenement.preventDefault();
+        this.informationSurvolee.set(attribut.id);
+    }
+
+    lacherSurInformation(evenement: DragEvent, attribut: AttributObjetMetier): void {
+        evenement.preventDefault();
+        this.informationSurvolee.set('');
+        const lachee = colonneLachee(evenement.dataTransfer?.getData('text/plain') || '');
+        if (!lachee) return;
+        const apres = informationAvecColonne(attribut, lachee.table, lachee.colonne);
+        if (!apres.ajoutee) return this.notifications.info(`« ${lachee.colonne} » était déjà rattachée à « ${attribut.name} ».`);
+        attribut.mappings = apres.information.mappings;
+        this.notifications.info(`« ${lachee.colonne} » rattachée à « ${attribut.name} » — enregistrez pour conserver.`);
+    }
+
+    // ---- V11 : dupliquer et assistant en trois étapes ----
+
+    /** Une copie repart en brouillon, sans historique, avec des informations aux identifiants neufs. */
+    async dupliquer(objet: ObjetMetier): Promise<void> {
+        const copie = copieDUnObjet(objet, genererIdentifiant);
+        try {
+            const { id, ...corps } = copie;
+            await this.api.enregistrerObjetMetier(id, corps);
+            await this.recharger();
+            this.selectionner(this.objets().find(candidat => candidat.id === id) || copie);
+            this.annulation.retenir(
+                retourDUneEcriture(`l'objet métier « ${copie.name} »`, id, null, this.moyensDuRetour()),
+                messageDeCopie(copie.name)
+            );
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** L'objet monté par l'assistant est enregistré tel quel, puis ouvert pour être complété. */
+    async adopterAssistant(objet: ObjetMetier): Promise<void> {
+        this.assistantOuvert.set(false);
+        this.edition.set(objet);
+        this.nouveau.set(true);
+        await this.enregistrer();
+        this.selectionner(this.objets().find(candidat => candidat.id === objet.id) || objet);
     }
 
     /**

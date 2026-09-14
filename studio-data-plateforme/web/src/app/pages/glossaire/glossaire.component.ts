@@ -3,6 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { AnnulationService } from '../../coeur/annulation.service';
+import { copieDUnTerme, messageDeCopie } from '../../coeur/duplication';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
 import { TermeGlossaire, genererIdentifiant } from '../../coeur/modeles';
@@ -82,6 +83,9 @@ import { SessionService } from '../../coeur/session.service';
                                 <td style="white-space: nowrap">
                                     @if (session.peutEditer()) {
                                         <button class="bouton petit" (click)="modifier(terme)">Modifier</button>
+                                        <button class="bouton petit" [attr.name]="'dupliquer-' + terme.id" (click)="dupliquer(terme)">
+                                            ⧉
+                                        </button>
                                         <button class="bouton petit danger" (click)="supprimer(terme)">Supprimer</button>
                                     }
                                     <app-proposer-correction
@@ -169,6 +173,22 @@ export class GlossaireComponent {
             this.annulation.retenir(
                 retourDUneEcriture(`le terme « ${brouillon.terme.term} »`, id, avant, this.moyensDuRetour()),
                 `Terme « ${brouillon.terme.term} » enregistré.`
+            );
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** Une copie du terme, à renommer : ses rattachements restent à l'original. */
+    async dupliquer(terme: TermeGlossaire): Promise<void> {
+        const copie = copieDUnTerme(terme, genererIdentifiant);
+        try {
+            const { id, ...champs } = copie;
+            await this.api.enregistrerTerme(id, champs);
+            await this.recharger();
+            this.annulation.retenir(
+                retourDUneEcriture(`le terme « ${copie.term} »`, id, null, this.moyensDuRetour()),
+                messageDeCopie(copie.term)
             );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);

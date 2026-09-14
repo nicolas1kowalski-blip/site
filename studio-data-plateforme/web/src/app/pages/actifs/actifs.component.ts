@@ -9,6 +9,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { AnnulationService } from '../../coeur/annulation.service';
+import { copieDUnActif, messageDeCopie } from '../../coeur/duplication';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
 import { Actif, GenreActif, ObjetMetier, Source, VocabulaireGouvernance, genererIdentifiant } from '../../coeur/modeles';
@@ -72,6 +73,7 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                         @if (session.peutEditer()) {
                             <button class="bouton principal" (click)="enregistrer()" [disabled]="enCours()">Enregistrer</button>
                             @if (!nouveau()) {
+                                <button class="bouton" name="dupliquerActif" (click)="dupliquer(actif)">⧉ Dupliquer</button>
                                 <button class="bouton danger" (click)="supprimer(actif)">Supprimer</button>
                             }
                         }
@@ -408,6 +410,27 @@ export class ActifsComponent {
             this.notifications.erreur(erreur as Error);
         } finally {
             this.enCours.set(false);
+        }
+    }
+
+    /**
+     * Une copie de l'application, à renommer. Ses sources ne suivent pas : une table n'a qu'un producteur,
+     * et il reste l'original.
+     */
+    async dupliquer(actif: Actif): Promise<void> {
+        const copie = copieDUnActif(actif, genererIdentifiant);
+        try {
+            const { id, ...corps } = copie;
+            await this.api.enregistrerActif(id, corps);
+            await this.recharger();
+            this.selectionId.set(id);
+            this.edition.set(this.actifs().find(candidat => candidat.id === id) || copie);
+            this.annulation.retenir(
+                retourDUneEcriture(`« ${copie.name} »`, id, null, this.moyensDuRetour()),
+                messageDeCopie(copie.name, "Ses sources n'ont pas été copiées : une table n'a qu'un producteur.")
+            );
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
         }
     }
 
