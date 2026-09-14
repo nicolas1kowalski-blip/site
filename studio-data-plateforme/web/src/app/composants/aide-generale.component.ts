@@ -21,6 +21,8 @@ export const RACCOURCIS_AIDE: { touches: string; quoi: string }[] = [
     { touches: 'G puis R', quoi: 'Aller aux Règles & score' },
     { touches: 'G puis B', quoi: 'Aller aux Tableaux de bord' },
     { touches: 'G puis I', quoi: "Revenir à l'accueil" },
+    { touches: 'Ctrl + Z', quoi: 'Annuler la dernière modification du référentiel' },
+    { touches: 'Maj + P', quoi: 'Mode présentation : grandes polices, menu masqué' },
     { touches: 'Alt + ←', quoi: 'Écran précédent' },
     { touches: 'Alt + →', quoi: 'Écran suivant' },
     { touches: 'Échap', quoi: 'Quitter le plein écran, fermer la recherche ou cette aide' },

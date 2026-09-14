@@ -2,7 +2,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
+import { AnnulationService } from '../../coeur/annulation.service';
 import { ClientApiService } from '../../coeur/client-api.service';
+import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
 import { TermeGlossaire, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
@@ -107,6 +109,7 @@ export class GlossaireComponent {
     readonly session = inject(SessionService);
     private readonly api = inject(ClientApiService);
     private readonly notifications = inject(NotificationsService);
+    private readonly annulation = inject(AnnulationService);
 
     readonly termes = signal<TermeGlossaire[]>([]);
     recherche = '';
@@ -144,25 +147,44 @@ export class GlossaireComponent {
         this.brouillon$.set({ nouveau: false, terme: { ...terme } });
     }
 
+    /** Les mêmes appels que la saisie ordinaire, pour défaire une écriture sur le glossaire. */
+    private moyensDuRetour(): MoyensDuRetour<TermeGlossaire> {
+        return {
+            ecrire: (id, contenu) => this.api.enregistrerTerme(id, contenu),
+            effacer: id => this.api.supprimerTerme(id),
+            relire: () => this.recharger()
+        };
+    }
+
     async enregistrer(): Promise<void> {
         const brouillon = this.brouillon$();
         if (!brouillon || !brouillon.terme.term.trim()) return;
+        // La version d'avant est prise avant l'appel : c'est elle que « ⟲ Annuler » réécrira.
+        const avant = this.termes().find(candidat => candidat.id === brouillon.terme.id) || null;
         try {
             const { id, ...champs } = brouillon.terme;
             await this.api.enregistrerTerme(id, champs);
-            this.notifications.succes(`Terme « ${brouillon.terme.term} » enregistré.`);
             this.brouillon$.set(null);
             await this.recharger();
+            this.annulation.retenir(
+                retourDUneEcriture(`le terme « ${brouillon.terme.term} »`, id, avant, this.moyensDuRetour()),
+                `Terme « ${brouillon.terme.term} » enregistré.`
+            );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
     }
 
+    /** Suppression sûre : on nomme le terme, et le retour en arrière reste offert ensuite. */
     async supprimer(terme: TermeGlossaire): Promise<void> {
-        if (!confirm(`Supprimer le terme « ${terme.term} » ?`)) return;
+        if (!confirm(questionAvantSuppression(`le terme « ${terme.term} »`))) return;
         try {
             await this.api.supprimerTerme(terme.id);
             await this.recharger();
+            this.annulation.retenir(
+                retourDUneSuppression(`le terme « ${terme.term} »`, terme, this.moyensDuRetour()),
+                `Terme « ${terme.term} » supprimé.`
+            );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

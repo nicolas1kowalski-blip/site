@@ -11,6 +11,7 @@ import { FilArianeComponent } from '../composants/fil-ariane.component';
 import { PaletteCommandesComponent } from '../composants/palette-commandes.component';
 import { PresentationComponent } from '../composants/presentation.component';
 import { SansDonneesComponent } from '../composants/sans-donnees.component';
+import { AnnulationService } from '../coeur/annulation.service';
 import { GROUPES_NAVIGATION, RACCOURCIS_ECRAN } from '../coeur/navigation';
 import { NotificationsService } from '../coeur/notifications.service';
 import { SessionService } from '../coeur/session.service';
@@ -113,6 +114,17 @@ const DELAI_RACCOURCI_MS = 1200;
                         title="Cliquer pour fermer"
                     >
                         <span class="espace">{{ notification.message }}</span>
+                        @if (notification.action; as action) {
+                            <!-- Le clic sur le bouton ne doit pas être compris comme « fermer la notification ». -->
+                            <button
+                                class="bouton petit"
+                                type="button"
+                                name="annuler"
+                                (click)="$event.stopPropagation(); action.faire(); notifications.fermer(notification.id)"
+                            >
+                                {{ action.libelle }}
+                            </button>
+                        }
                         <span class="fermer" aria-label="Fermer">✕</span>
                     </div>
                 }
@@ -281,6 +293,7 @@ const DELAI_RACCOURCI_MS = 1200;
 export class CoqueComponent {
     readonly session = inject(SessionService);
     readonly notifications = inject(NotificationsService);
+    readonly annulation = inject(AnnulationService);
     private readonly routeur = inject(Router);
     /** Densité compacte : tableaux, cartes et tuiles resserrés (classe « compact » posée sur le corps de la page). */
     readonly compact = signal(false);
@@ -322,6 +335,13 @@ export class CoqueComponent {
             this.palette().basculer();
             return;
         }
+        // Ctrl+Z défait la dernière modification du référentiel — sauf dans un champ, où c'est au navigateur
+        // d'annuler la frappe : on ne détourne jamais une touche pendant une saisie.
+        if ((evenement.ctrlKey || evenement.metaKey) && evenement.key.toLowerCase() === 'z' && !this.saisieEnCours(evenement)) {
+            evenement.preventDefault();
+            void this.annulation.annuler();
+            return;
+        }
         if (evenement.ctrlKey || evenement.metaKey || evenement.altKey || this.saisieEnCours(evenement)) return;
         const touche = evenement.key.toLowerCase();
         if (touche === 'g') {
@@ -347,6 +367,8 @@ export class CoqueComponent {
         if (!code) return;
         try {
             await this.session.changerEspace(code);
+            // Les gestes retenus visaient le référentiel de l'espace précédent : ils n'ont plus de sens ici.
+            this.annulation.oublierTout();
             this.notifications.info(`Espace de travail : ${this.session.espaceCourant()?.nom}`);
             // Les pages relisent leurs données à l'ouverture : on recharge la route courante.
             const url = this.routeur.url;

@@ -150,7 +150,7 @@ try {
         'confort V11 : le mode présentation agrandit l’écran et masque le menu de gauche',
         await page.evaluate(() => {
             const rail = document.querySelector('.rail');
-            return getComputedStyle(document.body).fontSize === '18px' && getComputedStyle(rail).display === 'none';
+            return window.getComputedStyle(document.body).fontSize === '18px' && window.getComputedStyle(rail).display === 'none';
         })
     );
     await capture('mode-presentation');
@@ -158,7 +158,7 @@ try {
     await page.waitForFunction(() => !document.body.classList.contains('en-presentation'));
     verifier(
         'confort V11 : Échap quitte la présentation et rend l’écran tel qu’il était',
-        await page.evaluate(() => getComputedStyle(document.querySelector('.rail')).display !== 'none')
+        await page.evaluate(() => window.getComputedStyle(document.querySelector('.rail')).display !== 'none')
     );
     verifier(
         'confort V11 : le bouton « imprimer » est offert à côté de l’aide',
@@ -1715,6 +1715,48 @@ try {
         'glossaire : terme créé et listé',
         /Client/.test(await page.textContent('app-glossaire tbody')) && /Ventes/.test(await page.textContent('app-glossaire tbody'))
     );
+    // ---- V11 : suppression sûre et annulation — supprimer un terme, puis le retrouver ----
+    await page.click('app-glossaire button:has-text("Nouveau terme")');
+    await page.fill('app-glossaire input[name=term]', 'Terme à retirer');
+    await page.fill('app-glossaire textarea[name=definition]', 'Créé pour vérifier que l’on peut revenir en arrière');
+    await page.click('app-glossaire button[type=submit]');
+    await page.waitForFunction(() => /Terme à retirer/.test(document.querySelector('app-glossaire tbody').textContent));
+    let questionPosee = '';
+    page.once('dialog', dialogue => {
+        questionPosee = dialogue.message();
+        dialogue.accept();
+    });
+    await page
+        .locator('app-glossaire tbody tr', { has: page.locator('b', { hasText: /^Terme à retirer$/ }) })
+        .locator('button:has-text("Supprimer")')
+        .click();
+    await page.waitForFunction(() => !/Terme à retirer/.test(document.querySelector('app-glossaire tbody').textContent));
+    verifier(
+        'confort V11 : la suppression nomme ce qui va disparaître et annonce que l’on peut revenir en arrière',
+        /Terme à retirer/.test(questionPosee) && /Annuler/.test(questionPosee)
+    );
+    await page.click('.notification button[name=annuler]');
+    await page.waitForFunction(() => /Terme à retirer/.test(document.querySelector('app-glossaire tbody').textContent));
+    verifier('confort V11 : « ⟲ Annuler » remet le terme supprimé, tel qu’il était', true);
+    // La même chose au clavier : Ctrl+Z défait la dernière modification du référentiel.
+    page.once('dialog', dialogue => dialogue.accept());
+    await page
+        .locator('app-glossaire tbody tr', { has: page.locator('b', { hasText: /^Terme à retirer$/ }) })
+        .locator('button:has-text("Supprimer")')
+        .click();
+    await page.waitForFunction(() => !/Terme à retirer/.test(document.querySelector('app-glossaire tbody').textContent));
+    await page.keyboard.press('Control+z');
+    await page.waitForFunction(() => /Terme à retirer/.test(document.querySelector('app-glossaire tbody').textContent));
+    verifier('confort V11 : Ctrl+Z annule la dernière modification du référentiel', true);
+    await capture('annulation');
+    // On repart d'un glossaire propre : le terme d'essai n'a plus à traîner dans les écrans suivants.
+    page.once('dialog', dialogue => dialogue.accept());
+    await page
+        .locator('app-glossaire tbody tr', { has: page.locator('b', { hasText: /^Terme à retirer$/ }) })
+        .locator('button:has-text("Supprimer")')
+        .click();
+    await page.waitForFunction(() => !/Terme à retirer/.test(document.querySelector('app-glossaire tbody').textContent));
+
     await page.click('a[href="/dictionnaire"]');
     await page.waitForSelector('app-dictionnaire .element');
     await page.locator('app-dictionnaire .element', { has: page.locator('b', { hasText: /^clients\.csv$/ }) }).click();

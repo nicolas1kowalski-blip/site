@@ -8,7 +8,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
+import { AnnulationService } from '../../coeur/annulation.service';
 import { ClientApiService } from '../../coeur/client-api.service';
+import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
 import { Actif, GenreActif, ObjetMetier, Source, VocabulaireGouvernance, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
@@ -307,6 +309,7 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
 export class ActifsComponent {
     private readonly api = inject(ClientApiService);
     private readonly notifications = inject(NotificationsService);
+    private readonly annulation = inject(AnnulationService);
     readonly session = inject(SessionService);
 
     readonly actifs = signal<Actif[]>([]);
@@ -376,17 +379,31 @@ export class ActifsComponent {
         else liste.push(valeur);
     }
 
+    /** Les mêmes appels que la saisie ordinaire, pour défaire une écriture sur une application. */
+    private moyensDuRetour(): MoyensDuRetour<Actif> {
+        return {
+            ecrire: (id, contenu) => this.api.enregistrerActif(id, contenu),
+            effacer: id => this.api.supprimerActif(id),
+            relire: () => this.recharger()
+        };
+    }
+
     async enregistrer(): Promise<void> {
         const actif = this.edition();
         if (!actif) return;
         if (!actif.name.trim()) return this.notifications.erreur("Donnez un nom à l'actif.");
         this.enCours.set(true);
+        // La version d'avant est prise avant l'appel : c'est elle que « ⟲ Annuler » réécrira.
+        const avant = this.actifs().find(candidat => candidat.id === actif.id) || null;
         try {
             const { id, ...corps } = actif;
             await this.api.enregistrerActif(id, corps);
-            this.notifications.succes(`« ${actif.name} » enregistré.`);
             this.nouveau.set(false);
             await this.recharger();
+            this.annulation.retenir(
+                retourDUneEcriture(`« ${actif.name} »`, id, avant, this.moyensDuRetour()),
+                `« ${actif.name} » enregistré.`
+            );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         } finally {
@@ -394,13 +411,18 @@ export class ActifsComponent {
         }
     }
 
+    /** Suppression sûre : on nomme l'application, et le retour en arrière reste offert ensuite. */
     async supprimer(actif: Actif): Promise<void> {
-        if (!confirm(`Supprimer « ${actif.name} » ?`)) return;
+        if (!confirm(questionAvantSuppression(`« ${actif.name} »`))) return;
         try {
             await this.api.supprimerActif(actif.id);
             this.edition.set(null);
             this.selectionId.set(null);
             await this.recharger();
+            this.annulation.retenir(
+                retourDUneSuppression(`« ${actif.name} »`, actif, this.moyensDuRetour()),
+                `« ${actif.name} » supprimé.`
+            );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

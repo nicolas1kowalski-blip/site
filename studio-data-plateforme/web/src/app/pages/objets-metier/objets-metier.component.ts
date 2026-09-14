@@ -13,7 +13,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { AnnulationService } from '../../coeur/annulation.service';
 import { ClientApiService } from '../../coeur/client-api.service';
+import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
 import {
     Actif,
     AttributObjetMetier,
@@ -545,6 +547,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 export class ObjetsMetierComponent {
     private readonly api = inject(ClientApiService);
     private readonly notifications = inject(NotificationsService);
+    private readonly annulation = inject(AnnulationService);
     readonly session = inject(SessionService);
     readonly formaterDate = formaterDate;
 
@@ -759,17 +762,32 @@ export class ObjetsMetierComponent {
         return completudeObjet(objet, this.actifs().length > 0);
     }
 
+    /**
+     * Ce qu'il faut pour défaire une écriture sur un objet métier : les mêmes appels que la saisie
+     * ordinaire, et la relecture de l'écran.
+     */
+    private moyensDuRetour(): MoyensDuRetour<ObjetMetier> {
+        return {
+            ecrire: (id, contenu) => this.api.enregistrerObjetMetier(id, contenu),
+            effacer: id => this.api.supprimerObjetMetier(id),
+            relire: () => this.recharger()
+        };
+    }
+
     async enregistrer(): Promise<void> {
         const objet = this.edition();
         if (!objet) return;
         if (!objet.name.trim()) return this.notifications.erreur("Donnez un nom à l'objet métier.");
         this.enCours.set(true);
+        // La version d'avant est prise avant l'appel : c'est elle que « ⟲ Annuler » réécrira.
+        const avant = this.objets().find(candidat => candidat.id === objet.id) || null;
         try {
             const { id, ...corps } = objet;
             await this.api.enregistrerObjetMetier(id, corps);
-            this.notifications.succes(`Objet « ${objet.name} » enregistré.`);
             this.nouveau.set(false);
             await this.recharger();
+            const quoi = `l'objet métier « ${objet.name} »`;
+            this.annulation.retenir(retourDUneEcriture(quoi, id, avant, this.moyensDuRetour()), `Objet « ${objet.name} » enregistré.`);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         } finally {
@@ -777,13 +795,18 @@ export class ObjetsMetierComponent {
         }
     }
 
+    /** Suppression sûre : on nomme ce qui va disparaître, et le retour en arrière reste offert ensuite. */
     async supprimer(objet: ObjetMetier): Promise<void> {
-        if (!confirm(`Supprimer l'objet métier « ${objet.name} » ?`)) return;
+        if (!confirm(questionAvantSuppression(`l'objet métier « ${objet.name} »`))) return;
         try {
             await this.api.supprimerObjetMetier(objet.id);
             this.edition.set(null);
             this.selectionId.set(null);
             await this.recharger();
+            this.annulation.retenir(
+                retourDUneSuppression(`l'objet métier « ${objet.name} »`, objet, this.moyensDuRetour()),
+                `Objet « ${objet.name} » supprimé.`
+            );
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
