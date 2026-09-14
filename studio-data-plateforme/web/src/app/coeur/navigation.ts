@@ -50,14 +50,14 @@ export const GROUPES_NAVIGATION: GroupeNavigation[] = [
         liens: [
             { chemin: '/catalogue', libelle: 'Catalogue', icone: '🧭' },
             { chemin: '/dictionnaire', libelle: 'Dictionnaire', icone: '☰' },
-            { chemin: '/actifs', libelle: 'Applications & processus', icone: '⚙' },
+            { chemin: '/actifs', libelle: 'Applications & restitutions', icone: '⚙' },
             { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '☺' },
             { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛' },
             { chemin: '/glossaire', libelle: 'Glossaire', icone: '✎' },
             { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '≡' },
             { chemin: '/perimetres', libelle: 'Périmètres', icone: '◫' },
-            { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🛡' },
-            { chemin: '/lineage', libelle: 'Lineage', icone: '⇢' },
+            { chemin: '/sensibilite', libelle: 'Confidentialité', icone: '🛡' },
+            { chemin: '/lineage', libelle: 'Parcours de la donnée', icone: '⇢' },
             { chemin: '/propositions', libelle: 'À valider', icone: '✔' },
             { chemin: '/journal', libelle: 'Historique', icone: '⏱' }
         ]

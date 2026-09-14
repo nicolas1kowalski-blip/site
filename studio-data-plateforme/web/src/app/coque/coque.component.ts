@@ -5,6 +5,7 @@
 import { Component, HostListener, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EtEnsuiteComponent } from '../composants/et-ensuite.component';
+import { AideEcranComponent } from '../composants/aide-ecran.component';
 import { PaletteCommandesComponent } from '../composants/palette-commandes.component';
 import { SansDonneesComponent } from '../composants/sans-donnees.component';
 import { GROUPES_NAVIGATION, RACCOURCIS_ECRAN } from '../coeur/navigation';
@@ -19,7 +20,15 @@ const DELAI_RACCOURCI_MS = 1200;
 
 @Component({
     selector: 'app-coque',
-    imports: [RouterOutlet, RouterLink, RouterLinkActive, PaletteCommandesComponent, EtEnsuiteComponent, SansDonneesComponent],
+    imports: [
+        RouterOutlet,
+        RouterLink,
+        RouterLinkActive,
+        PaletteCommandesComponent,
+        EtEnsuiteComponent,
+        SansDonneesComponent,
+        AideEcranComponent
+    ],
     template: `
         <div class="coque">
             <aside class="rail">
@@ -84,7 +93,7 @@ const DELAI_RACCOURCI_MS = 1200;
                     >
                     <button class="bouton petit" (click)="deconnecter()">Se déconnecter</button>
                 </header>
-                <main class="page"><app-sans-donnees /><router-outlet /><app-et-ensuite /></main>
+                <main class="page"><app-aide-ecran /><app-sans-donnees /><router-outlet /><app-et-ensuite /></main>
                 <app-palette-commandes />
             </div>
             <div class="notifications" aria-live="polite">

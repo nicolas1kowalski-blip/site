@@ -13,7 +13,7 @@ import { NotificationsService } from '../../coeur/notifications.service';
 const NOMS_FACETTES: Record<'type' | 'domaine' | 'sensibilite' | 'proprietaire', string> = {
     type: 'Type',
     domaine: 'Domaine',
-    sensibilite: 'Sensibilité',
+    sensibilite: 'Confidentialité',
     proprietaire: 'Propriétaire'
 };
 const LIBELLES_SENSIBILITE: Record<string, string> = {
@@ -140,7 +140,7 @@ const LIBELLES_SENSIBILITE: Record<string, string> = {
                         <dd>{{ entree.proprietaire || '—' }}</dd>
                         <dt>Qualité</dt>
                         <dd>{{ entree.qualite == null ? 'non mesurée' : entree.qualite + ' %' }}</dd>
-                        <dt>Sensibilité</dt>
+                        <dt title="Terme technique : sensibilité">Confidentialité</dt>
                         <dd>{{ libelleValeur('sensibilite', entree.sensibilite || '') }}</dd>
                         <dt>Étiquettes</dt>
                         <dd>{{ entree.etiquettes.join(', ') || '—' }}</dd>

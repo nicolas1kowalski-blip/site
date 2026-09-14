@@ -552,7 +552,8 @@ try {
     verifier('sources : « Extraire » depuis une carte ouvre l’écran Extraire', page.url().includes('/extraction'));
     // La vue choisie est mémorisée.
     await page.click('a[href="/sources"]');
-    await page.waitForSelector('app-sources');
+    // Les cartes n'apparaissent qu'une fois la liste des sources revenue du serveur : on l'attend.
+    await page.waitForSelector('app-sources .carte-source');
     verifier('sources : la vue cartes est retrouvée à la visite suivante', (await page.$$('app-sources .carte-source')).length >= 2);
     await page.click('app-sources button[name=vueListe]');
     await page.waitForSelector('app-sources table.tableau.sources');
@@ -768,15 +769,45 @@ try {
     // ---- gouvernance : objets métier, applications, personnes, listes de valeurs, sensibilité, propositions ----
     await page.click('a[href="/objets-metier"]');
     await page.waitForSelector('app-objets-metier');
+    // V13 : une phrase dit ce qu'on fait ici et pourquoi ; on peut la refermer pour de bon.
+    await page.waitForSelector('app-aide-ecran .bandeau-aide');
+    const aideObjets = await page.textContent('app-aide-ecran');
+    await page.click('app-aide-ecran button[name=fermerAide]');
+    await page.click('a[href="/glossaire"]');
+    await page.waitForSelector('app-glossaire');
+    const aideGlossaire = await page.textContent('app-aide-ecran');
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier');
+    verifier(
+        'gouvernance V13 : la phrase d’aide dit ce qu’on fait sur chaque écran, et reste refermée sur celui qu’on a refermé',
+        /trois questions/.test(aideObjets) &&
+            /mots du métier/.test(aideGlossaire) &&
+            (await page.$$('app-objets-metier ~ * .bandeau-aide, app-aide-ecran .bandeau-aide')).length === 0
+    );
     await page.selectOption('app-objets-metier select[name=sourceInitiale]', { label: 'clients.csv' });
     await page.click('app-objets-metier button:has-text("Initialiser")');
     await page.waitForSelector('app-objets-metier input[name=attribut-nom-2]');
     verifier(
-        'objets métier : initialisation depuis clients.csv — nom « clients », 3 attributs alimentés par la source',
+        'objets métier : initialisation depuis clients.csv — nom « clients », 3 informations créées',
         (await page.inputValue('app-objets-metier input[name=nom]')) === 'clients' &&
-            (await page.$$('app-objets-metier tbody tr')).length === 3 &&
-            /clients\.csv\.ville/.test(await page.textContent('app-objets-metier tbody'))
+            (await page.$$('app-objets-metier tbody tr')).length === 3
     );
+    // V13 : la fiche d'une information répond à trois questions, et dit laquelle reste à remplir.
+    await page.click('app-objets-metier button[name=ouvrirFiche-2]');
+    await page.waitForSelector('app-fiche-information .jauge');
+    const ficheAvant = await page.textContent('app-fiche-information');
+    await page.click('app-fiche-information button[name=chercherExemples]');
+    await page.waitForFunction(() => (document.querySelector('app-fiche-information input[name=fiche-exemples]') || {}).value);
+    const exemples = await page.inputValue('app-fiche-information input[name=fiche-exemples]');
+    verifier(
+        'gouvernance V13 : la fiche d’une information montre sa complétude, la prochaine question, la colonne du fichier et va chercher des exemples réels',
+        /Fiche complète à 25 %/.test(ficheAvant) &&
+            /Prochaine question : C'est quoi \?/.test(ficheAvant) &&
+            /clients\.csv\.ville/.test(ficheAvant) &&
+            /Paris/.test(exemples)
+    );
+    await capture('objets-metier-fiche-information');
+    await page.click('app-fiche-information button[name=fermerFiche]');
     await page.fill('app-objets-metier input[name=nom]', 'Client');
     await page.fill('app-objets-metier textarea[name=definition]', 'Personne ayant passé au moins une commande');
     await page.fill('app-objets-metier input[name=proprietaire]', 'Alice Martin');

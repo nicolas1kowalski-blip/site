@@ -56,7 +56,7 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
     template: `
         <div class="entete-page">
             <div class="espace">
-                <h1>Lineage</h1>
+                <h1>Parcours de la donnée</h1>
                 <p class="discret">D'où vient la donnée, où va-t-elle, et est-elle cohérente en chemin.</p>
             </div>
         </div>
@@ -388,7 +388,7 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
                                     <table class="tableau" style="margin-top: 8px">
                                         <thead>
                                             <tr>
-                                                <th>Attribut</th>
+                                                <th title="Terme technique : attribut">Information</th>
                                                 <th>Écarts</th>
                                                 <th>Exemples (clé : source ≠ cible)</th>
                                             </tr>

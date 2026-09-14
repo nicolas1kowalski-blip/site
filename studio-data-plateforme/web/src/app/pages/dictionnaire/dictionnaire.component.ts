@@ -63,7 +63,7 @@ const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
                             />
                         </div>
                         <div>
-                            <label class="etiquette">Sensibilité</label>
+                            <label class="etiquette" title="Terme technique : sensibilité">Confidentialité</label>
                             <select
                                 class="champ"
                                 name="sensitivity"
@@ -90,7 +90,7 @@ const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
                             <tr>
                                 <th>Colonne</th>
                                 <th>Description</th>
-                                <th>Sensibilité</th>
+                                <th title="Terme technique : sensibilité">Confidentialité</th>
                             </tr>
                         </thead>
                         <tbody>

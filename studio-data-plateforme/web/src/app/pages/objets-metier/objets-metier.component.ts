@@ -26,6 +26,8 @@ import {
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { completudeInformation, feuDeLObjet } from './description-information';
+import { FicheInformationComponent } from './fiche-information.component';
 
 type OngletFiche = 'attributs' | 'sources' | 'liens' | 'historique';
 
@@ -55,9 +57,21 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         { poids: 15, ok: !!objet.globalOwner.trim(), libelle: 'Désigner un propriétaire' },
         { poids: 15, ok: objet.sources.some(source => source.role === 'maitre'), libelle: 'Désigner une source maître' },
         { poids: 10, ok: attributs.length > 0, libelle: 'Ajouter des attributs' },
-        { poids: 15, ok: attributs.length > 0 && sansAlimentation === 0, libelle: `${sansAlimentation} attribut(s) non alimenté(s)` },
-        { poids: 15, ok: attributs.length > 0 && sansDefinition === 0, libelle: `${sansDefinition} attribut(s) sans définition` },
-        ...(avecActifs ? [{ poids: 10, ok: attributs.length > 0 && sansUsage === 0, libelle: `${sansUsage} attribut(s) sans usage` }] : []),
+        {
+            poids: 15,
+            ok: attributs.length > 0 && sansAlimentation === 0,
+            libelle: `${sansAlimentation} information(s) dont on ne sait pas d'où elles viennent`
+        },
+        { poids: 15, ok: attributs.length > 0 && sansDefinition === 0, libelle: `${sansDefinition} information(s) sans définition` },
+        ...(avecActifs
+            ? [
+                  {
+                      poids: 10,
+                      ok: attributs.length > 0 && sansUsage === 0,
+                      libelle: `${sansUsage} information(s) dont personne ne dit se servir`
+                  }
+              ]
+            : []),
         { poids: 5, ok: objet.status === 'Validé', libelle: "Faire valider l'objet" }
     ];
     const total = criteres.reduce((somme, critere) => somme + critere.poids, 0);
@@ -67,7 +81,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
 @Component({
     selector: 'app-objets-metier',
-    imports: [FormsModule],
+    imports: [FormsModule, FicheInformationComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -94,9 +108,12 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                 <input class="champ" placeholder="Filtrer…" [(ngModel)]="filtre" name="filtre" />
                 @for (objet of objetsFiltres(); track objet.id) {
                     <button class="element" [class.actif]="objet.id === selectionId()" (click)="selectionner(objet)">
-                        <span class="nom">{{ objet.name || '(sans nom)' }}</span>
+                        <span class="nom">
+                            <span class="feu" [class]="'feu ' + feu(objet).couleur" [title]="feu(objet).titre"></span>
+                            {{ objet.name || '(sans nom)' }}
+                        </span>
                         <span class="discret"
-                            >{{ objet.domain || '—' }} · {{ objet.elements.length }} attribut(s) · {{ completude(objet).score }} %</span
+                            >{{ objet.domain || '—' }} · {{ objet.elements.length }} information(s) · {{ completude(objet).score }} %</span
                         >
                     </button>
                 } @empty {
@@ -180,24 +197,21 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                         }
                     </div>
 
-                    <!-- attributs -->
+                    <!-- informations : la liste, et la fiche en trois questions de celle qu'on ouvre (V13) -->
                     @if (ongletActif() === 'attributs') {
                         <div class="defilement-x">
                             <table class="tableau">
                                 <thead>
                                     <tr>
-                                        <th>Attribut</th>
+                                        <th title="Terme technique : attribut">Information</th>
                                         <th>Définition</th>
-                                        <th>Sensibilité</th>
-                                        <th>Terme</th>
-                                        <th>Colonnes techniques</th>
-                                        <th>Utilisé par</th>
+                                        <th>Fiche</th>
                                         <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @for (attribut of objet.elements; track attribut.id; let index = $index) {
-                                        <tr>
+                                        <tr [class.ouverte]="attribut.id === informationOuverte()">
                                             <td>
                                                 <input
                                                     class="champ"
@@ -221,82 +235,19 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                     </button>
                                                 }
                                             </td>
-                                            <td>
-                                                <select
-                                                    class="champ"
-                                                    [(ngModel)]="attribut.sensitivity"
-                                                    [name]="'attribut-sensibilite-' + index"
-                                                    [disabled]="!session.peutEditer()"
+                                            <td style="white-space: nowrap">
+                                                <span class="badge" [class.succes]="complet(attribut) === 100">
+                                                    {{ complet(attribut) }} %
+                                                </span>
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    [name]="'ouvrirFiche-' + index"
+                                                    [attr.name]="'ouvrirFiche-' + index"
+                                                    (click)="ouvrirInformation(attribut)"
                                                 >
-                                                    <option value="">—</option>
-                                                    <option>Public</option>
-                                                    <option>Interne</option>
-                                                    <option>Sensible</option>
-                                                    <option>Personnel (RGPD)</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select
-                                                    class="champ"
-                                                    [(ngModel)]="attribut.term"
-                                                    [name]="'attribut-terme-' + index"
-                                                    [disabled]="!session.peutEditer()"
-                                                >
-                                                    <option value="">—</option>
-                                                    @for (terme of termes(); track terme.id) {
-                                                        <option [value]="terme.term">{{ terme.term }}</option>
-                                                    }
-                                                </select>
-                                            </td>
-                                            <td>
-                                                @for (correspondance of attribut.mappings; track $index; let indexCorrespondance = $index) {
-                                                    <span class="puce"
-                                                        >{{ correspondance.table }}.{{ correspondance.col }}
-                                                        @if (session.peutEditer()) {
-                                                            <a (click)="attribut.mappings.splice(indexCorrespondance, 1)">✕</a>
-                                                        }
-                                                    </span>
-                                                }
-                                                @if (session.peutEditer()) {
-                                                    <div class="ajout-colonne">
-                                                        <select
-                                                            class="champ"
-                                                            [(ngModel)]="choixTable[attribut.id]"
-                                                            [name]="'attribut-table-' + index"
-                                                            [attr.name]="'attribut-table-' + index"
-                                                        >
-                                                            <option value="">— table —</option>
-                                                            @for (source of sources(); track source.id) {
-                                                                <option [value]="source.name">{{ source.name }}</option>
-                                                            }
-                                                        </select>
-                                                        <select
-                                                            class="champ"
-                                                            [(ngModel)]="choixColonne[attribut.id]"
-                                                            [name]="'attribut-colonne-' + index"
-                                                            [attr.name]="'attribut-colonne-' + index"
-                                                        >
-                                                            <option value="">— colonne —</option>
-                                                            @for (colonne of colonnesDe(choixTable[attribut.id]); track colonne) {
-                                                                <option [value]="colonne">{{ colonne }}</option>
-                                                            }
-                                                        </select>
-                                                        <button class="bouton petit" (click)="ajouterCorrespondance(attribut)">+</button>
-                                                    </div>
-                                                }
-                                            </td>
-                                            <td>
-                                                @for (actif of actifs(); track actif.id) {
-                                                    <label class="case">
-                                                        <input
-                                                            type="checkbox"
-                                                            [checked]="attribut.usedBy.includes(actif.id)"
-                                                            (change)="basculer(attribut.usedBy, actif.id)"
-                                                            [disabled]="!session.peutEditer()"
-                                                        />
-                                                        {{ actif.name }}
-                                                    </label>
-                                                }
+                                                    {{ attribut.id === informationOuverte() ? 'Fermer' : 'Ouvrir la fiche' }}
+                                                </button>
                                             </td>
                                             <td>
                                                 @if (session.peutEditer()) {
@@ -308,8 +259,19 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                 </tbody>
                             </table>
                         </div>
+                        @if (informationChoisie(objet); as information) {
+                            <app-fiche-information
+                                [attribut]="information"
+                                [objet]="objet"
+                                [objets]="objets()"
+                                [sources]="sources()"
+                                [actifs]="actifs()"
+                                [termes]="termes()"
+                                (fermer)="informationOuverte.set('')"
+                            />
+                        }
                         @if (session.peutEditer()) {
-                            <button class="bouton petit" style="margin-top: 8px" (click)="ajouterAttribut(objet)">+ attribut</button>
+                            <button class="bouton petit" style="margin-top: 8px" (click)="ajouterAttribut(objet)">+ Information</button>
                         }
                     }
 
@@ -448,6 +410,27 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         </div>
     `,
     styles: `
+        /* Feu tricolore d'un objet : d'un coup d'œil, ce qui est documenté et ce qui n'a pas de responsable. */
+        .feu {
+            display: inline-block;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .feu.vert {
+            background: var(--succes);
+        }
+        .feu.orange {
+            background: var(--alerte);
+        }
+        .feu.rouge {
+            background: var(--erreur);
+        }
+        tr.ouverte td {
+            background: color-mix(in srgb, var(--accent) 7%, transparent);
+        }
         .disposition {
             display: grid;
             grid-template-columns: 280px 1fr;
@@ -546,11 +529,13 @@ export class ObjetsMetierComponent {
     readonly vocabulaire = signal<VocabulaireGouvernance | null>(null);
     readonly selectionId = signal<string | null>(null);
     readonly edition = signal<ObjetMetier | null>(null);
+    /** Identifiant de l'information dont la fiche en trois questions est ouverte ; vide = aucune. */
+    readonly informationOuverte = signal('');
     readonly nouveau = signal(false);
     readonly ongletActif = signal<OngletFiche>('attributs');
     readonly enCours = signal(false);
     readonly onglets: { cle: OngletFiche; libelle: string }[] = [
-        { cle: 'attributs', libelle: 'Attributs' },
+        { cle: 'attributs', libelle: 'Informations' },
         { cle: 'sources', libelle: 'Sources' },
         { cle: 'liens', libelle: 'Actifs et références' },
         { cle: 'historique', libelle: 'Historique' }
@@ -664,6 +649,22 @@ export class ObjetsMetierComponent {
             }
         this.sourceARattacher = '';
         this.edition.update(courant => (courant ? { ...courant } : courant));
+    }
+
+    /** Le feu tricolore d'un objet : rouge sans responsable, vert bien documenté, orange entre les deux. */
+    feu(objet: ObjetMetier): { couleur: string; titre: string } {
+        return feuDeLObjet(objet, this.completude(objet).score);
+    }
+    /** Où en est la fiche d'une information, en pourcentage. */
+    complet(attribut: AttributObjetMetier): number {
+        return completudeInformation(attribut).score;
+    }
+    /** L'information dont la fiche est ouverte, si elle appartient toujours à l'objet affiché. */
+    informationChoisie(objet: ObjetMetier): AttributObjetMetier | null {
+        return objet.elements.find(candidat => candidat.id === this.informationOuverte()) || null;
+    }
+    ouvrirInformation(attribut: AttributObjetMetier): void {
+        this.informationOuverte.update(courant => (courant === attribut.id ? '' : attribut.id));
     }
 
     ajouterAttribut(objet: ObjetMetier): void {

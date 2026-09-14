@@ -16,7 +16,7 @@ import { SessionService } from '../../coeur/session.service';
     template: `
         <div class="entete-page">
             <div class="espace">
-                <h1>Sensibilité</h1>
+                <h1>Confidentialité</h1>
                 <p class="discret">Classifiez chaque colonne ; le niveau proposé vient du dictionnaire et du nom de la colonne.</p>
             </div>
             @if (session.peutEditer()) {
@@ -74,7 +74,7 @@ import { SessionService } from '../../coeur/session.service';
                         <tr>
                             <th>Table</th>
                             <th>Colonne</th>
-                            <th>Sensibilité (dictionnaire)</th>
+                            <th title="Terme technique : sensibilité">Confidentialité (dictionnaire)</th>
                             <th>Niveau proposé</th>
                             <th>Niveau retenu</th>
                         </tr>
