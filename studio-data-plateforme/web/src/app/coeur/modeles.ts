@@ -686,6 +686,26 @@ export type AttributObjetMetier = {
     origins?: OrigineInformation[];
     [autre: string]: unknown;
 };
+/** Un filtre de portée d'une variante : la colonne, l'opérateur, et la valeur quand l'opérateur en attend une. */
+export type FiltreDePortee = { col: string; op: string; val?: string };
+/** Une information portée par une variante : elle nomme directement sa colonne dans la table de la variante. */
+export type InformationDeVariante = AttributObjetMetier & { col: string };
+/**
+ * Une variante (« facette ») d'un objet métier : une même table porte souvent plusieurs choses. Un fichier
+ * d'adresses contient l'adresse principale, les adresses de livraison, celles d'intervention. Une variante
+ * est une vue filtrée de cette table, avec son nom métier, sa cardinalité et ses informations propres.
+ */
+export type VarianteObjet = {
+    id: string;
+    name: string;
+    table: string;
+    cardinality?: string;
+    /** Ce qui délimite la variante dans sa table ; sans filtre, c'est toute la table. */
+    scope?: FiltreDePortee[];
+    /** Conditions, sur l'objet principal, sous lesquelles la variante s'applique. */
+    applies?: FiltreDePortee[];
+    elements?: InformationDeVariante[];
+};
 export type ObjetMetier = {
     id: string;
     name: string;
@@ -695,6 +715,8 @@ export type ObjetMetier = {
     contributors: string[];
     status?: string;
     elements: AttributObjetMetier[];
+    /** Les variantes (« facettes ») de l'objet : chacune une vue filtrée d'une table (V13). */
+    structure?: VarianteObjet[];
     sources: { table: string; role: RoleObjetSource }[];
     producedBy: string[];
     consumedBy: string[];

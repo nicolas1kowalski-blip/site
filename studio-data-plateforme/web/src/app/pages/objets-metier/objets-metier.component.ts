@@ -36,10 +36,35 @@ import { ACTIONS_GROUPEES, ActionGroupee, ChoixRapide, objetApresGeste, refusDuG
 import { AssistantObjetComponent } from './assistant-objet.component';
 import { ColonneOfferte, colonneLachee, colonneTransportee, colonnesDeLObjet, informationAvecColonne } from './colonnes-a-rattacher';
 import { FicheInformationComponent } from './fiche-information.component';
+import {
+    CARDINALITES_VARIANTE,
+    GroupeDInformations,
+    OPERATEURS_PORTEE,
+    OPTIONS_NOMBRE_DE_VALEURS,
+    VarianteObjet,
+    colonnesDuGroupe,
+    ecrireSurLeGroupe,
+    groupeRepetable,
+    informationDeVarianteNeuve,
+    libelleDuFiltre,
+    libelleDuNombreDeValeurs,
+    nombreDeValeurs,
+    pourquoiCeNombreDeValeurs,
+    renommerLeGroupe,
+    repetitionsDuGroupe,
+    replierLesRepetitions,
+    resumeDeLaVariante,
+    valeurDuGroupe,
+    varianteNeuve
+} from './variantes-objet';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { PropositionObjetComponent } from './proposition-objet.component';
 
-type OngletFiche = 'attributs' | 'sources' | 'liens' | 'historique';
+type OngletFiche = 'attributs' | 'variantes' | 'sources' | 'liens' | 'historique';
+
+/** Ce que l'on est en train de saisir pour ajouter un filtre de portée à une variante. */
+type FiltreEnCours = { col: string; op: string; val: string };
+const FILTRE_VIDE = (): FiltreEnCours => ({ col: '', op: '=', val: '' });
 
 const OBJET_VIDE = (): ObjetMetier => ({
     id: genererIdentifiant('bo'),
@@ -246,20 +271,44 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
                     <div class="onglets">
                         @for (onglet of onglets; track onglet.cle) {
-                            <button [class.actif]="ongletActif() === onglet.cle" (click)="ongletActif.set(onglet.cle)">
+                            <button
+                                [class.actif]="ongletActif() === onglet.cle"
+                                [attr.name]="'onglet-' + onglet.cle"
+                                (click)="ongletActif.set(onglet.cle)"
+                            >
                                 {{ onglet.libelle }}
+                                @if (onglet.cle === 'variantes' && variantes(objet).length) {
+                                    <span class="compte">{{ variantes(objet).length }}</span>
+                                }
                             </button>
                         }
                     </div>
 
                     <!-- informations : la liste, et la fiche en trois questions de celle qu'on ouvre (V13) -->
                     @if (ongletActif() === 'attributs') {
-                        @if (session.peutEditer() && objet.elements.length) {
+                        @if (objet.elements.length) {
                             <div class="entete-page" style="margin: 0 0 8px">
                                 <span class="discret espace">{{ objet.elements.length }} information(s)</span>
-                                <button class="bouton petit" type="button" name="actionsGroupees" (click)="basculerGeste(objet)">
-                                    ☑ Actions groupées
-                                </button>
+                                <!-- V13 : adresse_1, adresse_2… ne sont pas trois informations mais une seule, à trois valeurs. -->
+                                @if (colonnesRepliables(objet) > 0) {
+                                    <button
+                                        class="bouton petit"
+                                        type="button"
+                                        name="replierRepetitions"
+                                        [title]="
+                                            'Les colonnes numérotées (adresse_1, adresse_2…) sont vues comme une seule information ' +
+                                            'à plusieurs valeurs.'
+                                        "
+                                        (click)="repliActif.set(!repliActif())"
+                                    >
+                                        {{ repliActif() ? '⇱ Déplier' : '⇲ Replier' }} {{ colonnesRepliables(objet) }} colonne(s) répétée(s)
+                                    </button>
+                                }
+                                @if (session.peutEditer()) {
+                                    <button class="bouton petit" type="button" name="actionsGroupees" (click)="basculerGeste(objet)">
+                                        ☑ Actions groupées
+                                    </button>
+                                }
                             </div>
                         }
                         <!-- V11 : poser le même geste sur plusieurs informations d'un coup -->
@@ -352,13 +401,18 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                         }
                                         <th title="Terme technique : attribut">Information</th>
                                         <th>Définition</th>
+                                        <th title="Combien de valeurs pour une occurrence de l'objet">Nb valeurs</th>
                                         <th title="Terme technique : mapping">D'où ça vient</th>
                                         <th>Fiche</th>
                                         <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @for (attribut of objet.elements; track attribut.id; let index = $index) {
+                                    <!-- Une ligne par information — ou, repli actif, une ligne par groupe de colonnes répétées. -->
+                                    <!-- Suivi par identifiant, jamais par nom : deux informations peuvent porter le même. -->
+                                    @for (groupe of groupesAffiches(objet); track groupe.informations[0].id; let index = $index) {
+                                        @let attribut = groupe.informations[0];
+                                        @let valeurs = valeursDuGroupe(groupe);
                                         <tr
                                             [class.ouverte]="attribut.id === informationOuverte()"
                                             [class.survolee]="attribut.id === informationSurvolee()"
@@ -370,28 +424,37 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                 <td>
                                                     <input
                                                         type="checkbox"
-                                                        [checked]="informationsChoisies().includes(attribut.id)"
+                                                        [checked]="groupeChoisi(groupe)"
                                                         [attr.name]="'geste-' + index"
-                                                        (change)="basculerChoix(attribut.id)"
+                                                        (change)="basculerChoixDuGroupe(groupe)"
                                                     />
                                                 </td>
                                             }
                                             <td>
+                                                <!--
+                                                    La saisie n'est reprise qu'une fois quittée : sur un groupe replié, chaque
+                                                    frappe renommerait les colonnes et déferait le groupe sous les doigts.
+                                                -->
                                                 <input
                                                     class="champ"
-                                                    [(ngModel)]="attribut.name"
-                                                    [name]="'attribut-nom-' + index"
+                                                    [value]="groupe.base"
                                                     [attr.name]="'attribut-nom-' + index"
                                                     [disabled]="!session.peutEditer()"
+                                                    (change)="renommerLeGroupe(groupe, $any($event.target).value)"
                                                 />
+                                                @if (groupe.replie) {
+                                                    <span class="badge" [title]="colonnesDuGroupe(groupe).join(', ')">
+                                                        ⇲ {{ groupe.informations.length }} colonnes
+                                                    </span>
+                                                }
                                             </td>
                                             <td>
                                                 <input
                                                     class="champ"
-                                                    [(ngModel)]="attribut.definition"
-                                                    [name]="'attribut-definition-' + index"
+                                                    [value]="valeurDuGroupe(groupe, 'definition')"
                                                     [attr.name]="'attribut-definition-' + index"
                                                     [disabled]="!session.peutEditer()"
+                                                    (change)="ecrireSurLeGroupe(groupe, 'definition', $any($event.target).value)"
                                                 />
                                                 @if (!session.peutEditer()) {
                                                     <button class="bouton petit" (click)="proposerDefinition(objet, attribut)">
@@ -399,7 +462,33 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                     </button>
                                                 }
                                             </td>
-                                            <td class="discret">{{ provenance(attribut) || '—' }}</td>
+                                            <td style="white-space: nowrap">
+                                                <span class="badge" [class.alerte]="valeurs.plusieurs" [title]="valeurs.pourquoi">
+                                                    {{ valeurs.libelle }}
+                                                </span>
+                                                @if (valeurs.deduit) {
+                                                    <span
+                                                        class="discret"
+                                                        title="Déduit des colonnes numérotées — déclarez-le pour l'affirmer"
+                                                    >
+                                                        déduit
+                                                    </span>
+                                                }
+                                                @if (session.peutEditer()) {
+                                                    <select
+                                                        class="champ"
+                                                        [value]="valeurDuGroupe(groupe, 'multi')"
+                                                        [attr.name]="'attribut-valeurs-' + index"
+                                                        title="Combien de valeurs cette information peut prendre pour une occurrence de l'objet"
+                                                        (change)="ecrireSurLeGroupe(groupe, 'multi', $any($event.target).value)"
+                                                    >
+                                                        @for (choix of optionsNombreDeValeurs; track choix.valeur) {
+                                                            <option [value]="choix.valeur">{{ choix.libelle }}</option>
+                                                        }
+                                                    </select>
+                                                }
+                                            </td>
+                                            <td class="discret">{{ provenanceDuGroupe(groupe) || '—' }}</td>
                                             <td style="white-space: nowrap">
                                                 <span class="badge" [class.succes]="complet(attribut) === 100">
                                                     {{ complet(attribut) }} %
@@ -407,7 +496,6 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                 <button
                                                     class="bouton petit"
                                                     type="button"
-                                                    [name]="'ouvrirFiche-' + index"
                                                     [attr.name]="'ouvrirFiche-' + index"
                                                     (click)="ouvrirInformation(attribut)"
                                                 >
@@ -425,7 +513,9 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                             </td>
                                             <td>
                                                 @if (session.peutEditer()) {
-                                                    <button class="bouton petit danger" (click)="objet.elements.splice(index, 1)">✕</button>
+                                                    <button class="bouton petit danger" (click)="supprimerLeGroupe(objet, groupe)">
+                                                        ✕
+                                                    </button>
                                                 }
                                             </td>
                                         </tr>
@@ -446,6 +536,303 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                         }
                         @if (session.peutEditer()) {
                             <button class="bouton petit" style="margin-top: 8px" (click)="ajouterAttribut(objet)">+ Information</button>
+                        }
+                    }
+
+                    <!--
+                        Variantes (« facettes » en langage technique) : une même table porte souvent plusieurs
+                        choses. Un fichier d'adresses contient l'adresse principale, celles de livraison,
+                        celles d'intervention. Chacune est une vue filtrée de la table, avec son nom métier.
+                    -->
+                    @if (ongletActif() === 'variantes') {
+                        <p class="discret" style="margin-top: 0">
+                            Une variante est une vue filtrée d'une table : elle porte un nom métier, dit combien de fois elle se répète pour
+                            un objet, ce qu'elle garde de la table, et quand elle s'applique.
+                        </p>
+                        @for (variante of variantes(objet); track variante.id; let rang = $index) {
+                            <div class="carte variante">
+                                <div class="entete-page" style="margin: 0 0 6px">
+                                    <input
+                                        class="champ espace"
+                                        [(ngModel)]="variante.name"
+                                        [name]="'variante-nom-' + rang"
+                                        [attr.name]="'variante-nom-' + rang"
+                                        placeholder="Nom métier de la variante"
+                                        [disabled]="!session.peutEditer()"
+                                    />
+                                    <select
+                                        class="champ"
+                                        style="width: auto"
+                                        [ngModel]="variante.table"
+                                        [name]="'variante-table-' + rang"
+                                        [attr.name]="'variante-table-' + rang"
+                                        [disabled]="!session.peutEditer()"
+                                        (ngModelChange)="changerLaTableDeLaVariante(objet, variante, $event)"
+                                    >
+                                        @for (source of sources(); track source.id) {
+                                            <option [value]="source.name">{{ source.name }}</option>
+                                        }
+                                    </select>
+                                    <select
+                                        class="champ"
+                                        style="width: auto"
+                                        [(ngModel)]="variante.cardinality"
+                                        [name]="'variante-cardinalite-' + rang"
+                                        [attr.name]="'variante-cardinalite-' + rang"
+                                        title="Combien d'occurrences de cette variante pour un objet"
+                                        [disabled]="!session.peutEditer()"
+                                    >
+                                        @for (cardinalite of cardinalitesVariante; track cardinalite) {
+                                            <option [value]="cardinalite">{{ cardinalite }}</option>
+                                        }
+                                    </select>
+                                    <span
+                                        class="badge"
+                                        [class.alerte]="groupeRepetable(variante)"
+                                        [title]="
+                                            groupeRepetable(variante)
+                                                ? 'Plusieurs occurrences de ce groupe par objet.'
+                                                : 'Une seule occurrence de ce groupe par objet.'
+                                        "
+                                    >
+                                        {{ groupeRepetable(variante) ? 'groupe répétable' : 'groupe unique' }}
+                                    </span>
+                                    @if (session.peutEditer()) {
+                                        <button
+                                            class="bouton petit danger"
+                                            type="button"
+                                            [attr.name]="'supprimerVariante-' + rang"
+                                            (click)="supprimerVariante(objet, variante)"
+                                        >
+                                            ✕
+                                        </button>
+                                    }
+                                </div>
+                                <div class="discret" style="margin-bottom: 8px">{{ resumeDeLaVariante(variante) }}</div>
+
+                                <div class="formulaire-ligne">
+                                    <div>
+                                        <label class="etiquette" title="Ce que la variante garde de sa table">Ce qu'elle garde</label>
+                                        @for (filtre of variante.scope || []; track $index; let position = $index) {
+                                            <span class="puce">
+                                                {{ libelleDuFiltre(filtre) }}
+                                                @if (session.peutEditer()) {
+                                                    <a (click)="retirerFiltre(variante, 'scope', position)">✕</a>
+                                                }
+                                            </span>
+                                        } @empty {
+                                            <span class="discret">Toute la table.</span>
+                                        }
+                                        @if (session.peutEditer()) {
+                                            <div class="ligne-champs" style="margin-top: 6px">
+                                                <select
+                                                    class="champ"
+                                                    [(ngModel)]="saisieDePortee(variante).col"
+                                                    [name]="'portee-col-' + rang"
+                                                    [attr.name]="'portee-col-' + rang"
+                                                >
+                                                    <option value="">— colonne —</option>
+                                                    @for (colonne of colonnesDeLaVariante(variante); track colonne) {
+                                                        <option [value]="colonne">{{ colonne }}</option>
+                                                    }
+                                                </select>
+                                                <select
+                                                    class="champ"
+                                                    [(ngModel)]="saisieDePortee(variante).op"
+                                                    [name]="'portee-op-' + rang"
+                                                    [attr.name]="'portee-op-' + rang"
+                                                >
+                                                    @for (operateur of operateursPortee; track operateur.cle) {
+                                                        <option [value]="operateur.cle">{{ operateur.libelle }}</option>
+                                                    }
+                                                </select>
+                                                @if (!sansValeur(saisieDePortee(variante).op)) {
+                                                    <input
+                                                        class="champ"
+                                                        [(ngModel)]="saisieDePortee(variante).val"
+                                                        [name]="'portee-val-' + rang"
+                                                        [attr.name]="'portee-val-' + rang"
+                                                        placeholder="valeur"
+                                                    />
+                                                }
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    [attr.name]="'ajouterPortee-' + rang"
+                                                    (click)="ajouterFiltre(variante, 'scope')"
+                                                >
+                                                    + Filtre
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div>
+                                        <label class="etiquette" title="Conditions, sur l'objet lui-même, pour que la variante s'applique">
+                                            Quand elle s'applique
+                                        </label>
+                                        @for (filtre of variante.applies || []; track $index; let position = $index) {
+                                            <span class="puce">
+                                                {{ libelleDuFiltre(filtre) }}
+                                                @if (session.peutEditer()) {
+                                                    <a (click)="retirerFiltre(variante, 'applies', position)">✕</a>
+                                                }
+                                            </span>
+                                        } @empty {
+                                            <span class="discret">Toujours.</span>
+                                        }
+                                        @if (session.peutEditer()) {
+                                            <div class="ligne-champs" style="margin-top: 6px">
+                                                <select
+                                                    class="champ"
+                                                    [(ngModel)]="saisieDApplication(variante).col"
+                                                    [name]="'applique-col-' + rang"
+                                                    [attr.name]="'applique-col-' + rang"
+                                                >
+                                                    <option value="">— colonne de l'objet —</option>
+                                                    @for (colonne of colonnesDuCoeur(objet); track colonne) {
+                                                        <option [value]="colonne">{{ colonne }}</option>
+                                                    }
+                                                </select>
+                                                <select
+                                                    class="champ"
+                                                    [(ngModel)]="saisieDApplication(variante).op"
+                                                    [name]="'applique-op-' + rang"
+                                                    [attr.name]="'applique-op-' + rang"
+                                                >
+                                                    @for (operateur of operateursPortee; track operateur.cle) {
+                                                        <option [value]="operateur.cle">{{ operateur.libelle }}</option>
+                                                    }
+                                                </select>
+                                                @if (!sansValeur(saisieDApplication(variante).op)) {
+                                                    <input
+                                                        class="champ"
+                                                        [(ngModel)]="saisieDApplication(variante).val"
+                                                        [name]="'applique-val-' + rang"
+                                                        [attr.name]="'applique-val-' + rang"
+                                                        placeholder="valeur"
+                                                    />
+                                                }
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    [attr.name]="'ajouterApplique-' + rang"
+                                                    (click)="ajouterFiltre(variante, 'applies')"
+                                                >
+                                                    + Condition
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="defilement-x" style="margin-top: 10px">
+                                    <table class="tableau">
+                                        <thead>
+                                            <tr>
+                                                <th>Information</th>
+                                                <th>Colonne</th>
+                                                <th>Propriétaire</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (information of variante.elements || []; track information.id; let ligne = $index) {
+                                                <tr>
+                                                    <td>
+                                                        <input
+                                                            class="champ"
+                                                            [(ngModel)]="information.name"
+                                                            [name]="'vinfo-nom-' + rang + '-' + ligne"
+                                                            [attr.name]="'vinfo-nom-' + rang + '-' + ligne"
+                                                            [disabled]="!session.peutEditer()"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <select
+                                                            class="champ"
+                                                            [ngModel]="information.col"
+                                                            [name]="'vinfo-col-' + rang + '-' + ligne"
+                                                            [attr.name]="'vinfo-col-' + rang + '-' + ligne"
+                                                            [disabled]="!session.peutEditer()"
+                                                            (ngModelChange)="changerLaColonne(variante, information, $event)"
+                                                        >
+                                                            <option value="">—</option>
+                                                            @for (colonne of colonnesDeLaVariante(variante); track colonne) {
+                                                                <option [value]="colonne">{{ colonne }}</option>
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            class="champ"
+                                                            [(ngModel)]="information.owner"
+                                                            [name]="'vinfo-proprietaire-' + rang + '-' + ligne"
+                                                            [attr.name]="'vinfo-proprietaire-' + rang + '-' + ligne"
+                                                            [disabled]="!session.peutEditer()"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        @if (session.peutEditer()) {
+                                                            <button
+                                                                class="bouton petit danger"
+                                                                type="button"
+                                                                (click)="supprimerInformationDeVariante(variante, information.id)"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            } @empty {
+                                                <tr>
+                                                    <td colspan="4" class="discret">Aucune information dans cette variante.</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if (session.peutEditer()) {
+                                    <button
+                                        class="bouton petit"
+                                        type="button"
+                                        style="margin-top: 8px"
+                                        [attr.name]="'ajouterInfoVariante-' + rang"
+                                        (click)="ajouterInformationDeVariante(variante)"
+                                    >
+                                        + Information
+                                    </button>
+                                }
+                            </div>
+                        } @empty {
+                            <div class="vide">
+                                Aucune variante. Une seule table peut pourtant porter plusieurs choses : ajoutez-en une ci-dessous.
+                            </div>
+                        }
+
+                        @if (session.peutEditer()) {
+                            <div class="ligne-champs" style="margin-top: 10px">
+                                <select class="champ" [(ngModel)]="varianteTable" name="varianteTable">
+                                    <option value="">— table dont la variante est une vue —</option>
+                                    @for (source of sources(); track source.id) {
+                                        <option [value]="source.name">{{ source.name }}</option>
+                                    }
+                                </select>
+                                <input class="champ" [(ngModel)]="varianteNom" name="varianteNom" placeholder="Nom métier de la variante" />
+                                <select class="champ" [(ngModel)]="varianteCardinalite" name="varianteCardinalite">
+                                    @for (cardinalite of cardinalitesVariante; track cardinalite) {
+                                        <option [value]="cardinalite">{{ cardinalite }}</option>
+                                    }
+                                </select>
+                                <button
+                                    class="bouton principal"
+                                    type="button"
+                                    name="ajouterVariante"
+                                    [disabled]="!varianteTable"
+                                    (click)="ajouterVariante(objet)"
+                                >
+                                    + Variante
+                                </button>
+                            </div>
                         }
                     }
 
@@ -605,6 +992,23 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         .carte.geste {
             margin-bottom: 10px;
         }
+        /* V13 : une variante est un bloc à part entière, posé en retrait du reste de la fiche. */
+        .carte.variante {
+            margin-bottom: 12px;
+            background: var(--surface-2);
+        }
+        /* Le nombre de variantes, posé dans l'onglet : on sait avant d'y aller s'il y a quelque chose. */
+        .onglets .compte {
+            display: inline-block;
+            margin-left: 5px;
+            min-width: 15px;
+            padding: 0 4px;
+            border-radius: 7px;
+            background: var(--accent-2);
+            color: var(--accent);
+            font-size: 10.5px;
+            font-weight: 700;
+        }
 
         /* Feu tricolore d'un objet : d'un coup d'œil, ce qui est documenté et ce qui n'a pas de responsable. */
         .feu {
@@ -755,10 +1159,28 @@ export class ObjetsMetierComponent {
     readonly enCours = signal(false);
     readonly onglets: { cle: OngletFiche; libelle: string }[] = [
         { cle: 'attributs', libelle: 'Informations' },
+        { cle: 'variantes', libelle: 'Variantes' },
         { cle: 'sources', libelle: 'Sources' },
         { cle: 'liens', libelle: 'Actifs et références' },
         { cle: 'historique', libelle: 'Historique' }
     ];
+    /** Vrai quand les colonnes numérotées sont vues comme une seule information (comme la V13, par défaut). */
+    readonly repliActif = signal(true);
+    readonly cardinalitesVariante = CARDINALITES_VARIANTE;
+    readonly optionsNombreDeValeurs = OPTIONS_NOMBRE_DE_VALEURS;
+    readonly operateursPortee = Object.entries(OPERATEURS_PORTEE).map(([cle, libelle]) => ({ cle, libelle }));
+    readonly libelleDuFiltre = libelleDuFiltre;
+    readonly resumeDeLaVariante = resumeDeLaVariante;
+    readonly groupeRepetable = groupeRepetable;
+    readonly valeurDuGroupe = valeurDuGroupe;
+    readonly colonnesDuGroupe = colonnesDuGroupe;
+    /** La variante que l'on est en train de créer : sa table, son nom métier, sa cardinalité. */
+    varianteTable = '';
+    varianteNom = '';
+    varianteCardinalite = '1–N';
+    /** Les filtres en cours de saisie, une par variante : ce qu'elle garde, et quand elle s'applique. */
+    porteeEnCours: Record<string, FiltreEnCours> = {};
+    applicationEnCours: Record<string, FiltreEnCours> = {};
     filtre = '';
     sourceInitiale = '';
     sourceARattacher = '';
@@ -947,6 +1369,176 @@ export class ObjetsMetierComponent {
 
     completude(objet: ObjetMetier): { score: number; aFaire: string[] } {
         return completudeObjet(objet, this.actifs().length > 0);
+    }
+
+    // ---- V13 : colonnes répétées repliées, et nombre de valeurs d'une information ----
+
+    /**
+     * Les lignes du tableau des informations. Repli actif, adresse_1 / adresse_2 / adresse_3 deviennent une
+     * seule ligne « adresse » à trois valeurs ; repli inactif, chaque colonne garde sa ligne.
+     */
+    groupesAffiches(objet: ObjetMetier): GroupeDInformations[] {
+        const informations = objet.elements || [];
+        if (this.repliActif()) return replierLesRepetitions(informations);
+        return informations.map(information => ({ base: information.name, replie: false, informations: [information], rangs: [] }));
+    }
+
+    /** Combien de lignes le repli ferait gagner : sans gain, le bouton n'a pas lieu d'être montré. */
+    colonnesRepliables(objet: ObjetMetier): number {
+        const informations = objet.elements || [];
+        return informations.length - replierLesRepetitions(informations).length;
+    }
+
+    /** Le nombre de valeurs d'un groupe : ce qui est déclaré sur l'information, sinon ce que disent les colonnes. */
+    valeursDuGroupe(groupe: GroupeDInformations): { plusieurs: boolean; libelle: string; deduit: boolean; pourquoi: string } {
+        const compte = nombreDeValeurs(valeurDuGroupe(groupe, 'multi'), repetitionsDuGroupe(groupe));
+        return {
+            plusieurs: compte.plusieurs,
+            libelle: libelleDuNombreDeValeurs(compte),
+            deduit: compte.origine === 'déduit',
+            pourquoi: pourquoiCeNombreDeValeurs(compte, colonnesDuGroupe(groupe))
+        };
+    }
+
+    /** Renommer une ligne : sur un groupe replié, chaque colonne garde son numéro (courriel_1, courriel_2). */
+    renommerLeGroupe(groupe: GroupeDInformations, nom: string): void {
+        renommerLeGroupe(groupe, nom);
+    }
+
+    /** Écrire un champ sur la ligne : sur un groupe replié, la saisie vaut pour toutes ses colonnes. */
+    ecrireSurLeGroupe(groupe: GroupeDInformations, champ: string, valeur: string): void {
+        ecrireSurLeGroupe(groupe, champ, valeur);
+    }
+
+    /** Supprimer une ligne, c'est supprimer toutes les colonnes qu'elle recouvre. */
+    supprimerLeGroupe(objet: ObjetMetier, groupe: GroupeDInformations): void {
+        const aRetirer = new Set(groupe.informations.map(information => information.id));
+        objet.elements = objet.elements.filter(information => !aRetirer.has(information.id));
+    }
+
+    /** Cocher une ligne repliée coche toutes ses colonnes : le geste groupé porte sur ce que l'on voit. */
+    basculerChoixDuGroupe(groupe: GroupeDInformations): void {
+        const identifiants = groupe.informations.map(information => information.id);
+        const dejaChoisi = this.informationsChoisies().includes(identifiants[0]);
+        this.informationsChoisies.update(choisies =>
+            dejaChoisi ? choisies.filter(autre => !identifiants.includes(autre)) : [...choisies, ...identifiants]
+        );
+    }
+
+    groupeChoisi(groupe: GroupeDInformations): boolean {
+        return this.informationsChoisies().includes(groupe.informations[0].id);
+    }
+
+    /** D'où vient la ligne : les colonnes repliées, ou la provenance ordinaire de l'information. */
+    provenanceDuGroupe(groupe: GroupeDInformations): string {
+        if (groupe.replie) return colonnesDuGroupe(groupe).join(', ');
+        return this.provenance(groupe.informations[0]);
+    }
+
+    // ---- V13 : les variantes (« facettes ») d'un objet ----
+
+    /** Les variantes de l'objet, toujours sous forme de liste : la fiche les modifie sur place. */
+    variantes(objet: ObjetMetier): VarianteObjet[] {
+        if (!Array.isArray(objet.structure)) objet.structure = [];
+        return objet.structure;
+    }
+
+    /** Les colonnes de la table dont une variante est la vue : ce dans quoi ses filtres puisent. */
+    colonnesDeLaVariante(variante: VarianteObjet): string[] {
+        return this.colonnesDe(variante.table);
+    }
+
+    /** Les colonnes de la table maître de l'objet : c'est sur elles que porte l'applicabilité d'une variante. */
+    colonnesDuCoeur(objet: ObjetMetier): string[] {
+        const maitre = objet.sources.find(source => source.role === 'maitre') || objet.sources[0];
+        return this.colonnesDe(maitre?.table);
+    }
+
+    /** Ajoute une variante : une vue de la table choisie, une information par colonne, rien de filtré. */
+    ajouterVariante(objet: ObjetMetier): void {
+        if (!this.varianteTable) return;
+        const variante = varianteNeuve(
+            this.varianteTable,
+            this.varianteNom,
+            this.colonnesDe(this.varianteTable),
+            genererIdentifiant,
+            this.varianteCardinalite
+        );
+        this.variantes(objet).push(variante);
+        // La table devient une source de l'objet : sans cela, la variante n'apparaîtrait dans aucun parcours.
+        if (!objet.sources.some(source => source.table === variante.table))
+            objet.sources.push({ table: variante.table, role: 'contributeur' });
+        this.varianteNom = '';
+        this.varianteTable = '';
+        this.notifications.info(`Variante « ${variante.name} » ajoutée (vue de ${variante.table}) — enregistrez pour conserver.`);
+    }
+
+    /** Retire une variante, et avec elle la source qu'aucune autre variante n'utilise plus. */
+    supprimerVariante(objet: ObjetMetier, variante: VarianteObjet): void {
+        objet.structure = this.variantes(objet).filter(autre => autre.id !== variante.id);
+        if (!objet.structure.some(autre => autre.table === variante.table))
+            objet.sources = objet.sources.filter(source => !(source.table === variante.table && source.role !== 'maitre'));
+    }
+
+    /** Changer la table d'une variante remet ses informations à plat sur les colonnes de la nouvelle table. */
+    changerLaTableDeLaVariante(objet: ObjetMetier, variante: VarianteObjet, table: string): void {
+        variante.table = table;
+        variante.scope = [];
+        variante.elements = varianteNeuve(table, variante.name, this.colonnesDe(table), genererIdentifiant).elements;
+        if (!objet.sources.some(source => source.table === table)) objet.sources.push({ table, role: 'contributeur' });
+    }
+
+    /** Le filtre en cours de saisie pour une variante : créé à la demande, une entrée par variante. */
+    saisieDePortee(variante: VarianteObjet): FiltreEnCours {
+        return (this.porteeEnCours[variante.id] ||= FILTRE_VIDE());
+    }
+    saisieDApplication(variante: VarianteObjet): FiltreEnCours {
+        return (this.applicationEnCours[variante.id] ||= FILTRE_VIDE());
+    }
+
+    /** Vrai pour les opérateurs qui n'attendent aucune valeur : « est vide », « n'est pas vide ». */
+    sansValeur(operateur: string): boolean {
+        return operateur === 'empty' || operateur === 'notempty';
+    }
+
+    /** Ajoute un filtre à ce que la variante garde (portée) ou à ce qui la déclenche (applicabilité). */
+    ajouterFiltre(variante: VarianteObjet, ou: 'scope' | 'applies'): void {
+        const saisie = ou === 'scope' ? this.saisieDePortee(variante) : this.saisieDApplication(variante);
+        if (!saisie.col) return this.notifications.erreur('Choisissez la colonne du filtre.');
+        const valeur = this.sansValeur(saisie.op) ? '' : saisie.val.trim();
+        if (!this.sansValeur(saisie.op) && !valeur)
+            return this.notifications.erreur('Indiquez la valeur du filtre (par exemple : PRINCIPALE).');
+        const filtres = variante[ou] || [];
+        if (filtres.some(autre => autre.col === saisie.col && autre.op === saisie.op && (autre.val || '') === valeur))
+            return this.notifications.erreur('Ce filtre est déjà présent.');
+        filtres.push({ col: saisie.col, op: saisie.op, val: valeur });
+        if (ou === 'scope') variante.scope = filtres;
+        else variante.applies = filtres;
+        saisie.val = '';
+    }
+
+    retirerFiltre(variante: VarianteObjet, ou: 'scope' | 'applies', position: number): void {
+        (variante[ou] || []).splice(position, 1);
+    }
+
+    ajouterInformationDeVariante(variante: VarianteObjet): void {
+        const informations = variante.elements || [];
+        informations.push(informationDeVarianteNeuve(variante, this.colonnesDeLaVariante(variante)[0] || '', genererIdentifiant));
+        variante.elements = informations;
+    }
+
+    /** Rattacher une information de variante à une autre colonne : la correspondance suit le choix. */
+    changerLaColonne(
+        variante: VarianteObjet,
+        information: { col: string; mappings: { table: string; col: string }[] },
+        colonne: string
+    ): void {
+        information.col = colonne;
+        information.mappings = colonne ? [{ table: variante.table, col: colonne }] : [];
+    }
+
+    supprimerInformationDeVariante(variante: VarianteObjet, identifiant: string): void {
+        variante.elements = (variante.elements || []).filter(information => information.id !== identifiant);
     }
 
     // ---- V11 : actions groupées sur plusieurs informations ----

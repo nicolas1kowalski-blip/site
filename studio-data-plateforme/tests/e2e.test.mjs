@@ -70,6 +70,23 @@ const lignesDuResultat = async cible =>
                 .join('|')
         )
     );
+/**
+ * Attend que le tableau des informations d'un objet compte ce nombre de lignes. L'écran se redessine après
+ * le clic, jamais pendant : compter tout de suite reviendrait à lire l'écran d'avant.
+ */
+const lignesDInformations = async (cible, attendues) =>
+    cible
+        .waitForFunction(nombre => document.querySelectorAll('app-objets-metier tbody tr').length === nombre, attendues, { timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+/** Même attente, sur le texte du tableau des informations. */
+const texteDesInformations = async (cible, motif) =>
+    cible
+        .waitForFunction(source => new RegExp(source).test(document.querySelector('app-objets-metier tbody').textContent), motif.source, {
+            timeout: 3000
+        })
+        .then(() => true)
+        .catch(() => false);
 const capture = async nom => {
     if (!process.env.SHOTS) return;
     fs.mkdirSync(path.join(dossierTests, 'captures'), { recursive: true });
@@ -1100,6 +1117,86 @@ try {
     page.once('dialog', dialogue => dialogue.accept());
     await page.click('app-objets-metier button:has-text("Supprimer")');
     await page.waitForFunction(() => !/Client \(copie\)/.test(document.querySelector('app-objets-metier .liste').textContent));
+
+    // ---- V13 : colonnes répétées repliées, nombre de valeurs, et variantes d'un objet ----
+    // Deux colonnes numérotées ne sont pas deux informations : c'est une seule, à deux valeurs.
+    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.click('app-objets-metier button:has-text("+ Information")');
+    await page.click('app-objets-metier button:has-text("+ Information")');
+    // Le nom n'est repris qu'une fois le champ quitté : on tabule, comme le ferait une main.
+    await page.fill('app-objets-metier input[name=attribut-nom-3]', 'courriel_1');
+    await page.press('app-objets-metier input[name=attribut-nom-3]', 'Tab');
+    await page.fill('app-objets-metier input[name=attribut-nom-4]', 'courriel_2');
+    await page.press('app-objets-metier input[name=attribut-nom-4]', 'Tab');
+    await page.waitForSelector('app-objets-metier button[name=replierRepetitions]');
+    const lignesRepliees = await page.$$('app-objets-metier tbody tr');
+    verifier(
+        'V13 : courriel_1 et courriel_2 se replient en une seule information « courriel » à 2 valeurs',
+        lignesRepliees.length === 4 && /1 à 2 valeurs/.test(await page.textContent('app-objets-metier tbody'))
+    );
+    // Le repli se déplie à la demande : on retrouve chaque colonne telle que la source la porte.
+    await page.click('app-objets-metier button[name=replierRepetitions]');
+    verifier('V13 : déplié, chaque colonne numérotée retrouve sa ligne', await lignesDInformations(page, 5));
+    await page.click('app-objets-metier button[name=replierRepetitions]');
+    // Déclarer le nombre de valeurs l'emporte sur ce que les colonnes laissent déduire.
+    await page.selectOption('app-objets-metier select[name=attribut-valeurs-3]', 'n');
+    verifier(
+        'V13 : le nombre de valeurs déclaré l’emporte sur celui déduit des colonnes',
+        await texteDesInformations(page, /plusieurs valeurs/)
+    );
+    await capture('objets-metier-colonnes-repliees');
+    // On retire le groupe : une seule croix suffit pour les deux colonnes qu'il recouvre.
+    const ligneCourriel = page.locator('app-objets-metier tbody tr', { hasText: 'colonnes' }).first();
+    await ligneCourriel.locator('button.danger').click();
+    verifier('V13 : retirer une information repliée retire toutes les colonnes qu’elle recouvre', await lignesDInformations(page, 3));
+
+    // Une variante : une vue filtrée d'une table, avec son nom métier et sa cardinalité.
+    await page.click('app-objets-metier button[name=onglet-variantes]');
+    await page.selectOption('app-objets-metier select[name=varianteTable]', { label: 'commandes.csv' });
+    await page.fill('app-objets-metier input[name=varianteNom]', 'Commandes réglées');
+    await page.click('app-objets-metier button[name=ajouterVariante]');
+    await page.waitForSelector('app-objets-metier .carte.variante');
+    await page.selectOption('app-objets-metier select[name=portee-col-0]', 'montant');
+    await page.selectOption('app-objets-metier select[name=portee-op-0]', 'notempty');
+    await page.click('app-objets-metier button[name=ajouterPortee-0]');
+    const resumeLu = await page
+        .waitForFunction(
+            () =>
+                /vue de commandes\.csv · montant n’est pas vide/.test(
+                    document.querySelector('app-objets-metier .carte.variante').textContent
+                ),
+            null,
+            { timeout: 3000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    verifier('V13 : la variante dit en clair d’où elle vient et ce qu’elle garde', resumeLu);
+    await capture('objets-metier-variantes');
+    await page.click('app-objets-metier button:has-text("Enregistrer")');
+    await page.waitForSelector('.notification:has-text("enregistré")');
+    const clientAvecVariante = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json())).find(
+        objet => objet.name === 'Client'
+    );
+    const variante = (clientAvecVariante.structure || [])[0];
+    verifier(
+        'V13 : la variante est conservée avec sa table, sa cardinalité, son filtre et ses informations',
+        !!variante &&
+            variante.name === 'Commandes réglées' &&
+            variante.table === 'commandes.csv' &&
+            variante.cardinality === '1–N' &&
+            variante.scope.length === 1 &&
+            variante.elements.length > 0
+    );
+    // La table de la variante devient une source contributrice : sans cela elle sortirait des parcours.
+    verifier(
+        'V13 : la table d’une variante est rattachée à l’objet comme source contributrice',
+        clientAvecVariante.sources.some(source => source.table === 'commandes.csv' && source.role === 'contributeur')
+    );
+    // On retire la variante : les écrans suivants comptent les sources de « Client » sans elle.
+    await page.click('app-objets-metier button[name=supprimerVariante-0]');
+    await page.click('app-objets-metier button:has-text("Enregistrer")');
+    await page.waitForSelector('.notification:has-text("enregistré")');
+    await page.click('app-objets-metier button[name=onglet-attributs]');
 
     // ---- V11 : l'assistant de création en trois étapes ----
     await page.click('app-objets-metier button[name=assistantObjet]');
