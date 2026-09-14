@@ -1611,8 +1611,55 @@ try {
             clientAvecUsages.elements.every(information => !!information.examples && information.examplesAuto === true)
     );
 
+    // ---- V13 : la navigation de la gouvernance, rangée par famille ----
+    const famillesDuRail = await page.$$eval('.rail .famille-titre', titres => titres.map(titre => titre.textContent.trim()));
+    verifier(
+        'V13 : la gouvernance est rangée en familles — Découvrir, Patrimoine, Acteurs, Sens métier, Lineage, Contrôle',
+        JSON.stringify(famillesDuRail) === JSON.stringify(['Découvrir', 'Patrimoine', 'Acteurs', 'Sens métier', 'Lineage', 'Contrôle'])
+    );
+    const ecransDeLaGouvernance = await page.$$eval('.rail .groupe:has(.famille-titre) a', liens =>
+        liens.map(lien => lien.textContent.replace(/\s+/g, ' ').trim())
+    );
+    verifier(
+        'V13 : les écrans de gouvernance sont dans l’ordre et sous les libellés du classique',
+        JSON.stringify(ecransDeLaGouvernance) ===
+            JSON.stringify([
+                '🧭Catalogue',
+                '📚Dictionnaire',
+                '🧬Modèle de données',
+                '🖥Applications & processus',
+                '👥Personnes & rôles',
+                '🏛️Objets métier',
+                '📖Glossaire',
+                '🎚️Listes de valeurs',
+                '🧩Périmètres',
+                '🔐Sensibilité',
+                '🕸️Lineage',
+                '🛰️Surveillance des sources',
+                '✅À valider',
+                '📈Historique'
+            ])
+    );
+    await capture('navigation-gouvernance');
+
+    // ---- V13 : le modèle d'objets — les objets, ce qui les compose, ce qui les relie ----
+    await page.click('a[href="/modele-objets"]');
+    // Le dessin arrive après la lecture des objets : on l'attend, sinon on lirait l'écran vide.
+    await page.waitForSelector('app-modele-objets .noeud');
+    verifier(
+        'V13 : le modèle d’objets dessine une carte par objet métier et dit ce qu’il montre',
+        (await page.$$('app-modele-objets .noeud')).length >= 1 &&
+            /objet\(s\).*composition\(s\).*référence\(s\)/.test(await page.textContent('app-modele-objets .entete-page'))
+    );
+    await capture('modele-objets');
+
     // ---- V13 : import en masse de la gouvernance ----
-    await page.click('a[href="/import-gouvernance"]');
+    // C'est une action du panneau de gouvernance, pas un écran du menu : elle est dans l'en-tête.
+    verifier(
+        'V13 : « Import en masse » est une action du panneau de gouvernance, offerte sur ses écrans',
+        (await page.$$('.entete a[name=importEnMasse]')).length === 1
+    );
+    await page.click('.entete a[name=importEnMasse]');
     await page.waitForSelector('app-import-gouvernance');
     // Un fichier écrit à la main, avec des en-têtes en français : les colonnes doivent se reconnaître seules.
     const fichierImport = path.join(dossierTests, 'captures', 'import-dictionnaire.csv');

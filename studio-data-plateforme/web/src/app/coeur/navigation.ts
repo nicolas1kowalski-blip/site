@@ -5,8 +5,12 @@
  * proposent exactement les mêmes écrans, et un écran ajouté ici apparaît des deux côtés sans autre geste.
  */
 
-/** Un écran du menu. « administrateur » réserve l'entrée aux administrateurs de la plateforme. */
-export type Lien = { chemin: string; libelle: string; icone: string; administrateur?: boolean };
+/**
+ * Un écran du menu. « administrateur » réserve l'entrée aux administrateurs de la plateforme ;
+ * « famille » range l'écran sous un intertitre à l'intérieur de son groupe, comme la V13 le fait pour
+ * la gouvernance (Découvrir, Patrimoine, Acteurs, Sens métier, Lineage, Contrôle).
+ */
+export type Lien = { chemin: string; libelle: string; icone: string; famille?: string; administrateur?: boolean };
 export type GroupeNavigation = { titre: string; liens: Lien[] };
 
 /** Même découpage que l'application classique : Données & Modèle, Exploitation, Qualité & Audit, Gouvernance. */
@@ -41,26 +45,28 @@ export const GROUPES_NAVIGATION: GroupeNavigation[] = [
         liens: [
             { chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' },
             { chemin: '/qualite/regles', libelle: 'Règles & score', icone: '📏' },
-            { chemin: '/rapprochement', libelle: 'Rapprochement', icone: '⚭' },
-            { chemin: '/surveillance', libelle: 'Surveillance des sources', icone: '⌚' }
+            { chemin: '/rapprochement', libelle: 'Rapprochement', icone: '⚭' }
         ]
     },
     {
+        // Ordre, libellés, icônes et familles repris tels quels de la V13 : on commence par chercher la
+        // donnée disponible (Découvrir), puis on descend vers le patrimoine, les acteurs, le sens métier.
         titre: 'Gouvernance',
         liens: [
-            { chemin: '/catalogue', libelle: 'Catalogue', icone: '🧭' },
-            { chemin: '/dictionnaire', libelle: 'Dictionnaire', icone: '☰' },
-            { chemin: '/actifs', libelle: 'Applications & restitutions', icone: '⚙' },
-            { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '☺' },
-            { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛' },
-            { chemin: '/glossaire', libelle: 'Glossaire', icone: '✎' },
-            { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '≡' },
-            { chemin: '/perimetres', libelle: 'Périmètres', icone: '◫' },
-            { chemin: '/sensibilite', libelle: 'Confidentialité', icone: '🛡' },
-            { chemin: '/lineage', libelle: 'Parcours de la donnée', icone: '⇢' },
-            { chemin: '/propositions', libelle: 'À valider', icone: '✔' },
-            { chemin: '/import-gouvernance', libelle: 'Import en masse', icone: '⬆' },
-            { chemin: '/journal', libelle: 'Historique', icone: '⏱' }
+            { chemin: '/catalogue', libelle: 'Catalogue', icone: '🧭', famille: 'Découvrir' },
+            { chemin: '/dictionnaire', libelle: 'Dictionnaire', icone: '📚', famille: 'Patrimoine' },
+            { chemin: '/modele-objets', libelle: 'Modèle de données', icone: '🧬', famille: 'Patrimoine' },
+            { chemin: '/actifs', libelle: 'Applications & processus', icone: '🖥', famille: 'Acteurs' },
+            { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '👥', famille: 'Acteurs' },
+            { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛️', famille: 'Sens métier' },
+            { chemin: '/glossaire', libelle: 'Glossaire', icone: '📖', famille: 'Sens métier' },
+            { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '🎚️', famille: 'Sens métier' },
+            { chemin: '/perimetres', libelle: 'Périmètres', icone: '🧩', famille: 'Sens métier' },
+            { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🔐', famille: 'Sens métier' },
+            { chemin: '/lineage', libelle: 'Lineage', icone: '🕸️', famille: 'Lineage' },
+            { chemin: '/surveillance', libelle: 'Surveillance des sources', icone: '🛰️', famille: 'Contrôle' },
+            { chemin: '/propositions', libelle: 'À valider', icone: '✅', famille: 'Contrôle' },
+            { chemin: '/journal', libelle: 'Historique', icone: '📈', famille: 'Contrôle' }
         ]
     },
     { titre: 'Application complète', liens: [{ chemin: '/classique', libelle: 'Tous les écrans (classique)', icone: '⧉' }] },

@@ -26,6 +26,7 @@ import { JournalComponent } from './pages/journal/journal.component';
 import { LineageComponent } from './pages/lineage/lineage.component';
 import { ListesValeursComponent } from './pages/listes-valeurs/listes-valeurs.component';
 import { ModeleComponent } from './pages/modele/modele.component';
+import { ModeleObjetsComponent } from './pages/modele-objets/modele-objets.component';
 import { ObjetsMetierComponent } from './pages/objets-metier/objets-metier.component';
 import { PerimetresComponent } from './pages/perimetres/perimetres.component';
 import { PersonnesComponent } from './pages/personnes/personnes.component';
@@ -76,6 +77,7 @@ export const routes: Routes = [
             { path: 'glossaire', component: GlossaireComponent, title: 'Glossaire — Studio Data' },
             { path: 'dictionnaire', component: DictionnaireComponent, title: 'Dictionnaire — Studio Data' },
             { path: 'objets-metier', component: ObjetsMetierComponent, title: 'Objets métier — Studio Data' },
+            { path: 'modele-objets', component: ModeleObjetsComponent, title: 'Modèle de données (objets métier) — Studio Data' },
             { path: 'actifs', component: ActifsComponent, title: 'Applications & processus — Studio Data' },
             { path: 'perimetres', component: PerimetresComponent, title: 'Périmètres — Studio Data' },
             { path: 'listes-de-valeurs', component: ListesValeursComponent, title: 'Listes de valeurs — Studio Data' },

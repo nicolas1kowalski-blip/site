@@ -2,8 +2,8 @@
  * Coque de l'application : rail de navigation à gauche (les quatre phases de Studio Data plus
  * l'administration), en-tête avec le choix de l'espace de travail et l'utilisateur, zone de page, notifications.
  */
-import { Component, HostListener, inject, signal, viewChild } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, HostListener, computed, inject, signal, viewChild } from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EtEnsuiteComponent } from '../composants/et-ensuite.component';
 import { AideEcranComponent } from '../composants/aide-ecran.component';
 import { AideGeneraleComponent } from '../composants/aide-generale.component';
@@ -43,7 +43,11 @@ const DELAI_RACCOURCI_MS = 1200;
                 @for (groupe of groupes; track groupe.titre) {
                     <div class="groupe">
                         <div class="groupe-titre">{{ groupe.titre }}</div>
-                        @for (lien of groupe.liens; track lien.chemin) {
+                        @for (lien of groupe.liens; track lien.chemin; let rang = $index) {
+                            <!-- V13 : à l'intérieur de la gouvernance, les écrans sont rangés par famille. -->
+                            @if (lien.famille && lien.famille !== groupe.liens[rang - 1]?.famille) {
+                                <div class="famille-titre">{{ lien.famille }}</div>
+                            }
                             @if (!lien.administrateur || session.estAdministrateurGlobal()) {
                                 <a
                                     [routerLink]="lien.chemin"
@@ -81,6 +85,20 @@ const DELAI_RACCOURCI_MS = 1200;
                         </select>
                     </label>
                     <span class="espace"></span>
+                    <!--
+                        V13 : « Import en masse » n'est pas un écran du menu mais une action du panneau de
+                        gouvernance — elle n'apparaît donc que sur les écrans de gouvernance.
+                    -->
+                    @if (surLaGouvernance()) {
+                        <a
+                            class="bouton petit"
+                            name="importEnMasse"
+                            [routerLink]="'/import-gouvernance'"
+                            title="Importer en masse définitions, propriétaires, termes… depuis un fichier"
+                        >
+                            ⬆ Import en masse
+                        </a>
+                    }
                     <button
                         class="bouton petit recherche-globale"
                         type="button"
@@ -179,6 +197,15 @@ const DELAI_RACCOURCI_MS = 1200;
             place-items: center;
             font-size: 12px;
             font-weight: 640;
+        }
+        /* L'intertitre d'une famille : plus discret que celui d'un groupe, et légèrement en retrait. */
+        .famille-titre {
+            font-size: 9.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.32;
+            font-weight: 600;
+            padding: 7px 11px 3px 22px;
         }
         .groupe-titre {
             font-size: 10px;
@@ -332,6 +359,11 @@ export class CoqueComponent {
     readonly compact = signal(false);
 
     constructor() {
+        // L'adresse courante décide des actions de l'en-tête : on la suit à chaque navigation aboutie.
+        this.cheminCourant.set(this.routeur.url.split('?')[0]);
+        this.routeur.events.subscribe(evenement => {
+            if (evenement instanceof NavigationEnd) this.cheminCourant.set(evenement.urlAfterRedirects.split('?')[0]);
+        });
         let memorisee = '';
         try {
             memorisee = localStorage.getItem(CLE_DENSITE) || '';
@@ -353,6 +385,13 @@ export class CoqueComponent {
     }
 
     readonly groupes = GROUPES_NAVIGATION;
+    /** Les adresses des écrans de gouvernance : c'est là, et seulement là, qu'on offre l'import en masse. */
+    private readonly cheminsDeLaGouvernance = new Set(
+        (GROUPES_NAVIGATION.find(groupe => groupe.titre === 'Gouvernance')?.liens || []).map(lien => lien.chemin)
+    );
+    /** L'adresse courante, suivie au fil de la navigation : elle décide des actions offertes dans l'en-tête. */
+    readonly cheminCourant = signal('');
+    readonly surLaGouvernance = computed(() => this.cheminsDeLaGouvernance.has(this.cheminCourant()));
     readonly palette = viewChild.required(PaletteCommandesComponent);
     /** Dernière touche « G » tapée : un raccourci « G puis une lettre » n'est valable qu'aussitôt après. */
     private attenteRaccourci = 0;

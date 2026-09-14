@@ -87,6 +87,11 @@ export const AIDES_ECRAN: Record<string, AideEcran> = {
         quoi: 'Ici, vous dites à quoi ressemble une chose que vous gérez (un Client, un Contrat…) et qui en est responsable.',
         pourquoi: "Pour chaque information, trois questions : c'est quoi, d'où ça vient, qui s'en sert."
     },
+    '/modele-objets': {
+        pictogramme: '🧬',
+        quoi: 'Ici, vous voyez le sens de vos données : les objets métier, ce qui les compose, ce qui les relie.',
+        pourquoi: 'Le dessin se construit tout seul à partir des fiches : ce qui manque s’y voit tout de suite.'
+    },
     '/import-gouvernance': {
         pictogramme: '⬆️',
         quoi: 'Ici, vous remplissez la gouvernance depuis un fichier, au lieu de la saisir écran par écran.',
