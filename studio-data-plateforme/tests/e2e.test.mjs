@@ -403,6 +403,39 @@ try {
         )
     );
 
+    // ---- V13 : la vue graphique de l'extraction — cocher ses colonnes sur le schéma ----
+    await page.click('a[href="/extraction"]');
+    await page.waitForSelector('app-extraction');
+    await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
+    await page.click('app-extraction button[name=vueGraphique]');
+    await page.waitForSelector('app-vue-graphique-extraction .case-table');
+    const casesDuSchema = await page.$$eval('app-vue-graphique-extraction .case-table .nom-table', noms =>
+        noms.map(nom => nom.textContent.trim())
+    );
+    verifier(
+        'extraction V13 : la vue graphique montre la table de départ et les tables qu’elle atteint',
+        casesDuSchema.includes('clients.csv') && casesDuSchema.includes('commandes.csv')
+    );
+    // Cocher une colonne sur la case de commandes.csv l'ajoute avec le bon chemin, sans passer par les menus.
+    const caseCommandes = page.locator('app-vue-graphique-extraction .case-table', {
+        has: page.locator('.nom-table', { hasText: /^commandes\.csv$/ })
+    });
+    await caseCommandes.locator('.ligne-colonne', { hasText: 'montant' }).locator('input[type=checkbox]').check();
+    await page.waitForSelector('app-extraction .colonne-choisie, app-extraction tbody tr');
+    const colonnesRetenues = await page.evaluate(() =>
+        [...document.querySelectorAll('app-vue-graphique-extraction .ligne-colonne.choisie .nom-colonne')].map(nom =>
+            nom.textContent.trim()
+        )
+    );
+    verifier(
+        'extraction V13 : cocher une colonne sur le schéma l’ajoute à l’extraction, avec le chemin de jointure',
+        colonnesRetenues.includes('montant') &&
+            /commandes\.csv\.montant/.test(await page.textContent('app-extraction')) &&
+            (await page.$$('app-vue-graphique-extraction svg path[marker-end]')).length >= 1
+    );
+    await capture('extraction-vue-graphique');
+    await page.click('app-extraction button[name=fermerVueGraphique]');
+
     // ---- extraction : colonnes, filtre, aperçu, comptage, bilan, export, paramétrage ----
     await page.click('a[href="/extraction"]');
     await page.waitForSelector('app-extraction');

@@ -10,6 +10,7 @@
  * Fonctions pures : elles ne connaissent que les liens et les noms de tables, jamais l'écran.
  */
 import type { JointureExtraction, Relation } from '../../coeur/modeles';
+import type { CaseExtraction } from './cases-extraction';
 
 /** Une étape de chemin : un lien parcouru dans un sens donné. */
 export type EtapeChemin = {
@@ -140,4 +141,34 @@ export function routeDuChemin(chemin: Chemin, baseId: string): string {
 /** Retrouve un chemin à partir de sa clé, parmi ceux qui mènent à la table visée. */
 export function cheminParCle(chemins: Chemin[], cle: string): Chemin | undefined {
     return chemins.find(candidat => cleChemin(candidat) === cle);
+}
+
+/**
+ * Toutes les cases, à partir des chemins menant à chaque table. Une case par chemin ; la table de départ en
+ * a une, sans chemin. Les cases sont rendues de la moins profonde à la plus profonde.
+ */
+export function casesDuGraphe(
+    baseId: string,
+    cheminsParTable: Map<string, Chemin[]>,
+    nomDe: (tableId: string) => string
+): CaseExtraction[] {
+    const cases: CaseExtraction[] = [
+        { cle: '', tableId: baseId, nomTable: nomDe(baseId), profondeur: 0, cleParent: '', route: baseId, via: '', libelleLien: '' }
+    ];
+    for (const [tableId, chemins] of cheminsParTable)
+        for (const chemin of chemins) {
+            if (!chemin.length) continue;
+            const derniere = chemin[chemin.length - 1];
+            cases.push({
+                cle: cleChemin(chemin),
+                tableId,
+                nomTable: nomDe(tableId),
+                profondeur: chemin.length,
+                cleParent: cleChemin(chemin.slice(0, -1)),
+                route: cleChemin(chemin),
+                via: libelleChemin(chemin, nomDe),
+                libelleLien: `${nomDe(derniere.deTableId)}.${derniere.deColonne} → ${nomDe(derniere.versTableId)}.${derniere.versColonne}`
+            });
+        }
+    return cases.sort((premiere, seconde) => premiere.profondeur - seconde.profondeur || premiere.nomTable.localeCompare(seconde.nomTable));
 }

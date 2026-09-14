@@ -53,9 +53,12 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { AssistantsColonnesComponent } from './assistants-colonnes.component';
 import { FiltreFichierComponent } from './filtre-fichier.component';
+import { CaseExtraction } from './cases-extraction';
+import { VueGraphiqueExtractionComponent } from './vue-graphique.component';
 import {
     Chemin,
     ROUTE_INDIFFERENTE,
+    casesDuGraphe,
     cheminParCle,
     cheminsVers,
     cleChemin,
@@ -144,7 +147,8 @@ const LIGNES_APERCU_RAPIDE = 500;
         ScrollingModule,
         SelecteurColonneComponent,
         AssistantsColonnesComponent,
-        FiltreFichierComponent
+        FiltreFichierComponent,
+        VueGraphiqueExtractionComponent
     ],
     template: `
         <div class="entete-page">
@@ -193,6 +197,16 @@ const LIGNES_APERCU_RAPIDE = 500;
                     title="Partir d'un objet métier : jointures, filtres et noms pré-remplis"
                 >
                     🏛️ Objet métier
+                </button>
+                <button
+                    class="bouton petit"
+                    type="button"
+                    name="vueGraphique"
+                    [class.actif]="vueGraphiqueOuverte()"
+                    (click)="vueGraphiqueOuverte.set(!vueGraphiqueOuverte())"
+                    title="Choisir les colonnes directement sur le schéma des liens"
+                >
+                    🗺️ Vue graphique
                 </button>
                 <button
                     class="bouton petit"
@@ -291,6 +305,42 @@ const LIGNES_APERCU_RAPIDE = 500;
                     précis seulement si les liens ont des sens différents (souscripteur / bénéficiaire).
                 </p>
             </div>
+        }
+
+        <!-- V13 : choisir ses colonnes sur le schéma ; l'écran déclaratif reste dessous et reste synchronisé. -->
+        @if (baseId() && vueGraphiqueOuverte()) {
+            <section class="carte">
+                <div class="entete-page" style="margin: 0 0 6px">
+                    <div class="espace">
+                        <h2 style="margin: 0">🗺️ Vue graphique</h2>
+                        <p class="discret" style="margin: 4px 0 0">
+                            Chaque case est une table <b>atteinte par un chemin précis</b>. Une table reliée plusieurs fois apparaît une
+                            fois par lien : cochez la colonne sur la bonne case, le chemin se renseigne tout seul. Les cases se déplacent
+                            par leur en-tête.
+                        </p>
+                    </div>
+                    <button class="bouton petit" type="button" name="fermerVueGraphique" (click)="vueGraphiqueOuverte.set(false)">
+                        Fermer
+                    </button>
+                </div>
+                <app-vue-graphique-extraction
+                    [cases]="casesDuGraphe()"
+                    [colonnes]="colonnes()"
+                    [filtres]="filtres()"
+                    [colonnesDe]="colonnesDUneTable"
+                    [transformations]="transformations()"
+                    [operateurs]="operateurs()"
+                    (basculerColonne)="basculerColonneDuGraphe($event)"
+                    (changerColonne)="modifierColonne($event.index, $event.changement)"
+                    (ajouterFiltre)="ajouterFiltreDepuisLeGraphe($event)"
+                    (changerFiltre)="modifierFiltre($event.index, $event.changement)"
+                    (retirerFiltre)="retirerFiltre($event)"
+                    (toutesLesColonnes)="toutesLesColonnesDuGraphe($event)"
+                    (aucuneColonne)="aucuneColonneDuGraphe($event)"
+                    (compter)="compterDepuisLeGraphe($event)"
+                    (repartirDe)="repartirDepuisLeGraphe($event)"
+                />
+            </section>
         }
 
         @if (baseId()) {
@@ -1346,6 +1396,8 @@ export class ExtractionComponent {
 
     // ---- la spécification en cours de composition ----
     readonly baseId = signal('');
+    /** V13 : la vue graphique, ouverte ou non ; l'écran déclaratif reste dessous dans les deux cas. */
+    readonly vueGraphiqueOuverte = signal(false);
     readonly colonnes = signal<ColonneExtraction[]>([]);
     readonly filtres = signal<FiltreExtraction[]>([]);
     readonly fichiers = signal<FiltreFichierExtraction[]>([]);
@@ -1670,6 +1722,106 @@ export class ExtractionComponent {
     }
     retirerFiltre(index: number): void {
         this.filtres.update(liste => liste.filter((_, position) => position !== index));
+    }
+    modifierFiltre(index: number, changement: Partial<FiltreExtraction>): void {
+        this.filtres.update(liste => liste.map((filtre, position) => (position === index ? { ...filtre, ...changement } : filtre)));
+    }
+
+    // ---- V13 : la vue graphique écrit dans la même spécification que l'écran déclaratif ----
+
+    /** Les cases du schéma : une par table atteinte par un chemin précis (la table de départ comprise). */
+    readonly casesDuGraphe = computed(() =>
+        this.baseId() ? casesDuGraphe(this.baseId(), this.cheminsParTable(), tableId => this.nomDe(tableId)) : []
+    );
+    /** Passée telle quelle à la vue graphique : elle y lit les colonnes de chaque table. */
+    readonly colonnesDUneTable = (tableId: string): string[] => this.colonnesDe(tableId);
+
+    /** Cocher une colonne l'ajoute pour ce chemin précis ; la décocher la retire. */
+    basculerColonneDuGraphe(choix: { uneCase: CaseExtraction; colonne: string }): void {
+        const index = this.colonnes().findIndex(
+            candidate =>
+                !candidate.genre &&
+                candidate.tableId === choix.uneCase.tableId &&
+                candidate.route === choix.uneCase.route &&
+                candidate.nomColonne === choix.colonne
+        );
+        if (index >= 0) return this.retirerColonne(index);
+        this.colonnes.update(liste => [
+            ...liste,
+            {
+                tableId: choix.uneCase.tableId,
+                route: choix.uneCase.route,
+                nomColonne: choix.colonne,
+                alias: '',
+                transformation: 'none' as const
+            }
+        ]);
+    }
+
+    toutesLesColonnesDuGraphe(uneCase: CaseExtraction): void {
+        for (const colonne of this.colonnesDe(uneCase.tableId))
+            if (!this.colonneDejaChoisie(uneCase, colonne)) this.basculerColonneDuGraphe({ uneCase, colonne });
+    }
+    aucuneColonneDuGraphe(uneCase: CaseExtraction): void {
+        this.colonnes.update(liste =>
+            liste.filter(colonne => colonne.genre || colonne.tableId !== uneCase.tableId || colonne.route !== uneCase.route)
+        );
+    }
+    private colonneDejaChoisie(uneCase: CaseExtraction, colonne: string): boolean {
+        return this.colonnes().some(
+            candidate =>
+                !candidate.genre &&
+                candidate.tableId === uneCase.tableId &&
+                candidate.route === uneCase.route &&
+                candidate.nomColonne === colonne
+        );
+    }
+
+    /** ⛃ sur une colonne : un filtre vide y est posé, prêt à être renseigné sur la case même. */
+    ajouterFiltreDepuisLeGraphe(choix: { uneCase: CaseExtraction; colonne: string }): void {
+        this.filtres.update(liste => [
+            ...liste,
+            { tableId: choix.uneCase.tableId, route: choix.uneCase.route, nomColonne: choix.colonne, op: '=' as const, valeur: '' }
+        ]);
+    }
+
+    /**
+     * « Σ compter » : combien de lignes de cette table sont liées, une valeur par ligne de départ. La synthèse
+     * s'ancre sur l'avant-dernière étape du chemin — la table qui porte la clé —, comme l'assistant le fait.
+     */
+    compterDepuisLeGraphe(uneCase: CaseExtraction): void {
+        const chemin = cheminParCle(this.cheminsParTable().get(uneCase.tableId) || [], uneCase.cle);
+        const derniere = chemin?.[chemin.length - 1];
+        if (!derniere) return this.notifications.erreur(`Le chemin vers « ${uneCase.nomTable} » n'est plus connu.`);
+        const ancrage = chemin
+            .slice(0, -1)
+            .map(etape => etape.relationId)
+            .join('>');
+        this.ajouterColonneAvancee({
+            tableId: derniere.deTableId,
+            route: ancrage,
+            nomColonne: '',
+            genre: 'synthese',
+            alias: `${uneCase.nomTable} (nombre)`,
+            transformation: 'none',
+            synthese: {
+                tableId: uneCase.tableId,
+                deTableId: derniere.deTableId,
+                deRoute: ancrage,
+                deColonne: derniere.deColonne,
+                versColonne: derniere.versColonne,
+                mode: 'count',
+                nomColonne: '',
+                n: 3
+            }
+        });
+        this.notifications.info(`Nombre de « ${uneCase.nomTable} » par ligne de départ ajouté.`);
+    }
+
+    /** « ⭐ départ » : on repart de cette table, l'extraction est remise à plat. */
+    repartirDepuisLeGraphe(uneCase: CaseExtraction): void {
+        this.choisirBase(uneCase.tableId);
+        this.notifications.info(`Table de départ : « ${uneCase.nomTable} ».`);
     }
     sansValeur(op: OperateurFiltre): boolean {
         return OPERATEURS_SANS_VALEUR.includes(op);
