@@ -228,7 +228,7 @@ export function resumeDuFichier(fichier: FiltreFichierExtraction, nomDeLaTable: 
     `,
     styles: `
         .bloc.fichier {
-            border: 1px solid var(--bord);
+            border: 1px solid var(--bordure);
             border-radius: 8px;
             padding: 10px;
             margin-top: 8px;

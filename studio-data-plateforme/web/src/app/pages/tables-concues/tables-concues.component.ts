@@ -26,6 +26,7 @@ import {
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { exporterTableEnCsv } from '../../coeur/telechargement';
+import { TableauDonneesComponent } from '../../composants/tableau-donnees.component';
 import { AssistantEnrichissementComponent } from './assistant-enrichissement.component';
 
 const RECETTE_VIDE = (): Recette => ({
@@ -69,7 +70,7 @@ type GroupeEcarts = { cle: string; attributs: { attribut: string; valeurs: { sou
 
 @Component({
     selector: 'app-tables-concues',
-    imports: [FormsModule, AssistantEnrichissementComponent],
+    imports: [FormsModule, AssistantEnrichissementComponent, TableauDonneesComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -696,26 +697,11 @@ type GroupeEcarts = { cle: string; attributs: { attribut: string; valeurs: { sou
                         <pre class="sql">{{ sql }}</pre>
                     }
                     @if (apercu(); as apercu) {
-                        <div class="defilement-x" style="margin-top: 10px">
-                            <table class="tableau">
-                                <thead>
-                                    <tr>
-                                        @for (colonne of apercu.colonnes; track colonne.nom) {
-                                            <th>{{ colonne.nom }}</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @for (ligne of apercu.lignes; track $index) {
-                                        <tr>
-                                            @for (valeur of ligne; track $index) {
-                                                <td>{{ valeur ?? '' }}</td>
-                                            }
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                        <app-tableau-donnees
+                            [colonnes]="nomsDeColonnes(apercu.colonnes)"
+                            [lignes]="apercu.lignes"
+                            messageVide="Aucune ligne dans cette table conçue."
+                        />
                     }
                 }
             </div>
@@ -830,6 +816,10 @@ export class TablesConcuesComponent {
     readonly brouillon = signal<Recette | null>(null);
     readonly sql = signal<string | null>(null);
     readonly apercu = signal<ResultatSql | null>(null);
+    /** Les seuls noms des colonnes : le tableau de résultats n'a pas besoin de leur type. */
+    nomsDeColonnes(colonnes: { nom: string }[]): string[] {
+        return colonnes.map(colonne => colonne.nom);
+    }
     readonly ecarts = signal<RapportEcarts | null>(null);
     readonly contributions = signal<Contribution[] | null>(null);
     readonly tableOuverte = signal<TableConcue | null>(null);

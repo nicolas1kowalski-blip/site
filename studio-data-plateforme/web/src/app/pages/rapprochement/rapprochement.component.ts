@@ -5,6 +5,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { PaireCandidate, Rapprochement, Source, VocabulaireExploitation, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -12,7 +13,7 @@ import { SessionService } from '../../coeur/session.service';
 
 @Component({
     selector: 'app-rapprochement',
-    imports: [FormsModule],
+    imports: [FormsModule, PleinEcranComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -25,6 +26,7 @@ import { SessionService } from '../../coeur/session.service';
         </div>
         @for (rapprochement of rapprochements(); track rapprochement.id; let index = $index) {
             <div class="carte">
+                <app-plein-ecran />
                 <div class="formulaire-ligne">
                     <div>
                         <label class="etiquette">Nom</label

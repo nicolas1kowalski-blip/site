@@ -109,3 +109,77 @@ export const RACCOURCIS_ECRAN: Record<string, string> = {
 export function tousLesEcrans(): { lien: Lien; groupe: string }[] {
     return GROUPES_NAVIGATION.flatMap(groupe => groupe.liens.map(lien => ({ lien, groupe: groupe.titre })));
 }
+
+/**
+ * « Et ensuite ? » (V12) : ce que l'on fait logiquement après chaque écran. Une fois les sources chargées on
+ * décrit le modèle, une fois le modèle posé on extrait, une fois l'extraction faite on la compare ou on la
+ * garde de côté. Ce n'est pas un parcours obligatoire : c'est la suite la plus fréquente, à un clic.
+ */
+export const SUITES_ECRAN: Record<string, string[]> = {
+    '/': ['/sources', '/qualite', '/extraction'],
+    '/sources': ['/modele', '/qualite', '/extraction'],
+    '/tables-concues': ['/qualite', '/extraction', '/tableaux-de-bord'],
+    '/modele': ['/extraction', '/lineage', '/qualite'],
+    '/couverture': ['/qualite', '/extraction'],
+    '/series-temporelles': ['/qualite/regles', '/tableaux-de-bord'],
+    '/extraction': ['/jeux', '/comparateur', '/tableaux-de-bord'],
+    '/jeux': ['/comparateur', '/qualite', '/extraction'],
+    '/preparation': ['/qualite', '/extraction'],
+    '/tableaux-de-bord': ['/statistiques', '/qualite'],
+    '/comparateur': ['/jeux', '/qualite', '/rapprochement'],
+    '/navigateur': ['/extraction', '/qualite'],
+    '/explorateur': ['/extraction', '/jeux'],
+    '/statistiques': ['/tableaux-de-bord', '/extraction'],
+    '/explorateur-360': ['/lineage', '/catalogue'],
+    '/qualite': ['/qualite/regles', '/jeux', '/objets-metier'],
+    '/qualite/regles': ['/tableaux-de-bord', '/surveillance'],
+    '/rapprochement': ['/qualite', '/comparateur'],
+    '/surveillance': ['/qualite', '/sources'],
+    '/catalogue': ['/objets-metier', '/dictionnaire', '/lineage'],
+    '/dictionnaire': ['/objets-metier', '/glossaire'],
+    '/objets-metier': ['/qualite', '/catalogue', '/lineage'],
+    '/glossaire': ['/dictionnaire', '/catalogue'],
+    '/lineage': ['/catalogue', '/actifs'],
+    '/propositions': ['/objets-metier', '/catalogue']
+};
+
+/**
+ * Les écrans qui ne servent à rien tant qu'aucune source n'est chargée (V12) : on y affiche un bandeau qui
+ * le dit, avec le bouton pour charger un fichier, au lieu de listes vides sans explication.
+ */
+export const ECRANS_AVEC_DONNEES = [
+    '/tables-concues',
+    '/modele',
+    '/couverture',
+    '/series-temporelles',
+    '/extraction',
+    '/preparation',
+    '/tableaux-de-bord',
+    '/comparateur',
+    '/navigateur',
+    '/explorateur',
+    '/statistiques',
+    '/explorateur-360',
+    '/qualite',
+    '/qualite/regles',
+    '/rapprochement',
+    '/surveillance'
+];
+
+/** Vrai quand cet écran a besoin d'au moins une source pour montrer quoi que ce soit. */
+export function demandeDesDonnees(adresse: string): boolean {
+    return ECRANS_AVEC_DONNEES.includes(cheminNormalise(adresse));
+}
+
+/** Les écrans qui suivent celui-ci, avec leur libellé et leur icône ; vide quand aucune suite n'est prévue. */
+export function suitesDe(chemin: string): Lien[] {
+    const tous = new Map(tousLesEcrans().map(entree => [entree.lien.chemin, entree.lien]));
+    return (SUITES_ECRAN[cheminNormalise(chemin)] || []).map(suite => tous.get(suite)).filter((lien): lien is Lien => Boolean(lien));
+}
+
+/** L'adresse d'un écran sans ses paramètres ni son fragment : « /qualite?source=3 » devient « /qualite ». */
+export function cheminNormalise(adresse: string): string {
+    const chemin = String(adresse || '/').split(/[?#]/)[0];
+    if (chemin.length > 1 && chemin.endsWith('/')) return chemin.slice(0, -1);
+    return chemin || '/';
+}

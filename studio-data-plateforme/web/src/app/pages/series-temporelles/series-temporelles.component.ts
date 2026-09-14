@@ -5,6 +5,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { AnalyseSerie, ConfigurationSerie, Source, VocabulaireExploitation, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -22,7 +23,7 @@ export function dureeLisible(secondes: unknown): string {
 
 @Component({
     selector: 'app-series-temporelles',
-    imports: [FormsModule],
+    imports: [FormsModule, PleinEcranComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -37,6 +38,7 @@ export function dureeLisible(secondes: unknown): string {
         </div>
         @for (serie of series(); track serie.id; let index = $index) {
             <div class="carte">
+                <app-plein-ecran />
                 <div class="formulaire-ligne">
                     <div>
                         <label class="etiquette">Nom</label

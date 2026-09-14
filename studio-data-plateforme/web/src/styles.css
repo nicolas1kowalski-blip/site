@@ -115,3 +115,13 @@ body.avec-plein-ecran { overflow: hidden; }
 }
 /* Les zones à hauteur fixe (défilement virtuel, graphes) profitent de la place gagnée. */
 .en-plein-ecran .corps { height: calc(100vh - 200px); }
+
+/* ---- barre d'action collante : l'action principale reste à portée, si long soit le formulaire (V12) ---- */
+.barre-actions {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--surface);
+    padding-block: 8px;
+    border-bottom: 1px solid var(--bordure);
+}

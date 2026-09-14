@@ -6,6 +6,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     ApercuPreparation,
@@ -46,7 +47,7 @@ const PARAMETRES_INITIAUX: Partial<Record<TypeEtapePreparation, Record<string, s
 
 @Component({
     selector: 'app-preparation',
-    imports: [FormsModule],
+    imports: [FormsModule, PleinEcranComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -72,6 +73,7 @@ const PARAMETRES_INITIAUX: Partial<Record<TypeEtapePreparation, Record<string, s
         }
         @for (recette of recettes(); track recette.id; let indexRecette = $index) {
             <div class="carte">
+                <app-plein-ecran />
                 <div class="formulaire-ligne">
                     <div>
                         <label class="etiquette">Nom</label>

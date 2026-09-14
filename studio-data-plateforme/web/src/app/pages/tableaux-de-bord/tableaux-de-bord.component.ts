@@ -5,6 +5,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     Alerte,
@@ -35,7 +36,7 @@ const TUILE_VIDE = (): Tuile => ({
 
 @Component({
     selector: 'app-tableaux-de-bord',
-    imports: [FormsModule, GraphiqueSvgComponent],
+    imports: [FormsModule, PleinEcranComponent, GraphiqueSvgComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -118,6 +119,7 @@ const TUILE_VIDE = (): Tuile => ({
 
         @if (edition(); as tableau) {
             <div class="carte">
+                <app-plein-ecran />
                 <div class="entete-page" style="margin: 0 0 8px">
                     <input
                         class="champ espace"

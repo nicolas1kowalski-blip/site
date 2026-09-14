@@ -107,7 +107,23 @@ try {
             /0\s*sources et tables/.test(await page.textContent('.kpis')) &&
             /Aucun point d'attention/.test(await page.textContent('app-accueil'))
     );
+    verifier(
+        'confort V12 : « Et ensuite ? » propose les écrans qui suivent le cockpit (Sources, Qualité, Extraire)',
+        /Et ensuite \?/.test(await page.textContent('app-et-ensuite')) &&
+            (await page.$$eval('app-et-ensuite a', liens => liens.map(lien => lien.getAttribute('href')))).join() ===
+                '/sources,/qualite,/extraction'
+    );
     await capture('accueil');
+
+    // ---- espace encore vide : le bandeau dit ce qui manque, avec le bouton pour y remédier (V12) ----
+    await page.click('a[href="/extraction"]');
+    await page.waitForSelector('app-sans-donnees .bandeau-vide');
+    verifier(
+        'confort V12 : sur un écran qui a besoin de données, un bandeau annonce qu’aucune source n’est chargée et propose d’en charger une',
+        /Aucune source chargée/.test(await page.textContent('app-sans-donnees')) &&
+            (await page.getAttribute('app-sans-donnees a.bouton', 'href')) === '/sources?action=charger'
+    );
+    await capture('sans-donnees');
 
     // ---- dépôt d'un CSV depuis Angular ----
     await page.click('a[href="/sources"]');
@@ -707,7 +723,27 @@ try {
         'tables conçues : l’aperçu montre 4 lignes, la ville en majuscules, le montant ramené et l’étiquette calculée',
         apercuRecette.entetes.join() === 'SOURCE_ORIGINE,id_client,Nom du client,ville,montant,Etiquette' &&
             apercuRecette.lignes.length === 4 &&
-            apercuRecette.lignes.some(ligne => ligne[1] === '3' && ligne[3] === 'LILLE' && ligne[4] === '' && ligne[5] === 'Zoé (LILLE)')
+            // Le montant de Zoé est vide : les tableaux de résultats l'affichent « — » depuis la V11.
+            apercuRecette.lignes.some(ligne => ligne[1] === '3' && ligne[3] === 'LILLE' && ligne[4] === '—' && ligne[5] === 'Zoé (LILLE)')
+    );
+    // Le tableau de résultats est le composant commun : tri d'un clic sur l'en-tête (V11).
+    const colonneIdentifiant = () =>
+        page.$$eval('app-tables-concues app-tableau-donnees tbody tr td:nth-child(2)', cellules =>
+            cellules.map(cellule => cellule.textContent.trim())
+        );
+    await page.click('app-tables-concues app-tableau-donnees th.triable:nth-child(2)');
+    await page.waitForFunction(() =>
+        /▲/.test(document.querySelectorAll('app-tables-concues app-tableau-donnees th.triable')[1]?.textContent || '')
+    );
+    const identifiantsCroissants = await colonneIdentifiant();
+    await page.click('app-tables-concues app-tableau-donnees th.triable:nth-child(2)');
+    await page.waitForFunction(() =>
+        /▼/.test(document.querySelectorAll('app-tables-concues app-tableau-donnees th.triable')[1]?.textContent || '')
+    );
+    const identifiantsDecroissants = await colonneIdentifiant();
+    verifier(
+        'confort V11 : un clic sur une en-tête trie le tableau de résultats, un deuxième le renverse',
+        identifiantsCroissants.join() === '1,2,3,4' && identifiantsDecroissants.join() === '4,3,2,1'
     );
     await page.click('app-tables-concues button:has-text("Construire la table")');
     await page.waitForSelector('app-tables-concues .table-concue');

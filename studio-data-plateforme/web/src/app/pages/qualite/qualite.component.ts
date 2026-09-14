@@ -13,6 +13,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 import { ActivatedRoute } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
@@ -82,7 +83,8 @@ const REGLE_VIDE = (): DefinitionRegle => ({
         PageLignesComponent,
         DetailColonneComponent,
         DettesQualiteComponent,
-        TendanceScoresComponent
+        TendanceScoresComponent,
+        PleinEcranComponent
     ],
     template: `
         <div class="entete-page">
@@ -121,7 +123,9 @@ const REGLE_VIDE = (): DefinitionRegle => ({
             <!-- ---- profilage ---- -->
             @if (ongletActif() === 'profil') {
                 <div class="carte">
-                    <div class="entete-page" style="margin: 0">
+                    <app-plein-ecran />
+                    <!-- Barre collante (V12) : « Profiler la source » reste visible quelle que soit la longueur du rapport. -->
+                    <div class="entete-page barre-actions" style="margin: 0">
                         <button class="bouton principal" (click)="profiler()" [disabled]="enCours()">
                             {{ enCours() ? 'Analyse…' : 'Profiler la source' }}
                         </button>
@@ -338,7 +342,9 @@ const REGLE_VIDE = (): DefinitionRegle => ({
             <!-- ---- règles & score ---- -->
             @if (ongletActif() === 'regles') {
                 <div class="carte">
-                    <div class="entete-page" style="margin: 0">
+                    <app-plein-ecran />
+                    <!-- Barre collante (V12) : « Exécuter les règles » reste à portée sur un long rapport. -->
+                    <div class="entete-page barre-actions" style="margin: 0">
                         <button class="bouton principal" (click)="executerRegles()" [disabled]="enCours() || !regles().length">
                             {{ enCours() ? 'Exécution…' : 'Exécuter les règles' }}
                         </button>

@@ -6,6 +6,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
+import { TableauDonneesComponent } from '../../composants/tableau-donnees.component';
 import { ParametresComparaison, ResultatComparaison, Source } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
@@ -30,7 +31,7 @@ function nomComparable(nom: string): string {
 
 @Component({
     selector: 'app-comparateur',
-    imports: [FormsModule],
+    imports: [FormsModule, TableauDonneesComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -203,26 +204,12 @@ function nomComparable(nom: string): string {
                         </button>
                     </p>
                 }
-                <div class="defilement-x">
-                    <table class="tableau">
-                        <thead>
-                            <tr>
-                                @for (colonne of resultat.colonnes; track colonne) {
-                                    <th>{{ colonne }}</th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (ligne of resultat.apercu; track $index) {
-                                <tr>
-                                    @for (valeur of ligne; track $index) {
-                                        <td>{{ valeur ?? '' }}</td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <app-tableau-donnees
+                    [colonnes]="resultat.colonnes"
+                    [lignes]="resultat.apercu"
+                    [avecPleinEcran]="true"
+                    messageVide="Aucune ligne comparée."
+                />
             </div>
         }
     `,

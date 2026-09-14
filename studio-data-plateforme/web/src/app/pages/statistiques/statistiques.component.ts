@@ -4,6 +4,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { AgregatStatistique, ParametresStatistiques, ResultatStatistiques, Source, VocabulaireExploitation } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -11,7 +12,7 @@ import { GenreGraphique, GraphiqueSvgComponent } from '../../composants/graphiqu
 
 @Component({
     selector: 'app-statistiques',
-    imports: [FormsModule, GraphiqueSvgComponent],
+    imports: [FormsModule, PleinEcranComponent, GraphiqueSvgComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -99,6 +100,7 @@ import { GenreGraphique, GraphiqueSvgComponent } from '../../composants/graphiqu
         </div>
         @if (resultat(); as resultat) {
             <div class="carte">
+                <app-plein-ecran />
                 <h2>{{ titre() }}</h2>
                 @if (resultat.points.length === 0) {
                     <p class="discret">Aucune valeur.</p>

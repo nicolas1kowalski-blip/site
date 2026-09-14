@@ -4,6 +4,7 @@
  * ou de l'ensemble (le parent fournit alors toutes les pages).
  */
 import { Component, input, output } from '@angular/core';
+import { TableauDonneesComponent } from '../../composants/tableau-donnees.component';
 import { PageLignes } from '../../coeur/modeles';
 
 export const TAILLE_PAGE_LIGNES = 50;
@@ -40,32 +41,10 @@ export const TAILLE_PAGE_LIGNES = 50;
                 </button>
                 <button class="bouton petit" type="button" (click)="fermer.emit()">Fermer</button>
             </div>
-            @if (page.lignes.length) {
-                <div class="defilement-x">
-                    <table class="tableau">
-                        <thead>
-                            <tr>
-                                @for (colonne of page.colonnes; track colonne) {
-                                    <th>{{ colonne }}</th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (ligne of page.lignes; track $index) {
-                                <tr>
-                                    @for (valeur of ligne; track $index) {
-                                        <td>{{ valeur ?? '' }}</td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            } @else {
-                <div class="vide">Aucune ligne.</div>
-            }
+            <app-tableau-donnees [colonnes]="page.colonnes" [lignes]="page.lignes" />
         }
-    `
+    `,
+    imports: [TableauDonneesComponent]
 })
 export class PageLignesComponent {
     readonly titre = input('Lignes');
