@@ -502,3 +502,95 @@ test('hiérarchie par table de liaison datée : l’organigramme est aplati à l
         'après le changement, Études est au troisième niveau'
     );
 });
+
+test('filtre « dans le fichier » : garder, exclure, colonnes jointes et ordre du fichier', async () => {
+    const fichier = {
+        nom: 'demande',
+        colonnes: ['ville', 'commentaire'],
+        lignes: [
+            ['LILLE', 'à relancer'],
+            ['paris ', 'prioritaire']
+        ],
+        correspondances: [{ colonneFichier: 'ville', tableId: 'tb_clients', nomColonne: 'ville' }]
+    };
+    const extraire = async (options: object) => {
+        const reponse = await appel({
+            method: 'POST',
+            url: '/api/extraction/apercu',
+            payload: {
+                specification: {
+                    baseId: 'tb_clients',
+                    colonnes: [{ tableId: 'tb_clients', nomColonne: 'nom' }],
+                    fichiers: [{ ...fichier, ...options }],
+                    tri: []
+                },
+                limite: 50
+            }
+        });
+        assert.equal(reponse.statusCode, 201, reponse.body);
+        return json(reponse);
+    };
+    // Comparaison tolérante : « LILLE » et « paris » (avec espace) retrouvent Lille et Paris.
+    const gardes = await extraire({});
+    assert.deepEqual(gardes.lignes.map((ligne: string[]) => ligne[0]).sort(), ['Ana', 'Idris', 'Zoé'], 'les clients de Paris et Lille');
+    const exclus = await extraire({ mode: 'exclure' });
+    assert.deepEqual(exclus.lignes, [['Bob']], 'seul le Lyonnais reste');
+    // Colonnes du fichier ramenées et ordre du fichier conservé : Lille (rang 1) avant Paris (rang 2).
+    const joints = await extraire({ joindreColonnes: true, conserverOrdre: true });
+    assert.deepEqual(
+        joints.colonnes.map((colonne: { nom: string }) => colonne.nom),
+        ['nom', 'demande.ville', 'demande.commentaire']
+    );
+    assert.deepEqual(joints.lignes[0], ['Zoé', 'LILLE', 'à relancer'], 'la ligne du fichier vient en premier');
+    assert.equal(joints.lignes.length, 3);
+});
+
+test('filtre fichier : la comparaison exacte ne retrouve que ce qui est écrit pareil', async () => {
+    const apercu = json(
+        await appel({
+            method: 'POST',
+            url: '/api/extraction/apercu',
+            payload: {
+                specification: {
+                    baseId: 'tb_clients',
+                    colonnes: [{ tableId: 'tb_clients', nomColonne: 'nom' }],
+                    fichiers: [
+                        {
+                            nom: 'strict',
+                            colonnes: ['ville'],
+                            lignes: [['LILLE'], ['Paris']],
+                            correspondances: [{ colonneFichier: 'ville', tableId: 'tb_clients', nomColonne: 'ville' }],
+                            comparaison: 'exacte'
+                        }
+                    ]
+                },
+                limite: 50
+            }
+        })
+    );
+    assert.deepEqual(
+        apercu.lignes.map((ligne: string[]) => ligne[0]).sort(),
+        ['Ana', 'Idris'],
+        '« LILLE » ne vaut pas « Lille » en comparaison exacte'
+    );
+});
+
+test('vérifier un fichier : combien de ses valeurs sont inconnues de la table, et lesquelles', async () => {
+    const reponse = await appel({
+        method: 'POST',
+        url: '/api/extraction/verifier-fichier',
+        payload: {
+            fichier: {
+                nom: 'demande',
+                colonnes: ['ville'],
+                lignes: [['Paris'], ['Brest'], ['Nantes'], ['Lille']],
+                correspondances: [{ colonneFichier: 'ville', tableId: 'tb_clients', nomColonne: 'ville' }]
+            }
+        }
+    });
+    assert.equal(reponse.statusCode, 201, reponse.body);
+    const verification = json(reponse);
+    assert.equal(verification.lignesDuFichier, 4);
+    assert.equal(verification.manquantes, 2, 'Brest et Nantes sont inconnues');
+    assert.deepEqual(verification.exemples, ['Brest', 'Nantes'], 'dans l’ordre du fichier');
+});

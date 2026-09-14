@@ -9,8 +9,10 @@
  *   1. Colonnes en sortie          — tableau ordonné (source, nom en sortie, transformation, clé), ajout d'une
  *                                    colonne, de toutes, ou de plusieurs d'un coup ; puis les trois assistants
  *                                    Σ synthèse d'une table liée, 🌳 hiérarchie aplatie, ƒx colonne calculée.
- *   2. Filtres                     — puces, avec les opérateurs du classique, les valeurs suggérées de la colonne
- *                                    et le filtre « dans une liste fournie » (fichier ou texte collé).
+ *   2. Filtres                     — puces, avec les opérateurs du classique, les valeurs suggérées de la colonne,
+ *                                    le filtre « dans une liste fournie » (fichier ou texte collé) et le filtre
+ *                                    📄 « dans le fichier » : une liste déposée (CSV, texte, Excel) ou collée que
+ *                                    l'on rattache à une ou plusieurs colonnes, pour garder ou exclure ces lignes.
  *   3. Options                     — 🎯 dédoublonner par clé fonctionnelle, 🧮 regrouper & agréger avec des
  *                                    mesures à critères (NB.SI.ENS, SOMME.SI.ENS).
  *   4. Actions                     — compter, prévisualiser, bilan qualité, voir (et éditer) le SQL, type de
@@ -30,6 +32,7 @@ import {
     ColonneExtraction,
     DedoublonnageExtraction,
     FiltreExtraction,
+    FiltreFichierExtraction,
     FonctionMesure,
     MesureExtraction,
     ModeSynthese,
@@ -49,6 +52,7 @@ import {
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { AssistantsColonnesComponent } from './assistants-colonnes.component';
+import { FiltreFichierComponent } from './filtre-fichier.component';
 import {
     Chemin,
     ROUTE_INDIFFERENTE,
@@ -134,7 +138,14 @@ const LIGNES_APERCU_RAPIDE = 500;
 
 @Component({
     selector: 'app-extraction',
-    imports: [PleinEcranComponent, FormsModule, ScrollingModule, SelecteurColonneComponent, AssistantsColonnesComponent],
+    imports: [
+        PleinEcranComponent,
+        FormsModule,
+        ScrollingModule,
+        SelecteurColonneComponent,
+        AssistantsColonnesComponent,
+        FiltreFichierComponent
+    ],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -571,6 +582,13 @@ const LIGNES_APERCU_RAPIDE = 500;
                                 + Filtre
                             </button>
                         </div>
+                        <app-filtre-fichier
+                            [(fichiers)]="fichiers"
+                            [baseId]="baseId()"
+                            [sources]="sources()"
+                            [chemins]="cheminsParTable()"
+                            [routesParDefaut]="routesParDefaut()"
+                        />
                         @if (tablesAmbigues().length) {
                             <div class="bloc ambiguite">
                                 <div class="titre-bloc">🔗 Quel lien utiliser ?</div>
@@ -1330,6 +1348,7 @@ export class ExtractionComponent {
     readonly baseId = signal('');
     readonly colonnes = signal<ColonneExtraction[]>([]);
     readonly filtres = signal<FiltreExtraction[]>([]);
+    readonly fichiers = signal<FiltreFichierExtraction[]>([]);
     readonly mesures = signal<MesureExtraction[]>([]);
     readonly criteresEnAttente = signal<FiltreExtraction[]>([]);
     readonly dedoublonnage = signal<DedoublonnageExtraction>({ actif: false, cles: [], garder: 'premiere' });
@@ -1459,6 +1478,8 @@ export class ExtractionComponent {
         if (this.objetCharge()) puces.push({ texte: `🏛️ objet ${this.objetCharge()}`, alerte: false });
         puces.push({ texte: `${this.colonnes().length} colonne(s)`, alerte: !this.colonnes().length });
         puces.push({ texte: `${this.filtres().length} filtre(s)`, alerte: false });
+        for (const fichier of this.fichiers())
+            puces.push({ texte: `📄 ${fichier.lignes.length} valeur(s) de « ${fichier.nom} »`, alerte: false });
         if (this.dedoublonnage().actif) puces.push({ texte: `🎯 dédoublonnage (${this.dedoublonnage().cles.length} clé)`, alerte: false });
         if (this.regrouper()) puces.push({ texte: `🧮 regroupement · ${this.mesures().length} agrégat(s)`, alerte: false });
         const jointure = this.typeJointure() === 'inner' ? 'intersection' : 'conserver tout';
@@ -1526,6 +1547,7 @@ export class ExtractionComponent {
         this.modeAjout.set('colonne');
         this.colonnes.set([]);
         this.filtres.set([]);
+        this.fichiers.set([]);
         this.mesures.set([]);
         this.criteresEnAttente.set([]);
         this.dedoublonnage.set({ actif: false, cles: [], garder: 'premiere' });
@@ -1752,7 +1774,8 @@ export class ExtractionComponent {
     /** Les chemins effectivement empruntés : ils déterminent les jointures à poser, et elles seules. */
     private cheminsUtilises(): Chemin[] {
         const criteres = this.mesures().flatMap(mesure => mesure.criteres);
-        const elements = [...this.colonnes(), ...this.filtres(), ...this.mesures(), ...criteres];
+        const correspondances = this.fichiers().flatMap(fichier => fichier.correspondances);
+        const elements = [...this.colonnes(), ...this.filtres(), ...this.mesures(), ...criteres, ...correspondances];
         const chemins: Chemin[] = [];
         for (const element of elements) {
             if (!element.tableId) continue;
@@ -1770,6 +1793,7 @@ export class ExtractionComponent {
             typeJointure: this.typeJointure(),
             colonnes: this.colonnes().map(colonne => this.colonnePourLeServeur(colonne)),
             filtres: this.filtres().filter(filtre => filtre.nomColonne),
+            fichiers: this.fichiers().filter(fichier => fichier.correspondances.length),
             regrouper: this.regrouper(),
             mesures: this.regrouper() ? this.mesures() : [],
             dedoublonner: this.dedoublonnerLignes(),
@@ -1915,6 +1939,7 @@ export class ExtractionComponent {
         this.choisirBase(specification.baseId);
         this.colonnes.set(specification.colonnes.map(colonne => ({ ...colonne, alias: colonne.alias || '' })));
         this.filtres.set(specification.filtres.map(filtre => ({ ...filtre })));
+        this.fichiers.set((specification.fichiers || []).map(fichier => ({ ...fichier })));
         this.mesures.set((specification.mesures || []).map(mesure => ({ ...mesure })));
         this.typeJointure.set(specification.typeJointure);
         this.regrouper.set(specification.regrouper);

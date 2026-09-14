@@ -12,6 +12,17 @@ import { z } from 'zod';
 import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
 import { cleNormalisee } from '../modele/modele.service';
 import {
+    Correspondance,
+    FiltreFichier,
+    LIGNES_FICHIER_MAXIMUM,
+    colonnesRamenees,
+    conditionDAppariement,
+    conditionDExistence,
+    cteDuFichier,
+    demandeUneJointure,
+    nomDeLaCte
+} from './filtre-fichier';
+import {
     ErreurFormule,
     Hierarchie,
     MODES_SYNTHESE,
@@ -154,6 +165,32 @@ const schemaMesure = z.object({
     alias: z.string().trim().min(1, 'nom en sortie requis'),
     criteres: z.array(schemaCritere).default([])
 });
+/**
+ * Filtre « dans le fichier » : le contenu déposé voyage avec la spécification (il ne devient pas une source),
+ * avec les colonnes auxquelles il correspond et la façon de comparer.
+ */
+export const schemaFiltreFichier = z.object({
+    nom: z.string().default(''),
+    colonnes: z.array(z.string()).default([]),
+    lignes: z.array(z.array(z.string())).max(LIGNES_FICHIER_MAXIMUM).default([]),
+    correspondances: z
+        .array(
+            z.object({
+                colonneFichier: z.string().min(1),
+                tableId: z.string().min(1),
+                route: z.string().default(''),
+                nomColonne: z.string().min(1)
+            })
+        )
+        .default([]),
+    mode: z.enum(['garder', 'exclure']).default('garder'),
+    comparaison: z.enum(['tolerante', 'exacte', 'normalisee']).default('tolerante'),
+    /** Ramener aussi les autres colonnes du fichier (commentaire, référence interne…) dans le résultat. */
+    joindreColonnes: z.boolean().default(false),
+    /** Restituer les lignes dans l'ordre du fichier. */
+    conserverOrdre: z.boolean().default(false)
+});
+
 /** Dédoublonnage par clé fonctionnelle : on garde une seule ligne par valeur de clé. */
 const schemaDedoublonnage = z.object({
     actif: z.boolean().default(false),
@@ -167,6 +204,8 @@ export const schemaSpecification = z.object({
     typeJointure: z.enum(['left', 'inner']).default('left'),
     colonnes: z.array(schemaColonne).min(1, 'au moins une colonne'),
     filtres: z.array(schemaFiltre).default([]),
+    /** Filtres par fichier déposé : « donne-moi telles données pour cette liste ». */
+    fichiers: z.array(schemaFiltreFichier).default([]),
     regrouper: z.boolean().default(false),
     mesures: z.array(schemaMesure).default([]),
     /** Dédoublonnage simple : supprimer les lignes en tous points identiques (SELECT DISTINCT). */
@@ -321,9 +360,19 @@ export function construireSql(specification: Specification, contexte: ContexteCo
     const { aliasSortie, selections, clesRegroupement, ctes, jointuresHierarchie } = sortie;
     if (!selections.length) throw new ErreurSpecification('Aucune colonne ni mesure en sortie.');
     clausesFrom.push(...jointuresHierarchie);
-    const conditions = specification.filtres.map(filtre =>
+    const conditions: string[] = specification.filtres.map(filtre =>
         conditionFiltre('', filtre, expressionSource(filtre, aliasDe, aliasParTable, `Le filtre sur « ${filtre.nomColonne} »`))
     );
+    // Les filtres par fichier : une table éphémère par fichier, jointe ou seulement consultée.
+    const fichiers = clausesDesFichiers(specification, aliasDe, aliasParTable);
+    ctes.push(...fichiers.ctes);
+    clausesFrom.push(...fichiers.jointures);
+    conditions.push(...fichiers.conditions);
+    for (const colonne of fichiers.colonnes) {
+        verifierNomLibre(aliasSortie, colonne.alias);
+        aliasSortie.push(colonne.alias);
+        selections.push(`${colonne.expression} AS ${identifiantSql(colonne.alias)}`);
+    }
     const prologue = ctes.length ? `WITH RECURSIVE ${ctes.join(',\n')}\n` : '';
     const distinct = specification.dedoublonner && !specification.regrouper ? 'DISTINCT ' : '';
     // Les rangs des lignes d'origine servent à choisir « la première » ou « la dernière » lors du dédoublonnage.
@@ -334,6 +383,7 @@ export function construireSql(specification: Specification, contexte: ContexteCo
     if (conditions.length) sql += `\nWHERE ${conditions.join('\n  AND ')}`;
     if (specification.regrouper && clesRegroupement.length) sql += `\nGROUP BY ${clesRegroupement.join(', ')}`;
     if (parCle) sql = envelopperDedoublonnage(sql, parCle, aliasSortie, ordres, specification.dedoublonnage.garder);
+    if (fichiers.ordre && !specification.tri.length && !parCle) sql += `\nORDER BY ${fichiers.ordre}`;
     return { sql: sql + clausesTriEtLimite(specification, aliasSortie), alias: aliasSortie };
 }
 
@@ -405,6 +455,43 @@ function ajouterExpression(sortie: SortieConstruite, specification: Specificatio
 
 function verifierNomLibre(aliasSortie: string[], alias: string): void {
     if (aliasSortie.includes(alias)) throw new ErreurSpecification(`Deux colonnes portent le même nom en sortie : « ${alias} ».`);
+}
+
+/** Ce que produit un filtre par fichier dans la requête. */
+type ClausesFichier = {
+    ctes: string[];
+    jointures: string[];
+    conditions: string[];
+    colonnes: { expression: string; alias: string }[];
+    ordre: string;
+};
+
+/**
+ * Traduit les filtres par fichier. Quand on se contente de garder ou d'exclure des lignes, une sous-requête
+ * d'existence suffit et ne multiplie jamais les lignes. Quand on veut aussi rapatrier les colonnes du fichier
+ * ou conserver son ordre, il faut le joindre pour de bon.
+ */
+function clausesDesFichiers(
+    specification: Specification,
+    aliasDe: Map<string, string>,
+    aliasParTable: Map<string, string[]>
+): ClausesFichier {
+    const resultat: ClausesFichier = { ctes: [], jointures: [], conditions: [], colonnes: [], ordre: '' };
+    specification.fichiers.forEach((fichier, index) => {
+        if (!fichier.correspondances.length) return;
+        const nomCte = nomDeLaCte(index);
+        const expressionDe = (correspondance: Correspondance) =>
+            expressionSource(correspondance, aliasDe, aliasParTable, `Le filtre sur le fichier « ${fichier.nom} »`);
+        resultat.ctes.push(cteDuFichier(nomCte, fichier as FiltreFichier));
+        if (demandeUneJointure(fichier as FiltreFichier)) {
+            resultat.jointures.push(`JOIN ${nomCte} ON ${conditionDAppariement(nomCte, fichier as FiltreFichier, expressionDe)}`);
+            resultat.colonnes.push(...colonnesRamenees(nomCte, fichier as FiltreFichier));
+            if (fichier.conserverOrdre) resultat.ordre = `${nomCte}.rang`;
+        } else {
+            resultat.conditions.push(conditionDExistence(nomCte, fichier as FiltreFichier, expressionDe));
+        }
+    });
+    return resultat;
 }
 
 /** Ce qui suffit à désigner une colonne source : sa table, sa route et son nom. */

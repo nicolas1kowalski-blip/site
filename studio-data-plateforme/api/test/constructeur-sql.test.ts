@@ -423,3 +423,119 @@ test('lien quel qu’il soit sur un critère de mesure : la condition porte sur 
     );
     assert.match(sql, /COUNT\(\*\) FILTER \(WHERE UPPER\(TRIM\(CAST\(COALESCE\(t1\."ville", t2\."ville"\) AS VARCHAR\)\)\) = 'PARIS'\)/);
 });
+
+test('filtre « dans le fichier » : sous-requête d’existence, comparaison tolérante par défaut', () => {
+    const fichier = {
+        nom: 'liste.csv',
+        colonnes: ['SIREN'],
+        lignes: [['123'], ['456']],
+        correspondances: [{ colonneFichier: 'SIREN', tableId: 'a', nomColonne: 'siren' }]
+    };
+    const { sql } = construireSql(specification({ fichiers: [fichier] }), contexte);
+    assert.match(sql, /WITH RECURSIVE fichier0\(valeur0, rang\) AS \(VALUES \('123', 1\), \('456', 2\)\)/);
+    assert.match(
+        sql,
+        /EXISTS \(SELECT 1 FROM fichier0 WHERE UPPER\(TRIM\(CAST\(t0\."siren" AS VARCHAR\)\)\) = UPPER\(TRIM\(CAST\(fichier0\.valeur0 AS VARCHAR\)\)\)\)/
+    );
+    assert.doesNotMatch(sql, /JOIN fichier0/, 'sans jointure : les lignes ne sont jamais multipliées');
+});
+
+test('filtre fichier : exclure, comparaison exacte et comparaison normalisée', () => {
+    const base = {
+        nom: 'liste.csv',
+        colonnes: ['code'],
+        lignes: [['A-01']],
+        correspondances: [{ colonneFichier: 'code', tableId: 'a', nomColonne: 'code' }]
+    };
+    const exclusion = construireSql(specification({ fichiers: [{ ...base, mode: 'exclure' }] }), contexte).sql;
+    assert.match(exclusion, /NOT EXISTS \(SELECT 1 FROM fichier0/);
+    const exacte = construireSql(specification({ fichiers: [{ ...base, comparaison: 'exacte' }] }), contexte).sql;
+    assert.match(exacte, /TRIM\(CAST\(t0\."code" AS VARCHAR\)\) = TRIM\(CAST\(fichier0\.valeur0 AS VARCHAR\)\)/);
+    const normalisee = construireSql(specification({ fichiers: [{ ...base, comparaison: 'normalisee' }] }), contexte).sql;
+    assert.match(normalisee, /strip_accents\(UPPER\(CAST\(t0\."code" AS VARCHAR\)\)\), '\[\^A-Z0-9\]', '', 'g'\), '\^0\+\(\?=\.\)', ''\)/);
+});
+
+test('filtre fichier : plusieurs colonnes de correspondance, toutes doivent coïncider', () => {
+    const { sql } = construireSql(
+        specification({
+            fichiers: [
+                {
+                    nom: 'paires.csv',
+                    colonnes: ['nom', 'ville'],
+                    lignes: [['Ana', 'Paris']],
+                    correspondances: [
+                        { colonneFichier: 'nom', tableId: 'a', nomColonne: 'nom' },
+                        { colonneFichier: 'ville', tableId: 'a', nomColonne: 'ville' }
+                    ]
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.match(sql, /fichier0\.valeur0/);
+    assert.match(sql, /fichier0\.valeur1/);
+    assert.match(sql, /AND UPPER\(TRIM\(CAST\(t0\."ville"/, 'les deux conditions sont réunies par ET');
+});
+
+test('filtre fichier : joindre les colonnes du fichier et conserver son ordre', () => {
+    const { sql, alias } = construireSql(
+        specification({
+            colonnes: [{ tableId: 'a', nomColonne: 'nom' }],
+            fichiers: [
+                {
+                    nom: 'demande',
+                    colonnes: ['SIREN', 'commentaire'],
+                    lignes: [['123', 'urgent']],
+                    correspondances: [{ colonneFichier: 'SIREN', tableId: 'a', nomColonne: 'siren' }],
+                    joindreColonnes: true,
+                    conserverOrdre: true
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.match(sql, /JOIN fichier0 ON /, 'le fichier est joint pour de bon');
+    assert.deepEqual(alias, ['nom', 'demande.SIREN', 'demande.commentaire']);
+    assert.match(sql, /ORDER BY fichier0\.rang$/, 'le résultat suit l’ordre du fichier');
+});
+
+test('filtre fichier : les colonnes clés reviennent même sans « joindre les colonnes », si l’ordre est demandé', () => {
+    const { alias } = construireSql(
+        specification({
+            colonnes: [{ tableId: 'a', nomColonne: 'nom' }],
+            fichiers: [
+                {
+                    nom: 'demande',
+                    colonnes: ['SIREN', 'commentaire'],
+                    lignes: [['123', 'urgent']],
+                    correspondances: [{ colonneFichier: 'SIREN', tableId: 'a', nomColonne: 'siren' }],
+                    conserverOrdre: true
+                }
+            ]
+        }),
+        contexte
+    );
+    assert.deepEqual(alias, ['nom', 'demande.SIREN'], 'la clé oui, le commentaire non');
+});
+
+test('filtre fichier vide ou sans correspondance : ignoré, la requête reste valide', () => {
+    const sansCorrespondance = construireSql(
+        specification({ fichiers: [{ nom: 'vide', colonnes: ['x'], lignes: [['1']], correspondances: [] }] }),
+        contexte
+    ).sql;
+    assert.doesNotMatch(sansCorrespondance, /fichier0/);
+    const sansLigne = construireSql(
+        specification({
+            fichiers: [
+                {
+                    nom: 'vide',
+                    colonnes: ['code'],
+                    lignes: [],
+                    correspondances: [{ colonneFichier: 'code', tableId: 'a', nomColonne: 'code' }]
+                }
+            ]
+        }),
+        contexte
+    ).sql;
+    assert.match(sansLigne, /fichier0\(valeur0, rang\) AS \(SELECT NULL, 0 WHERE FALSE\)/, 'table vide mais valide');
+});

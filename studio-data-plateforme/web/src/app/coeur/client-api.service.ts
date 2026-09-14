@@ -57,6 +57,7 @@ import {
     BilanZip,
     EntreeLivraisonZip,
     FichierDepose,
+    FiltreFichierExtraction,
     LigneCouverture,
     MesureRelation,
     OptionsLectureCsv,
@@ -115,9 +116,11 @@ import {
     Sante,
     Source,
     SpecificationExtraction,
+    TableauFichier,
     TermeGlossaire,
     Utilisateur,
     ValeurSuggeree,
+    VerificationFichier,
     VocabulaireExtraction,
     VocabulaireQualite
 } from './modeles';
@@ -315,6 +318,14 @@ export class ClientApiService {
     /** Valeurs les plus fréquentes d'une colonne, proposées dans les filtres ; « debut » restreint à un préfixe. */
     valeursColonne(tableId: string, nomColonne: string, debut = ''): Promise<ValeurSuggeree[]> {
         return firstValueFrom(this.http.post<ValeurSuggeree[]>(`${this.racine}/extraction/valeurs`, { tableId, nomColonne, debut }));
+    }
+    /** Lit la liste fournie d'un filtre « dans le fichier » : un fichier déjà déposé, ou un texte collé. */
+    lireFichierListe(corps: { nomServeur?: string; feuille?: string; texte?: string; separateur?: string }): Promise<TableauFichier> {
+        return firstValueFrom(this.http.post<TableauFichier>(`${this.racine}/extraction/lire-fichier`, corps));
+    }
+    /** Combien de valeurs de la liste fournie n'existent pas dans la table visée, et lesquelles. */
+    verifierFichierListe(fichier: FiltreFichierExtraction): Promise<VerificationFichier> {
+        return firstValueFrom(this.http.post<VerificationFichier>(`${this.racine}/extraction/verifier-fichier`, { fichier }));
     }
     sqlExtraction(specification: SpecificationExtraction): Promise<{ sql: string }> {
         return firstValueFrom(this.http.post<{ sql: string }>(`${this.racine}/extraction/sql`, specification));

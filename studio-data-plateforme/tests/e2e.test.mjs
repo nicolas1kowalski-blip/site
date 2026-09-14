@@ -381,6 +381,37 @@ try {
     );
     await capture('extraction-regroupement');
 
+    // ---- extraction : filtre « dans le fichier » (V12.3) — une liste collée, vérifiée, jointe et ordonnée ----
+    await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
+    await page.click('app-extraction input[name=regrouper]'); // on repart d'une extraction ligne à ligne
+    await page.selectOption('app-extraction select[name=ajout_colonne]', 'nom');
+    await page.click('app-extraction button[name=ajouterColonne]');
+    await page.click('app-extraction button[name=ouvrirFiltreFichier]');
+    await page.click('app-extraction button[name=collerFichier]');
+    await page.fill('app-extraction textarea[name=texteColle]', 'client;commentaire\nZoé;à relancer\nAna;VIP\nInconnu;à créer');
+    await page.click('app-extraction button[name=lireColle]');
+    await page.waitForSelector('app-extraction select[name=colonneFichier]');
+    await page.selectOption('app-extraction select[name=cible-fichier_colonne]', 'nom');
+    await page.click('app-extraction button[name=ajouterCorrespondance]');
+    await page.click('app-extraction button[name=verifierFichier]');
+    await page.waitForSelector('app-extraction .bloc.fichier .badge.alerte');
+    const bilanDuFichier = await page.textContent('app-extraction .bloc.fichier .badge.alerte');
+    verifier(
+        'extraction : la vérification du fichier annonce 1 valeur sur 3 absente de clients.csv (« Inconnu »)',
+        /1 valeur\(s\) sur 3 absente/.test(bilanDuFichier)
+    );
+    await page.click('app-extraction input[name=joindreColonnes]');
+    await page.click('app-extraction input[name=conserverOrdre]');
+    await page.click('app-extraction button[name=validerFiltreFichier]');
+    await page.click('app-extraction button[name=previsualiser]');
+    await page.waitForFunction(() => /commentaire/.test(document.querySelector('app-extraction .entete-colonnes')?.textContent || ''));
+    const lignesDuFichier = await lignesDuResultat(page);
+    verifier(
+        'extraction : le filtre fichier garde les 2 clients connus, dans l’ordre du fichier, avec la colonne « commentaire » rapatriée',
+        lignesDuFichier.length === 2 && lignesDuFichier[0] === 'Zoé|Zoé|à relancer' && lignesDuFichier[1] === 'Ana|Ana|VIP'
+    );
+    await capture('extraction-filtre-fichier');
+
     // ---- extraction avancée : assistants (colonne calculée, synthèse), filtre sur liste, résultat enregistré comme source ----
     await page.selectOption('app-extraction select[name=base]', { label: 'clients.csv' });
     for (const colonne of ['nom', 'ville']) {

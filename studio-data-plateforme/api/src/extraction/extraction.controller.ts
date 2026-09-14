@@ -7,6 +7,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { Readable } from 'node:stream';
 import { randomBytes } from 'node:crypto';
+import { promises as fsp } from 'node:fs';
 import { z } from 'zod';
 import { EspaceAvecRole, EspaceCourant, RoleEspaceRequis, UtilisateurCourant } from '../authentification/contexte-requete';
 import { Utilisateur } from '../base-de-donnees/schema';
@@ -17,7 +18,10 @@ import { EspacesService } from '../espaces/espaces.service';
 import { JournalService } from '../journal/journal.service';
 import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
 import { SourcesService } from '../sources/sources.service';
+import { lireFeuilleExcel } from '../importation/classeur-excel';
 import { MODES_SYNTHESE } from './constructeur-avance';
+import { COMPARAISONS_FICHIER, MODES_FICHIER, sqlValeursAbsentes } from './filtre-fichier';
+import { lireTexteDelimite, tableauDepuisLignes } from './tableau-fichier';
 import {
     AGREGATS,
     GENRES_COLONNE,
@@ -27,6 +31,7 @@ import {
     Specification,
     TRANSFORMATIONS,
     construireSql,
+    schemaFiltreFichier,
     schemaSpecification
 } from './constructeur-sql';
 
@@ -35,6 +40,19 @@ const LIMITE_APERCU = 200;
 const LECTURE_SEULE = /^\s*(SELECT|WITH)\b/i;
 /** Nombre de valeurs proposées dans les listes déroulantes des filtres. */
 const VALEURS_SUGGEREES = 200;
+
+/** Nombre de valeurs absentes montrées en exemple : assez pour comprendre, pas assez pour noyer. */
+const EXEMPLES_ABSENTS = 20;
+
+const schemaVerification = z.object({ fichier: schemaFiltreFichier });
+
+/** Lecture d'une liste fournie : soit un fichier déjà déposé, soit un texte collé dans l'écran. */
+const schemaLectureFichier = z.object({
+    nomServeur: z.string().trim().max(300).default(''),
+    feuille: z.string().trim().max(200).default(''),
+    texte: z.string().default(''),
+    separateur: z.string().max(4).default('')
+});
 
 const schemaValeurs = z.object({
     tableId: z.string().min(1),
@@ -87,8 +105,33 @@ export class ExtractionController {
             transformations: TRANSFORMATIONS,
             agregats: AGREGATS,
             genresColonne: GENRES_COLONNE,
-            modesSynthese: MODES_SYNTHESE
+            modesSynthese: MODES_SYNTHESE,
+            comparaisonsFichier: COMPARAISONS_FICHIER,
+            modesFichier: MODES_FICHIER
         };
+    }
+
+    @Post('lire-fichier')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({
+        summary: 'Lit la liste fournie pour un filtre « dans le fichier » : fichier déposé (CSV, texte, Excel) ou texte collé.'
+    })
+    async lireFichier(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @Body(valider(schemaLectureFichier)) corps: z.infer<typeof schemaLectureFichier>
+    ) {
+        if (corps.texte.trim()) return lireTexteDelimite(corps.texte, corps.separateur);
+        if (!corps.nomServeur) throw erreurRequete('Déposez un fichier ou collez une liste de valeurs.');
+        const nom = verifierNomSur(corps.nomServeur, 'nom de fichier');
+        const { fichiers } = await this.espaces.ressources(espace);
+        try {
+            const contenu = await fsp.readFile(fichiers.chemin(nom));
+            if (nom.toLowerCase().endsWith('.xlsx'))
+                return tableauDepuisLignes(lireFeuilleExcel(contenu, corps.feuille || undefined).lignes);
+            return lireTexteDelimite(contenu.toString('utf8'), corps.separateur);
+        } catch (erreur) {
+            throw erreurRequete(`Fichier illisible : ${(erreur as Error).message}`);
+        }
     }
 
     @Post('valeurs')
@@ -107,6 +150,29 @@ export class ExtractionController {
                 ` WHERE ${colonne} <> '' ${commence} GROUP BY 1 ORDER BY lignes DESC, valeur LIMIT ${VALEURS_SUGGEREES}`
         );
         return resultat.lignes.map(ligne => ({ valeur: String(ligne[0]), lignes: Number(ligne[1]) }));
+    }
+
+    @Post('verifier-fichier')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Combien de valeurs du fichier déposé n’existent pas dans la table visée, et lesquelles.' })
+    async verifierFichier(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @Body(valider(schemaVerification)) corps: z.infer<typeof schemaVerification>
+    ) {
+        const fichier = corps.fichier;
+        const premiere = fichier.correspondances[0];
+        if (!premiere) throw erreurRequete('Indiquez d’abord à quelle colonne le fichier correspond.');
+        const nomTable = 't_' + premiere.tableId;
+        const { moteur } = await this.espaces.ressources(espace);
+        const [comptage, exemples] = await Promise.all([
+            moteur.executer(sqlValeursAbsentes('verif', fichier, nomTable, 0)),
+            moteur.executer(sqlValeursAbsentes('verif', fichier, nomTable, EXEMPLES_ABSENTS))
+        ]);
+        return {
+            lignesDuFichier: fichier.lignes.length,
+            manquantes: Number(comptage.lignes[0]?.[0] ?? 0),
+            exemples: exemples.lignes.map(ligne => String(ligne[0]))
+        };
     }
 
     @Post('sql')

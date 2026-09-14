@@ -234,6 +234,31 @@ export type MesureExtraction = {
     alias: string;
     criteres: FiltreExtraction[];
 };
+/** Façons de comparer une valeur du fichier à une valeur de la base, de la plus souple à la plus stricte. */
+export type ComparaisonFichier = 'tolerante' | 'exacte' | 'normalisee';
+/** Garder les lignes présentes dans le fichier, ou au contraire les exclure. */
+export type ModeFichier = 'garder' | 'exclure';
+/** Une colonne du fichier rattachée à une colonne d'une table de l'extraction. */
+export type CorrespondanceFichier = { colonneFichier: string; tableId: string; route?: string; nomColonne: string };
+/**
+ * Filtre « dans le fichier » : une liste fournie par l'utilisateur (fichier déposé ou texte collé) qui
+ * restreint l'extraction. Le fichier ne devient pas une source : ses valeurs voyagent avec la spécification.
+ */
+export type FiltreFichierExtraction = {
+    nom: string;
+    colonnes: string[];
+    lignes: string[][];
+    correspondances: CorrespondanceFichier[];
+    mode: ModeFichier;
+    comparaison: ComparaisonFichier;
+    joindreColonnes: boolean;
+    conserverOrdre: boolean;
+};
+/** Le tableau lu par le serveur dans la liste fournie : des en-têtes et des lignes de texte. */
+export type TableauFichier = { colonnes: string[]; lignes: string[][] };
+/** Combien de valeurs du fichier n'existent pas dans la table visée, et lesquelles. */
+export type VerificationFichier = { lignesDuFichier: number; manquantes: number; exemples: string[] };
+
 /** Dédoublonnage par clé fonctionnelle : une seule ligne par valeur de clé. */
 export type DedoublonnageExtraction = { actif: boolean; cles: string[]; garder: 'premiere' | 'derniere' };
 export type SpecificationExtraction = {
@@ -242,6 +267,7 @@ export type SpecificationExtraction = {
     typeJointure: 'left' | 'inner';
     colonnes: ColonneExtraction[];
     filtres: FiltreExtraction[];
+    fichiers?: FiltreFichierExtraction[];
     regrouper: boolean;
     mesures?: MesureExtraction[];
     dedoublonner: boolean;
@@ -283,6 +309,8 @@ export type VocabulaireExtraction = {
     agregats: Record<Agregat, string>;
     genresColonne: Record<GenreColonneExtraction, string>;
     modesSynthese: Record<ModeSynthese, string>;
+    comparaisonsFichier: Record<ComparaisonFichier, string>;
+    modesFichier: Record<ModeFichier, string>;
 };
 export type Materialisation = { sourceId: string; nom: string; lignes: number; colonnes: string[] };
 
