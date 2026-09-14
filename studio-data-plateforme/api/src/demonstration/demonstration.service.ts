@@ -32,22 +32,19 @@ import { EspacesService } from '../espaces/espaces.service';
 import { GouvernanceService } from '../gouvernance/gouvernance.service';
 import { ImportationService } from '../importation/importation.service';
 import { JournalService } from '../journal/journal.service';
+import { LineageService } from '../lineage/lineage.service';
 import { QualiteService } from '../qualite/qualite.service';
 import { SourcesService } from '../sources/sources.service';
 import {
-    APPLICATIONS,
     FICHIERS,
-    GLOSSAIRE,
     LIENS,
     LISTES_DE_VALEURS,
-    OBJET_METIER_CLIENT,
-    PERSONNES,
     PROFIL_CLE_CONTACTS,
     REGLES,
-    SENSIBILITE,
     SERIE_RELEVES,
     TABLEAUX_DE_BORD
 } from './catalogue-demonstration';
+import { ACTIFS, CONFIDENTIALITE, GLOSSAIRE, OBJETS_METIER, PERIMETRES, PERSONNES, PROPOSITIONS } from './gouvernance-demonstration';
 
 export type EtatDemonstration = {
     /** Le jeu tel qu'il est rangé dans la base : c'est lui qui sert à installer. */
@@ -86,6 +83,7 @@ export class DemonstrationService {
         private readonly sources: SourcesService,
         private readonly importation: ImportationService,
         private readonly gouvernance: GouvernanceService,
+        private readonly lineage: LineageService,
         private readonly qualite: QualiteService,
         private readonly journal: JournalService
     ) {}
@@ -200,6 +198,9 @@ export class DemonstrationService {
             throw erreurRequete(`L'espace « ${espace.code} » contient déjà des sources : cochez « remplacer » pour le réinstaller.`);
         const sources = await this.chargerLesFichiers(espace, utilisateur);
         await this.installerLaGouvernance(espace, utilisateur);
+        // La carte des flux se déduit de ce qui vient d'être déclaré (applications productrices, objets
+        // métier, tables conçues) : on emploie le même calcul que le bouton « Synchroniser » de l'écran.
+        await this.lineage.synchroniser(espace, utilisateur);
         await this.installerLesRegles(espace);
         const score = await this.premierAudit(espace, utilisateur);
         await this.base
@@ -283,13 +284,15 @@ export class DemonstrationService {
         const etat = await this.gouvernance.etat(espace.id);
         etat.relations = LIENS.map(lien => ({ kind: '', measured: null, ...lien }));
         etat.governance.valueLists = LISTES_DE_VALEURS;
-        etat.governance.businessObjects = [OBJET_METIER_CLIENT];
-        etat.governance.assets = APPLICATIONS;
+        etat.governance.businessObjects = OBJETS_METIER;
+        etat.governance.assets = ACTIFS;
         etat.governance.glossary = GLOSSAIRE;
         etat.governance.people = PERSONNES;
+        etat.governance.perimeters = PERIMETRES;
+        etat.governance.proposals = PROPOSITIONS;
         etat.governance.domainList = [...new Set(FICHIERS.map(entree => entree.domaine))];
         etat.governance.dictionary = this.dictionnaire();
-        etat.governance.privacy = { levels: SENSIBILITE, actions: etat.governance.privacy.actions };
+        etat.governance.privacy = { levels: CONFIDENTIALITE, actions: etat.governance.privacy.actions };
         (etat.governance as Record<string, unknown>)['series'] = [SERIE_RELEVES];
         (etat as Record<string, unknown>)['dashboards'] = TABLEAUX_DE_BORD;
         await this.gouvernance.enregistrer(espace, utilisateur, etat, 'demonstration.gouvernance', espace.code);

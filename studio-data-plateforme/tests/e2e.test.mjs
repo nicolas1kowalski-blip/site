@@ -834,6 +834,8 @@ try {
     await page.click('app-aide-ecran button[name=fermerAide]');
     await page.click('a[href="/glossaire"]');
     await page.waitForSelector('app-glossaire');
+    // Le bandeau du glossaire n'est pas posé au même instant que l'écran : on l'attend, sans quoi on lit le vide.
+    await page.waitForSelector('app-aide-ecran .bandeau-aide');
     const aideGlossaire = await page.textContent('app-aide-ecran');
     await page.click('a[href="/objets-metier"]');
     await page.waitForSelector('app-objets-metier');
@@ -1968,6 +1970,56 @@ try {
         /échec\(s\)/.test(await page.textContent('app-qualite tbody tr:has-text("SIRET attendu pour les professionnels")'))
     );
     await capture('demonstration-qualite');
+
+    // ---- mode démonstration : la gouvernance est là aussi, et prête à être montrée ----
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier .liste .element');
+    const objetsDemonstration = await page.$$eval('app-objets-metier .liste .element', elements => elements.length);
+    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.waitForFunction(() => document.querySelector('app-objets-metier input[name=nom]')?.value === 'Client');
+    const ficheClient = await page.textContent('app-objets-metier .fiche');
+    // Les noms des informations sont dans des champs de saisie : leur texte n'est pas dans le document.
+    const informationsClient = await page.$$eval('app-objets-metier input[name^=attribut-nom-]', champs =>
+        champs.map(champ => champ.value)
+    );
+    console.log(
+        objetsDemonstration,
+        '| lignes:',
+        (await page.$$('app-objets-metier tbody tr')).length,
+        '| raison:',
+        /Raison sociale/.test(ficheClient),
+        '| copie:',
+        /copié de/.test(ficheClient)
+    );
+    verifier(
+        'mode démonstration : sept objets métier décrits, et la fiche « Client » montre ses informations, ses colonnes et sa provenance héritée',
+        objetsDemonstration === 7 &&
+            informationsClient.length === 7 &&
+            informationsClient.includes('Raison sociale') &&
+            /copié de Commune/.test(ficheClient)
+    );
+    await capture('demonstration-objets-metier');
+    await page.click('a[href="/actifs"]');
+    await page.waitForSelector('app-actifs .liste .element');
+    const actifsDemonstration = await page.textContent('app-actifs .liste');
+    verifier(
+        'mode démonstration : applications, processus et restitutions sont déclarés, avec ce qu’ils produisent',
+        (await page.$$eval('app-actifs .liste .element', elements => elements.length)) === 12 &&
+            /CRM Vega/.test(actifsDemonstration) &&
+            /Déclaration de TVA/.test(actifsDemonstration)
+    );
+    await page.click('a[href="/lineage"]');
+    await page.waitForSelector('app-lineage .noeud');
+    const noeudsFlux = await page.$$eval('app-lineage .noeud', elements => elements.length);
+    verifier('mode démonstration : le parcours de la donnée est déjà dessiné (la carte n’est plus vide)', noeudsFlux >= 10);
+    await capture('demonstration-lineage');
+    await page.click('a[href="/propositions"]');
+    await page.waitForSelector('app-propositions .proposition');
+    verifier(
+        'mode démonstration : trois propositions attendent d’être validées, chacune dans son domaine',
+        (await page.$$('app-propositions .proposition')).length === 3 && /Client › Statut/.test(await page.textContent('app-propositions'))
+    );
+    await capture('demonstration-propositions');
 
     // ---- lectrice : droits limités ----
     await page.click('button:has-text("Se déconnecter")');
