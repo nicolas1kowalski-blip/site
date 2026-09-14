@@ -6,6 +6,8 @@ import { Component, HostListener, inject, signal, viewChild } from '@angular/cor
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { EtEnsuiteComponent } from '../composants/et-ensuite.component';
 import { AideEcranComponent } from '../composants/aide-ecran.component';
+import { AideGeneraleComponent } from '../composants/aide-generale.component';
+import { FilArianeComponent } from '../composants/fil-ariane.component';
 import { PaletteCommandesComponent } from '../composants/palette-commandes.component';
 import { SansDonneesComponent } from '../composants/sans-donnees.component';
 import { GROUPES_NAVIGATION, RACCOURCIS_ECRAN } from '../coeur/navigation';
@@ -27,7 +29,9 @@ const DELAI_RACCOURCI_MS = 1200;
         PaletteCommandesComponent,
         EtEnsuiteComponent,
         SansDonneesComponent,
-        AideEcranComponent
+        AideEcranComponent,
+        FilArianeComponent,
+        AideGeneraleComponent
     ],
     template: `
         <div class="coque">
@@ -83,6 +87,7 @@ const DELAI_RACCOURCI_MS = 1200;
                     >
                         ⌕ Rechercher <span class="touche">Ctrl K</span>
                     </button>
+                    <app-aide-generale />
                     <span class="densite" title="Densité de l'affichage : tableaux et cartes plus serrés ou plus aérés">
                         <button class="bouton petit" [class.actif]="!compact()" (click)="choisirDensite(false)">Confort</button>
                         <button class="bouton petit" [class.actif]="compact()" (click)="choisirDensite(true)">Compact</button>
@@ -93,7 +98,7 @@ const DELAI_RACCOURCI_MS = 1200;
                     >
                     <button class="bouton petit" (click)="deconnecter()">Se déconnecter</button>
                 </header>
-                <main class="page"><app-aide-ecran /><app-sans-donnees /><router-outlet /><app-et-ensuite /></main>
+                <main class="page"><app-fil-ariane /><app-aide-ecran /><app-sans-donnees /><router-outlet /><app-et-ensuite /></main>
                 <app-palette-commandes />
             </div>
             <div class="notifications" aria-live="polite">

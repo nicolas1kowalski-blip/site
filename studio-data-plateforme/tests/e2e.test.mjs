@@ -115,6 +115,37 @@ try {
     );
     await capture('accueil');
 
+    // ---- V11 : fil d'Ariane, Précédent / Suivant, écrans récents ----
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources');
+    await page.click('a[href="/qualite"]');
+    await page.waitForSelector('app-qualite');
+    const filQualite = await page.textContent('app-fil-ariane');
+    verifier(
+        'confort V11 : le fil d’Ariane situe l’écran dans sa famille, et les écrans récents sont à un clic',
+        /Qualité & Audit/.test(filQualite) && /Récemment/.test(filQualite) && /Sources/.test(filQualite)
+    );
+    await page.click('app-fil-ariane button[name=precedent]');
+    await page.waitForSelector('app-sources');
+    verifier('confort V11 : « Précédent » revient sur l’écran d’avant', page.url().endsWith('/sources'));
+    await page.keyboard.press('Alt+ArrowRight');
+    await page.waitForSelector('app-qualite');
+    verifier('confort V11 : Alt + → repart en avant, sans repasser par le navigateur', page.url().endsWith('/qualite'));
+    // ---- V11 : l'aide « ? » — les raccourcis et le lexique, une fois pour toutes ----
+    await page.click('app-aide-generale button[name=ouvrirAide]');
+    await page.waitForSelector('.panneau-aide');
+    const aide = await page.textContent('.panneau-aide');
+    verifier(
+        'confort V11 : l’aide « ? » liste les raccourcis clavier et explique les mots de l’application',
+        /Ctrl \+ K/.test(aide) && /Alt \+ ←/.test(aide) && /information/.test(aide) && /terme technique : attribut/.test(aide)
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.panneau-aide'));
+    verifier('confort V11 : Échap referme l’aide', true);
+
+    await page.click('a[href="/"]');
+    await page.waitForSelector('app-accueil');
+
     // ---- espace encore vide : le bandeau dit ce qui manque, avec le bouton pour y remédier (V12) ----
     await page.click('a[href="/extraction"]');
     await page.waitForSelector('app-sans-donnees .bandeau-vide');
