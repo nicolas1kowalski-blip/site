@@ -125,3 +125,79 @@ body.avec-plein-ecran { overflow: hidden; }
     padding-block: 8px;
     border-bottom: 1px solid var(--bordure);
 }
+
+/* ---- imprimer une fiche (⎙) et mode présentation (Maj+P) — repris de la V11 ---- */
+/* À l'impression, on ne garde que le contenu de l'écran : ni menu, ni en-tête, ni boutons, ni bandeaux
+   d'aide. Ce qui reste sur la feuille est ce que l'on montrerait en réunion : les titres, les tableaux et
+   le vocabulaire métier de l'écran. */
+@media print {
+    body {
+        background: #fff;
+        color: #000;
+    }
+    .rail,
+    .entete,
+    .notifications,
+    app-fil-ariane,
+    app-aide-ecran,
+    app-sans-donnees,
+    app-et-ensuite,
+    app-palette-commandes,
+    .barre-actions .bouton,
+    .bouton {
+        display: none !important;
+    }
+    .coque {
+        display: block;
+        min-height: 0;
+    }
+    .page {
+        padding: 0;
+    }
+    .carte {
+        box-shadow: none;
+        border-color: #999;
+        break-inside: avoid;
+    }
+    .defilement-x {
+        overflow: visible;
+    }
+    .tableau th {
+        position: static;
+        background: #eee;
+        color: #000;
+    }
+    .barre-actions {
+        position: static;
+        border: 0;
+    }
+}
+
+/* Présentation : grandes polices et menu masqué, pour projeter un écran sans qu'il devienne illisible.
+   Rien n'est verrouillé côté données — seul l'affichage change, et quitter le mode rend l'écran tel qu'il était. */
+body.en-presentation {
+    font-size: 18px;
+}
+body.en-presentation .rail {
+    display: none;
+}
+body.en-presentation .coque {
+    grid-template-columns: 1fr;
+}
+body.en-presentation .tableau {
+    font-size: 17px;
+}
+body.en-presentation .kpi b {
+    font-size: 34px;
+}
+body.en-presentation .kpi span,
+body.en-presentation .discret {
+    font-size: 15px;
+}
+body.en-presentation .carte {
+    padding: 22px;
+}
+body.en-presentation app-aide-ecran,
+body.en-presentation app-et-ensuite {
+    display: none;
+}

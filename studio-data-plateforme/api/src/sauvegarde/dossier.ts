@@ -55,7 +55,7 @@ function sectionObjetsMetier(objets: DonneesDossier['objets']): string {
                 `<h3>${echapper(objet.nom)} <span class="discret">${echapper(objet.domaine)} · ${echapper(objet.proprietaire || 'sans propriétaire')} · ${echapper(objet.statut || 'brouillon')}</span></h3>` +
                 `<p>${echapper(objet.definition || 'Définition à écrire.')}</p>` +
                 tableau(
-                    ['Attribut', 'Définition', 'Colonnes techniques'],
+                    ['Information', 'Définition', 'Colonnes du fichier'],
                     objet.attributs.map(attribut => [attribut.nom, attribut.definition, attribut.colonnes])
                 )
         )
@@ -130,13 +130,80 @@ function sectionsControle(donnees: DonneesDossier): string[] {
             )
         ),
         section(
-            '9. Sensibilité des colonnes',
+            '9. Confidentialité des colonnes',
             tableau(
                 ['Niveau', 'Colonnes'],
                 donnees.sensibilite.map(niveau => [niveau.niveau, String(niveau.colonnes)])
             )
-        )
+        ),
+        sectionVocabulaire()
     ];
+}
+
+/**
+ * Les mots du métier employés dans ce dossier, et le terme technique que chacun remplace.
+ *
+ * Le dossier part souvent à des gens qui n'ouvriront jamais l'application : il doit se lire seul. Cette
+ * dernière section est la même liste que le lexique des écrans (web/src/app/coeur/vocabulaire-metier.ts) ;
+ * elle est recopiée ici parce que le document HTML se fabrique côté serveur, sans rien emprunter au client.
+ */
+const MOTS_DU_DOSSIER: { mot: string; technique: string; definition: string }[] = [
+    {
+        mot: 'information',
+        technique: 'attribut',
+        definition: "Un renseignement élémentaire sur un objet (par exemple la date de naissance d'un client)."
+    },
+    {
+        mot: 'variante',
+        technique: 'facette',
+        definition: "Une forme particulière d'un objet, avec ses propres informations (Client particulier / Client entreprise)."
+    },
+    {
+        mot: 'parcours de la donnée',
+        technique: 'lineage',
+        definition: "D'où vient la donnée et où elle va : application qui la crée, fichiers, objets, restitutions, destinataires."
+    },
+    {
+        mot: 'colonne du fichier',
+        technique: 'mapping',
+        definition: "La colonne d'un fichier chargé qui porte réellement la valeur d'une information."
+    },
+    {
+        mot: 'confidentialité',
+        technique: 'sensibilité',
+        definition: 'À quel point la donnée doit être protégée : publique, interne, sensible, ou personnelle au sens du RGPD.'
+    },
+    {
+        mot: 'responsable',
+        technique: 'propriétaire (owner)',
+        definition: "La personne qui répond de la qualité et de la définition d'une donnée, et qui valide les modifications."
+    },
+    {
+        mot: 'restitution',
+        technique: '',
+        definition: 'Ce qui sort des données : rapport, tableau de bord, fichier réglementaire, extraction livrée.'
+    },
+    {
+        mot: 'objet métier',
+        technique: '',
+        definition: "Une chose que l'on gère et dont on parle tous les jours : un Client, un Contrat, un Produit."
+    },
+    {
+        mot: 'domaine métier',
+        technique: '',
+        definition: "Le périmètre d'activité auquel une donnée se rattache : Finance, Ressources humaines, Commercial…"
+    }
+];
+
+/** Section 10 : le lexique, pour que le dossier se lise sans connaître le jargon. */
+function sectionVocabulaire(): string {
+    return section(
+        '10. Les mots de ce dossier',
+        tableau(
+            ['Mot employé', 'Terme technique', 'Ce que cela veut dire'],
+            MOTS_DU_DOSSIER.map(mot => [mot.mot, mot.technique, mot.definition])
+        )
+    );
 }
 
 /** Le dossier complet, en HTML autonome. */

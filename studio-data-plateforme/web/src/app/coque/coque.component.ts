@@ -9,6 +9,7 @@ import { AideEcranComponent } from '../composants/aide-ecran.component';
 import { AideGeneraleComponent } from '../composants/aide-generale.component';
 import { FilArianeComponent } from '../composants/fil-ariane.component';
 import { PaletteCommandesComponent } from '../composants/palette-commandes.component';
+import { PresentationComponent } from '../composants/presentation.component';
 import { SansDonneesComponent } from '../composants/sans-donnees.component';
 import { GROUPES_NAVIGATION, RACCOURCIS_ECRAN } from '../coeur/navigation';
 import { NotificationsService } from '../coeur/notifications.service';
@@ -31,7 +32,8 @@ const DELAI_RACCOURCI_MS = 1200;
         SansDonneesComponent,
         AideEcranComponent,
         FilArianeComponent,
-        AideGeneraleComponent
+        AideGeneraleComponent,
+        PresentationComponent
     ],
     template: `
         <div class="coque">
@@ -88,6 +90,7 @@ const DELAI_RACCOURCI_MS = 1200;
                         ⌕ Rechercher <span class="touche">Ctrl K</span>
                     </button>
                     <app-aide-generale />
+                    <app-presentation />
                     <span class="densite" title="Densité de l'affichage : tableaux et cartes plus serrés ou plus aérés">
                         <button class="bouton petit" [class.actif]="!compact()" (click)="choisirDensite(false)">Confort</button>
                         <button class="bouton petit" [class.actif]="compact()" (click)="choisirDensite(true)">Compact</button>

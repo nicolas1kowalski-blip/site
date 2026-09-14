@@ -143,6 +143,28 @@ try {
     await page.waitForFunction(() => !document.querySelector('.panneau-aide'));
     verifier('confort V11 : Échap referme l’aide', true);
 
+    // ---- V11 : le mode présentation — grandes polices, menu masqué, et rien de perdu en sortant ----
+    await page.click('app-presentation button[name=presentation]');
+    await page.waitForFunction(() => document.body.classList.contains('en-presentation'));
+    verifier(
+        'confort V11 : le mode présentation agrandit l’écran et masque le menu de gauche',
+        await page.evaluate(() => {
+            const rail = document.querySelector('.rail');
+            return getComputedStyle(document.body).fontSize === '18px' && getComputedStyle(rail).display === 'none';
+        })
+    );
+    await capture('mode-presentation');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.body.classList.contains('en-presentation'));
+    verifier(
+        'confort V11 : Échap quitte la présentation et rend l’écran tel qu’il était',
+        await page.evaluate(() => getComputedStyle(document.querySelector('.rail')).display !== 'none')
+    );
+    verifier(
+        'confort V11 : le bouton « imprimer » est offert à côté de l’aide',
+        !!(await page.$('app-presentation button[name=imprimer]'))
+    );
+
     await page.click('a[href="/"]');
     await page.waitForSelector('app-accueil');
 
