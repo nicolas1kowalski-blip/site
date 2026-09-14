@@ -863,6 +863,42 @@ try {
         (await page.inputValue('app-objets-metier input[name=nom]')) === 'Commande' &&
             (await page.$$('app-objets-metier tbody tr')).length === 3
     );
+    // ---- V12.6 : une information qui provient d'une information d'un autre objet ----
+    await page.click('app-objets-metier button[name=ouvrirFiche-1]');
+    await page.waitForSelector('app-fiche-information select[name=origine-objet]');
+    // On retire la colonne du fichier : cette information ne vient plus de nulle part…
+    await page.click('app-fiche-information .puce a');
+    await page.waitForFunction(() => /Fiche complète à 50 %/.test(document.querySelector('app-fiche-information')?.textContent || ''));
+    // … puis on déclare qu'elle est copiée d'une information d'un autre objet.
+    await page.selectOption('app-fiche-information select[name=origine-objet]', { label: 'Client' });
+    await page.selectOption('app-fiche-information select[name=origine-information]', { label: 'id_client' });
+    await page.selectOption('app-fiche-information select[name=origine-nature]', 'copie');
+    await page.fill('app-fiche-information input[name=origine-regle]', 'même identifiant, repris tel quel');
+    await page.click('app-fiche-information button[name=ajouterOrigine]');
+    await page.waitForSelector('.notification.succes:has-text("Origine déclarée")');
+    const ficheOrigine = await page.textContent('app-fiche-information');
+    verifier(
+        'gouvernance V12.6 : « Identifiant client » est déclarée copiée de « Client › id_client », et compte désormais comme alimentée',
+        /Copie/.test(ficheOrigine) &&
+            /Client › id_client/.test(ficheOrigine) &&
+            /même identifiant, repris tel quel/.test(ficheOrigine) &&
+            /Fiche complète à 75 %/.test(ficheOrigine) &&
+            /Provient d'un autre objet métier/.test(ficheOrigine)
+    );
+    verifier(
+        'gouvernance V12.6 : la provenance héritée se lit dans la liste des informations',
+        /copié de Client › id_client/.test(await page.textContent('app-objets-metier tbody'))
+    );
+    // Une boucle est refusée avant d'être écrite.
+    await page.selectOption('app-fiche-information select[name=origine-objet]', { label: 'Client' });
+    await page.selectOption('app-fiche-information select[name=origine-information]', { label: 'id_client' });
+    await page.click('app-fiche-information button[name=ajouterOrigine]');
+    await page.waitForSelector('.notification.erreur:has-text("déjà déclarée")');
+    verifier(
+        'gouvernance V12.6 : déclarer deux fois la même origine est refusé',
+        /déjà déclarée/.test(await page.textContent('.notification.erreur:has-text("déjà déclarée")'))
+    );
+    await page.click('app-fiche-information button[name=fermerFiche]');
     await capture('objets-metier-proposition');
     // On n'enregistre pas cet objet de démonstration : on revient sur « Client ».
     await page.click('app-objets-metier .liste .element:has-text("Client")');

@@ -375,3 +375,40 @@ test('propositions : dépôt, remplacement, acceptation appliquée, refus, retra
         'la proposition retirée a disparu'
     );
 });
+
+test('une information peut provenir d’une information d’un autre objet (copie, dérivé, agrégé)', async () => {
+    await appel({
+        method: 'PUT',
+        url: '/api/gouvernance/objets-metier/bo_personne',
+        payload: {
+            name: 'Personne',
+            elements: [{ id: 'be_adresse', name: 'Adresse', mappings: [{ table: 'personnes.csv', col: 'adr' }] }]
+        }
+    });
+    const reponse = await appel({
+        method: 'PUT',
+        url: '/api/gouvernance/objets-metier/bo_contrat',
+        payload: {
+            name: 'Contrat',
+            elements: [
+                {
+                    id: 'be_adresse_risque',
+                    name: 'Adresse de risque',
+                    origins: [{ boId: 'bo_personne', elId: 'be_adresse', kind: 'copie', rule: 'reprise telle quelle' }]
+                }
+            ]
+        }
+    });
+    assert.equal(reponse.statusCode, 200, reponse.body);
+    const objets = json(await appel({ method: 'GET', url: '/api/gouvernance/objets-metier' }));
+    const contrat = objets.find((objet: { id: string }) => objet.id === 'bo_contrat');
+    assert.deepEqual(contrat.elements[0].origins, [
+        { boId: 'bo_personne', elId: 'be_adresse', kind: 'copie', rule: 'reprise telle quelle' }
+    ]);
+    const nature = await appel({
+        method: 'PUT',
+        url: '/api/gouvernance/objets-metier/bo_contrat',
+        payload: { name: 'Contrat', elements: [{ id: 'be_x', name: 'X', origins: [{ boId: 'a', elId: 'b', kind: 'inventee' }] }] }
+    });
+    assert.equal(nature.statusCode, 400, 'une nature inconnue est refusée');
+});

@@ -294,7 +294,7 @@ export type CompletudeInformation = { score: number; controles: ControleInformat
  * L'état d'une fiche d'information. Les quatre questions ont le même poids : ce n'est pas une note de
  * qualité, c'est une liste de choses à dire — et celle qui manque est nommée pour savoir où aller.
  */
-export function completudeInformation(attribut: AttributObjetMetier): CompletudeInformation {
+export function completudeInformation(attribut: AttributObjetMetier, origineDeclaree = false): CompletudeInformation {
     const controles: ControleInformation[] = [
         {
             question: "C'est quoi ?",
@@ -304,9 +304,10 @@ export function completudeInformation(attribut: AttributObjetMetier): Completude
         },
         {
             question: "D'où ça vient ?",
-            conseil: 'indiquer la colonne du fichier qui porte la valeur',
+            conseil: "indiquer la colonne du fichier, ou l'information d'un autre objet dont elle provient",
             section: 2,
-            repondu: (attribut.mappings || []).length > 0
+            // Une information héritée d'un autre objet compte comme alimentée, même sans colonne (V12.6).
+            repondu: (attribut.mappings || []).length > 0 || origineDeclaree
         },
         {
             question: "Qui s'en sert ?",

@@ -29,7 +29,18 @@ const schemaAttribut = z
         owner: z.string().optional(),
         sensitivity: z.string().optional(),
         examples: z.string().optional(),
-        term: z.string().optional()
+        term: z.string().optional(),
+        /** V12.6 : les informations d'autres objets dont celle-ci provient (copie, dérivé, agrégé). */
+        origins: z
+            .array(
+                z.object({
+                    boId: z.string().min(1),
+                    elId: z.string().min(1),
+                    kind: z.enum(['copie', 'derive', 'agrege']).default('copie'),
+                    rule: z.string().default('')
+                })
+            )
+            .optional()
     })
     .passthrough();
 const schemaObjetMetier = z

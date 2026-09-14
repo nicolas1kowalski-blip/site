@@ -28,6 +28,7 @@ import {
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { completudeInformation, feuDeLObjet } from './description-information';
+import { originesValides, provenanceDe } from './origines-information';
 import { FicheInformationComponent } from './fiche-information.component';
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { PropositionObjetComponent } from './proposition-objet.component';
@@ -52,7 +53,8 @@ const OBJET_VIDE = (): ObjetMetier => ({
 /** Complétude de la fiche : mêmes critères pondérés que l'application classique (boCompleteness). */
 export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { score: number; aFaire: string[] } {
     const attributs = objet.elements || [];
-    const sansAlimentation = attributs.filter(attribut => !(attribut.mappings || []).length).length;
+    // Une information héritée d'un autre objet est alimentée, même sans colonne de fichier (V12.6).
+    const sansAlimentation = attributs.filter(attribut => !(attribut.mappings || []).length && !(attribut.origins || []).length).length;
     const sansDefinition = attributs.filter(attribut => !attribut.definition).length;
     const sansUsage = attributs.filter(attribut => !(attribut.usedBy || []).length).length;
     const criteres: { poids: number; ok: boolean; libelle: string }[] = [
@@ -228,6 +230,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                     <tr>
                                         <th title="Terme technique : attribut">Information</th>
                                         <th>Définition</th>
+                                        <th title="Terme technique : mapping">D'où ça vient</th>
                                         <th>Fiche</th>
                                         <th></th>
                                     </tr>
@@ -258,6 +261,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                     </button>
                                                 }
                                             </td>
+                                            <td class="discret">{{ provenance(attribut) || '—' }}</td>
                                             <td style="white-space: nowrap">
                                                 <span class="badge" [class.succes]="complet(attribut) === 100">
                                                     {{ complet(attribut) }} %
@@ -694,9 +698,13 @@ export class ObjetsMetierComponent {
     feu(objet: ObjetMetier): { couleur: string; titre: string } {
         return feuDeLObjet(objet, this.completude(objet).score);
     }
-    /** Où en est la fiche d'une information, en pourcentage. */
+    /** Où en est la fiche d'une information, en pourcentage (une origine déclarée compte comme provenance). */
     complet(attribut: AttributObjetMetier): number {
-        return completudeInformation(attribut).score;
+        return completudeInformation(attribut, originesValides(this.objets(), attribut).length > 0).score;
+    }
+    /** D'où vient l'information, en clair : la colonne du fichier, et ce dont elle hérite. */
+    provenance(attribut: AttributObjetMetier): string {
+        return provenanceDe(this.objets(), attribut);
     }
     /** L'information dont la fiche est ouverte, si elle appartient toujours à l'objet affiché. */
     informationChoisie(objet: ObjetMetier): AttributObjetMetier | null {

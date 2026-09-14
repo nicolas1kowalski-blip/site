@@ -12,13 +12,22 @@
  * section. Quand la définition manque, la fiche en propose une : celle déjà écrite ailleurs pour la même
  * information, ou à défaut une devinette d'après le nom. Rien n'est écrit sans un clic.
  */
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
-import { Actif, AttributObjetMetier, ObjetMetier, Source, TermeGlossaire } from '../../coeur/modeles';
+import { Actif, AttributObjetMetier, ObjetMetier, OrigineInformation, Source, TermeGlossaire } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
-import { completudeInformation, definitionDejaEcrite, definitionDevinee } from './description-information';
+import { CompletudeInformation, completudeInformation, definitionDejaEcrite, definitionDevinee } from './description-information';
+import {
+    NATURES_ORIGINE,
+    NatureOrigine,
+    REGLE_DE_CHOIX,
+    dependantsDe,
+    libelleOrigine,
+    originesValides,
+    refusDeLOrigine
+} from './origines-information';
 
 /** Nombre de valeurs réelles ramenées en exemple : de quoi reconnaître la donnée, pas de quoi la lister. */
 const EXEMPLES = 3;
@@ -134,6 +143,70 @@ const EXEMPLES = 3;
                         <button class="bouton petit" type="button" name="ajouterColonneFichier" (click)="ajouterColonne()">
                             + Colonne
                         </button>
+                    </div>
+                }
+
+                <!-- V12.6 : une information vient parfois d'une autre information, décrite ailleurs. -->
+                <div class="titre-bloc">Provient d'un autre objet métier</div>
+                @if (origines().length) {
+                    <div class="puces">
+                        @for (origine of origines(); track $index; let index = $index) {
+                            <span class="puce">
+                                <span class="badge neutre">{{ natures[origine.kind].libelle }}</span>
+                                {{ libelle(origine) }}
+                                @if (origine.rule) {
+                                    <span class="discret">— {{ origine.rule }}</span>
+                                }
+                                @if (peutEditer()) {
+                                    <a (click)="retirerOrigine(index)">✕</a>
+                                }
+                            </span>
+                        }
+                    </div>
+                }
+                @if (peutEditer()) {
+                    <details class="guide-natures" [open]="!origines().length">
+                        <summary>Quelle nature choisir ? Copie, dérivé ou agrégé</summary>
+                        <div class="natures">
+                            @for (nature of naturesListe; track nature.cle) {
+                                <div class="nature">
+                                    <b>{{ nature.libelle }}</b>
+                                    <span class="discret">{{ nature.forme }}</span>
+                                    <p>{{ nature.explication }}</p>
+                                    <em class="discret">Ex. {{ nature.exemple }}</em>
+                                </div>
+                            }
+                        </div>
+                        <p class="discret">{{ regleDeChoix }}</p>
+                    </details>
+                    <div class="ligne-champs">
+                        <select class="champ" name="origine-objet" [(ngModel)]="origineObjet" (ngModelChange)="origineInformation = ''">
+                            <option value="">— objet d'origine —</option>
+                            @for (autre of autresObjets(); track autre.id) {
+                                <option [value]="autre.id">{{ autre.name }}</option>
+                            }
+                        </select>
+                        <select class="champ" name="origine-information" [(ngModel)]="origineInformation">
+                            <option value="">— information —</option>
+                            @for (candidate of informationsDe(origineObjet); track candidate.id) {
+                                <option [value]="candidate.id">{{ candidate.name }}</option>
+                            }
+                        </select>
+                        <select class="champ petit" name="origine-nature" [(ngModel)]="origineNature">
+                            @for (nature of naturesListe; track nature.cle) {
+                                <option [value]="nature.cle">{{ nature.libelle }}</option>
+                            }
+                        </select>
+                        <input class="champ" name="origine-regle" [(ngModel)]="origineRegle" placeholder="la règle, en clair" />
+                        <button class="bouton petit" type="button" name="ajouterOrigine" (click)="ajouterOrigine()">+ Origine</button>
+                    </div>
+                }
+                @if (reutilisePar().length) {
+                    <div class="discret">
+                        Réutilisé par :
+                        @for (dependant of reutilisePar(); track $index) {
+                            <span class="puce">{{ dependant.objet.name }} › {{ dependant.information.name }}</span>
+                        }
                     </div>
                 }
             </section>
@@ -287,6 +360,33 @@ const EXEMPLES = 3;
             flex-wrap: wrap;
             gap: 10px;
         }
+        .guide-natures summary {
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12.5px;
+        }
+        .natures {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 8px 0;
+        }
+        .nature {
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: grid;
+            gap: 2px;
+        }
+        .nature p {
+            margin: 2px 0;
+            font-size: 12px;
+        }
+        .titre-bloc {
+            font-weight: 700;
+            font-size: 12.5px;
+            margin-top: 6px;
+        }
         .en-dire-plus summary {
             cursor: pointer;
             font-weight: 700;
@@ -314,16 +414,44 @@ export class FicheInformationComponent {
     table = '';
     colonne = '';
 
-    readonly completude = computed(() => completudeInformation(this.attribut()));
-    readonly colonnesDuFichier = computed(() => this.sources().find(source => source.name === this.table)?.headers || []);
-    readonly premiereColonne = computed(() => this.attribut().mappings[0] || null);
+    readonly natures = NATURES_ORIGINE;
+    readonly naturesListe = Object.entries(NATURES_ORIGINE).map(([cle, nature]) => ({ cle: cle as NatureOrigine, ...nature }));
+    readonly regleDeChoix = REGLE_DE_CHOIX;
+    origineObjet = '';
+    origineInformation = '';
+    origineNature: NatureOrigine = 'copie';
+    origineRegle = '';
+
+    /**
+     * Ces valeurs ne sont pas des `computed` : la fiche travaille sur l'objet que l'écran lui confie et le
+     * modifie en place (une colonne retirée, une origine ajoutée). Un signal ne verrait pas ces changements,
+     * puisque la référence ne bouge pas ; une méthode, elle, est relue à chaque affichage.
+     */
+    origines(): OrigineInformation[] {
+        return originesValides(this.objets(), this.attribut());
+    }
+    reutilisePar(): { objet: ObjetMetier; information: AttributObjetMetier }[] {
+        return dependantsDe(this.objets(), this.objet().id, this.attribut().id);
+    }
+    autresObjets(): ObjetMetier[] {
+        return this.objets().filter(candidat => candidat.id !== this.objet().id);
+    }
+    completude(): CompletudeInformation {
+        return completudeInformation(this.attribut(), this.origines().length > 0);
+    }
+    colonnesDuFichier(): string[] {
+        return this.sources().find(source => source.name === this.table)?.headers || [];
+    }
+    premiereColonne(): { table: string; col: string } | null {
+        return this.attribut().mappings[0] || null;
+    }
 
     peutEditer(): boolean {
         return this.session.peutEditer();
     }
 
     /** La définition qu'on propose tant qu'aucune n'est écrite : reprise d'ailleurs, sinon devinée. */
-    readonly definitionProposee = computed<{ texte: string; origine: string } | null>(() => {
+    definitionProposee(): { texte: string; origine: string } | null {
         const attribut = this.attribut();
         if ((attribut.definition || '').trim()) return null;
         const ailleurs = definitionDejaEcrite(this.objets(), attribut.name, this.objet().id);
@@ -334,7 +462,41 @@ export class FicheInformationComponent {
             };
         const devinee = definitionDevinee(attribut.name, this.objet().name);
         return devinee ? { texte: devinee, origine: "devinée d'après le nom" } : null;
-    });
+    }
+
+    informationsDe(objetId: string): AttributObjetMetier[] {
+        return this.objets().find(candidat => candidat.id === objetId)?.elements || [];
+    }
+    libelle(origine: OrigineInformation): string {
+        return libelleOrigine(this.objets(), origine);
+    }
+
+    /** Déclarer une origine : on refuse les boucles avant d'écrire, pas après. */
+    ajouterOrigine(): void {
+        const origine: OrigineInformation = {
+            boId: this.origineObjet,
+            elId: this.origineInformation,
+            kind: this.origineNature,
+            rule: this.origineRegle.trim()
+        };
+        const refus = refusDeLOrigine(this.objets(), this.attribut(), this.objet().id, origine);
+        if (refus) {
+            this.notifications.erreur(refus);
+            return;
+        }
+        const attribut = this.attribut();
+        attribut.origins = [...(attribut.origins || []), origine];
+        this.origineInformation = '';
+        this.origineRegle = '';
+        this.notifications.succes(
+            `Origine déclarée : « ${this.libelle(origine)} » (${NATURES_ORIGINE[origine.kind].libelle.toLowerCase()}). ` +
+                "Le parcours de la donnée remonte maintenant jusqu'à cet objet."
+        );
+    }
+    retirerOrigine(index: number): void {
+        const attribut = this.attribut();
+        attribut.origins = (attribut.origins || []).filter((_, position) => position !== index);
+    }
 
     utiliser(texte: string): void {
         this.attribut().definition = texte;

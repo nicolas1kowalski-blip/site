@@ -667,6 +667,11 @@ export type VocabulaireTablesConcues = {
 // ---- gouvernance : référentiels (format de l'application classique, champs en anglais) ----
 export type RoleObjetSource = 'maitre' | 'contributeur' | 'destinataire';
 /** Attribut (« information ») d'un objet métier : mappings = colonnes techniques qui l'alimentent, usedBy = actifs. */
+/**
+ * Une information peut provenir d'une information d'un autre objet : copie (même valeur), dérivé (valeur
+ * transformée, la règle est écrite en clair) ou agrégé (plusieurs lignes résumées en une valeur).
+ */
+export type OrigineInformation = { boId: string; elId: string; kind: 'copie' | 'derive' | 'agrege'; rule?: string };
 export type AttributObjetMetier = {
     id: string;
     name: string;
@@ -677,6 +682,8 @@ export type AttributObjetMetier = {
     sensitivity?: string;
     examples?: string;
     term?: string;
+    /** Les informations d'autres objets dont celle-ci provient (V12.6). */
+    origins?: OrigineInformation[];
     [autre: string]: unknown;
 };
 export type ObjetMetier = {
