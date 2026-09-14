@@ -1611,6 +1611,81 @@ try {
             clientAvecUsages.elements.every(information => !!information.examples && information.examplesAuto === true)
     );
 
+    // ---- V13 : import en masse de la gouvernance ----
+    await page.click('a[href="/import-gouvernance"]');
+    await page.waitForSelector('app-import-gouvernance');
+    // Un fichier écrit à la main, avec des en-têtes en français : les colonnes doivent se reconnaître seules.
+    const fichierImport = path.join(dossierTests, 'captures', 'import-dictionnaire.csv');
+    fs.writeFileSync(
+        fichierImport,
+        [
+            'Table;Colonne;Définition;Sensibilité',
+            'clients.csv;nom;Nom de famille du client;Personnelle',
+            'clients.csv;ville;Ville;Interne'
+        ].join('\n'),
+        'utf8'
+    );
+    await page.setInputFiles('app-import-gouvernance input[type=file]', fichierImport);
+    await page.waitForSelector('app-import-gouvernance button[name=importer]');
+    verifier(
+        'V13 : les colonnes du fichier se posent seules sur les champs de la cible',
+        (await page.inputValue('app-import-gouvernance select[name=colonne-table]')) === 'Table' &&
+            (await page.inputValue('app-import-gouvernance select[name=colonne-col]')) === 'Colonne' &&
+            (await page.inputValue('app-import-gouvernance select[name=colonne-definition]')) === 'Définition'
+    );
+    verifier(
+        'V13 : l’aperçu montre ce qui sera écrit, avant que rien ne le soit',
+        /Nom de famille du client/.test(await page.textContent('app-import-gouvernance tbody'))
+    );
+    await capture('import-gouvernance');
+    await page.click('app-import-gouvernance button[name=importer]');
+    await page.waitForSelector('app-import-gouvernance .compte-rendu');
+    verifier(
+        'V13 : l’import rend compte de ce qu’il a créé, mis à jour et ignoré',
+        /2 créé\(s\)/.test(await page.textContent('app-import-gouvernance .compte-rendu'))
+    );
+    const dictionnaireImporte = await page.evaluate(async () => await (await fetch('/api/gouvernance/dictionnaire')).json());
+    verifier(
+        'V13 : les définitions et sensibilités importées sont bien enregistrées dans le dictionnaire',
+        dictionnaireImporte['clients.csv'].columns.nom.description === 'Nom de famille du client' &&
+            dictionnaireImporte['clients.csv'].columns.nom.sensitivity === 'Personnelle'
+    );
+    // Réimporté tel quel, le même contenu ne réécrit rien : on le dit plutôt que de faire semblant.
+    // (Sous un autre nom : rechoisir le même fichier ne donnerait rien à signaler au navigateur.)
+    const memeContenu = path.join(dossierTests, 'captures', 'import-dictionnaire-bis.csv');
+    fs.copyFileSync(fichierImport, memeContenu);
+    await page.setInputFiles('app-import-gouvernance input[type=file]', memeContenu);
+    await page.waitForSelector('app-import-gouvernance button[name=importer]');
+    await page.click('app-import-gouvernance button[name=importer]');
+    await page.waitForSelector('app-import-gouvernance .compte-rendu.rien');
+    verifier(
+        'V13 : réimporté tel quel, rien n’est réécrit — et le motif est donné',
+        /Déjà identique/.test(await page.textContent('app-import-gouvernance .compte-rendu'))
+    );
+    // Ce qui ne se comprend pas est signalé, pas enregistré.
+    // Un autre nom de fichier : rechoisir le même laisserait le navigateur sans rien à signaler.
+    const fichierEcarts = path.join(dossierTests, 'captures', 'import-informations.csv');
+    fs.writeFileSync(
+        fichierEcarts,
+        ['Objet métier;Information;Sensibilité', 'Inexistant;x;Interne', 'Client;ville;Ultra-secrète'].join('\n'),
+        'utf8'
+    );
+    await page.selectOption('app-import-gouvernance select[name=cible]', 'informations');
+    await page.setInputFiles('app-import-gouvernance input[type=file]', fichierEcarts);
+    await page.waitForSelector('app-import-gouvernance button[name=importer]');
+    await page.click('app-import-gouvernance button[name=importer]');
+    await page.waitForSelector('app-import-gouvernance .compte-rendu');
+    const ecartsDeLImport = await page.textContent('app-import-gouvernance .compte-rendu');
+    verifier(
+        'V13 : un objet introuvable et une sensibilité inconnue sont expliqués, avec les noms existants en repère',
+        /Objet métier introuvable/.test(ecartsDeLImport) &&
+            /Sensibilité inconnue/.test(ecartsDeLImport) &&
+            /Objets métier existants/.test(ecartsDeLImport)
+    );
+    fs.rmSync(fichierImport, { force: true });
+    fs.rmSync(fichierEcarts, { force: true });
+    fs.rmSync(memeContenu, { force: true });
+
     // V13 : « 💬 Proposer une correction » depuis la fiche — rien ne change avant validation du responsable.
     await page.click('a[href="/objets-metier"]');
     await page.waitForSelector('app-objets-metier .fiche');

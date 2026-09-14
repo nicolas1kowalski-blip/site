@@ -59,6 +59,7 @@ export const GROUPES_NAVIGATION: GroupeNavigation[] = [
             { chemin: '/sensibilite', libelle: 'Confidentialité', icone: '🛡' },
             { chemin: '/lineage', libelle: 'Parcours de la donnée', icone: '⇢' },
             { chemin: '/propositions', libelle: 'À valider', icone: '✔' },
+            { chemin: '/import-gouvernance', libelle: 'Import en masse', icone: '⬆' },
             { chemin: '/journal', libelle: 'Historique', icone: '⏱' }
         ]
     },

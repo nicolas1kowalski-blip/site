@@ -26,7 +26,11 @@ export type FicheDictionnaire = {
     sensitivity?: string;
     sourceSystem?: string;
     steward?: string;
-    columns?: Record<string, { description?: string; sensitivity?: string }>;
+    /**
+     * Ce que l'on sait de chaque colonne : sa définition, sa sensibilité, le type que l'on en attend, et le
+     * terme du glossaire auquel elle renvoie (V13).
+     */
+    columns?: Record<string, { description?: string; sensitivity?: string; technicalType?: string; term?: string }>;
 };
 
 type EtatApplication = {
@@ -49,7 +53,16 @@ const schemaFiche = z.object({
     sensitivity: z.string().trim().optional(),
     sourceSystem: z.string().trim().optional(),
     steward: z.string().trim().optional(),
-    columns: z.record(z.object({ description: z.string().optional(), sensitivity: z.string().optional() })).optional()
+    columns: z
+        .record(
+            z.object({
+                description: z.string().optional(),
+                sensitivity: z.string().optional(),
+                technicalType: z.string().optional(),
+                term: z.string().optional()
+            })
+        )
+        .optional()
 });
 
 @ApiTags('Gouvernance')

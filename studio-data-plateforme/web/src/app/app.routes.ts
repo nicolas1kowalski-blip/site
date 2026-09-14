@@ -21,6 +21,7 @@ import { Explorateur360Component } from './pages/explorateur-360/explorateur-360
 import { ExtractionComponent } from './pages/extraction/extraction.component';
 import { JeuxComponent } from './pages/jeux/jeux.component';
 import { GlossaireComponent } from './pages/glossaire/glossaire.component';
+import { ImportGouvernanceComponent } from './pages/import-gouvernance/import-gouvernance.component';
 import { JournalComponent } from './pages/journal/journal.component';
 import { LineageComponent } from './pages/lineage/lineage.component';
 import { ListesValeursComponent } from './pages/listes-valeurs/listes-valeurs.component';
@@ -82,6 +83,11 @@ export const routes: Routes = [
             { path: 'personnes', component: PersonnesComponent, title: 'Personnes & rôles — Studio Data' },
             { path: 'propositions', component: PropositionsComponent, title: 'Propositions à valider — Studio Data' },
             { path: 'lineage', component: LineageComponent, title: 'Lineage — Studio Data' },
+            {
+                path: 'import-gouvernance',
+                component: ImportGouvernanceComponent,
+                title: 'Import en masse de la gouvernance — Studio Data'
+            },
             { path: 'journal', component: JournalComponent, title: 'Journal — Studio Data' },
             { path: 'classique', component: ClassiqueComponent, title: 'Application complète — Studio Data' },
             { path: 'espaces', component: EspacesComponent, title: 'Espaces — Studio Data' },

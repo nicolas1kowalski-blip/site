@@ -64,7 +64,8 @@ export type FicheDictionnaire = {
     domain?: string;
     updateFrequency?: string;
     sensitivity?: string;
-    columns?: Record<string, { description?: string; sensitivity?: string }>;
+    /** Par colonne : sa définition, sa sensibilité, le type attendu, et le terme du glossaire visé (V13). */
+    columns?: Record<string, { description?: string; sensitivity?: string; technicalType?: string; term?: string }>;
 };
 
 export type EntreeJournal = { id: string; action: string; cible: string | null; details: unknown; horodatage: string; auteur: string };
