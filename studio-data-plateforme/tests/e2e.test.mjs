@@ -231,6 +231,38 @@ try {
     );
     await capture('modele-regles');
 
+    // ---- graphes V12.11 : tracé à angles droits, couloirs distincts, mise en avant au survol ----
+    const cheminsDuModele = await page.$$eval('app-modele app-graphe-svg .lien path[stroke]:not([stroke=transparent])', chemins =>
+        chemins.map(chemin => chemin.getAttribute('d'))
+    );
+    verifier(
+        'graphe : les liens sont tracés à angles droits (segments), et non plus en courbes',
+        cheminsDuModele.length >= 1 &&
+            cheminsDuModele.every(chemin => /^M [\d.-]+ [\d.-]+ L /.test(chemin)) &&
+            cheminsDuModele.every(chemin => !/C /.test(chemin))
+    );
+    await page.hover('app-modele app-graphe-svg .lien');
+    await page.waitForSelector('app-modele app-graphe-svg .lien.en-avant');
+    verifier(
+        'graphe : au survol, le lien est mis en avant et redessiné par-dessus les cases',
+        (await page.$$('app-modele app-graphe-svg path.lien-en-avant')).length >= 1
+    );
+    await capture('graphe-angles-droits');
+    // La bascule vers les liens courbes est mémorisée.
+    await page.click('app-modele app-graphe-svg button[name=basculerTrace]');
+    await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('app-modele app-graphe-svg .lien path[stroke]')).some(chemin =>
+            /C /.test(chemin.getAttribute('d') || '')
+        )
+    );
+    verifier('graphe : la bascule passe aux liens courbes', true);
+    await page.click('app-modele app-graphe-svg button[name=basculerTrace]');
+    await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll('app-modele app-graphe-svg .lien path[stroke]')).every(
+            chemin => !/C /.test(chemin.getAttribute('d') || '')
+        )
+    );
+
     // ---- extraction : colonnes, filtre, aperçu, comptage, bilan, export, paramétrage ----
     await page.click('a[href="/extraction"]');
     await page.waitForSelector('app-extraction');
@@ -889,6 +921,8 @@ try {
     await page.waitForSelector('table.sources tbody tr');
     await page.click('table.sources tr:has-text("clients.csv") button:has-text("Lineage")');
     await page.waitForSelector('app-lineage select[name=table]');
+    // On attend la valeur, pas seulement la présence du champ : le paramètre d'adresse est appliqué au tick suivant.
+    await page.waitForFunction(() => document.querySelector('app-lineage select[name=table]')?.value === 'clients.csv');
     verifier(
         'confort : « Lineage » depuis Sources ouvre « Autour d’une table » sur clients.csv',
         (await page.inputValue('app-lineage select[name=table]')) === 'clients.csv'

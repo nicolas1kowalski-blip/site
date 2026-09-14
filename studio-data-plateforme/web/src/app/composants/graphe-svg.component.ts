@@ -10,6 +10,8 @@
 import { Component, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { exporterSvgEnImage } from '../coeur/export-image';
 import { NotificationsService } from '../coeur/notifications.service';
+import { PreferencesService } from '../coeur/preferences.service';
+import { abscisseDuCouloir, cheminAAnglesDroits, cheminCourbe, pointsDAttache, surDesColonnesDistinctes } from './trace-liens';
 
 export type NoeudDessine = { id: string; titre: string; detail?: string; couleur?: string; bordure?: string; selectionne?: boolean };
 export type LienDessine = {
@@ -28,6 +30,9 @@ type LienPlace = { lien: LienDessine; chemin: string; milieuX: number; milieuY: 
 const ECART_COLONNES = 110;
 const ECART_LIGNES = 30;
 const LIGNES_MAXIMUM = 12;
+
+/** Tracé retenu pour les liens : à angles droits (défaut, V12.11) ou en courbes (dessin d'origine). */
+export type TraceDesLiens = 'angles' | 'courbes';
 
 /** Taille d'un nœud d'après la longueur de son titre et de son détail (bornée). */
 function tailleNoeud(noeud: NoeudDessine): [number, number] {
@@ -143,33 +148,6 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
     return places;
 }
 
-/** Chemin d'une flèche : courbe horizontale entre deux colonnes, segment sinon. */
-function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: number; milieuY: number } {
-    if (arrivee.x - depart.x > (depart.largeur + arrivee.largeur) / 2 + 24) {
-        const debut = { x: depart.x + depart.largeur / 2, y: depart.y };
-        const fin = { x: arrivee.x - arrivee.largeur / 2, y: arrivee.y };
-        const courbure = Math.max(40, (fin.x - debut.x) * 0.45);
-        return {
-            chemin: `M ${debut.x} ${debut.y} C ${debut.x + courbure} ${debut.y}, ${fin.x - courbure} ${fin.y}, ${fin.x} ${fin.y}`,
-            milieuX: (debut.x + fin.x) / 2,
-            milieuY: (debut.y + fin.y) / 2
-        };
-    }
-    if (depart.x - arrivee.x > (depart.largeur + arrivee.largeur) / 2 + 24) {
-        const debut = { x: depart.x - depart.largeur / 2, y: depart.y };
-        const fin = { x: arrivee.x + arrivee.largeur / 2, y: arrivee.y };
-        const courbure = Math.max(40, (debut.x - fin.x) * 0.45);
-        return {
-            chemin: `M ${debut.x} ${debut.y} C ${debut.x - courbure} ${debut.y}, ${fin.x + courbure} ${fin.y}, ${fin.x} ${fin.y}`,
-            milieuX: (debut.x + fin.x) / 2,
-            milieuY: (debut.y + fin.y) / 2
-        };
-    }
-    const debut = { x: depart.x, y: depart.y + (arrivee.y > depart.y ? depart.hauteur / 2 : -depart.hauteur / 2) };
-    const fin = { x: arrivee.x, y: arrivee.y + (arrivee.y > depart.y ? -arrivee.hauteur / 2 : arrivee.hauteur / 2) };
-    return { chemin: `M ${debut.x} ${debut.y} L ${fin.x} ${fin.y}`, milieuX: (debut.x + fin.x) / 2, milieuY: (debut.y + fin.y) / 2 };
-}
-
 @Component({
     selector: 'app-graphe-svg',
     template: `
@@ -180,6 +158,15 @@ function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: n
                     <button type="button" class="bouton petit" (click)="zoomerDe(0.8)" title="Zoom arrière">−</button>
                     <button type="button" class="bouton petit" (click)="ajuster()" title="Recentrer et réorganiser">⤢</button>
                     <button type="button" class="bouton petit" (click)="pleinEcran()" title="Plein écran (Échap pour sortir)">⛶</button>
+                    <button
+                        type="button"
+                        class="bouton petit"
+                        name="basculerTrace"
+                        (click)="basculerTrace()"
+                        [title]="trace() === 'angles' ? 'Passer aux liens courbes' : 'Passer aux liens à angles droits'"
+                    >
+                        {{ trace() === 'angles' ? '⌐' : '〜' }}
+                    </button>
                     <button type="button" class="bouton petit" (click)="exporterImage()" title="Exporter l'image (PNG)">📷</button>
                 </div>
             }
@@ -200,7 +187,14 @@ function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: n
                 </defs>
                 <g [attr.transform]="'translate(' + translationX() + ' ' + translationY() + ') scale(' + echelle() + ')'">
                     @for (lien of liensPlaces(); track $index) {
-                        <g class="lien" (click)="lienChoisi.emit(lien.lien); $event.stopPropagation()">
+                        <g
+                            class="lien"
+                            [class.en-avant]="estEnAvant(lien.lien)"
+                            [class.efface]="quelqueChoseEstSurvole() && !estEnAvant(lien.lien)"
+                            (mouseenter)="lienSurvole.set(lien.lien)"
+                            (mouseleave)="lienSurvole.set(null)"
+                            (click)="lienChoisi.emit(lien.lien); $event.stopPropagation()"
+                        >
                             <path
                                 [attr.d]="lien.chemin"
                                 fill="none"
@@ -221,6 +215,8 @@ function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: n
                         <g
                             class="noeud"
                             [class.selectionne]="noeud.noeud.selectionne"
+                            (mouseenter)="noeudSurvole.set(noeud.noeud.id)"
+                            (mouseleave)="noeudSurvole.set('')"
                             (click)="noeudChoisi.emit(noeud.noeud); $event.stopPropagation()"
                         >
                             <rect
@@ -247,6 +243,18 @@ function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: n
                                 </text>
                             }
                         </g>
+                    }
+                    <!-- Le lien mis en avant est redessiné par-dessus les cases : en SVG, c'est l'ordre qui fait le dessus. -->
+                    @for (lien of liensEnAvant(); track $index) {
+                        <path
+                            class="lien-en-avant"
+                            [attr.d]="lien.chemin"
+                            fill="none"
+                            [attr.stroke]="lien.lien.couleur || 'var(--accent)'"
+                            stroke-width="3"
+                            [attr.stroke-dasharray]="lien.lien.pointille ? '4 3' : null"
+                            marker-end="url(#fleche)"
+                        />
                     }
                 </g>
             </svg>
@@ -298,6 +306,22 @@ function cheminLien(depart: Place, arrivee: Place): { chemin: string; milieuX: n
         .lien {
             cursor: pointer;
         }
+        /* Au survol, le lien concerné passe devant les cases et s'épaissit ; les autres s'effacent. */
+        .lien.en-avant {
+            filter: drop-shadow(0 0 2px var(--surface));
+        }
+        .lien.en-avant path {
+            stroke-width: 3;
+        }
+        .lien-en-avant {
+            pointer-events: none;
+        }
+        .lien.efface {
+            opacity: 0.25;
+        }
+        .lien.en-avant .libelle-lien {
+            font-weight: 700;
+        }
         .libelle-lien {
             font-size: 10px;
             fill: var(--texte-2);
@@ -320,6 +344,24 @@ export class GrapheSvgComponent {
     private readonly conteneur = viewChild.required<ElementRef<HTMLDivElement>>('conteneur');
     private readonly notifications = inject(NotificationsService);
 
+    /** Ce qui est survolé : le lien lui-même, ou une case dont on veut voir tous les liens. */
+    readonly lienSurvole = signal<LienDessine | null>(null);
+    readonly noeudSurvole = signal('');
+    readonly quelqueChoseEstSurvole = computed(() => !!this.lienSurvole() || !!this.noeudSurvole());
+
+    /** Les liens à redessiner par-dessus les cases : ceux qui sont mis en avant. */
+    readonly liensEnAvant = computed(() => this.liensPlaces().filter(place => this.estEnAvant(place.lien)));
+
+    /** Un lien est mis en avant quand on le survole, ou quand on survole une case à laquelle il touche. */
+    estEnAvant(lien: LienDessine): boolean {
+        if (this.lienSurvole() === lien) return true;
+        const noeud = this.noeudSurvole();
+        return !!noeud && (lien.source === noeud || lien.target === noeud);
+    }
+
+    /** Dessin des liens, mémorisé : à angles droits (V12.11) ou en courbes. */
+    readonly trace = signal<TraceDesLiens>('angles');
+    private readonly preferences = inject(PreferencesService);
     readonly echelle = signal(1);
     readonly translationX = signal(30);
     readonly translationY = signal(30);
@@ -329,24 +371,78 @@ export class GrapheSvgComponent {
     readonly noeudsPlaces = computed(() => this.noeuds().map(noeud => ({ noeud, place: this.places()[noeud.id] })));
     readonly liensPlaces = computed<LienPlace[]>(() => {
         const places = this.places();
-        // Quand trois liens ou plus portent le même libellé vers le même nœud, une seule étiquette est affichée.
+        const traçables = this.liens().filter(lien => places[lien.source] && places[lien.target]);
+        const attaches = pointsDAttache(traçables, places);
+        const etiquette = this.etiqueteur(traçables);
+        // Les liens qui relient le même couple de colonnes se partagent les couloirs entre ces colonnes.
+        const rangDansLeCouple = new Map<string, number>();
+        const totalParCouple = new Map<string, number>();
+        traçables.forEach(lien => {
+            const cle = this.coupleDeColonnes(places[lien.source], places[lien.target]);
+            totalParCouple.set(cle, (totalParCouple.get(cle) || 0) + 1);
+        });
+        return traçables.map((lien, index) => {
+            const cle = this.coupleDeColonnes(places[lien.source], places[lien.target]);
+            const rang = rangDansLeCouple.get(cle) || 0;
+            rangDansLeCouple.set(cle, rang + 1);
+            const trace = this.tracerUnLien(places[lien.source], places[lien.target], attaches[index], rang, totalParCouple.get(cle) || 1);
+            return { lien, ...trace, libelle: etiquette(lien) };
+        });
+    });
+
+    /** Deux cases appartiennent au même « couple de colonnes » quand leurs abscisses sont les mêmes. */
+    private coupleDeColonnes(depart: Place, arrivee: Place): string {
+        return `${Math.round(depart.x)}→${Math.round(arrivee.x)}`;
+    }
+
+    /** Le tracé d'un lien, selon le dessin retenu : angles droits avec couloir, ou courbe. */
+    private tracerUnLien(depart: Place, arrivee: Place, attache: { yDepart: number; yArrivee: number }, rang: number, total: number) {
+        const versLaDroite = arrivee.x >= depart.x;
+        const debut = { x: depart.x + (versLaDroite ? depart.largeur / 2 : -depart.largeur / 2), y: attache.yDepart };
+        const fin = { x: arrivee.x + (versLaDroite ? -arrivee.largeur / 2 : arrivee.largeur / 2), y: attache.yArrivee };
+        if (!surDesColonnesDistinctes(depart, arrivee)) {
+            // Cases voisines : un segment direct de bord à bord reste le plus lisible.
+            const versLeBas = arrivee.y > depart.y;
+            const haut = { x: depart.x, y: depart.y + (versLeBas ? depart.hauteur / 2 : -depart.hauteur / 2) };
+            const bas = { x: arrivee.x, y: arrivee.y + (versLeBas ? -arrivee.hauteur / 2 : arrivee.hauteur / 2) };
+            return {
+                chemin: `M ${haut.x} ${haut.y} L ${bas.x} ${bas.y}`,
+                milieuX: (haut.x + bas.x) / 2,
+                milieuY: (haut.y + bas.y) / 2
+            };
+        }
+        if (this.trace() === 'courbes') return cheminCourbe(debut, fin);
+        return cheminAAnglesDroits(debut, fin, abscisseDuCouloir(debut.x, fin.x, rang, total));
+    }
+
+    /**
+     * Quand trois liens ou plus portent le même libellé vers le même nœud, une seule étiquette est affichée,
+     * suivie du nombre : le graphe reste lisible sans perdre l'information.
+     */
+    private etiqueteur(liens: LienDessine[]): (lien: LienDessine) => string {
         const compteur: Record<string, number> = {};
-        for (const lien of this.liens())
+        for (const lien of liens)
             if (lien.libelle) compteur[lien.libelle + '¦' + lien.target] = (compteur[lien.libelle + '¦' + lien.target] || 0) + 1;
         const affiches = new Set<string>();
-        return this.liens()
-            .filter(lien => places[lien.source] && places[lien.target])
-            .map(lien => {
-                const trace = cheminLien(places[lien.source], places[lien.target]);
-                let libelle = lien.libelle || '';
-                const cle = libelle + '¦' + lien.target;
-                if (libelle && compteur[cle] >= 3) {
-                    libelle = affiches.has(cle) ? '' : `${libelle} ×${compteur[cle]}`;
-                    affiches.add(cle);
-                }
-                return { lien, ...trace, libelle };
-            });
-    });
+        return lien => {
+            const libelle = lien.libelle || '';
+            const cle = libelle + '¦' + lien.target;
+            if (!libelle || compteur[cle] < 3) return libelle;
+            if (affiches.has(cle)) return '';
+            affiches.add(cle);
+            return `${libelle} ×${compteur[cle]}`;
+        };
+    }
+
+    constructor() {
+        if (this.preferences.lire('graphe.trace', 'angles') === 'courbes') this.trace.set('courbes');
+    }
+
+    /** Change le dessin des liens et s'en souvient : c'est un goût, pas un réglage à refaire chaque fois. */
+    basculerTrace(): void {
+        this.trace.update(courant => (courant === 'angles' ? 'courbes' : 'angles'));
+        this.preferences.ecrire('graphe.trace', this.trace());
+    }
 
     zoomer(evenement: WheelEvent): void {
         evenement.preventDefault();

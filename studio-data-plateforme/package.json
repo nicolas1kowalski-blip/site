@@ -15,7 +15,7 @@
     "tester:api": "npm run tester --prefix api",
     "tester:e2e": "node tests/e2e.test.mjs",
     "tester:demo": "node --test donnees-demo/generer.test.mjs",
-    "tester:chemins": "node --test --experimental-strip-types --no-warnings tests/chemins.test.mjs",
+    "tester:chemins": "node --test --experimental-strip-types --no-warnings tests/chemins.test.mjs tests/trace-liens.test.mjs",
     "demo": "node donnees-demo/generer.mjs",
     "verifier": "node formater.mjs --check && eslint .",
     "formater": "node formater.mjs",
