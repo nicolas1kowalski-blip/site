@@ -14,6 +14,7 @@
  */
 import { Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { Actif, AttributObjetMetier, ObjetMetier, OrigineInformation, Source, TermeGlossaire } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -34,11 +35,21 @@ const EXEMPLES = 3;
 
 @Component({
     selector: 'app-fiche-information',
-    imports: [FormsModule],
+    imports: [FormsModule, RouterLink],
     template: `
         <div class="fiche-information">
             <div class="entete-page" style="margin: 0 0 8px">
                 <b class="espace">Fiche de « {{ attribut().name }} »</b>
+                <!-- V13 : de la fiche d'une information, on va voir son parcours d'un clic. -->
+                <a
+                    class="bouton petit"
+                    name="parcoursInformation"
+                    title="D'où vient cette information, et où elle va"
+                    [routerLink]="'/lineage'"
+                    [queryParams]="{ objet: objet().id, information: attribut().id }"
+                >
+                    🔎 Parcours
+                </a>
                 <button class="bouton petit" type="button" name="fermerFiche" (click)="fermer.emit()">Fermer</button>
             </div>
 

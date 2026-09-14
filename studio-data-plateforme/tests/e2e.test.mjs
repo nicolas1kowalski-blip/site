@@ -2021,6 +2021,64 @@ try {
     );
     await capture('demonstration-propositions');
 
+    // ---- V13 : le parcours s'ouvre depuis ce que l'on regarde, pas seulement par le menu ----
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier .liste .element');
+    await page.click('app-objets-metier .liste .element:has-text("Facture")');
+    await page.waitForFunction(() => document.querySelector('app-objets-metier input[name=nom]')?.value === 'Facture');
+    await page.click('app-objets-metier a[name=parcoursObjet]');
+    // Le parcours de l'objet entier montre la synthèse (V12.7), pas la phrase d'une information.
+    await page.waitForSelector('app-lineage .synthese-parcours');
+    verifier(
+        'gouvernance V13 : « 🔎 Parcours » d’une fiche d’objet ouvre le parcours de cet objet, déjà chargé',
+        /objet=bo_facture/.test(page.url()) && /information/.test(await page.textContent('app-lineage .synthese-parcours'))
+    );
+    await capture('parcours-depuis-objet');
+    // Depuis une information : le parcours de cette information seule.
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier .liste .element');
+    await page.click('app-objets-metier .liste .element:has-text("Facture")');
+    await page.waitForSelector('app-objets-metier tbody tr');
+    await page.click('app-objets-metier a[name=parcours-2]');
+    await page.waitForSelector('app-lineage .phrase-parcours');
+    verifier(
+        'gouvernance V13 : « 🔎 » d’une information ouvre le parcours de cette information seule',
+        /objet=bo_facture&information=be_facture_ttc/.test(decodeURIComponent(page.url())) &&
+            (await page.inputValue('app-lineage select[name=attribut]')) === 'be_facture_ttc'
+    );
+    // Depuis le catalogue : la fiche d'une table mène au parcours autour de cette table.
+    await page.click('a[href="/catalogue"]');
+    await page.waitForSelector('app-catalogue .entree');
+    // Les tables ne sont pas dans la couche « métier » du catalogue : on demande à tout voir.
+    await page.click('app-catalogue input[name=couche]');
+    await page.fill('app-catalogue input.recherche', 'factures.csv');
+    // Le nom d'une table se lit dans le titre de sa carte ; « dans factures.csv » désignerait une colonne.
+    await page.waitForSelector('app-catalogue .entree strong:text-is("factures.csv")');
+    await page.click('app-catalogue .entree:has(strong:text-is("factures.csv"))');
+    await page.waitForSelector('app-catalogue button[name=parcoursDepuisCatalogue]');
+    await page.click('app-catalogue button[name=parcoursDepuisCatalogue]');
+    await page.waitForFunction(() => document.querySelector('app-lineage select[name=table]')?.value === 'factures.csv');
+    verifier(
+        'gouvernance V13 : « 🔎 Parcours » d’une table du catalogue ouvre le parcours autour de cette table',
+        /table=factures.csv/.test(decodeURIComponent(page.url())) && (await page.$$('app-lineage .noeud')).length > 0
+    );
+    await capture('parcours-depuis-catalogue');
+    // Depuis la fiche d'une colonne : ce qui serait touché si elle changeait.
+    await page.click('a[href="/catalogue"]');
+    await page.waitForSelector('app-catalogue .entree');
+    await page.click('app-catalogue input[name=couche]');
+    await page.fill('app-catalogue input.recherche', 'optin_email');
+    await page.waitForSelector('app-catalogue .entree strong:text-is("optin_email")');
+    await page.click('app-catalogue .entree:has(strong:text-is("optin_email"))');
+    await page.waitForSelector('app-catalogue button[name=parcoursDepuisCatalogue]');
+    await page.click('app-catalogue button[name=parcoursDepuisCatalogue]');
+    await page.waitForFunction(() => document.querySelector('app-lineage select[name=colonneImpact]')?.value === 'optin_email');
+    await page.waitForSelector('app-lineage ul.impact li');
+    verifier(
+        'gouvernance V13 : « 🔎 Parcours » d’une colonne ouvre ce qui serait touché si elle changeait (le consentement → la campagne)',
+        /colonne=optin_email/.test(decodeURIComponent(page.url())) && /Campagne de courriels/.test(await page.textContent('app-lineage'))
+    );
+
     // ---- lectrice : droits limités ----
     await page.click('button:has-text("Se déconnecter")');
     await page.waitForURL('**/connexion');

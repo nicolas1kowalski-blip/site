@@ -12,7 +12,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AnnulationService } from '../../coeur/annulation.service';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
@@ -92,7 +92,14 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
 @Component({
     selector: 'app-objets-metier',
-    imports: [FormsModule, FicheInformationComponent, PropositionObjetComponent, ProposerCorrectionComponent, AssistantObjetComponent],
+    imports: [
+        FormsModule,
+        RouterLink,
+        FicheInformationComponent,
+        PropositionObjetComponent,
+        ProposerCorrectionComponent,
+        AssistantObjetComponent
+    ],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -162,6 +169,12 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                         <span class="badge" [class.succes]="completude(objet).score >= 80" [class.alerte]="completude(objet).score < 80"
                             >complétude {{ completude(objet).score }} %</span
                         >
+                        <!-- V13 : d'une fiche, on va voir d'où vient la donnée et où elle va. -->
+                        @if (!nouveau()) {
+                            <a class="bouton" name="parcoursObjet" [routerLink]="'/lineage'" [queryParams]="{ objet: objet.id }">
+                                🔎 Parcours
+                            </a>
+                        }
                         @if (session.peutEditer()) {
                             <button class="bouton principal" (click)="enregistrer()" [disabled]="enCours()">Enregistrer</button>
                             @if (!nouveau()) {
@@ -400,6 +413,15 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                 >
                                                     {{ attribut.id === informationOuverte() ? 'Fermer' : 'Ouvrir la fiche' }}
                                                 </button>
+                                                <a
+                                                    class="bouton petit"
+                                                    [attr.name]="'parcours-' + index"
+                                                    title="D'où vient cette information, et où elle va"
+                                                    [routerLink]="'/lineage'"
+                                                    [queryParams]="{ objet: objet.id, information: attribut.id }"
+                                                >
+                                                    🔎
+                                                </a>
                                             </td>
                                             <td>
                                                 @if (session.peutEditer()) {

@@ -795,6 +795,8 @@ export class LineageComponent {
     objetId = '';
     attributId = '';
     nomTable = '';
+    /** Application sur laquelle ouvrir la carte, quand on arrive depuis sa fiche (vide sinon). */
+    private applicationDemandee = '';
 
     readonly roles = computed(() => Object.entries(this.vocabulaire()?.roles || {}).map(([cle, libelle]) => ({ cle, libelle })));
     readonly relations = computed(() => Object.entries(this.vocabulaire()?.relations || {}).map(([cle, libelle]) => ({ cle, libelle })));
@@ -830,18 +832,35 @@ export class LineageComponent {
     constructor() {
         // Lien « Lineage » de l'écran Sources : /lineage?table=nom ouvre directement « Autour d'une table ».
         const parametres = inject(ActivatedRoute).snapshot.queryParamMap;
-        // Depuis l'accueil de la gouvernance : /lineage?objet=identifiant ouvre le parcours de cet objet.
+        // Depuis l'accueil de la gouvernance, le catalogue ou la fiche d'un objet :
+        // /lineage?objet=identifiant ouvre le parcours de cet objet, et &information=identifiant celui
+        // d'une seule de ses informations.
         const objetDemande = parametres.get('objet');
         if (objetDemande) {
             this.objetId = objetDemande;
+            this.attributId = parametres.get('information') || '';
             this.onglet.set('attribut');
+            // Sans cet appel, l'écran s'ouvrirait sur le bon objet mais sans son parcours : c'est pourtant
+            // ce qu'on est venu voir.
+            void this.chargerParcours();
         }
         const tableDemandee = parametres.get('table');
         if (tableDemandee) {
             this.nomTable = tableDemandee;
             this.onglet.set('table');
             void this.chargerLineageTable();
+            // Depuis la fiche d'une colonne du catalogue : on ouvre plutôt « qui serait touché si elle change ».
+            const colonneDemandee = parametres.get('colonne');
+            if (colonneDemandee) {
+                this.tableImpact = tableDemandee;
+                this.colonneImpact = colonneDemandee;
+                this.onglet.set('impact');
+                void this.analyserImpact();
+            }
         }
+        // Depuis la fiche d'une application : la carte des flux, ce nœud déjà sélectionné.
+        this.applicationDemandee = parametres.get('application') || '';
+        if (this.applicationDemandee) this.onglet.set('carte');
         void this.recharger();
     }
 
@@ -861,6 +880,12 @@ export class LineageComponent {
             this.vocabulaire.set(vocabulaire);
             if (this.noeudChoisi()) this.choisirNoeud(this.noeudChoisi()!.id);
             if (this.lienChoisi()) this.choisirLien(this.lienChoisi()!.id);
+            // On arrive depuis la fiche d'une application : son nœud est choisi d'emblée, panneau ouvert.
+            if (this.applicationDemandee) {
+                const noeud = carte.noeuds.find(candidat => candidat.assetId === this.applicationDemandee);
+                if (noeud) this.choisirNoeud(noeud.id);
+                this.applicationDemandee = '';
+            }
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

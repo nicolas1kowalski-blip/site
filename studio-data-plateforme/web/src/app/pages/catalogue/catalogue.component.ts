@@ -7,6 +7,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
+import { libelleDuParcours, lienDuParcours } from '../../coeur/lien-parcours';
 import { EntreeCatalogue, FiltresCatalogue, ResultatCatalogue, TypeCatalogue } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 
@@ -149,7 +150,15 @@ const LIBELLES_SENSIBILITE: Record<string, string> = {
                             <dd>{{ entree.motsCles.join(', ') }}</dd>
                         }
                     </dl>
-                    <button class="bouton principal" (click)="ouvrirEcran(entree)">Ouvrir dans l'écran dédié</button>
+                    <div class="ligne-champs">
+                        <button class="bouton principal" (click)="ouvrirEcran(entree)">Ouvrir dans l'écran dédié</button>
+                        <!-- V13 : on va au parcours depuis ce que l'on regarde, pas seulement par le menu. -->
+                        @if (lienParcours(entree); as lien) {
+                            <button class="bouton" name="parcoursDepuisCatalogue" (click)="ouvrirParcours(lien)">
+                                {{ libelleParcours(entree.type) }}
+                            </button>
+                        }
+                    </div>
                 </aside>
             }
         </div>
@@ -303,5 +312,16 @@ export class CatalogueComponent {
 
     ouvrirEcran(entree: EntreeCatalogue): void {
         void this.routeur.navigateByUrl(entree.lien);
+    }
+
+    /** Le parcours de la donnée, ouvert sur ce que la fiche décrit ; vide quand la fiche n'a pas de parcours. */
+    lienParcours(entree: EntreeCatalogue): string {
+        return lienDuParcours(entree);
+    }
+    libelleParcours(type: string): string {
+        return libelleDuParcours(type);
+    }
+    ouvrirParcours(lien: string): void {
+        void this.routeur.navigateByUrl(lien);
     }
 }
