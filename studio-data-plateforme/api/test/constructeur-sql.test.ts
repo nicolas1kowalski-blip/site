@@ -136,15 +136,20 @@ test('colonne calculée : [colonne] et [table.colonne] deviennent des expression
     );
 });
 
-test('synthèse d’une table liée : sous-requête corrélée (nombre, valeurs, N premières) sans jointure', () => {
-    const synthese = { tableId: 'b', deTableId: 'a', deColonne: 'id_client', versColonne: 'id_client' };
+const syntheseVersCommandes = { tableId: 'b', deTableId: 'a', deColonne: 'id_client', versColonne: 'id_client' };
+
+test('synthèse d’une table liée : nombre et liste de valeurs en sous-requête corrélée, sans jointure', () => {
     const { sql, alias } = construireSql(
         specification({
             colonnes: [
                 { tableId: 'a', nomColonne: 'nom' },
-                { tableId: 'a', genre: 'synthese', synthese: { ...synthese, mode: 'count' }, alias: 'nb_commandes' },
-                { tableId: 'a', genre: 'synthese', synthese: { ...synthese, mode: 'values', nomColonne: 'montant' }, alias: 'montants' },
-                { tableId: 'a', genre: 'synthese', synthese: { ...synthese, mode: 'first', nomColonne: 'montant', n: 2 } }
+                { tableId: 'a', genre: 'synthese', synthese: { ...syntheseVersCommandes, mode: 'count' }, alias: 'nb_commandes' },
+                {
+                    tableId: 'a',
+                    genre: 'synthese',
+                    synthese: { ...syntheseVersCommandes, mode: 'values', nomColonne: 'montant' },
+                    alias: 'montants'
+                }
             ]
         }),
         contexte
@@ -154,8 +159,27 @@ test('synthèse d’une table liée : sous-requête corrélée (nombre, valeurs,
         /\(SELECT COUNT\(\*\) FROM "t_b" s WHERE NULLIF\(UPPER\(TRIM\(CAST\(s\."id_client" AS VARCHAR\)\)\), ''\) = NULLIF\(UPPER\(TRIM\(CAST\(t0\."id_client" AS VARCHAR\)\)\), ''\)\) AS "nb_commandes"/
     );
     assert.match(sql, /string_agg\(DISTINCT NULLIF\(TRIM\(CAST\(s\."montant" AS VARCHAR\)\), ''\), ' \| '\)/);
-    assert.deepEqual(alias, ['nom', 'nb_commandes', 'montants', 'commandes_1', 'commandes_2']);
+    assert.deepEqual(alias, ['nom', 'nb_commandes', 'montants']);
     assert.doesNotMatch(sql, /JOIN/);
+});
+
+test('synthèse « N premières valeurs » : la table liée est lue une seule fois, en liste ordonnée', () => {
+    const { sql, alias } = construireSql(
+        specification({
+            colonnes: [
+                { tableId: 'a', nomColonne: 'nom' },
+                { tableId: 'a', genre: 'synthese', synthese: { ...syntheseVersCommandes, mode: 'first', nomColonne: 'montant', n: 4 } }
+            ]
+        }),
+        contexte
+    );
+    // Une seule lecture de t_b, quel que soit le nombre de colonnes transposées.
+    assert.equal(sql.match(/FROM "t_b"/g)?.length, 1);
+    assert.match(sql, /transpose0 AS \(SELECT .* AS cle, list\(TRIM\(CAST\(s\."montant" AS VARCHAR\)\) ORDER BY s\."__rn"\) AS valeurs/);
+    assert.match(sql, /LEFT JOIN transpose0 ON transpose0\.cle = NULLIF\(UPPER\(TRIM\(CAST\(t0\."id_client" AS VARCHAR\)\)\), ''\)/);
+    assert.match(sql, /transpose0\.valeurs\[1\] AS "commandes_1"/);
+    assert.match(sql, /transpose0\.valeurs\[4\] AS "commandes_4"/);
+    assert.deepEqual(alias, ['nom', 'commandes_1', 'commandes_2', 'commandes_3', 'commandes_4']);
 });
 
 test('hiérarchie aplatie : CTE récursive, jointure sur l’identifiant normalisé, une colonne par niveau', () => {

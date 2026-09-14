@@ -44,6 +44,8 @@ const schemaLignesAnomalie = z.object({
     offset: z.number().int().min(0).default(0),
     filtres: schemaFiltres
 });
+/** Les lignes d'une anomalie gardées comme jeu temporaire : mêmes repères, plus le nom du jeu. */
+const schemaJeuAnomalie = schemaLignesAnomalie.omit({ offset: true }).extend({ nom: z.string().trim().min(1, 'nom requis').max(120) });
 const schemaExecution = z.object({ sourceId: z.string().optional() });
 const schemaAuditObjet = z.object({ objetId: z.string().min(1, 'objet métier requis'), filtres: schemaFiltres });
 const schemaProfilsCle = z.object({ profils: z.array(schemaProfilCle).default([]) });
@@ -110,6 +112,13 @@ export class QualiteController {
         @Body(valider(schemaLignesAnomalie)) corps: z.infer<typeof schemaLignesAnomalie>
     ) {
         return this.qualite.lignesAnomalie(espace, corps.sourceId, corps.genre, corps.colonne, corps.offset, corps.filtres);
+    }
+
+    @Post('anomalies/jeu')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({ summary: 'Garde les lignes d’une anomalie comme jeu temporaire, sans créer de source.' })
+    jeuDesAnomalies(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaJeuAnomalie)) corps: z.infer<typeof schemaJeuAnomalie>) {
+        return this.qualite.jeuDesAnomalies(espace, corps.sourceId, corps.genre, corps.colonne, corps.nom, corps.filtres);
     }
 
     // ---- doublons ----

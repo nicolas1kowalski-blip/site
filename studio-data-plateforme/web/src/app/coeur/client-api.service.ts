@@ -381,6 +381,10 @@ export class ClientApiService {
     creerJeu(sql: string, nom: string, origine: OrigineJeu): Promise<JeuTemporaire> {
         return firstValueFrom(this.http.post<JeuTemporaire>(`${this.racine}/jeux`, { sql, nom, origine }));
     }
+    /** Garde un fichier déposé comme jeu temporaire, sans en faire une source. */
+    creerJeuDepuisFichier(corps: { nomServeur: string; nom: string; feuille?: string; delim?: string }): Promise<JeuTemporaire> {
+        return firstValueFrom(this.http.post<JeuTemporaire>(`${this.racine}/jeux/fichier`, corps));
+    }
     renommerJeu(id: string, nom: string): Promise<JeuTemporaire> {
         return firstValueFrom(this.http.put<JeuTemporaire>(`${this.racine}/jeux/${encodeURIComponent(id)}/nom`, { nom }));
     }
@@ -422,6 +426,18 @@ export class ClientApiService {
     ): Promise<PageLignes> {
         return firstValueFrom(
             this.http.post<PageLignes>(`${this.racine}/qualite/anomalies/lignes`, { sourceId, genre, colonne, offset, filtres })
+        );
+    }
+    /** Garde les lignes d'une anomalie comme jeu temporaire, sans créer de source. */
+    jeuDesAnomalies(
+        sourceId: string,
+        genre: GenreAnomalie,
+        colonne: string,
+        nom: string,
+        filtres: FiltreAudit[] = []
+    ): Promise<JeuTemporaire> {
+        return firstValueFrom(
+            this.http.post<JeuTemporaire>(`${this.racine}/qualite/anomalies/jeu`, { sourceId, genre, colonne, nom, filtres })
         );
     }
     chercherDoublons(sourceId: string, cle: string[], filtres: FiltreAudit[] = []): Promise<ResultatDoublons> {

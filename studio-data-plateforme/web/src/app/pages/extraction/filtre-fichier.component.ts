@@ -31,6 +31,15 @@ import { SelecteurColonneComponent } from './selecteur-colonne.component';
 /** Lignes du fichier montrées en aperçu : assez pour reconnaître son contenu, pas assez pour encombrer. */
 const LIGNES_APERCU = 5;
 
+/** Nom comparable entre un en-tête de fichier et une colonne de table : minuscules, sans accents ni ponctuation. */
+export function nomComparable(nom: string): string {
+    return nom
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
 /** Un filtre fichier vide, prêt à recevoir une liste. */
 export function fichierVide(): FiltreFichierExtraction {
     return {
@@ -355,11 +364,34 @@ export class FiltreFichierComponent {
             this.notifications.erreur('Cette liste est vide : aucune colonne n’a été trouvée.');
             return;
         }
-        this.edition.update(fichier => ({ ...fichier, nom, colonnes: tableau.colonnes, lignes: tableau.lignes, correspondances: [] }));
+        const evidente = this.correspondanceEvidente(tableau.colonnes);
+        this.edition.update(fichier => ({
+            ...fichier,
+            nom,
+            colonnes: tableau.colonnes,
+            lignes: tableau.lignes,
+            correspondances: evidente ? [evidente] : []
+        }));
         this.colonneFichier.set(tableau.colonnes[0]);
         this.verification.set(null);
         this.collageOuvert.set(false);
         this.notifications.info(`${tableau.lignes.length} ligne(s) lue(s) dans « ${nom} ».`);
+    }
+
+    /**
+     * La correspondance qui va de soi : une colonne du fichier dont le nom ressemble à une colonne de la table
+     * de départ (« SIREN » et « siren », « N° client » et « n_client »). On n'en propose qu'une : c'est un
+     * point de départ, pas une décision — les autres s'ajoutent à la main.
+     */
+    private correspondanceEvidente(colonnes: string[]): CorrespondanceFichier | null {
+        const base = this.sources().find(source => source.id === this.baseId());
+        if (!base) return null;
+        const parNom = new Map((base.headers || []).map(entete => [nomComparable(entete), entete]));
+        for (const colonne of colonnes) {
+            const cible = parNom.get(nomComparable(colonne));
+            if (cible) return { colonneFichier: colonne, tableId: base.id, route: '', nomColonne: cible };
+        }
+        return null;
     }
 
     private async deposerSurLeServeur(fichier: File): Promise<void> {

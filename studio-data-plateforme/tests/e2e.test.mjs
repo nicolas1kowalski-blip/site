@@ -1166,6 +1166,34 @@ try {
         (await telechargementComparaison).suggestedFilename() === 'Comparaison_clients.csv_vs_Clients_consolides.csv'
     );
 
+    // ---- comparateur : un fichier extérieur comparé sans devenir une source, puis les écarts gardés (V12.4) ----
+    await page.setInputFiles('app-comparateur input[name=fichierB]', path.join(dossierTests, 'donnees', 'clients-recus.csv'));
+    await page.waitForSelector('.notification.succes:has-text("gardé comme jeu temporaire")');
+    await page.waitForFunction(() => document.querySelector('app-comparateur select[name=tableB]')?.value === 'clients-recus.csv');
+    verifier(
+        'comparateur : le fichier reçu est gardé comme jeu temporaire et choisi côté B, sans apparaître dans Sources',
+        (await page.$$eval('app-comparateur select[name=tableB] option', options => options.map(option => option.value))).includes(
+            'clients-recus.csv'
+        )
+    );
+    await page.selectOption('app-comparateur select[name=cle-a-0]', 'id_client');
+    await page.click('app-comparateur button:has-text("+ colonne à comparer")');
+    await page.selectOption('app-comparateur select[name=colonne-a-0]', 'ville');
+    await page.click('app-comparateur button.principal:has-text("Comparer")');
+    await page.waitForFunction(() => /clients-recus/.test(document.querySelector('app-comparateur h2')?.textContent || ''));
+    const syntheseFichier = await page.$$eval('app-comparateur .synthese .valeur', valeurs => valeurs.map(valeur => valeur.textContent));
+    verifier(
+        'comparateur : contre le fichier reçu — 4 lignes évaluées, 1 identique, 1 différente (Lyon / Marseille), 2 absentes du fichier, 1 en plus',
+        syntheseFichier.join() === '4,1,1,2,1'
+    );
+    await page.click('app-comparateur button[name=garderEcarts]');
+    await page.waitForSelector('.notification.succes:has-text("Écarts")');
+    verifier(
+        'comparateur : les 4 lignes en écart sont gardées comme jeu temporaire',
+        /4 ligne/.test(await page.textContent('.notification.succes:has-text("Écarts")'))
+    );
+    await capture('comparateur-fichier-exterieur');
+
     // ---- exploitation : statistiques, explorateur 360°, préparation ----
     await page.click('a[href="/statistiques"]');
     await page.waitForSelector('app-statistiques');
@@ -1375,6 +1403,20 @@ try {
             /fusion/.test(await page.textContent('app-sources tbody tr:has-text("Clients et produits")'))
     );
     await capture('sources-avancees');
+
+    // ---- audit : les lignes en anomalie gardées comme jeu temporaire (V12.4) ----
+    await page.click('a[href="/qualite"]');
+    await page.waitForSelector('app-qualite');
+    await page.selectOption('app-qualite select[name=source]', { label: 'Clients et produits' });
+    await page.click('app-qualite button:has-text("Profiler la source")');
+    await page.waitForSelector('app-inspecteur-anomalies tbody tr');
+    await page.locator('app-inspecteur-anomalies tbody tr').first().locator('button:has-text("Garder")').click();
+    await page.waitForSelector('.notification.succes:has-text("jeu temporaire")');
+    verifier(
+        'audit : les lignes d’une anomalie sont gardées comme jeu temporaire, sans créer de source',
+        /gardé comme jeu temporaire/.test(await page.textContent('.notification.succes:has-text("jeu temporaire")'))
+    );
+    await capture('audit-anomalies-jeu');
 
     await page.click('a[href="/couverture"]');
     await page.waitForSelector('app-couverture');

@@ -9,6 +9,7 @@ import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { EspaceAvecRole, EspaceCourant, RoleEspaceRequis, UtilisateurCourant } from '../authentification/contexte-requete';
 import { Utilisateur } from '../base-de-donnees/schema';
+import { verifierNomSur } from '../commun/erreurs';
 import { valider } from '../commun/validation';
 import { EspacesService } from '../espaces/espaces.service';
 import { identifiantSql } from '../espaces/moteur-duckdb';
@@ -28,6 +29,14 @@ const schemaCreation = z.object({
     origine: z.enum(Object.keys(ORIGINES_JEU) as [OrigineJeu, ...OrigineJeu[]]).default('requete')
 });
 const schemaNom = z.object({ nom: z.string().trim().min(1, 'nom requis').max(120) });
+
+/** Un fichier déposé gardé comme jeu, sans devenir une source : le « 📄 Fichier extérieur… » des écrans. */
+const schemaFichier = z.object({
+    nomServeur: z.string().trim().min(1, 'fichier requis').max(300),
+    nom: z.string().trim().min(1, 'nom requis').max(120),
+    feuille: z.string().trim().max(200).default(''),
+    delim: z.string().max(4).default('')
+});
 
 @ApiTags('Jeux temporaires')
 @Controller('api/jeux')
@@ -61,6 +70,22 @@ export class JeuxController {
         @Body(valider(schemaCreation)) corps: z.infer<typeof schemaCreation>
     ) {
         const jeu = await this.jeux.creerDepuisRequete(espace, corps.sql, corps.nom, corps.origine);
+        await this.journal.consigner({ espaceId: espace.id, utilisateurId: utilisateur.id, action: 'jeu.creation', cible: jeu.nom });
+        return jeu;
+    }
+
+    @Post('fichier')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({ summary: 'Garde un fichier déposé (CSV, texte, Excel, Parquet, JSON) comme jeu temporaire.' })
+    async creerDepuisFichier(
+        @EspaceCourant() espace: EspaceAvecRole,
+        @UtilisateurCourant() utilisateur: Utilisateur,
+        @Body(valider(schemaFichier)) corps: z.infer<typeof schemaFichier>
+    ) {
+        const nomServeur = verifierNomSur(corps.nomServeur, 'nom de fichier');
+        const jeu = await this.jeux.creerDepuisFichier(espace, nomServeur, corps.nom, corps.feuille, {
+            ...(corps.delim ? { delim: corps.delim } : {})
+        });
         await this.journal.consigner({ espaceId: espace.id, utilisateurId: utilisateur.id, action: 'jeu.creation', cible: jeu.nom });
         return jeu;
     }

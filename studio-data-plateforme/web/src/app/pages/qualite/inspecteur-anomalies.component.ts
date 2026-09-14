@@ -8,6 +8,7 @@ import { Component, inject, input, signal } from '@angular/core';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { Anomalie, FiltreAudit, PageLignes } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
+import { SessionService } from '../../coeur/session.service';
 import { telechargerCsv } from '../../coeur/telechargement';
 import { PageLignesComponent, TAILLE_PAGE_LIGNES } from './page-lignes.component';
 
@@ -47,6 +48,16 @@ const LIGNES_EXPORTEES_MAXIMUM = 5000;
                                 <td style="white-space: nowrap">
                                     <button class="bouton petit" (click)="voir(anomalie)" [disabled]="enCours()">Voir les lignes</button>
                                     <button class="bouton petit" (click)="exporter(anomalie)" [disabled]="enCours()">CSV</button>
+                                    @if (session.peutEditer()) {
+                                        <button
+                                            class="bouton petit"
+                                            (click)="garderEnJeu(anomalie)"
+                                            [disabled]="enCours()"
+                                            title="Garder ces lignes comme jeu temporaire, sans créer de source"
+                                        >
+                                            ⏳ Garder
+                                        </button>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -76,6 +87,7 @@ const LIGNES_EXPORTEES_MAXIMUM = 5000;
 export class InspecteurAnomaliesComponent {
     private readonly api = inject(ClientApiService);
     private readonly notifications = inject(NotificationsService);
+    readonly session = inject(SessionService);
 
     readonly sourceId = input.required<string>();
     readonly sourceNom = input('');
@@ -111,6 +123,23 @@ export class InspecteurAnomaliesComponent {
             this.page.set(
                 await this.api.lignesAnomalie(this.sourceId(), anomalie.genre, anomalie.colonne, Math.max(0, offset), this.filtres())
             );
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+
+    /**
+     * Garde les lignes en anomalie comme jeu temporaire : on les audite, on les compare, on les extrait
+     * ensuite comme n'importe quelle table — sans jamais créer de source dans le référentiel.
+     */
+    async garderEnJeu(anomalie: Anomalie): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const nom = `${anomalie.libelle} — ${anomalie.colonne || this.sourceNom() || this.sourceId()}`;
+            const jeu = await this.api.jeuDesAnomalies(this.sourceId(), anomalie.genre, anomalie.colonne, nom, this.filtres());
+            this.notifications.succes(`« ${jeu.nom} » gardé comme jeu temporaire : ${jeu.lignes} ligne(s).`);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         } finally {

@@ -6,6 +6,7 @@
  */
 import { Module } from '@nestjs/common';
 import { GouvernanceModule } from '../gouvernance/gouvernance.module';
+import { JeuxModule } from '../jeux/jeux.module';
 import { JournalModule } from '../journal/journal.module';
 import { ModeleModule } from '../modele/modele.module';
 import { SourcesModule } from '../sources/sources.module';
@@ -13,7 +14,7 @@ import { QualiteController } from './qualite.controller';
 import { QualiteService } from './qualite.service';
 
 @Module({
-    imports: [JournalModule, SourcesModule, GouvernanceModule, ModeleModule],
+    imports: [JournalModule, SourcesModule, GouvernanceModule, ModeleModule, JeuxModule],
     controllers: [QualiteController],
     providers: [QualiteService],
     exports: [QualiteService]

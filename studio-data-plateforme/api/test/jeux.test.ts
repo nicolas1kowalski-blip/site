@@ -162,3 +162,42 @@ test('une requête qui écrit est refusée, et un jeu inconnu répond 404', asyn
     assert.equal(ecriture.statusCode, 400);
     assert.equal((await appel({ method: 'PUT', url: '/api/jeux/tb_inconnu/nom', payload: { nom: 'x' } })).statusCode, 404);
 });
+
+test('un fichier reçu devient un jeu temporaire sans passer par les sources', async () => {
+    await appel({
+        method: 'PUT',
+        url: '/api/fichiers/jeu_livraison.csv',
+        payload: Buffer.from('siren;commentaire\n123456789;à relancer\n987654321;VIP\n'),
+        headers: { 'content-type': 'application/octet-stream' }
+    });
+    const reponse = await appel({
+        method: 'POST',
+        url: '/api/jeux/fichier',
+        payload: { nomServeur: 'jeu_livraison.csv', nom: 'livraison du matin' }
+    });
+    assert.equal(reponse.statusCode, 201, reponse.body);
+    const jeu = json(reponse);
+    assert.equal(jeu.lignes, 2);
+    assert.deepEqual(jeu.colonnes, ['siren', 'commentaire']);
+    assert.equal(jeu.origine, 'fichier');
+    const sources = json(await appel({ method: 'GET', url: '/api/tables' }));
+    assert.ok(
+        !sources.some((source: { name: string }) => source.name === 'livraison du matin'),
+        'un jeu temporaire n’apparaît pas dans les sources'
+    );
+});
+
+test('les lignes en anomalie d’un audit sont gardées comme jeu temporaire', async () => {
+    await deposerSource('tb_sales', 'sales.csv', 'id;ville\n1; Paris \n2;Lyon\n3; Paris \n', ['id', 'ville']);
+    const reponse = await appel({
+        method: 'POST',
+        url: '/api/qualite/anomalies/jeu',
+        payload: { sourceId: 'tb_sales', genre: 'espacesParasites', colonne: 'ville', nom: 'villes à nettoyer' }
+    });
+    assert.equal(reponse.statusCode, 201, reponse.body);
+    const jeu = json(reponse);
+    assert.equal(jeu.origine, 'anomalies');
+    assert.equal(jeu.lignes, 2, 'les deux lignes dont la ville porte des espaces parasites');
+    const jeux = json(await appel({ method: 'GET', url: '/api/jeux' }));
+    assert.ok(jeux.some((candidat: { nom: string }) => candidat.nom === 'villes à nettoyer'));
+});

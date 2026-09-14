@@ -594,3 +594,39 @@ test('vérifier un fichier : combien de ses valeurs sont inconnues de la table, 
     assert.equal(verification.manquantes, 2, 'Brest et Nantes sont inconnues');
     assert.deepEqual(verification.exemples, ['Brest', 'Nantes'], 'dans l’ordre du fichier');
 });
+
+test('synthèse « N premières valeurs » : les montants d’un client transposés en colonnes, en une lecture', async () => {
+    const specification = {
+        baseId: 'tb_clients',
+        colonnes: [
+            { tableId: 'tb_clients', nomColonne: 'nom' },
+            {
+                tableId: 'tb_clients',
+                genre: 'synthese',
+                alias: 'montant',
+                synthese: {
+                    tableId: 'tb_commandes',
+                    deTableId: 'tb_clients',
+                    deColonne: 'id_client',
+                    versColonne: 'id_client',
+                    mode: 'first',
+                    nomColonne: 'montant',
+                    n: 3
+                }
+            }
+        ],
+        tri: [{ alias: 'nom', sens: 'asc' }]
+    };
+    const apercu = json(await appel({ method: 'POST', url: '/api/extraction/apercu', payload: { specification } }));
+    assert.deepEqual(
+        apercu.colonnes.map((colonne: { nom: string }) => colonne.nom),
+        ['nom', 'montant_1', 'montant_2', 'montant_3']
+    );
+    assert.deepEqual(apercu.lignes, [
+        ['Ana', '25.5', '12', null],
+        ['Bob', '99.9', null, null],
+        ['Idris', '5', null, null],
+        ['Zoé', null, null, null]
+    ]);
+    assert.equal(apercu.sql.match(/FROM "t_tb_commandes"/g).length, 1, 'une seule lecture de la table liée');
+});

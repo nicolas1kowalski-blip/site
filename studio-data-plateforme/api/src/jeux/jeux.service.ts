@@ -12,10 +12,13 @@
  */
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import { promises as fsp } from 'node:fs';
 import { EspaceAvecRole } from '../authentification/contexte-requete';
 import { erreurIntrouvable, erreurRequete } from '../commun/erreurs';
 import { EspacesService } from '../espaces/espaces.service';
-import { identifiantSql } from '../espaces/moteur-duckdb';
+import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
+import { feuilleEnCsv, lireFeuilleExcel } from '../importation/classeur-excel';
+import { OptionsLectureCsv, extensionAcceptee, extensionDe, lectureDuckDB } from '../importation/ingestion';
 import { DocumentSource, SourcesService } from '../sources/sources.service';
 
 /** D'où vient un jeu : cela se lit dans le panneau et aide à s'y retrouver quand ils s'accumulent. */
@@ -88,6 +91,35 @@ export class JeuxService {
             lignes
         });
         return { id, nom: nomPropre, origine, lignes, colonnes, creeLe: new Date().toISOString() };
+    }
+
+    /**
+     * Crée un jeu à partir d'un fichier déposé — c'est le « 📄 Fichier extérieur… » des écrans : on compare ou
+     * on audite un fichier reçu ce matin sans le charger comme source. Les classeurs Excel passent par un CSV
+     * intermédiaire, comme à l'importation.
+     */
+    async creerDepuisFichier(
+        espace: EspaceAvecRole,
+        nomServeur: string,
+        nom: string,
+        feuille = '',
+        options: OptionsLectureCsv = {}
+    ): Promise<JeuTemporaire> {
+        const extension = extensionDe(nomServeur);
+        if (!extensionAcceptee(extension)) throw erreurRequete(`Format .${extension} non pris en charge pour un jeu temporaire.`);
+        const { fichiers } = await this.espaces.ressources(espace);
+        let lecture = lectureDuckDB(nomServeur, extension, options);
+        if (extension === 'xlsx') {
+            try {
+                const contenu = lireFeuilleExcel(await fsp.readFile(fichiers.chemin(nomServeur)), feuille || undefined);
+                const nomCsv = nomServeur + '.csv';
+                await fsp.writeFile(fichiers.chemin(nomCsv), '﻿' + feuilleEnCsv(contenu));
+                lecture = `read_csv_auto(${litteralSql(nomCsv)}, header=true, all_varchar=true, delim=';')`;
+            } catch (erreur) {
+                throw erreurRequete(`Classeur Excel : ${(erreur as Error).message}`);
+            }
+        }
+        return this.creerDepuisRequete(espace, `SELECT * FROM ${lecture}`, nom, 'fichier');
     }
 
     /** Le document d'un jeu, ou une erreur claire si l'identifiant ne désigne pas un jeu temporaire. */

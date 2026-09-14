@@ -29,9 +29,11 @@ import {
     Synthese,
     conditionListe,
     cteHierarchie,
+    cteValeursOrdonnees,
     expressionsHierarchie,
     expressionsSynthese,
-    formuleEnSql
+    formuleEnSql,
+    jointureValeursOrdonnees
 } from './constructeur-avance';
 
 export const OPERATEURS_FILTRE = {
@@ -420,17 +422,17 @@ function colonnesEnSortie(
         const quoi = `La colonne « ${colonne.nomColonne || colonne.alias || colonne.genre} »`;
         const aliasTable = aliasDeRoute(aliasDe, colonne.route, colonne.tableId);
         if (!aliasTable) throw new ErreurSpecification(`${quoi} vient d'une table absente de l'extraction.`);
-        const items = expressionsColonne(
-            colonne,
+        const items = expressionsColonne(colonne, {
             aliasTable,
-            colonne.nomColonne ? expressionSource(colonne, aliasDe, aliasParTable, quoi) : '',
-            aliasParDefaut(colonne, specification, contexte),
+            expressionColonne: colonne.nomColonne ? expressionSource(colonne, aliasDe, aliasParTable, quoi) : '',
+            alias: aliasParDefaut(colonne, specification, contexte),
             contexte,
             aliasDe,
+            aliasParTable,
             resoudreReference,
-            sortie.ctes,
-            sortie.jointuresHierarchie
-        );
+            ctes: sortie.ctes,
+            jointures: sortie.jointuresHierarchie
+        });
         for (const item of items) ajouterExpression(sortie, specification, colonne, item);
     }
     if (specification.regrouper)
@@ -670,18 +672,28 @@ function resolveurDeReferences(
     };
 }
 
+/** Tout ce dont la traduction d'une colonne a besoin, en plus de la colonne elle-même. */
+type EntourageColonne = {
+    /** Alias de la table d'où sort la colonne, par la route qu'elle a choisie. */
+    aliasTable: string;
+    /** Expression SQL de la colonne source (vide pour une synthèse, une hiérarchie ou un calcul). */
+    expressionColonne: string;
+    /** Nom que la colonne portera en sortie. */
+    alias: string;
+    contexte: ContexteConstruction;
+    aliasDe: Map<string, string>;
+    aliasParTable: Map<string, string[]>;
+    resoudreReference: (reference: string) => string | null;
+    /** Tables éphémères à déclarer avant la requête (hiérarchies, listes transposées). */
+    ctes: string[];
+    /** Jointures que ces tables éphémères demandent. */
+    jointures: string[];
+};
+
 /** Les expressions produites par une colonne (une, ou plusieurs pour une synthèse « N premières » et une hiérarchie). */
-function expressionsColonne(
-    colonne: ColonneExtraction,
-    aliasTable: string,
-    expressionSourceColonne: string,
-    aliasColonne: string,
-    contexte: ContexteConstruction,
-    aliasDe: Map<string, string>,
-    resoudreReference: (reference: string) => string | null,
-    ctes: string[],
-    jointuresHierarchie: string[]
-): ItemSortie[] {
+function expressionsColonne(colonne: ColonneExtraction, entourage: EntourageColonne): ItemSortie[] {
+    const { aliasTable, expressionColonne, alias: aliasColonne, contexte, aliasDe, aliasParTable, ctes } = entourage;
+    const { resoudreReference, jointures: jointuresHierarchie } = entourage;
     try {
         switch (colonne.genre) {
             case 'calcul':
@@ -689,15 +701,21 @@ function expressionsColonne(
             case 'synthese': {
                 const synthese = colonne.synthese as Synthese | undefined;
                 if (!synthese) throw new ErreurSpecification('Synthèse incomplète : table liée et relation requises.');
-                const aliasParent = aliasDeRoute(aliasDe, synthese.deRoute, synthese.deTableId);
-                if (!aliasParent)
-                    throw new ErreurSpecification(`La synthèse « ${aliasColonne} » s'ancre sur une table absente de l'extraction.`);
-                return expressionsSynthese(
-                    synthese,
-                    contexte.nomTableDe(synthese.tableId),
-                    `${aliasParent}.${identifiantSql(synthese.deColonne)}`,
-                    aliasColonne
+                // La table d'ancrage peut être ramenée par plusieurs liens : « quel qu'il soit » les réunit.
+                const expressionParent = expressionSource(
+                    { tableId: synthese.deTableId, route: synthese.deRoute, nomColonne: synthese.deColonne },
+                    aliasDe,
+                    aliasParTable,
+                    `La synthèse « ${aliasColonne} »`
                 );
+                // « N premières valeurs » : la table liée est lue une seule fois, rangée en liste ordonnée.
+                let nomCteValeurs = '';
+                if (synthese.mode === 'first') {
+                    nomCteValeurs = 'transpose' + ctes.length;
+                    ctes.push(cteValeursOrdonnees(nomCteValeurs, contexte.nomTableDe(synthese.tableId), synthese));
+                    jointuresHierarchie.push(jointureValeursOrdonnees(nomCteValeurs, expressionParent));
+                }
+                return expressionsSynthese(synthese, contexte.nomTableDe(synthese.tableId), expressionParent, aliasColonne, nomCteValeurs);
             }
             case 'hierarchie': {
                 const hierarchie = colonne.hierarchie as Hierarchie | undefined;
@@ -716,7 +734,7 @@ function expressionsColonne(
             }
             default: {
                 if (!colonne.nomColonne) throw new ErreurSpecification('Colonne sans nom.');
-                return [{ expression: expressionTransformee(expressionSourceColonne, colonne.transformation), alias: aliasColonne }];
+                return [{ expression: expressionTransformee(expressionColonne, colonne.transformation), alias: aliasColonne }];
             }
         }
     } catch (erreur) {

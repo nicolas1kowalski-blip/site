@@ -11,6 +11,14 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { exporterTableEnCsv } from '../../coeur/telechargement';
 
+/** Formats qu'un fichier extérieur peut prendre : les mêmes qu'une source, sans les archives. */
+const FORMATS_ACCEPTES = '.csv,.txt,.tsv,.xlsx,.parquet,.json,.ndjson';
+
+/** Nom sous lequel un fichier extérieur est déposé le temps d'être lu : préfixé, pour ne rien écraser. */
+export function nomDeDepot(nomFichier: string): string {
+    return 'jeu_' + Date.now() + '_' + nomFichier.replace(/[^\w.-]+/g, '_');
+}
+
 /** Nom de colonne comparable entre sources : minuscules, sans accents ni ponctuation. */
 function nomComparable(nom: string): string {
     return nom
@@ -40,6 +48,12 @@ function nomComparable(nom: string): string {
                             <option [value]="source.name">{{ source.name }}</option>
                         }
                     </select>
+                    @if (session.peutEditer()) {
+                        <label class="bouton petit exterieur">
+                            📄 Fichier extérieur…
+                            <input type="file" hidden name="fichierA" [accept]="formatsAcceptes" (change)="deposerUnCote($event, 'A')" />
+                        </label>
+                    }
                 </div>
                 <div>
                     <label class="etiquette">Fichier B</label>
@@ -49,6 +63,12 @@ function nomComparable(nom: string): string {
                             <option [value]="source.name">{{ source.name }}</option>
                         }
                     </select>
+                    @if (session.peutEditer()) {
+                        <label class="bouton petit exterieur">
+                            📄 Fichier extérieur…
+                            <input type="file" hidden name="fichierB" [accept]="formatsAcceptes" (change)="deposerUnCote($event, 'B')" />
+                        </label>
+                    }
                 </div>
                 <label class="case"
                     ><input type="checkbox" name="ignorerCasse" [(ngModel)]="parametres.ignorerCasse" /> ignorer la casse</label
@@ -172,6 +192,17 @@ function nomComparable(nom: string): string {
                         Télécharger le rapport CSV
                     </button>
                 </p>
+                @if (session.peutEditer()) {
+                    <p class="discret">
+                        Garder ce résultat sous la main, sans créer de source :
+                        <button class="bouton petit" name="garderEcarts" (click)="garderEnJeu(resultat, true)" [disabled]="enCours()">
+                            ⏳ Garder les écarts
+                        </button>
+                        <button class="bouton petit" name="garderRapport" (click)="garderEnJeu(resultat, false)" [disabled]="enCours()">
+                            ⏳ Garder tout le rapport
+                        </button>
+                    </p>
+                }
                 <div class="defilement-x">
                     <table class="tableau">
                         <thead>
@@ -232,6 +263,9 @@ function nomComparable(nom: string): string {
         .tuile.ko .valeur {
             color: var(--erreur);
         }
+        .exterieur {
+            margin-top: 4px;
+        }
     `
 })
 export class ComparateurComponent {
@@ -241,6 +275,7 @@ export class ComparateurComponent {
     readonly sources = signal<Source[]>([]);
     readonly resultat = signal<ResultatComparaison | null>(null);
     readonly enCours = signal(false);
+    readonly formatsAcceptes = FORMATS_ACCEPTES;
     parametres: ParametresComparaison = {
         tableA: '',
         tableB: '',
@@ -289,6 +324,65 @@ export class ComparateurComponent {
 
     seulementCles(): boolean {
         return this.parametres.correspondances.filter(correspondance => correspondance.colA && correspondance.colB).length === 0;
+    }
+
+    /**
+     * « 📄 Fichier extérieur… » : le fichier reçu est déposé puis gardé comme jeu temporaire, et aussitôt
+     * choisi de ce côté-ci. Il n'apparaît ni dans Sources, ni dans le modèle : on compare, puis on l'oublie.
+     */
+    async deposerUnCote(evenement: Event, cote: 'A' | 'B'): Promise<void> {
+        const champ = evenement.target as HTMLInputElement;
+        const fichier = champ.files?.[0];
+        champ.value = '';
+        if (!fichier) return;
+        this.enCours.set(true);
+        try {
+            const nomServeur = nomDeDepot(fichier.name);
+            await this.televerser(fichier, nomServeur);
+            const jeu = await this.api.creerJeuDepuisFichier({ nomServeur, nom: this.nomLibre(fichier.name) });
+            await this.recharger();
+            this.reinitialiserColonnes();
+            if (cote === 'A') this.parametres.tableA = jeu.nom;
+            else this.parametres.tableB = jeu.nom;
+            this.notifications.succes(`« ${jeu.nom} » gardé comme jeu temporaire : ${jeu.lignes} ligne(s).`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+
+    /** Un nom qui ne heurte aucune source ni aucun jeu déjà présent : « livraison.csv », puis « livraison.csv (2) ». */
+    private nomLibre(propose: string): string {
+        const pris = new Set(this.sources().map(source => source.name));
+        let nom = propose;
+        let suite = 2;
+        while (pris.has(nom)) {
+            nom = `${propose} (${suite})`;
+            suite += 1;
+        }
+        return nom;
+    }
+
+    private televerser(fichier: File, nomServeur: string): Promise<void> {
+        return new Promise((resoudre, rejeter) => {
+            this.api.deposerFichier(nomServeur, fichier).subscribe({ error: rejeter, complete: resoudre });
+        });
+    }
+
+    /** Après la comparaison : garder les écarts seuls, ou tout le rapport, comme jeu temporaire. */
+    async garderEnJeu(resultat: ResultatComparaison, ecartsSeuls: boolean): Promise<void> {
+        this.enCours.set(true);
+        try {
+            const nom = this.nomLibre(ecartsSeuls ? `Écarts ${resultat.nom}` : resultat.nom);
+            const jeu = await this.api.creerJeu(ecartsSeuls ? resultat.sqlEcarts : resultat.sqlRapport, nom, 'ecarts');
+            await this.recharger();
+            this.notifications.succes(`« ${jeu.nom} » gardé comme jeu temporaire : ${jeu.lignes} ligne(s).`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+        }
     }
 
     /** Le rapport complet (toutes les lignes comparées) est la source produite : on la télécharge en CSV. */

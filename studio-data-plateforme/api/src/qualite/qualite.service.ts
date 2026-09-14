@@ -15,6 +15,7 @@ import { ConfigurationSerie } from '../exploitation/series-temporelles';
 import { MoteurDuckDB, identifiantSql } from '../espaces/moteur-duckdb';
 import { GouvernanceService } from '../gouvernance/gouvernance.service';
 import { ListeValeurs, sqlCodesAutorises } from '../gouvernance/listes-valeurs';
+import { JeuTemporaire, JeuxService } from '../jeux/jeux.service';
 import { ModeleService } from '../modele/modele.service';
 import { DocumentSource, SourcesService } from '../sources/sources.service';
 import { FiltreSource, conditionFiltreSource } from '../tables-concues/constructeur-table-concue';
@@ -104,7 +105,8 @@ export class QualiteService {
         private readonly espaces: EspacesService,
         private readonly sources: SourcesService,
         private readonly gouvernance: GouvernanceService,
-        private readonly modele: ModeleService
+        private readonly modele: ModeleService,
+        private readonly jeux: JeuxService
     ) {}
 
     // ---- périmètre d'audit (filtres) ----
@@ -268,6 +270,32 @@ export class QualiteService {
         try {
             const profilColonne = genre === 'aberrantes' ? await this.profilerColonne(moteur, nomTable, colonne) : undefined;
             return await this.page(moteur, sqlLignesAnomalie(genre, nomTable, entetes, colonne, profilColonne), offset);
+        } finally {
+            await liberer();
+        }
+    }
+
+    /**
+     * Garde les lignes d'une anomalie comme jeu temporaire : c'est le « ⏳ Garder » à côté de Voir et CSV.
+     * Tout se passe pendant que la table auditée existe encore — un jeu est une table, pas une requête différée.
+     */
+    async jeuDesAnomalies(
+        espace: EspaceAvecRole,
+        sourceId: string,
+        genre: GenreAnomalie,
+        colonne: string,
+        nom: string,
+        filtres?: FiltreSource[]
+    ): Promise<JeuTemporaire> {
+        const source = await this.sourceDe(espace, sourceId);
+        const entetes = source.headers || [];
+        if (colonne && !colonne.startsWith('(') && !entetes.includes(colonne)) throw erreurRequete(`Colonne inconnue : « ${colonne} ».`);
+        const { moteur } = await this.espaces.ressources(espace);
+        const { nomTable, liberer } = await this.tableAuditee(moteur, sourceId, filtres);
+        try {
+            const profilColonne = genre === 'aberrantes' ? await this.profilerColonne(moteur, nomTable, colonne) : undefined;
+            const sql = sqlLignesAnomalie(genre, nomTable, entetes, colonne, profilColonne);
+            return await this.jeux.creerDepuisRequete(espace, sql, nom, 'anomalies');
         } finally {
             await liberer();
         }

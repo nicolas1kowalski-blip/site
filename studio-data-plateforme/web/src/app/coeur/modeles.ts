@@ -934,6 +934,10 @@ export type ResultatComparaison = {
     manquantesB: number;
     colonnes: string[];
     apercu: unknown[][];
+    /** Requête de lecture du rapport complet, prête à être gardée comme jeu temporaire. */
+    sqlRapport: string;
+    /** La même, limitée aux lignes qui posent question (différentes ou manquantes d'un côté). */
+    sqlEcarts: string;
 };
 /** Série temporelle : source, clé de série (keyCols), horodatage (tsCol), mesure (valCol), pas (auto ou secondes). */
 export type ConfigurationSerie = {

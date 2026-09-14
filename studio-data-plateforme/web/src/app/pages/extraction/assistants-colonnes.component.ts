@@ -12,7 +12,7 @@
 import { Component, computed, effect, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ColonneExtraction, ModeSynthese, Source } from '../../coeur/modeles';
-import { Chemin, cheminParCle } from './chemins';
+import { Chemin, ROUTE_INDIFFERENTE, cheminParCle } from './chemins';
 import { SelecteurColonneComponent } from './selecteur-colonne.component';
 
 /** Fonctions de tableur proposées, avec le libellé de l'application classique. */
@@ -129,7 +129,6 @@ export function formuleDeLaSaisie(saisie: SaisieCalcul, references: string[]): s
                             <app-selecteur-colonne
                                 identifiant="synthese"
                                 [sources]="sources()"
-                                [avecLienIndifferent]="false"
                                 [chemins]="cheminsLies()"
                                 [avecColonne]="false"
                                 [(tableId)]="syntheseTableId"
@@ -585,12 +584,15 @@ export class AssistantsColonnesComponent {
     // ---- synthèse : ajout ----
     ajouterSynthese(): void {
         const chemins = this.chemins().get(this.syntheseTableId()) || [];
-        const chemin = cheminParCle(chemins, this.syntheseRoute()) || chemins[0];
+        // « Le lien renseigné, quel qu'il soit » : la table d'ancrage est prise par toutes ses routes à la fois.
+        const indifferent = this.syntheseRoute() === ROUTE_INDIFFERENTE;
+        const chemin = (indifferent ? chemins[0] : cheminParCle(chemins, this.syntheseRoute())) || chemins[0];
         const derniere = chemin?.[chemin.length - 1];
         if (!derniere) return;
+        const ancrage = indifferent ? ROUTE_INDIFFERENTE : this.routeAncrage(chemin);
         this.ajouter.emit({
             tableId: derniere.deTableId,
-            route: this.routeAncrage(chemin),
+            route: ancrage,
             nomColonne: '',
             genre: 'synthese',
             alias: this.syntheseAlias().trim(),
@@ -598,7 +600,7 @@ export class AssistantsColonnesComponent {
             synthese: {
                 tableId: this.syntheseTableId(),
                 deTableId: derniere.deTableId,
-                deRoute: this.routeAncrage(chemin),
+                deRoute: ancrage,
                 deColonne: derniere.deColonne,
                 versColonne: derniere.versColonne,
                 mode: this.syntheseMode(),

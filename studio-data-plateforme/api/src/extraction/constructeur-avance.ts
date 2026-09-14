@@ -71,6 +71,9 @@ export function formuleEnSql(formule: string, resoudre: (reference: string) => s
     });
 }
 
+/** Une expression SQL et le nom qu'elle portera en sortie. */
+export type ExpressionNommee = { expression: string; alias: string };
+
 /**
  * Expressions d'une synthèse : une seule pour count / countd / values, N pour « premières valeurs ».
  * `nomTableEnfant` est la table DuckDB résumée, `expressionParent` la clé côté table présente.
@@ -79,8 +82,9 @@ export function expressionsSynthese(
     synthese: Synthese,
     nomTableEnfant: string,
     expressionParent: string,
-    aliasSortie: string
-): { expression: string; alias: string }[] {
+    aliasSortie: string,
+    nomCteTransposition = ''
+): ExpressionNommee[] {
     const table = identifiantSql(nomTableEnfant);
     const condition = `${cleNormalisee('s.' + identifiantSql(synthese.versColonne))} = ${cleNormalisee(expressionParent)}`;
     const colonne = synthese.nomColonne ? `TRIM(CAST(s.${identifiantSql(synthese.nomColonne)} AS VARCHAR))` : null;
@@ -105,13 +109,42 @@ export function expressionsSynthese(
             ];
         case 'first': {
             if (!colonne) throw new ErreurFormule('Synthèse « premières valeurs » : choisissez la colonne à ramener.');
-            const nombre = Math.max(1, Math.min(12, synthese.n || 3));
-            return Array.from({ length: nombre }, (_, position) => ({
-                expression: `(SELECT ${colonne} FROM ${table} s WHERE ${condition} ORDER BY s."__rn" LIMIT 1 OFFSET ${position})`,
-                alias: `${aliasSortie}_${position + 1}`
-            }));
+            if (!nomCteTransposition)
+                throw new ErreurFormule('Synthèse « premières valeurs » : la liste ordonnée de la table liée est requise.');
+            return expressionsTransposees(nomCteTransposition, synthese, aliasSortie);
         }
     }
+}
+
+/** Nombre de colonnes transposées : au moins une, douze au plus — au-delà, c'est un tableau, pas une synthèse. */
+export function nombreTranspose(synthese: Synthese): number {
+    return Math.max(1, Math.min(12, synthese.n || 3));
+}
+
+/**
+ * La table liée lue **une seule fois** : ses valeurs sont rangées en liste ordonnée, une liste par clé.
+ * Transposer douze colonnes ne coûte alors pas plus cher que d'en transposer trois.
+ */
+export function cteValeursOrdonnees(nomCte: string, nomTableEnfant: string, synthese: Synthese): string {
+    const colonne = `TRIM(CAST(s.${identifiantSql(synthese.nomColonne)} AS VARCHAR))`;
+    return (
+        `${nomCte} AS (SELECT ${cleNormalisee('s.' + identifiantSql(synthese.versColonne))} AS cle,` +
+        ` list(${colonne} ORDER BY s."__rn") AS valeurs` +
+        ` FROM ${identifiantSql(nomTableEnfant)} s GROUP BY 1)`
+    );
+}
+
+/** Le raccordement de cette liste à la ligne de l'extraction, par la clé de la relation. */
+export function jointureValeursOrdonnees(nomCte: string, expressionParent: string): string {
+    return `LEFT JOIN ${nomCte} ON ${nomCte}.cle = ${cleNormalisee(expressionParent)}`;
+}
+
+/** Une colonne par rang : la n-ième valeur de la liste (les listes DuckDB commencent à 1). */
+export function expressionsTransposees(nomCte: string, synthese: Synthese, aliasSortie: string): ExpressionNommee[] {
+    return Array.from({ length: nombreTranspose(synthese) }, (_, position) => ({
+        expression: `${nomCte}.valeurs[${position + 1}]`,
+        alias: `${aliasSortie}_${position + 1}`
+    }));
 }
 
 /**
