@@ -15,6 +15,7 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { JeuTemporaire, OrigineJeu } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 
 /** Les écrans où un jeu se travaille, avec l'adresse à ouvrir. */
 const DESTINATIONS: { chemin: string; libelle: string }[] = [
@@ -28,7 +29,7 @@ const DESTINATIONS: { chemin: string; libelle: string }[] = [
 
 @Component({
     selector: 'app-jeux',
-    imports: [FormsModule, RouterLink],
+    imports: [PleinEcranComponent, FormsModule, RouterLink],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -48,6 +49,7 @@ const DESTINATIONS: { chemin: string; libelle: string }[] = [
             </div>
         } @else {
             <div class="carte">
+                <app-plein-ecran />
                 <div class="defilement-x">
                     <table class="tableau">
                         <thead>

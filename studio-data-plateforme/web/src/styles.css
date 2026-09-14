@@ -100,3 +100,18 @@ body.compact .kpi b { font-size: 18px; }
 body.compact .champ, body.compact select.champ { padding: 5px 8px; }
 body.compact .bouton { padding: 5px 9px; }
 body.compact .entete-page { margin-bottom: 8px; }
+
+/* ---- plein écran (⛶) : un tableau, un rapport ou un tableau de bord occupe toute la fenêtre ---- */
+/* Pendant qu'un élément est agrandi, le reste de la page ne défile plus derrière lui. */
+body.avec-plein-ecran { overflow: hidden; }
+.en-plein-ecran {
+    position: fixed;
+    inset: 12px;
+    z-index: 40;
+    margin: 0;
+    overflow: auto;
+    background: var(--surface);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+}
+/* Les zones à hauteur fixe (défilement virtuel, graphes) profitent de la place gagnée. */
+.en-plein-ecran .corps { height: calc(100vh - 200px); }

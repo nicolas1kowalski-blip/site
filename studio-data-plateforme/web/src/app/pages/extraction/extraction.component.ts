@@ -60,6 +60,7 @@ import {
     tablesAccessibles
 } from './chemins';
 import { SelecteurColonneComponent } from './selecteur-colonne.component';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 
 /** Une valeur par ligne ; sur chaque ligne, seule la première cellule compte (séparateurs ; , tabulation, |). */
 export function valeursDeListe(texte: string): string[] {
@@ -133,7 +134,7 @@ const LIGNES_APERCU_RAPIDE = 500;
 
 @Component({
     selector: 'app-extraction',
-    imports: [FormsModule, ScrollingModule, SelecteurColonneComponent, AssistantsColonnesComponent],
+    imports: [PleinEcranComponent, FormsModule, ScrollingModule, SelecteurColonneComponent, AssistantsColonnesComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -886,6 +887,7 @@ const LIGNES_APERCU_RAPIDE = 500;
                 }
                 @if (apercu(); as apercu) {
                     <div class="carte resultat">
+                        <app-plein-ecran />
                         <div class="ligne entete-colonnes">
                             @for (colonne of apercu.colonnes; track colonne.nom) {
                                 <div class="cellule" [title]="colonne.type">

@@ -10,6 +10,7 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { Relation, ResultatSql, Source } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { telechargerCsv } from '../../coeur/telechargement';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
 
 const LIGNES_MAXIMUM = 1000;
 const DELAI_FILTRE_MS = 400;
@@ -25,7 +26,7 @@ type LienColonne = { table: string; colonne: string };
 
 @Component({
     selector: 'app-navigateur',
-    imports: [FormsModule],
+    imports: [PleinEcranComponent, FormsModule],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -59,6 +60,7 @@ type LienColonne = { table: string; colonne: string };
         </div>
         @if (source(); as source) {
             <div class="carte defilement-x">
+                <app-plein-ecran />
                 @if (chargement()) {
                     <span class="discret">Chargement…</span>
                 }

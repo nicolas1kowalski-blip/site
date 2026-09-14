@@ -2,19 +2,22 @@
  * Coque de l'application : rail de navigation à gauche (les quatre phases de Studio Data plus
  * l'administration), en-tête avec le choix de l'espace de travail et l'utilisateur, zone de page, notifications.
  */
-import { Component, inject, signal } from '@angular/core';
+import { Component, HostListener, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { PaletteCommandesComponent } from '../composants/palette-commandes.component';
+import { GROUPES_NAVIGATION, RACCOURCIS_ECRAN } from '../coeur/navigation';
 import { NotificationsService } from '../coeur/notifications.service';
 import { SessionService } from '../coeur/session.service';
-
-type Lien = { chemin: string; libelle: string; icone: string; administrateur?: boolean };
 
 /** Clé de stockage local de la densité choisie (préférence propre au navigateur). */
 const CLE_DENSITE = 'studio-data.densite';
 
+/** Délai pendant lequel la lettre qui suit « G » est comprise comme un raccourci d'écran. */
+const DELAI_RACCOURCI_MS = 1200;
+
 @Component({
     selector: 'app-coque',
-    imports: [RouterOutlet, RouterLink, RouterLinkActive],
+    imports: [RouterOutlet, RouterLink, RouterLinkActive, PaletteCommandesComponent],
     template: `
         <div class="coque">
             <aside class="rail">
@@ -60,6 +63,15 @@ const CLE_DENSITE = 'studio-data.densite';
                         </select>
                     </label>
                     <span class="espace"></span>
+                    <button
+                        class="bouton petit recherche-globale"
+                        type="button"
+                        name="rechercheGlobale"
+                        (click)="palette().basculer()"
+                        title="Rechercher un écran, une action, une source ou une colonne (Ctrl+K)"
+                    >
+                        ⌕ Rechercher <span class="touche">Ctrl K</span>
+                    </button>
                     <span class="densite" title="Densité de l'affichage : tableaux et cartes plus serrés ou plus aérés">
                         <button class="bouton petit" [class.actif]="!compact()" (click)="choisirDensite(false)">Confort</button>
                         <button class="bouton petit" [class.actif]="compact()" (click)="choisirDensite(true)">Compact</button>
@@ -71,6 +83,7 @@ const CLE_DENSITE = 'studio-data.densite';
                     <button class="bouton petit" (click)="deconnecter()">Se déconnecter</button>
                 </header>
                 <main class="page"><router-outlet /></main>
+                <app-palette-commandes />
             </div>
             <div class="notifications" aria-live="polite">
                 @for (notification of notifications.visibles(); track notification.id) {
@@ -91,6 +104,15 @@ const CLE_DENSITE = 'studio-data.densite';
         </div>
     `,
     styles: `
+        .recherche-globale .touche {
+            margin-left: 6px;
+            padding: 1px 5px;
+            border: 1px solid var(--bordure);
+            border-radius: 4px;
+            font-size: 10px;
+            color: var(--texte-2);
+        }
+
         .coque {
             display: grid;
             grid-template-columns: 230px 1fr;
@@ -265,70 +287,41 @@ export class CoqueComponent {
         }
     }
 
-    /** Même découpage que l'application classique : Données & Modèle, Exploitation, Qualité & Audit, Gouvernance. */
-    readonly groupes: { titre: string; liens: Lien[] }[] = [
-        {
-            titre: 'Données & Modèle',
-            liens: [
-                { chemin: '/', libelle: 'Cockpit', icone: '⌂' },
-                { chemin: '/sources', libelle: 'Sources', icone: '▤' },
-                { chemin: '/tables-concues', libelle: 'Tables conçues', icone: '🧱' },
-                { chemin: '/modele', libelle: 'Modèle de données', icone: '⇄' },
-                { chemin: '/couverture', libelle: 'Couverture', icone: '◐' },
-                { chemin: '/series-temporelles', libelle: 'Séries temporelles', icone: '∿' }
-            ]
-        },
-        {
-            titre: 'Exploitation',
-            liens: [
-                { chemin: '/extraction', libelle: 'Extraire', icone: '⤓' },
-                { chemin: '/jeux', libelle: 'Jeux temporaires', icone: '⏳' },
-                { chemin: '/preparation', libelle: 'Préparation', icone: '🧹' },
-                { chemin: '/tableaux-de-bord', libelle: 'Tableaux de bord', icone: '▤' },
-                { chemin: '/comparateur', libelle: 'Comparer', icone: '⇆' },
-                { chemin: '/navigateur', libelle: 'Explorer', icone: '⌕' },
-                { chemin: '/explorateur', libelle: 'Explorer (SQL)', icone: '⌗' },
-                { chemin: '/statistiques', libelle: 'Statistiques', icone: '📊' },
-                { chemin: '/explorateur-360', libelle: 'Explorateur 360°', icone: '🕸' }
-            ]
-        },
-        {
-            titre: 'Qualité & Audit',
-            liens: [
-                { chemin: '/qualite', libelle: 'Qualité & Audit', icone: '✓' },
-                { chemin: '/qualite/regles', libelle: 'Règles & score', icone: '📏' },
-                { chemin: '/rapprochement', libelle: 'Rapprochement', icone: '⚭' },
-                { chemin: '/surveillance', libelle: 'Surveillance des sources', icone: '⌚' }
-            ]
-        },
-        {
-            titre: 'Gouvernance',
-            liens: [
-                { chemin: '/catalogue', libelle: 'Catalogue', icone: '🧭' },
-                { chemin: '/dictionnaire', libelle: 'Dictionnaire', icone: '☰' },
-                { chemin: '/actifs', libelle: 'Applications & processus', icone: '⚙' },
-                { chemin: '/personnes', libelle: 'Personnes & rôles', icone: '☺' },
-                { chemin: '/objets-metier', libelle: 'Objets métier', icone: '🏛' },
-                { chemin: '/glossaire', libelle: 'Glossaire', icone: '✎' },
-                { chemin: '/listes-de-valeurs', libelle: 'Listes de valeurs', icone: '≡' },
-                { chemin: '/perimetres', libelle: 'Périmètres', icone: '◫' },
-                { chemin: '/sensibilite', libelle: 'Sensibilité', icone: '🛡' },
-                { chemin: '/lineage', libelle: 'Lineage', icone: '⇢' },
-                { chemin: '/propositions', libelle: 'À valider', icone: '✔' },
-                { chemin: '/journal', libelle: 'Historique', icone: '⏱' }
-            ]
-        },
-        { titre: 'Application complète', liens: [{ chemin: '/classique', libelle: 'Tous les écrans (classique)', icone: '⧉' }] },
-        {
-            titre: 'Administration',
-            liens: [
-                { chemin: '/sauvegarde', libelle: 'Sauvegarde et partage', icone: '⇩' },
-                { chemin: '/espaces', libelle: 'Espaces et membres', icone: '⬚' },
-                { chemin: '/utilisateurs', libelle: 'Utilisateurs', icone: '☺', administrateur: true },
-                { chemin: '/demonstration', libelle: 'Mode démonstration', icone: '✨', administrateur: true }
-            ]
+    readonly groupes = GROUPES_NAVIGATION;
+    readonly palette = viewChild.required(PaletteCommandesComponent);
+    /** Dernière touche « G » tapée : un raccourci « G puis une lettre » n'est valable qu'aussitôt après. */
+    private attenteRaccourci = 0;
+
+    /**
+     * Raccourcis clavier de l'application : Ctrl+K (ou ⌘K) ouvre la recherche, puis « G » suivi d'une lettre
+     * mène directement à un écran. Rien ne se déclenche pendant une saisie : on ne détourne jamais la frappe.
+     */
+    @HostListener('document:keydown', ['$event'])
+    auClavier(evenement: KeyboardEvent): void {
+        if ((evenement.ctrlKey || evenement.metaKey) && evenement.key.toLowerCase() === 'k') {
+            evenement.preventDefault();
+            this.palette().basculer();
+            return;
         }
-    ];
+        if (evenement.ctrlKey || evenement.metaKey || evenement.altKey || this.saisieEnCours(evenement)) return;
+        const touche = evenement.key.toLowerCase();
+        if (touche === 'g') {
+            this.attenteRaccourci = Date.now();
+            return;
+        }
+        const chemin = RACCOURCIS_ECRAN[touche];
+        if (chemin && Date.now() - this.attenteRaccourci < DELAI_RACCOURCI_MS) {
+            this.attenteRaccourci = 0;
+            this.routeur.navigate([chemin]);
+        }
+    }
+
+    /** Vrai quand la frappe est destinée à un champ : le raccourci doit alors se taire. */
+    private saisieEnCours(evenement: KeyboardEvent): boolean {
+        const cible = evenement.target as HTMLElement | null;
+        if (!cible) return false;
+        return ['INPUT', 'TEXTAREA', 'SELECT'].includes(cible.tagName) || cible.isContentEditable;
+    }
 
     async changerEspace(evenement: Event): Promise<void> {
         const code = (evenement.target as HTMLSelectElement).value;

@@ -451,6 +451,55 @@ try {
     await page.waitForFunction(() => /Clients vérifiés/.test(document.querySelector('app-sources')?.textContent || ''));
     verifier('jeux : promu, le jeu devient une source de l’espace', true);
 
+    // ---- plein écran (⛶) sur un tableau de données ----
+    await page.click('a[href="/navigateur"]');
+    await page.waitForSelector('app-navigateur');
+    await page.selectOption('app-navigateur select[name=table]', { label: 'clients.csv' });
+    await page.waitForSelector('app-navigateur .carte.defilement-x app-plein-ecran button');
+    await page.click('app-navigateur .carte.defilement-x app-plein-ecran button');
+    await page.waitForSelector('app-navigateur .carte.en-plein-ecran');
+    verifier(
+        'plein écran : le tableau de données occupe la fenêtre et le corps ne défile plus derrière',
+        (await page.$$('app-navigateur .carte.en-plein-ecran')).length === 1 &&
+            (await page.evaluate(() => document.body.classList.contains('avec-plein-ecran')))
+    );
+    await capture('plein-ecran');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.en-plein-ecran'));
+    verifier('plein écran : Échap revient à la disposition normale', true);
+
+    // ---- recherche globale Ctrl+K et raccourcis d'écran ----
+    await page.keyboard.press('Control+k');
+    await page.waitForSelector('app-palette-commandes input[name=rechercheGlobale]');
+    await page.fill('app-palette-commandes input[name=rechercheGlobale]', 'audit');
+    const propositionsAudit = await page.$$eval('app-palette-commandes .resultats li', lignes =>
+        lignes.map(ligne => ligne.textContent.replace(/\s+/g, ' ').trim())
+    );
+    verifier(
+        'recherche Ctrl+K : « audit » propose l’écran Qualité & Audit et l’action « Lancer un audit qualité »',
+        propositionsAudit.some(ligne => /Qualité & Audit/.test(ligne)) &&
+            propositionsAudit.some(ligne => /Lancer un audit qualité/.test(ligne))
+    );
+    await capture('recherche-globale');
+    await page.fill('app-palette-commandes input[name=rechercheGlobale]', 'clients');
+    const propositionsClients = await page.$$eval('app-palette-commandes .resultats li', lignes =>
+        lignes.map(ligne => ligne.textContent.replace(/\s+/g, ' ').trim())
+    );
+    verifier(
+        'recherche Ctrl+K : les sources de l’espace et leurs colonnes sont proposées',
+        propositionsClients.some(ligne => /clients\.csv/.test(ligne))
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('app-palette-commandes .palette'));
+    // « G » puis « S » mène aux Sources, « G » puis « X » à Extraire.
+    await page.keyboard.press('g');
+    await page.keyboard.press('s');
+    await page.waitForSelector('app-sources');
+    await page.keyboard.press('g');
+    await page.keyboard.press('x');
+    await page.waitForSelector('app-extraction');
+    verifier('raccourcis : G puis S ouvre les Sources, G puis X ouvre Extraire', true);
+
     // ---- qualité : profilage, doublons, règle et score ----
     await page.click('a[href="/qualite"]');
     await page.waitForSelector('app-qualite');
