@@ -879,6 +879,13 @@ export type NoeudGraphe = {
     genre: 'app' | 'table' | 'colonne' | 'attribut' | 'objet' | 'alerte';
 };
 export type Graphe = { noeuds: NoeudGraphe[]; liens: { source: string; target: string; libelle?: string }[] };
+/** Un élément relié à un objet, tel que le panneau « Synthèse » du parcours le liste. */
+export type ElementRelie = { sens: 'amont' | 'aval'; type: string; nom: string; role: string };
+/** Parcours d'un objet : le graphe synthétique, et tout ce qui lui est relié, en clair. */
+export type ParcoursObjet = {
+    graphe: Graphe;
+    synthese: { amont: Record<string, number>; aval: Record<string, number>; elements: ElementRelie[] };
+};
 export type VocabulaireLineage = {
     relations: Record<string, string>;
     roles: Record<string, string>;

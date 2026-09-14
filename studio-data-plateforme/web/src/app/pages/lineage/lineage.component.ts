@@ -10,6 +10,7 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { phraseDeParcours } from '../accueil/question-gouvernance';
+import { GroupeReplie, estUnGroupe, grapheReplie, groupesDe } from '../../composants/repli-graphe';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
@@ -22,6 +23,7 @@ import {
     NoeudFluxEnrichi,
     Actif,
     ObjetMetier,
+    ParcoursObjet,
     PaireAttributs,
     Source,
     VocabulaireLineage,
@@ -490,14 +492,14 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
         @if (onglet() === 'attribut') {
             <div class="carte">
                 <div class="formulaire-ligne" style="max-width: 640px">
-                    <select class="champ" name="objet" [(ngModel)]="objetId" (ngModelChange)="attributId = ''; grapheAttribut.set(null)">
+                    <select class="champ" name="objet" [(ngModel)]="objetId" (ngModelChange)="changerObjet()">
                         <option value="">— objet métier —</option>
                         @for (objet of objets(); track objet.id) {
                             <option [value]="objet.id">{{ objet.name }}</option>
                         }
                     </select>
                     <select class="champ" name="attribut" [(ngModel)]="attributId" (ngModelChange)="chargerParcours()">
-                        <option value="">— attribut —</option>
+                        <option value="">— tout l'objet —</option>
                         @for (attribut of attributsDe(objetId); track attribut.id) {
                             <option [value]="attribut.id">{{ attribut.name }}</option>
                         }
@@ -507,18 +509,69 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
                     <!-- V13 : le parcours en une phrase, avant le graphe — on lit avant de regarder. -->
                     <p class="phrase-parcours">{{ phrase }}</p>
                 }
-                @if (grapheAttribut(); as graphe) {
+                @if (grapheAffiche(); as graphe) {
+                    <!-- V12.8 : ce qui se répète est regroupé, et s'ouvre d'un clic. -->
+                    @if (groupes().length) {
+                        <div class="ligne-champs">
+                            <span class="discret">Trop d'éléments du même type : ils sont regroupés.</span>
+                            <button class="bouton petit" type="button" name="toutDevelopper" (click)="toutDevelopper()">
+                                Tout développer
+                            </button>
+                            <button class="bouton petit" type="button" name="reduire" (click)="reduire()">Réduire</button>
+                        </div>
+                    }
                     <app-graphe-svg
                         style="display: block; margin-top: 10px"
                         [noeuds]="noeudsGraphe(graphe)"
                         [liens]="graphe.liens"
                         [hauteur]="420"
+                        (noeudChoisi)="ouvrirGroupe($event)"
                     />
                 } @else {
                     <p class="discret">
-                        Choisissez un objet métier puis un attribut : ses applications sources, ses colonnes techniques et ses consommateurs
-                        apparaissent.
+                        Choisissez un objet métier : tout ce qui l'alimente et tout ce qui s'en sert apparaît, une flèche par élément.
+                        Choisissez ensuite une information pour suivre son parcours à elle.
                     </p>
+                }
+                @if (synthese(); as synthese) {
+                    <!-- V12.7 : la synthèse, en clair, au-dessus du graphe qu'on ne lit pas toujours. -->
+                    <div class="synthese-parcours">
+                        <b>Synthèse</b>
+                        <div class="compteurs">
+                            @for (compteur of compteurs(synthese.amont); track compteur.libelle) {
+                                <span class="badge neutre">amont : {{ compteur.nombre }} {{ compteur.libelle }}</span>
+                            }
+                            @for (compteur of compteurs(synthese.aval); track compteur.libelle) {
+                                <span class="badge">aval : {{ compteur.nombre }} {{ compteur.libelle }}</span>
+                            }
+                        </div>
+                        <table class="tableau">
+                            <thead>
+                                <tr>
+                                    <th>Sens</th>
+                                    <th>Type</th>
+                                    <th>Nom</th>
+                                    <th>Rôle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (element of synthese.elements; track $index) {
+                                    <tr>
+                                        <td>{{ element.sens }}</td>
+                                        <td>{{ element.type }}</td>
+                                        <td>
+                                            <b>{{ element.nom }}</b>
+                                        </td>
+                                        <td class="discret">{{ element.role }}</td>
+                                    </tr>
+                                } @empty {
+                                    <tr>
+                                        <td colspan="4" class="discret">Rien n'est encore relié à cet objet.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </div>
         }
@@ -550,6 +603,17 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
         }
     `,
     styles: `
+        .synthese-parcours {
+            margin-top: 12px;
+            border-top: 1px solid var(--bordure);
+            padding-top: 10px;
+        }
+        .synthese-parcours .compteurs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 6px 0 8px;
+        }
         .phrase-parcours {
             margin: 10px 0 0;
             font-size: 13px;
@@ -658,6 +722,10 @@ export class LineageComponent {
     readonly brouillonNoeud = signal<(Partial<NoeudFlux> & { name: string }) | null>(null);
     readonly brouillonLien = signal<(Partial<LienFlux> & { source: string; target: string }) | null>(null);
     readonly grapheAttribut = signal<Graphe | null>(null);
+    /** Parcours de l'objet entier : le graphe et sa synthèse (V12.7). */
+    readonly parcours = signal<ParcoursObjet | null>(null);
+    /** Groupes repliés que l'utilisateur a ouverts (V12.8). */
+    readonly groupesOuverts = signal<Set<string>>(new Set());
 
     /** Le parcours en une phrase (V13) : d'où vient l'information choisie, et ce qui s'en sert. */
     phraseParcours(): string {
@@ -910,13 +978,71 @@ export class LineageComponent {
         return this.objets().find(objet => objet.id === objetId)?.elements || [];
     }
 
+    /** Changer d'objet repart de son parcours à lui : on regarde l'ensemble avant d'entrer dans le détail. */
+    changerObjet(): void {
+        this.attributId = '';
+        this.grapheAttribut.set(null);
+        this.groupesOuverts.set(new Set());
+        void this.chargerParcours();
+    }
+
+    /**
+     * Sans information choisie, on montre le parcours de l'objet entier (V12.7) ; avec une information, le
+     * sien. Les deux vues sont dessinées par le même graphe.
+     */
     async chargerParcours(): Promise<void> {
-        if (!this.objetId || !this.attributId) return;
+        if (!this.objetId) return;
         try {
-            this.grapheAttribut.set(await this.api.parcoursAttribut(this.objetId, this.attributId));
+            if (this.attributId) {
+                this.parcours.set(null);
+                this.grapheAttribut.set(await this.api.parcoursAttribut(this.objetId, this.attributId));
+                return;
+            }
+            const parcours = await this.api.parcoursObjet(this.objetId);
+            this.parcours.set(parcours);
+            this.grapheAttribut.set(parcours.graphe);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
+    }
+
+    /** La synthèse n'existe que pour le parcours d'un objet entier. */
+    synthese(): ParcoursObjet['synthese'] | null {
+        return this.attributId ? null : this.parcours()?.synthese || null;
+    }
+    /** Les compteurs d'un côté, sans les zéros : on ne montre pas ce qu'il n'y a pas. */
+    compteurs(cote: Record<string, number>): { libelle: string; nombre: number }[] {
+        return Object.entries(cote)
+            .map(entree => ({ libelle: entree[0], nombre: entree[1] }))
+            .filter(compteur => compteur.nombre > 0);
+    }
+
+    /** Le graphe tel qu'on le montre : replié tant que l'utilisateur n'a pas ouvert les groupes (V12.8). */
+    grapheAffiche(): Graphe | null {
+        const graphe = this.grapheAttribut();
+        if (!graphe) return null;
+        const replie = grapheReplie(graphe, this.centreDuParcours(), this.groupesOuverts());
+        return { noeuds: replie.noeuds as Graphe['noeuds'], liens: replie.liens };
+    }
+    /** Les groupes que ce parcours mérite — calculés à la demande, jamais stockés. */
+    groupes(): GroupeReplie[] {
+        const graphe = this.grapheAttribut();
+        return graphe ? groupesDe(graphe, this.centreDuParcours()) : [];
+    }
+    /** Le nœud autour duquel le parcours est construit : l'objet, ou l'information choisie. */
+    private centreDuParcours(): string {
+        return this.attributId ? 'attr:' + this.attributId : 'bo:' + this.objetId;
+    }
+    /** Un clic sur une case regroupée l'ouvre ; sur une autre case, il ne se passe rien ici. */
+    ouvrirGroupe(noeud: { id: string }): void {
+        if (!estUnGroupe(noeud.id)) return;
+        this.groupesOuverts.update(ouverts => new Set([...ouverts, noeud.id]));
+    }
+    toutDevelopper(): void {
+        this.groupesOuverts.set(new Set(this.groupes().map(groupe => groupe.id)));
+    }
+    reduire(): void {
+        this.groupesOuverts.set(new Set());
     }
 
     async chargerLineageTable(): Promise<void> {

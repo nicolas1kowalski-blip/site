@@ -140,6 +140,14 @@ export class LineageController {
         return this.lineage.parcoursAttribut(espace.id, boId, elId);
     }
 
+    @Get('objet')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Parcours d’un objet métier : une flèche par élément relié, avec le nombre d’informations concernées.' })
+    parcoursObjet(@EspaceCourant() espace: EspaceAvecRole, @Query('boId') boId?: string) {
+        if (!boId) throw erreurRequete('Paramètre boId requis.');
+        return this.lineage.parcoursObjet(espace.id, boId);
+    }
+
     @Get('impact')
     @RoleEspaceRequis('lecteur')
     @ApiOperation({

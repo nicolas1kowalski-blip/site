@@ -230,3 +230,42 @@ test('parcours d’un attribut : application source, colonne, attribut, consomma
     assert.equal(graphe.liens.length, 3);
     assert.equal((await appel({ method: 'GET', url: '/api/lineage/attribut?boId=bo_client&elId=absent' })).statusCode, 404);
 });
+
+test('parcours d’un objet : une flèche par élément relié, avec le nombre d’informations', async () => {
+    await appel({
+        method: 'PUT',
+        url: '/api/gouvernance/actifs/as_crm',
+        payload: { name: 'CRM', kind: 'app', sources: ['clients.csv'] }
+    });
+    await appel({
+        method: 'PUT',
+        url: '/api/gouvernance/actifs/as_rapport',
+        payload: { name: 'Rapport mensuel', kind: 'report' }
+    });
+    await appel({
+        method: 'PUT',
+        url: '/api/gouvernance/objets-metier/bo_parcours',
+        payload: {
+            name: 'Client suivi',
+            sources: [{ table: 'clients.csv', role: 'maitre' }],
+            elements: [
+                { id: 'be1', name: 'Nom', mappings: [{ table: 'clients.csv', col: 'nom' }], usedBy: ['as_rapport'] },
+                { id: 'be2', name: 'Ville', mappings: [{ table: 'clients.csv', col: 'ville' }], usedBy: ['as_rapport'] }
+            ]
+        }
+    });
+    const parcours = json(await appel({ method: 'GET', url: '/api/lineage/objet?boId=bo_parcours' }));
+    const versLObjet = parcours.graphe.liens.filter((lien: { target: string }) => lien.target === 'bo:bo_parcours');
+    assert.equal(versLObjet.length, 2, 'une flèche pour le fichier, une pour l’application qui le produit');
+    assert.ok(versLObjet.some((lien: { libelle: string }) => lien.libelle === 'alimente 2 information(s)'));
+    const depuisLObjet = parcours.graphe.liens.filter((lien: { source: string }) => lien.source === 'bo:bo_parcours');
+    assert.equal(depuisLObjet.length, 1, 'une seule flèche vers la restitution, même pour deux informations');
+    assert.equal(depuisLObjet[0].libelle, 'utilise 2 information(s)');
+    assert.equal(parcours.synthese.amont.fichiers, 1);
+    assert.equal(parcours.synthese.aval.restitutions, 1);
+    assert.ok(
+        parcours.synthese.elements.some(
+            (element: { nom: string; role: string }) => element.nom === 'Rapport mensuel' && element.role === 'utilise 2 information(s)'
+        )
+    );
+});

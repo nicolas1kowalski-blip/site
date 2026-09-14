@@ -48,6 +48,17 @@ export type NoeudGraphe = {
 };
 export type LienGraphe = { source: string; target: string; libelle?: string };
 export type Graphe = { noeuds: NoeudGraphe[]; liens: LienGraphe[] };
+
+/** Un élément relié à l'objet, tel que le panneau « Synthèse » le liste. */
+export type ElementRelie = { sens: 'amont' | 'aval'; type: string; nom: string; role: string };
+/**
+ * Parcours d'un objet (V12.7) : le graphe synthétique — une seule flèche par application, fichier ou objet,
+ * avec le nombre d'informations concernées — et la liste de tout ce qui est relié, en clair.
+ */
+export type ParcoursObjet = {
+    graphe: Graphe;
+    synthese: { amont: Record<string, number>; aval: Record<string, number>; elements: ElementRelie[] };
+};
 export type ActifImpacte = { id: string; name: string; criticality: string; owner: string };
 export type AnalyseImpact = {
     direct: ActifImpacte[];
@@ -57,7 +68,16 @@ export type AnalyseImpact = {
     related: string[];
 };
 
-type Attribut = { id: string; name: string; mappings?: { table: string; col: string }[]; usedBy?: string[]; sourceApp?: string };
+type OrigineAttribut = { boId: string; elId: string; kind?: string };
+type Attribut = {
+    id: string;
+    name: string;
+    mappings?: { table: string; col: string }[];
+    usedBy?: string[];
+    sourceApp?: string;
+    /** Informations d'autres objets dont celle-ci provient (V12.6). */
+    origins?: OrigineAttribut[];
+};
 type ObjetMetier = {
     id: string;
     name: string;
@@ -360,6 +380,127 @@ export class LineageService {
         if (!(attribut.usedBy || []).length) {
             graphe.noeuds.push({ id: 'nouse', titre: 'aucun consommateur déclaré', genre: 'alerte' });
             graphe.liens.push({ source: idAttribut, target: 'nouse' });
+        }
+    }
+
+    /**
+     * Parcours d'un objet métier (V12.7) : tout ce qui l'alimente et tout ce qui s'en sert, **une seule flèche
+     * par élément**, avec le nombre d'informations concernées. Un objet de vingt informations alimenté par la
+     * même application donnait vingt flèches identiques ; il en donne une, qui dit « produit 20 information(s) ».
+     */
+    async parcoursObjet(espaceId: string, boId: string): Promise<ParcoursObjet> {
+        const etat = await this.gouvernance.etat(espaceId);
+        const objets = etat.governance.businessObjects as unknown as ObjetMetier[];
+        const objet = objets.find(candidat => candidat.id === boId);
+        if (!objet) throw erreurIntrouvable('Objet métier inconnu.');
+        const actifs = etat.governance.assets as unknown as Actif[];
+        const graphe: Graphe = { noeuds: [], liens: [] };
+        const identifiant = 'bo:' + objet.id;
+        graphe.noeuds.push({ id: identifiant, titre: objet.name, detail: objet.domain || 'objet métier', genre: 'objet' });
+        const elements: ElementRelie[] = [];
+        this.amontDeLObjet(graphe, objet, objets, actifs, elements);
+        this.avalDeLObjet(graphe, objet, objets, actifs, elements);
+        const compter = (sens: 'amont' | 'aval', type: string) =>
+            elements.filter(element => element.sens === sens && element.type === type).length;
+        return {
+            graphe,
+            synthese: {
+                amont: {
+                    applications: compter('amont', 'application'),
+                    fichiers: compter('amont', 'fichier'),
+                    objets: compter('amont', 'objet')
+                },
+                aval: {
+                    applications: compter('aval', 'application'),
+                    processus: compter('aval', 'processus'),
+                    restitutions: compter('aval', 'restitution'),
+                    objets: compter('aval', 'objet')
+                },
+                elements
+            }
+        };
+    }
+
+    /** Ce qui alimente l'objet : applications productrices, fichiers de ses informations, objets d'origine. */
+    private amontDeLObjet(graphe: Graphe, objet: ObjetMetier, objets: ObjetMetier[], actifs: Actif[], elements: ElementRelie[]): void {
+        const identifiant = 'bo:' + objet.id;
+        const informations = objet.elements || [];
+        const parFichier = new Map<string, number>();
+        for (const information of informations)
+            for (const table of new Set((information.mappings || []).map(correspondance => correspondance.table)))
+                parFichier.set(table, (parFichier.get(table) || 0) + 1);
+        const producteurs = new Map<string, number>();
+        for (const identifiantActif of objet.producedBy || []) producteurs.set(identifiantActif, informations.length);
+        for (const [table, nombre] of parFichier) {
+            const proprietaire = actifs.find(actif => actif.kind === 'app' && (actif.sources || []).includes(table));
+            if (proprietaire) producteurs.set(proprietaire.id, Math.max(producteurs.get(proprietaire.id) || 0, nombre));
+            const idTable = 'tbl:' + table;
+            graphe.noeuds.push({ id: idTable, titre: table, detail: `${nombre} information(s)`, genre: 'table' });
+            graphe.liens.push({ source: idTable, target: identifiant, libelle: `alimente ${nombre} information(s)` });
+            elements.push({ sens: 'amont', type: 'fichier', nom: table, role: `alimente ${nombre} information(s)` });
+        }
+        for (const [identifiantActif, nombre] of producteurs) {
+            const actif = actifs.find(candidat => candidat.id === identifiantActif);
+            if (!actif) continue;
+            graphe.noeuds.push({ id: 'as:' + actif.id, titre: actif.name, detail: 'application source', genre: 'app' });
+            graphe.liens.push({ source: 'as:' + actif.id, target: identifiant, libelle: `produit ${nombre} information(s)` });
+            elements.push({ sens: 'amont', type: 'application', nom: actif.name, role: `produit ${nombre} information(s)` });
+        }
+        for (const [identifiantObjet, detail] of this.objetsDOrigine(objet, objets)) {
+            const amont = objets.find(candidat => candidat.id === identifiantObjet);
+            if (!amont) continue;
+            graphe.noeuds.push({ id: 'bo:' + amont.id, titre: amont.name, detail: 'objet amont', genre: 'objet' });
+            graphe.liens.push({ source: 'bo:' + amont.id, target: identifiant, libelle: detail });
+            elements.push({ sens: 'amont', type: 'objet', nom: amont.name, role: detail });
+        }
+    }
+
+    /** Les objets dont cet objet reprend des informations, avec le nombre et la nature de la reprise. */
+    private objetsDOrigine(objet: ObjetMetier, objets: ObjetMetier[]): Map<string, string> {
+        const natures: Record<string, string> = { copie: 'copie', derive: 'dérivé', agrege: 'agrégé' };
+        const comptes = new Map<string, { nombre: number; natures: Set<string> }>();
+        for (const information of objet.elements || [])
+            for (const origine of information.origins || []) {
+                if (!objets.some(candidat => candidat.id === origine.boId)) continue;
+                if (!comptes.has(origine.boId)) comptes.set(origine.boId, { nombre: 0, natures: new Set() });
+                const compte = comptes.get(origine.boId)!;
+                compte.nombre += 1;
+                compte.natures.add(natures[origine.kind || 'copie'] || 'copie');
+            }
+        return new Map(
+            [...comptes].map(([identifiant, compte]) => [
+                identifiant,
+                `${compte.nombre} information(s) reprise(s) (${[...compte.natures].join(', ')})`
+            ])
+        );
+    }
+
+    /** Ce qui se sert de l'objet : applications, processus, restitutions, et les objets qui le reprennent. */
+    private avalDeLObjet(graphe: Graphe, objet: ObjetMetier, objets: ObjetMetier[], actifs: Actif[], elements: ElementRelie[]): void {
+        const identifiant = 'bo:' + objet.id;
+        const genres: Record<string, string> = { process: 'processus', report: 'restitution' };
+        const consommateurs = new Map<string, number>();
+        for (const identifiantActif of objet.consumedBy || []) consommateurs.set(identifiantActif, (objet.elements || []).length);
+        for (const information of objet.elements || [])
+            for (const identifiantActif of information.usedBy || [])
+                consommateurs.set(identifiantActif, (consommateurs.get(identifiantActif) || 0) + 1);
+        for (const [identifiantActif, nombre] of consommateurs) {
+            const actif = actifs.find(candidat => candidat.id === identifiantActif);
+            if (!actif) continue;
+            const type = genres[actif.kind || ''] || 'application';
+            graphe.noeuds.push({ id: 'use:' + actif.id, titre: actif.name, detail: type, genre: 'app' });
+            graphe.liens.push({ source: identifiant, target: 'use:' + actif.id, libelle: `utilise ${nombre} information(s)` });
+            elements.push({ sens: 'aval', type, nom: actif.name, role: `utilise ${nombre} information(s)` });
+        }
+        for (const autre of objets) {
+            if (autre.id === objet.id) continue;
+            const reprises = (autre.elements || []).filter(information =>
+                (information.origins || []).some(origine => origine.boId === objet.id)
+            ).length;
+            if (!reprises) continue;
+            graphe.noeuds.push({ id: 'bo:' + autre.id, titre: autre.name, detail: 'objet aval', genre: 'objet' });
+            graphe.liens.push({ source: identifiant, target: 'bo:' + autre.id, libelle: `${reprises} information(s) reprise(s)` });
+            elements.push({ sens: 'aval', type: 'objet', nom: autre.name, role: `${reprises} information(s) reprise(s)` });
         }
     }
 

@@ -1274,6 +1274,17 @@ try {
     await capture('lineage');
     await page.click('app-lineage .onglets button:has-text("Parcours")');
     await page.selectOption('app-lineage select[name=objet]', { label: 'Client' });
+    // V12.7 : sans information choisie, on voit le parcours de l'objet entier, avec sa synthèse en clair.
+    await page.waitForSelector('app-lineage .synthese-parcours tbody tr');
+    const syntheseObjet = await page.textContent('app-lineage .synthese-parcours');
+    verifier(
+        'parcours V12.7 : l’objet Client montre sa synthèse — les fichiers qui l’alimentent, avec le nombre d’informations',
+        /Synthèse/.test(syntheseObjet) &&
+            /amont : 1 fichiers/.test(syntheseObjet) &&
+            /clients\.csv/.test(syntheseObjet) &&
+            /alimente 3 information\(s\)/.test(syntheseObjet)
+    );
+    await capture('lineage-parcours-objet');
     await page.selectOption('app-lineage select[name=attribut]', { label: 'ville' });
     await page.waitForSelector('app-lineage app-graphe-svg .noeud');
     const noeudsParcours = await page.$$eval('app-lineage app-graphe-svg .noeud .titre', titres =>
