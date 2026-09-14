@@ -7,6 +7,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { Actif, GenreActif, ObjetMetier, Source, VocabulaireGouvernance, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -31,7 +32,7 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
 
 @Component({
     selector: 'app-actifs',
-    imports: [FormsModule],
+    imports: [FormsModule, ProposerCorrectionComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -73,6 +74,15 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                             }
                         }
                     </div>
+                    <!-- V13 : contribuer sans risque — le responsable valide avant que quoi que ce soit change. -->
+                    <app-proposer-correction
+                        [genre]="'asset'"
+                        [cible]="{ assetId: actif.id }"
+                        [sujet]="actif.name"
+                        champ="description"
+                        [valeurActuelle]="actif.description"
+                        [domaine]="actif.domain || ''"
+                    />
                     <div class="formulaire-ligne">
                         <div>
                             <label class="etiquette">Nom</label

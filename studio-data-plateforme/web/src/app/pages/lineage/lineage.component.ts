@@ -9,6 +9,7 @@
  */
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { phraseDeParcours } from '../accueil/question-gouvernance';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
@@ -19,6 +20,7 @@ import {
     LienFluxEnrichi,
     NoeudFlux,
     NoeudFluxEnrichi,
+    Actif,
     ObjetMetier,
     PaireAttributs,
     Source,
@@ -501,6 +503,10 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
                         }
                     </select>
                 </div>
+                @if (phraseParcours(); as phrase) {
+                    <!-- V13 : le parcours en une phrase, avant le graphe — on lit avant de regarder. -->
+                    <p class="phrase-parcours">{{ phrase }}</p>
+                }
                 @if (grapheAttribut(); as graphe) {
                     <app-graphe-svg
                         style="display: block; margin-top: 10px"
@@ -544,6 +550,13 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
         }
     `,
     styles: `
+        .phrase-parcours {
+            margin: 10px 0 0;
+            font-size: 13px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--surface-2);
+        }
         .onglets {
             display: flex;
             gap: 4px;
@@ -637,12 +650,24 @@ export class LineageComponent {
     readonly carte = signal<CarteFlux | null>(null);
     readonly sources = signal<Source[]>([]);
     readonly objets = signal<ObjetMetier[]>([]);
+    /** Applications, processus et restitutions : ils nomment les extrémités du parcours en une phrase. */
+    readonly actifs = signal<Actif[]>([]);
     readonly vocabulaire = signal<VocabulaireLineage | null>(null);
     readonly noeudChoisi = signal<NoeudFluxEnrichi | null>(null);
     readonly lienChoisi = signal<LienFluxEnrichi | null>(null);
     readonly brouillonNoeud = signal<(Partial<NoeudFlux> & { name: string }) | null>(null);
     readonly brouillonLien = signal<(Partial<LienFlux> & { source: string; target: string }) | null>(null);
     readonly grapheAttribut = signal<Graphe | null>(null);
+
+    /** Le parcours en une phrase (V13) : d'où vient l'information choisie, et ce qui s'en sert. */
+    phraseParcours(): string {
+        const objet = this.objets().find(candidat => candidat.id === this.objetId);
+        if (!objet || !this.grapheAttribut()) return '';
+        const information = (objet.elements || []).find(candidat => candidat.id === this.attributId);
+        if (!information) return '';
+        return phraseDeParcours(`${objet.name} › ${information.name}`, objet, this.actifs(), information);
+    }
+
     readonly grapheTable = signal<Graphe | null>(null);
     readonly impact = signal<AnalyseImpact | null>(null);
     tableImpact = '';
@@ -703,15 +728,17 @@ export class LineageComponent {
 
     async recharger(): Promise<void> {
         try {
-            const [carte, sources, objets, vocabulaire] = await Promise.all([
+            const [carte, sources, objets, actifs, vocabulaire] = await Promise.all([
                 this.api.carteFlux(),
                 this.api.sources(),
                 this.api.objetsMetier(),
+                this.api.actifs(),
                 this.vocabulaire() ?? this.api.vocabulaireLineage()
             ]);
             this.carte.set(carte);
             this.sources.set(sources);
             this.objets.set(objets);
+            this.actifs.set(actifs);
             this.vocabulaire.set(vocabulaire);
             if (this.noeudChoisi()) this.choisirNoeud(this.noeudChoisi()!.id);
             if (this.lienChoisi()) this.choisirLien(this.lienChoisi()!.id);

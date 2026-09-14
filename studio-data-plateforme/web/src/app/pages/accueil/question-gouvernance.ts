@@ -158,3 +158,25 @@ export function tachesDe(objets: ObjetMetier[], propositionsEnAttente: number, d
     if (propositionsEnAttente) taches.push({ libelle: 'proposition(s) à valider', nombre: propositionsEnAttente, lien: '/propositions' });
     return taches;
 }
+
+/**
+ * Le parcours de la donnée en une phrase : d'où elle vient, ce qui s'en sert, à qui elle est diffusée.
+ * C'est la phrase qui ouvre chaque parcours (V13) et qui répond aux questions « d'où vient… » et « où va… ».
+ *
+ * On ne raconte que ce qui est déclaré : à défaut, on le dit franchement plutôt que de laisser un blanc.
+ */
+export function phraseDeParcours(
+    sujet: string,
+    objet: ObjetMetier,
+    applications: Actif[],
+    information?: { id: string; usedBy?: string[] }
+): string {
+    const nomDe = (identifiants: string[]) =>
+        applications.filter(application => identifiants.includes(application.id)).map(application => application.name);
+    const amont = [...nomDe(objet.producedBy || []), ...(objet.sources || []).map(source => source.table)];
+    const usages = information?.usedBy?.length ? information.usedBy : objet.consumedBy || [];
+    const aval = nomDe(usages);
+    const debut = amont.length ? `vient de ${amont.join(', ')}` : "n'a pas encore de source déclarée";
+    const suite = aval.length ? `sert à ${aval.join(', ')}` : "personne n'a encore déclaré s'en servir";
+    return `« ${sujet} » ${debut} ; ${suite}.`;
+}

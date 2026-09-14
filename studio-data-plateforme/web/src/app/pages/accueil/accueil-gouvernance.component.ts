@@ -20,7 +20,7 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { Actif, ObjetMetier, TermeGlossaire } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { PreferencesService } from '../../coeur/preferences.service';
-import { EntiteGouvernance, chercherEntites, entitesGouvernance, intentionDe, tachesDe } from './question-gouvernance';
+import { EntiteGouvernance, chercherEntites, entitesGouvernance, intentionDe, phraseDeParcours, tachesDe } from './question-gouvernance';
 
 /** Mots du glossaire montrés sur l'accueil : les premiers suffisent, le reste est à un clic. */
 const MOTS_MONTRES = 8;
@@ -345,28 +345,9 @@ export class AccueilGouvernanceComponent {
 
     /** Le parcours en une phrase : d'où vient la donnée, et ce qui s'en sert. */
     parcours(entite: EntiteGouvernance): string {
-        const objet = entite.objet;
-        if (!objet) return '';
-        const sources = objet.sources.map(source => source.table);
-        const consommateurs = this.applications()
-            .filter(
-                application => objet.consumedBy.includes(application.id) || (entite.information?.id && this.utilise(application, entite))
-            )
-            .map(application => application.name);
-        const producteurs = this.applications()
-            .filter(application => objet.producedBy.includes(application.id))
-            .map(application => application.name);
-        const amont = [...producteurs, ...sources];
-        const phrases = [
-            amont.length ? `vient de ${amont.join(', ')}` : "n'a pas encore de source déclarée",
-            consommateurs.length ? `sert à ${consommateurs.join(', ')}` : "personne n'a encore déclaré s'en servir"
-        ];
-        return `« ${entite.nom} » ${phrases[0]} ; ${phrases[1]}.`;
-    }
-
-    private utilise(application: Actif, entite: EntiteGouvernance): boolean {
-        const information = entite.objet?.elements.find(candidat => candidat.id === entite.information?.id);
-        return Boolean(information && information.usedBy.includes(application.id));
+        if (!entite.objet) return '';
+        const information = entite.objet.elements.find(candidat => candidat.id === entite.information?.id);
+        return phraseDeParcours(entite.nom, entite.objet, this.applications(), information);
     }
 
     /** Combien de données ce mot du métier étiquette : informations qui le portent. */

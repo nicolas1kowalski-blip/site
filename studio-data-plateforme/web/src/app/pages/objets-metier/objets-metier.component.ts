@@ -1,13 +1,14 @@
 /**
  * Objets métier : la liste (gauche) et la fiche de l'objet choisi (droite).
  *   • Identité : nom, définition, domaine, propriétaire, contributeurs, statut, complétude de la fiche ;
- *   • Attributs : nom, définition, sensibilité, terme du glossaire, colonnes techniques qui les alimentent
- *     (table.colonne), actifs qui les utilisent ;
+ *   • Informations (V13 : « attribut » en langage technique) : nom et définition dans la liste, et pour
+ *     chacune une fiche en trois questions — c'est quoi, d'où ça vient, qui s'en sert ;
  *   • Sources : tables techniques et leur rôle (maître, contributeur, destinataire) ;
  *   • Actifs producteurs et consommateurs, objets référencés ;
  *   • Historique des décisions (propositions validées ou refusées).
- * Un objet peut être initialisé depuis une source : un attribut par colonne, déjà rattaché à la table.
- * Un lecteur peut proposer une définition d'attribut ; un éditeur modifie directement.
+ * Un objet peut être initialisé depuis une source : une information par colonne, déjà rattachée à la table ;
+ * « ✨ Décrire depuis un fichier / modèle » va plus loin et propose aussi les noms, les définitions et des
+ * exemples de valeurs. Chacun peut proposer une correction sur une fiche ; le responsable valide.
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -28,6 +29,7 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { completudeInformation, feuDeLObjet } from './description-information';
 import { FicheInformationComponent } from './fiche-information.component';
+import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { PropositionObjetComponent } from './proposition-objet.component';
 
 type OngletFiche = 'attributs' | 'sources' | 'liens' | 'historique';
@@ -57,7 +59,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         { poids: 15, ok: !!objet.definition.trim(), libelle: 'Écrire la définition' },
         { poids: 15, ok: !!objet.globalOwner.trim(), libelle: 'Désigner un propriétaire' },
         { poids: 15, ok: objet.sources.some(source => source.role === 'maitre'), libelle: 'Désigner une source maître' },
-        { poids: 10, ok: attributs.length > 0, libelle: 'Ajouter des attributs' },
+        { poids: 10, ok: attributs.length > 0, libelle: 'Ajouter des informations' },
         {
             poids: 15,
             ok: attributs.length > 0 && sansAlimentation === 0,
@@ -82,7 +84,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
 @Component({
     selector: 'app-objets-metier',
-    imports: [FormsModule, FicheInformationComponent, PropositionObjetComponent],
+    imports: [FormsModule, FicheInformationComponent, PropositionObjetComponent, ProposerCorrectionComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -152,6 +154,14 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                     @if (completude(objet).aFaire.length) {
                         <div class="discret" style="margin-bottom: 8px">À faire : {{ completude(objet).aFaire.join(' · ') }}</div>
                     }
+                    <!-- V13 : contribuer sans risque — le responsable valide avant que quoi que ce soit change. -->
+                    <app-proposer-correction
+                        [genre]="'bo'"
+                        [cible]="{ boId: objet.id }"
+                        [sujet]="objet.name"
+                        [valeurActuelle]="objet.definition"
+                        [domaine]="objet.domain || ''"
+                    />
                     <div class="formulaire-ligne">
                         <div>
                             <label class="etiquette">Nom</label

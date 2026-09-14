@@ -579,6 +579,12 @@ try {
     await page.keyboard.press('Control+k');
     await page.waitForSelector('app-palette-commandes input[name=rechercheGlobale]');
     await page.fill('app-palette-commandes input[name=rechercheGlobale]', 'audit');
+    // La liste se recalcule à la frappe : on attend qu'elle soit filtrée avant de la lire.
+    await page.waitForFunction(() =>
+        [...document.querySelectorAll('app-palette-commandes .resultats li')].some(ligne =>
+            /Lancer un audit qualité/.test(ligne.textContent)
+        )
+    );
     const propositionsAudit = await page.$$eval('app-palette-commandes .resultats li', lignes =>
         lignes.map(ligne => ligne.textContent.replace(/\s+/g, ' ').trim())
     );
@@ -1183,29 +1189,26 @@ try {
     );
     await capture('sensibilite');
 
-    // Une proposition (déposée par l'API, comme le ferait un lecteur) est validée depuis l'écran.
-    await page.evaluate(async boId => {
-        await fetch('/api/gouvernance/propositions', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                kind: 'bo',
-                field: 'definition',
-                target: { boId },
-                label: 'Client : définition',
-                before: 'Personne ayant passé au moins une commande',
-                after: 'Personne physique ou morale ayant passé au moins une commande',
-                domain: 'Ventes'
-            })
-        });
-    }, objetsMetier[0].id);
+    // V13 : « 💬 Proposer une correction » depuis la fiche — rien ne change avant validation du responsable.
+    await page.click('a[href="/objets-metier"]');
+    await page.waitForSelector('app-objets-metier .fiche');
+    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.click('app-objets-metier button[name=proposerCorrection]');
+    await page.fill('app-objets-metier textarea[name=correctionProposee]', 'Personne physique ou morale ayant passé au moins une commande');
+    await page.click('app-objets-metier button[name=envoyerCorrection]');
+    await page.waitForSelector('.notification.succes:has-text("le responsable la validera")');
+    const objetAvantValidation = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json()))[0];
+    verifier(
+        'gouvernance V13 : une correction proposée depuis la fiche ne modifie rien tant qu’elle n’est pas validée',
+        objetAvantValidation.definition === 'Personne ayant passé au moins une commande'
+    );
     await page.click('a[href="/propositions"]');
     await page.waitForSelector('app-propositions .proposition');
     await page.click('app-propositions button:has-text("Valider")');
     await page.waitForSelector('app-propositions h2:has-text("Décisions passées")');
     const objetApres = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json()))[0];
     verifier(
-        'propositions : la proposition validée est appliquée à l’objet Client et tracée dans son historique',
+        'propositions : la correction proposée, une fois validée, est appliquée à l’objet Client et tracée dans son historique',
         objetApres.definition === 'Personne physique ou morale ayant passé au moins une commande' &&
             objetApres.history.length === 1 &&
             /validée/.test(await page.textContent('app-propositions tbody'))
@@ -1244,6 +1247,12 @@ try {
         'lineage : le parcours de l’attribut « ville » montre l’application CRM, la colonne clients.csv.ville et l’attribut',
         noeudsParcours.includes('CRM') && noeudsParcours.includes('ville') && noeudsParcours.length >= 3
     );
+    // V13 : une phrase résume le parcours avant le graphe — on lit avant de regarder.
+    verifier(
+        'gouvernance V13 : le parcours s’ouvre sur une phrase qui dit d’où vient l’information et ce qui s’en sert',
+        /« Client › ville » vient de .*clients\.csv/.test(await page.textContent('app-lineage .phrase-parcours'))
+    );
+    await capture('lineage-parcours-phrase');
 
     // ---- exploitation : tableau de bord (indicateur et barres), comparateur ----
     await page.click('a[href="/tableaux-de-bord"]');

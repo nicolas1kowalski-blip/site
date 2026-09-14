@@ -9,6 +9,7 @@ import {
     entitesGouvernance,
     intentionDe,
     normaliser,
+    phraseDeParcours,
     tachesDe
 } from '../web/src/app/pages/accueil/question-gouvernance.ts';
 
@@ -103,4 +104,29 @@ test('rien à faire donne une liste vide, pas une liste de zéros', () => {
         }
     ];
     assert.deepEqual(tachesDe(complet, 0), []);
+});
+
+test('le parcours en une phrase dit d’où ça vient et ce qui s’en sert', () => {
+    const objet = {
+        id: 'bo',
+        name: 'Client',
+        producedBy: ['as1'],
+        consumedBy: ['as2'],
+        sources: [{ table: 'clients.csv', role: 'maitre' }],
+        elements: []
+    };
+    const applications = [
+        { id: 'as1', name: 'CRM' },
+        { id: 'as2', name: 'Reporting' }
+    ];
+    assert.equal(phraseDeParcours('Client', objet, applications), '« Client » vient de CRM, clients.csv ; sert à Reporting.');
+    assert.match(
+        phraseDeParcours('Client › Adresse', objet, applications, { id: 'be', usedBy: [] }),
+        /sert à Reporting\.$/,
+        "sans usage propre, l'information hérite de ceux de l'objet"
+    );
+    assert.equal(
+        phraseDeParcours('Contrat', { id: 'x', name: 'Contrat', producedBy: [], consumedBy: [], sources: [], elements: [] }, []),
+        "« Contrat » n'a pas encore de source déclarée ; personne n'a encore déclaré s'en servir."
+    );
 });

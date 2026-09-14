@@ -1,6 +1,7 @@
 /** Glossaire métier : liste des termes, recherche, création et modification en place, suppression. */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { TermeGlossaire, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
@@ -8,7 +9,7 @@ import { SessionService } from '../../coeur/session.service';
 
 @Component({
     selector: 'app-glossaire',
-    imports: [FormsModule],
+    imports: [FormsModule, ProposerCorrectionComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -81,6 +82,13 @@ import { SessionService } from '../../coeur/session.service';
                                         <button class="bouton petit" (click)="modifier(terme)">Modifier</button>
                                         <button class="bouton petit danger" (click)="supprimer(terme)">Supprimer</button>
                                     }
+                                    <app-proposer-correction
+                                        [genre]="'term'"
+                                        [cible]="{ termId: terme.id }"
+                                        [sujet]="terme.term"
+                                        [valeurActuelle]="terme.definition"
+                                        [domaine]="terme.domain || ''"
+                                    />
                                 </td>
                             </tr>
                         }
