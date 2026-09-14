@@ -2181,6 +2181,41 @@ try {
             etat.governance.glossary.length === 1
     );
 
+    // ---- V13 : le cycle de validation d'une fiche du dictionnaire ----
+    // Une définition écrite n'est pas une définition validée : la fiche porte un statut, daté et attribué.
+    page.once('dialog', dialogue => dialogue.accept('relue avec les Ventes'));
+    await page.selectOption('app-dictionnaire select[name=statut]', 'Validé');
+    await page.waitForSelector('app-dictionnaire .historique');
+    verifier(
+        'V13 : le statut d’une fiche est validé, et le passage est historisé avec son commentaire',
+        /Brouillon.*→.*Validé/s.test(await page.textContent('app-dictionnaire .historique')) &&
+            /relue avec les Ventes/.test(await page.textContent('app-dictionnaire .historique'))
+    );
+    const dictionnaireValide = await page.evaluate(async () => await (await fetch('/api/gouvernance/dictionnaire')).json());
+    verifier(
+        'V13 : le statut, sa date, son auteur et son historique sont conservés',
+        dictionnaireValide['clients.csv'].status === 'Validé' &&
+            !!dictionnaireValide['clients.csv'].statusAt &&
+            !!dictionnaireValide['clients.csv'].statusBy &&
+            dictionnaireValide['clients.csv'].history.length === 1
+    );
+    verifier(
+        'V13 : l’avancement du dictionnaire dit combien de fiches sont validées',
+        /1\/\d+ validée\(s\)/.test(await page.textContent('app-dictionnaire .entete-page'))
+    );
+    // Une fiche « proposée » entre dans la file de validation, et le filtre ne montre plus qu'elle.
+    await page.locator('app-dictionnaire .element', { has: page.locator('b', { hasText: /^commandes\.csv$/ }) }).click();
+    await page.selectOption('app-dictionnaire select[name=statut]', 'Proposé');
+    await page.waitForSelector('app-dictionnaire button[name=filtrerAValider]');
+    await page.click('app-dictionnaire button[name=filtrerAValider]');
+    const filtreesAValider = await page
+        .waitForFunction(() => document.querySelectorAll('app-dictionnaire aside .element').length === 1, null, { timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+    verifier('V13 : « à valider » ne montre plus que les fiches qui attendent une décision', filtreesAValider);
+    await capture('dictionnaire-validation');
+    await page.click('app-dictionnaire button[name=filtrerAValider]');
+
     // ---- utilisateurs et espaces ----
     await page.click('a[href="/utilisateurs"]');
     await page.waitForSelector('app-utilisateurs');
@@ -2348,6 +2383,27 @@ try {
         (await page.$$('app-propositions .proposition')).length === 3 && /Client › Statut/.test(await page.textContent('app-propositions'))
     );
     await capture('demonstration-propositions');
+    // V13 : les propositions se regroupent par ce qu'elles visent, sous le nom réel de la cible.
+    const titresDesGroupes = await page.$$eval('app-propositions .carte h2', titres => titres.map(titre => titre.textContent.trim()));
+    verifier(
+        'V13 : les propositions sont regroupées sous le nom de ce qu’elles visent, jamais sous un identifiant',
+        titresDesGroupes.length > 0 && titresDesGroupes.every(titre => !/\b(bo|gl|as)_/.test(titre))
+    );
+    // « Tout valider » tranche pour tout le groupe d'un geste — ici en administrateur, qui décide partout.
+    const avantToutValider = (await page.$$('app-propositions .proposition')).length;
+    const tailleDuGroupe = (await page.$$('app-propositions .carte:has(button[name=toutValider-0]) .proposition')).length;
+    await page.click('app-propositions button[name=toutValider-0]');
+    await page.waitForSelector('.notification.succes:has-text("validées et appliquées")');
+    const apresToutValider = await page
+        .waitForFunction(
+            restantes => document.querySelectorAll('app-propositions .proposition').length === restantes,
+            avantToutValider - tailleDuGroupe,
+            { timeout: 5000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    verifier('V13 : « tout valider » tranche d’un geste toutes les propositions d’un même groupe', apresToutValider);
+    await capture('propositions-groupees');
 
     // ---- V13 : le parcours s'ouvre depuis ce que l'on regarde, pas seulement par le menu ----
     await page.click('a[href="/objets-metier"]');

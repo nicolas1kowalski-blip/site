@@ -64,6 +64,11 @@ export type FicheDictionnaire = {
     domain?: string;
     updateFrequency?: string;
     sensitivity?: string;
+    /** Où en est la fiche : brouillon, proposée, validée, obsolète — et par qui, depuis quand (V13). */
+    status?: string;
+    statusAt?: string;
+    statusBy?: string;
+    history?: { at: string; from: string; to: string; by: string; comment: string }[];
     /** Par colonne : sa définition, sa sensibilité, le type attendu, et le terme du glossaire visé (V13). */
     columns?: Record<string, { description?: string; sensitivity?: string; technicalType?: string; term?: string }>;
 };

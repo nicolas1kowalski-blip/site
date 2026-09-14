@@ -26,6 +26,11 @@ export type FicheDictionnaire = {
     sensitivity?: string;
     sourceSystem?: string;
     steward?: string;
+    /** Où en est la fiche : brouillon, proposée, validée, obsolète — et par qui, depuis quand (V13). */
+    status?: string;
+    statusAt?: string;
+    statusBy?: string;
+    history?: { at: string; from: string; to: string; by: string; comment: string }[];
     /**
      * Ce que l'on sait de chaque colonne : sa définition, sa sensibilité, le type que l'on en attend, et le
      * terme du glossaire auquel elle renvoie (V13).
@@ -53,6 +58,20 @@ const schemaFiche = z.object({
     sensitivity: z.string().trim().optional(),
     sourceSystem: z.string().trim().optional(),
     steward: z.string().trim().optional(),
+    status: z.string().trim().optional(),
+    statusAt: z.string().trim().optional(),
+    statusBy: z.string().trim().optional(),
+    history: z
+        .array(
+            z.object({
+                at: z.string(),
+                from: z.string(),
+                to: z.string(),
+                by: z.string(),
+                comment: z.string().default('')
+            })
+        )
+        .optional(),
     columns: z
         .record(
             z.object({

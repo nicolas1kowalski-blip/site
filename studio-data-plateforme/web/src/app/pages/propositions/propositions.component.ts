@@ -5,9 +5,17 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { ClientApiService } from '../../coeur/client-api.service';
-import { Proposition, formaterDate } from '../../coeur/modeles';
+import { Actif, ObjetMetier, Personne, Proposition, TermeGlossaire, formaterDate } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import {
+    GroupeDePropositions,
+    decidablesDuGroupe,
+    etatDuToutValider,
+    peutDecider,
+    pouvoirDeDecider,
+    regrouperLesPropositions
+} from './groupes-propositions';
 
 @Component({
     selector: 'app-propositions',
@@ -18,9 +26,34 @@ import { SessionService } from '../../coeur/session.service';
                 <p class="discret">{{ enAttente().length }} en attente — un éditeur valide ou refuse ; la valeur validée est appliquée.</p>
             </div>
         </div>
-        @for (groupe of parDomaine(); track groupe.domaine) {
+        <!--
+            V13 : les propositions n'arrivent pas une par une — quelqu'un relit une fiche entière et
+            corrige cinq définitions d'un coup. On les regroupe donc par ce qu'elles visent, et l'on peut
+            trancher pour tout le groupe. La validation revient au responsable du domaine, pas à n'importe
+            quel éditeur : sans cela, valider ne voudrait rien dire.
+        -->
+        @for (groupe of parCible(); track groupe.cle; let rang = $index) {
             <div class="carte">
-                <h2>{{ groupe.domaine }}</h2>
+                <div class="entete-page" style="margin: 0 0 4px">
+                    <h2 class="espace" style="margin: 0">{{ groupe.libelle }}</h2>
+                    <span class="discret">{{ groupe.propositions.length }} en attente</span>
+                    @if (session.peutEditer()) {
+                        @let tout = etatDuToutValider(groupe);
+                        <button
+                            class="bouton petit"
+                            type="button"
+                            [attr.name]="'toutValider-' + rang"
+                            [disabled]="!tout.possible || enCours()"
+                            [title]="tout.raison"
+                            (click)="toutValider(groupe)"
+                        >
+                            {{ tout.libelle }}
+                        </button>
+                        @if (tout.raison) {
+                            <span class="discret">{{ tout.raison }}</span>
+                        }
+                    }
+                </div>
                 @for (proposition of groupe.propositions; track proposition.id) {
                     <div class="proposition">
                         <div class="espace">
@@ -30,12 +63,17 @@ import { SessionService } from '../../coeur/session.service';
                                 <strong>{{ proposition.after || 'vide' }}</strong>
                             </div>
                             <div class="discret">
-                                proposé par {{ proposition.byName || proposition.by }} le {{ formaterDate(proposition.at) }}
+                                proposé par {{ proposition.byName || proposition.by }} le {{ formaterDate(proposition.at) }} · domaine
+                                {{ proposition.domain || '—' }}
                             </div>
                         </div>
-                        @if (session.peutEditer()) {
+                        @if (session.peutEditer() && peutDecider(proposition)) {
                             <button class="bouton principal petit" (click)="accepter(proposition)">Valider</button>
                             <button class="bouton petit danger" (click)="refuser(proposition)">Refuser</button>
+                        } @else if (session.peutEditer()) {
+                            <span class="discret" title="Seul le responsable du domaine peut trancher">
+                                à décider par le responsable de « {{ proposition.domain || 'sans domaine' }} »
+                            </span>
                         }
                         @if (proposition.by === session.utilisateur()?.identifiant || session.peutEditer()) {
                             <button class="bouton petit" (click)="retirer(proposition)">Retirer</button>
@@ -112,15 +150,20 @@ export class PropositionsComponent {
     readonly propositions = signal<Proposition[]>([]);
     readonly enAttente = computed(() => this.propositions().filter(proposition => proposition.status === 'pending'));
     readonly decidees = computed(() => this.propositions().filter(proposition => proposition.status !== 'pending'));
-    readonly parDomaine = computed(() => {
-        const groupes = new Map<string, Proposition[]>();
-        for (const proposition of this.enAttente()) {
-            const domaine = proposition.domain || 'Sans domaine';
-            if (!groupes.has(domaine)) groupes.set(domaine, []);
-            groupes.get(domaine)!.push(proposition);
-        }
-        return [...groupes].map(([domaine, propositions]) => ({ domaine, propositions }));
-    });
+    readonly personnes = signal<Personne[]>([]);
+    readonly enCours = signal(false);
+    /** Les noms réels des cibles : une proposition doit se lire sans jamais montrer d'identifiant interne. */
+    readonly nomsConnus = signal<Record<string, string>>({});
+
+    readonly parCible = computed(() => regrouperLesPropositions(this.enAttente(), this.nomsConnus()));
+    /** Ce que la personne connectée a le droit de trancher : ses domaines, ou tout si elle administre. */
+    readonly pouvoir = computed(() =>
+        pouvoirDeDecider(
+            this.personnes(),
+            { email: this.session.utilisateur()?.email || '', nom: this.session.utilisateur()?.nomAffiche || '' },
+            this.session.estAdministrateurGlobal()
+        )
+    );
 
     constructor() {
         void this.recharger();
@@ -128,9 +171,58 @@ export class PropositionsComponent {
 
     async recharger(): Promise<void> {
         try {
-            this.propositions.set(await this.api.propositions());
+            const [propositions, personnes, objets, termes, actifs] = await Promise.all([
+                this.api.propositions(),
+                this.api.personnes(),
+                this.api.objetsMetier(),
+                this.api.glossaire(),
+                this.api.actifs()
+            ]);
+            this.propositions.set(propositions);
+            this.personnes.set(personnes);
+            this.nomsConnus.set(this.nommerLesCibles(objets, termes, actifs));
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** Un identifiant ne dit rien à personne : on garde, pour chacun, le nom sous lequel on le connaît. */
+    private nommerLesCibles(objets: ObjetMetier[], termes: TermeGlossaire[], actifs: Actif[]): Record<string, string> {
+        const noms: Record<string, string> = {};
+        for (const objet of objets) noms[objet.id] = objet.name;
+        for (const terme of termes) noms[terme.id] = terme.term;
+        for (const actif of actifs) noms[actif.id] = actif.name;
+        return noms;
+    }
+
+    peutDecider(proposition: Proposition): boolean {
+        return peutDecider(proposition, this.pouvoir());
+    }
+
+    etatDuToutValider(groupe: GroupeDePropositions): { possible: boolean; libelle: string; raison: string } {
+        return etatDuToutValider(groupe, this.pouvoir());
+    }
+
+    /**
+     * Valide d'un geste toutes les propositions du groupe que l'on a le droit de trancher. Une par une
+     * côté serveur : chacune applique sa valeur, et un refus isolé n'emporte pas les autres.
+     */
+    async toutValider(groupe: GroupeDePropositions): Promise<void> {
+        const aValider = decidablesDuGroupe(groupe, this.pouvoir());
+        if (!aValider.length) return;
+        this.enCours.set(true);
+        let validees = 0;
+        try {
+            for (const proposition of aValider) {
+                await this.api.accepterProposition(proposition.id);
+                validees++;
+            }
+            this.notifications.succes(`${validees} proposition(s) validées et appliquées sur « ${groupe.libelle} ».`);
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.enCours.set(false);
+            await this.recharger();
         }
     }
 
