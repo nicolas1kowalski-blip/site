@@ -151,6 +151,139 @@ export function definitionDejaEcrite(
     return null;
 }
 
+/**
+ * Modèles d'objets prêts à l'emploi. Devant une page blanche, on ne sait pas par où commencer ; devant une
+ * liste de huit informations qu'on peut décocher, si. Les définitions vides seront devinées d'après le nom.
+ */
+export const MODELES_OBJET: Record<string, { nom: string; definition: string }[]> = {
+    Client: [
+        { nom: 'Numéro client', definition: 'Identifiant unique attribué à la création du client.' },
+        { nom: 'Nom', definition: 'Nom ou raison sociale du client.' },
+        { nom: 'Adresse', definition: 'Adresse postale principale.' },
+        { nom: 'Code postal', definition: '' },
+        { nom: 'Ville', definition: '' },
+        { nom: 'E-mail', definition: 'Adresse électronique de contact.' },
+        { nom: 'Téléphone', definition: '' },
+        { nom: 'Date de création', definition: "Date d'entrée en relation." },
+        { nom: 'Statut', definition: 'Actif, inactif, prospect…' },
+        { nom: 'Segment', definition: 'Catégorie commerciale du client.' }
+    ],
+    Contrat: [
+        { nom: 'Numéro de contrat', definition: 'Identifiant unique du contrat.' },
+        { nom: 'Client', definition: 'Client titulaire du contrat.' },
+        { nom: 'Produit', definition: 'Produit souscrit.' },
+        { nom: "Date d'effet", definition: 'Date à laquelle le contrat prend effet.' },
+        { nom: 'Date de fin', definition: "Date d'échéance ou de résiliation." },
+        { nom: 'Statut', definition: 'En cours, résilié, suspendu…' },
+        { nom: 'Prime', definition: 'Montant périodique dû par le client.' },
+        { nom: 'Périodicité', definition: 'Mensuelle, trimestrielle, annuelle.' }
+    ],
+    Produit: [
+        { nom: 'Code produit', definition: 'Identifiant du produit au catalogue.' },
+        { nom: 'Libellé', definition: 'Nom commercial du produit.' },
+        { nom: 'Famille', definition: 'Regroupement de produits.' },
+        { nom: 'Prix', definition: 'Prix de vente de référence.' },
+        { nom: 'Devise', definition: '' },
+        { nom: 'Statut', definition: 'Commercialisé, retiré…' },
+        { nom: 'Date de lancement', definition: '' }
+    ],
+    Fournisseur: [
+        { nom: 'Code fournisseur', definition: 'Identifiant du fournisseur.' },
+        { nom: 'Raison sociale', definition: 'Nom légal du fournisseur.' },
+        { nom: 'SIRET', definition: "Numéro SIRET de l'établissement." },
+        { nom: 'Adresse', definition: '' },
+        { nom: 'Contact', definition: 'Personne de contact.' },
+        { nom: 'IBAN', definition: 'Compte bancaire de règlement.' },
+        { nom: 'Conditions de paiement', definition: 'Délai et mode de règlement convenus.' }
+    ],
+    Facture: [
+        { nom: 'Numéro de facture', definition: 'Identifiant unique de la facture.' },
+        { nom: 'Client', definition: 'Client facturé.' },
+        { nom: "Date d'émission", definition: '' },
+        { nom: "Date d'échéance", definition: 'Date limite de paiement.' },
+        { nom: 'Montant HT', definition: '' },
+        { nom: 'TVA', definition: '' },
+        { nom: 'Montant TTC', definition: '' },
+        { nom: 'Statut', definition: 'Émise, payée, en retard, annulée.' }
+    ],
+    Salarié: [
+        { nom: 'Matricule', definition: 'Identifiant du salarié dans la paie.' },
+        { nom: 'Nom', definition: '' },
+        { nom: 'Prénom', definition: '' },
+        { nom: 'Date de naissance', definition: '' },
+        { nom: "Date d'entrée", definition: "Date d'embauche." },
+        { nom: 'Poste', definition: 'Intitulé de poste.' },
+        { nom: 'Service', definition: 'Service ou direction de rattachement.' },
+        { nom: 'Manager', definition: 'Responsable hiérarchique.' }
+    ],
+    Sinistre: [
+        { nom: 'Numéro de sinistre', definition: 'Identifiant unique du sinistre.' },
+        { nom: 'Contrat', definition: 'Contrat concerné.' },
+        { nom: 'Date de survenance', definition: "Date à laquelle le sinistre s'est produit." },
+        { nom: 'Date de déclaration', definition: '' },
+        { nom: 'Nature', definition: 'Type de sinistre.' },
+        { nom: 'Montant estimé', definition: 'Coût prévu.' },
+        { nom: 'Montant réglé', definition: 'Coût payé à ce jour.' },
+        { nom: 'Statut', definition: 'Ouvert, clos, refusé.' }
+    ]
+};
+
+/** Une information proposée : à retenir ou non, avec le nom, la définition et la colonne d'où elle vient. */
+export type InformationProposee = {
+    retenue: boolean;
+    nom: string;
+    definition: string;
+    /** Fichier et colonne reconnus, vides quand rien ne correspond. */
+    table: string;
+    colonne: string;
+};
+
+/** Une proposition d'objet complète, telle que l'écran la présente avant création. */
+export type PropositionObjet = { nom: string; domaine: string; informations: InformationProposee[] };
+
+/** Le minimum d'un fichier chargé dont la proposition a besoin : son nom, ses colonnes, son domaine. */
+export type FichierPropose = { name: string; headers?: string[]; theme?: string };
+
+/** À partir d'un fichier : une information par colonne, avec son nom lisible et une définition devinée. */
+export function propositionDepuisFichier(fichier: FichierPropose): PropositionObjet {
+    const nom = nomDObjet(fichier.name);
+    return {
+        nom,
+        domaine: fichier.theme || '',
+        informations: (fichier.headers || []).map(colonne => ({
+            retenue: true,
+            nom: humaniser(colonne),
+            definition: definitionDevinee(humaniser(colonne), nom),
+            table: fichier.name,
+            colonne
+        }))
+    };
+}
+
+/**
+ * À partir d'un modèle : les informations du modèle, rattachées aux colonnes qui leur ressemblent dans les
+ * fichiers chargés. Une information sans colonne reconnue reste proposée — on la rattachera plus tard.
+ */
+export function propositionDepuisModele(cleModele: string, fichiers: FichierPropose[]): PropositionObjet {
+    const colonnes = fichiers.flatMap(fichier => (fichier.headers || []).map(colonne => ({ fichier, colonne })));
+    return {
+        nom: cleModele,
+        domaine: '',
+        informations: (MODELES_OBJET[cleModele] || []).map(modele => {
+            const trouvee = colonnes.find(
+                candidate => memeNom(humaniser(candidate.colonne), modele.nom) || memeNom(candidate.colonne, modele.nom)
+            );
+            return {
+                retenue: true,
+                nom: modele.nom,
+                definition: modele.definition || definitionDevinee(modele.nom, cleModele),
+                table: trouvee ? trouvee.fichier.name : '',
+                colonne: trouvee ? trouvee.colonne : ''
+            };
+        })
+    };
+}
+
 /** Une des quatre questions auxquelles une fiche d'information doit répondre. */
 export type ControleInformation = { question: string; conseil: string; section: 1 | 2 | 3; repondu: boolean };
 

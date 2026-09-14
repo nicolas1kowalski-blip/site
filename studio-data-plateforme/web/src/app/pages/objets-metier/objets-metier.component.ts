@@ -28,6 +28,7 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import { completudeInformation, feuDeLObjet } from './description-information';
 import { FicheInformationComponent } from './fiche-information.component';
+import { PropositionObjetComponent } from './proposition-objet.component';
 
 type OngletFiche = 'attributs' | 'sources' | 'liens' | 'historique';
 
@@ -81,7 +82,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
 @Component({
     selector: 'app-objets-metier',
-    imports: [FormsModule, FicheInformationComponent],
+    imports: [FormsModule, FicheInformationComponent, PropositionObjetComponent],
     template: `
         <div class="entete-page">
             <div class="espace">
@@ -98,9 +99,21 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                     }
                 </select>
                 <button class="bouton" (click)="initialiserDepuisSource()" [disabled]="!sourceInitiale">Initialiser</button>
+                <button class="bouton" name="decrireDepuisFichier" (click)="propositionOuverte.set(true)">
+                    ✨ Décrire depuis un fichier / modèle
+                </button>
                 <button class="bouton principal" (click)="nouvelObjet()">Nouvel objet</button>
             }
         </div>
+
+        @if (propositionOuverte()) {
+            <app-proposition-objet
+                [sources]="sources()"
+                [objets]="objets()"
+                (creerObjet)="adopterProposition($event)"
+                (fermer)="propositionOuverte.set(false)"
+            />
+        }
 
         <div class="disposition">
             <!-- ---- liste ---- -->
@@ -531,6 +544,8 @@ export class ObjetsMetierComponent {
     readonly edition = signal<ObjetMetier | null>(null);
     /** Identifiant de l'information dont la fiche en trois questions est ouverte ; vide = aucune. */
     readonly informationOuverte = signal('');
+    /** Vrai quand le panneau « ✨ Décrire depuis un fichier / modèle » est ouvert. */
+    readonly propositionOuverte = signal(false);
     readonly nouveau = signal(false);
     readonly ongletActif = signal<OngletFiche>('attributs');
     readonly enCours = signal(false);
@@ -597,6 +612,16 @@ export class ObjetsMetierComponent {
         this.selectionId.set(objet.id);
         this.nouveau.set(false);
         this.edition.set(structuredClone(objet));
+    }
+
+    /** L'objet proposé devient la fiche en cours d'édition : il ne sera enregistré qu'après relecture. */
+    adopterProposition(objet: ObjetMetier): void {
+        this.propositionOuverte.set(false);
+        this.selectionId.set(objet.id);
+        this.nouveau.set(true);
+        this.edition.set(objet);
+        this.ongletActif.set('attributs');
+        this.notifications.info(`Objet « ${objet.name} » proposé avec ${objet.elements.length} information(s). Relisez, puis enregistrez.`);
     }
 
     nouvelObjet(): void {

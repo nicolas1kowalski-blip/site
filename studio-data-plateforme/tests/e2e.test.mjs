@@ -825,6 +825,42 @@ try {
     );
     await capture('objets-metier');
 
+    // ---- V13 : décrire un objet sans partir de zéro (depuis un fichier, puis depuis un modèle) ----
+    await page.click('app-objets-metier button[name=decrireDepuisFichier]');
+    await page.waitForSelector('app-proposition-objet');
+    await page.click('app-proposition-objet button:has-text("commandes.csv")');
+    await page.waitForSelector('app-proposition-objet input[name=proposition-nom-0]');
+    const objetPropose = await page.evaluate(() => ({
+        nom: document.querySelector('app-proposition-objet input[name=proposition-nom]').value,
+        informations: [...document.querySelectorAll('app-proposition-objet input[name^=proposition-nom-]')].map(champ => champ.value),
+        definitions: [...document.querySelectorAll('app-proposition-objet input[name^=proposition-definition-]')].map(champ => champ.value)
+    }));
+    verifier(
+        'gouvernance V13 : depuis commandes.csv, l’objet « Commande » est proposé avec ses informations nommées et définies',
+        objetPropose.nom === 'Commande' &&
+            objetPropose.informations.join() === 'Identifiant commande,Identifiant client,Montant' &&
+            /Identifiant unique/.test(objetPropose.definitions[0]) &&
+            /Montant en devise/.test(objetPropose.definitions[2])
+    );
+    await page.waitForFunction(() =>
+        /25/.test(document.querySelector('app-proposition-objet tbody tr:last-child td:last-child')?.textContent || '')
+    );
+    verifier(
+        'gouvernance V13 : la proposition montre des exemples de valeurs réelles lus dans le fichier',
+        /25/.test(await page.textContent('app-proposition-objet tbody tr:last-child td:last-child'))
+    );
+    await page.click('app-proposition-objet button[name=creerObjetPropose]');
+    // La fiche affichée devient celle de l'objet proposé : on l'attend, sans quoi on lit encore la précédente.
+    await page.waitForFunction(() => document.querySelector('app-objets-metier input[name=nom]')?.value === 'Commande');
+    verifier(
+        'gouvernance V13 : l’objet proposé devient une fiche à relire, avec ses trois informations et sa source maître',
+        (await page.inputValue('app-objets-metier input[name=nom]')) === 'Commande' &&
+            (await page.$$('app-objets-metier tbody tr')).length === 3
+    );
+    await capture('objets-metier-proposition');
+    // On n'enregistre pas cet objet de démonstration : on revient sur « Client ».
+    await page.click('app-objets-metier .liste .element:has-text("Client")');
+
     // ---- qualité avancée : périmètre d'audit, anomalies, règle par groupe et lignes en échec, clé fonctionnelle, objet métier ----
     await page.click('a[href="/qualite"]');
     await page.waitForSelector('app-qualite');
@@ -1281,7 +1317,8 @@ try {
     await page.selectOption('app-explorateur-360 select[name=colonne]', 'nom');
     await page.fill('app-explorateur-360 input[name=valeur]', 'ana');
     await page.click('app-explorateur-360 button.principal');
-    await page.waitForSelector('app-explorateur-360 app-graphe-svg');
+    // Le graphe est dessiné après la réponse du serveur : on attend les nœuds, pas seulement le composant.
+    await page.waitForFunction(() => document.querySelectorAll('app-explorateur-360 app-graphe-svg .noeud').length === 3);
     verifier(
         'explorateur 360° : depuis « Ana », le graphe montre la cliente et ses deux commandes reliées par le modèle (id_client)',
         (await page.$$('app-explorateur-360 app-graphe-svg .noeud')).length === 3 &&
