@@ -143,9 +143,9 @@ export class LineageController {
     @Get('objet')
     @RoleEspaceRequis('lecteur')
     @ApiOperation({ summary: 'Parcours d’un objet métier : une flèche par élément relié, avec le nombre d’informations concernées.' })
-    parcoursObjet(@EspaceCourant() espace: EspaceAvecRole, @Query('boId') boId?: string) {
+    parcoursObjet(@EspaceCourant() espace: EspaceAvecRole, @Query('boId') boId?: string, @Query('profond') profond?: string) {
         if (!boId) throw erreurRequete('Paramètre boId requis.');
-        return this.lineage.parcoursObjet(espace.id, boId);
+        return this.lineage.parcoursObjet(espace.id, boId, profond === '1');
     }
 
     @Get('impact')

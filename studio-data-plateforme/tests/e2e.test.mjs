@@ -1284,6 +1284,24 @@ try {
             /clients\.csv/.test(syntheseObjet) &&
             /alimente 3 information\(s\)/.test(syntheseObjet)
     );
+    // V12.10 / V13.2 : « ⇠ Jusqu'au début » remonte toute la chaîne, et la phrase dit d'où part la donnée.
+    await page.waitForSelector('app-lineage .depuis-le-debut');
+    const depuisLeDebut = await page.textContent('app-lineage .depuis-le-debut');
+    const phraseProfonde = await page.textContent('app-lineage .phrase-parcours');
+    verifier(
+        'parcours V12.10 : la chaîne complète remonte jusqu’à l’application qui produit le fichier, et la phrase cite ce point de départ',
+        /Depuis le début/.test(depuisLeDebut) &&
+            /CRM ⇢ clients\.csv ⇢ Client/.test(depuisLeDebut.replace(/\s+/g, ' ')) &&
+            /tout au début : CRM/.test(phraseProfonde)
+    );
+    // Décoché, on revient à la vue à un niveau.
+    await page.click('app-lineage input[name=jusquAuDebut]');
+    await page.waitForFunction(() => !document.querySelector('app-lineage .depuis-le-debut'));
+    verifier(
+        'parcours V12.10 : décoché, le parcours revient à un seul niveau',
+        !/tout au début/.test(await page.textContent('app-lineage .phrase-parcours'))
+    );
+    await page.click('app-lineage input[name=jusquAuDebut]');
     await capture('lineage-parcours-objet');
     await page.selectOption('app-lineage select[name=attribut]', { label: 'ville' });
     await page.waitForSelector('app-lineage app-graphe-svg .noeud');

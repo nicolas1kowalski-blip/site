@@ -269,3 +269,19 @@ test('parcours d’un objet : une flèche par élément relié, avec le nombre d
         )
     );
 });
+
+test('parcours d’un objet « jusqu’au début » : on remonte l’application qui produit le fichier', async () => {
+    const profond = json(await appel({ method: 'GET', url: '/api/lineage/objet?boId=bo_parcours&profond=1' }));
+    const crm = profond.graphe.noeuds.find((noeud: { id: string }) => noeud.id === 'as:as_crm');
+    assert.ok(crm, 'CRM produit clients.csv : il apparaît en amont du fichier');
+    const versLeFichier = profond.graphe.liens.filter(
+        (lien: { source: string; target: string }) => lien.source === 'as:as_crm' && lien.target === 'tbl:clients.csv'
+    );
+    assert.equal(versLeFichier.length, 1);
+    assert.equal(versLeFichier[0].libelle, 'produit');
+    const plat = json(await appel({ method: 'GET', url: '/api/lineage/objet?boId=bo_parcours' }));
+    assert.ok(
+        !plat.graphe.liens.some((lien: { target: string }) => lien.target === 'tbl:clients.csv'),
+        'sans l’option, le parcours s’arrête au premier niveau'
+    );
+});

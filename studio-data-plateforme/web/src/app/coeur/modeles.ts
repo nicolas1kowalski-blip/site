@@ -877,6 +877,10 @@ export type NoeudGraphe = {
     titre: string;
     detail?: string;
     genre: 'app' | 'table' | 'colonne' | 'attribut' | 'objet' | 'alerte';
+    /** Distance au point de départ : 1 = alimente directement, 2 = alimente ce qui alimente… (V12.10) */
+    niveau?: number;
+    /** Vrai pour le tout premier maillon connu de la chaîne. */
+    debut?: boolean;
 };
 export type Graphe = { noeuds: NoeudGraphe[]; liens: { source: string; target: string; libelle?: string }[] };
 /** Un élément relié à un objet, tel que le panneau « Synthèse » du parcours le liste. */

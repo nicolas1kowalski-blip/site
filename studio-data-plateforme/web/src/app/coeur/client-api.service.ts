@@ -721,8 +721,9 @@ export class ClientApiService {
         return firstValueFrom(this.http.get<Graphe>(`${this.racine}/lineage/attribut`, { params: { boId, elId } }));
     }
     /** Parcours d'un objet métier : une flèche par élément relié, avec le nombre d'informations concernées. */
-    parcoursObjet(boId: string): Promise<ParcoursObjet> {
-        return firstValueFrom(this.http.get<ParcoursObjet>(`${this.racine}/lineage/objet`, { params: { boId } }));
+    parcoursObjet(boId: string, jusquAuDebut = false): Promise<ParcoursObjet> {
+        const params: Record<string, string> = { boId, profond: jusquAuDebut ? '1' : '0' };
+        return firstValueFrom(this.http.get<ParcoursObjet>(`${this.racine}/lineage/objet`, { params }));
     }
     lineageTable(nom: string): Promise<Graphe> {
         return firstValueFrom(this.http.get<Graphe>(`${this.racine}/lineage/table/${encodeURIComponent(nom)}`));

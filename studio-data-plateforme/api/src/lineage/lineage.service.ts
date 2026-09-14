@@ -45,9 +45,17 @@ export type NoeudGraphe = {
     titre: string;
     detail?: string;
     genre: 'app' | 'table' | 'colonne' | 'attribut' | 'objet' | 'alerte';
+    /** Distance au point de départ du parcours : 1 = alimente directement, 2 = alimente ce qui alimente… (V12.10) */
+    niveau?: number;
+    /** Vrai pour le tout premier maillon connu : au-delà, la gouvernance ne sait plus rien. */
+    debut?: boolean;
 };
 export type LienGraphe = { source: string; target: string; libelle?: string };
 export type Graphe = { noeuds: NoeudGraphe[]; liens: LienGraphe[] };
+
+/** Garde-fous de la remontée : un référentiel mal décrit ne doit pas faire tourner l'écran en rond. */
+const PROFONDEUR_AMONT_MAXIMUM = 8;
+const NOEUDS_AMONT_MAXIMUM = 160;
 
 /** Un élément relié à l'objet, tel que le panneau « Synthèse » le liste. */
 export type ElementRelie = { sens: 'amont' | 'aval'; type: string; nom: string; role: string };
@@ -388,7 +396,7 @@ export class LineageService {
      * par élément**, avec le nombre d'informations concernées. Un objet de vingt informations alimenté par la
      * même application donnait vingt flèches identiques ; il en donne une, qui dit « produit 20 information(s) ».
      */
-    async parcoursObjet(espaceId: string, boId: string): Promise<ParcoursObjet> {
+    async parcoursObjet(espaceId: string, boId: string, jusquAuDebut = false): Promise<ParcoursObjet> {
         const etat = await this.gouvernance.etat(espaceId);
         const objets = etat.governance.businessObjects as unknown as ObjetMetier[];
         const objet = objets.find(candidat => candidat.id === boId);
@@ -400,6 +408,7 @@ export class LineageService {
         const elements: ElementRelie[] = [];
         this.amontDeLObjet(graphe, objet, objets, actifs, elements);
         this.avalDeLObjet(graphe, objet, objets, actifs, elements);
+        if (jusquAuDebut) await this.remonterJusquAuDebut(graphe, espaceId, etat);
         const compter = (sens: 'amont' | 'aval', type: string) =>
             elements.filter(element => element.sens === sens && element.type === type).length;
         return {
@@ -502,6 +511,112 @@ export class LineageService {
             graphe.liens.push({ source: identifiant, target: 'bo:' + autre.id, libelle: `${reprises} information(s) reprise(s)` });
             elements.push({ sens: 'aval', type: 'objet', nom: autre.name, role: `${reprises} information(s) reprise(s)` });
         }
+    }
+
+    /**
+     * Remonter jusqu'au début de la donnée (V12.10) : chaque élément amont est remonté à son tour.
+     *
+     * Un parcours qui s'arrête au premier niveau ne dit qu'une demi-vérité : le fichier qui alimente un objet
+     * vient lui-même d'une application, qui lit d'autres fichiers, qui sont parfois construits à partir
+     * d'autres encore. On remonte donc tout ce que la gouvernance sait, jusqu'au premier maillon — celui
+     * qu'on marque « début de la chaîne », parce qu'au-delà on ne sait plus rien.
+     *
+     * Deux garde-fous : une profondeur maximale et un nombre de nœuds maximal. Un référentiel mal décrit ne
+     * doit pas faire tourner l'écran en rond.
+     */
+    private async remonterJusquAuDebut(graphe: Graphe, espaceId: string, etat: EtatApplication): Promise<void> {
+        const actifs = etat.governance.assets as unknown as Actif[];
+        const objets = etat.governance.businessObjects as unknown as ObjetMetier[];
+        const sources = await this.sources.lister(espaceId);
+        const connus = new Set(graphe.noeuds.map(noeud => noeud.id));
+        // On part des éléments qui alimentent déjà le centre : ce sont eux qu'il faut remonter.
+        let front = graphe.noeuds.filter(noeud => noeud.id !== graphe.noeuds[0]?.id).map(noeud => noeud.id);
+        for (let niveau = 2; niveau <= PROFONDEUR_AMONT_MAXIMUM && front.length; niveau += 1) {
+            const suivant: string[] = [];
+            for (const identifiant of front) {
+                if (graphe.noeuds.length >= NOEUDS_AMONT_MAXIMUM) break;
+                for (const amont of this.amontDe(identifiant, actifs, objets, sources)) {
+                    graphe.liens.push({ source: amont.noeud.id, target: identifiant, libelle: amont.libelle });
+                    if (connus.has(amont.noeud.id)) continue;
+                    connus.add(amont.noeud.id);
+                    graphe.noeuds.push({ ...amont.noeud, niveau });
+                    suivant.push(amont.noeud.id);
+                }
+            }
+            front = suivant;
+        }
+        // Début de la chaîne : ce qui n'est alimenté par rien d'autre dans le graphe obtenu.
+        const alimentes = new Set(graphe.liens.map(lien => lien.target));
+        for (const noeud of graphe.noeuds) if (noeud.niveau && !alimentes.has(noeud.id)) noeud.debut = true;
+    }
+
+    /** Ce qui alimente un élément du parcours, selon sa nature : une application, un fichier ou un objet. */
+    private amontDe(
+        identifiant: string,
+        actifs: Actif[],
+        objets: ObjetMetier[],
+        sources: DocumentSource[]
+    ): { noeud: NoeudGraphe; libelle: string }[] {
+        if (identifiant.startsWith('as:') || identifiant.startsWith('use:'))
+            return this.amontDUneApplication(identifiant.slice(identifiant.indexOf(':') + 1), actifs);
+        if (identifiant.startsWith('tbl:')) return this.amontDUnFichier(identifiant.slice(4), actifs, sources);
+        if (identifiant.startsWith('bo:')) return this.amontDUnObjet(identifiant.slice(3), actifs, objets);
+        return [];
+    }
+
+    /** Une application est alimentée par les fichiers qu'elle lit. */
+    private amontDUneApplication(identifiantActif: string, actifs: Actif[]): { noeud: NoeudGraphe; libelle: string }[] {
+        const actif = actifs.find(candidat => candidat.id === identifiantActif);
+        if (!actif) return [];
+        return (actif.tables || []).map(table => ({
+            noeud: { id: 'tbl:' + table, titre: table, detail: 'fichier lu', genre: 'table' as const },
+            libelle: 'lu par'
+        }));
+    }
+
+    /** Un fichier vient de l'application qui le produit, et des fichiers dont il est construit. */
+    private amontDUnFichier(table: string, actifs: Actif[], sources: DocumentSource[]): { noeud: NoeudGraphe; libelle: string }[] {
+        const amont: { noeud: NoeudGraphe; libelle: string }[] = [];
+        const producteur = actifs.find(actif => actif.kind === 'app' && (actif.sources || []).includes(table));
+        if (producteur)
+            amont.push({
+                noeud: { id: 'as:' + producteur.id, titre: producteur.name, detail: 'application source', genre: 'app' as const },
+                libelle: 'produit'
+            });
+        const source = sources.find(candidat => candidat.name === table);
+        const recette = source?.['design'] as { sources?: { src: string }[] } | undefined;
+        for (const contributrice of recette?.sources || [])
+            amont.push({
+                noeud: {
+                    id: 'tbl:' + contributrice.src,
+                    titre: contributrice.src,
+                    detail: 'fichier contributeur',
+                    genre: 'table' as const
+                },
+                libelle: 'consolidé dans'
+            });
+        return amont;
+    }
+
+    /** Un objet amont a ses propres sources : ses applications productrices et ses fichiers. */
+    private amontDUnObjet(boId: string, actifs: Actif[], objets: ObjetMetier[]): { noeud: NoeudGraphe; libelle: string }[] {
+        const objet = objets.find(candidat => candidat.id === boId);
+        if (!objet) return [];
+        const amont: { noeud: NoeudGraphe; libelle: string }[] = [];
+        for (const identifiantActif of objet.producedBy || []) {
+            const actif = actifs.find(candidat => candidat.id === identifiantActif);
+            if (actif)
+                amont.push({
+                    noeud: { id: 'as:' + actif.id, titre: actif.name, detail: 'application source', genre: 'app' as const },
+                    libelle: 'produit'
+                });
+        }
+        for (const table of new Set((objet.sources || []).map(source => source.table)))
+            amont.push({
+                noeud: { id: 'tbl:' + table, titre: table, detail: 'fichier', genre: 'table' as const },
+                libelle: 'alimente'
+            });
+        return amont;
     }
 
     /** Amont et aval d'une table dans la carte des flux (nœuds atteignables par les liens, dans les deux sens). */

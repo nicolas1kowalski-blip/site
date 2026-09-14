@@ -11,6 +11,8 @@ import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { phraseDeParcours } from '../accueil/question-gouvernance';
 import { GroupeReplie, estUnGroupe, grapheReplie, groupesDe } from '../../composants/repli-graphe';
+import { CHAINES_MONTREES, chaineLisible, chainesVers, resumeDesChaines } from '../../composants/chaines-parcours';
+import { PreferencesService } from '../../coeur/preferences.service';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
@@ -35,6 +37,9 @@ import { SessionService } from '../../coeur/session.service';
 import { GrapheSvgComponent, LienDessine, NoeudDessine } from '../../composants/graphe-svg.component';
 
 type Onglet = 'carte' | 'attribut' | 'table' | 'impact';
+
+/** Clé de la préférence « jusqu'au début » : le choix suit l'utilisateur d'une visite à l'autre. */
+const CLE_JUSQU_AU_DEBUT = 'lineage.jusquAuDebut';
 
 const COULEUR_ROLE: Record<string, { fond: string; bord: string }> = {
     app: { fond: '#e2e8f0', bord: '#334155' },
@@ -505,6 +510,31 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
                         }
                     </select>
                 </div>
+                <div class="ligne-champs">
+                    <label class="case" title="Remonter tout l'amont connu, jusqu'au premier maillon">
+                        <input
+                            type="checkbox"
+                            name="jusquAuDebut"
+                            [ngModel]="jusquAuDebut()"
+                            (ngModelChange)="basculerJusquAuDebut($event)"
+                        />
+                        ⇠ Jusqu'au début
+                    </label>
+                </div>
+                @if (jusquAuDebut() && chaines().length) {
+                    <!-- V12.10 : les chaînes complètes, en clair — on lit avant de regarder le graphe. -->
+                    <details class="depuis-le-debut" open>
+                        <summary>
+                            ⇠ Depuis le début : {{ chaines().length }} chaîne(s), {{ departs().length }} point(s) de départ
+                            @if (departs().length) {
+                                — <b>{{ departs().join(', ') }}</b>
+                            }
+                        </summary>
+                        @for (chaine of chaines(); track $index) {
+                            <div class="chaine">{{ chaine }}</div>
+                        }
+                    </details>
+                }
                 @if (phraseParcours(); as phrase) {
                     <!-- V13 : le parcours en une phrase, avant le graphe — on lit avant de regarder. -->
                     <p class="phrase-parcours">{{ phrase }}</p>
@@ -603,6 +633,20 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
         }
     `,
     styles: `
+        .depuis-le-debut {
+            margin-top: 10px;
+            background: var(--surface-2);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12.5px;
+        }
+        .depuis-le-debut summary {
+            cursor: pointer;
+            font-weight: 700;
+        }
+        .depuis-le-debut .chaine {
+            padding: 3px 0;
+        }
         .synthese-parcours {
             margin-top: 12px;
             border-top: 1px solid var(--bordure);
@@ -705,6 +749,7 @@ const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
 })
 export class LineageComponent {
     private readonly api = inject(ClientApiService);
+    private readonly preferences = inject(PreferencesService);
     private readonly notifications = inject(NotificationsService);
     readonly session = inject(SessionService);
     readonly formaterDate = formaterDate;
@@ -726,14 +771,20 @@ export class LineageComponent {
     readonly parcours = signal<ParcoursObjet | null>(null);
     /** Groupes repliés que l'utilisateur a ouverts (V12.8). */
     readonly groupesOuverts = signal<Set<string>>(new Set());
+    /** « ⇠ Jusqu'au début » : remonter tout l'amont connu, ou s'arrêter au premier niveau (V12.10). */
+    readonly jusquAuDebut = signal(this.preferences.lireBooleen(CLE_JUSQU_AU_DEBUT, true));
 
     /** Le parcours en une phrase (V13) : d'où vient l'information choisie, et ce qui s'en sert. */
     phraseParcours(): string {
         const objet = this.objets().find(candidat => candidat.id === this.objetId);
         if (!objet || !this.grapheAttribut()) return '';
         const information = (objet.elements || []).find(candidat => candidat.id === this.attributId);
-        if (!information) return '';
-        return phraseDeParcours(`${objet.name} › ${information.name}`, objet, this.actifs(), information);
+        const sujet = information ? `${objet.name} › ${information.name}` : objet.name;
+        const phrase = phraseDeParcours(sujet, objet, this.actifs(), information);
+        // V13.2 : quand on remonte jusqu'au début, la phrase dit aussi d'où part vraiment la donnée.
+        const departs = this.jusquAuDebut() ? this.departs() : [];
+        if (!departs.length) return phrase;
+        return `${phrase.replace(/\.$/, '')} — tout au début : ${departs.slice(0, 4).join(', ')}.`;
     }
 
     readonly grapheTable = signal<Graphe | null>(null);
@@ -998,7 +1049,7 @@ export class LineageComponent {
                 this.grapheAttribut.set(await this.api.parcoursAttribut(this.objetId, this.attributId));
                 return;
             }
-            const parcours = await this.api.parcoursObjet(this.objetId);
+            const parcours = await this.api.parcoursObjet(this.objetId, this.jusquAuDebut());
             this.parcours.set(parcours);
             this.grapheAttribut.set(parcours.graphe);
         } catch (erreur) {
@@ -1024,6 +1075,27 @@ export class LineageComponent {
         const replie = grapheReplie(graphe, this.centreDuParcours(), this.groupesOuverts());
         return { noeuds: replie.noeuds as Graphe['noeuds'], liens: replie.liens };
     }
+    /** Les chaînes complètes qui mènent au centre, écrites en clair (V12.10). */
+    chaines(): string[] {
+        const graphe = this.grapheAttribut();
+        if (!graphe) return [];
+        return chainesVers(graphe, this.centreDuParcours())
+            .filter(chaine => chaine.length > 2)
+            .slice(0, CHAINES_MONTREES)
+            .map(chaine => chaineLisible(graphe, chaine));
+    }
+    /** Les points de départ des chaînes : ce que la gouvernance connaît de plus amont. */
+    departs(): string[] {
+        const graphe = this.grapheAttribut();
+        return graphe ? resumeDesChaines(graphe, this.centreDuParcours()).departs : [];
+    }
+    /** L'interrupteur « ⇠ Jusqu'au début » : le choix est mémorisé d'une visite à l'autre. */
+    basculerJusquAuDebut(actif: boolean): void {
+        this.jusquAuDebut.set(actif);
+        this.preferences.ecrire(CLE_JUSQU_AU_DEBUT, actif);
+        void this.chargerParcours();
+    }
+
     /** Les groupes que ce parcours mérite — calculés à la demande, jamais stockés. */
     groupes(): GroupeReplie[] {
         const graphe = this.grapheAttribut();
