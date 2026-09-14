@@ -662,25 +662,34 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         .liste .champ {
             margin-bottom: 8px;
         }
+        /* Sélecteur segmenté, comme dans la V13 : un fond teinté, et l'onglet actif en pastille posée. */
         .onglets {
-            display: flex;
-            gap: 4px;
-            margin: 14px 0 10px;
-            border-bottom: 1px solid var(--bordure);
+            display: inline-flex;
+            gap: 2px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            background: color-mix(in srgb, var(--texte) 5%, transparent);
+            border-radius: 9px;
+            padding: 2px;
         }
         .onglets button {
             border: 0;
             background: none;
-            padding: 8px 12px;
+            padding: 6px 12px;
+            border-radius: 7px;
             font: inherit;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 530;
             color: var(--texte-2);
             cursor: pointer;
-            border-bottom: 2px solid transparent;
+            transition:
+                background-color 0.16s var(--souple),
+                color 0.16s var(--souple);
         }
         .onglets button.actif {
-            color: var(--accent);
-            border-bottom-color: var(--accent);
+            background: var(--surface);
+            color: var(--texte);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
         }
         .puce {
             display: inline-block;
