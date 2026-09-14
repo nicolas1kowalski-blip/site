@@ -451,6 +451,33 @@ try {
     await page.waitForFunction(() => /Clients vérifiés/.test(document.querySelector('app-sources')?.textContent || ''));
     verifier('jeux : promu, le jeu devient une source de l’espace', true);
 
+    // ---- Sources : vue cartes et actions à un clic (V12.0) ----
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources button[name=vueCartes]');
+    await page.click('app-sources button[name=vueCartes]');
+    await page.waitForSelector('app-sources .carte-source');
+    const cartesSources = await page.$$eval('app-sources .carte-source', cartes =>
+        cartes.map(carte => carte.textContent.replace(/\s+/g, ' ').trim())
+    );
+    verifier(
+        'sources : la vue cartes présente chaque source avec ses chiffres et ses actions à un clic',
+        cartesSources.length >= 2 &&
+            cartesSources.some(
+                carte => /clients\.csv/.test(carte) && /Explorer/.test(carte) && /Auditer/.test(carte) && /Extraire/.test(carte)
+            )
+    );
+    await capture('sources-cartes');
+    // Une action mène bien à l'écran visé, sur la bonne source.
+    await page.click('app-sources .carte-source:has-text("clients.csv") button:has-text("Extraire")');
+    await page.waitForSelector('app-extraction');
+    verifier('sources : « Extraire » depuis une carte ouvre l’écran Extraire', page.url().includes('/extraction'));
+    // La vue choisie est mémorisée.
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources');
+    verifier('sources : la vue cartes est retrouvée à la visite suivante', (await page.$$('app-sources .carte-source')).length >= 2);
+    await page.click('app-sources button[name=vueListe]');
+    await page.waitForSelector('app-sources table.tableau.sources');
+
     // ---- plein écran (⛶) sur un tableau de données ----
     await page.click('a[href="/navigateur"]');
     await page.waitForSelector('app-navigateur');

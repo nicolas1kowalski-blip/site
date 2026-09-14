@@ -29,6 +29,7 @@ import {
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { PreferencesService } from '../../coeur/preferences.service';
 
 type Depot = { nom: string; progression: number; etape: string };
 
@@ -294,6 +295,26 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
                 />
                 <span class="discret">{{ recherche ? sourcesVisibles().length + ' / ' : '' }}{{ sources().length }} source(s)</span>
                 <span class="espace"></span>
+                <span class="bascule-vue" title="Présenter les sources en tableau ou en cartes">
+                    <button
+                        class="bouton petit"
+                        type="button"
+                        name="vueListe"
+                        [class.actif]="vue() === 'liste'"
+                        (click)="choisirVue('liste')"
+                    >
+                        ▤ Liste
+                    </button>
+                    <button
+                        class="bouton petit"
+                        type="button"
+                        name="vueCartes"
+                        [class.actif]="vue() === 'cartes'"
+                        (click)="choisirVue('cartes')"
+                    >
+                        ▦ Cartes
+                    </button>
+                </span>
                 @if (session.peutEditer()) {
                     <label class="case"
                         ><input type="checkbox" name="parametres" [(ngModel)]="parametresVisibles" /> paramètres de lecture</label
@@ -306,6 +327,42 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
                 </div>
             } @else if (!sourcesVisibles().length) {
                 <div class="vide">Aucune source ne correspond à « {{ recherche }} ».</div>
+            } @else if (vue() === 'cartes') {
+                <div class="grille-cartes">
+                    @for (source of sourcesVisibles(); track source.id) {
+                        <article class="carte-source">
+                            <header>
+                                <b>{{ source.name }}</b>
+                                <span class="badge neutre">{{ source.type }}</span>
+                            </header>
+                            <div class="discret domaine">{{ source.theme || 'sans domaine' }}</div>
+                            <dl class="chiffres">
+                                <div>
+                                    <dt>Lignes</dt>
+                                    <dd>{{ lignesDe(source) }}</dd>
+                                </div>
+                                <div>
+                                    <dt>Colonnes</dt>
+                                    <dd>{{ source.headers.length }}</dd>
+                                </div>
+                                <div>
+                                    <dt>Taille</dt>
+                                    <dd>{{ formaterOctets(source.size) }}</dd>
+                                </div>
+                            </dl>
+                            <div class="actions-carte">
+                                <button class="bouton petit" (click)="apercevoir(source)">Aperçu</button>
+                                <button class="bouton petit" (click)="ouvrirExplorateur(source)">Explorer</button>
+                                <button class="bouton petit" (click)="ouvrirQualite(source)">Auditer</button>
+                                <button class="bouton petit" (click)="ouvrirExtraction(source)">Extraire</button>
+                                <button class="bouton petit" (click)="ouvrirDictionnaire(source)">Dictionnaire</button>
+                                @if (session.peutEditer()) {
+                                    <button class="bouton petit" (click)="ouvrirObjetMetier(source)">Objet métier</button>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
             } @else {
                 <div class="defilement-x">
                     <table class="tableau sources">
@@ -390,6 +447,20 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
                                     <td class="discret">{{ formaterDate(source.enregistreLe) }}</td>
                                     <td class="actions">
                                         <button class="bouton petit" (click)="apercevoir(source)">Aperçu</button>
+                                        <button
+                                            class="bouton petit"
+                                            (click)="ouvrirExplorateur(source)"
+                                            title="Parcourir les lignes de cette source"
+                                        >
+                                            Explorer
+                                        </button>
+                                        <button
+                                            class="bouton petit"
+                                            (click)="ouvrirExtraction(source)"
+                                            title="Composer une extraction à partir de cette source"
+                                        >
+                                            Extraire
+                                        </button>
                                         <button
                                             class="bouton petit"
                                             (click)="ouvrirDictionnaire(source)"
@@ -538,6 +609,56 @@ const ADRESSE_VIDE = (): ParametresAdresse => ({
         }
     `,
     styles: `
+        .bascule-vue {
+            display: inline-flex;
+            gap: 4px;
+        }
+        .bascule-vue .bouton.actif {
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 700;
+        }
+        .grille-cartes {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+        }
+        .carte-source {
+            border: 1px solid var(--bordure);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: var(--surface);
+        }
+        .carte-source header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: space-between;
+        }
+        .carte-source .domaine {
+            font-size: 11px;
+            margin-bottom: 6px;
+        }
+        .carte-source .chiffres {
+            display: flex;
+            gap: 14px;
+            margin: 0 0 8px;
+        }
+        .carte-source .chiffres dt {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--texte-2);
+        }
+        .carte-source .chiffres dd {
+            margin: 0;
+            font-weight: 700;
+        }
+        .actions-carte {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
         .depot {
             margin-bottom: 10px;
             display: flex;
@@ -590,9 +711,12 @@ export class SourcesComponent {
     readonly adresse = this.adresse$;
     readonly accept = EXTENSIONS_ACCEPTEES.map(extension => '.' + extension).join(',');
     private readonly router = inject(Router);
+    private readonly preferences = inject(PreferencesService);
     readonly vocabulaire = signal<VocabulaireImportation | null>(null);
     /** Nombre de lignes par nom de source (volumétrie du cockpit) et dernier profilage par identifiant de source. */
     readonly lignesParNom = signal<Record<string, number>>({});
+    /** Présentation des sources : tableau détaillé, ou cartes pour embrasser l'ensemble d'un coup d'œil. */
+    readonly vue = signal<'liste' | 'cartes'>('liste');
     readonly dernierProfilage = signal<Record<string, AuditQualite>>({});
     readonly colonnesDepliees = signal(new Set<string>());
     readonly relectureEnCours = signal('');
@@ -629,6 +753,7 @@ export class SourcesComponent {
     readonly formaterDate = formaterDate;
 
     constructor() {
+        this.vue.set(this.preferences.lire('sources.vue', 'liste') === 'cartes' ? 'cartes' : 'liste');
         this.recharger();
     }
 
@@ -649,6 +774,12 @@ export class SourcesComponent {
             this.notifications.erreur(erreur as Error);
         }
     }
+    /** La vue choisie est mémorisée : on retrouve l'écran comme on l'a laissé. */
+    choisirVue(vue: 'liste' | 'cartes'): void {
+        this.vue.set(vue);
+        this.preferences.ecrire('sources.vue', vue);
+    }
+
     lignesDe(source: Source): number | undefined {
         return this.lignesParNom()[source.name];
     }
@@ -714,6 +845,14 @@ export class SourcesComponent {
     }
     ouvrirQualite(source: Source): void {
         void this.router.navigate(['/qualite'], { queryParams: { source: source.id } });
+    }
+    /** Parcourir les lignes de cette source dans l'Explorateur. */
+    ouvrirExplorateur(source: Source): void {
+        void this.router.navigate(['/navigateur'], { queryParams: { source: source.id } });
+    }
+    /** Partir de cette source dans Extraire : elle devient la table de départ. */
+    ouvrirExtraction(source: Source): void {
+        void this.router.navigate(['/extraction'], { queryParams: { source: source.id } });
     }
     colonnesDe(sourceId: string | undefined): string[] {
         return this.sources().find(source => source.id === sourceId)?.headers || [];
