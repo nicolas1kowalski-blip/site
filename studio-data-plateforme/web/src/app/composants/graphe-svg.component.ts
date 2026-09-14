@@ -7,13 +7,28 @@
  * Déplacement (glisser le fond), zoom (molette), sélection d'un nœud ou d'un lien (clic) → événements.
  * Barre d'outils (comme dans l'application classique) : zoom avant / arrière, recentrer, plein écran, export en image.
  */
-import { Component, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { exporterSvgEnImage } from '../coeur/export-image';
 import { NotificationsService } from '../coeur/notifications.service';
 import { PreferencesService } from '../coeur/preferences.service';
+import { HAUTEUR_ENTETE, HAUTEUR_LIGNE, ZoneDeDomaine, couleurDuDomaine, rangerParDomaine, tailleDuBloc, texteCoupe } from './blocs-graphe';
 import { abscisseDuCouloir, cheminAAnglesDroits, cheminCourbe, pointsDAttache, surDesColonnesDistinctes } from './trace-liens';
 
-export type NoeudDessine = { id: string; titre: string; detail?: string; couleur?: string; bordure?: string; selectionne?: boolean };
+export type NoeudDessine = {
+    id: string;
+    titre: string;
+    detail?: string;
+    couleur?: string;
+    bordure?: string;
+    selectionne?: boolean;
+    /** V13 : les lignes du bloc — une par colonne, avec son marqueur. Sans elles, le nœud reste une case. */
+    lignes?: string[];
+    /** Domaine du nœud : il décide de la couleur de l'en-tête et de la zone qui l'entoure. */
+    domaine?: string;
+    /** Couleurs du bloc, calculées par l'écran depuis le domaine (blocs-graphe.ts). */
+    fondEnTete?: string;
+    couleurTitre?: string;
+};
 export type LienDessine = {
     id?: string;
     source: string;
@@ -34,8 +49,9 @@ const LIGNES_MAXIMUM = 12;
 /** Tracé retenu pour les liens : à angles droits (défaut, V12.11) ou en courbes (dessin d'origine). */
 export type TraceDesLiens = 'angles' | 'courbes';
 
-/** Taille d'un nœud d'après la longueur de son titre et de son détail (bornée). */
+/** Taille d'un nœud : un bloc (V13) se mesure à ses lignes, une case à son titre et à son détail. */
 function tailleNoeud(noeud: NoeudDessine): [number, number] {
+    if (noeud.lignes) return tailleDuBloc(noeud.titre, noeud.lignes);
     const longueur = Math.max(noeud.titre.length * 7.5, (noeud.detail || '').length * 6) + 20;
     return [Math.min(260, Math.max(120, longueur)), noeud.detail ? 46 : 30];
 }
@@ -186,6 +202,26 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
                     </marker>
                 </defs>
                 <g [attr.transform]="'translate(' + translationX() + ' ' + translationY() + ') scale(' + echelle() + ')'">
+                    <!-- V13 : chaque domaine a son cadre, dessiné derrière ses blocs et portant son nom. -->
+                    @for (zone of zones(); track zone.domaine) {
+                        <g class="zone">
+                            <rect
+                                [attr.x]="zone.x"
+                                [attr.y]="zone.y"
+                                [attr.width]="zone.largeur"
+                                [attr.height]="zone.hauteur"
+                                rx="12"
+                                [attr.fill]="zone.trait"
+                                fill-opacity="0.05"
+                                [attr.stroke]="zone.trait"
+                                stroke-dasharray="6 4"
+                                stroke-width="1.5"
+                            />
+                            <text [attr.x]="zone.x + 8" [attr.y]="zone.y + 13" [attr.fill]="zone.trait" class="nom-zone">
+                                🗂 {{ zone.domaine }}
+                            </text>
+                        </g>
+                    }
                     @for (lien of liensPlaces(); track $index) {
                         <g
                             class="lien"
@@ -225,22 +261,72 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
                                 [attr.width]="noeud.place.largeur"
                                 [attr.height]="noeud.place.hauteur"
                                 rx="8"
-                                [attr.fill]="noeud.noeud.couleur || 'var(--surface)'"
+                                [attr.fill]="noeud.noeud.lignes ? '#fff' : noeud.noeud.couleur || 'var(--surface)'"
                                 [attr.stroke]="noeud.noeud.bordure || 'var(--bordure)'"
                                 [attr.stroke-width]="noeud.noeud.selectionne ? 3 : 1.5"
                             />
-                            <text
-                                [attr.x]="noeud.place.x"
-                                [attr.y]="noeud.place.y + (noeud.noeud.detail ? -3 : 5)"
-                                text-anchor="middle"
-                                class="titre"
-                            >
-                                {{ noeud.noeud.titre }}
-                            </text>
-                            @if (noeud.noeud.detail) {
-                                <text [attr.x]="noeud.place.x" [attr.y]="noeud.place.y + 14" text-anchor="middle" class="detail">
-                                    {{ noeud.noeud.detail }}
+                            @if (noeud.noeud.lignes; as lignes) {
+                                <!-- V13 : un bloc — en-tête coloré par domaine, puis une ligne par colonne. -->
+                                <path
+                                    [attr.d]="
+                                        'M ' +
+                                        (noeud.place.x - noeud.place.largeur / 2) +
+                                        ' ' +
+                                        (noeud.place.y - noeud.place.hauteur / 2 + hauteurEnTete) +
+                                        ' h ' +
+                                        noeud.place.largeur
+                                    "
+                                    [attr.stroke]="noeud.noeud.bordure || 'var(--bordure)'"
+                                    stroke-opacity="0.5"
+                                    fill="none"
+                                />
+                                <rect
+                                    [attr.x]="noeud.place.x - noeud.place.largeur / 2"
+                                    [attr.y]="noeud.place.y - noeud.place.hauteur / 2"
+                                    [attr.width]="noeud.place.largeur"
+                                    [attr.height]="hauteurEnTete"
+                                    rx="8"
+                                    [attr.fill]="noeud.noeud.fondEnTete || 'var(--surface-2)'"
+                                />
+                                <rect
+                                    [attr.x]="noeud.place.x - noeud.place.largeur / 2"
+                                    [attr.y]="noeud.place.y - noeud.place.hauteur / 2 + hauteurEnTete - 8"
+                                    [attr.width]="noeud.place.largeur"
+                                    height="8"
+                                    [attr.fill]="noeud.noeud.fondEnTete || 'var(--surface-2)'"
+                                />
+                                <text
+                                    [attr.x]="noeud.place.x - noeud.place.largeur / 2 + 10"
+                                    [attr.y]="noeud.place.y - noeud.place.hauteur / 2 + hauteurEnTete / 2 + 4"
+                                    [attr.fill]="noeud.noeud.couleurTitre || 'var(--texte)'"
+                                    class="titre-bloc"
+                                >
+                                    {{ couper(noeud.noeud.titre, noeud.place.largeur) }}
                                 </text>
+                                @for (ligne of lignes; track $index; let rang = $index) {
+                                    <text
+                                        [attr.x]="noeud.place.x - noeud.place.largeur / 2 + 10"
+                                        [attr.y]="noeud.place.y - noeud.place.hauteur / 2 + hauteurEnTete + 12 + rang * hauteurLigne"
+                                        class="ligne-bloc"
+                                        [class.reste]="ligne.startsWith('…')"
+                                    >
+                                        {{ couper(ligne, noeud.place.largeur) }}
+                                    </text>
+                                }
+                            } @else {
+                                <text
+                                    [attr.x]="noeud.place.x"
+                                    [attr.y]="noeud.place.y + (noeud.noeud.detail ? -3 : 5)"
+                                    text-anchor="middle"
+                                    class="titre"
+                                >
+                                    {{ noeud.noeud.titre }}
+                                </text>
+                                @if (noeud.noeud.detail) {
+                                    <text [attr.x]="noeud.place.x" [attr.y]="noeud.place.y + 14" text-anchor="middle" class="detail">
+                                        {{ noeud.noeud.detail }}
+                                    </text>
+                                }
                             }
                         </g>
                     }
@@ -302,6 +388,22 @@ function disposer(noeuds: NoeudDessine[], liens: LienDessine[]): Record<string, 
         .noeud .detail {
             font-size: 10px;
             fill: var(--texte-2);
+        }
+        /* V13 : le bloc — son titre dans l'en-tête, ses colonnes dessous. */
+        .noeud .titre-bloc {
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .noeud .ligne-bloc {
+            font-size: 10px;
+            fill: #475569;
+        }
+        .noeud .ligne-bloc.reste {
+            fill: #94a3b8;
+        }
+        .zone .nom-zone {
+            font-size: 12px;
+            font-weight: 700;
         }
         .lien {
             cursor: pointer;
@@ -367,7 +469,48 @@ export class GrapheSvgComponent {
     readonly translationY = signal(30);
     private deplacement: { x: number; y: number; translationX: number; translationY: number } | null = null;
 
-    readonly places = computed(() => disposer(this.noeuds(), this.liens()));
+    /**
+     * Rangement des nœuds : en couches de gauche à droite (le sens des flèches prime), ou domaine par
+     * domaine comme la V13 le fait sur le modèle de données (les familles priment).
+     */
+    readonly disposition = input<'couches' | 'domaines'>('couches');
+
+    readonly places = computed(() => {
+        if (this.disposition() !== 'domaines') return disposer(this.noeuds(), this.liens());
+        const rangement = rangerParDomaine(
+            this.noeuds().map(noeud => {
+                const [largeur, hauteur] = tailleNoeud(noeud);
+                return { id: noeud.id, largeur, hauteur, domaine: noeud.domaine || '' };
+            })
+        );
+        const places: Record<string, Place> = {};
+        for (const noeud of this.noeuds()) {
+            const [largeur, hauteur] = tailleNoeud(noeud);
+            const place = rangement.places[noeud.id];
+            places[noeud.id] = { x: place.x, y: place.y, largeur, hauteur };
+        }
+        return places;
+    });
+
+    /** Les cadres de domaine, dessinés derrière les blocs (vides hors du rangement par domaine). */
+    readonly zones = computed<(ZoneDeDomaine & { trait: string })[]>(() => {
+        if (this.disposition() !== 'domaines') return [];
+        const domaines = this.noeuds().map(noeud => noeud.domaine || '');
+        return rangerParDomaine(
+            this.noeuds().map(noeud => {
+                const [largeur, hauteur] = tailleNoeud(noeud);
+                return { id: noeud.id, largeur, hauteur, domaine: noeud.domaine || '' };
+            })
+        ).zones.map(zone => ({ ...zone, trait: couleurDuDomaine(domaines, zone.domaine).trait }));
+    });
+
+    /** Hauteurs du bloc, pour le gabarit : en-tête et ligne. */
+    readonly hauteurEnTete = HAUTEUR_ENTETE;
+    readonly hauteurLigne = HAUTEUR_LIGNE;
+    /** Un texte plus large que son bloc est coupé, comme dans le classique. */
+    couper(texte: string, largeur: number): string {
+        return texteCoupe(texte, largeur);
+    }
     readonly noeudsPlaces = computed(() => this.noeuds().map(noeud => ({ noeud, place: this.places()[noeud.id] })));
     readonly liensPlaces = computed<LienPlace[]>(() => {
         const places = this.places();
@@ -434,8 +577,20 @@ export class GrapheSvgComponent {
         };
     }
 
+    /** Vrai tant que la personne n'a ni déplacé ni zoomé : on peut alors recadrer sans la contrarier. */
+    private cadrageLibre = true;
+
     constructor() {
         if (this.preferences.lire('graphe.trace', 'angles') === 'courbes') this.trace.set('courbes');
+        // Cadrage automatique à la première image, et à chaque changement de contenu tant que personne n'a
+        // navigué à la main — c'est ce que fait le classique (svgFitAll / needFit). Sans cela, un graphe
+        // rangé par domaine peut s'ouvrir hors de l'écran.
+        effect(() => {
+            const places = this.places();
+            if (!this.cadrageLibre || !Object.keys(places).length) return;
+            // Le cadrage a besoin des dimensions réelles du SVG : on attend la fin du rendu.
+            setTimeout(() => this.ajuster(), 0);
+        });
     }
 
     /** Change le dessin des liens et s'en souvient : c'est un goût, pas un réglage à refaire chaque fois. */
@@ -446,6 +601,7 @@ export class GrapheSvgComponent {
 
     zoomer(evenement: WheelEvent): void {
         evenement.preventDefault();
+        this.cadrageLibre = false;
         const facteur = evenement.deltaY < 0 ? 1.1 : 1 / 1.1;
         const nouvelle = Math.min(3, Math.max(0.3, this.echelle() * facteur));
         const rectangle = this.zone().nativeElement.getBoundingClientRect();
@@ -483,6 +639,7 @@ export class GrapheSvgComponent {
     }
 
     commencerDeplacement(evenement: PointerEvent): void {
+        this.cadrageLibre = false;
         this.deplacement = {
             x: evenement.clientX,
             y: evenement.clientY,
@@ -502,15 +659,29 @@ export class GrapheSvgComponent {
     }
 
     /** Ramène le graphe entier dans la zone visible. */
+    /**
+     * Cadre tout le dessin dans la fenêtre, comme le « Ranger » du classique (svgFitAll) : on mesure ce
+     * qu'occupe réellement le graphe — un rangement par domaine ne commence pas forcément en haut à gauche —
+     * puis on choisit l'échelle qui le fait tenir, sans descendre sous un douzième ni dépasser 1,4.
+     */
     ajuster(): void {
         const places = Object.values(this.places());
         if (!places.length) return;
-        const largeurGraphe = Math.max(...places.map(place => place.x + place.largeur / 2)) + 20;
-        const hauteurGraphe = Math.max(...places.map(place => place.y + place.hauteur / 2)) + 20;
+        const gauche = Math.min(...places.map(place => place.x - place.largeur / 2));
+        const haut = Math.min(...places.map(place => place.y - place.hauteur / 2));
+        const droite = Math.max(...places.map(place => place.x + place.largeur / 2));
+        const bas = Math.max(...places.map(place => place.y + place.hauteur / 2));
+        const largeurGraphe = droite - gauche;
+        const hauteurGraphe = bas - haut;
+        if (largeurGraphe <= 0 || hauteurGraphe <= 0) return;
         const rectangle = this.zone().nativeElement.getBoundingClientRect();
-        const echelle = Math.min(1, rectangle.width / largeurGraphe, rectangle.height / hauteurGraphe);
+        const marge = 50;
+        const echelle = Math.max(
+            0.12,
+            Math.min(1.4, (rectangle.width - 2 * marge) / largeurGraphe, (rectangle.height - 2 * marge) / hauteurGraphe)
+        );
         this.echelle.set(echelle);
-        this.translationX.set(Math.max(10, (rectangle.width - largeurGraphe * echelle) / 2));
-        this.translationY.set(Math.max(10, (rectangle.height - hauteurGraphe * echelle) / 2));
+        this.translationX.set((rectangle.width - largeurGraphe * echelle) / 2 - gauche * echelle);
+        this.translationY.set((rectangle.height - hauteurGraphe * echelle) / 2 - haut * echelle);
     }
 }

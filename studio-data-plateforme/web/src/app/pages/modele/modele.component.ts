@@ -21,6 +21,7 @@ import {
 } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import { LIGNES_BLOC_COMPACT, LIGNES_BLOC_SCHEMA, couleurDuDomaine, lignesDuBloc } from '../../composants/blocs-graphe';
 import { GrapheSvgComponent, LienDessine, NoeudDessine } from '../../composants/graphe-svg.component';
 import { PageLignesComponent } from '../qualite/page-lignes.component';
 
@@ -31,7 +32,8 @@ const NATURES_LIEN: Record<string, string> = {
     reference: '→ référence'
 };
 const CARDINALITES = ['', '1-1', '1-N', 'N-1', 'N-N'];
-const COULEUR_PAR_DOMAINE = ['#4f46e5', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f43f5e', '#14b8a6', '#f97316', '#64748b'];
+/** Le symbole qui précède l'étiquette d'un lien, selon sa nature (relKindSymbol du classique). */
+const SYMBOLE_NATURE: Record<string, string> = { composition: '◆ ', aggregation: '◇ ', reference: '→ ' };
 
 type BrouillonRegle = {
     relationId: string;
@@ -74,9 +76,10 @@ type BrouillonRegle = {
             @if (sources().length) {
                 <app-graphe-svg
                     nomImage="modele-de-donnees"
+                    disposition="domaines"
                     [noeuds]="noeuds()"
                     [liens]="liens()"
-                    [hauteur]="vue === 'schema' ? 520 : 360"
+                    [hauteur]="vue === 'schema' ? 560 : 420"
                     (noeudChoisi)="choisirTable($event.id)"
                 />
             } @else {
@@ -533,22 +536,46 @@ export class ModeleComponent {
     nouveau = { sourceTable: '', sourceCol: '', targetTable: '', targetCol: '', cardinality: 'N-1' };
     brouillonRegle: BrouillonRegle = { relationId: '', sens: 'cible', condCol: '', condOp: '=', condVal: '', expect: '=', n: 1 };
 
-    /** Nœuds du graphe : une table par source, couleur par domaine, détail = colonnes (schéma) ou compte. */
+    /**
+     * Nœuds du graphe, façon V13 : un **bloc** par table — en-tête coloré par domaine, puis une ligne par
+     * colonne avec son marqueur (🔑 clé, 🔐 clé étrangère, 🔗 colonne de jointure). En vue compacte, sept
+     * colonnes au plus, puis « … N autre(s) colonne(s) » ; en vue schéma, quarante.
+     */
     readonly noeuds = computed<NoeudDessine[]>(() => {
-        const domaines = [...new Set(this.sources().map(source => String(source.theme || '')))];
+        const domaines = this.sources().map(source => String(source.theme || ''));
+        const maximum = this.vue === 'schema' ? LIGNES_BLOC_SCHEMA : LIGNES_BLOC_COMPACT;
         return this.sources().map(source => {
             const domaine = String(source.theme || '');
-            const detail =
-                this.vue === 'schema' ? source.headers.join(', ') : `${source.headers.length} colonne(s)${domaine ? ' · ' + domaine : ''}`;
+            const couleurs = couleurDuDomaine(domaines, domaine);
+            const recette = source.type === 'designed' ? source.design : undefined;
+            const roles = {
+                cles: recette?.key || [],
+                clesEtrangeres: (recette?.fks || []).map(cle => cle.attr),
+                jointures: this.colonnesDeJointure(source.name)
+            };
+            const pictogramme = source.type === 'designed' ? '🧱 ' : source.type === 'extraction' ? '⤓ ' : '📄 ';
             return {
                 id: source.name,
-                titre: source.name,
-                detail,
-                couleur: COULEUR_PAR_DOMAINE[domaines.indexOf(domaine) % COULEUR_PAR_DOMAINE.length],
+                titre: pictogramme + source.name,
+                lignes: lignesDuBloc(source.headers || [], roles, maximum),
+                domaine,
+                fondEnTete: couleurs.entete,
+                couleurTitre: couleurs.titre,
+                bordure: couleurs.trait,
                 selectionne: this.tableChoisie() === source.name
             };
         });
     });
+
+    /** Les colonnes d'une table qui servent à un lien du modèle : ce sont elles que l'on cherche d'abord. */
+    private colonnesDeJointure(nomTable: string): string[] {
+        const colonnes = new Set<string>();
+        for (const relation of this.relations()) {
+            if (relation.sourceTable === nomTable && relation.sourceCol) colonnes.add(relation.sourceCol);
+            if (relation.targetTable === nomTable && relation.targetCol) colonnes.add(relation.targetCol);
+        }
+        return [...colonnes];
+    }
     readonly liens = computed<LienDessine[]>(() =>
         this.relations()
             .filter(relation => relation.sourceId && relation.targetId)
@@ -556,7 +583,8 @@ export class ModeleComponent {
                 id: relation.id,
                 source: relation.sourceTable,
                 target: relation.targetTable,
-                libelle: `${relation.sourceCol} → ${relation.targetCol}${relation.cardinality ? ' (' + relation.cardinality + ')' : ''}`,
+                // Même écriture que le classique : « ◆ id_client = id_client [N-1] ».
+                libelle: `${SYMBOLE_NATURE[relation.kind || ''] || ''}${relation.sourceCol} = ${relation.targetCol}${relation.cardinality ? ' [' + relation.cardinality + ']' : ''}`,
                 pointille: relation.kind === 'reference',
                 epaisseur:
                     this.tableChoisie() && (relation.sourceTable === this.tableChoisie() || relation.targetTable === this.tableChoisie())

@@ -300,6 +300,40 @@ try {
     );
     await capture('modele-regles');
 
+    // ---- V13 : le graphe du modèle est fait de blocs rangés par domaine ----
+    const blocsDuModele = await page.$$eval('app-modele app-graphe-svg .noeud text.titre-bloc', titres =>
+        titres.map(titre => titre.textContent.trim())
+    );
+    const lignesDuBloc = await page.$$eval('app-modele app-graphe-svg .noeud text.ligne-bloc', lignes =>
+        lignes.map(ligne => ligne.textContent.trim())
+    );
+    verifier(
+        'modèle V13 : chaque table est un bloc — son nom en en-tête, ses colonnes dessous, la colonne de jointure marquée 🔗',
+        blocsDuModele.some(titre => /clients\.csv/.test(titre)) &&
+            lignesDuBloc.some(ligne => /^🔗 id_client/.test(ligne)) &&
+            lignesDuBloc.some(ligne => /^· ville/.test(ligne))
+    );
+    const zones = await page.$$eval('app-modele app-graphe-svg .zone text', noms => noms.map(nom => nom.textContent.trim()));
+    verifier(
+        'modèle V13 : les tables sont rangées par domaine, chaque domaine dans son cadre nommé',
+        zones.some(nom => /Ventes/.test(nom)) && zones.length >= 2
+    );
+    await capture('modele-blocs-domaines');
+
+    // Les deux tables réunies dans le même domaine se rangent côte à côte, et leur lien redevient horizontal.
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources table.sources tbody tr');
+    const ligneCommandesDomaine = page.locator('app-sources tbody tr', { has: page.locator('td b', { hasText: /^commandes\.csv$/ }) });
+    await ligneCommandesDomaine.locator('input[name^=domaine-]').fill('Ventes');
+    await ligneCommandesDomaine.locator('input[name^=domaine-]').press('Tab');
+    await page.waitForFunction(
+        async () => (await (await fetch('/api/tables')).json()).filter(source => source.theme === 'Ventes').length === 2
+    );
+    await page.click('a[href="/modele"]');
+    await page.waitForSelector('app-modele app-graphe-svg .noeud');
+    await page.waitForFunction(() => document.querySelectorAll('app-modele app-graphe-svg .zone').length === 1, null, { timeout: 10000 });
+    verifier('modèle V13 : deux tables du même domaine tiennent dans un seul cadre', true);
+
     // ---- graphes V12.11 : tracé à angles droits, couloirs distincts, mise en avant au survol ----
     const cheminsDuModele = await page.$$eval('app-modele app-graphe-svg .lien path[stroke]:not([stroke=transparent])', chemins =>
         chemins.map(chemin => chemin.getAttribute('d'))
@@ -1396,7 +1430,7 @@ try {
         'lineage : la carte dérivée contient les deux fichiers, la table conçue, l’application CRM et l’objet Client (' +
             noeudsCarte.join(', ') +
             ')',
-        ['CRM', 'Client', 'Clients consolidés', 'clients.csv', 'commandes.csv'].every(nom => noeudsCarte.includes(nom))
+        ['🖥 CRM', '🏛️ Client', '🏛 Clients consolidés', '📄 clients.csv', '🗄 commandes.csv'].every(nom => noeudsCarte.includes(nom))
     );
     await page.click('app-lineage app-graphe-svg .noeud:has-text("Clients consolidés")');
     await page.waitForSelector('app-lineage h2:has-text("Clients consolidés")');
@@ -1443,7 +1477,7 @@ try {
     );
     verifier(
         'lineage : le parcours de l’attribut « ville » montre l’application CRM, la colonne clients.csv.ville et l’attribut',
-        noeudsParcours.includes('CRM') && noeudsParcours.includes('ville') && noeudsParcours.length >= 3
+        noeudsParcours.includes('🖥 CRM') && noeudsParcours.some(titre => /ville/.test(titre)) && noeudsParcours.length >= 3
     );
     // V13 : une phrase résume le parcours avant le graphe — on lit avant de regarder.
     verifier(

@@ -50,6 +50,24 @@ const COULEUR_ROLE: Record<string, { fond: string; bord: string }> = {
     consumer: { fond: '#f1f5f9', bord: '#64748b' }
 };
 const COULEUR_SANTE: Record<string, string> = { ok: '#16a34a', warn: '#d97706', bad: '#dc2626' };
+/** Le pictogramme de chaque rôle, comme dans la V13 : on reconnaît la nature d'une case avant de la lire. */
+const PICTOGRAMME_ROLE: Record<string, string> = {
+    master: '🗄',
+    source: '📄',
+    reference: '🏛',
+    consumer: '📊',
+    app: '🖥',
+    object: '🏛️'
+};
+/** Le pictogramme de chaque genre de nœud des parcours (application, fichier, colonne, information, objet). */
+const PICTOGRAMME_GENRE: Record<string, string> = {
+    app: '🖥',
+    table: '📄',
+    colonne: '⋮',
+    attribut: '🏛️',
+    objet: '🏛️',
+    alerte: '⚠'
+};
 const COULEUR_GENRE: Record<string, { fond: string; bord: string }> = {
     app: COULEUR_ROLE['app'],
     table: { fond: '#dbeafe', bord: '#2563eb' },
@@ -810,7 +828,7 @@ export class LineageComponent {
     readonly noeudsCarte = computed<NoeudDessine[]>(() =>
         (this.carte()?.noeuds || []).map(noeud => ({
             id: noeud.id,
-            titre: noeud.name,
+            titre: `${PICTOGRAMME_ROLE[noeud.role] || ''} ${noeud.name}`.trim(),
             detail: `${this.libelleRole(noeud.role)}${noeud.origine ? ' · ' + noeud.origine : ''}`,
             couleur: this.couleurRole(noeud.role).fond,
             bordure: this.couleurRole(noeud.role).bord,
@@ -1154,7 +1172,7 @@ export class LineageComponent {
     noeudsGraphe(graphe: Graphe): NoeudDessine[] {
         return graphe.noeuds.map(noeud => ({
             id: noeud.id,
-            titre: noeud.titre,
+            titre: `${PICTOGRAMME_GENRE[noeud.genre] || ''} ${noeud.titre}`.trim(),
             detail: noeud.detail,
             couleur: COULEUR_GENRE[noeud.genre].fond,
             bordure: COULEUR_GENRE[noeud.genre].bord

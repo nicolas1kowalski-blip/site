@@ -15,7 +15,7 @@
     "tester:api": "npm run tester --prefix api",
     "tester:e2e": "node tests/e2e.test.mjs",
     "tester:demo": "node --test donnees-demo/generer.test.mjs",
-    "tester:chemins": "node --test --experimental-strip-types --no-warnings tests/chemins.test.mjs tests/trace-liens.test.mjs tests/tri-tableau.test.mjs tests/description-information.test.mjs tests/question-gouvernance.test.mjs tests/origines-information.test.mjs tests/repli-graphe.test.mjs tests/chaines-parcours.test.mjs tests/gestes-annulables.test.mjs tests/gestes-saisie.test.mjs tests/lien-parcours.test.mjs",
+    "tester:chemins": "node --test --experimental-strip-types --no-warnings tests/chemins.test.mjs tests/trace-liens.test.mjs tests/tri-tableau.test.mjs tests/description-information.test.mjs tests/question-gouvernance.test.mjs tests/origines-information.test.mjs tests/repli-graphe.test.mjs tests/chaines-parcours.test.mjs tests/gestes-annulables.test.mjs tests/gestes-saisie.test.mjs tests/lien-parcours.test.mjs tests/blocs-graphe.test.mjs",
     "demo": "node donnees-demo/generer.mjs",
     "verifier": "node formater.mjs --check && eslint .",
     "formater": "node formater.mjs",

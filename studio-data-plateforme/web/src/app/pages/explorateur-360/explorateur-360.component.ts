@@ -178,7 +178,8 @@ export class Explorateur360Component {
             )
             .map(noeud => ({
                 id: noeud.id,
-                titre: noeud.table,
+                // Même pictogramme que dans le classique : une case de l'explorateur est une ligne de fichier.
+                titre: '📄 ' + noeud.table,
                 detail: this.libelle(noeud),
                 couleur: noeud.etendu ? 'var(--accent-fond)' : undefined,
                 selectionne: noeud.id === this.choisiId()
