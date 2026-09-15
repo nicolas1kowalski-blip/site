@@ -35,7 +35,19 @@ export type FicheDictionnaire = {
      * Ce que l'on sait de chaque colonne : sa définition, sa sensibilité, le type que l'on en attend, et le
      * terme du glossaire auquel elle renvoie (V13).
      */
-    columns?: Record<string, { description?: string; sensitivity?: string; technicalType?: string; term?: string }>;
+    columns?: Record<
+        string,
+        {
+            definition?: string;
+            description?: string;
+            sensitivity?: string;
+            technicalType?: string;
+            examples?: string;
+            examplesAuto?: boolean;
+            term?: string;
+            valueListId?: string;
+        }
+    >;
 };
 
 type EtatApplication = {
@@ -75,10 +87,19 @@ const schemaFiche = z.object({
     columns: z
         .record(
             z.object({
+                /** La définition métier de la colonne — le nom du champ que lit aussi l'application classique. */
+                definition: z.string().optional(),
+                /** Ancien nom du même champ : on continue de l'accepter pour ne rien perdre des fiches déjà saisies. */
                 description: z.string().optional(),
                 sensitivity: z.string().optional(),
                 technicalType: z.string().optional(),
-                term: z.string().optional()
+                /** Des valeurs réellement rencontrées, pour comprendre la colonne sans ouvrir le fichier. */
+                examples: z.string().optional(),
+                /** Vrai quand les exemples ont été pris dans la source plutôt que saisis à la main. */
+                examplesAuto: z.boolean().optional(),
+                term: z.string().optional(),
+                /** La liste de valeurs qui régit cette colonne (« A = Actif »), quand elle en a une. */
+                valueListId: z.string().optional()
             })
         )
         .optional()

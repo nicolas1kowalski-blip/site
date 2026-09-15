@@ -58,19 +58,40 @@ export type ColonneResultat = { nom: string; type: string };
 export type ResultatSql = { colonnes: ColonneResultat[]; lignes: unknown[][]; ignoree?: boolean };
 
 export type TermeGlossaire = { id: string; term: string; definition: string; domain?: string; synonyms?: string; owner?: string };
+/** Ce que l'on sait d'une colonne : sa définition, sa confidentialité, son type, ses exemples, son terme. */
+export type ColonneDeDictionnaire = {
+    /** La définition métier, sous le nom de champ que lit aussi l'application classique. */
+    definition?: string;
+    /** Ancien nom du même champ : encore lu, pour ne rien perdre des fiches déjà saisies. */
+    description?: string;
+    sensitivity?: string;
+    technicalType?: string;
+    /** Des valeurs réellement rencontrées : comprendre la colonne sans ouvrir le fichier. */
+    examples?: string;
+    /** Vrai quand les exemples ont été pris dans la source plutôt que saisis à la main. */
+    examplesAuto?: boolean;
+    term?: string;
+    /** La liste de valeurs qui régit la colonne (« A = Actif »), quand elle en a une. */
+    valueListId?: string;
+};
+
 export type FicheDictionnaire = {
     description?: string;
     owner?: string;
     domain?: string;
     updateFrequency?: string;
     sensitivity?: string;
+    /** La personne référente de la donnée, au quotidien — le classique dit « Data Steward ». */
+    steward?: string;
+    /** L'application d'où la donnée vient : c'est aussi le point de départ de son parcours. */
+    sourceSystem?: string;
     /** Où en est la fiche : brouillon, proposée, validée, obsolète — et par qui, depuis quand (V13). */
     status?: string;
     statusAt?: string;
     statusBy?: string;
     history?: { at: string; from: string; to: string; by: string; comment: string }[];
-    /** Par colonne : sa définition, sa sensibilité, le type attendu, et le terme du glossaire visé (V13). */
-    columns?: Record<string, { description?: string; sensitivity?: string; technicalType?: string; term?: string }>;
+    /** Par colonne : sa définition, sa confidentialité, son type, ses exemples, son terme, sa liste (V13). */
+    columns?: Record<string, ColonneDeDictionnaire>;
 };
 
 export type EntreeJournal = { id: string; action: string; cible: string | null; details: unknown; horodatage: string; auteur: string };

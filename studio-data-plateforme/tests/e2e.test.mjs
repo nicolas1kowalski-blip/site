@@ -2501,11 +2501,45 @@ try {
     await page.waitForSelector('.notification.succes');
     const etat = await page.evaluate(async () => (await (await fetch('/api/etat/appState')).json()).valeur);
     verifier(
-        'dictionnaire : fiche et description de colonne écrites dans le document appState partagé',
+        'dictionnaire : fiche et définition de colonne écrites dans le document appState partagé, sous le nom de champ que lit aussi le classique',
         etat.governance.dictionary['clients.csv'].owner === 'Équipe Données' &&
-            etat.governance.dictionary['clients.csv'].columns.ville.description === 'Ville de résidence' &&
+            etat.governance.dictionary['clients.csv'].columns.ville.definition === 'Ville de résidence' &&
             etat.governance.glossary.length === 1
     );
+
+    // ---- V13 : ce qu'il faut pour comprendre une colonne sans ouvrir le fichier ----
+    await page.fill('app-dictionnaire input[name=steward]', 'Camille Roy');
+    await page.fill('app-dictionnaire input[name=sourceSystem]', 'CRM');
+    await page.fill('app-dictionnaire input[name="t_ville"]', 'VARCHAR(40)');
+    await page.selectOption('app-dictionnaire select[name="g_ville"]', { label: 'Client' });
+    await page.click('app-dictionnaire button[type=submit]');
+    await page.waitForSelector('.notification.succes');
+    const ficheEnrichie = await page.evaluate(
+        async () => (await (await fetch('/api/etat/appState')).json()).valeur.governance.dictionary['clients.csv']
+    );
+    verifier(
+        'V13 : la fiche porte aussi un référent et le système source, et chaque colonne son type et son terme',
+        ficheEnrichie.steward === 'Camille Roy' &&
+            ficheEnrichie.sourceSystem === 'CRM' &&
+            ficheEnrichie.columns.ville.technicalType === 'VARCHAR(40)' &&
+            !!ficheEnrichie.columns.ville.term
+    );
+    // « Échantillonner » prend de vraies valeurs dans le fichier, sans écraser ce qui a été saisi à la main.
+    await page.click('app-dictionnaire button[name=echantillonnerLesExemples]');
+    await page.waitForSelector('.notification.succes:has-text("illustrées")');
+    const ficheIllustree = await page.evaluate(
+        async () => (await (await fetch('/api/etat/appState')).json()).valeur.governance.dictionary['clients.csv']
+    );
+    verifier(
+        'V13 : « Échantillonner » illustre les colonnes avec des valeurs réellement présentes dans le fichier',
+        /Paris|Lyon|Lille/.test(ficheIllustree.columns.ville.examples || '') && ficheIllustree.columns.ville.examplesAuto === true
+    );
+    verifier(
+        'V13 : le dictionnaire dit combien de colonnes sont définies, et propose l’autre entrée (par objet métier)',
+        /\d+\/\d+ définies/.test(await page.textContent('app-dictionnaire')) &&
+            (await page.$$('app-dictionnaire button[name=dictionnaireParObjet]')).length === 1
+    );
+    await capture('dictionnaire-v13');
 
     // ---- V13 : le cycle de validation d'une fiche du dictionnaire ----
     // Une définition écrite n'est pas une définition validée : la fiche porte un statut, daté et attribué.

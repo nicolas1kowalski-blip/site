@@ -1,13 +1,31 @@
 /**
- * Dictionnaire des données : pour chaque source, une fiche (description, responsable, domaine, fréquence de
- * mise à jour, sensibilité) et une description par colonne. Les modifications sont fusionnées dans le
- * document partagé avec l'application complète.
+ * Dictionnaire des données — repris de la V13.
+ *
+ * Pour chaque source, une fiche (description, responsable, référent, domaine, système source, fréquence de
+ * mise à jour, confidentialité, statut de validation) et, pour chaque colonne, ce qu'il faut pour la
+ * comprendre sans ouvrir le fichier : sa définition, son type technique, des exemples de valeurs, sa
+ * confidentialité, le terme du glossaire qu'elle porte et la liste de valeurs qui la régit.
+ *
+ * Quand une colonne n'a pas encore de définition, l'écran montre en filigrane ce que l'objet métier en dit
+ * et le signale : on n'écrit pas deux fois la même chose à deux endroits.
+ *
+ * Les modifications sont fusionnées dans le document partagé avec l'application classique.
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
-import { FicheDictionnaire, Source, formaterDate } from '../../coeur/modeles';
+import { Router } from '@angular/router';
+import {
+    Actif,
+    ColonneDeDictionnaire,
+    FicheDictionnaire,
+    ListeValeurs,
+    ObjetMetier,
+    Source,
+    TermeGlossaire,
+    formaterDate
+} from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import {
@@ -22,10 +40,19 @@ import {
     sourcesAValider,
     statutDe
 } from './validation-fiche';
+import {
+    ValeurHeritee,
+    colonnesDecrites,
+    definitionDe,
+    exemplesDepuisLesValeurs,
+    exemplesRemplacables,
+    heriteDeLObjetMetier,
+    phraseDeLHeritage
+} from './colonnes-dictionnaire';
 
 type FicheEnEdition = {
     source: Source;
-    fiche: FicheDictionnaire & { columns: Record<string, { description?: string; sensitivity?: string }> };
+    fiche: FicheDictionnaire & { columns: Record<string, ColonneDeDictionnaire> };
 };
 
 const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
@@ -34,6 +61,28 @@ const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
     selector: 'app-dictionnaire',
     imports: [FormsModule],
     template: `
+        <!--
+            V13 : deux entrées pour la même matière. « Par objet métier » décrit la donnée telle que le
+            métier la nomme (c'est l'écran des objets métier, avec ses variantes et ses groupes) ; « Par
+            table technique » la décrit fichier par fichier, colonne par colonne — c'est cet écran.
+        -->
+        <div class="flex items-center gap-1.5 mb-4">
+            <button
+                type="button"
+                name="dictionnaireParObjet"
+                class="text-xs font-bold px-3 py-1.5 rounded-lg border bg-white text-slate-500 border-slate-300 hover:bg-slate-50"
+                (click)="ouvrirParObjetMetier()"
+            >
+                🏛️ Par objet métier
+            </button>
+            <button
+                type="button"
+                name="dictionnaireParTable"
+                class="text-xs font-bold px-3 py-1.5 rounded-lg border bg-indigo-600 text-white border-indigo-600"
+            >
+                📄 Par table technique
+            </button>
+        </div>
         <div class="entete-page">
             <div class="espace">
                 <h1>Dictionnaire des données</h1>
@@ -114,6 +163,32 @@ const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
                             ><input class="champ" name="domain" [(ngModel)]="edition.fiche.domain" [disabled]="!session.peutEditer()" />
                         </div>
                         <div>
+                            <label class="etiquette" title="Le classique dit « Data Steward »">Référent</label
+                            ><input
+                                class="champ"
+                                name="steward"
+                                [(ngModel)]="edition.fiche.steward"
+                                placeholder="personne référente au quotidien"
+                                [disabled]="!session.peutEditer()"
+                            />
+                        </div>
+                        <div>
+                            <label class="etiquette" title="C'est aussi le point de départ du parcours de la donnée">Système source</label
+                            ><input
+                                class="champ"
+                                name="sourceSystem"
+                                list="applicationsConnues"
+                                [(ngModel)]="edition.fiche.sourceSystem"
+                                placeholder="ex : SAP, CRM, export Excel…"
+                                [disabled]="!session.peutEditer()"
+                            />
+                            <datalist id="applicationsConnues">
+                                @for (application of applications(); track application.id) {
+                                    <option [value]="application.name"></option>
+                                }
+                            </datalist>
+                        </div>
+                        <div>
                             <label class="etiquette">Fréquence de mise à jour</label
                             ><input
                                 class="champ"
@@ -145,47 +220,131 @@ const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
                         style="font-family: inherit"
                         [disabled]="!session.peutEditer()"
                     ></textarea>
-                    <h3 style="margin-top: 14px">Colonnes ({{ edition.source.headers.length }})</h3>
-                    <table class="tableau">
-                        <thead>
-                            <tr>
-                                <th>Colonne</th>
-                                <th>Description</th>
-                                <th title="Terme technique : sensibilité">Confidentialité</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (colonne of edition.source.headers; track colonne) {
+                    <div class="flex justify-between items-center mt-4 mb-2 flex-wrap gap-2">
+                        <h3 style="margin: 0">Colonnes ({{ colonnesDecrites(edition) }}/{{ edition.source.headers.length }} définies)</h3>
+                        @if (session.peutEditer()) {
+                            <button
+                                type="button"
+                                name="echantillonnerLesExemples"
+                                class="bouton petit"
+                                [disabled]="echantillonnage()"
+                                title="Prend quelques valeurs réellement présentes dans le fichier, sans écraser ce qui a été saisi à la main"
+                                (click)="echantillonnerLesExemples(edition)"
+                            >
+                                ⟳ Échantillonner les exemples depuis la source
+                            </button>
+                        }
+                    </div>
+                    <div style="overflow-x: auto">
+                        <table class="tableau">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <code>{{ colonne }}</code>
-                                    </td>
-                                    <td>
-                                        <input
-                                            class="champ"
-                                            [name]="'d_' + colonne"
-                                            [attr.name]="'d_' + colonne"
-                                            [(ngModel)]="colonneDe(edition, colonne).description"
-                                            [disabled]="!session.peutEditer()"
-                                        />
-                                    </td>
-                                    <td>
-                                        <select
-                                            class="champ"
-                                            [name]="'s_' + colonne"
-                                            [attr.name]="'s_' + colonne"
-                                            [(ngModel)]="colonneDe(edition, colonne).sensitivity"
-                                            [disabled]="!session.peutEditer()"
-                                        >
-                                            @for (niveau of sensibilites; track niveau) {
-                                                <option [value]="niveau">{{ niveau || '—' }}</option>
-                                            }
-                                        </select>
-                                    </td>
+                                    <th>Colonne</th>
+                                    <th>Définition fonctionnelle</th>
+                                    <th>Type technique</th>
+                                    <th>Exemples de valeurs</th>
+                                    <th title="Terme technique : sensibilité">Confidentialité</th>
+                                    <th>Terme du glossaire</th>
+                                    <th>🎚️ Liste de valeurs</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @for (colonne of edition.source.headers; track colonne) {
+                                    @let champs = colonneDe(edition, colonne);
+                                    <tr>
+                                        <td>
+                                            <code>{{ colonne }}</code>
+                                        </td>
+                                        <td>
+                                            <!-- V13 : à défaut de définition propre, on montre celle de l'objet métier, et d'où elle vient. -->
+                                            @let heriteeDefinition = heritee(edition, colonne, 'definition');
+                                            <input
+                                                class="champ"
+                                                [name]="'d_' + colonne"
+                                                [attr.name]="'d_' + colonne"
+                                                [(ngModel)]="champs.definition"
+                                                [placeholder]="heriteeDefinition ? heriteeDefinition.valeur : 'Définition métier…'"
+                                                [disabled]="!session.peutEditer()"
+                                            />
+                                            @if (!champs.definition && heriteeDefinition) {
+                                                <div class="herite" [attr.name]="'herite_' + colonne">
+                                                    {{ phraseHeritage(heriteeDefinition) }}
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <input
+                                                class="champ etroit"
+                                                [name]="'t_' + colonne"
+                                                [attr.name]="'t_' + colonne"
+                                                [(ngModel)]="champs.technicalType"
+                                                placeholder="ex : VARCHAR(10)"
+                                                [disabled]="!session.peutEditer()"
+                                            />
+                                        </td>
+                                        <td>
+                                            <input
+                                                class="champ"
+                                                [class.auto]="champs.examplesAuto"
+                                                [name]="'e_' + colonne"
+                                                [attr.name]="'e_' + colonne"
+                                                [(ngModel)]="champs.examples"
+                                                (ngModelChange)="champs.examplesAuto = false"
+                                                placeholder="ex : PARIS ; LYON…"
+                                                [title]="champs.examplesAuto ? 'Pris dans la source' : 'Saisie manuelle'"
+                                                [disabled]="!session.peutEditer()"
+                                            />
+                                        </td>
+                                        <td>
+                                            @let heriteeConfidentialite = heritee(edition, colonne, 'sensitivity');
+                                            <select
+                                                class="champ"
+                                                [name]="'s_' + colonne"
+                                                [attr.name]="'s_' + colonne"
+                                                [(ngModel)]="champs.sensitivity"
+                                                [disabled]="!session.peutEditer()"
+                                            >
+                                                @for (niveau of sensibilites; track niveau) {
+                                                    <option [value]="niveau">{{ niveau || '—' }}</option>
+                                                }
+                                            </select>
+                                            @if (!champs.sensitivity && heriteeConfidentialite) {
+                                                <div class="herite">hérite : {{ heriteeConfidentialite.valeur }}</div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <select
+                                                class="champ"
+                                                [name]="'g_' + colonne"
+                                                [attr.name]="'g_' + colonne"
+                                                [(ngModel)]="champs.term"
+                                                [disabled]="!session.peutEditer()"
+                                            >
+                                                <option value="">— aucun terme —</option>
+                                                @for (terme of termes(); track terme.id) {
+                                                    <option [value]="terme.id">{{ terme.term }}</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select
+                                                class="champ"
+                                                [name]="'v_' + colonne"
+                                                [attr.name]="'v_' + colonne"
+                                                [(ngModel)]="champs.valueListId"
+                                                [disabled]="!session.peutEditer()"
+                                            >
+                                                <option value="">— aucune liste —</option>
+                                                @for (liste of listes(); track liste.id) {
+                                                    <option [value]="liste.id">{{ liste.name }}</option>
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                     @if (session.peutEditer()) {
                         <div style="margin-top: 12px"><button class="bouton principal" type="submit">Enregistrer la fiche</button></div>
                     }
@@ -248,6 +407,19 @@ const SENSIBILITES = ['', 'public', 'interne', 'confidentiel', 'personnel'];
         .historique {
             margin-bottom: 8px;
         }
+        /* Ce que l'objet métier dit déjà de cette colonne : on le montre, on ne le recopie pas. */
+        .herite {
+            font-size: 10px;
+            color: var(--succes);
+            margin-top: 2px;
+        }
+        .champ.etroit {
+            width: 130px;
+        }
+        /* Des exemples pris dans la source, et non saisis à la main. */
+        .champ.auto {
+            background: color-mix(in srgb, var(--accent) 6%, transparent);
+        }
         .historique summary {
             cursor: pointer;
         }
@@ -271,6 +443,16 @@ export class DictionnaireComponent {
     readonly formaterDate = formaterDate;
     /** Vrai quand la liste ne montre plus que les fiches qui attendent une décision. */
     readonly filtreAValider = signal(false);
+    /** Ce que l'écran va chercher ailleurs : les mots du glossaire, les listes de valeurs, les objets
+     * métier (pour l'héritage) et les applications (pour proposer le système source). */
+    readonly termes = signal<TermeGlossaire[]>([]);
+    readonly listes = signal<ListeValeurs[]>([]);
+    readonly objets = signal<ObjetMetier[]>([]);
+    readonly applications = signal<Actif[]>([]);
+    /** Vrai pendant que l'on prend des exemples dans le fichier : le bouton ne se relance pas. */
+    readonly echantillonnage = signal(false);
+    private readonly routeur = inject(Router);
+    readonly phraseHeritage = phraseDeLHeritage;
 
     readonly avancement = computed<AvancementDuDictionnaire>(() =>
         avancementDuDictionnaire(
@@ -296,9 +478,20 @@ export class DictionnaireComponent {
 
     async recharger(): Promise<void> {
         try {
-            const [sources, fiches] = await Promise.all([this.api.sources(), this.api.dictionnaire()]);
+            const [sources, fiches, termes, listes, objets, actifs] = await Promise.all([
+                this.api.sources(),
+                this.api.dictionnaire(),
+                this.api.glossaire(),
+                this.api.listesValeurs(),
+                this.api.objetsMetier(),
+                this.api.actifs()
+            ]);
             this.sources.set(sources);
             this.fiches.set(fiches);
+            this.termes.set(termes);
+            this.listes.set(listes);
+            this.objets.set(objets);
+            this.applications.set(actifs.filter(actif => actif.kind === 'app'));
             const demandee = sources.find(source => source.name === this.sourceDemandee);
             if (demandee && !this.edition()) this.ouvrir(demandee);
         } catch (erreur) {
@@ -313,7 +506,9 @@ export class DictionnaireComponent {
             fiche: {
                 description: '',
                 owner: '',
+                steward: '',
                 domain: '',
+                sourceSystem: '',
                 updateFrequency: '',
                 sensitivity: '',
                 ...existante,
@@ -322,10 +517,63 @@ export class DictionnaireComponent {
         });
     }
 
-    /** Fiche d'une colonne, créée à la volée pour que le formulaire puisse la remplir. */
-    colonneDe(edition: FicheEnEdition, colonne: string): { description?: string; sensitivity?: string } {
-        if (!edition.fiche.columns[colonne]) edition.fiche.columns[colonne] = { description: '', sensitivity: '' };
-        return edition.fiche.columns[colonne];
+    /**
+     * Fiche d'une colonne, créée à la volée pour que le formulaire puisse la remplir. Une fiche ancienne
+     * rangeait sa définition sous « description » : on la ramène sous son nom d'aujourd'hui, une fois, à
+     * l'ouverture — sans quoi la saisie précédente disparaîtrait de l'écran.
+     */
+    colonneDe(edition: FicheEnEdition, colonne: string): ColonneDeDictionnaire {
+        const champs = (edition.fiche.columns[colonne] ||= {});
+        if (champs.definition === undefined) champs.definition = definitionDe(champs);
+        if (champs.sensitivity === undefined) champs.sensitivity = '';
+        return champs;
+    }
+
+    /** Ce que l'objet métier dit déjà de cette colonne, quand la colonne elle-même n'en dit rien. */
+    heritee(edition: FicheEnEdition, colonne: string, champ: 'definition' | 'sensitivity'): ValeurHeritee | null {
+        return heriteDeLObjetMetier(this.objets(), edition.source.name, colonne, champ);
+    }
+
+    /** Combien de colonnes de la fiche portent déjà une définition. */
+    colonnesDecrites(edition: FicheEnEdition): number {
+        return colonnesDecrites(edition.source.headers, edition.fiche.columns);
+    }
+
+    /** L'autre entrée vers la même matière : la donnée telle que le métier la nomme. */
+    ouvrirParObjetMetier(): void {
+        void this.routeur.navigateByUrl('/objets-metier');
+    }
+
+    /**
+     * Va chercher, dans le fichier, quelques valeurs réellement présentes dans chaque colonne. On ne
+     * remplace jamais des exemples saisis à la main — ce serait détruire du travail — mais on rafraîchit
+     * ceux qui venaient déjà d'un échantillonnage.
+     */
+    async echantillonnerLesExemples(edition: FicheEnEdition): Promise<void> {
+        this.echantillonnage.set(true);
+        let remplies = 0;
+        try {
+            for (const colonne of edition.source.headers) {
+                const champs = this.colonneDe(edition, colonne);
+                if (!exemplesRemplacables(champs)) continue;
+                const observees = await this.api.valeursColonne(edition.source.id, colonne);
+                const exemples = exemplesDepuisLesValeurs(observees);
+                if (!exemples) continue;
+                champs.examples = exemples;
+                champs.examplesAuto = true;
+                remplies++;
+            }
+            await this.enregistrer();
+            this.notifications.succes(
+                remplies
+                    ? `${remplies} colonne(s) illustrées par des valeurs prises dans « ${edition.source.name} ».`
+                    : 'Rien à illustrer : toutes les colonnes portent déjà des exemples saisis à la main.'
+            );
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.echantillonnage.set(false);
+        }
     }
 
     /** Le statut de la fiche d'une source, tel qu'il est enregistré (et non celui en cours d'édition). */
