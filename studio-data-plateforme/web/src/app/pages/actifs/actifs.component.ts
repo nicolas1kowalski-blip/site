@@ -1,5 +1,13 @@
 /**
- * Applications, processus et restitutions (les « actifs » du lineage) : liste et fiche.
+ * Applications, processus et restitutions — repris de la V13.
+ *
+ * Le modèle que l'écran applique, et qu'il énonce en tête : une application contient ses sources, ces
+ * sources alimentent les objets métier, qui alimentent à leur tour les consommateurs. C'est l'application
+ * qui est maître, jamais le fichier — une table n'a donc qu'un producteur, et tout l'aval s'en déduit.
+ *
+ * L'écran porte aussi l'analyse d'impact : « si cette donnée a un problème, qui est touché ? ».
+ *
+ * Liste et fiche :
  *   • Application : tables qu'elle produit (elle en est propriétaire) et tables qu'elle lit ;
  *   • Processus : applications sur lesquelles il s'appuie ;
  *   • Restitution : actifs qui la génèrent, destinataires, fréquence, forme ;
@@ -12,9 +20,21 @@ import { AnnulationService } from '../../coeur/annulation.service';
 import { copieDUnActif, messageDeCopie } from '../../coeur/duplication';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { MoyensDuRetour, questionAvantSuppression, retourDUneEcriture, retourDUneSuppression } from '../../coeur/gestes-annulables';
-import { Actif, GenreActif, ObjetMetier, Source, VocabulaireGouvernance, genererIdentifiant } from '../../coeur/modeles';
+import { Actif, AnalyseImpact, GenreActif, ObjetMetier, Source, VocabulaireGouvernance, genererIdentifiant } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
+import {
+    ChaineAval,
+    ColonneCritique,
+    ajouterUneColonneCritique,
+    blocsDImpact,
+    chaineAval,
+    etatDeLaSource,
+    libelleDeLaColonne,
+    objetsAlimentes,
+    phraseDeLUsage,
+    usageDunActif
+} from './chaine-des-actifs';
 
 const ACTIF_VIDE = (kind: GenreActif): Actif => ({
     id: genererIdentifiant('as'),
@@ -43,9 +63,66 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                 <p class="discret">{{ actifs().length }} actif(s) — qui produit, lit et diffuse les données.</p>
             </div>
             @if (session.peutEditer()) {
-                <button class="bouton" (click)="nouvel('app')">Nouvelle application</button>
-                <button class="bouton" (click)="nouvel('process')">Nouveau processus</button>
-                <button class="bouton" (click)="nouvel('report')">Nouvelle restitution</button>
+                <button class="bouton" name="nouvelleApplication" (click)="nouvel('app')">Nouvelle application</button>
+                <button class="bouton" name="nouveauProcessus" (click)="nouvel('process')">Nouveau processus</button>
+                <button class="bouton" name="nouvelleRestitution" (click)="nouvel('report')">Nouvelle restitution</button>
+            }
+        </div>
+
+        <!-- V13 : le modèle est écrit là où on le remplit, sans quoi on rattache au hasard. -->
+        <div class="bandeau-modele" name="modeleDesActifs">
+            <span class="intitule">Modèle</span>
+            <b>🖥 Application</b><span class="fleche">contient →</span> <b class="vert">📄 Sources</b
+            ><span class="fleche">alimentent →</span> <b class="vert">🏛️ Objet métier</b><span class="fleche">alimente →</span>
+            <b>📥 Consommateurs</b>
+            <span class="note"
+                >C'est l'application qui est maître, jamais le fichier ; on ne remplit un objet métier que via une application.</span
+            >
+        </div>
+
+        <!-- V13 : « si cette donnée a un problème, qui est touché ? » — la question se pose ici. -->
+        <div class="carte impact-v13">
+            <h2 style="margin: 0 0 8px">🛎 Analyse d'impact — « si cette donnée a un problème, qui est touché ? »</h2>
+            <div class="formulaire-ligne" style="max-width: 660px">
+                <select class="champ" name="tableImpact" [(ngModel)]="tableImpact" (ngModelChange)="colonneImpact = ''">
+                    <option value="">— table —</option>
+                    @for (source of sources(); track source.id) {
+                        <option [value]="source.name">{{ source.name }}</option>
+                    }
+                </select>
+                <select class="champ" name="colonneImpact" [(ngModel)]="colonneImpact">
+                    <option value="">Toute la table</option>
+                    @for (colonne of colonnesDe(tableImpact); track colonne) {
+                        <option [value]="colonne">{{ colonne }}</option>
+                    }
+                </select>
+                <button
+                    class="bouton principal"
+                    name="analyserImpact"
+                    [disabled]="!tableImpact"
+                    (click)="analyserImpact()"
+                    style="flex: 0 0 auto"
+                >
+                    Analyser l'impact
+                </button>
+            </div>
+            @if (impact(); as impact) {
+                <div name="resultatImpact" style="margin-top: 8px">
+                    @if (!impact.direct.length && !impact.viaLineage.length && !impact.viaRelations.length) {
+                        <p class="discret">Aucun processus déclaré n'utilise cette donnée — déclarez-en un ci-dessous.</p>
+                    }
+                    @for (bloc of blocsDImpact(impact); track bloc.titre) {
+                        @if (bloc.actifs.length) {
+                            <h3 style="margin: 8px 0 2px">{{ bloc.titre }}</h3>
+                            @for (touche of bloc.actifs; track touche.id) {
+                                <div class="text-xs">
+                                    <b>{{ touche.name }}</b>
+                                    <span class="discret"> · {{ touche.criticality }} · {{ touche.owner || 'sans responsable' }}</span>
+                                </div>
+                            }
+                        }
+                    }
+                </div>
             }
         </div>
 
@@ -133,16 +210,25 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                         <div class="formulaire-ligne" style="margin-top: 10px">
                             <div>
                                 <label class="etiquette">Tables produites (l'application en est propriétaire)</label>
+                                <!-- Une table n'a qu'un producteur : celles d'une autre application se voient, mais ne se prennent pas. -->
                                 @for (source of sources(); track source.id) {
-                                    <label class="case"
-                                        ><input
-                                            type="checkbox"
-                                            [checked]="actif.sources.includes(source.name)"
-                                            (change)="basculer(actif.sources, source.name)"
-                                            [disabled]="!session.peutEditer()"
-                                        />
-                                        {{ source.name }}</label
+                                    @let etat = etatSource(actif, source.name);
+                                    <label
+                                        class="case"
+                                        [class.prise]="etat.priseParUnAutre"
+                                        [title]="etat.priseParUnAutre ? 'Déjà rattachée à ' + etat.proprietaire : ''"
                                     >
+                                        <input
+                                            type="checkbox"
+                                            [checked]="etat.rattachee"
+                                            (change)="basculer(actif.sources, source.name)"
+                                            [disabled]="!session.peutEditer() || etat.priseParUnAutre"
+                                        />
+                                        {{ source.name }}
+                                        @if (etat.priseParUnAutre) {
+                                            <span class="discret">· 🖥 {{ etat.proprietaire }}</span>
+                                        }
+                                    </label>
                                 }
                             </div>
                             <div>
@@ -160,6 +246,36 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                                 }
                             </div>
                         </div>
+                        <!-- Déduit des sources ci-dessus : un objet métier déclare de quelles tables il vient. -->
+                        @if (objetsAlimentes(actif).length) {
+                            <label class="etiquette" style="margin-top: 10px">
+                                🏛️ Objets métier alimentés
+                                <span class="discret">— déduits des sources ci-dessus, rien à ressaisir</span>
+                            </label>
+                            <div class="puces" name="objetsAlimentes">
+                                @for (objet of objetsAlimentes(actif); track objet.id) {
+                                    <span class="puce vert">🏛️ {{ objet.name }}</span>
+                                }
+                            </div>
+                        }
+                        @let aval = chaine(actif);
+                        @if (aval.sources.length && (aval.objets.length || aval.consommateurs.length)) {
+                            <div class="chaine-aval" name="chaineAval">
+                                <span class="intitule">🔗 Chaîne aval</span>
+                                <b class="vert">📄 {{ aval.sources.join(', ') }}</b>
+                                @if (aval.objets.length) {
+                                    <span>
+                                        → <b>🏛️ {{ aval.objets.join(', ') }}</b></span
+                                    >
+                                }
+                                @if (aval.consommateurs.length) {
+                                    <span>
+                                        → <span class="discret">{{ aval.consommateurs.join(', ') }}</span></span
+                                    >
+                                }
+                                <span class="note">déduit du paramétrage amont — rien à ressaisir</span>
+                            </div>
+                        }
                     }
                     @if (actif.kind === 'process') {
                         <label class="etiquette" style="margin-top: 10px">Applications sur lesquelles le processus s'appuie</label>
@@ -175,6 +291,44 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                             >
                         } @empty {
                             <div class="discret">Aucune application déclarée.</div>
+                        }
+                        <!-- V13 : les colonnes dont le processus dépend vraiment — c'est ce que lit l'analyse d'impact. -->
+                        <label class="etiquette" style="margin-top: 10px">Colonnes critiques utilisées</label>
+                        <div class="puces" name="colonnesCritiques">
+                            @for (colonne of actif.columns; track $index; let rang = $index) {
+                                <span class="puce ambre">
+                                    {{ libelleColonne(colonne) }}
+                                    @if (session.peutEditer()) {
+                                        <a (click)="retirerLaColonne(actif, rang)" title="Retirer">✕</a>
+                                    }
+                                </span>
+                            } @empty {
+                                <span class="discret">aucune colonne déclarée critique</span>
+                            }
+                        </div>
+                        @if (session.peutEditer()) {
+                            <div class="formulaire-ligne" style="max-width: 560px">
+                                <select
+                                    class="champ"
+                                    name="tableCritique"
+                                    [(ngModel)]="tableCritique"
+                                    (ngModelChange)="colonneCritique = ''"
+                                >
+                                    <option value="">— table —</option>
+                                    @for (source of sources(); track source.id) {
+                                        <option [value]="source.name">{{ source.name }}</option>
+                                    }
+                                </select>
+                                <select class="champ" name="colonneCritique" [(ngModel)]="colonneCritique">
+                                    <option value="">— colonne —</option>
+                                    @for (colonne of colonnesDe(tableCritique); track colonne) {
+                                        <option [value]="colonne">{{ colonne }}</option>
+                                    }
+                                </select>
+                                <button class="bouton" name="lierLaColonne" (click)="lierLaColonne(actif)" style="flex: 0 0 auto">
+                                    Lier la colonne
+                                </button>
+                            </div>
                         }
                     }
                     @if (actif.kind === 'report') {
@@ -254,6 +408,8 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
                     } @empty {
                         <div class="discret">Aucun objet métier.</div>
                     }
+                    <!-- Un actif déclaré mais relié à rien ne sert à personne : on le dit. -->
+                    <div class="discret" style="margin-top: 10px" name="usageDeLActif">{{ phraseUsage(actif) }}</div>
                 </div>
             } @else {
                 <div class="carte discret" style="text-align: center; padding: 40px">Choisissez un actif, ou créez-en un.</div>
@@ -306,6 +462,80 @@ const ACTIF_VIDE = (kind: GenreActif): Actif => ({
             gap: 6px;
             font-size: 12px;
         }
+        /* Une source déjà rattachée à une autre application : visible, mais hors de portée. */
+        .case.prise {
+            opacity: 0.5;
+        }
+        /* Le modèle, écrit en tête de l'écran. */
+        .bandeau-modele {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 8px;
+            background: var(--surface);
+            border: 1px solid var(--bordure);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        .bandeau-modele .intitule,
+        .chaine-aval .intitule {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--texte-2);
+        }
+        .bandeau-modele .fleche {
+            color: var(--texte-2);
+            opacity: 0.6;
+        }
+        .bandeau-modele .note,
+        .chaine-aval .note {
+            flex-basis: 100%;
+            font-size: 11px;
+            color: var(--texte-2);
+        }
+        .vert {
+            color: var(--succes);
+        }
+        .impact-v13 {
+            margin-bottom: 14px;
+        }
+        .chaine-aval {
+            font-size: 11.5px;
+            background: var(--surface);
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 6px 8px;
+            margin-top: 6px;
+        }
+        .puces {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 4px 0;
+        }
+        .puce {
+            font-size: 11px;
+            padding: 2px 8px;
+            border: 1px solid var(--bordure);
+            border-radius: 999px;
+            background: var(--surface-2);
+        }
+        .puce.vert {
+            border-color: color-mix(in srgb, var(--succes) 45%, transparent);
+            color: var(--succes);
+        }
+        .puce.ambre {
+            border-color: color-mix(in srgb, var(--alerte) 45%, transparent);
+            color: var(--alerte);
+        }
+        .puce a {
+            cursor: pointer;
+            margin-left: 5px;
+            color: var(--erreur);
+        }
     `
 })
 export class ActifsComponent {
@@ -323,6 +553,15 @@ export class ActifsComponent {
     readonly edition = signal<Actif | null>(null);
     readonly nouveau = signal(false);
     readonly enCours = signal(false);
+    /** L'analyse d'impact en cours : la table et la colonne interrogées, et ce qu'elle a répondu. */
+    readonly impact = signal<AnalyseImpact | null>(null);
+    tableImpact = '';
+    colonneImpact = '';
+    /** La colonne critique que l'on est en train de déclarer sur un processus. */
+    tableCritique = '';
+    colonneCritique = '';
+    readonly blocsDImpact = blocsDImpact;
+    readonly libelleColonne = libelleDeLaColonne;
 
     readonly genres = computed(() =>
         Object.entries(this.vocabulaire()?.genresActif || {}).map(([cle, libelle]) => ({ cle: cle as GenreActif, libelle }))
@@ -352,6 +591,52 @@ export class ActifsComponent {
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }
+    }
+
+    /** Les colonnes d'une source, pour les listes déroulantes de l'impact et des colonnes critiques. */
+    colonnesDe(nomSource: string): string[] {
+        return this.sources().find(source => source.name === nomSource)?.headers || [];
+    }
+
+    /** « Si cette donnée a un problème, qui est touché ? » — directement, en aval, ou par les liens. */
+    async analyserImpact(): Promise<void> {
+        try {
+            this.impact.set(await this.api.analyseImpact(this.tableImpact, this.colonneImpact || undefined));
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** Ce que dit la case d'une source : à moi, libre, ou déjà prise par une autre application. */
+    etatSource(actif: Actif, nomSource: string) {
+        return etatDeLaSource(this.actifs(), actif, nomSource);
+    }
+
+    /** Les objets métier qu'alimentent les sources de cette application — déduits, jamais saisis. */
+    objetsAlimentes(actif: Actif): ObjetMetier[] {
+        return objetsAlimentes(actif, this.objets());
+    }
+
+    /** Ce que produit l'application, en bout de chaîne. */
+    chaine(actif: Actif): ChaineAval {
+        return chaineAval(actif, this.objets(), this.actifs());
+    }
+
+    /** À quoi l'actif est relié, en une phrase. */
+    phraseUsage(actif: Actif): string {
+        return phraseDeLUsage(usageDunActif(actif, this.objets(), this.actifs()));
+    }
+
+    /** Déclare une colonne critique sur un processus : c'est elle que lira l'analyse d'impact. */
+    lierLaColonne(actif: Actif): void {
+        const colonnes = (actif.columns ||= []) as ColonneCritique[];
+        if (!ajouterUneColonneCritique(colonnes, this.tableCritique, this.colonneCritique))
+            return this.notifications.erreur('Choisissez une table et une colonne qui ne soient pas déjà déclarées.');
+        this.colonneCritique = '';
+    }
+
+    retirerLaColonne(actif: Actif, rang: number): void {
+        (actif.columns as ColonneCritique[]).splice(rang, 1);
     }
 
     actifsDuGenre(genre: GenreActif): Actif[] {

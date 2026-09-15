@@ -1620,6 +1620,48 @@ try {
         .click();
     await page.click('app-actifs button:has-text("Enregistrer")');
     await page.waitForSelector('app-actifs .liste .element:has-text("CRM")');
+
+    // ---- V13 : le modèle énoncé, la chaîne aval déduite, l'usage et l'analyse d'impact ----
+    verifier(
+        'V13 : l’écran énonce son modèle — l’application est maître, jamais le fichier',
+        /Application.*Sources.*Objet métier.*Consommateurs/s.test(await page.textContent('app-actifs [name=modeleDesActifs]')) &&
+            /l'application qui est maître, jamais le fichier/.test(await page.textContent('app-actifs [name=modeleDesActifs]'))
+    );
+    await page.click('app-actifs .liste .element:has-text("CRM")');
+    await page.waitForFunction(() => document.querySelector('app-actifs input[name=nom]')?.value === 'CRM');
+    verifier(
+        'V13 : les objets métier alimentés se déduisent des sources produites, sans rien ressaisir',
+        /🏛️ Client/.test(await page.textContent('app-actifs [name=objetsAlimentes]'))
+    );
+    verifier(
+        'V13 : la chaîne aval se lit d’un coup — sources → objet métier',
+        /clients\.csv/.test(await page.textContent('app-actifs [name=chaineAval]')) &&
+            /rien à ressaisir/.test(await page.textContent('app-actifs [name=chaineAval]'))
+    );
+    verifier(
+        'V13 : la fiche dit à quoi l’actif est relié',
+        /source\(s\)|objet\(s\) métier|pas encore relié/.test(await page.textContent('app-actifs [name=usageDeLActif]'))
+    );
+    // Un processus déclare les colonnes dont il dépend : les contrôles sont là, et le calcul qui les
+    // pose sans doublon est éprouvé par les tests de « chaine-des-actifs ».
+    await page.click('app-actifs button[name=nouveauProcessus]');
+    await page.waitForSelector('app-actifs select[name=tableCritique]');
+    verifier(
+        'V13 : un processus peut déclarer les colonnes critiques dont il dépend',
+        /Colonnes critiques utilisées/.test(await page.textContent('app-actifs')) &&
+            (await page.$$('app-actifs button[name=lierLaColonne]')).length === 1
+    );
+    // L'analyse d'impact répond « qui est touché ? » à partir de ce qui est déjà déclaré.
+    await page.evaluate(() => document.querySelector('.defilement-page')?.scrollTo(0, 0));
+    await page.selectOption('app-actifs select[name=tableImpact]', 'clients.csv');
+    await page.click('app-actifs button[name=analyserImpact]');
+    await page.waitForSelector('app-actifs [name=resultatImpact]');
+    verifier(
+        'V13 : l’analyse d’impact se pose sur l’écran des applications, et répond',
+        (await page.textContent('app-actifs [name=resultatImpact]')).length > 0
+    );
+    await capture('applications-processus-v13');
+
     const actifs = await page.evaluate(async () => await (await fetch('/api/gouvernance/actifs')).json());
     verifier(
         'applications : « CRM » produit clients.csv et porte l’objet Client',
@@ -2236,7 +2278,17 @@ try {
     );
     // Le tri A → Z remet les résultats dans l'ordre alphabétique, quelle que soit la pertinence.
     await page.selectOption('app-catalogue select[name=triDuCatalogue]', 'alpha');
-    await page.waitForFunction(() => document.querySelectorAll('app-catalogue .cat-card').length > 1);
+    // Le tri se fait côté serveur : on attend que les cartes soient effectivement réordonnées.
+    await page
+        .waitForFunction(
+            () => {
+                const titres = [...document.querySelectorAll('app-catalogue .cat-card .font-bold')].map(titre => titre.textContent.trim());
+                return titres.length > 1 && titres.every((titre, rang) => rang === 0 || titre.localeCompare(titres[rang - 1], 'fr') >= 0);
+            },
+            null,
+            { timeout: 5000 }
+        )
+        .catch(() => {});
     const titresTries = await page.$$eval('app-catalogue .cat-card .font-bold', titres => titres.map(titre => titre.textContent.trim()));
     verifier(
         'V13 : le catalogue se trie par pertinence, qualité, fraîcheur ou ordre alphabétique',
