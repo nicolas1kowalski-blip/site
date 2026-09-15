@@ -1611,6 +1611,65 @@ try {
             clientAvecUsages.elements.every(information => !!information.examples && information.examplesAuto === true)
     );
 
+    // ---- V13 : la barre latérale défile pour elle seule, et se réduit ----
+    const defilementsSepares = await page.evaluate(() => {
+        const navigation = document.querySelector('.rail-navigation');
+        const page = document.querySelector('.defilement-page');
+        const corps = document.body;
+        return {
+            navigation: window.getComputedStyle(navigation).overflowY,
+            page: window.getComputedStyle(page).overflowY,
+            // La fenêtre elle-même ne doit plus défiler : chaque colonne a le sien.
+            fenetre: corps.scrollHeight <= window.innerHeight + 1
+        };
+    });
+    verifier(
+        'V13 : le menu et l’écran de droite défilent chacun de son côté, la fenêtre ne défile plus',
+        defilementsSepares.navigation === 'auto' && defilementsSepares.page === 'auto' && defilementsSepares.fenetre
+    );
+    // Le menu descend sans emporter la page. On rétrécit la fenêtre pour qu'il déborde vraiment :
+    // sans débordement, le faire défiler ne prouverait rien.
+    await page.setViewportSize({ width: 1500, height: 520 });
+    await page.waitForFunction(() => {
+        const navigation = document.querySelector('.rail-navigation');
+        return navigation.scrollHeight > navigation.clientHeight;
+    });
+    // On note où en est l'écran de droite AVANT de toucher au menu : c'est son immobilité qui est en jeu.
+    const pageAvant = await page.evaluate(() => document.querySelector('.defilement-page').scrollTop);
+    await page.evaluate(() => document.querySelector('.rail-navigation').scrollTo(0, 400));
+    const apresDefilementDuMenu = await page.evaluate(() => ({
+        menu: document.querySelector('.rail-navigation').scrollTop,
+        page: document.querySelector('.defilement-page').scrollTop
+    }));
+    verifier(
+        'V13 : faire défiler le menu ne déplace pas l’écran de droite',
+        apresDefilementDuMenu.menu === 400 && apresDefilementDuMenu.page === pageAvant
+    );
+    await page.evaluate(() => document.querySelector('.rail-navigation').scrollTo(0, 0));
+    await page.setViewportSize({ width: 1500, height: 950 });
+    // Réduire la barre : 70 px, les libellés s'effacent, les pictogrammes restent.
+    const largeurDepliee = await page.evaluate(() => document.querySelector('.rail').getBoundingClientRect().width);
+    await page.click('.rail button[name=replierMenu]');
+    const barreReduite = await page
+        .waitForFunction(() => Math.round(document.querySelector('.rail').getBoundingClientRect().width) === 70, null, { timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+    verifier(
+        'V13 : « Réduire le menu » ramène la barre à 70 px, pictogrammes seuls',
+        largeurDepliee > 200 && barreReduite && (await page.$$('.rail .groupe-titre:visible')).length === 0
+    );
+    await capture('menu-reduit');
+    // Le choix se retrouve après un rechargement, comme dans la V13.
+    await page.reload();
+    await page.waitForSelector('.rail');
+    const repliRetrouve = await page
+        .waitForFunction(() => Math.round(document.querySelector('.rail').getBoundingClientRect().width) === 70, null, { timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+    verifier('V13 : la barre réduite le reste d’une visite à l’autre', repliRetrouve);
+    await page.click('.rail button[name=replierMenu]');
+    await page.waitForFunction(() => document.querySelector('.rail').getBoundingClientRect().width > 200);
+
     // ---- V13 : la navigation de la gouvernance, rangée par famille ----
     const famillesDuRail = await page.$$eval('.rail .famille-titre', titres => titres.map(titre => titre.textContent.trim()));
     verifier(

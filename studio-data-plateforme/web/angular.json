@@ -28,6 +28,7 @@
               }
             ],
             "styles": [
+              "src/tailwind-v13.css",
               "src/styles.css"
             ]
           },

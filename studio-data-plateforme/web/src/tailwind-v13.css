@@ -1,0 +1,220 @@
+/*
+ * Tailwind pour les écrans repris de l'application classique.
+ *
+ * La V13 est écrite en Tailwind : son balisage porte directement les classes utilitaires
+ * (« bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 font-bold »). Traduire ces classes
+ * dans notre système maison faisait perdre, à chaque écran, les espacements, les teintes et les formes
+ * exactes. On charge donc Tailwind, et l'on recopie le balisage du classique tel quel.
+ *
+ * Deux précautions, sans lesquelles la reprise serait fausse :
+ *
+ *   1. **La version.** La V13 utilise Tailwind 3 ; nous sommes en Tailwind 4, qui a changé des valeurs et
+ *      des noms par défaut. Copier le balisage sans rien faire changerait le rendu en silence. Ce fichier
+ *      restitue donc les défauts de la version 3 — et seulement ceux que la V13 emploie réellement, relevés
+ *      dans ses sources : la palette, la couleur de bordure par défaut, « rounded » (366 emplois),
+ *      « shadow-sm » (3) et « ring » (4).
+ *
+ *   2. **Les écrans déjà en place.** Une cinquantaine d'écrans reposent sur le CSS maison (.carte, .bouton,
+ *      .tableau…). On n'importe donc pas le « preflight » de Tailwind, qui remettrait à zéro le style de
+ *      tous les éléments de l'application. Ce qu'il apporte d'indispensable au balisage de la V13 est
+ *      reposé plus bas, sous la classe « ecran-v13 » : seuls les écrans repris en héritent.
+ */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/*
+ * La palette de Tailwind 3, en valeurs exactes. La version 4 l'a réécrite en OKLCH : les teintes sont
+ * proches mais pas identiques, et l'écart se voit sur les aplats clairs dont la V13 est faite.
+ * On ne redéfinit que les dix familles que ses écrans emploient.
+ */
+@theme {
+    --color-slate-50: #f8fafc;
+    --color-slate-100: #f1f5f9;
+    --color-slate-200: #e2e8f0;
+    --color-slate-300: #cbd5e1;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-600: #475569;
+    --color-slate-700: #334155;
+    --color-slate-800: #1e293b;
+    --color-slate-900: #0f172a;
+    --color-slate-950: #020617;
+
+    --color-gray-50: #f9fafb;
+    --color-gray-100: #f3f4f6;
+    --color-gray-200: #e5e7eb;
+    --color-gray-300: #d1d5db;
+    --color-gray-400: #9ca3af;
+    --color-gray-500: #6b7280;
+    --color-gray-600: #4b5563;
+    --color-gray-700: #374151;
+    --color-gray-800: #1f2937;
+    --color-gray-900: #111827;
+
+    --color-emerald-50: #ecfdf5;
+    --color-emerald-100: #d1fae5;
+    --color-emerald-200: #a7f3d0;
+    --color-emerald-300: #6ee7b7;
+    --color-emerald-400: #34d399;
+    --color-emerald-500: #10b981;
+    --color-emerald-600: #059669;
+    --color-emerald-700: #047857;
+    --color-emerald-800: #065f46;
+    --color-emerald-900: #064e3b;
+
+    --color-green-50: #f0fdf4;
+    --color-green-100: #dcfce7;
+    --color-green-200: #bbf7d0;
+    --color-green-300: #86efac;
+    --color-green-400: #4ade80;
+    --color-green-500: #22c55e;
+    --color-green-600: #16a34a;
+    --color-green-700: #15803d;
+    --color-green-800: #166534;
+    --color-green-900: #14532d;
+
+    --color-indigo-50: #eef2ff;
+    --color-indigo-100: #e0e7ff;
+    --color-indigo-200: #c7d2fe;
+    --color-indigo-300: #a5b4fc;
+    --color-indigo-400: #818cf8;
+    --color-indigo-500: #6366f1;
+    --color-indigo-600: #4f46e5;
+    --color-indigo-700: #4338ca;
+    --color-indigo-800: #3730a3;
+    --color-indigo-900: #312e81;
+
+    --color-amber-50: #fffbeb;
+    --color-amber-100: #fef3c7;
+    --color-amber-200: #fde68a;
+    --color-amber-300: #fcd34d;
+    --color-amber-400: #fbbf24;
+    --color-amber-500: #f59e0b;
+    --color-amber-600: #d97706;
+    --color-amber-700: #b45309;
+    --color-amber-800: #92400e;
+    --color-amber-900: #78350f;
+
+    --color-red-50: #fef2f2;
+    --color-red-100: #fee2e2;
+    --color-red-200: #fecaca;
+    --color-red-300: #fca5a5;
+    --color-red-400: #f87171;
+    --color-red-500: #ef4444;
+    --color-red-600: #dc2626;
+    --color-red-700: #b91c1c;
+    --color-red-800: #991b1b;
+    --color-red-900: #7f1d1d;
+
+    --color-blue-50: #eff6ff;
+    --color-blue-100: #dbeafe;
+    --color-blue-200: #bfdbfe;
+    --color-blue-500: #3b82f6;
+    --color-blue-600: #2563eb;
+    --color-blue-700: #1d4ed8;
+
+    --color-purple-50: #faf5ff;
+    --color-purple-100: #f3e8ff;
+    --color-purple-200: #e9d5ff;
+    --color-purple-600: #9333ea;
+    --color-purple-700: #7e22ce;
+
+    --color-teal-50: #f0fdfa;
+    --color-teal-100: #ccfbf1;
+    --color-teal-200: #99f6e4;
+    --color-teal-600: #0d9488;
+    --color-teal-700: #0f766e;
+
+    --color-sky-50: #f0f9ff;
+    --color-sky-100: #e0f2fe;
+    --color-sky-200: #bae6fd;
+    --color-sky-600: #0284c7;
+    --color-sky-700: #0369a1;
+
+    --color-orange-50: #fff7ed;
+    --color-orange-100: #ffedd5;
+    --color-orange-200: #fed7aa;
+    --color-orange-500: #f97316;
+    --color-orange-600: #ea580c;
+
+    /*
+     * L'ombre la plus discrète. La version 3 la nommait « shadow-sm » ; la version 4 a donné ce nom à
+     * l'ombre du cran au-dessus. On rend donc à « shadow-sm » sa valeur d'origine.
+     */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/*
+ * Les trois utilitaires que Tailwind 4 a renommés ou dont il a changé la valeur, remis dans leur sens de
+ * la version 3 — celui que le balisage de la V13 suppose.
+ */
+
+/** En version 3, « rounded » seul vaut 0,25 rem ; en version 4, le nom a été donné à une autre taille. */
+@utility rounded {
+    border-radius: 0.25rem;
+}
+
+/** L'anneau de la version 3 fait 3 px ; celui de la version 4 n'en fait plus qu'un. */
+@utility ring {
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+    box-shadow: 0 0 0 3px var(--tw-ring-color);
+}
+
+/*
+ * Ce que le « preflight » de Tailwind apporte d'indispensable au balisage de la V13, reposé sous la seule
+ * classe « ecran-v13 » : les écrans qui ne sont pas repris du classique n'en voient rien.
+ *
+ * La règle qui compte est celle des bordures : « border » seul ne fixe qu'une épaisseur. En version 3, le
+ * preflight donnait à tout élément la couleur gray-200 par défaut ; sans lui, la bordure prendrait la
+ * couleur du texte, et chaque cadre de la V13 deviendrait un trait noir.
+ */
+.ecran-v13,
+.ecran-v13 *,
+.ecran-v13 *::before,
+.ecran-v13 *::after {
+    border-color: var(--color-gray-200);
+    border-style: solid;
+    border-width: 0;
+}
+.ecran-v13 {
+    color: var(--color-slate-700);
+}
+/* Les titres et les listes du classique ne comptent sur aucune marge par défaut du navigateur. */
+.ecran-v13 h1,
+.ecran-v13 h2,
+.ecran-v13 h3,
+.ecran-v13 h4,
+.ecran-v13 p,
+.ecran-v13 ul,
+.ecran-v13 ol {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+}
+.ecran-v13 ul,
+.ecran-v13 ol {
+    list-style: none;
+    padding: 0;
+}
+/* Les champs et les boutons héritent de la fonte et ne portent aucun style propre au navigateur. */
+.ecran-v13 button,
+.ecran-v13 input,
+.ecran-v13 select,
+.ecran-v13 textarea {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    background: transparent;
+    border-radius: 0;
+}
+.ecran-v13 button {
+    cursor: pointer;
+    text-align: inherit;
+}
+.ecran-v13 table {
+    border-collapse: collapse;
+}
+.ecran-v13 svg {
+    display: block;
+    vertical-align: middle;
+}

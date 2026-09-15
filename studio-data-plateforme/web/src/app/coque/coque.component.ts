@@ -19,6 +19,12 @@ import { SessionService } from '../coeur/session.service';
 /** Clé de stockage local de la densité choisie (préférence propre au navigateur). */
 const CLE_DENSITE = 'studio-data.densite';
 
+/** Clé de stockage local du repli de la barre latérale — comme la V13, le choix se retrouve. */
+const CLE_RAIL_REDUIT = 'studio-data.rail-reduit';
+/** Les deux largeurs de la barre : dépliée, et réduite aux seuls pictogrammes (70 px, comme la V13). */
+const LARGEUR_RAIL = '262px';
+const LARGEUR_RAIL_REDUIT = '70px';
+
 /** Délai pendant lequel la lettre qui suit « G » est comprise comme un raccourci d'écran. */
 const DELAI_RACCOURCI_MS = 1200;
 
@@ -38,29 +44,49 @@ const DELAI_RACCOURCI_MS = 1200;
     ],
     template: `
         <div class="coque">
-            <aside class="rail">
-                <div class="marque"><span class="logo">SD</span><span>Studio Data</span></div>
-                @for (groupe of groupes; track groupe.titre) {
-                    <div class="groupe">
-                        <div class="groupe-titre">{{ groupe.titre }}</div>
-                        @for (lien of groupe.liens; track lien.chemin; let rang = $index) {
-                            <!-- V13 : à l'intérieur de la gouvernance, les écrans sont rangés par famille. -->
-                            @if (lien.famille && lien.famille !== groupe.liens[rang - 1]?.famille) {
-                                <div class="famille-titre">{{ lien.famille }}</div>
+            <aside class="rail" [class.reduit]="railReduit()">
+                <div class="marque"><span class="logo">SD</span><span class="texte-marque">Studio Data</span></div>
+                <!--
+                    V13 : la navigation défile pour elle seule. Sans cela, un menu long entraîne toute la
+                    page, et l'on perd l'écran de droite en cherchant un écran à gauche.
+                -->
+                <nav class="rail-navigation">
+                    @for (groupe of groupes; track groupe.titre) {
+                        <div class="groupe">
+                            <div class="groupe-titre">{{ groupe.titre }}</div>
+                            @for (lien of groupe.liens; track lien.chemin; let rang = $index) {
+                                <!-- V13 : à l'intérieur de la gouvernance, les écrans sont rangés par famille. -->
+                                @if (lien.famille && lien.famille !== groupe.liens[rang - 1]?.famille) {
+                                    <div class="famille-titre">{{ lien.famille }}</div>
+                                }
+                                @if (!lien.administrateur || session.estAdministrateurGlobal()) {
+                                    <a
+                                        [routerLink]="lien.chemin"
+                                        routerLinkActive="actif"
+                                        [routerLinkActiveOptions]="{ exact: lien.chemin === '/' || lien.chemin === '/qualite' }"
+                                    >
+                                        <span class="icone">{{ lien.icone }}</span
+                                        >{{ lien.libelle }}
+                                    </a>
+                                }
                             }
-                            @if (!lien.administrateur || session.estAdministrateurGlobal()) {
-                                <a
-                                    [routerLink]="lien.chemin"
-                                    routerLinkActive="actif"
-                                    [routerLinkActiveOptions]="{ exact: lien.chemin === '/' || lien.chemin === '/qualite' }"
-                                >
-                                    <span class="icone">{{ lien.icone }}</span
-                                    >{{ lien.libelle }}
-                                </a>
-                            }
-                        }
-                    </div>
-                }
+                        </div>
+                    }
+                </nav>
+                <!-- V13 : replier la barre à 70 px, et s'en souvenir d'une visite à l'autre. -->
+                <div class="rail-pied">
+                    <button
+                        type="button"
+                        class="rail-repli"
+                        name="replierMenu"
+                        [title]="railReduit() ? 'Déplier le menu' : 'Réduire le menu'"
+                        [attr.aria-label]="railReduit() ? 'Déplier le menu' : 'Réduire le menu'"
+                        (click)="basculerLeRail()"
+                    >
+                        <span class="icone">{{ railReduit() ? '⟩' : '⟨' }}</span>
+                        <span class="libelle-repli">Réduire le menu</span>
+                    </button>
+                </div>
             </aside>
             <div class="principal">
                 <header class="entete">
@@ -120,7 +146,9 @@ const DELAI_RACCOURCI_MS = 1200;
                     >
                     <button class="bouton petit" (click)="deconnecter()">Se déconnecter</button>
                 </header>
-                <main class="page"><app-fil-ariane /><app-aide-ecran /><app-sans-donnees /><router-outlet /><app-et-ensuite /></main>
+                <div class="defilement-page">
+                    <main class="page"><app-fil-ariane /><app-aide-ecran /><app-sans-donnees /><router-outlet /><app-et-ensuite /></main>
+                </div>
                 <app-palette-commandes />
             </div>
             <div class="notifications" aria-live="polite">
@@ -162,10 +190,16 @@ const DELAI_RACCOURCI_MS = 1200;
             color: var(--texte-2);
         }
 
+        /*
+         * V13 : deux défilements indépendants. La fenêtre ne défile pas ; le menu défile dans sa colonne,
+         * la page dans la sienne. On peut ainsi chercher un écran à gauche sans perdre sa place à droite.
+         */
         .coque {
             display: grid;
-            grid-template-columns: 262px 1fr;
-            min-height: 100vh;
+            grid-template-columns: var(--largeur-rail, 262px) 1fr;
+            height: 100vh;
+            overflow: hidden;
+            transition: grid-template-columns 0.18s var(--souple);
         }
         /* Le rail : une barre latérale posée, sélection en pastille pleine. */
         .rail {
@@ -174,8 +208,78 @@ const DELAI_RACCOURCI_MS = 1200;
             padding: 12px 10px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 10px;
             border-right: 1px solid rgba(255, 255, 255, 0.05);
+            min-height: 0;
+            overflow: hidden;
+        }
+        /* Seule la liste des écrans défile : la marque reste en haut, le repli reste en bas. */
+        .rail-navigation {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .rail-navigation::-webkit-scrollbar {
+            width: 6px;
+        }
+        .rail-navigation::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.18);
+            border-radius: 3px;
+        }
+        .rail-pied {
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            padding-top: 8px;
+        }
+        .rail-repli {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 7px 11px;
+            border: 0;
+            background: none;
+            color: inherit;
+            opacity: 0.55;
+            font: inherit;
+            font-size: 12px;
+            border-radius: 9px;
+            cursor: pointer;
+        }
+        .rail-repli:hover {
+            background: rgba(255, 255, 255, 0.07);
+            opacity: 1;
+        }
+        /* ---- barre réduite : les pictogrammes seuls, comme dans la V13 ---- */
+        .rail.reduit {
+            padding: 12px 6px;
+        }
+        .rail.reduit .texte-marque,
+        .rail.reduit .groupe-titre,
+        .rail.reduit .famille-titre,
+        .rail.reduit .libelle-repli {
+            display: none;
+        }
+        .rail.reduit a {
+            justify-content: center;
+            padding: 8px 0;
+            gap: 0;
+        }
+        /* Le libellé disparaît, mais reste lisible au survol par l'infobulle du lien. */
+        .rail.reduit a > :not(.icone) {
+            display: none;
+        }
+        .rail.reduit .marque {
+            justify-content: center;
+        }
+        .rail.reduit .rail-repli {
+            justify-content: center;
+            padding: 7px 0;
         }
         .marque {
             display: flex;
@@ -248,6 +352,15 @@ const DELAI_RACCOURCI_MS = 1200;
             display: flex;
             flex-direction: column;
             min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+        }
+        /* C'est ce conteneur qui défile : l'en-tête reste collé en haut de la colonne de droite. */
+        .defilement-page {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
         /* La barre du haut : translucide et floutée, elle laisse deviner le contenu qui passe dessous. */
         .entete {
@@ -359,6 +472,13 @@ export class CoqueComponent {
     readonly compact = signal(false);
 
     constructor() {
+        // Le repli de la barre est relu au démarrage ; un stockage indisponible ne doit rien empêcher.
+        try {
+            this.railReduit.set(localStorage.getItem(CLE_RAIL_REDUIT) === '1');
+        } catch {
+            this.railReduit.set(false);
+        }
+        this.appliquerLaLargeurDuRail();
         // L'adresse courante décide des actions de l'en-tête : on la suit à chaque navigation aboutie.
         this.cheminCourant.set(this.routeur.url.split('?')[0]);
         this.routeur.events.subscribe(evenement => {
@@ -371,6 +491,25 @@ export class CoqueComponent {
             memorisee = '';
         }
         this.choisirDensite(memorisee === 'compact', false);
+    }
+
+    /** Réduit ou déplie la barre latérale, et retient le choix. */
+    basculerLeRail(): void {
+        this.railReduit.update(reduit => !reduit);
+        this.appliquerLaLargeurDuRail();
+        try {
+            localStorage.setItem(CLE_RAIL_REDUIT, this.railReduit() ? '1' : '0');
+        } catch {
+            // Sans stockage local, le repli vaut pour la visite en cours : ce n'est pas une raison d'échouer.
+        }
+    }
+
+    /**
+     * La largeur est portée par une variable CSS sur la grille : c'est elle qui rend le repli progressif,
+     * et qui laisse la colonne de droite reprendre aussitôt la place libérée.
+     */
+    private appliquerLaLargeurDuRail(): void {
+        document.documentElement.style.setProperty('--largeur-rail', this.railReduit() ? LARGEUR_RAIL_REDUIT : LARGEUR_RAIL);
     }
 
     choisirDensite(compact: boolean, memoriser = true): void {
@@ -391,6 +530,8 @@ export class CoqueComponent {
     );
     /** L'adresse courante, suivie au fil de la navigation : elle décide des actions offertes dans l'en-tête. */
     readonly cheminCourant = signal('');
+    /** Barre latérale réduite aux pictogrammes (V13) : le choix se retrouve d'une visite à l'autre. */
+    readonly railReduit = signal(false);
     readonly surLaGouvernance = computed(() => this.cheminsDeLaGouvernance.has(this.cheminCourant()));
     readonly palette = viewChild.required(PaletteCommandesComponent);
     /** Dernière touche « G » tapée : un raccourci « G puis une lettre » n'est valable qu'aussitôt après. */
