@@ -1282,6 +1282,40 @@ try {
     );
     await page.click('app-objets-metier button[name=onglet-structure]');
 
+    // ---- V13 : l'audit de l'objet — check-list, score, volumétrie du périmètre, règles rattachées ----
+    await page.click('app-objets-metier button[name=onglet-audit]');
+    await page.waitForSelector('app-objets-metier [name=checkListDeGouvernance]');
+    await page
+        .waitForFunction(() => /ligne\(s\)/.test(document.querySelector('app-objets-metier').textContent), null, { timeout: 5000 })
+        .catch(() => {});
+    const checkListDeGouvernance = await page.textContent('app-objets-metier [name=checkListDeGouvernance]');
+    verifier(
+        'V13 : l’audit pose les huit points de la check-list de gouvernance',
+        (checkListDeGouvernance.match(/[✅❌]/g) || []).length === 8 &&
+            /Propriétaire global nommé/.test(checkListDeGouvernance) &&
+            /Source maître désignée/.test(checkListDeGouvernance) &&
+            /Pas de conflit de maîtres/.test(checkListDeGouvernance) &&
+            /Fiche dictionnaire de la source maître validée/.test(checkListDeGouvernance)
+    );
+    const scoreDeGouvernance = await page.textContent('app-objets-metier [name=scoreDeGouvernance]');
+    verifier(
+        'V13 : le score de gouvernance dit combien de points sur huit sont satisfaits',
+        /Score de gouvernance de « Client »/.test(scoreDeGouvernance) && /\([0-8]\/8\)/.test(scoreDeGouvernance)
+    );
+    const volumetrieDuPerimetre = await page.textContent('app-objets-metier [name=volumetrieDuPerimetre]');
+    verifier(
+        'V13 : l’audit montre le volume de chaque table du périmètre, et le total',
+        /clients\.csv/.test(volumetrieDuPerimetre) && /Total/.test(volumetrieDuPerimetre) && /4 ligne\(s\)/.test(volumetrieDuPerimetre)
+    );
+    // Les règles posées plus tôt sur clients.csv portent sur une table du périmètre : l'audit les rattache.
+    const reglesDuPerimetre = await page.textContent('app-objets-metier [name=reglesDuPerimetre]');
+    verifier(
+        'V13 : l’audit rattache à l’objet les règles de qualité qui portent sur ses tables',
+        /clients\.csv/.test(reglesDuPerimetre) && /(%|non exécutée)/.test(reglesDuPerimetre)
+    );
+    await capture('objet-metier-audit');
+    await page.click('app-objets-metier button[name=onglet-structure]');
+
     // ---- V11 : l'assistant de création en trois étapes ----
     await page.click('app-objets-metier button[name=assistantObjet]');
     await page.waitForSelector('app-assistant-objet');

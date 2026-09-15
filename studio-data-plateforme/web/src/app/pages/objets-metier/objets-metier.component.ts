@@ -20,7 +20,10 @@ import { copieDUnObjet, messageDeCopie } from '../../coeur/duplication';
 import {
     Actif,
     AttributObjetMetier,
+    FicheDictionnaire,
     ObjetMetier,
+    Perimetre,
+    RegleQualite,
     Personne,
     RoleObjetSource,
     Source,
@@ -40,15 +43,31 @@ import { FicheInformationComponent } from './fiche-information.component';
 import { UsagesObjetComponent } from './usages-objet.component';
 import { FicheValidable, STATUTS_FICHE, changerLeStatut, depuisQuand, statutDe } from '../dictionnaire/validation-fiche';
 import {
+    ContexteDeLAudit,
+    ControleDeGouvernance,
+    RegleDuPerimetre,
+    controlerLObjet,
+    couleurDuScore,
+    perimetreDeLObjet,
+    phraseDuScore,
+    reglesDuPerimetre,
+    scoreDeGouvernance,
+    tableMaitreDe,
+    variantesExactementUne,
+    volumetrieDuPerimetre
+} from './audit-objet';
+import {
     AuditHierarchie,
     Hierarchie,
     ajouterUnNiveau,
+    arbreConforme,
     basculerUnParentAdmis,
     cequiManquePourAuditer,
     estUneRacine,
     hierarchieNeuve,
     hierarchiesDe,
     parentsPossibles,
+    resumeDeLaHierarchie,
     retirerUnNiveau,
     tuilesDeLAudit
 } from './hierarchies-objet';
@@ -460,7 +479,7 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                                 : 'px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors border-transparent text-slate-400 hover:text-slate-600'
                                         "
                                         [attr.name]="'onglet-' + onglet.cle"
-                                        (click)="ongletActif.set(onglet.cle)"
+                                        (click)="ouvrirLOnglet(onglet.cle)"
                                     >
                                         {{ onglet.libelle }}
                                         @if (compte) {
@@ -1687,7 +1706,121 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                         }
                                     </div>
                                 }
+                                <!-- 🔎 Audit : la check-list de gouvernance, le périmètre de l'objet et ses règles (V13). -->
                                 @if (ongletActif() === 'audit') {
+                                    @let controles = controlerLObjet(objet);
+                                    @let score = scoreDeGouvernance(controles);
+                                    <div class="border-2 border-indigo-200 rounded-xl p-4 bg-white mb-3">
+                                        <div class="flex items-center gap-3 mb-3">
+                                            <div class="text-2xl font-black" [class]="couleurDuScore(score)">{{ score }}%</div>
+                                            <div class="text-xs font-bold text-slate-600" name="scoreDeGouvernance">
+                                                {{ phraseDuScore(objet) }}
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-1 mb-3" name="checkListDeGouvernance">
+                                            @for (controle of controles; track controle.libelle) {
+                                                <div [class]="controle.ok ? 'text-xs text-emerald-700' : 'text-xs text-red-600'">
+                                                    {{ controle.ok ? '✅' : '❌' }} {{ controle.libelle }}
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Un objet couvre plusieurs tables : on montre le volume de chacune, pas du seul maître. -->
+                                        @let volumes = volumetrieDuPerimetre(objet);
+                                        @if (volumes.tables.length) {
+                                            <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 mt-2">
+                                                📦 Volumétrie du périmètre ({{ volumes.tables.length }} table{{
+                                                    volumes.tables.length > 1 ? 's' : ''
+                                                }})
+                                            </div>
+                                            <div class="border border-slate-200 rounded-lg p-2 bg-slate-50" name="volumetrieDuPerimetre">
+                                                @for (table of volumes.tables; track table.nom) {
+                                                    <div class="text-xs flex items-center gap-2">
+                                                        <span class="text-slate-600">{{ table.nom }}</span>
+                                                        <span class="ml-auto font-bold text-slate-700">{{ table.lignes }} ligne(s)</span>
+                                                    </div>
+                                                }
+                                                <div class="text-xs flex items-center gap-2 border-t border-slate-200 mt-1 pt-1">
+                                                    <span class="font-bold text-slate-600">Total</span>
+                                                    <span class="ml-auto font-black text-slate-800">{{ volumes.total }} ligne(s)</span>
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <!-- Les hiérarchies de l'objet, rappelées ici avec leur dernier audit d'arbre. -->
+                                        @if (hierarchies(objet).length) {
+                                            <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 mt-2">
+                                                🌳 Hiérarchies ({{ hierarchies(objet).length }})
+                                            </div>
+                                            @for (hierarchie of hierarchies(objet); track hierarchie.id) {
+                                                <div class="text-xs mb-1">
+                                                    <span class="font-bold text-slate-600">{{ hierarchie.name }}</span>
+                                                    <span class="text-slate-400"> — {{ resumeDeLaHierarchie(hierarchie) }}</span>
+                                                    @if (auditsDArbre()[hierarchie.id]; as arbre) {
+                                                        <span
+                                                            [class]="
+                                                                arbreConforme(arbre)
+                                                                    ? 'ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700'
+                                                                    : 'ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700'
+                                                            "
+                                                        >
+                                                            {{ arbreConforme(arbre) ? 'arbre conforme' : 'arbre en défaut' }}
+                                                        </span>
+                                                    } @else {
+                                                        <span class="text-slate-300"> — non audité (onglet 🌳 Hiérarchies)</span>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+
+                                        <!-- Les règles de qualité qui portent sur l'objet lui-même ou sur une table de son périmètre. -->
+                                        @let regles = reglesDuPerimetre(objet);
+                                        <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 mt-2">
+                                            📏 Règles de qualité rattachées ({{ regles.length }})
+                                        </div>
+                                        <div name="reglesDuPerimetre">
+                                            @for (regle of regles; track regle.id) {
+                                                <div class="text-xs flex items-center gap-2">
+                                                    <span class="font-bold text-slate-700">{{ regle.nom }}</span>
+                                                    <span class="text-[10px] text-slate-400">{{ regle.genre }} · {{ regle.cible }}</span>
+                                                    @if (regle.dernierTaux !== null) {
+                                                        <span
+                                                            [class]="
+                                                                regle.dernierTaux === 100
+                                                                    ? 'ml-auto font-bold text-emerald-600'
+                                                                    : 'ml-auto font-bold text-amber-600'
+                                                            "
+                                                        >
+                                                            {{ regle.dernierTaux }} %
+                                                        </span>
+                                                    } @else {
+                                                        <span class="ml-auto text-[10px] text-slate-300">non exécutée</span>
+                                                    }
+                                                </div>
+                                            } @empty {
+                                                <p class="text-[11px] text-slate-400 italic">
+                                                    Aucune règle de qualité rattachée. Créez-en dans <b>Règles &amp; score</b> sur l'une des
+                                                    tables de cet objet : elle apparaîtra ici.
+                                                </p>
+                                            }
+                                        </div>
+
+                                        <!-- Les variantes « exactement une » : celles dont une occurrence en trop est une faute. -->
+                                        @if (variantesExactementUne(objet).length) {
+                                            <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 mt-2">
+                                                ◆ Variantes à occurrence unique ({{ variantesExactementUne(objet).length }})
+                                            </div>
+                                            @for (variante of variantesExactementUne(objet); track variante.id) {
+                                                <div class="text-xs text-slate-600">
+                                                    {{ variante.name }}
+                                                    <span class="text-slate-400"
+                                                        >— vue de {{ variante.table }}, attendue une seule fois</span
+                                                    >
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+
                                     <h4 class="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Historique des décisions</h4>
                                     @for (entree of objet.history || []; track $index) {
                                         <div class="discret">
@@ -1945,6 +2078,23 @@ export class ObjetsMetierComponent {
     /** Le dernier audit d'arbre rendu, par hiérarchie : on le garde à l'écran jusqu'au suivant. */
     readonly auditsDArbre = signal<Record<string, AuditHierarchie>>({});
     readonly auditEnCours = signal(false);
+    /**
+     * Ce que l'onglet 🔎 Audit va chercher ailleurs dans l'application : le volume de chaque table, les
+     * règles de qualité, les fiches de dictionnaire et les périmètres métier. Ces quatre listes ne sont
+     * lues qu'à l'ouverture de l'onglet, et une seule fois : elles ne ralentissent pas l'écran.
+     */
+    readonly volumetrieConnue = signal<{ nom: string; lignes: number }[]>([]);
+    readonly reglesConnues = signal<RegleQualite[]>([]);
+    readonly fichesDeDictionnaire = signal<Record<string, FicheDictionnaire>>({});
+    readonly perimetresConnus = signal<Perimetre[]>([]);
+    /** Vrai une fois l'audit chargé : on ne redemande pas ces quatre listes à chaque changement d'onglet. */
+    private auditCharge = false;
+    /** Rappels de fonctions pures utilisées telles quelles par le gabarit. */
+    readonly couleurDuScore = couleurDuScore;
+    readonly scoreDeGouvernance = scoreDeGouvernance;
+    readonly variantesExactementUne = variantesExactementUne;
+    readonly resumeDeLaHierarchie = resumeDeLaHierarchie;
+    readonly arbreConforme = arbreConforme;
     /** Les valeurs réellement présentes dans la colonne du contexte, lues à la demande. */
     readonly valeursDuContexte = signal<{ valeur: string; compte: number }[]>([]);
     readonly couvertureEnCours = signal(false);
@@ -2412,6 +2562,94 @@ export class ObjetsMetierComponent {
         } finally {
             this.auditEnCours.set(false);
         }
+    }
+
+    // ---- V13 : l'audit de l'objet (check-list, périmètre, règles) ----
+
+    /**
+     * Change d'onglet. L'onglet 🔎 Audit a besoin de quatre listes que l'écran ne charge pas par ailleurs :
+     * on va les chercher au moment où il s'ouvre, et une seule fois.
+     */
+    ouvrirLOnglet(onglet: OngletFiche): void {
+        this.ongletActif.set(onglet);
+        if (onglet === 'audit') void this.chargerCeQuilFautPourAuditer();
+    }
+
+    /** Le volume des tables, les règles de qualité, les fiches de dictionnaire et les périmètres métier. */
+    private async chargerCeQuilFautPourAuditer(): Promise<void> {
+        if (this.auditCharge) return;
+        this.auditCharge = true;
+        try {
+            const [cockpit, regles, fiches, perimetres] = await Promise.all([
+                this.api.cockpit(),
+                this.api.reglesQualite(),
+                this.api.dictionnaire(),
+                this.api.perimetres()
+            ]);
+            this.volumetrieConnue.set(cockpit.volumetrie);
+            this.reglesConnues.set(regles);
+            this.fichesDeDictionnaire.set(fiches);
+            this.perimetresConnus.set(perimetres);
+        } catch (erreur) {
+            this.auditCharge = false;
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** Les tables de l'objet : sa source maître, ses autres sources, et les tables de ses variantes. */
+    perimetreDeLObjet(objet: ObjetMetier): string[] {
+        return perimetreDeLObjet(objet);
+    }
+
+    /**
+     * Ce que la check-list ne peut pas lire sur la fiche elle-même : où en est la fiche de dictionnaire de
+     * la table maître, si un périmètre métier revendique l'objet, et si un actif déclare s'en servir.
+     */
+    private contexteDeLAudit(objet: ObjetMetier): ContexteDeLAudit {
+        const perimetre = perimetreDeLObjet(objet);
+        const tables = new Set(perimetre);
+        const fiche = this.fichesDeDictionnaire()[tableMaitreDe(objet)];
+        return {
+            statutDuDictionnaire: statutDe((fiche || {}) as FicheValidable),
+            dansUnPerimetre: this.perimetresConnus().some(
+                candidat => (candidat.boIds || []).includes(objet.id) || (candidat.tables || []).some(table => tables.has(table))
+            ),
+            utiliseParUnActif: this.actifs().some(
+                actif => (actif.boIds || []).includes(objet.id) || (actif.tables || []).some(table => tables.has(table))
+            )
+        };
+    }
+
+    /** La check-list de gouvernance de l'objet : huit points, les mêmes pour tous. */
+    controlerLObjet(objet: ObjetMetier): ControleDeGouvernance[] {
+        return controlerLObjet(objet, this.contexteDeLAudit(objet));
+    }
+
+    /** La phrase du score : le nom de l'objet, et le nombre de points satisfaits. */
+    phraseDuScore(objet: ObjetMetier): string {
+        return phraseDuScore(objet, this.controlerLObjet(objet));
+    }
+
+    /** Le volume de chaque table du périmètre, et le total. */
+    volumetrieDuPerimetre(objet: ObjetMetier): { tables: { nom: string; lignes: number }[]; total: number } {
+        return volumetrieDuPerimetre(perimetreDeLObjet(objet), this.volumetrieConnue());
+    }
+
+    /**
+     * Les règles de qualité qui portent sur l'objet ou sur une table de son périmètre. Une règle est
+     * enregistrée sur l'identifiant d'une source ; on la ramène au nom de la table, qui est ce que la fiche
+     * de l'objet manipule partout ailleurs.
+     */
+    reglesDuPerimetre(objet: ObjetMetier): RegleDuPerimetre[] {
+        const regles = this.reglesConnues().map(regle => ({
+            id: regle.id,
+            nom: regle.nom,
+            genre: regle.type,
+            cible: this.sources().find(source => source.id === regle.sourceId)?.name || regle.sourceId,
+            active: regle.active,
+            dernierTaux: regle.dernierResultat ? regle.dernierResultat.taux : null
+        }));
+        return reglesDuPerimetre(regles, objet.id, perimetreDeLObjet(objet));
     }
 
     // ---- V13 : des exemples pris dans les données, pour toutes les informations d'un coup ----
