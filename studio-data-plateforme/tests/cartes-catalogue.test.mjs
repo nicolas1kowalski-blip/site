@@ -10,13 +10,12 @@ import {
     allureDe,
     cartesLimitees,
     classeDeQualite,
-    couleurDeResponsable,
     fraicheurLisible,
-    initialesDe,
     libelleDeConfidentialite,
     libelleDeValidation,
     surtitreDe
 } from '../web/src/app/pages/catalogue/cartes-catalogue.ts';
+import { couleurDeResponsable, initialesDe } from '../web/src/app/coeur/pastille-personne.ts';
 
 const entree = (proprietes = {}) => ({
     type: 'bo',

@@ -17,13 +17,12 @@ import { ClientApiService } from '../../coeur/client-api.service';
 import { libelleDuParcours, lienDuParcours } from '../../coeur/lien-parcours';
 import { EntreeCatalogue, FiltresCatalogue, ResultatCatalogue, TriCatalogue, TypeCatalogue } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
+import { couleurDeResponsable, initialesDe } from '../../coeur/pastille-personne';
 import {
     allureDe,
     cartesLimitees,
     classeDeQualite,
-    couleurDeResponsable,
     fraicheurLisible,
-    initialesDe,
     libelleDeConfidentialite,
     libelleDeValidation,
     surtitreDe

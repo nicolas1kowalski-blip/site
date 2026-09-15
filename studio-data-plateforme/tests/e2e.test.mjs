@@ -1628,15 +1628,20 @@ try {
 
     await page.click('a[href="/personnes"]');
     await page.waitForSelector('app-personnes');
+    // Tant qu'aucune personne n'est déclarée, l'écran dit ce qu'on y fait et propose d'en créer une.
+    verifier(
+        'V13 : sans personne déclarée, l’écran des rôles explique le circuit au lieu d’être vide',
+        /Aucune personne/.test(await page.textContent('app-personnes [name=aucunePersonne]'))
+    );
     await page.fill('app-personnes input[name=nouveauDomaine]', 'Finance');
-    await page.click('app-personnes form button:has-text("Ajouter")');
-    await page.waitForSelector('app-personnes .puce:has-text("Finance")');
-    await page.click('app-personnes button:has-text("Nouvelle personne")');
+    await page.click('app-personnes button[name=ajouterDomaine]');
+    await page.waitForFunction(() => /Finance/.test(document.querySelector('app-personnes [name=domainesMetier]')?.textContent || ''));
+    await page.click('app-personnes button[name=ajouterPersonne]');
     await page.fill('app-personnes input[name=personne-nom-0]', 'Alice Martin');
     await page.selectOption('app-personnes select[name=personne-role-0]', 'owner');
     await page.selectOption('app-personnes select[name=personne-domaine-0]', 'Ventes');
-    await page.click('app-personnes button:has-text("+ rôle")');
-    await page.click('app-personnes button:has-text("Enregistrer")');
+    await page.click('app-personnes button[name=ajouterRole-0]');
+    await page.click('app-personnes button[name=enregistrerPersonne-0]');
     await page.waitForSelector('.notification.succes');
     const personnes = await page.evaluate(async () => await (await fetch('/api/gouvernance/personnes')).json());
     verifier(
@@ -1644,8 +1649,54 @@ try {
         personnes.length === 1 &&
             personnes[0].roles[0].role === 'owner' &&
             personnes[0].roles[0].domain === 'Ventes' &&
-            /Finance/.test(await page.textContent('app-personnes .puces'))
+            /Finance/.test(await page.textContent('app-personnes [name=domainesMetier]'))
     );
+    // V13 : la puce d'un rôle porte son pictogramme, son domaine et son nom ; le résumé se lit en une phrase.
+    await page.waitForFunction(() => document.querySelector('app-personnes [name=resumeDesRoles-0]'));
+    verifier(
+        'V13 : un rôle se lit « 👑 Ventes · Propriétaire », et la personne se résume en une phrase',
+        /👑 Ventes · Propriétaire/.test(await page.textContent('app-personnes [name=personne-0]')) &&
+            /Propriétaire · Ventes/.test(await page.textContent('app-personnes [name=resumeDesRoles-0]'))
+    );
+    // V13 : un domaine dit ce qu'il sert avant qu'on le retire.
+    verifier(
+        'V13 : chaque domaine métier annonce ce qui le cite (sources, objets, termes, applis, rôles)',
+        /Ventes.*·.*(source|objet|appli|rôle)/.test((await page.textContent('app-personnes [name=domainesMetier]')).replace(/\s+/g, ' '))
+    );
+    // V13 : l'exemple de rôles complète la liste sans recréer ce qui existe déjà — Alice est là, donc
+    // seules Bob (contributeur), Chloé (lectrice) et l'administrateur sont ajoutés.
+    await page.click('app-personnes button[name=exempleDeRoles]');
+    await page.waitForSelector('.notification.succes');
+    await page.waitForFunction(async () => (await (await fetch('/api/gouvernance/personnes')).json()).length === 4, null, {
+        timeout: 5000
+    });
+    const apresExemple = await page.evaluate(async () => await (await fetch('/api/gouvernance/personnes')).json());
+    verifier(
+        'V13 : « Exemple de rôles » complète les rôles manquants (contributeur, lecteur, administrateur) sans recréer Alice',
+        apresExemple.length === 4 &&
+            ['contrib', 'reader', 'admin'].every(role =>
+                apresExemple.some(personne => (personne.roles || []).some(candidat => candidat.role === role && !candidat.domain))
+            ) &&
+            apresExemple.filter(personne => personne.name === 'Alice Martin').length === 1
+    );
+    await page.click('app-personnes button[name=exempleDeRoles]');
+    await page.waitForSelector('.notification.succes');
+    const apresSecondClic = await page.evaluate(async () => await (await fetch('/api/gouvernance/personnes')).json());
+    verifier('V13 : un second clic ne crée pas de doublons', apresSecondClic.length === 4);
+    await capture('personnes-roles-v13');
+    // On retire les trois personnes d'exemple : elles ne servaient qu'à éprouver le bouton, et la suite
+    // des contrôles s'appuie sur Alice seule.
+    await page.evaluate(
+        async noms => {
+            const toutes = await (await fetch('/api/gouvernance/personnes')).json();
+            for (const personne of toutes)
+                if (noms.includes(personne.name))
+                    await fetch('/api/gouvernance/personnes/' + encodeURIComponent(personne.id), { method: 'DELETE' });
+        },
+        ['Bob Durand', 'Chloé Petit', 'Admin gouvernance']
+    );
+    await page.reload();
+    await page.waitForSelector('app-personnes');
 
     await page.click('a[href="/listes-de-valeurs"]');
     await page.waitForSelector('app-listes-valeurs');

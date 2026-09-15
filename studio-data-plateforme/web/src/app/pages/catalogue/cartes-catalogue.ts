@@ -6,8 +6,8 @@
  * puis les signaux de confiance — la qualité mesurée, la confidentialité, l'état de validation, le
  * responsable, la date du dernier rafraîchissement, les étiquettes.
  *
- * La couleur du responsable est tirée de son nom : la même personne garde la même pastille d'un écran à
- * l'autre, sans qu'on ait à lui en attribuer une.
+ * La pastille du responsable (ses initiales, sa couleur) est commune à tous les écrans : elle vit dans
+ * coeur/pastille-personne.
  *
  * Fonctions pures : elles ne connaissent que ce qu'on leur donne.
  */
@@ -42,30 +42,6 @@ export function allureDe(type: string): AllureDeType {
 export function surtitreDe(entree: EntreeCatalogue): string {
     const domaine = entree.domaine && entree.domaine !== '—' ? ' · ' + entree.domaine : '';
     return allureDe(entree.type).libelle + domaine;
-}
-
-/** Les initiales d'un responsable : deux lettres au plus, comme sur les pastilles du classique. */
-export function initialesDe(nom: string): string {
-    return (nom || '')
-        .split(/\s+/)
-        .map(mot => mot[0] || '')
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
-}
-
-/** Les sept couleurs de pastille du classique, dans leur ordre. */
-const COULEURS_DE_RESPONSABLE = ['#2563eb', '#059669', '#8b5cf6', '#f59e0b', '#0ea5e9', '#dc2626', '#0f172a'];
-
-/**
- * La couleur de la pastille d'un responsable, tirée de son nom. Le calcul est celui du classique : chaque
- * caractère fait avancer un total, dont on garde le reste — une même personne retombe donc toujours sur la
- * même couleur, sur tous les écrans et d'une session à l'autre.
- */
-export function couleurDeResponsable(nom: string): string {
-    let total = 0;
-    for (const caractere of String(nom)) total = (total * 31 + caractere.charCodeAt(0)) >>> 0;
-    return COULEURS_DE_RESPONSABLE[total % COULEURS_DE_RESPONSABLE.length];
 }
 
 /** La pastille de qualité : verte au-delà de 90, orange au-delà de 70, rouge en deçà. */

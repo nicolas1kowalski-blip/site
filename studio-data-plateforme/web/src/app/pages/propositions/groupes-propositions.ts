@@ -72,36 +72,20 @@ export type PouvoirDeDecider = { domaines: string[]; partout: boolean };
 const ROLES_QUI_DECIDENT = ['owner', 'admin'];
 
 /**
- * Ce que peut trancher la personne connectée. On la reconnaît par son adresse électronique, sinon par son
- * nom : c'est ce dont on dispose quand les personnes de la gouvernance et les comptes sont tenus à part.
+ * Ce que peut trancher la personne connectée. On lui passe la règle qui reconnaît « moi » parmi les
+ * personnes de la gouvernance (`correspondALIdentite`, dans l'écran des personnes) : ce module n'a pas à
+ * savoir comment les comptes et les personnes se rapprochent, seulement à en tirer les domaines.
  * Un administrateur de l'espace décide partout — sans quoi une gouvernance mal peuplée se bloquerait.
  */
 export function pouvoirDeDecider(
     personnes: Personne[],
     identite: { email?: string; nom?: string },
-    administrateur: boolean
+    administrateur: boolean,
+    estMoi: (personne: Personne, identite: { email?: string; nom?: string }) => boolean
 ): PouvoirDeDecider {
-    const email = String(identite.email || '')
-        .trim()
-        .toLowerCase();
-    const nom = String(identite.nom || '')
-        .trim()
-        .toLowerCase();
-    const moi = personnes.filter(personne => {
-        const sienne = String(personne.email || '')
-            .trim()
-            .toLowerCase();
-        if (email && sienne) return sienne === email;
-        return (
-            !!nom &&
-            String(personne.name || '')
-                .trim()
-                .toLowerCase() === nom
-        );
-    });
-    const domaines = moi.flatMap(personne =>
-        (personne.roles || []).filter(role => ROLES_QUI_DECIDENT.includes(role.role)).map(role => role.domain)
-    );
+    const domaines = personnes
+        .filter(personne => estMoi(personne, identite))
+        .flatMap(personne => (personne.roles || []).filter(role => ROLES_QUI_DECIDENT.includes(role.role)).map(role => role.domain));
     return { domaines: [...new Set(domaines)], partout: administrateur };
 }
 

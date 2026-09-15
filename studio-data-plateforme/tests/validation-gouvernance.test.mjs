@@ -24,6 +24,7 @@ import {
     pouvoirDeDecider,
     regrouperLesPropositions
 } from '../web/src/app/pages/propositions/groupes-propositions.ts';
+import { correspondALIdentite } from '../web/src/app/pages/personnes/roles-personnes.ts';
 
 // ---- le statut d'une fiche ----
 
@@ -157,21 +158,21 @@ const personnes = [
 ];
 
 test('le responsable d’un domaine décide sur son domaine, et seulement là', () => {
-    const pouvoir = pouvoirDeDecider(personnes, { email: 'alice@exemple.fr' }, false);
+    const pouvoir = pouvoirDeDecider(personnes, { email: 'alice@exemple.fr' }, false, correspondALIdentite);
     assert.deepEqual(pouvoir, { domaines: ['Ventes'], partout: false });
     assert.equal(peutDecider(proposition('p1', 'bo', {}, 'Ventes'), pouvoir), true);
     assert.equal(peutDecider(proposition('p2', 'bo', {}, 'Achats'), pouvoir), false);
 });
 
 test('un contributeur ne tranche pas, un administrateur tranche partout', () => {
-    assert.deepEqual(pouvoirDeDecider(personnes, { email: 'bob@exemple.fr' }, false).domaines, []);
-    const administrateur = pouvoirDeDecider(personnes, { email: 'inconnu@exemple.fr' }, true);
+    assert.deepEqual(pouvoirDeDecider(personnes, { email: 'bob@exemple.fr' }, false, correspondALIdentite).domaines, []);
+    const administrateur = pouvoirDeDecider(personnes, { email: 'inconnu@exemple.fr' }, true, correspondALIdentite);
     assert.equal(peutDecider(proposition('p1', 'bo', {}, 'Achats'), administrateur), true);
 });
 
 test('à défaut d’adresse, on reconnaît la personne à son nom', () => {
-    assert.deepEqual(pouvoirDeDecider(personnes, { nom: 'Alice Martin' }, false).domaines, ['Ventes']);
-    assert.deepEqual(pouvoirDeDecider(personnes, {}, false).domaines, [], 'sans identité, aucun pouvoir');
+    assert.deepEqual(pouvoirDeDecider(personnes, { nom: 'Alice Martin' }, false, correspondALIdentite).domaines, ['Ventes']);
+    assert.deepEqual(pouvoirDeDecider(personnes, {}, false, correspondALIdentite).domaines, [], 'sans identité, aucun pouvoir');
 });
 
 test('« tout valider » ne prend que ce que l’on a le droit de trancher, et dit pourquoi', () => {
@@ -179,7 +180,7 @@ test('« tout valider » ne prend que ce que l’on a le droit de trancher, et d
         [proposition('p1', 'bo', { boId: 'bo_1' }, 'Ventes'), proposition('p2', 'bo', { boId: 'bo_1' }, 'Achats')],
         {}
     )[0];
-    const responsableDesVentes = pouvoirDeDecider(personnes, { email: 'alice@exemple.fr' }, false);
+    const responsableDesVentes = pouvoirDeDecider(personnes, { email: 'alice@exemple.fr' }, false, correspondALIdentite);
     assert.deepEqual(
         decidablesDuGroupe(groupe, responsableDesVentes).map(une => une.id),
         ['p1']

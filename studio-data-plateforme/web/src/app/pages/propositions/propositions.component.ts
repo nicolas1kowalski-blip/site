@@ -7,6 +7,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { Actif, ObjetMetier, Personne, Proposition, TermeGlossaire, formaterDate } from '../../coeur/modeles';
 import { NotificationsService } from '../../coeur/notifications.service';
+import { correspondALIdentite } from '../personnes/roles-personnes';
 import { SessionService } from '../../coeur/session.service';
 import {
     GroupeDePropositions,
@@ -161,7 +162,8 @@ export class PropositionsComponent {
         pouvoirDeDecider(
             this.personnes(),
             { email: this.session.utilisateur()?.email || '', nom: this.session.utilisateur()?.nomAffiche || '' },
-            this.session.estAdministrateurGlobal()
+            this.session.estAdministrateurGlobal(),
+            correspondALIdentite
         )
     );
 
