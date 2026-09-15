@@ -52,6 +52,20 @@ import {
     retirerUnNiveau,
     tuilesDeLAudit
 } from './hierarchies-objet';
+import {
+    CouvertureDUneValeur,
+    MaitriseContextuelle,
+    RegleDeMaitrise,
+    cequiManquePourVerifier,
+    choisirLeContexte,
+    conclusionDeCouverture,
+    couvertureDuContexte,
+    informationDeContexte,
+    maitriseDe,
+    phraseDeCouverture,
+    regleNeuve,
+    tablesProposees
+} from './maitrise-objet';
 import { BilanEchantillonnage, bilanNeuf, classerAvantEchantillonnage, phraseDuBilan, poserDesExemples } from './usages-objet';
 import {
     CARDINALITES_VARIANTE,
@@ -1214,6 +1228,147 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
 
                                 <!-- audit : l'historique des décisions, en attendant l'audit global de la V13 -->
                                 <!-- 🌳 Hiérarchies : l'arbre déclaré, puis confronté aux données (V13). -->
+                                <!-- ⚖️ Maîtrise : quelle source fait foi selon le contexte (V13). -->
+                                @if (ongletActif() === 'maitrise') {
+                                    @let maitrise = maitriseDe(objet);
+                                    <div class="border border-blue-200 rounded-lg p-3 bg-blue-50/40">
+                                        <div class="text-[10px] uppercase font-bold text-blue-800 mb-1">
+                                            ⚖️ Règles de maîtrise contextuelle
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 mb-2">
+                                            Si la source maître dépend du contexte (par exemple, selon le <em>type de contrat</em>, la
+                                            donnée est maîtrisée par un système différent avec un propriétaire différent), choisissez
+                                            l'information de contexte puis définissez les règles. À défaut de règle applicable, la source 👑
+                                            maître générale et le propriétaire global s'appliquent.
+                                        </p>
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <label class="text-xs font-bold text-slate-500" for="contexteDeMaitrise"
+                                                >Information de contexte :</label
+                                            >
+                                            <select
+                                                id="contexteDeMaitrise"
+                                                class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                name="contexteDeMaitrise"
+                                                [ngModel]="maitrise.elementId"
+                                                [disabled]="!session.peutEditer()"
+                                                (ngModelChange)="choisirLeContexte(objet, $event)"
+                                            >
+                                                <option value="">— aucune (maîtrise unique) —</option>
+                                                @for (information of objet.elements; track information.id) {
+                                                    <option [value]="information.id">{{ information.name }}</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        @if (informationDeContexte(objet); as contexte) {
+                                            @for (regle of maitrise.rules; track regle.id; let rang = $index) {
+                                                <div
+                                                    class="flex flex-wrap items-center gap-2 mb-1.5 bg-white border border-blue-100 rounded-lg p-2"
+                                                >
+                                                    <span class="text-xs text-slate-500">
+                                                        Si <strong>{{ contexte.name }}</strong> =
+                                                    </span>
+                                                    <input
+                                                        class="border border-slate-300 p-1.5 rounded text-xs w-36 font-bold"
+                                                        placeholder="choisir ou saisir…"
+                                                        list="valeursDuContexte"
+                                                        [(ngModel)]="regle.value"
+                                                        [name]="'maitrise-valeur-' + rang"
+                                                        [attr.name]="'maitrise-valeur-' + rang"
+                                                        [disabled]="!session.peutEditer()"
+                                                    />
+                                                    <span class="text-xs text-slate-400">→ maître :</span>
+                                                    <select
+                                                        class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                        [(ngModel)]="regle.masterTable"
+                                                        [name]="'maitrise-table-' + rang"
+                                                        [attr.name]="'maitrise-table-' + rang"
+                                                        [disabled]="!session.peutEditer()"
+                                                    >
+                                                        @for (table of tablesProposees(objet); track table) {
+                                                            <option [value]="table">{{ table }}</option>
+                                                        }
+                                                    </select>
+                                                    <span class="text-xs text-slate-400">· propriétaire :</span>
+                                                    <input
+                                                        class="border border-slate-300 p-1.5 rounded text-xs w-44"
+                                                        placeholder="propriétaire pour ce contexte"
+                                                        [(ngModel)]="regle.owner"
+                                                        [name]="'maitrise-proprietaire-' + rang"
+                                                        [attr.name]="'maitrise-proprietaire-' + rang"
+                                                        [disabled]="!session.peutEditer()"
+                                                    />
+                                                    @if (session.peutEditer()) {
+                                                        <button
+                                                            class="text-red-400 hover:text-red-600 ml-auto"
+                                                            type="button"
+                                                            [attr.name]="'supprimerRegleMaitrise-' + rang"
+                                                            (click)="supprimerLaRegleDeMaitrise(objet, regle)"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                            <!-- Les valeurs réelles du contexte, proposées à la saisie d'une règle. -->
+                                            <datalist id="valeursDuContexte">
+                                                @for (valeur of couvertureDuContexte(); track valeur.valeur) {
+                                                    <option [value]="valeur.valeur"></option>
+                                                }
+                                            </datalist>
+                                            <div class="flex items-center gap-2 mt-2">
+                                                @if (session.peutEditer()) {
+                                                    <button
+                                                        class="text-xs bg-white border border-blue-300 text-blue-700 px-2.5 py-1 rounded font-medium hover:bg-blue-50"
+                                                        type="button"
+                                                        name="ajouterRegleMaitrise"
+                                                        (click)="ajouterUneRegleDeMaitrise(objet)"
+                                                    >
+                                                        + Règle
+                                                    </button>
+                                                }
+                                                <button
+                                                    class="text-xs bg-blue-600 text-white px-2.5 py-1 rounded font-bold hover:bg-blue-700 disabled:opacity-50"
+                                                    type="button"
+                                                    name="verifierCouverture"
+                                                    [disabled]="couvertureEnCours()"
+                                                    (click)="verifierLaCouverture(objet)"
+                                                >
+                                                    🔎 Vérifier la couverture sur les données réelles
+                                                </button>
+                                            </div>
+                                            @if (couvertureDuContexte().length) {
+                                                <div class="mt-2" name="couvertureDuContexte">
+                                                    <div class="text-xs mb-1.5">{{ phraseDeCouverture() }} :</div>
+                                                    <div class="flex flex-wrap gap-1.5">
+                                                        @for (valeur of couvertureDuContexte(); track valeur.valeur) {
+                                                            <span
+                                                                class="text-[11px] rounded-full px-2 py-0.5 border"
+                                                                [class]="
+                                                                    valeur.couverte
+                                                                        ? 'text-[11px] rounded-full px-2 py-0.5 border bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                                        : 'text-[11px] rounded-full px-2 py-0.5 border bg-red-50 border-red-200 text-red-700'
+                                                                "
+                                                            >
+                                                                {{ valeur.couverte ? '✅' : '⚠️' }} {{ valeur.valeur }}
+                                                                <span class="text-slate-400">({{ valeur.compte }})</span>
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                    <p
+                                                        class="text-[10px] mt-1.5"
+                                                        [class]="
+                                                            toutEstCouvert()
+                                                                ? 'text-[10px] mt-1.5 text-emerald-700'
+                                                                : 'text-[10px] mt-1.5 text-red-600'
+                                                        "
+                                                    >
+                                                        {{ conclusionDeCouverture() }}
+                                                    </p>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
                                 @if (ongletActif() === 'hierarchies') {
                                     <div class="border border-emerald-200 rounded-lg p-3 bg-emerald-50/30">
                                         <div class="flex items-center gap-2 flex-wrap mb-1">
@@ -1790,6 +1945,9 @@ export class ObjetsMetierComponent {
     /** Le dernier audit d'arbre rendu, par hiérarchie : on le garde à l'écran jusqu'au suivant. */
     readonly auditsDArbre = signal<Record<string, AuditHierarchie>>({});
     readonly auditEnCours = signal(false);
+    /** Les valeurs réellement présentes dans la colonne du contexte, lues à la demande. */
+    readonly valeursDuContexte = signal<{ valeur: string; compte: number }[]>([]);
+    readonly couvertureEnCours = signal(false);
     readonly cardinalitesVariante = CARDINALITES_VARIANTE;
     readonly optionsNombreDeValeurs = OPTIONS_NOMBRE_DE_VALEURS;
     readonly operateursPortee = Object.entries(OPERATEURS_PORTEE).map(([cle, libelle]) => ({ cle, libelle }));
@@ -2109,6 +2267,79 @@ export class ObjetsMetierComponent {
     provenanceDuGroupe(groupe: GroupeDInformations): string {
         if (groupe.replie) return colonnesDuGroupe(groupe).join(', ');
         return this.provenance(groupe.informations[0]);
+    }
+
+    // ---- V13 : la maîtrise contextuelle — quelle source fait foi selon le contexte ----
+
+    maitriseDe(objet: ObjetMetier): MaitriseContextuelle {
+        return maitriseDe(objet);
+    }
+
+    informationDeContexte(objet: ObjetMetier): AttributObjetMetier | null {
+        return informationDeContexte(objet);
+    }
+
+    tablesProposees(objet: ObjetMetier): string[] {
+        return tablesProposees(
+            objet,
+            this.sources().map(source => source.name)
+        );
+    }
+
+    /** Changer de contexte efface les règles : elles parlaient des valeurs de l'ancienne information. */
+    choisirLeContexte(objet: ObjetMetier, elementId: string): void {
+        choisirLeContexte(objet, elementId);
+        this.valeursDuContexte.set([]);
+    }
+
+    ajouterUneRegleDeMaitrise(objet: ObjetMetier): void {
+        maitriseDe(objet).rules.push(regleNeuve(objet, genererIdentifiant));
+    }
+
+    supprimerLaRegleDeMaitrise(objet: ObjetMetier, regle: RegleDeMaitrise): void {
+        const maitrise = maitriseDe(objet);
+        maitrise.rules = maitrise.rules.filter(autre => autre.id !== regle.id);
+    }
+
+    /** Les valeurs observées, confrontées aux règles écrites : c'est là que se voient les oublis. */
+    couvertureDuContexte(): CouvertureDUneValeur[] {
+        const objet = this.edition();
+        if (!objet) return [];
+        return couvertureDuContexte(this.valeursDuContexte(), maitriseDe(objet).rules);
+    }
+
+    phraseDeCouverture(): string {
+        return phraseDeCouverture(this.couvertureDuContexte());
+    }
+
+    conclusionDeCouverture(): string {
+        return conclusionDeCouverture(this.couvertureDuContexte());
+    }
+
+    toutEstCouvert(): boolean {
+        return this.couvertureDuContexte().every(valeur => valeur.couverte);
+    }
+
+    /**
+     * Va lire les valeurs réellement présentes dans la colonne du contexte. On refuse avant d'appeler
+     * quand l'information de contexte n'est rattachée à aucune colonne : il n'y aurait rien à lire.
+     */
+    async verifierLaCouverture(objet: ObjetMetier): Promise<void> {
+        const manque = cequiManquePourVerifier(objet);
+        if (manque) return this.notifications.erreur(manque);
+        const colonne = (informationDeContexte(objet)?.mappings || [])[0];
+        const source = this.sources().find(candidat => candidat.name === colonne.table);
+        if (!source) return this.notifications.erreur(`Le fichier « ${colonne.table} » n'est plus chargé.`);
+        this.couvertureEnCours.set(true);
+        try {
+            const valeurs = await this.api.valeursColonne(String(source.id), colonne.col);
+            this.valeursDuContexte.set(valeurs.map(observee => ({ valeur: observee.valeur, compte: observee.lignes })));
+            if (!valeurs.length) this.notifications.info('Cette colonne ne contient aucune valeur renseignée.');
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.couvertureEnCours.set(false);
+        }
     }
 
     // ---- V13 : les hiérarchies de l'objet, déclarées puis confrontées aux données ----

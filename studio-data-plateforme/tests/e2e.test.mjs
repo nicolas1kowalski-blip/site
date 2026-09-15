@@ -1197,6 +1197,38 @@ try {
     await page.click('app-objets-metier button:has-text("Enregistrer")');
     await page.waitForSelector('.notification:has-text("enregistré")');
 
+    // ---- V13 : la maîtrise contextuelle, et sa couverture sur les données réelles ----
+    await page.click('app-objets-metier button[name=onglet-maitrise]');
+    await page.selectOption('app-objets-metier select[name=contexteDeMaitrise]', { label: 'ville' });
+    await page.click('app-objets-metier button[name=ajouterRegleMaitrise]');
+    await page.fill('app-objets-metier input[name=maitrise-valeur-0]', 'Paris');
+    await page.fill('app-objets-metier input[name=maitrise-proprietaire-0]', 'Équipe Île-de-France');
+    await page.click('app-objets-metier button[name=verifierCouverture]');
+    await page.waitForSelector('app-objets-metier [name=couvertureDuContexte]');
+    const couvertureDeLaMaitrise = await page.textContent('app-objets-metier [name=couvertureDuContexte]');
+    verifier(
+        'V13 : la couverture confronte les règles aux valeurs réelles — Paris couverte, les autres non',
+        /1\/3 valeur\(s\) de contexte couverte\(s\)/.test(couvertureDeLaMaitrise) &&
+            /✅ Paris/.test(couvertureDeLaMaitrise) &&
+            /⚠️ (Lyon|Lille)/.test(couvertureDeLaMaitrise) &&
+            /source maître générale et le propriétaire global/.test(couvertureDeLaMaitrise)
+    );
+    await capture('objet-metier-maitrise');
+    // La casse ne compte pas : « paris » couvre « Paris ».
+    await page.fill('app-objets-metier input[name=maitrise-valeur-0]', 'PARIS');
+    const couvertureApresCasse = await page
+        .waitForFunction(
+            () => /1\/3 valeur\(s\)/.test(document.querySelector('app-objets-metier [name=couvertureDuContexte]').textContent),
+            null,
+            { timeout: 3000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    verifier('V13 : la couverture ignore la casse — « PARIS » couvre toujours « Paris »', couvertureApresCasse);
+    // On retire la règle : elle ne servait qu'à éprouver la couverture.
+    await page.click('app-objets-metier button[name=supprimerRegleMaitrise-0]');
+    await page.selectOption('app-objets-metier select[name=contexteDeMaitrise]', '');
+
     // ---- V13 : déclarer une hiérarchie, puis la confronter aux données ----
     await page.click('app-objets-metier button[name=onglet-hierarchies]');
     await page.click('app-objets-metier button[name=ajouterHierarchie]');
