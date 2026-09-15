@@ -122,3 +122,79 @@ export function etatDuToutValider(
         raison: restantes ? `${restantes} proposition(s) de ce groupe relèvent d'un autre responsable.` : ''
     };
 }
+
+// ---- les deux vues de l'écran « à valider » ----
+
+/** Les deux façons de regarder les propositions : celles à trancher, et celles que l'on a soi-même faites. */
+export const VUES_DES_PROPOSITIONS = [
+    { cle: 'aValider', libelle: '✅ À valider' },
+    { cle: 'parMoi', libelle: '✍️ Proposées par moi' }
+] as const;
+export type VueDesPropositions = (typeof VUES_DES_PROPOSITIONS)[number]['cle'];
+
+/**
+ * Les propositions que la vue demandée montre.
+ *   • « à valider » : tout ce qui attend, réduit à ses propres domaines quand on le demande — c'est le
+ *     réglage par défaut du classique, parce qu'une liste où l'on ne peut rien trancher décourage ;
+ *   • « proposées par moi » : ce que l'on a soi-même proposé et qui attend encore une décision.
+ */
+export function propositionsDeLaVue(
+    enAttente: Proposition[],
+    vue: VueDesPropositions,
+    pouvoir: PouvoirDeDecider,
+    monIdentifiant: string,
+    mesDomainesSeulement: boolean
+): Proposition[] {
+    if (vue === 'parMoi') return enAttente.filter(proposition => !!monIdentifiant && proposition.by === monIdentifiant);
+    if (!mesDomainesSeulement) return enAttente;
+    return enAttente.filter(proposition => peutDecider(proposition, pouvoir));
+}
+
+/** Des groupes rangés sous leur domaine métier, dans l'ordre où les domaines apparaissent. */
+export type DomaineDePropositions = { domaine: string; groupes: GroupeDePropositions[] };
+
+/**
+ * Range les groupes sous leur domaine. C'est ainsi que le classique présente l'écran : on relit d'abord
+ * les Ventes, puis la Finance — et non une liste où les domaines s'entremêlent.
+ */
+export function grouperParDomaine(groupes: GroupeDePropositions[]): DomaineDePropositions[] {
+    const parDomaine: DomaineDePropositions[] = [];
+    const connus = new Map<string, DomaineDePropositions>();
+    for (const groupe of groupes) {
+        const domaine = groupe.propositions[0]?.domain || 'Sans domaine';
+        let rangee = connus.get(domaine);
+        if (!rangee) {
+            rangee = { domaine, groupes: [] };
+            connus.set(domaine, rangee);
+            parDomaine.push(rangee);
+        }
+        rangee.groupes.push(groupe);
+    }
+    return parDomaine;
+}
+
+/**
+ * Où aller pour voir une proposition en contexte : la fiche qu'elle vise, ouverte sur l'écran qui la
+ * porte. Lire « définition : vide → un client est… » ne suffit pas pour décider ; il faut voir la fiche.
+ */
+export function lienVersLaCible(cle: string): string {
+    const separation = cle.indexOf(':');
+    const genre = cle.slice(0, separation);
+    const identifiant = cle.slice(separation + 1);
+    if (genre === 'objet') return `/objets-metier?objet=${encodeURIComponent(identifiant)}`;
+    if (genre === 'table') return `/dictionnaire?source=${encodeURIComponent(identifiant)}`;
+    if (genre === 'terme') return '/glossaire';
+    if (genre === 'application') return '/actifs';
+    return '';
+}
+
+/** Le nombre de décisions passées que l'on déroule : au-delà, c'est l'écran Historique qui sert. */
+export const DECISIONS_MONTREES = 50;
+
+/** Ce qu'une valeur proposée donne à lire ; « vide » plutôt que rien, pour que la flèche garde un sens. */
+export function valeurLisible(valeur: unknown): string {
+    if (valeur == null || valeur === '') return 'vide';
+    if (Array.isArray(valeur)) return valeur.length ? valeur.join(', ') : 'vide';
+    if (typeof valeur === 'object') return JSON.stringify(valeur);
+    return String(valeur);
+}

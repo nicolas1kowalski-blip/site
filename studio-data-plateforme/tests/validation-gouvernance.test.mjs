@@ -21,7 +21,13 @@ import {
     etatDuToutValider,
     libelleDuGroupe,
     peutDecider,
+    DECISIONS_MONTREES,
+    VUES_DES_PROPOSITIONS,
+    grouperParDomaine,
+    lienVersLaCible,
     pouvoirDeDecider,
+    propositionsDeLaVue,
+    valeurLisible,
     regrouperLesPropositions
 } from '../web/src/app/pages/propositions/groupes-propositions.ts';
 import { correspondALIdentite } from '../web/src/app/pages/personnes/roles-personnes.ts';
@@ -192,4 +198,78 @@ test('« tout valider » ne prend que ce que l’on a le droit de trancher, et d
     const sansPouvoir = etatDuToutValider(groupe, { domaines: [], partout: false });
     assert.equal(sansPouvoir.possible, false);
     assert.match(sansPouvoir.raison, /revient au responsable du domaine/);
+});
+
+test('les deux vues de l’écran « à valider » : ce qui m’attend, et ce que j’ai proposé', () => {
+    const proposition = (id, domaine, auteur) => ({
+        id,
+        status: 'pending',
+        domain: domaine,
+        by: auteur,
+        label: 'Définition',
+        before: '',
+        after: 'x',
+        kind: 'bo',
+        target: { boId: 'bo_1' }
+    });
+    const enAttente = [proposition('p1', 'Ventes', 'bob'), proposition('p2', 'Finance', 'bob'), proposition('p3', 'Ventes', 'alice')];
+    const responsableDesVentes = { domaines: ['Ventes'], partout: false };
+    assert.deepEqual(
+        propositionsDeLaVue(enAttente, 'aValider', responsableDesVentes, 'alice', true).map(candidate => candidate.id),
+        ['p1', 'p3'],
+        'mes domaines seulement : la Finance ne m’encombre pas'
+    );
+    assert.deepEqual(
+        propositionsDeLaVue(enAttente, 'aValider', responsableDesVentes, 'alice', false).map(candidate => candidate.id),
+        ['p1', 'p2', 'p3'],
+        'sans le filtre, tout ce qui attend est montré'
+    );
+    assert.deepEqual(
+        propositionsDeLaVue(enAttente, 'parMoi', responsableDesVentes, 'bob', true).map(candidate => candidate.id),
+        ['p1', 'p2'],
+        '« proposées par moi » ignore le domaine'
+    );
+    assert.deepEqual(propositionsDeLaVue(enAttente, 'parMoi', responsableDesVentes, '', true), [], 'sans identité, on n’a rien proposé');
+    assert.deepEqual(
+        VUES_DES_PROPOSITIONS.map(vue => vue.cle),
+        ['aValider', 'parMoi']
+    );
+});
+
+test('les groupes se rangent sous leur domaine, dans leur ordre d’apparition', () => {
+    const groupe = (cle, domaine) => ({ cle, libelle: cle, propositions: [{ id: cle, domain: domaine }] });
+    const range = grouperParDomaine([
+        groupe('objet:bo_1', 'Ventes'),
+        groupe('table:clients.csv', 'Finance'),
+        groupe('terme:t_1', 'Ventes'),
+        groupe('objet:bo_9', '')
+    ]);
+    assert.deepEqual(
+        range.map(rangee => rangee.domaine),
+        ['Ventes', 'Finance', 'Sans domaine']
+    );
+    assert.deepEqual(
+        range[0].groupes.map(candidat => candidat.cle),
+        ['objet:bo_1', 'terme:t_1']
+    );
+    assert.deepEqual(grouperParDomaine([]), []);
+});
+
+test('« Voir › » mène à la fiche visée, sur l’écran qui la porte', () => {
+    assert.equal(lienVersLaCible('objet:bo_1'), '/objets-metier?objet=bo_1');
+    assert.equal(lienVersLaCible('table:clients.csv'), '/dictionnaire?source=clients.csv');
+    assert.equal(lienVersLaCible('terme:t_1'), '/glossaire');
+    assert.equal(lienVersLaCible('application:as_1'), '/actifs');
+    assert.equal(lienVersLaCible('domaine:Ventes'), '', 'un domaine n’a pas de fiche à ouvrir');
+});
+
+test('une valeur proposée se lit toujours, « vide » compris', () => {
+    assert.equal(valeurLisible('un client'), 'un client');
+    assert.equal(valeurLisible(''), 'vide');
+    assert.equal(valeurLisible(null), 'vide');
+    assert.equal(valeurLisible([]), 'vide');
+    assert.equal(valeurLisible(['a', 'b']), 'a, b');
+    assert.equal(valeurLisible(12), '12');
+    assert.equal(valeurLisible({ table: 'clients.csv' }), '{"table":"clients.csv"}');
+    assert.equal(DECISIONS_MONTREES, 50);
 });

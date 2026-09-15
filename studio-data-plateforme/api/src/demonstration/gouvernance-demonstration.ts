@@ -766,8 +766,11 @@ export const GLOSSAIRE = [
 ];
 
 /**
- * Trois propositions en attente : l'écran « À valider » a ainsi de quoi se montrer, et chacune illustre un
- * cas différent — une définition manquante, un mot du glossaire à préciser, une criticité contestée.
+ * Quatre propositions en attente : l'écran « À valider » a ainsi de quoi se montrer, et chacune illustre un
+ * cas différent — une définition manquante, une définition d'objet à préciser, un mot du glossaire à
+ * affiner, une criticité contestée. Les deux premières visent la même fiche (l'objet Client) : c'est ce
+ * qui permet de montrer « tout valider pour cette fiche », le geste qui évite de trancher cinq fois la
+ * même décision.
  */
 export const PROPOSITIONS = [
     {
@@ -783,6 +786,20 @@ export const PROPOSITIONS = [
         by: 'demo',
         byName: 'Service support',
         at: '2026-09-01T09:12:00.000Z'
+    },
+    {
+        id: 'pr_definition_client',
+        kind: 'bo' as const,
+        field: 'definition',
+        target: { boId: 'bo_client' },
+        label: 'Client › Définition',
+        before: 'Personne ou entreprise ayant passé au moins une commande.',
+        after: 'Personne physique ou morale ayant passé au moins une commande, y compris annulée.',
+        domain: 'Commercial',
+        status: 'pending' as const,
+        by: 'demo',
+        byName: 'Service support',
+        at: '2026-09-02T10:20:00.000Z'
     },
     {
         id: 'pr_terme_encours',

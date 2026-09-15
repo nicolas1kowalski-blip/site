@@ -1967,15 +1967,15 @@ try {
         objetAvantValidation.definition === 'Personne ayant passé au moins une commande'
     );
     await page.click('a[href="/propositions"]');
-    await page.waitForSelector('app-propositions .proposition');
-    await page.click('app-propositions button:has-text("Valider")');
-    await page.waitForSelector('app-propositions h2:has-text("Décisions passées")');
+    await page.waitForSelector('app-propositions [name=propositionEnAttente]');
+    await page.click('app-propositions button[name=validerProposition]');
+    await page.waitForSelector('app-propositions [name=decisionsPassees]');
     const objetApres = (await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json()))[0];
     verifier(
         'propositions : la correction proposée, une fois validée, est appliquée à l’objet Client et tracée dans son historique',
         objetApres.definition === 'Personne physique ou morale ayant passé au moins une commande' &&
             objetApres.history.length === 1 &&
-            /validée/.test(await page.textContent('app-propositions tbody'))
+            /validée/.test(await page.textContent('app-propositions [name=decisionsPassees]'))
     );
     await capture('propositions');
 
@@ -2703,32 +2703,74 @@ try {
     verifier('mode démonstration : le parcours de la donnée est déjà dessiné (la carte n’est plus vide)', noeudsFlux >= 10);
     await capture('demonstration-lineage');
     await page.click('a[href="/propositions"]');
-    await page.waitForSelector('app-propositions .proposition');
+    await page.waitForSelector('app-propositions [name=propositionEnAttente]');
+    await page
+        .waitForFunction(() => document.querySelectorAll('app-propositions [name=propositionEnAttente]').length === 4, null, {
+            timeout: 5000
+        })
+        .catch(() => {});
     verifier(
-        'mode démonstration : trois propositions attendent d’être validées, chacune dans son domaine',
-        (await page.$$('app-propositions .proposition')).length === 3 && /Client › Statut/.test(await page.textContent('app-propositions'))
+        'mode démonstration : quatre propositions attendent d’être validées, rangées par domaine',
+        (await page.$$('app-propositions [name=propositionEnAttente]')).length === 4 &&
+            /Client › Statut/.test(await page.textContent('app-propositions'))
     );
     await capture('demonstration-propositions');
     // V13 : les propositions se regroupent par ce qu'elles visent, sous le nom réel de la cible.
-    const titresDesGroupes = await page.$$eval('app-propositions .carte h2', titres => titres.map(titre => titre.textContent.trim()));
+    const titresDesGroupes = await page.$$eval('app-propositions [name=titreDuGroupe]', titres =>
+        titres.map(titre => titre.textContent.trim())
+    );
     verifier(
         'V13 : les propositions sont regroupées sous le nom de ce qu’elles visent, jamais sous un identifiant',
         titresDesGroupes.length > 0 && titresDesGroupes.every(titre => !/\b(bo|gl|as)_/.test(titre))
     );
     // « Tout valider » tranche pour tout le groupe d'un geste — ici en administrateur, qui décide partout.
-    const avantToutValider = (await page.$$('app-propositions .proposition')).length;
-    const tailleDuGroupe = (await page.$$('app-propositions .carte:has(button[name=toutValider-0]) .proposition')).length;
-    await page.click('app-propositions button[name=toutValider-0]');
+    const avantToutValider = (await page.$$('app-propositions [name=propositionEnAttente]')).length;
+    const tailleDuGroupe = (await page.$$('app-propositions div:has(> div > button[name^="toutValider-"]) [name=propositionEnAttente]'))
+        .length;
+    await page.click('app-propositions button[name^="toutValider-"]');
     await page.waitForSelector('.notification.succes:has-text("validées et appliquées")');
     const apresToutValider = await page
         .waitForFunction(
-            restantes => document.querySelectorAll('app-propositions .proposition').length === restantes,
+            restantes => document.querySelectorAll('app-propositions [name=propositionEnAttente]').length === restantes,
             avantToutValider - tailleDuGroupe,
             { timeout: 5000 }
         )
         .then(() => true)
         .catch(() => false);
     verifier('V13 : « tout valider » tranche d’un geste toutes les propositions d’un même groupe', apresToutValider);
+
+    // ---- V13 : les deux vues, le filtre « mes domaines », le rappel de qui l'on est, les décisions passées ----
+    verifier(
+        'V13 : l’écran dit qui l’on est et sur quoi l’on décide',
+        /Vous êtes .* administrateur/.test(await page.textContent('app-propositions [name=quiJeSuis]'))
+    );
+    verifier(
+        'V13 : les propositions sont rangées sous leur domaine métier',
+        /Domaine (Finance|Support|Commercial)/.test(await page.textContent('app-propositions'))
+    );
+    // « Proposées par moi » : rien, puisque les propositions de démonstration viennent d'ailleurs.
+    await page.click('app-propositions button[name=vue-parMoi]');
+    await page.waitForSelector('app-propositions [name=rienAValider]');
+    verifier(
+        'V13 : « proposées par moi » sépare ce que j’attends d’autrui de ce que j’ai moi-même proposé',
+        /Aucune proposition en attente de votre part/.test(await page.textContent('app-propositions [name=rienAValider]'))
+    );
+    await page.click('app-propositions button[name=vue-aValider]');
+    await page.waitForSelector('app-propositions [name=propositionEnAttente]');
+    // Les décisions déjà prises sont repliées, et se déroulent d'un clic.
+    verifier(
+        'V13 : les décisions passées sont rangées dans un volet replié, et non étalées',
+        /🗂 Décisions passées/.test(await page.textContent('app-propositions [name=decisionsPassees]'))
+    );
+    // « Voir › » ouvre la fiche visée, sur l'écran qui la porte.
+    await page.click('app-propositions button[name=voirEnContexte]');
+    await page.waitForURL(url => /\/(objets-metier|glossaire|actifs|dictionnaire)/.test(url.toString()));
+    verifier(
+        'V13 : « Voir › » ouvre la fiche visée par la proposition, sur son écran',
+        /\/(objets-metier|glossaire|actifs|dictionnaire)/.test(page.url())
+    );
+    await page.click('a[href="/propositions"]');
+    await page.waitForSelector('app-propositions [name=propositionEnAttente]');
     await capture('propositions-groupees');
 
     // ---- V13 : le parcours s'ouvre depuis ce que l'on regarde, pas seulement par le menu ----

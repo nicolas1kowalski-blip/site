@@ -162,7 +162,10 @@ test('gouvernance installée : périmètres, personnes avec rôles, et propositi
         ['Commercial:owner', 'Ventes:owner']
     );
     const propositions = json(await appel({ method: 'GET', url: '/api/gouvernance/propositions' }));
-    assert.equal(propositions.filter((proposition: { status: string }) => proposition.status === 'pending').length, 3);
+    const enAttente = propositions.filter((proposition: { status: string }) => proposition.status === 'pending');
+    assert.equal(enAttente.length, 4);
+    // Deux d'entre elles visent la même fiche : l'écran « à valider » peut ainsi montrer « tout valider ».
+    assert.equal(enAttente.filter((proposition: { target: { boId?: string } }) => proposition.target.boId === 'bo_client').length, 2);
 });
 
 /** La carte des flux est dérivée à l'installation : sans elle, « Parcours de la donnée » resterait vide. */
