@@ -996,7 +996,7 @@ try {
     await page.fill('app-objets-metier input[name=domaine]', 'Ventes');
     await page.fill('app-objets-metier input[name=attribut-definition-2]', 'Ville de résidence');
     await page.click('app-objets-metier button:has-text("Enregistrer")');
-    await page.waitForSelector('app-objets-metier .liste .element:has-text("Client")');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button:has-text("Client")');
     const objetsMetier = await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json());
     verifier(
         'objets métier : « Client » enregistré dans appState.governance.businessObjects (source maître clients.csv, attribut ville défini)',
@@ -1077,7 +1077,7 @@ try {
     await page.click('app-fiche-information button[name=fermerFiche]');
     await capture('objets-metier-proposition');
     // On n'enregistre pas cet objet de démonstration : on revient sur « Client ».
-    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Client")');
 
     // ---- V11 : actions groupées, glisser-déposer d'une colonne, dupliquer ----
     await page.click('app-objets-metier button[name=actionsGroupees]');
@@ -1103,7 +1103,7 @@ try {
     await capture('objets-metier-gestes-groupes');
     // Dupliquer : la copie repart en brouillon, à renommer.
     await page.click('app-objets-metier button[name=dupliquerObjet]');
-    await page.waitForSelector('app-objets-metier .liste .element:has-text("Client (copie)")');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button:has-text("Client (copie)")');
     const apresCopie = await page.evaluate(async () => await (await fetch('/api/gouvernance/objets-metier')).json());
     const copie = apresCopie.find(objet => objet.name === 'Client (copie)');
     verifier(
@@ -1115,12 +1115,12 @@ try {
     );
     // On ne garde pas la copie : les écrans suivants comptent un seul objet métier.
     page.once('dialog', dialogue => dialogue.accept());
-    await page.click('app-objets-metier button:has-text("Supprimer")');
-    await page.waitForFunction(() => !/Client \(copie\)/.test(document.querySelector('app-objets-metier .liste').textContent));
+    await page.click('app-objets-metier button[name=supprimerObjet]');
+    await page.waitForFunction(() => !/Client \(copie\)/.test(document.querySelector('app-objets-metier #listeDesObjets').textContent));
 
     // ---- V13 : colonnes répétées repliées, nombre de valeurs, et variantes d'un objet ----
     // Deux colonnes numérotées ne sont pas deux informations : c'est une seule, à deux valeurs.
-    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Client")');
     await page.click('app-objets-metier button:has-text("+ Information")');
     await page.click('app-objets-metier button:has-text("+ Information")');
     // Le nom n'est repris qu'une fois le champ quitté : on tabule, comme le ferait une main.
@@ -1151,7 +1151,7 @@ try {
     verifier('V13 : retirer une information repliée retire toutes les colonnes qu’elle recouvre', await lignesDInformations(page, 3));
 
     // Une variante : une vue filtrée d'une table, avec son nom métier et sa cardinalité.
-    await page.click('app-objets-metier button[name=onglet-variantes]');
+    await page.click('app-objets-metier button[name=onglet-structure]');
     await page.selectOption('app-objets-metier select[name=varianteTable]', { label: 'commandes.csv' });
     await page.fill('app-objets-metier input[name=varianteNom]', 'Commandes réglées');
     await page.click('app-objets-metier button[name=ajouterVariante]');
@@ -1197,14 +1197,34 @@ try {
     await page.click('app-objets-metier button:has-text("Enregistrer")');
     await page.waitForSelector('.notification:has-text("enregistré")');
 
+    // V13 : la fiche porte six onglets, dans cet ordre et sous ces libellés, avec leur compteur.
+    const ongletsDeLaFiche = await page.$$eval('app-objets-metier #ficheDeLObjet [name^=onglet-]', boutons =>
+        boutons.map(bouton => bouton.textContent.replace(/\s+/g, ' ').trim())
+    );
+    verifier(
+        'V13 : la fiche d’un objet porte les six onglets du classique, compteurs compris',
+        ongletsDeLaFiche.length === 6 &&
+            ongletsDeLaFiche[0].startsWith('🧩 Attributs & composition') &&
+            ongletsDeLaFiche[1].startsWith('🔗 Sources') &&
+            ongletsDeLaFiche[2].startsWith('🌳 Hiérarchies') &&
+            ongletsDeLaFiche[3].startsWith('⚖️ Maîtrise') &&
+            ongletsDeLaFiche[4].startsWith('🔌 Applis & usages') &&
+            ongletsDeLaFiche[5].startsWith('🔎 Audit')
+    );
+    verifier(
+        'V13 : le compteur d’un onglet dit ce qu’il contient — 3 informations, 1 source',
+        ongletsDeLaFiche[0].endsWith('3') && ongletsDeLaFiche[1].endsWith('1')
+    );
+    await capture('objet-metier-onglets-v13');
+
     // Tant qu'aucune application n'est déclarée, l'onglet des usages dit où aller les déclarer.
-    await page.click('app-objets-metier button[name=onglet-usages]');
+    await page.click('app-objets-metier button[name=onglet-usage]');
     await page.waitForSelector('app-usages-objet');
     verifier(
         'V13 : sans application déclarée, l’écran des usages dit où aller les déclarer',
         /Applications & processus/.test(await page.textContent('app-usages-objet'))
     );
-    await page.click('app-objets-metier button[name=onglet-attributs]');
+    await page.click('app-objets-metier button[name=onglet-structure]');
 
     // ---- V11 : l'assistant de création en trois étapes ----
     await page.click('app-objets-metier button[name=assistantObjet]');
@@ -1241,9 +1261,9 @@ try {
     );
     // Objet de démonstration : on le retire, les écrans suivants comptent un seul objet métier.
     page.once('dialog', dialogue => dialogue.accept());
-    await page.click('app-objets-metier button:has-text("Supprimer")');
-    await page.waitForFunction(() => !/Site/.test(document.querySelector('app-objets-metier .liste').textContent));
-    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.click('app-objets-metier button[name=supprimerObjet]');
+    await page.waitForFunction(() => !/Site/.test(document.querySelector('app-objets-metier #listeDesObjets').textContent));
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Client")');
 
     // ---- V13 : l'accueil de la gouvernance — la question, les tâches, les mots du métier ----
     await page.click('a[href="/"]');
@@ -1570,9 +1590,9 @@ try {
     // ---- V13 : qui se sert de quelle information, et les exemples pris dans les données ----
     // L'application « CRM » est déclarée : la matrice a maintenant de quoi poser ses colonnes.
     await page.click('a[href="/objets-metier"]');
-    await page.waitForSelector('app-objets-metier .fiche');
-    await page.click('app-objets-metier .liste .element:has-text("Client")');
-    await page.click('app-objets-metier button[name=onglet-usages]');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button');
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Client")');
+    await page.click('app-objets-metier button[name=onglet-usage]');
     await page.waitForSelector('app-usages-objet table');
     verifier(
         'V13 : la matrice des usages montre chaque information, et signale celles que personne ne lit',
@@ -1592,7 +1612,7 @@ try {
     verifier('V13 : « tout cocher » déclare d’un geste ce qu’une application utilise', usagesPoses);
     await capture('objets-metier-usages-par-application');
     // Les exemples de valeurs, pris pour toutes les informations d'un coup.
-    await page.click('app-objets-metier button[name=onglet-attributs]');
+    await page.click('app-objets-metier button[name=onglet-structure]');
     await page.click('app-objets-metier button[name=exemplesPourToutes]');
     // On lit la notification du bilan, pas la première venue : les précédentes sont encore à l'écran.
     const bilanDesExemples = await page.textContent('.notification:has-text("complétée")');
@@ -1794,8 +1814,8 @@ try {
 
     // V13 : « 💬 Proposer une correction » depuis la fiche — rien ne change avant validation du responsable.
     await page.click('a[href="/objets-metier"]');
-    await page.waitForSelector('app-objets-metier .fiche');
-    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button');
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Client")');
     await page.click('app-objets-metier button[name=proposerCorrection]');
     await page.fill('app-objets-metier textarea[name=correctionProposee]', 'Personne physique ou morale ayant passé au moins une commande');
     await page.click('app-objets-metier button[name=envoyerCorrection]');
@@ -2442,11 +2462,11 @@ try {
 
     // ---- mode démonstration : la gouvernance est là aussi, et prête à être montrée ----
     await page.click('a[href="/objets-metier"]');
-    await page.waitForSelector('app-objets-metier .liste .element');
-    const objetsDemonstration = await page.$$eval('app-objets-metier .liste .element', elements => elements.length);
-    await page.click('app-objets-metier .liste .element:has-text("Client")');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button');
+    const objetsDemonstration = await page.$$eval('app-objets-metier #listeDesObjets button', elements => elements.length);
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Client")');
     await page.waitForFunction(() => document.querySelector('app-objets-metier input[name=nom]')?.value === 'Client');
-    const ficheClient = await page.textContent('app-objets-metier .fiche');
+    const ficheClient = await page.textContent('app-objets-metier #ficheDeLObjet');
     // Les noms des informations sont dans des champs de saisie : leur texte n'est pas dans le document.
     const informationsClient = await page.$$eval('app-objets-metier input[name^=attribut-nom-]', champs =>
         champs.map(champ => champ.value)
@@ -2513,8 +2533,8 @@ try {
 
     // ---- V13 : le parcours s'ouvre depuis ce que l'on regarde, pas seulement par le menu ----
     await page.click('a[href="/objets-metier"]');
-    await page.waitForSelector('app-objets-metier .liste .element');
-    await page.click('app-objets-metier .liste .element:has-text("Facture")');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button');
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Facture")');
     await page.waitForFunction(() => document.querySelector('app-objets-metier input[name=nom]')?.value === 'Facture');
     await page.click('app-objets-metier a[name=parcoursObjet]');
     // Le parcours de l'objet entier montre la synthèse (V12.7), pas la phrase d'une information.
@@ -2526,8 +2546,8 @@ try {
     await capture('parcours-depuis-objet');
     // Depuis une information : le parcours de cette information seule.
     await page.click('a[href="/objets-metier"]');
-    await page.waitForSelector('app-objets-metier .liste .element');
-    await page.click('app-objets-metier .liste .element:has-text("Facture")');
+    await page.waitForSelector('app-objets-metier #listeDesObjets button');
+    await page.click('app-objets-metier #listeDesObjets button:has-text("Facture")');
     await page.waitForSelector('app-objets-metier tbody tr');
     await page.click('app-objets-metier a[name=parcours-2]');
     await page.waitForSelector('app-lineage .phrase-parcours');

@@ -21,6 +21,7 @@ import {
     Actif,
     AttributObjetMetier,
     ObjetMetier,
+    Personne,
     RoleObjetSource,
     Source,
     TermeGlossaire,
@@ -37,6 +38,7 @@ import { AssistantObjetComponent } from './assistant-objet.component';
 import { ColonneOfferte, colonneLachee, colonneTransportee, colonnesDeLObjet, informationAvecColonne } from './colonnes-a-rattacher';
 import { FicheInformationComponent } from './fiche-information.component';
 import { UsagesObjetComponent } from './usages-objet.component';
+import { FicheValidable, STATUTS_FICHE, changerLeStatut, depuisQuand, statutDe } from '../dictionnaire/validation-fiche';
 import { BilanEchantillonnage, bilanNeuf, classerAvantEchantillonnage, phraseDuBilan, poserDesExemples } from './usages-objet';
 import {
     CARDINALITES_VARIANTE,
@@ -62,7 +64,11 @@ import {
 import { ProposerCorrectionComponent } from '../../composants/proposer-correction.component';
 import { PropositionObjetComponent } from './proposition-objet.component';
 
-type OngletFiche = 'attributs' | 'variantes' | 'usages' | 'sources' | 'liens' | 'historique';
+/**
+ * Les six onglets de la fiche, dans l'ordre de la V13. « structure » réunit les informations du cœur et
+ * les variantes : c'est le plan de travail de l'objet, et la V13 n'en fait qu'un.
+ */
+type OngletFiche = 'structure' | 'sources' | 'hierarchies' | 'maitrise' | 'usage' | 'audit';
 
 /** Combien de valeurs on reprend du fichier pour illustrer une information : de quoi comprendre, pas plus. */
 const EXEMPLES_PAR_INFORMATION = 4;
@@ -132,867 +138,1120 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
         UsagesObjetComponent
     ],
     template: `
-        <div class="entete-page">
-            <div class="espace">
-                <h1>Objets métier</h1>
-                <p class="discret">
-                    {{ objets().length }} objet(s) — ce que l'entreprise manipule, décrit en langage métier et relié aux sources.
-                </p>
-            </div>
+        <!--
+            Écran repris du classique : le balisage est celui de la V13, classe pour classe. « ecran-v13 »
+            pose ce que le preflight de Tailwind apporte, sans toucher au reste de l'application.
+        -->
+        <div class="ecran-v13">
+            <!-- La barre d'amorçage : une source n'INITIALISE qu'un objet, qui vit ensuite sa propre vie. -->
             @if (session.peutEditer()) {
-                <select class="champ" style="width: auto" [(ngModel)]="sourceInitiale" name="sourceInitiale">
-                    <option value="">Initialiser depuis une source…</option>
-                    @for (source of sources(); track source.id) {
-                        <option [value]="source.name">{{ source.name }}</option>
-                    }
-                </select>
-                <button class="bouton" (click)="initialiserDepuisSource()" [disabled]="!sourceInitiale">Initialiser</button>
-                <button class="bouton" name="decrireDepuisFichier" (click)="propositionOuverte.set(true)">
-                    ✨ Décrire depuis un fichier / modèle
-                </button>
-                <button class="bouton" name="assistantObjet" (click)="assistantOuvert.set(true)">🪄 Assistant en 3 étapes</button>
-                <button class="bouton principal" (click)="nouvelObjet()">Nouvel objet</button>
-            }
-        </div>
-
-        @if (assistantOuvert()) {
-            <app-assistant-objet
-                [sources]="sources()"
-                [domaines]="domaines()"
-                (creerObjet)="adopterAssistant($event)"
-                (fermer)="assistantOuvert.set(false)"
-            />
-        }
-
-        @if (propositionOuverte()) {
-            <app-proposition-objet
-                [sources]="sources()"
-                [objets]="objets()"
-                (creerObjet)="adopterProposition($event)"
-                (fermer)="propositionOuverte.set(false)"
-            />
-        }
-
-        <div class="disposition">
-            <!-- ---- liste ---- -->
-            <div class="carte liste">
-                <input class="champ" placeholder="Filtrer…" [(ngModel)]="filtre" name="filtre" />
-                @for (objet of objetsFiltres(); track objet.id) {
-                    <button class="element" [class.actif]="objet.id === selectionId()" (click)="selectionner(objet)">
-                        <span class="nom">
-                            <span class="feu" [class]="'feu ' + feu(objet).couleur" [title]="feu(objet).titre"></span>
-                            {{ objet.name || '(sans nom)' }}
-                        </span>
-                        <span class="discret"
-                            >{{ objet.domain || '—' }} · {{ objet.elements.length }} information(s) · {{ completude(objet).score }} %</span
+                <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 block mb-1" for="sourceInitiale">
+                            Initialiser un objet métier depuis une source
+                        </label>
+                        <select
+                            id="sourceInitiale"
+                            class="border border-slate-300 p-2 rounded text-sm bg-white"
+                            [(ngModel)]="sourceInitiale"
+                            name="sourceInitiale"
                         >
-                    </button>
-                } @empty {
-                    <div class="discret" style="padding: 12px">Aucun objet métier.</div>
-                }
-            </div>
-
-            <!-- ---- fiche ---- -->
-            @if (edition(); as objet) {
-                <div class="carte fiche">
-                    <div class="entete-page" style="margin: 0 0 8px">
-                        <h2 class="espace">{{ objet.name || 'Nouvel objet métier' }}</h2>
-                        <span class="badge" [class.succes]="completude(objet).score >= 80" [class.alerte]="completude(objet).score < 80"
-                            >complétude {{ completude(objet).score }} %</span
-                        >
-                        <!-- V13 : d'une fiche, on va voir d'où vient la donnée et où elle va. -->
-                        @if (!nouveau()) {
-                            <a class="bouton" name="parcoursObjet" [routerLink]="'/lineage'" [queryParams]="{ objet: objet.id }">
-                                🔎 Parcours
-                            </a>
-                        }
-                        @if (session.peutEditer()) {
-                            <button class="bouton principal" (click)="enregistrer()" [disabled]="enCours()">Enregistrer</button>
-                            @if (!nouveau()) {
-                                <button class="bouton" name="dupliquerObjet" (click)="dupliquer(objet)">⧉ Dupliquer</button>
-                                <button class="bouton danger" (click)="supprimer(objet)">Supprimer</button>
+                            @for (source of sources(); track source.id) {
+                                <option [value]="source.name">{{ source.name }}</option>
+                            } @empty {
+                                <option value="">Aucune table chargée</option>
                             }
-                        }
+                        </select>
                     </div>
-                    @if (completude(objet).aFaire.length) {
-                        <div class="discret" style="margin-bottom: 8px">À faire : {{ completude(objet).aFaire.join(' · ') }}</div>
-                    }
-                    <!-- V13 : contribuer sans risque — le responsable valide avant que quoi que ce soit change. -->
-                    <app-proposer-correction
-                        [genre]="'bo'"
-                        [cible]="{ boId: objet.id }"
-                        [sujet]="objet.name"
-                        [valeurActuelle]="objet.definition"
-                        [domaine]="objet.domain || ''"
-                    />
-                    <div class="formulaire-ligne">
-                        <div>
-                            <label class="etiquette">Nom</label
-                            ><input class="champ" name="nom" [(ngModel)]="objet.name" [disabled]="!session.peutEditer()" />
-                        </div>
-                        <div>
-                            <label class="etiquette">Domaine métier</label
-                            ><input
-                                class="champ"
-                                name="domaine"
-                                [(ngModel)]="objet.domain"
-                                list="domaines"
-                                [disabled]="!session.peutEditer()"
-                            />
-                            <datalist id="domaines">
-                                @for (domaine of domaines(); track domaine) {
-                                    <option [value]="domaine"></option>
-                                }
-                            </datalist>
-                        </div>
-                        <div>
-                            <label class="etiquette">Propriétaire</label
-                            ><input class="champ" name="proprietaire" [(ngModel)]="objet.globalOwner" [disabled]="!session.peutEditer()" />
-                        </div>
-                        <div>
-                            <label class="etiquette">Statut</label>
-                            <select class="champ" name="statut" [(ngModel)]="objet.status" [disabled]="!session.peutEditer()">
-                                <option>Brouillon</option>
-                                <option>En revue</option>
-                                <option>Validé</option>
-                            </select>
-                        </div>
-                    </div>
-                    <label class="etiquette" style="margin-top: 8px">Définition</label>
-                    <textarea
-                        class="champ"
-                        name="definition"
-                        [(ngModel)]="objet.definition"
-                        style="font-family: inherit"
-                        [disabled]="!session.peutEditer()"
-                    ></textarea>
-                    <label class="etiquette" style="margin-top: 8px">Contributeurs (séparés par des virgules)</label>
+                    <button
+                        class="bg-emerald-600 text-white text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
+                        type="button"
+                        [disabled]="!sourceInitiale"
+                        (click)="initialiserDepuisSource()"
+                    >
+                        <span>🏛️</span> Initialiser
+                    </button>
+                    <button
+                        class="bg-white border border-emerald-300 text-emerald-700 text-sm font-bold px-4 py-2 rounded-lg"
+                        type="button"
+                        name="decrireDepuisFichier"
+                        (click)="propositionOuverte.set(true)"
+                    >
+                        ✨ Décrire depuis un fichier / modèle
+                    </button>
+                    <button
+                        class="bg-white border border-emerald-300 text-emerald-700 text-sm font-bold px-4 py-2 rounded-lg"
+                        type="button"
+                        name="assistantObjet"
+                        (click)="assistantOuvert.set(true)"
+                    >
+                        🪄 Assistant en 3 étapes
+                    </button>
+                    <button
+                        class="bg-white border border-emerald-300 text-emerald-700 text-sm font-bold px-4 py-2 rounded-lg"
+                        type="button"
+                        (click)="nouvelObjet()"
+                    >
+                        + Objet vierge
+                    </button>
+                    <p class="text-xs text-slate-500 w-full md:w-auto md:flex-1">
+                        La source ne sert qu'à <strong>initialiser</strong> l'objet : les informations sont ensuite renommables et d'autres
+                        sources peuvent être rattachées (👑 maître, ✍️ contributeur, 📥 destinataire).
+                    </p>
+                </div>
+            }
+
+            @if (assistantOuvert()) {
+                <app-assistant-objet
+                    [sources]="sources()"
+                    [domaines]="domaines()"
+                    (creerObjet)="adopterAssistant($event)"
+                    (fermer)="assistantOuvert.set(false)"
+                />
+            }
+
+            @if (propositionOuverte()) {
+                <app-proposition-objet
+                    [sources]="sources()"
+                    [objets]="objets()"
+                    (creerObjet)="adopterProposition($event)"
+                    (fermer)="propositionOuverte.set(false)"
+                />
+            }
+
+            <!--
+            V13 : la liste des objets prend une largeur fixe et la fiche tout le reste — le tableau des
+            informations a besoin de place, la liste n'en a pas besoin. Sous 1536 px, la liste passe
+            au-dessus de la fiche, en cartes alignées.
+        -->
+            <div class="flex flex-col 2xl:flex-row gap-4">
+                <div id="listeDesObjets" class="flex flex-wrap gap-2 2xl:block 2xl:w-[230px] shrink-0">
                     <input
-                        class="champ"
-                        name="contributeurs"
-                        [ngModel]="objet.contributors.join(', ')"
-                        (ngModelChange)="definirContributeurs($event)"
-                        [disabled]="!session.peutEditer()"
+                        class="border border-slate-300 p-2 rounded text-sm bg-white w-full 2xl:mb-2"
+                        placeholder="Filtrer…"
+                        [(ngModel)]="filtre"
+                        name="filtre"
                     />
-
-                    <div class="onglets">
-                        @for (onglet of onglets; track onglet.cle) {
-                            <button
-                                [class.actif]="ongletActif() === onglet.cle"
-                                [attr.name]="'onglet-' + onglet.cle"
-                                (click)="ongletActif.set(onglet.cle)"
-                            >
-                                {{ onglet.libelle }}
-                                @if (onglet.cle === 'variantes' && variantes(objet).length) {
-                                    <span class="compte">{{ variantes(objet).length }}</span>
-                                }
-                            </button>
-                        }
-                    </div>
-
-                    <!-- informations : la liste, et la fiche en trois questions de celle qu'on ouvre (V13) -->
-                    @if (ongletActif() === 'attributs') {
-                        @if (objet.elements.length) {
-                            <div class="entete-page" style="margin: 0 0 8px">
-                                <span class="discret espace">{{ objet.elements.length }} information(s)</span>
-                                <!-- V13 : adresse_1, adresse_2… ne sont pas trois informations mais une seule, à trois valeurs. -->
-                                @if (colonnesRepliables(objet) > 0) {
-                                    <button
-                                        class="bouton petit"
-                                        type="button"
-                                        name="replierRepetitions"
-                                        [title]="
-                                            'Les colonnes numérotées (adresse_1, adresse_2…) sont vues comme une seule information ' +
-                                            'à plusieurs valeurs.'
-                                        "
-                                        (click)="repliActif.set(!repliActif())"
-                                    >
-                                        {{ repliActif() ? '⇱ Déplier' : '⇲ Replier' }} {{ colonnesRepliables(objet) }} colonne(s) répétée(s)
-                                    </button>
-                                }
-                                @if (session.peutEditer()) {
-                                    <!-- V13 : des exemples réels valent mieux qu'une description, et on peut les prendre tous d'un coup. -->
-                                    <button
-                                        class="bouton petit"
-                                        type="button"
-                                        name="exemplesPourToutes"
-                                        title="Prendre, pour chaque information, les valeurs les plus fréquentes de sa colonne"
-                                        [disabled]="echantillonnage()"
-                                        (click)="exemplesPourToutes(objet)"
-                                    >
-                                        {{ echantillonnage() ? '…' : '🎲' }} Exemples pour toutes
-                                    </button>
-                                    <button class="bouton petit" type="button" name="actionsGroupees" (click)="basculerGeste(objet)">
-                                        ☑ Actions groupées
-                                    </button>
-                                }
+                    @for (objet of objetsFiltres(); track objet.id) {
+                        @let etat = etatDeLObjet(objet);
+                        <button
+                            type="button"
+                            class="2xl:w-full min-w-[210px] text-left p-3 rounded-lg border 2xl:mb-2 transition-colors"
+                            [class]="
+                                objet.id === selectionId()
+                                    ? '2xl:w-full min-w-[210px] text-left p-3 rounded-lg border 2xl:mb-2 transition-colors bg-emerald-50 border-emerald-300 shadow-sm'
+                                    : '2xl:w-full min-w-[210px] text-left p-3 rounded-lg border 2xl:mb-2 transition-colors bg-white border-slate-200 hover:border-emerald-200'
+                            "
+                            (click)="selectionner(objet)"
+                        >
+                            <div class="flex items-center gap-1.5 mb-1">
+                                <span>🏛️</span>
+                                <span class="font-bold text-sm text-slate-800 truncate">{{ objet.name || '(sans nom)' }}</span>
                             </div>
-                        }
-                        <!-- V11 : poser le même geste sur plusieurs informations d'un coup -->
-                        @if (gesteOuvert()) {
-                            <div class="carte geste">
-                                <div class="entete-page" style="margin: 0 0 8px">
-                                    <b class="espace">Actions groupées — {{ informationsChoisies().length }} information(s) choisie(s)</b>
-                                    <button class="bouton petit" type="button" name="choixTout" (click)="choisir(objet, 'tout')">
-                                        Tout
-                                    </button>
-                                    <button class="bouton petit" type="button" name="choixAucun" (click)="choisir(objet, 'aucun')">
-                                        Aucune
-                                    </button>
-                                    <button
-                                        class="bouton petit"
-                                        type="button"
-                                        name="choixSansDefinition"
-                                        (click)="choisir(objet, 'sansDefinition')"
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded" [class]="etat.classes">
+                                    {{ etat.libelle }}
+                                </span>
+                                <span class="text-[10px] text-slate-400">
+                                    {{ objet.sources.length }} source(s) · {{ objet.elements.length }} information(s)
+                                </span>
+                            </div>
+                        </button>
+                    } @empty {
+                        <p class="text-sm text-slate-400 italic py-10 text-center w-full">
+                            Aucun objet métier. Initialisez-en un depuis une source ci-dessus.
+                        </p>
+                    }
+                </div>
+
+                <!-- ---- fiche ---- -->
+                @if (edition(); as objet) {
+                    <div id="ficheDeLObjet" class="flex-1 min-w-0">
+                        <!-- Carte d'identité de l'objet, telle que la V13 la dessine. -->
+                        <div class="border-2 border-emerald-200 rounded-xl bg-white overflow-hidden">
+                            <div class="bg-emerald-50/70 border-b border-emerald-100 p-4">
+                                <div class="flex items-center gap-2 flex-wrap mb-3">
+                                    <span class="text-xl" aria-hidden="true">🏛️</span>
+                                    <input
+                                        class="font-black text-lg border border-slate-300 px-2.5 py-1.5 rounded-lg w-72 bg-white"
+                                        name="nom"
+                                        aria-label="Nom de l'objet métier"
+                                        [(ngModel)]="objet.name"
+                                        [disabled]="!session.peutEditer()"
+                                    />
+                                    <span
+                                        class="text-[10px] px-2 py-0.5 rounded font-bold"
+                                        [class]="classesDuStatut(objet)"
+                                        [title]="depuisQuandLeStatut(objet)"
                                     >
-                                        Sans définition
-                                    </button>
-                                    <button
-                                        class="bouton petit"
-                                        type="button"
-                                        name="choixSansOrigine"
-                                        (click)="choisir(objet, 'sansOrigine')"
-                                    >
-                                        Sans provenance
-                                    </button>
-                                    <button class="bouton petit" type="button" name="fermerGeste" (click)="gesteOuvert.set(false)">
-                                        Fermer
-                                    </button>
-                                </div>
-                                <div class="ligne-champs">
-                                    <select class="champ" name="gesteAction" [(ngModel)]="gesteAction">
-                                        @for (choix of actionsGroupees; track choix.action) {
-                                            <option [value]="choix.action">{{ choix.libelle }}</option>
-                                        }
-                                    </select>
-                                    @if (gesteAction === 'usage') {
-                                        <select class="champ" name="gesteValeur" [(ngModel)]="gesteValeur">
-                                            <option value="">— application ou processus —</option>
-                                            @for (actif of actifs(); track actif.id) {
-                                                <option [value]="actif.id">{{ actif.name }}</option>
+                                        {{ objet.status || 'Brouillon' }}
+                                    </span>
+                                    @if (session.peutEditer()) {
+                                        <select
+                                            class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white font-bold"
+                                            name="statut"
+                                            aria-label="Statut"
+                                            [ngModel]="objet.status || 'Brouillon'"
+                                            (ngModelChange)="changerLeStatutDeLObjet(objet, $event)"
+                                        >
+                                            @for (statut of statutsDeFiche; track statut) {
+                                                <option [value]="statut">{{ statut }}</option>
                                             }
                                         </select>
-                                    } @else {
+                                    }
+                                    <span
+                                        class="ml-auto text-[10px] px-2 py-0.5 rounded font-bold"
+                                        [class]="
+                                            completude(objet).score >= 80
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                        "
+                                    >
+                                        complétude {{ completude(objet).score }} %
+                                    </span>
+                                    @if (!nouveau()) {
+                                        <a
+                                            class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg font-bold"
+                                            name="parcoursObjet"
+                                            title="D'où vient la donnée de cet objet, et où elle va"
+                                            [routerLink]="'/lineage'"
+                                            [queryParams]="{ objet: objet.id }"
+                                        >
+                                            🔎 Parcours
+                                        </a>
+                                    }
+                                    @if (session.peutEditer()) {
+                                        <button
+                                            class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm disabled:opacity-50"
+                                            type="button"
+                                            [disabled]="enCours()"
+                                            (click)="enregistrer()"
+                                        >
+                                            Enregistrer
+                                        </button>
+                                        @if (!nouveau()) {
+                                            <button
+                                                class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg font-bold"
+                                                type="button"
+                                                name="dupliquerObjet"
+                                                (click)="dupliquer(objet)"
+                                            >
+                                                ⧉ Dupliquer
+                                            </button>
+                                            <button
+                                                class="text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg border border-red-200 bg-white text-xs font-bold"
+                                                type="button"
+                                                name="supprimerObjet"
+                                                title="Supprimer l'objet"
+                                                (click)="supprimer(objet)"
+                                            >
+                                                🗑
+                                            </button>
+                                        }
+                                    }
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div class="bo-fld">
+                                        <label for="bo-proprietaire">Propriétaire global</label>
                                         <input
-                                            class="champ"
-                                            name="gesteValeur"
-                                            [(ngModel)]="gesteValeur"
-                                            [placeholder]="valeurAttendue()"
-                                            [attr.list]="gesteAction === 'terme' ? 'geste-termes' : null"
+                                            id="bo-proprietaire"
+                                            name="proprietaire"
+                                            list="personnesConnues"
+                                            placeholder="ex : Direction immobilière, ou une personne"
+                                            [(ngModel)]="objet.globalOwner"
+                                            [disabled]="!session.peutEditer()"
                                         />
-                                        <datalist id="geste-termes">
-                                            @for (terme of termes(); track terme.id) {
-                                                <option [value]="terme.term"></option>
+                                        <datalist id="personnesConnues">
+                                            @for (personne of personnes(); track personne.id) {
+                                                <option [value]="personne.name"></option>
                                             }
                                         </datalist>
-                                    }
-                                    <button class="bouton principal" type="button" name="appliquerGeste" (click)="appliquerGeste(objet)">
-                                        Appliquer
-                                    </button>
+                                    </div>
+                                    <div class="bo-fld">
+                                        <label for="bo-domaine">
+                                            Domaine métier <span class="font-normal text-slate-400">— qui valide</span>
+                                        </label>
+                                        <input
+                                            id="bo-domaine"
+                                            name="domaine"
+                                            list="domaines"
+                                            [(ngModel)]="objet.domain"
+                                            [disabled]="!session.peutEditer()"
+                                        />
+                                        <datalist id="domaines">
+                                            @for (domaine of domaines(); track domaine) {
+                                                <option [value]="domaine"></option>
+                                            }
+                                        </datalist>
+                                    </div>
+                                    <div class="bo-fld">
+                                        <label for="bo-definition">Définition</label>
+                                        <textarea
+                                            id="bo-definition"
+                                            rows="2"
+                                            name="definition"
+                                            placeholder="Ce qu'est cet objet pour le métier, en une ou deux phrases."
+                                            [(ngModel)]="objet.definition"
+                                            [disabled]="!session.peutEditer()"
+                                        ></textarea>
+                                    </div>
                                 </div>
+                                <div class="flex items-center gap-2 flex-wrap mt-2 text-[11px] text-slate-500">
+                                    <span class="font-bold">Contributeurs :</span>
+                                    <input
+                                        class="border border-slate-200 rounded-lg px-2 py-1 text-[11px] bg-white w-72"
+                                        name="contributeurs"
+                                        placeholder="ex : DSI, BU Sud (virgules)"
+                                        [ngModel]="objet.contributors.join(', ')"
+                                        (ngModelChange)="definirContributeurs($event)"
+                                        [disabled]="!session.peutEditer()"
+                                    />
+                                </div>
+                                @if (completude(objet).aFaire.length) {
+                                    <div class="text-[11px] text-slate-500 mt-2">À faire : {{ completude(objet).aFaire.join(' · ') }}</div>
+                                }
+                                <!-- V13 : contribuer sans risque — le responsable valide avant que rien ne change. -->
+                                <app-proposer-correction
+                                    [genre]="'bo'"
+                                    [cible]="{ boId: objet.id }"
+                                    [sujet]="objet.name"
+                                    [valeurActuelle]="objet.definition"
+                                    [domaine]="objet.domain || ''"
+                                />
                             </div>
-                        }
-                        <!-- V11 : les colonnes des sources de l'objet, à glisser sur une information -->
-                        @if (session.peutEditer() && colonnesOffertes(objet).length) {
-                            <div class="colonnes-a-glisser">
-                                <span class="discret">Glissez une colonne sur une information pour dire d'où elle vient :</span>
-                                @for (offerte of colonnesOffertes(objet); track offerte.table + '.' + offerte.colonne) {
-                                    <span
-                                        class="puce colonne"
-                                        [class.utilisee]="offerte.dejaRattachee"
-                                        draggable="true"
-                                        [title]="offerte.table + ' · ' + offerte.colonne"
-                                        (dragstart)="commencerGlissement($event, offerte)"
+
+                            <!-- Les six onglets de la V13, avec leur compteur : une seule section à la fois. -->
+                            <div class="border-b border-slate-200 px-4 flex gap-1 flex-wrap bg-slate-50/60">
+                                @for (onglet of onglets; track onglet.cle) {
+                                    @let compte = compteDeLOnglet(objet, onglet.cle);
+                                    <button
+                                        type="button"
+                                        class="px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors"
+                                        [class]="
+                                            ongletActif() === onglet.cle
+                                                ? 'px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors border-emerald-500 text-emerald-700'
+                                                : 'px-3 py-2.5 text-xs font-bold border-b-2 -mb-px transition-colors border-transparent text-slate-400 hover:text-slate-600'
+                                        "
+                                        [attr.name]="'onglet-' + onglet.cle"
+                                        (click)="ongletActif.set(onglet.cle)"
                                     >
-                                        {{ offerte.colonne }}
-                                    </span>
+                                        {{ onglet.libelle }}
+                                        @if (compte) {
+                                            <span
+                                                class="ml-0.5 text-[10px] rounded-full px-1.5 py-0.5"
+                                                [class]="
+                                                    ongletActif() === onglet.cle
+                                                        ? 'ml-0.5 text-[10px] rounded-full px-1.5 py-0.5 bg-emerald-100 text-emerald-700'
+                                                        : 'ml-0.5 text-[10px] rounded-full px-1.5 py-0.5 bg-slate-100 text-slate-500'
+                                                "
+                                            >
+                                                {{ compte }}
+                                            </span>
+                                        }
+                                    </button>
                                 }
                             </div>
-                        }
-                        <div class="defilement-x">
-                            <table class="tableau">
-                                <thead>
-                                    <tr>
-                                        @if (gesteOuvert()) {
-                                            <th></th>
-                                        }
-                                        <th title="Terme technique : attribut">Information</th>
-                                        <th>Définition</th>
-                                        <th title="Combien de valeurs pour une occurrence de l'objet">Nb valeurs</th>
-                                        <th title="Terme technique : mapping">D'où ça vient</th>
-                                        <th>Fiche</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Une ligne par information — ou, repli actif, une ligne par groupe de colonnes répétées. -->
-                                    <!-- Suivi par identifiant, jamais par nom : deux informations peuvent porter le même. -->
-                                    @for (groupe of groupesAffiches(objet); track groupe.informations[0].id; let index = $index) {
-                                        @let attribut = groupe.informations[0];
-                                        @let valeurs = valeursDuGroupe(groupe);
-                                        <tr
-                                            [class.ouverte]="attribut.id === informationOuverte()"
-                                            [class.survolee]="attribut.id === informationSurvolee()"
-                                            (dragover)="survolerInformation($event, attribut)"
-                                            (dragleave)="informationSurvolee.set('')"
-                                            (drop)="lacherSurInformation($event, attribut)"
-                                        >
-                                            @if (gesteOuvert()) {
-                                                <td>
-                                                    <input
-                                                        type="checkbox"
-                                                        [checked]="groupeChoisi(groupe)"
-                                                        [attr.name]="'geste-' + index"
-                                                        (change)="basculerChoixDuGroupe(groupe)"
-                                                    />
-                                                </td>
-                                            }
-                                            <td>
-                                                <!--
-                                                    La saisie n'est reprise qu'une fois quittée : sur un groupe replié, chaque
-                                                    frappe renommerait les colonnes et déferait le groupe sous les doigts.
-                                                -->
-                                                <input
-                                                    class="champ"
-                                                    [value]="groupe.base"
-                                                    [attr.name]="'attribut-nom-' + index"
-                                                    [disabled]="!session.peutEditer()"
-                                                    (change)="renommerLeGroupe(groupe, $any($event.target).value)"
-                                                />
-                                                @if (groupe.replie) {
-                                                    <span class="badge" [title]="colonnesDuGroupe(groupe).join(', ')">
-                                                        ⇲ {{ groupe.informations.length }} colonnes
-                                                    </span>
-                                                }
-                                            </td>
-                                            <td>
-                                                <input
-                                                    class="champ"
-                                                    [value]="valeurDuGroupe(groupe, 'definition')"
-                                                    [attr.name]="'attribut-definition-' + index"
-                                                    [disabled]="!session.peutEditer()"
-                                                    (change)="ecrireSurLeGroupe(groupe, 'definition', $any($event.target).value)"
-                                                />
-                                                @if (!session.peutEditer()) {
-                                                    <button class="bouton petit" (click)="proposerDefinition(objet, attribut)">
-                                                        Proposer une définition
-                                                    </button>
-                                                }
-                                            </td>
-                                            <td style="white-space: nowrap">
-                                                <span class="badge" [class.alerte]="valeurs.plusieurs" [title]="valeurs.pourquoi">
-                                                    {{ valeurs.libelle }}
-                                                </span>
-                                                @if (valeurs.deduit) {
-                                                    <span
-                                                        class="discret"
-                                                        title="Déduit des colonnes numérotées — déclarez-le pour l'affirmer"
-                                                    >
-                                                        déduit
-                                                    </span>
-                                                }
-                                                @if (session.peutEditer()) {
-                                                    <select
-                                                        class="champ"
-                                                        [value]="valeurDuGroupe(groupe, 'multi')"
-                                                        [attr.name]="'attribut-valeurs-' + index"
-                                                        title="Combien de valeurs cette information peut prendre pour une occurrence de l'objet"
-                                                        (change)="ecrireSurLeGroupe(groupe, 'multi', $any($event.target).value)"
-                                                    >
-                                                        @for (choix of optionsNombreDeValeurs; track choix.valeur) {
-                                                            <option [value]="choix.valeur">{{ choix.libelle }}</option>
-                                                        }
-                                                    </select>
-                                                }
-                                            </td>
-                                            <td class="discret">{{ provenanceDuGroupe(groupe) || '—' }}</td>
-                                            <td style="white-space: nowrap">
-                                                <span class="badge" [class.succes]="complet(attribut) === 100">
-                                                    {{ complet(attribut) }} %
-                                                </span>
+                            <div class="p-4">
+                                <!-- informations : la liste, et la fiche en trois questions de celle qu'on ouvre (V13) -->
+                                @if (ongletActif() === 'structure') {
+                                    @if (objet.elements.length) {
+                                        <div class="entete-page" style="margin: 0 0 8px">
+                                            <span class="discret espace">{{ objet.elements.length }} information(s)</span>
+                                            <!-- V13 : adresse_1, adresse_2… ne sont pas trois informations mais une seule, à trois valeurs. -->
+                                            @if (colonnesRepliables(objet) > 0) {
                                                 <button
                                                     class="bouton petit"
                                                     type="button"
-                                                    [attr.name]="'ouvrirFiche-' + index"
-                                                    (click)="ouvrirInformation(attribut)"
+                                                    name="replierRepetitions"
+                                                    [title]="
+                                                        'Les colonnes numérotées (adresse_1, adresse_2…) sont vues comme une seule information ' +
+                                                        'à plusieurs valeurs.'
+                                                    "
+                                                    (click)="repliActif.set(!repliActif())"
                                                 >
-                                                    {{ attribut.id === informationOuverte() ? 'Fermer' : 'Ouvrir la fiche' }}
+                                                    {{ repliActif() ? '⇱ Déplier' : '⇲ Replier' }}
+                                                    {{ colonnesRepliables(objet) }} colonne(s) répétée(s)
                                                 </button>
-                                                <a
+                                            }
+                                            @if (session.peutEditer()) {
+                                                <!-- V13 : des exemples réels valent mieux qu'une description, et on peut les prendre tous d'un coup. -->
+                                                <button
                                                     class="bouton petit"
-                                                    [attr.name]="'parcours-' + index"
-                                                    title="D'où vient cette information, et où elle va"
-                                                    [routerLink]="'/lineage'"
-                                                    [queryParams]="{ objet: objet.id, information: attribut.id }"
+                                                    type="button"
+                                                    name="exemplesPourToutes"
+                                                    title="Prendre, pour chaque information, les valeurs les plus fréquentes de sa colonne"
+                                                    [disabled]="echantillonnage()"
+                                                    (click)="exemplesPourToutes(objet)"
                                                 >
-                                                    🔎
-                                                </a>
-                                            </td>
-                                            <td>
-                                                @if (session.peutEditer()) {
-                                                    <button class="bouton petit danger" (click)="supprimerLeGroupe(objet, groupe)">
-                                                        ✕
-                                                    </button>
-                                                }
-                                            </td>
-                                        </tr>
+                                                    {{ echantillonnage() ? '…' : '🎲' }} Exemples pour toutes
+                                                </button>
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    name="actionsGroupees"
+                                                    (click)="basculerGeste(objet)"
+                                                >
+                                                    ☑ Actions groupées
+                                                </button>
+                                            }
+                                        </div>
                                     }
-                                </tbody>
-                            </table>
-                        </div>
-                        @if (informationChoisie(objet); as information) {
-                            <app-fiche-information
-                                [attribut]="information"
-                                [objet]="objet"
-                                [objets]="objets()"
-                                [sources]="sources()"
-                                [actifs]="actifs()"
-                                [termes]="termes()"
-                                (fermer)="informationOuverte.set('')"
-                            />
-                        }
-                        @if (session.peutEditer()) {
-                            <button class="bouton petit" style="margin-top: 8px" (click)="ajouterAttribut(objet)">+ Information</button>
-                        }
-                    }
+                                    <!-- V11 : poser le même geste sur plusieurs informations d'un coup -->
+                                    @if (gesteOuvert()) {
+                                        <div class="carte geste">
+                                            <div class="entete-page" style="margin: 0 0 8px">
+                                                <b class="espace"
+                                                    >Actions groupées — {{ informationsChoisies().length }} information(s) choisie(s)</b
+                                                >
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    name="choixTout"
+                                                    (click)="choisir(objet, 'tout')"
+                                                >
+                                                    Tout
+                                                </button>
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    name="choixAucun"
+                                                    (click)="choisir(objet, 'aucun')"
+                                                >
+                                                    Aucune
+                                                </button>
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    name="choixSansDefinition"
+                                                    (click)="choisir(objet, 'sansDefinition')"
+                                                >
+                                                    Sans définition
+                                                </button>
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    name="choixSansOrigine"
+                                                    (click)="choisir(objet, 'sansOrigine')"
+                                                >
+                                                    Sans provenance
+                                                </button>
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    name="fermerGeste"
+                                                    (click)="gesteOuvert.set(false)"
+                                                >
+                                                    Fermer
+                                                </button>
+                                            </div>
+                                            <div class="ligne-champs">
+                                                <select class="champ" name="gesteAction" [(ngModel)]="gesteAction">
+                                                    @for (choix of actionsGroupees; track choix.action) {
+                                                        <option [value]="choix.action">{{ choix.libelle }}</option>
+                                                    }
+                                                </select>
+                                                @if (gesteAction === 'usage') {
+                                                    <select class="champ" name="gesteValeur" [(ngModel)]="gesteValeur">
+                                                        <option value="">— application ou processus —</option>
+                                                        @for (actif of actifs(); track actif.id) {
+                                                            <option [value]="actif.id">{{ actif.name }}</option>
+                                                        }
+                                                    </select>
+                                                } @else {
+                                                    <input
+                                                        class="champ"
+                                                        name="gesteValeur"
+                                                        [(ngModel)]="gesteValeur"
+                                                        [placeholder]="valeurAttendue()"
+                                                        [attr.list]="gesteAction === 'terme' ? 'geste-termes' : null"
+                                                    />
+                                                    <datalist id="geste-termes">
+                                                        @for (terme of termes(); track terme.id) {
+                                                            <option [value]="terme.term"></option>
+                                                        }
+                                                    </datalist>
+                                                }
+                                                <button
+                                                    class="bouton principal"
+                                                    type="button"
+                                                    name="appliquerGeste"
+                                                    (click)="appliquerGeste(objet)"
+                                                >
+                                                    Appliquer
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                    <!-- V11 : les colonnes des sources de l'objet, à glisser sur une information -->
+                                    @if (session.peutEditer() && colonnesOffertes(objet).length) {
+                                        <div class="colonnes-a-glisser">
+                                            <span class="discret">Glissez une colonne sur une information pour dire d'où elle vient :</span>
+                                            @for (offerte of colonnesOffertes(objet); track offerte.table + '.' + offerte.colonne) {
+                                                <span
+                                                    class="puce colonne"
+                                                    [class.utilisee]="offerte.dejaRattachee"
+                                                    draggable="true"
+                                                    [title]="offerte.table + ' · ' + offerte.colonne"
+                                                    (dragstart)="commencerGlissement($event, offerte)"
+                                                >
+                                                    {{ offerte.colonne }}
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                    <div class="defilement-x">
+                                        <table class="tableau">
+                                            <thead>
+                                                <tr>
+                                                    @if (gesteOuvert()) {
+                                                        <th></th>
+                                                    }
+                                                    <th title="Terme technique : attribut">Information</th>
+                                                    <th>Définition</th>
+                                                    <th title="Combien de valeurs pour une occurrence de l'objet">Nb valeurs</th>
+                                                    <th title="Terme technique : mapping">D'où ça vient</th>
+                                                    <th>Fiche</th>
+                                                    <th></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- Une ligne par information — ou, repli actif, une ligne par groupe de colonnes répétées. -->
+                                                <!-- Suivi par identifiant, jamais par nom : deux informations peuvent porter le même. -->
+                                                @for (
+                                                    groupe of groupesAffiches(objet);
+                                                    track groupe.informations[0].id;
+                                                    let index = $index
+                                                ) {
+                                                    @let attribut = groupe.informations[0];
+                                                    @let valeurs = valeursDuGroupe(groupe);
+                                                    <tr
+                                                        [class.ouverte]="attribut.id === informationOuverte()"
+                                                        [class.survolee]="attribut.id === informationSurvolee()"
+                                                        (dragover)="survolerInformation($event, attribut)"
+                                                        (dragleave)="informationSurvolee.set('')"
+                                                        (drop)="lacherSurInformation($event, attribut)"
+                                                    >
+                                                        @if (gesteOuvert()) {
+                                                            <td>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    [checked]="groupeChoisi(groupe)"
+                                                                    [attr.name]="'geste-' + index"
+                                                                    (change)="basculerChoixDuGroupe(groupe)"
+                                                                />
+                                                            </td>
+                                                        }
+                                                        <td>
+                                                            <!--
+                                                    La saisie n'est reprise qu'une fois quittée : sur un groupe replié, chaque
+                                                    frappe renommerait les colonnes et déferait le groupe sous les doigts.
+                                                -->
+                                                            <input
+                                                                class="champ"
+                                                                [value]="groupe.base"
+                                                                [attr.name]="'attribut-nom-' + index"
+                                                                [disabled]="!session.peutEditer()"
+                                                                (change)="renommerLeGroupe(groupe, $any($event.target).value)"
+                                                            />
+                                                            @if (groupe.replie) {
+                                                                <span class="badge" [title]="colonnesDuGroupe(groupe).join(', ')">
+                                                                    ⇲ {{ groupe.informations.length }} colonnes
+                                                                </span>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <input
+                                                                class="champ"
+                                                                [value]="valeurDuGroupe(groupe, 'definition')"
+                                                                [attr.name]="'attribut-definition-' + index"
+                                                                [disabled]="!session.peutEditer()"
+                                                                (change)="
+                                                                    ecrireSurLeGroupe(groupe, 'definition', $any($event.target).value)
+                                                                "
+                                                            />
+                                                            @if (!session.peutEditer()) {
+                                                                <button class="bouton petit" (click)="proposerDefinition(objet, attribut)">
+                                                                    Proposer une définition
+                                                                </button>
+                                                            }
+                                                        </td>
+                                                        <td style="white-space: nowrap">
+                                                            <span
+                                                                class="badge"
+                                                                [class.alerte]="valeurs.plusieurs"
+                                                                [title]="valeurs.pourquoi"
+                                                            >
+                                                                {{ valeurs.libelle }}
+                                                            </span>
+                                                            @if (valeurs.deduit) {
+                                                                <span
+                                                                    class="discret"
+                                                                    title="Déduit des colonnes numérotées — déclarez-le pour l'affirmer"
+                                                                >
+                                                                    déduit
+                                                                </span>
+                                                            }
+                                                            @if (session.peutEditer()) {
+                                                                <select
+                                                                    class="champ"
+                                                                    [value]="valeurDuGroupe(groupe, 'multi')"
+                                                                    [attr.name]="'attribut-valeurs-' + index"
+                                                                    title="Combien de valeurs cette information peut prendre pour une occurrence de l'objet"
+                                                                    (change)="ecrireSurLeGroupe(groupe, 'multi', $any($event.target).value)"
+                                                                >
+                                                                    @for (choix of optionsNombreDeValeurs; track choix.valeur) {
+                                                                        <option [value]="choix.valeur">{{ choix.libelle }}</option>
+                                                                    }
+                                                                </select>
+                                                            }
+                                                        </td>
+                                                        <td class="discret">{{ provenanceDuGroupe(groupe) || '—' }}</td>
+                                                        <td style="white-space: nowrap">
+                                                            <span class="badge" [class.succes]="complet(attribut) === 100">
+                                                                {{ complet(attribut) }} %
+                                                            </span>
+                                                            <button
+                                                                class="bouton petit"
+                                                                type="button"
+                                                                [attr.name]="'ouvrirFiche-' + index"
+                                                                (click)="ouvrirInformation(attribut)"
+                                                            >
+                                                                {{ attribut.id === informationOuverte() ? 'Fermer' : 'Ouvrir la fiche' }}
+                                                            </button>
+                                                            <a
+                                                                class="bouton petit"
+                                                                [attr.name]="'parcours-' + index"
+                                                                title="D'où vient cette information, et où elle va"
+                                                                [routerLink]="'/lineage'"
+                                                                [queryParams]="{ objet: objet.id, information: attribut.id }"
+                                                            >
+                                                                🔎
+                                                            </a>
+                                                        </td>
+                                                        <td>
+                                                            @if (session.peutEditer()) {
+                                                                <button
+                                                                    class="bouton petit danger"
+                                                                    (click)="supprimerLeGroupe(objet, groupe)"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    @if (informationChoisie(objet); as information) {
+                                        <app-fiche-information
+                                            [attribut]="information"
+                                            [objet]="objet"
+                                            [objets]="objets()"
+                                            [sources]="sources()"
+                                            [actifs]="actifs()"
+                                            [termes]="termes()"
+                                            (fermer)="informationOuverte.set('')"
+                                        />
+                                    }
+                                    @if (session.peutEditer()) {
+                                        <button class="bouton petit" style="margin-top: 8px" (click)="ajouterAttribut(objet)">
+                                            + Information
+                                        </button>
+                                    }
+                                }
 
-                    <!--
+                                <!--
                         Variantes (« facettes » en langage technique) : une même table porte souvent plusieurs
                         choses. Un fichier d'adresses contient l'adresse principale, celles de livraison,
                         celles d'intervention. Chacune est une vue filtrée de la table, avec son nom métier.
                     -->
-                    @if (ongletActif() === 'variantes') {
-                        <p class="discret" style="margin-top: 0">
-                            Une variante est une vue filtrée d'une table : elle porte un nom métier, dit combien de fois elle se répète pour
-                            un objet, ce qu'elle garde de la table, et quand elle s'applique.
-                        </p>
-                        @for (variante of variantes(objet); track variante.id; let rang = $index) {
-                            <div class="carte variante">
-                                <div class="entete-page" style="margin: 0 0 6px">
-                                    <input
-                                        class="champ espace"
-                                        [(ngModel)]="variante.name"
-                                        [name]="'variante-nom-' + rang"
-                                        [attr.name]="'variante-nom-' + rang"
-                                        placeholder="Nom métier de la variante"
-                                        [disabled]="!session.peutEditer()"
-                                    />
-                                    <select
-                                        class="champ"
-                                        style="width: auto"
-                                        [ngModel]="variante.table"
-                                        [name]="'variante-table-' + rang"
-                                        [attr.name]="'variante-table-' + rang"
-                                        [disabled]="!session.peutEditer()"
-                                        (ngModelChange)="changerLaTableDeLaVariante(objet, variante, $event)"
-                                    >
-                                        @for (source of sources(); track source.id) {
-                                            <option [value]="source.name">{{ source.name }}</option>
-                                        }
-                                    </select>
-                                    <select
-                                        class="champ"
-                                        style="width: auto"
-                                        [(ngModel)]="variante.cardinality"
-                                        [name]="'variante-cardinalite-' + rang"
-                                        [attr.name]="'variante-cardinalite-' + rang"
-                                        title="Combien d'occurrences de cette variante pour un objet"
-                                        [disabled]="!session.peutEditer()"
-                                    >
-                                        @for (cardinalite of cardinalitesVariante; track cardinalite) {
-                                            <option [value]="cardinalite">{{ cardinalite }}</option>
-                                        }
-                                    </select>
-                                    <span
-                                        class="badge"
-                                        [class.alerte]="groupeRepetable(variante)"
-                                        [title]="
-                                            groupeRepetable(variante)
-                                                ? 'Plusieurs occurrences de ce groupe par objet.'
-                                                : 'Une seule occurrence de ce groupe par objet.'
-                                        "
-                                    >
-                                        {{ groupeRepetable(variante) ? 'groupe répétable' : 'groupe unique' }}
-                                    </span>
-                                    @if (session.peutEditer()) {
-                                        <button
-                                            class="bouton petit danger"
-                                            type="button"
-                                            [attr.name]="'supprimerVariante-' + rang"
-                                            (click)="supprimerVariante(objet, variante)"
-                                        >
-                                            ✕
-                                        </button>
+                                @if (ongletActif() === 'structure') {
+                                    <p class="discret" style="margin-top: 0">
+                                        Une variante est une vue filtrée d'une table : elle porte un nom métier, dit combien de fois elle se
+                                        répète pour un objet, ce qu'elle garde de la table, et quand elle s'applique.
+                                    </p>
+                                    @for (variante of variantes(objet); track variante.id; let rang = $index) {
+                                        <div class="carte variante">
+                                            <div class="entete-page" style="margin: 0 0 6px">
+                                                <input
+                                                    class="champ espace"
+                                                    [(ngModel)]="variante.name"
+                                                    [name]="'variante-nom-' + rang"
+                                                    [attr.name]="'variante-nom-' + rang"
+                                                    placeholder="Nom métier de la variante"
+                                                    [disabled]="!session.peutEditer()"
+                                                />
+                                                <select
+                                                    class="champ"
+                                                    style="width: auto"
+                                                    [ngModel]="variante.table"
+                                                    [name]="'variante-table-' + rang"
+                                                    [attr.name]="'variante-table-' + rang"
+                                                    [disabled]="!session.peutEditer()"
+                                                    (ngModelChange)="changerLaTableDeLaVariante(objet, variante, $event)"
+                                                >
+                                                    @for (source of sources(); track source.id) {
+                                                        <option [value]="source.name">{{ source.name }}</option>
+                                                    }
+                                                </select>
+                                                <select
+                                                    class="champ"
+                                                    style="width: auto"
+                                                    [(ngModel)]="variante.cardinality"
+                                                    [name]="'variante-cardinalite-' + rang"
+                                                    [attr.name]="'variante-cardinalite-' + rang"
+                                                    title="Combien d'occurrences de cette variante pour un objet"
+                                                    [disabled]="!session.peutEditer()"
+                                                >
+                                                    @for (cardinalite of cardinalitesVariante; track cardinalite) {
+                                                        <option [value]="cardinalite">{{ cardinalite }}</option>
+                                                    }
+                                                </select>
+                                                <span
+                                                    class="badge"
+                                                    [class.alerte]="groupeRepetable(variante)"
+                                                    [title]="
+                                                        groupeRepetable(variante)
+                                                            ? 'Plusieurs occurrences de ce groupe par objet.'
+                                                            : 'Une seule occurrence de ce groupe par objet.'
+                                                    "
+                                                >
+                                                    {{ groupeRepetable(variante) ? 'groupe répétable' : 'groupe unique' }}
+                                                </span>
+                                                @if (session.peutEditer()) {
+                                                    <button
+                                                        class="bouton petit danger"
+                                                        type="button"
+                                                        [attr.name]="'supprimerVariante-' + rang"
+                                                        (click)="supprimerVariante(objet, variante)"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                }
+                                            </div>
+                                            <div class="discret" style="margin-bottom: 8px">{{ resumeDeLaVariante(variante) }}</div>
+
+                                            <div class="formulaire-ligne">
+                                                <div>
+                                                    <label class="etiquette" title="Ce que la variante garde de sa table"
+                                                        >Ce qu'elle garde</label
+                                                    >
+                                                    @for (filtre of variante.scope || []; track $index; let position = $index) {
+                                                        <span class="puce">
+                                                            {{ libelleDuFiltre(filtre) }}
+                                                            @if (session.peutEditer()) {
+                                                                <a (click)="retirerFiltre(variante, 'scope', position)">✕</a>
+                                                            }
+                                                        </span>
+                                                    } @empty {
+                                                        <span class="discret">Toute la table.</span>
+                                                    }
+                                                    @if (session.peutEditer()) {
+                                                        <div class="ligne-champs" style="margin-top: 6px">
+                                                            <select
+                                                                class="champ"
+                                                                [(ngModel)]="saisieDePortee(variante).col"
+                                                                [name]="'portee-col-' + rang"
+                                                                [attr.name]="'portee-col-' + rang"
+                                                            >
+                                                                <option value="">— colonne —</option>
+                                                                @for (colonne of colonnesDeLaVariante(variante); track colonne) {
+                                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                                }
+                                                            </select>
+                                                            <select
+                                                                class="champ"
+                                                                [(ngModel)]="saisieDePortee(variante).op"
+                                                                [name]="'portee-op-' + rang"
+                                                                [attr.name]="'portee-op-' + rang"
+                                                            >
+                                                                @for (operateur of operateursPortee; track operateur.cle) {
+                                                                    <option [value]="operateur.cle">{{ operateur.libelle }}</option>
+                                                                }
+                                                            </select>
+                                                            @if (!sansValeur(saisieDePortee(variante).op)) {
+                                                                <input
+                                                                    class="champ"
+                                                                    [(ngModel)]="saisieDePortee(variante).val"
+                                                                    [name]="'portee-val-' + rang"
+                                                                    [attr.name]="'portee-val-' + rang"
+                                                                    placeholder="valeur"
+                                                                />
+                                                            }
+                                                            <button
+                                                                class="bouton petit"
+                                                                type="button"
+                                                                [attr.name]="'ajouterPortee-' + rang"
+                                                                (click)="ajouterFiltre(variante, 'scope')"
+                                                            >
+                                                                + Filtre
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        class="etiquette"
+                                                        title="Conditions, sur l'objet lui-même, pour que la variante s'applique"
+                                                    >
+                                                        Quand elle s'applique
+                                                    </label>
+                                                    @for (filtre of variante.applies || []; track $index; let position = $index) {
+                                                        <span class="puce">
+                                                            {{ libelleDuFiltre(filtre) }}
+                                                            @if (session.peutEditer()) {
+                                                                <a (click)="retirerFiltre(variante, 'applies', position)">✕</a>
+                                                            }
+                                                        </span>
+                                                    } @empty {
+                                                        <span class="discret">Toujours.</span>
+                                                    }
+                                                    @if (session.peutEditer()) {
+                                                        <div class="ligne-champs" style="margin-top: 6px">
+                                                            <select
+                                                                class="champ"
+                                                                [(ngModel)]="saisieDApplication(variante).col"
+                                                                [name]="'applique-col-' + rang"
+                                                                [attr.name]="'applique-col-' + rang"
+                                                            >
+                                                                <option value="">— colonne de l'objet —</option>
+                                                                @for (colonne of colonnesDuCoeur(objet); track colonne) {
+                                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                                }
+                                                            </select>
+                                                            <select
+                                                                class="champ"
+                                                                [(ngModel)]="saisieDApplication(variante).op"
+                                                                [name]="'applique-op-' + rang"
+                                                                [attr.name]="'applique-op-' + rang"
+                                                            >
+                                                                @for (operateur of operateursPortee; track operateur.cle) {
+                                                                    <option [value]="operateur.cle">{{ operateur.libelle }}</option>
+                                                                }
+                                                            </select>
+                                                            @if (!sansValeur(saisieDApplication(variante).op)) {
+                                                                <input
+                                                                    class="champ"
+                                                                    [(ngModel)]="saisieDApplication(variante).val"
+                                                                    [name]="'applique-val-' + rang"
+                                                                    [attr.name]="'applique-val-' + rang"
+                                                                    placeholder="valeur"
+                                                                />
+                                                            }
+                                                            <button
+                                                                class="bouton petit"
+                                                                type="button"
+                                                                [attr.name]="'ajouterApplique-' + rang"
+                                                                (click)="ajouterFiltre(variante, 'applies')"
+                                                            >
+                                                                + Condition
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <div class="defilement-x" style="margin-top: 10px">
+                                                <table class="tableau">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Information</th>
+                                                            <th>Colonne</th>
+                                                            <th>Propriétaire</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @for (
+                                                            information of variante.elements || [];
+                                                            track information.id;
+                                                            let ligne = $index
+                                                        ) {
+                                                            <tr>
+                                                                <td>
+                                                                    <input
+                                                                        class="champ"
+                                                                        [(ngModel)]="information.name"
+                                                                        [name]="'vinfo-nom-' + rang + '-' + ligne"
+                                                                        [attr.name]="'vinfo-nom-' + rang + '-' + ligne"
+                                                                        [disabled]="!session.peutEditer()"
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <select
+                                                                        class="champ"
+                                                                        [ngModel]="information.col"
+                                                                        [name]="'vinfo-col-' + rang + '-' + ligne"
+                                                                        [attr.name]="'vinfo-col-' + rang + '-' + ligne"
+                                                                        [disabled]="!session.peutEditer()"
+                                                                        (ngModelChange)="changerLaColonne(variante, information, $event)"
+                                                                    >
+                                                                        <option value="">—</option>
+                                                                        @for (colonne of colonnesDeLaVariante(variante); track colonne) {
+                                                                            <option [value]="colonne">{{ colonne }}</option>
+                                                                        }
+                                                                    </select>
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        class="champ"
+                                                                        [(ngModel)]="information.owner"
+                                                                        [name]="'vinfo-proprietaire-' + rang + '-' + ligne"
+                                                                        [attr.name]="'vinfo-proprietaire-' + rang + '-' + ligne"
+                                                                        [disabled]="!session.peutEditer()"
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    @if (session.peutEditer()) {
+                                                                        <button
+                                                                            class="bouton petit danger"
+                                                                            type="button"
+                                                                            (click)="
+                                                                                supprimerInformationDeVariante(variante, information.id)
+                                                                            "
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        } @empty {
+                                                            <tr>
+                                                                <td colspan="4" class="discret">Aucune information dans cette variante.</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            @if (session.peutEditer()) {
+                                                <button
+                                                    class="bouton petit"
+                                                    type="button"
+                                                    style="margin-top: 8px"
+                                                    [attr.name]="'ajouterInfoVariante-' + rang"
+                                                    (click)="ajouterInformationDeVariante(variante)"
+                                                >
+                                                    + Information
+                                                </button>
+                                            }
+                                        </div>
+                                    } @empty {
+                                        <div class="vide">
+                                            Aucune variante. Une seule table peut pourtant porter plusieurs choses : ajoutez-en une
+                                            ci-dessous.
+                                        </div>
                                     }
-                                </div>
-                                <div class="discret" style="margin-bottom: 8px">{{ resumeDeLaVariante(variante) }}</div>
 
-                                <div class="formulaire-ligne">
-                                    <div>
-                                        <label class="etiquette" title="Ce que la variante garde de sa table">Ce qu'elle garde</label>
-                                        @for (filtre of variante.scope || []; track $index; let position = $index) {
-                                            <span class="puce">
-                                                {{ libelleDuFiltre(filtre) }}
-                                                @if (session.peutEditer()) {
-                                                    <a (click)="retirerFiltre(variante, 'scope', position)">✕</a>
+                                    @if (session.peutEditer()) {
+                                        <div class="ligne-champs" style="margin-top: 10px">
+                                            <select class="champ" [(ngModel)]="varianteTable" name="varianteTable">
+                                                <option value="">— table dont la variante est une vue —</option>
+                                                @for (source of sources(); track source.id) {
+                                                    <option [value]="source.name">{{ source.name }}</option>
                                                 }
-                                            </span>
-                                        } @empty {
-                                            <span class="discret">Toute la table.</span>
-                                        }
-                                        @if (session.peutEditer()) {
-                                            <div class="ligne-champs" style="margin-top: 6px">
-                                                <select
-                                                    class="champ"
-                                                    [(ngModel)]="saisieDePortee(variante).col"
-                                                    [name]="'portee-col-' + rang"
-                                                    [attr.name]="'portee-col-' + rang"
-                                                >
-                                                    <option value="">— colonne —</option>
-                                                    @for (colonne of colonnesDeLaVariante(variante); track colonne) {
-                                                        <option [value]="colonne">{{ colonne }}</option>
-                                                    }
-                                                </select>
-                                                <select
-                                                    class="champ"
-                                                    [(ngModel)]="saisieDePortee(variante).op"
-                                                    [name]="'portee-op-' + rang"
-                                                    [attr.name]="'portee-op-' + rang"
-                                                >
-                                                    @for (operateur of operateursPortee; track operateur.cle) {
-                                                        <option [value]="operateur.cle">{{ operateur.libelle }}</option>
-                                                    }
-                                                </select>
-                                                @if (!sansValeur(saisieDePortee(variante).op)) {
-                                                    <input
-                                                        class="champ"
-                                                        [(ngModel)]="saisieDePortee(variante).val"
-                                                        [name]="'portee-val-' + rang"
-                                                        [attr.name]="'portee-val-' + rang"
-                                                        placeholder="valeur"
-                                                    />
+                                            </select>
+                                            <input
+                                                class="champ"
+                                                [(ngModel)]="varianteNom"
+                                                name="varianteNom"
+                                                placeholder="Nom métier de la variante"
+                                            />
+                                            <select class="champ" [(ngModel)]="varianteCardinalite" name="varianteCardinalite">
+                                                @for (cardinalite of cardinalitesVariante; track cardinalite) {
+                                                    <option [value]="cardinalite">{{ cardinalite }}</option>
                                                 }
-                                                <button
-                                                    class="bouton petit"
-                                                    type="button"
-                                                    [attr.name]="'ajouterPortee-' + rang"
-                                                    (click)="ajouterFiltre(variante, 'scope')"
-                                                >
-                                                    + Filtre
-                                                </button>
-                                            </div>
-                                        }
-                                    </div>
-                                    <div>
-                                        <label class="etiquette" title="Conditions, sur l'objet lui-même, pour que la variante s'applique">
-                                            Quand elle s'applique
-                                        </label>
-                                        @for (filtre of variante.applies || []; track $index; let position = $index) {
-                                            <span class="puce">
-                                                {{ libelleDuFiltre(filtre) }}
-                                                @if (session.peutEditer()) {
-                                                    <a (click)="retirerFiltre(variante, 'applies', position)">✕</a>
-                                                }
-                                            </span>
-                                        } @empty {
-                                            <span class="discret">Toujours.</span>
-                                        }
-                                        @if (session.peutEditer()) {
-                                            <div class="ligne-champs" style="margin-top: 6px">
-                                                <select
-                                                    class="champ"
-                                                    [(ngModel)]="saisieDApplication(variante).col"
-                                                    [name]="'applique-col-' + rang"
-                                                    [attr.name]="'applique-col-' + rang"
-                                                >
-                                                    <option value="">— colonne de l'objet —</option>
-                                                    @for (colonne of colonnesDuCoeur(objet); track colonne) {
-                                                        <option [value]="colonne">{{ colonne }}</option>
-                                                    }
-                                                </select>
-                                                <select
-                                                    class="champ"
-                                                    [(ngModel)]="saisieDApplication(variante).op"
-                                                    [name]="'applique-op-' + rang"
-                                                    [attr.name]="'applique-op-' + rang"
-                                                >
-                                                    @for (operateur of operateursPortee; track operateur.cle) {
-                                                        <option [value]="operateur.cle">{{ operateur.libelle }}</option>
-                                                    }
-                                                </select>
-                                                @if (!sansValeur(saisieDApplication(variante).op)) {
-                                                    <input
-                                                        class="champ"
-                                                        [(ngModel)]="saisieDApplication(variante).val"
-                                                        [name]="'applique-val-' + rang"
-                                                        [attr.name]="'applique-val-' + rang"
-                                                        placeholder="valeur"
-                                                    />
-                                                }
-                                                <button
-                                                    class="bouton petit"
-                                                    type="button"
-                                                    [attr.name]="'ajouterApplique-' + rang"
-                                                    (click)="ajouterFiltre(variante, 'applies')"
-                                                >
-                                                    + Condition
-                                                </button>
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
+                                            </select>
+                                            <button
+                                                class="bouton principal"
+                                                type="button"
+                                                name="ajouterVariante"
+                                                [disabled]="!varianteTable"
+                                                (click)="ajouterVariante(objet)"
+                                            >
+                                                + Variante
+                                            </button>
+                                        </div>
+                                    }
+                                }
 
-                                <div class="defilement-x" style="margin-top: 10px">
+                                <!-- V13 : qui se sert de quelle information — par application, ou en matrice complète -->
+                                @if (ongletActif() === 'usage') {
+                                    <app-usages-objet [objet]="objet" [actifs]="actifs()" [modifiable]="session.peutEditer()" />
+                                }
+
+                                <!-- sources -->
+                                @if (ongletActif() === 'sources') {
                                     <table class="tableau">
                                         <thead>
                                             <tr>
-                                                <th>Information</th>
-                                                <th>Colonne</th>
-                                                <th>Propriétaire</th>
+                                                <th>Table technique</th>
+                                                <th>Rôle</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @for (information of variante.elements || []; track information.id; let ligne = $index) {
+                                            @for (source of objet.sources; track source.table; let index = $index) {
                                                 <tr>
-                                                    <td>
-                                                        <input
-                                                            class="champ"
-                                                            [(ngModel)]="information.name"
-                                                            [name]="'vinfo-nom-' + rang + '-' + ligne"
-                                                            [attr.name]="'vinfo-nom-' + rang + '-' + ligne"
-                                                            [disabled]="!session.peutEditer()"
-                                                        />
-                                                    </td>
+                                                    <td>{{ source.table }}</td>
                                                     <td>
                                                         <select
                                                             class="champ"
-                                                            [ngModel]="information.col"
-                                                            [name]="'vinfo-col-' + rang + '-' + ligne"
-                                                            [attr.name]="'vinfo-col-' + rang + '-' + ligne"
+                                                            [(ngModel)]="source.role"
+                                                            [name]="'source-role-' + index"
+                                                            [attr.name]="'source-role-' + index"
                                                             [disabled]="!session.peutEditer()"
-                                                            (ngModelChange)="changerLaColonne(variante, information, $event)"
                                                         >
-                                                            <option value="">—</option>
-                                                            @for (colonne of colonnesDeLaVariante(variante); track colonne) {
-                                                                <option [value]="colonne">{{ colonne }}</option>
+                                                            @for (role of rolesSource(); track role.cle) {
+                                                                <option [value]="role.cle">{{ role.libelle }}</option>
                                                             }
                                                         </select>
                                                     </td>
                                                     <td>
-                                                        <input
-                                                            class="champ"
-                                                            [(ngModel)]="information.owner"
-                                                            [name]="'vinfo-proprietaire-' + rang + '-' + ligne"
-                                                            [attr.name]="'vinfo-proprietaire-' + rang + '-' + ligne"
-                                                            [disabled]="!session.peutEditer()"
-                                                        />
-                                                    </td>
-                                                    <td>
                                                         @if (session.peutEditer()) {
-                                                            <button
-                                                                class="bouton petit danger"
-                                                                type="button"
-                                                                (click)="supprimerInformationDeVariante(variante, information.id)"
-                                                            >
+                                                            <button class="bouton petit danger" (click)="objet.sources.splice(index, 1)">
                                                                 ✕
                                                             </button>
                                                         }
                                                     </td>
                                                 </tr>
-                                            } @empty {
-                                                <tr>
-                                                    <td colspan="4" class="discret">Aucune information dans cette variante.</td>
-                                                </tr>
                                             }
                                         </tbody>
                                     </table>
-                                </div>
-                                @if (session.peutEditer()) {
-                                    <button
-                                        class="bouton petit"
-                                        type="button"
-                                        style="margin-top: 8px"
-                                        [attr.name]="'ajouterInfoVariante-' + rang"
-                                        (click)="ajouterInformationDeVariante(variante)"
-                                    >
-                                        + Information
-                                    </button>
-                                }
-                            </div>
-                        } @empty {
-                            <div class="vide">
-                                Aucune variante. Une seule table peut pourtant porter plusieurs choses : ajoutez-en une ci-dessous.
-                            </div>
-                        }
-
-                        @if (session.peutEditer()) {
-                            <div class="ligne-champs" style="margin-top: 10px">
-                                <select class="champ" [(ngModel)]="varianteTable" name="varianteTable">
-                                    <option value="">— table dont la variante est une vue —</option>
-                                    @for (source of sources(); track source.id) {
-                                        <option [value]="source.name">{{ source.name }}</option>
-                                    }
-                                </select>
-                                <input class="champ" [(ngModel)]="varianteNom" name="varianteNom" placeholder="Nom métier de la variante" />
-                                <select class="champ" [(ngModel)]="varianteCardinalite" name="varianteCardinalite">
-                                    @for (cardinalite of cardinalitesVariante; track cardinalite) {
-                                        <option [value]="cardinalite">{{ cardinalite }}</option>
-                                    }
-                                </select>
-                                <button
-                                    class="bouton principal"
-                                    type="button"
-                                    name="ajouterVariante"
-                                    [disabled]="!varianteTable"
-                                    (click)="ajouterVariante(objet)"
-                                >
-                                    + Variante
-                                </button>
-                            </div>
-                        }
-                    }
-
-                    <!-- V13 : qui se sert de quelle information — par application, ou en matrice complète -->
-                    @if (ongletActif() === 'usages') {
-                        <app-usages-objet [objet]="objet" [actifs]="actifs()" [modifiable]="session.peutEditer()" />
-                    }
-
-                    <!-- sources -->
-                    @if (ongletActif() === 'sources') {
-                        <table class="tableau">
-                            <thead>
-                                <tr>
-                                    <th>Table technique</th>
-                                    <th>Rôle</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @for (source of objet.sources; track source.table; let index = $index) {
-                                    <tr>
-                                        <td>{{ source.table }}</td>
-                                        <td>
-                                            <select
-                                                class="champ"
-                                                [(ngModel)]="source.role"
-                                                [name]="'source-role-' + index"
-                                                [attr.name]="'source-role-' + index"
-                                                [disabled]="!session.peutEditer()"
-                                            >
+                                    @if (session.peutEditer()) {
+                                        <div class="formulaire-ligne" style="margin-top: 8px; max-width: 620px">
+                                            <select class="champ" [(ngModel)]="sourceARattacher" name="sourceARattacher">
+                                                <option value="">— table —</option>
+                                                @for (source of sources(); track source.id) {
+                                                    <option [value]="source.name">{{ source.name }}</option>
+                                                }
+                                            </select>
+                                            <select class="champ" [(ngModel)]="roleARattacher" name="roleARattacher">
                                                 @for (role of rolesSource(); track role.cle) {
                                                     <option [value]="role.cle">{{ role.libelle }}</option>
                                                 }
                                             </select>
-                                        </td>
-                                        <td>
-                                            @if (session.peutEditer()) {
-                                                <button class="bouton petit danger" (click)="objet.sources.splice(index, 1)">✕</button>
-                                            }
-                                        </td>
-                                    </tr>
+                                            <label class="case"
+                                                ><input type="checkbox" [(ngModel)]="genererAttributs" name="genererAttributs" /> créer les
+                                                attributs</label
+                                            >
+                                            <button
+                                                class="bouton"
+                                                (click)="rattacherSource(objet)"
+                                                [disabled]="!sourceARattacher"
+                                                style="flex: 0 0 auto"
+                                            >
+                                                Rattacher
+                                            </button>
+                                        </div>
+                                    }
                                 }
-                            </tbody>
-                        </table>
-                        @if (session.peutEditer()) {
-                            <div class="formulaire-ligne" style="margin-top: 8px; max-width: 620px">
-                                <select class="champ" [(ngModel)]="sourceARattacher" name="sourceARattacher">
-                                    <option value="">— table —</option>
-                                    @for (source of sources(); track source.id) {
-                                        <option [value]="source.name">{{ source.name }}</option>
-                                    }
-                                </select>
-                                <select class="champ" [(ngModel)]="roleARattacher" name="roleARattacher">
-                                    @for (role of rolesSource(); track role.cle) {
-                                        <option [value]="role.cle">{{ role.libelle }}</option>
-                                    }
-                                </select>
-                                <label class="case"
-                                    ><input type="checkbox" [(ngModel)]="genererAttributs" name="genererAttributs" /> créer les
-                                    attributs</label
-                                >
-                                <button
-                                    class="bouton"
-                                    (click)="rattacherSource(objet)"
-                                    [disabled]="!sourceARattacher"
-                                    style="flex: 0 0 auto"
-                                >
-                                    Rattacher
-                                </button>
-                            </div>
-                        }
-                    }
 
-                    <!-- liens : actifs et objets référencés -->
-                    @if (ongletActif() === 'liens') {
-                        <div class="formulaire-ligne">
-                            <div>
-                                <label class="etiquette">Produit par</label>
-                                @for (actif of actifs(); track actif.id) {
-                                    <label class="case"
-                                        ><input
-                                            type="checkbox"
-                                            [checked]="objet.producedBy.includes(actif.id)"
-                                            (change)="basculer(objet.producedBy, actif.id)"
-                                            [disabled]="!session.peutEditer()"
-                                        />
-                                        {{ actif.name }}</label
-                                    >
-                                } @empty {
-                                    <div class="discret">Aucun actif déclaré (écran Applications & processus).</div>
+                                <!-- liens : actifs et objets référencés -->
+                                @if (ongletActif() === 'sources') {
+                                    <div class="formulaire-ligne">
+                                        <div>
+                                            <label class="etiquette">Produit par</label>
+                                            @for (actif of actifs(); track actif.id) {
+                                                <label class="case"
+                                                    ><input
+                                                        type="checkbox"
+                                                        [checked]="objet.producedBy.includes(actif.id)"
+                                                        (change)="basculer(objet.producedBy, actif.id)"
+                                                        [disabled]="!session.peutEditer()"
+                                                    />
+                                                    {{ actif.name }}</label
+                                                >
+                                            } @empty {
+                                                <div class="discret">Aucun actif déclaré (écran Applications & processus).</div>
+                                            }
+                                        </div>
+                                        <div>
+                                            <label class="etiquette">Consommé par</label>
+                                            @for (actif of actifs(); track actif.id) {
+                                                <label class="case"
+                                                    ><input
+                                                        type="checkbox"
+                                                        [checked]="objet.consumedBy.includes(actif.id)"
+                                                        (change)="basculer(objet.consumedBy, actif.id)"
+                                                        [disabled]="!session.peutEditer()"
+                                                    />
+                                                    {{ actif.name }}</label
+                                                >
+                                            }
+                                        </div>
+                                        <div>
+                                            <label class="etiquette">Objets référencés</label>
+                                            @for (autre of autresObjets(); track autre.id) {
+                                                <label class="case"
+                                                    ><input
+                                                        type="checkbox"
+                                                        [checked]="referencie(objet, autre.id)"
+                                                        (change)="basculerReference(objet, autre.id)"
+                                                        [disabled]="!session.peutEditer()"
+                                                    />
+                                                    {{ autre.name }}</label
+                                                >
+                                            } @empty {
+                                                <div class="discret">Aucun autre objet.</div>
+                                            }
+                                        </div>
+                                    </div>
                                 }
-                            </div>
-                            <div>
-                                <label class="etiquette">Consommé par</label>
-                                @for (actif of actifs(); track actif.id) {
-                                    <label class="case"
-                                        ><input
-                                            type="checkbox"
-                                            [checked]="objet.consumedBy.includes(actif.id)"
-                                            (change)="basculer(objet.consumedBy, actif.id)"
-                                            [disabled]="!session.peutEditer()"
-                                        />
-                                        {{ actif.name }}</label
-                                    >
-                                }
-                            </div>
-                            <div>
-                                <label class="etiquette">Objets référencés</label>
-                                @for (autre of autresObjets(); track autre.id) {
-                                    <label class="case"
-                                        ><input
-                                            type="checkbox"
-                                            [checked]="referencie(objet, autre.id)"
-                                            (change)="basculerReference(objet, autre.id)"
-                                            [disabled]="!session.peutEditer()"
-                                        />
-                                        {{ autre.name }}</label
-                                    >
-                                } @empty {
-                                    <div class="discret">Aucun autre objet.</div>
+
+                                <!-- audit : l'historique des décisions, en attendant l'audit global de la V13 -->
+                                @if (ongletActif() === 'audit') {
+                                    <h4 class="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Historique des décisions</h4>
+                                    @for (entree of objet.history || []; track $index) {
+                                        <div class="discret">
+                                            {{ formaterDate(entree.at) }} — {{ entree.from }} → {{ entree.to }} par {{ entree.by }} :
+                                            {{ entree.comment }}
+                                        </div>
+                                    } @empty {
+                                        <div class="discret">Aucune décision enregistrée sur cet objet.</div>
+                                    }
                                 }
                             </div>
                         </div>
-                    }
-
-                    <!-- historique -->
-                    @if (ongletActif() === 'historique') {
-                        @for (entree of objet.history || []; track $index) {
-                            <div class="discret">
-                                {{ formaterDate(entree.at) }} — {{ entree.from }} → {{ entree.to }} par {{ entree.by }} :
-                                {{ entree.comment }}
-                            </div>
-                        } @empty {
-                            <div class="discret">Aucune décision enregistrée sur cet objet.</div>
-                        }
-                    }
-                </div>
-            } @else {
-                <div class="carte fiche discret" style="text-align: center; padding: 40px">Choisissez un objet métier, ou créez-en un.</div>
-            }
+                    </div>
+                } @else {
+                    <p class="flex-1 text-sm text-slate-400 italic py-10 text-center">Choisissez un objet métier, ou créez-en un.</p>
+                }
+            </div>
         </div>
     `,
     styles: `
+        /* Les champs de la carte d'identité, repris tels quels du classique (.bo-fld). */
+        .bo-fld label {
+            display: block;
+            font-size: 10.5px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 3px;
+        }
+        .bo-fld input[type='text'],
+        .bo-fld input:not([type]),
+        .bo-fld select,
+        .bo-fld textarea {
+            width: 100%;
+            font-size: 12.5px;
+            padding: 7px 9px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #fff;
+            min-height: 34px;
+        }
+        .bo-fld textarea {
+            min-height: 64px;
+            resize: vertical;
+            line-height: 1.4;
+        }
+        .bo-fld .hint {
+            font-size: 10.5px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
         /* V11 : le bandeau des colonnes que l'on fait glisser sur une information. */
         .colonnes-a-glisser {
             display: flex;
@@ -1157,6 +1416,8 @@ export class ObjetsMetierComponent {
     readonly sources = signal<Source[]>([]);
     readonly actifs = signal<Actif[]>([]);
     readonly termes = signal<TermeGlossaire[]>([]);
+    /** Les personnes déclarées : ce sont elles que l'on propose comme propriétaire d'un objet. */
+    readonly personnes = signal<Personne[]>([]);
     readonly domaines = signal<string[]>([]);
     readonly vocabulaire = signal<VocabulaireGouvernance | null>(null);
     readonly selectionId = signal<string | null>(null);
@@ -1177,16 +1438,17 @@ export class ObjetsMetierComponent {
     /** Vrai quand le panneau « ✨ Décrire depuis un fichier / modèle » est ouvert. */
     readonly propositionOuverte = signal(false);
     readonly nouveau = signal(false);
-    readonly ongletActif = signal<OngletFiche>('attributs');
+    readonly ongletActif = signal<OngletFiche>('structure');
     readonly enCours = signal(false);
     readonly onglets: { cle: OngletFiche; libelle: string }[] = [
-        { cle: 'attributs', libelle: 'Informations' },
-        { cle: 'variantes', libelle: 'Variantes' },
-        { cle: 'usages', libelle: 'Usages' },
-        { cle: 'sources', libelle: 'Sources' },
-        { cle: 'liens', libelle: 'Actifs et références' },
-        { cle: 'historique', libelle: 'Historique' }
+        { cle: 'structure', libelle: '🧩 Attributs & composition' },
+        { cle: 'sources', libelle: '🔗 Sources' },
+        { cle: 'hierarchies', libelle: '🌳 Hiérarchies' },
+        { cle: 'maitrise', libelle: '⚖️ Maîtrise' },
+        { cle: 'usage', libelle: '🔌 Applis & usages' },
+        { cle: 'audit', libelle: '🔎 Audit' }
     ];
+    readonly statutsDeFiche = STATUTS_FICHE;
     /** Vrai quand les colonnes numérotées sont vues comme une seule information (comme la V13, par défaut). */
     readonly repliActif = signal(true);
     /** Vrai pendant que l'on va chercher des exemples dans les fichiers : le bouton ne se relance pas. */
@@ -1242,12 +1504,13 @@ export class ObjetsMetierComponent {
 
     async recharger(): Promise<void> {
         try {
-            const [objets, sources, actifs, termes, domaines, vocabulaire] = await Promise.all([
+            const [objets, sources, actifs, termes, domaines, personnes, vocabulaire] = await Promise.all([
                 this.api.objetsMetier(),
                 this.api.sources(),
                 this.api.actifs(),
                 this.api.glossaire(),
                 this.api.domaines(),
+                this.api.personnes(),
                 this.vocabulaire() ?? this.api.vocabulaireGouvernance()
             ]);
             this.objets.set(objets.map(objet => ({ ...OBJET_VIDE(), ...objet })));
@@ -1255,6 +1518,7 @@ export class ObjetsMetierComponent {
             this.actifs.set(actifs);
             this.termes.set(termes);
             this.domaines.set(domaines);
+            this.personnes.set(personnes);
             this.vocabulaire.set(vocabulaire);
             const selection = this.objets().find(objet => objet.id === this.selectionId());
             if (selection) this.selectionner(selection);
@@ -1275,7 +1539,7 @@ export class ObjetsMetierComponent {
         this.selectionId.set(objet.id);
         this.nouveau.set(true);
         this.edition.set(objet);
-        this.ongletActif.set('attributs');
+        this.ongletActif.set('structure');
         this.notifications.info(`Objet « ${objet.name} » proposé avec ${objet.elements.length} information(s). Relisez, puis enregistrez.`);
     }
 
@@ -1284,7 +1548,7 @@ export class ObjetsMetierComponent {
         this.selectionId.set(objet.id);
         this.nouveau.set(true);
         this.edition.set(objet);
-        this.ongletActif.set('attributs');
+        this.ongletActif.set('structure');
     }
 
     /** Un objet par source : nom dérivé du fichier, un attribut par colonne, la source en rôle maître. */
@@ -1329,6 +1593,56 @@ export class ObjetsMetierComponent {
             }
         this.sourceARattacher = '';
         this.edition.update(courant => (courant ? { ...courant } : courant));
+    }
+
+    /**
+     * L'état d'un objet, tel que la V13 le résume d'un badge dans la liste : sans propriétaire d'abord,
+     * puis sans source maître, puis la maîtrise contextuelle, et sinon tout va bien.
+     */
+    etatDeLObjet(objet: ObjetMetier): { libelle: string; classes: string } {
+        if (!objet.globalOwner) return { libelle: 'sans propriétaire', classes: 'bg-red-100 text-red-600' };
+        const maitres = objet.sources.filter(source => source.role === 'maitre');
+        const regles = ((objet['contextRules'] as { rules?: unknown[] })?.rules || []).length > 0;
+        if (objet.sources.length && !maitres.length && !regles) return { libelle: 'sans maître', classes: 'bg-amber-100 text-amber-700' };
+        if (regles) return { libelle: 'maîtrise contextuelle', classes: 'bg-blue-100 text-blue-700' };
+        return { libelle: 'ok', classes: 'bg-emerald-100 text-emerald-700' };
+    }
+
+    /** Le badge du statut de la fiche, teinté selon ce qu'il annonce — comme dans le dictionnaire. */
+    classesDuStatut(objet: ObjetMetier): string {
+        const statut = statutDe(objet as FicheValidable);
+        if (statut === 'Validé') return 'bg-emerald-100 text-emerald-700';
+        if (statut === 'Proposé') return 'bg-amber-100 text-amber-700';
+        if (statut === 'Obsolète') return 'bg-slate-200 text-slate-500 line-through';
+        return 'bg-slate-100 text-slate-500';
+    }
+
+    depuisQuandLeStatut(objet: ObjetMetier): string {
+        return depuisQuand(objet as FicheValidable, formaterDate);
+    }
+
+    /**
+     * Changer le statut d'un objet le date, l'attribue et l'historise — le même cycle que pour une fiche
+     * du dictionnaire. Valider demande un commentaire, facultatif : c'est le « pourquoi » qu'on relira.
+     */
+    changerLeStatutDeLObjet(objet: ObjetMetier, nouveau: string): void {
+        const commentaire = nouveau === 'Validé' ? (prompt('Commentaire de validation (facultatif) :') ?? '') : '';
+        const qui = this.session.utilisateur()?.nomAffiche || this.session.utilisateur()?.identifiant || '';
+        changerLeStatut(objet as FicheValidable, nouveau, qui, commentaire);
+    }
+
+    /**
+     * Le compteur posé sur un onglet. Celui des usages compte ce qui manque — les informations dont
+     * personne ne dit se servir — et non ce qui est fait : c'est ce qui reste à faire qui doit sauter aux yeux.
+     */
+    compteDeLOnglet(objet: ObjetMetier, onglet: OngletFiche): number {
+        if (onglet === 'structure') return (objet.structure || []).length + (objet.elements || []).length;
+        if (onglet === 'sources') return objet.sources.length;
+        if (onglet === 'hierarchies') return ((objet['hierarchies'] as unknown[]) || []).length;
+        if (onglet === 'maitrise') return ((objet['contextRules'] as { rules?: unknown[] })?.rules || []).length;
+        if (onglet === 'usage')
+            return this.actifs().length ? (objet.elements || []).filter(information => !(information.usedBy || []).length).length : 0;
+        return 0;
     }
 
     /** Le feu tricolore d'un objet : rouge sans responsable, vert bien documenté, orange entre les deux. */
