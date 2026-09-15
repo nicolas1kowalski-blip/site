@@ -1197,6 +1197,30 @@ try {
     await page.click('app-objets-metier button:has-text("Enregistrer")');
     await page.waitForSelector('.notification:has-text("enregistré")');
 
+    // ---- V13 : déclarer une hiérarchie, puis la confronter aux données ----
+    await page.click('app-objets-metier button[name=onglet-hierarchies]');
+    await page.click('app-objets-metier button[name=ajouterHierarchie]');
+    await page.waitForSelector('app-objets-metier input[name=hier-nom-0]');
+    // clients.csv ne porte pas d'arbre : on déclare id_client comme clé et comme parent, ce qui fait de
+    // chaque ligne son propre parent — l'audit doit le dire plutôt que de le laisser passer.
+    await page.selectOption('app-objets-metier select[name=hier-enfant-0]', 'id_client');
+    await page.selectOption('app-objets-metier select[name=hier-cle-0]', 'id_client');
+    await page.selectOption('app-objets-metier select[name=hier-type-0]', 'ville');
+    await page.fill('app-objets-metier input[name=hier-niveau-0]', 'PARIS');
+    await page.click('app-objets-metier button[name=ajouterNiveau-0]');
+    verifier('V13 : un niveau déclaré sans parent admis est marqué « racine »', /racine/.test(await page.textContent('app-objets-metier')));
+    await page.click('app-objets-metier button[name=auditerArbre-0]');
+    await page.waitForSelector('app-objets-metier [name=auditArbre-0]');
+    const tuilesDeLArbre = await page.textContent('app-objets-metier [name=auditArbre-0]');
+    verifier(
+        'V13 : l’audit confronte l’arbre aux données — 4 lignes, et 4 lignes parent d’elles-mêmes',
+        /4/.test(tuilesDeLArbre) && /parent d’elles-mêmes/.test(tuilesDeLArbre) && /types non déclarés/.test(tuilesDeLArbre)
+    );
+    await capture('objet-metier-hierarchies');
+    // On retire la hiérarchie : elle ne servait qu'à éprouver l'audit.
+    await page.click('app-objets-metier button[name=supprimerHierarchie-0]');
+    await page.click('app-objets-metier button[name=onglet-structure]');
+
     // V13 : la fiche porte six onglets, dans cet ordre et sous ces libellés, avec leur compteur.
     const ongletsDeLaFiche = await page.$$eval('app-objets-metier #ficheDeLObjet [name^=onglet-]', boutons =>
         boutons.map(bouton => bouton.textContent.replace(/\s+/g, ' ').trim())

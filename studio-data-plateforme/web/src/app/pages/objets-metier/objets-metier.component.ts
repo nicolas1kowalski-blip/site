@@ -39,6 +39,19 @@ import { ColonneOfferte, colonneLachee, colonneTransportee, colonnesDeLObjet, in
 import { FicheInformationComponent } from './fiche-information.component';
 import { UsagesObjetComponent } from './usages-objet.component';
 import { FicheValidable, STATUTS_FICHE, changerLeStatut, depuisQuand, statutDe } from '../dictionnaire/validation-fiche';
+import {
+    AuditHierarchie,
+    Hierarchie,
+    ajouterUnNiveau,
+    basculerUnParentAdmis,
+    cequiManquePourAuditer,
+    estUneRacine,
+    hierarchieNeuve,
+    hierarchiesDe,
+    parentsPossibles,
+    retirerUnNiveau,
+    tuilesDeLAudit
+} from './hierarchies-objet';
 import { BilanEchantillonnage, bilanNeuf, classerAvantEchantillonnage, phraseDuBilan, poserDesExemples } from './usages-objet';
 import {
     CARDINALITES_VARIANTE,
@@ -1200,6 +1213,325 @@ export function completudeObjet(objet: ObjetMetier, avecActifs: boolean): { scor
                                 }
 
                                 <!-- audit : l'historique des décisions, en attendant l'audit global de la V13 -->
+                                <!-- 🌳 Hiérarchies : l'arbre déclaré, puis confronté aux données (V13). -->
+                                @if (ongletActif() === 'hierarchies') {
+                                    <div class="border border-emerald-200 rounded-lg p-3 bg-emerald-50/30">
+                                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                                            <span class="text-[10px] uppercase font-bold text-emerald-800">
+                                                🌳 Hiérarchies ({{ hierarchies(objet).length }})
+                                            </span>
+                                            @if (!tableMaitre(objet)) {
+                                                <span class="text-xs text-slate-500">
+                                                    Rattachez d'abord une source maître : c'est sur elle que porte l'arbre.
+                                                </span>
+                                            }
+                                            @if (session.peutEditer()) {
+                                                <button
+                                                    class="ml-auto text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold disabled:opacity-50"
+                                                    type="button"
+                                                    name="ajouterHierarchie"
+                                                    [disabled]="!tableMaitre(objet)"
+                                                    (click)="ajouterUneHierarchie(objet)"
+                                                >
+                                                    + Hiérarchie
+                                                </button>
+                                            }
+                                        </div>
+                                        @for (hierarchie of hierarchies(objet); track hierarchie.id; let rang = $index) {
+                                            <div class="border-2 border-emerald-300 rounded-lg p-3 bg-emerald-50/40 mb-2">
+                                                <div class="flex items-center gap-2 flex-wrap mb-2">
+                                                    <input
+                                                        class="font-bold text-xs border border-emerald-300 p-1.5 rounded w-40 bg-white"
+                                                        [(ngModel)]="hierarchie.name"
+                                                        [name]="'hier-nom-' + rang"
+                                                        [attr.name]="'hier-nom-' + rang"
+                                                        [disabled]="!session.peutEditer()"
+                                                    />
+                                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            [name]="'hier-mode-' + rang"
+                                                            [checked]="hierarchie.mode !== 'link'"
+                                                            [disabled]="!session.peutEditer()"
+                                                            (change)="hierarchie.mode = 'self'"
+                                                        />
+                                                        parent dans la même table
+                                                    </label>
+                                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            [name]="'hier-mode-' + rang"
+                                                            [checked]="hierarchie.mode === 'link'"
+                                                            [disabled]="!session.peutEditer()"
+                                                            (change)="hierarchie.mode = 'link'"
+                                                        />
+                                                        via table de liaison
+                                                    </label>
+                                                    <label
+                                                        class="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1 ml-2"
+                                                    >
+                                                        Profondeur max
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            max="50"
+                                                            placeholder="—"
+                                                            class="border border-slate-300 p-1 rounded text-xs w-14 bg-white"
+                                                            [(ngModel)]="hierarchie.maxDepth"
+                                                            [name]="'hier-profondeur-' + rang"
+                                                            [attr.name]="'hier-profondeur-' + rang"
+                                                            [disabled]="!session.peutEditer()"
+                                                        />
+                                                    </label>
+                                                    @if (session.peutEditer()) {
+                                                        <button
+                                                            class="ml-auto text-xs text-red-400 hover:text-red-600"
+                                                            type="button"
+                                                            [attr.name]="'supprimerHierarchie-' + rang"
+                                                            (click)="supprimerLaHierarchie(objet, hierarchie)"
+                                                        >
+                                                            🗑
+                                                        </button>
+                                                    }
+                                                </div>
+
+                                                <!-- Ce qui porte le lien de parenté : une colonne, ou une table de liaison. -->
+                                                <div class="flex flex-wrap items-end gap-2 mb-2 text-xs">
+                                                    @if (hierarchie.mode === 'link') {
+                                                        <div>
+                                                            <label class="text-[9px] uppercase font-bold text-slate-400 block"
+                                                                >Table de liaison</label
+                                                            >
+                                                            <select
+                                                                class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                                [(ngModel)]="hierarchie.linkTable"
+                                                                [name]="'hier-liaison-' + rang"
+                                                                [attr.name]="'hier-liaison-' + rang"
+                                                                [disabled]="!session.peutEditer()"
+                                                            >
+                                                                <option value="">choisir…</option>
+                                                                @for (source of sources(); track source.id) {
+                                                                    <option [value]="source.name">{{ source.name }}</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[9px] uppercase font-bold text-slate-400 block">
+                                                                Col. enfant (liaison)
+                                                            </label>
+                                                            <select
+                                                                class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                                [(ngModel)]="hierarchie.linkChildCol"
+                                                                [name]="'hier-liaison-enfant-' + rang"
+                                                                [attr.name]="'hier-liaison-enfant-' + rang"
+                                                                [disabled]="!session.peutEditer()"
+                                                            >
+                                                                <option value="">enfant…</option>
+                                                                @for (colonne of colonnesDe(hierarchie.linkTable); track colonne) {
+                                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[9px] uppercase font-bold text-slate-400 block">
+                                                                Col. parent (liaison)
+                                                            </label>
+                                                            <select
+                                                                class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                                [(ngModel)]="hierarchie.linkParentCol"
+                                                                [name]="'hier-liaison-parent-' + rang"
+                                                                [attr.name]="'hier-liaison-parent-' + rang"
+                                                                [disabled]="!session.peutEditer()"
+                                                            >
+                                                                <option value="">parent…</option>
+                                                                @for (colonne of colonnesDe(hierarchie.linkTable); track colonne) {
+                                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    } @else {
+                                                        <div>
+                                                            <label class="text-[9px] uppercase font-bold text-slate-400 block">
+                                                                Colonne pointant vers le parent
+                                                            </label>
+                                                            <select
+                                                                class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                                [(ngModel)]="hierarchie.childCol"
+                                                                [name]="'hier-enfant-' + rang"
+                                                                [attr.name]="'hier-enfant-' + rang"
+                                                                [disabled]="!session.peutEditer()"
+                                                            >
+                                                                <option value="">ex : code_parent</option>
+                                                                @for (colonne of colonnesDe(tableMaitre(objet)); track colonne) {
+                                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    }
+                                                    <div>
+                                                        <label class="text-[9px] uppercase font-bold text-slate-400 block">
+                                                            Colonne clé (référencée)
+                                                        </label>
+                                                        <select
+                                                            class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                            [(ngModel)]="hierarchie.parentKeyCol"
+                                                            [name]="'hier-cle-' + rang"
+                                                            [attr.name]="'hier-cle-' + rang"
+                                                            [disabled]="!session.peutEditer()"
+                                                        >
+                                                            <option value="">ex : code</option>
+                                                            @for (colonne of colonnesDe(tableMaitre(objet)); track colonne) {
+                                                                <option [value]="colonne">{{ colonne }}</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Les niveaux, et pour chacun les niveaux dont il a le droit de dépendre. -->
+                                                <div class="border-t border-emerald-100 pt-2 mt-1">
+                                                    <div class="flex flex-wrap items-end gap-2 mb-1.5">
+                                                        <div>
+                                                            <label class="text-[9px] uppercase font-bold text-slate-400 block">
+                                                                Colonne de type (niveaux)
+                                                            </label>
+                                                            <select
+                                                                class="border border-slate-300 p-1.5 rounded text-xs bg-white"
+                                                                [(ngModel)]="hierarchie.typeCol"
+                                                                [name]="'hier-type-' + rang"
+                                                                [attr.name]="'hier-type-' + rang"
+                                                                [disabled]="!session.peutEditer()"
+                                                            >
+                                                                <option value="">— aucune —</option>
+                                                                @for (colonne of colonnesDe(tableMaitre(objet)); track colonne) {
+                                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                        @if (hierarchie.typeCol && session.peutEditer()) {
+                                                            <div>
+                                                                <label class="text-[9px] uppercase font-bold text-slate-400 block">
+                                                                    Ajouter un niveau
+                                                                </label>
+                                                                <input
+                                                                    class="border border-slate-300 p-1.5 rounded text-xs w-32"
+                                                                    placeholder="ex : SITE"
+                                                                    [(ngModel)]="niveauASaisir[hierarchie.id]"
+                                                                    [name]="'hier-niveau-' + rang"
+                                                                    [attr.name]="'hier-niveau-' + rang"
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                class="text-xs bg-white border border-emerald-300 text-emerald-700 px-2 py-1 rounded font-bold"
+                                                                type="button"
+                                                                [attr.name]="'ajouterNiveau-' + rang"
+                                                                (click)="ajouterUnNiveauA(hierarchie)"
+                                                            >
+                                                                + Niveau
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                    @for (niveau of hierarchie.levels || []; track niveau.name) {
+                                                        <div
+                                                            class="flex items-center gap-2 flex-wrap bg-white border border-emerald-100 rounded p-1.5 mb-1"
+                                                        >
+                                                            <span class="text-xs font-black text-emerald-800 w-28 truncate">{{
+                                                                niveau.name
+                                                            }}</span>
+                                                            <span class="text-[9px] uppercase font-bold text-slate-400"
+                                                                >parents admis :</span
+                                                            >
+                                                            @for (autre of parentsPossibles(hierarchie, niveau.name); track autre.name) {
+                                                                <button
+                                                                    type="button"
+                                                                    class="text-[10px] border rounded px-1.5 py-0.5 cursor-pointer"
+                                                                    [class]="
+                                                                        niveau.parents.includes(autre.name)
+                                                                            ? 'text-[10px] border rounded px-1.5 py-0.5 cursor-pointer bg-emerald-100 border-emerald-300 text-emerald-800 font-bold'
+                                                                            : 'text-[10px] border rounded px-1.5 py-0.5 cursor-pointer bg-white border-slate-200 text-slate-400'
+                                                                    "
+                                                                    [disabled]="!session.peutEditer()"
+                                                                    (click)="basculerUnParent(hierarchie, niveau.name, autre.name)"
+                                                                >
+                                                                    {{ autre.name }}
+                                                                </button>
+                                                            }
+                                                            @if (estUneRacine(niveau)) {
+                                                                <span
+                                                                    class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                                                >
+                                                                    racine
+                                                                </span>
+                                                            }
+                                                            @if (session.peutEditer()) {
+                                                                <button
+                                                                    class="ml-auto text-emerald-200 hover:text-red-500"
+                                                                    type="button"
+                                                                    (click)="retirerUnNiveauDe(hierarchie, niveau.name)"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    } @empty {
+                                                        @if (hierarchie.typeCol) {
+                                                            <p class="text-[10px] text-slate-400 mb-1.5">
+                                                                Déclarez les niveaux, puis cochez pour chacun ses parents admis (plusieurs
+                                                                sont possibles : un LOCAL peut dépendre d'un NIVEAU, d'une AIRE ou d'un
+                                                                BÂTIMENT). Aucun parent coché = niveau racine.
+                                                            </p>
+                                                        }
+                                                    }
+                                                    <button
+                                                        class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold disabled:opacity-50"
+                                                        type="button"
+                                                        [attr.name]="'auditerArbre-' + rang"
+                                                        [disabled]="auditEnCours()"
+                                                        (click)="auditerLArbre(objet, hierarchie)"
+                                                    >
+                                                        🔎 Auditer l'arbre sur les données
+                                                    </button>
+                                                    @if (auditsDArbre()[hierarchie.id]; as audit) {
+                                                        <div
+                                                            class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2"
+                                                            [attr.name]="'auditArbre-' + rang"
+                                                        >
+                                                            @for (tuile of tuilesDeLAudit(audit); track tuile.libelle) {
+                                                                <div
+                                                                    class="p-2 border rounded-lg"
+                                                                    [class]="
+                                                                        tuile.mauvais && tuile.valeur > 0
+                                                                            ? 'p-2 border rounded-lg bg-red-50 border-red-200'
+                                                                            : 'p-2 border rounded-lg bg-white border-slate-200'
+                                                                    "
+                                                                >
+                                                                    <div
+                                                                        class="text-sm font-black"
+                                                                        [class]="
+                                                                            tuile.mauvais && tuile.valeur > 0
+                                                                                ? 'text-sm font-black text-red-600'
+                                                                                : 'text-sm font-black text-slate-700'
+                                                                        "
+                                                                    >
+                                                                        {{ tuile.valeur }}
+                                                                    </div>
+                                                                    <div class="text-[9px] uppercase font-bold text-slate-400">
+                                                                        {{ tuile.libelle }}
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        } @empty {
+                                            <p class="text-xs text-slate-500">
+                                                Aucune hiérarchie déclarée. Si cet objet se range en arbre — un local dans un bâtiment, un
+                                                bâtiment sur un site — déclarez-le ici : on pourra ensuite vérifier que les données le
+                                                respectent.
+                                            </p>
+                                        }
+                                    </div>
+                                }
                                 @if (ongletActif() === 'audit') {
                                     <h4 class="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Historique des décisions</h4>
                                     @for (entree of objet.history || []; track $index) {
@@ -1453,6 +1785,11 @@ export class ObjetsMetierComponent {
     readonly repliActif = signal(true);
     /** Vrai pendant que l'on va chercher des exemples dans les fichiers : le bouton ne se relance pas. */
     readonly echantillonnage = signal(false);
+    /** Le niveau en cours de saisie, par hiérarchie. */
+    niveauASaisir: Record<string, string> = {};
+    /** Le dernier audit d'arbre rendu, par hiérarchie : on le garde à l'écran jusqu'au suivant. */
+    readonly auditsDArbre = signal<Record<string, AuditHierarchie>>({});
+    readonly auditEnCours = signal(false);
     readonly cardinalitesVariante = CARDINALITES_VARIANTE;
     readonly optionsNombreDeValeurs = OPTIONS_NOMBRE_DE_VALEURS;
     readonly operateursPortee = Object.entries(OPERATEURS_PORTEE).map(([cle, libelle]) => ({ cle, libelle }));
@@ -1772,6 +2109,78 @@ export class ObjetsMetierComponent {
     provenanceDuGroupe(groupe: GroupeDInformations): string {
         if (groupe.replie) return colonnesDuGroupe(groupe).join(', ');
         return this.provenance(groupe.informations[0]);
+    }
+
+    // ---- V13 : les hiérarchies de l'objet, déclarées puis confrontées aux données ----
+
+    /** Les hiérarchies de l'objet, toujours exploitables ; la fiche les modifie sur place. */
+    hierarchies(objet: ObjetMetier): Hierarchie[] {
+        const arbres = hierarchiesDe(objet as { hierarchies?: unknown });
+        objet['hierarchies'] = arbres;
+        return arbres;
+    }
+
+    /** La table maître de l'objet : c'est sur elle que porte l'arbre, comme dans la V13. */
+    tableMaitre(objet: ObjetMetier): string {
+        const maitre = objet.sources.find(source => source.role === 'maitre') || objet.sources[0];
+        return maitre?.table || '';
+    }
+
+    ajouterUneHierarchie(objet: ObjetMetier): void {
+        const arbres = this.hierarchies(objet);
+        arbres.push(hierarchieNeuve(genererIdentifiant, arbres.length));
+    }
+
+    supprimerLaHierarchie(objet: ObjetMetier, hierarchie: Hierarchie): void {
+        objet['hierarchies'] = this.hierarchies(objet).filter(autre => autre.id !== hierarchie.id);
+    }
+
+    /** Ajoute le niveau saisi, et vide le champ pour laisser saisir le suivant. */
+    ajouterUnNiveauA(hierarchie: Hierarchie): void {
+        const saisi = this.niveauASaisir[hierarchie.id] || '';
+        if (!ajouterUnNiveau(hierarchie, saisi))
+            return this.notifications.erreur(saisi.trim() ? `Le niveau « ${saisi.trim()} » est déjà déclaré.` : 'Nommez le niveau.');
+        this.niveauASaisir[hierarchie.id] = '';
+    }
+
+    retirerUnNiveauDe(hierarchie: Hierarchie, nom: string): void {
+        retirerUnNiveau(hierarchie, nom);
+    }
+
+    basculerUnParent(hierarchie: Hierarchie, niveau: string, parent: string): void {
+        basculerUnParentAdmis(hierarchie, niveau, parent);
+    }
+
+    parentsPossibles(hierarchie: Hierarchie, niveau: string) {
+        return parentsPossibles(hierarchie, niveau);
+    }
+
+    estUneRacine(niveau: { name: string; parents: string[] }): boolean {
+        return estUneRacine(niveau);
+    }
+
+    tuilesDeLAudit(audit: AuditHierarchie) {
+        return tuilesDeLAudit(audit);
+    }
+
+    /**
+     * Confronte l'arbre déclaré aux données. On refuse avant d'appeler quand la déclaration est incomplète :
+     * un audit sur une hiérarchie à moitié décrite ne voudrait rien dire.
+     */
+    async auditerLArbre(objet: ObjetMetier, hierarchie: Hierarchie): Promise<void> {
+        const manque = cequiManquePourAuditer(hierarchie);
+        if (manque) return this.notifications.erreur(manque);
+        const table = this.tableMaitre(objet);
+        if (!table) return this.notifications.erreur('Rattachez une source maître : c’est sur elle que porte l’arbre.');
+        this.auditEnCours.set(true);
+        try {
+            const audit = await this.api.auditerHierarchie(table, hierarchie);
+            this.auditsDArbre.update(connus => ({ ...connus, [hierarchie.id]: audit }));
+        } catch (erreur) {
+            this.notifications.erreur(erreur as Error);
+        } finally {
+            this.auditEnCours.set(false);
+        }
     }
 
     // ---- V13 : des exemples pris dans les données, pour toutes les informations d'un coup ----

@@ -9,6 +9,7 @@ import { HttpClient, HttpErrorResponse, HttpEvent, HttpEventType, HttpIntercepto
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, firstValueFrom, throwError } from 'rxjs';
+import { AuditHierarchie } from '../pages/objets-metier/hierarchies-objet';
 import {
     Cockpit,
     ApercuPreparation,
@@ -607,6 +608,14 @@ export class ClientApiService {
     }
     retirerDomaine(name: string): Promise<string[]> {
         return firstValueFrom(this.http.delete<string[]>(`${this.racine}/gouvernance/domaines/${encodeURIComponent(name)}`));
+    }
+
+    /**
+     * Confronte la hiérarchie déclarée sur un objet aux données réelles : racines, orphelins, boucles,
+     * parents non admis, types non déclarés, et profondeur quand une limite est annoncée (V13).
+     */
+    auditerHierarchie(table: string, hierarchie: unknown): Promise<AuditHierarchie> {
+        return firstValueFrom(this.http.post<AuditHierarchie>(`${this.racine}/gouvernance/hierarchies/auditer`, { table, hierarchie }));
     }
 
     // ---- gouvernance : listes de valeurs ----

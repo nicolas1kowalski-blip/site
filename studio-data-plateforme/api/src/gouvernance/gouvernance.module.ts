@@ -5,17 +5,26 @@
 import { Module } from '@nestjs/common';
 import { DocumentsModule } from '../documents/documents.module';
 import { JournalModule } from '../journal/journal.module';
+import { EspacesModule } from '../espaces/espaces.module';
 import { SourcesModule } from '../sources/sources.module';
 import { GouvernanceController } from './gouvernance.controller';
 import { GouvernanceService } from './gouvernance.service';
+import { HierarchiesController } from './hierarchies.controller';
 import { ListesValeursController } from './listes-valeurs.controller';
 import { PropositionsController } from './propositions.controller';
 import { ReferentielsController } from './referentiels.controller';
 import { SensibiliteController } from './sensibilite.controller';
 
 @Module({
-    imports: [DocumentsModule, JournalModule, SourcesModule],
-    controllers: [GouvernanceController, ReferentielsController, ListesValeursController, SensibiliteController, PropositionsController],
+    imports: [DocumentsModule, JournalModule, SourcesModule, EspacesModule],
+    controllers: [
+        GouvernanceController,
+        ReferentielsController,
+        ListesValeursController,
+        SensibiliteController,
+        PropositionsController,
+        HierarchiesController
+    ],
     providers: [GouvernanceService],
     exports: [GouvernanceService]
 })
