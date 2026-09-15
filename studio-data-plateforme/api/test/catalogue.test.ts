@@ -7,7 +7,17 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { creerApplication } from '../src/application';
-import { EntreeCatalogue, indexer, normaliser, pertinence, rechercher, sensibiliteDe } from '../src/catalogue/catalogue';
+import {
+    EntreeCatalogue,
+    exemplesDeRecherche,
+    indexer,
+    normaliser,
+    pertinence,
+    rechercher,
+    sensibiliteDe,
+    statistiquesDuCatalogue,
+    trier
+} from '../src/catalogue/catalogue';
 import { lireConfiguration } from '../src/configuration/configuration';
 
 const dossierTemporaire = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-data-catalogue-'));
@@ -134,7 +144,8 @@ test('fonctions pures : normalisation, sensibilité, pertinence, recherche et fa
             validation: null,
             etiquettes: [],
             motsCles: [],
-            lien: '/'
+            lien: '/',
+            fraicheur: null
         });
     const index = [
         entree('bo', 'Client', 'Ventes'),
@@ -197,4 +208,82 @@ test('recherche : couche métier par défaut, recherche par mot, facettes', asyn
     const parProprietaire = json(await appel({ method: 'GET', url: '/api/catalogue?proprietaire=Alice&couche=tout' }));
     assert.ok(parProprietaire.resultats.length >= 2);
     assert.ok(parProprietaire.resultats.every((resultat: { proprietaire: string }) => resultat.proprietaire === 'Alice'));
+});
+
+test('fonctions pures : tri, statistiques du bandeau et exemples de recherche', () => {
+    const fiche = (titre: string, qualite: number | null, fraicheur: number | null, domaine = 'Ventes'): EntreeCatalogue => ({
+        type: 'table',
+        id: titre,
+        titre,
+        sousTitre: '',
+        description: '',
+        domaine,
+        proprietaire: '',
+        qualite,
+        sensibilite: null,
+        validation: null,
+        etiquettes: [],
+        motsCles: [],
+        lien: '/',
+        fraicheur
+    });
+    const resultats = [fiche('Bravo', 40, 200), fiche('Alpha', null, 300), fiche('Charlie', 90, null)];
+    assert.deepEqual(
+        trier(resultats, 'qualite').map(entree => entree.titre),
+        ['Charlie', 'Bravo', 'Alpha'],
+        'une qualité jamais mesurée ne passe pas devant une qualité connue'
+    );
+    assert.deepEqual(
+        trier(resultats, 'fraicheur').map(entree => entree.titre),
+        ['Alpha', 'Bravo', 'Charlie']
+    );
+    assert.deepEqual(
+        trier(resultats, 'alpha').map(entree => entree.titre),
+        ['Alpha', 'Bravo', 'Charlie']
+    );
+    assert.deepEqual(
+        trier(resultats, 'pertinence').map(entree => entree.titre),
+        ['Bravo', 'Alpha', 'Charlie'],
+        'la pertinence garde l’ordre déjà posé par la recherche'
+    );
+
+    const statistiques = statistiquesDuCatalogue(
+        [fiche('a', null, null, 'Ventes'), fiche('b', null, null, 'Finance'), fiche('c', null, null, '—')],
+        [{ documentee: true }, { documentee: false }, { documentee: true }, { documentee: true }],
+        ['Validé', 'Validé', 'Brouillon', 'Proposé']
+    );
+    assert.deepEqual(statistiques, { actifs: 3, domaines: 2, sourcesDocumentees: 75, validesParUnResponsable: 50 });
+    assert.deepEqual(statistiquesDuCatalogue([], [], []), {
+        actifs: 0,
+        domaines: 0,
+        sourcesDocumentees: 0,
+        validesParUnResponsable: 0
+    });
+
+    assert.deepEqual(exemplesDeRecherche('clients.csv', 'Client', 'Alice'), ['clients', 'données personnelles', 'Client', 'Alice']);
+    assert.deepEqual(exemplesDeRecherche('', '', ''), ['données personnelles'], 'une piste vide est omise, pas inventée');
+});
+
+test('recherche : le tri, les chiffres du bandeau et les exemples arrivent avec les résultats', async () => {
+    const parNom = json(await appel({ method: 'GET', url: '/api/catalogue?couche=tout&tri=alpha' }));
+    const titres = parNom.resultats.map((resultat: { titre: string }) => resultat.titre);
+    assert.deepEqual(
+        titres,
+        [...titres].sort((premier, second) => premier.localeCompare(second, 'fr')),
+        'A → Z respecté'
+    );
+    const parQualite = json(await appel({ method: 'GET', url: '/api/catalogue?couche=tout&tri=qualite' }));
+    assert.notEqual(parQualite.resultats[0].qualite, null, 'le tri par qualité met en tête ce qui est mesuré');
+    const inventé = json(await appel({ method: 'GET', url: '/api/catalogue?couche=tout&tri=nimporte' }));
+    assert.equal(inventé.resultats.length, parNom.resultats.length, 'un tri inconnu retombe sur la pertinence, sans erreur');
+    assert.equal(parNom.statistiques.actifs, parNom.total);
+    assert.ok(parNom.statistiques.domaines >= 1);
+    assert.ok(parNom.statistiques.sourcesDocumentees >= 0 && parNom.statistiques.sourcesDocumentees <= 100);
+    assert.ok(parNom.exemples.includes('données personnelles'));
+    assert.ok(
+        parNom.exemples.some((exemple: string) => exemple === 'clients'),
+        'le nom d’une source sert d’exemple, sans extension'
+    );
+    const parFraicheur = json(await appel({ method: 'GET', url: '/api/catalogue?couche=tout&tri=fraicheur' }));
+    assert.notEqual(parFraicheur.resultats[0].fraicheur, null, 'le plus récemment rafraîchi arrive en tête');
 });

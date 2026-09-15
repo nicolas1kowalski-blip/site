@@ -1064,14 +1064,23 @@ export type EntreeCatalogue = {
     etiquettes: string[];
     motsCles: string[];
     lien: string;
+    /** Quand l'élément a été rafraîchi pour la dernière fois (millisecondes), ou null si on ne le sait pas. */
+    fraicheur: number | null;
 };
 export type Facette = { valeur: string; nombre: number };
+/** Les quatre chiffres du bandeau du catalogue. */
+export type StatistiquesDuCatalogue = { actifs: number; domaines: number; sourcesDocumentees: number; validesParUnResponsable: number };
+/** L'ordre des résultats du catalogue. */
+export type TriCatalogue = 'pertinence' | 'qualite' | 'fraicheur' | 'alpha';
 export type ResultatCatalogue = {
     resultats: EntreeCatalogue[];
     facettes: Record<'type' | 'domaine' | 'sensibilite' | 'proprietaire', Facette[]>;
     techniquesMasquees: number;
     types: Record<TypeCatalogue, string>;
     total: number;
+    statistiques: StatistiquesDuCatalogue;
+    /** Les recherches proposées sous la barre (« Essayez : … »), prises dans ce que l'espace contient. */
+    exemples: string[];
 };
 export type FiltresCatalogue = {
     q?: string;
@@ -1080,6 +1089,7 @@ export type FiltresCatalogue = {
     sensibilite?: string[];
     proprietaire?: string[];
     couche?: 'metier' | 'tout';
+    tri?: TriCatalogue;
 };
 export type ColonneSchema = { name: string; type: string };
 export type Instantane = { ts: number; rows: number; schema: ColonneSchema[] };

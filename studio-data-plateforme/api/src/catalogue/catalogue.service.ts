@@ -7,12 +7,38 @@ import { EtatApplication, GouvernanceService } from '../gouvernance/gouvernance.
 import { niveauPropose } from '../gouvernance/sensibilite';
 import { QualiteService } from '../qualite/qualite.service';
 import { DocumentSource, SourcesService } from '../sources/sources.service';
-import { EntreeCatalogue, FiltresCatalogue, TYPES_CATALOGUE, indexer, rechercher, sensibiliteDe, validationDe } from './catalogue';
+import {
+    EntreeCatalogue,
+    FiltresCatalogue,
+    TYPES_CATALOGUE,
+    exemplesDeRecherche,
+    indexer,
+    rechercher,
+    sensibiliteDe,
+    statistiquesDuCatalogue,
+    trier,
+    validationDe
+} from './catalogue';
 
 type Element = Record<string, unknown> & { id: string };
-type RegleResumee = { id: string; nom: string; sourceId: string; colonne: string; type: string; criticite: string; taux: number | null };
+type RegleResumee = {
+    id: string;
+    nom: string;
+    sourceId: string;
+    colonne: string;
+    type: string;
+    criticite: string;
+    taux: number | null;
+    executeLe: number | null;
+};
 const texte = (valeur: unknown) => (valeur == null ? '' : String(valeur));
 const liste = <T = unknown,>(valeur: unknown): T[] => (Array.isArray(valeur) ? (valeur as T[]) : []);
+/** Une date quelconque (texte ISO, horodatage) ramenée en millisecondes, ou null quand elle est illisible. */
+function dateEnMillisecondes(valeur: unknown): number | null {
+    if (valeur == null || valeur === '') return null;
+    const quand = typeof valeur === 'number' ? valeur : Date.parse(String(valeur));
+    return Number.isFinite(quand) ? quand : null;
+}
 
 @Injectable()
 export class CatalogueService {
@@ -24,7 +50,35 @@ export class CatalogueService {
 
     async rechercher(espaceId: string, filtres: FiltresCatalogue) {
         const index = await this.index(espaceId);
-        return { ...rechercher(index, filtres), types: TYPES_CATALOGUE, total: index.length };
+        const trouve = rechercher(index, filtres);
+        const [etat, sources] = await Promise.all([this.gouvernance.etat(espaceId), this.sources.lister(espaceId)]);
+        const fiches = etat.governance.dictionary as Record<string, Record<string, unknown>>;
+        const objets = etat.governance.businessObjects as Element[];
+        const statuts = [
+            ...sources.filter(source => fiches[source.name]).map(source => texte(fiches[source.name]['status']) || 'Brouillon'),
+            ...objets.map(objet => texte(objet['status']) || 'Brouillon')
+        ];
+        return {
+            ...trouve,
+            resultats: trier(trouve.resultats, filtres.tri),
+            types: TYPES_CATALOGUE,
+            total: index.length,
+            statistiques: statistiquesDuCatalogue(
+                index,
+                sources.map(source => ({ documentee: !!texte(fiches[source.name]?.['description']) })),
+                statuts
+            ),
+            exemples: exemplesDeRecherche(sources[0]?.name || '', texte(objets[0]?.['name']), this.premierProprietaire(fiches))
+        };
+    }
+
+    /** Le premier propriétaire nommé dans le dictionnaire : il sert d'exemple de recherche par responsable. */
+    private premierProprietaire(fiches: Record<string, Record<string, unknown>>): string {
+        return (
+            Object.values(fiches)
+                .map(fiche => texte(fiche['owner']))
+                .find(Boolean) || ''
+        );
     }
 
     /** Règles de qualité (table regles_qualite) résumées pour le catalogue. */
@@ -36,7 +90,8 @@ export class CatalogueService {
             colonne: regle.colonne,
             type: regle.type,
             criticite: regle.criticite,
-            taux: regle.dernierResultat ? Math.round(100 * (regle.dernierResultat as { taux: number }).taux) : null
+            taux: regle.dernierResultat ? Math.round(100 * (regle.dernierResultat as { taux: number }).taux) : null,
+            executeLe: dateEnMillisecondes((regle.dernierResultat as { executeLe?: unknown } | null)?.executeLe)
         }));
     }
 
@@ -109,7 +164,8 @@ export class CatalogueService {
             etiquettes: [estConcue ? 'table conçue' : estDerivee ? 'dérivée' : source.type || 'table', texte(fiche['sourceSystem'])].filter(
                 Boolean
             ),
-            lien: estConcue ? '/tables-concues' : '/sources'
+            lien: estConcue ? '/tables-concues' : '/sources',
+            fraicheur: dateEnMillisecondes(source['enregistreLe'])
         });
     }
 
@@ -135,7 +191,8 @@ export class CatalogueService {
             validation: champs['description'] ? 'ok' : null,
             etiquettes: [texte(champs['technicalType'])].filter(Boolean),
             motsCles: [source.name],
-            lien: '/dictionnaire'
+            lien: '/dictionnaire',
+            fraicheur: table.fraicheur
         });
     }
 
@@ -198,7 +255,17 @@ export class CatalogueService {
 function entree(
     partiel: Pick<EntreeCatalogue, 'type' | 'id' | 'titre' | 'sousTitre' | 'description' | 'lien'> & Partial<EntreeCatalogue>
 ): EntreeCatalogue {
-    return { domaine: '—', proprietaire: '', qualite: null, sensibilite: null, validation: null, etiquettes: [], motsCles: [], ...partiel };
+    return {
+        domaine: '—',
+        proprietaire: '',
+        qualite: null,
+        sensibilite: null,
+        validation: null,
+        etiquettes: [],
+        motsCles: [],
+        fraicheur: null,
+        ...partiel
+    };
 }
 
 function entreeTerme(terme: Element): EntreeCatalogue {
@@ -306,6 +373,7 @@ function entreeRegle(regle: RegleResumee, nomSource: string): EntreeCatalogue {
         description: `${regle.type} — criticité ${regle.criticite}`,
         qualite: regle.taux,
         etiquettes: ['règle'],
-        lien: '/qualite'
+        lien: '/qualite',
+        fraicheur: regle.executeLe
     });
 }

@@ -2144,22 +2144,24 @@ try {
 
     // ---- catalogue, surveillance des sources, sauvegarde ----
     await page.click('a[href="/catalogue"]');
-    await page.waitForSelector('app-catalogue .entree');
+    await page.waitForSelector('app-catalogue .cat-card');
     await page.fill('app-catalogue input[name=recherche]', 'client');
     await page.waitForFunction(
         () =>
             /résultat\(s\)/.test(document.querySelector('app-catalogue')?.textContent || '') &&
-            document.querySelector('app-catalogue .entree strong')?.textContent.trim() === 'Client'
+            document.querySelector('app-catalogue .cat-card .font-bold')?.textContent.trim() === 'Client'
     );
     const catalogueTexte = await page.textContent('app-catalogue');
     verifier(
         'catalogue : « client » trouve l’objet métier Client en tête, avec ses signaux, et signale les données techniques masquées',
         /Objet métier/.test(catalogueTexte) && /donnée\(s\) technique\(s\) masquée\(s\)/.test(catalogueTexte)
     );
-    await page.click('app-catalogue label.case:has-text("tout (tables") input');
-    await page.waitForFunction(() => /clients\.csv/.test(document.querySelector('app-catalogue .cartes')?.textContent || ''));
+    await page.click('app-catalogue button[name=coucheTout]');
+    await page.waitForFunction(() =>
+        /clients\.csv/.test(document.querySelector('app-catalogue [name=cartesDuCatalogue]')?.textContent || '')
+    );
     // La carte de la table elle-même (son titre est exactement « clients.csv »), pas celle d'une de ses colonnes (« dans clients.csv »).
-    await page.locator('app-catalogue .entree', { has: page.locator('strong', { hasText: /^clients\.csv$/ }) }).click();
+    await page.locator('app-catalogue .cat-card', { has: page.locator('.font-bold', { hasText: /^clients\.csv$/ }) }).click();
     await page.waitForSelector('app-catalogue .fiche');
     const ficheCatalogue = await page.textContent('app-catalogue .fiche');
     verifier(
@@ -2167,6 +2169,63 @@ try {
         /Qualité\s*71 %/.test(ficheCatalogue) && /données personnelles/.test(ficheCatalogue)
     );
     await capture('catalogue');
+
+    // ---- V13 : le bandeau, le tri, les puces de filtre et la bascule liste / grille ----
+    const chiffresDuCatalogue = await page.textContent('app-catalogue [name=chiffresDuCatalogue]');
+    verifier(
+        'V13 : le bandeau du catalogue annonce ce que l’espace contient et à quel point il est décrit',
+        /actifs catalogués/.test(chiffresDuCatalogue) &&
+            /domaines métier/.test(chiffresDuCatalogue) &&
+            /% *sources documentées/.test(chiffresDuCatalogue.replace(/\s+/g, ' ')) &&
+            /validés par un responsable/.test(chiffresDuCatalogue)
+    );
+    verifier(
+        'V13 : le bandeau propose des recherches toutes prêtes, prises dans ce que l’espace contient',
+        /données personnelles/.test(await page.textContent('app-catalogue [name=exemplesDeRecherche]'))
+    );
+    // Le tri A → Z remet les résultats dans l'ordre alphabétique, quelle que soit la pertinence.
+    await page.selectOption('app-catalogue select[name=triDuCatalogue]', 'alpha');
+    await page.waitForFunction(() => document.querySelectorAll('app-catalogue .cat-card').length > 1);
+    const titresTries = await page.$$eval('app-catalogue .cat-card .font-bold', titres => titres.map(titre => titre.textContent.trim()));
+    verifier(
+        'V13 : le catalogue se trie par pertinence, qualité, fraîcheur ou ordre alphabétique',
+        titresTries.length > 1 && titresTries.every((titre, rang) => rang === 0 || titre.localeCompare(titresTries[rang - 1], 'fr') >= 0)
+    );
+    await page.selectOption('app-catalogue select[name=triDuCatalogue]', 'pertinence');
+    // Une facette cochée devient une puce, que l'on retire d'un clic.
+    await page.click('app-catalogue .cat-fitem:has-text("Objet métier")');
+    await page.waitForSelector('app-catalogue .achip-ux');
+    verifier(
+        'V13 : un filtre posé est rappelé sous forme de puce, avec sa croix pour le retirer',
+        /Objet métier ✕/.test(await page.textContent('app-catalogue .achip-ux'))
+    );
+    await page.click('app-catalogue .achip-ux');
+    await page.waitForFunction(() => !document.querySelector('app-catalogue .achip-ux'));
+    verifier('V13 : cliquer la puce retire le filtre', (await page.$$('app-catalogue .achip-ux')).length === 0);
+    // La bascule ▤ / ▦ passe les cartes sur deux colonnes.
+    await page.click('app-catalogue button[name=vueGrille]');
+    await page.waitForFunction(() =>
+        (document.querySelector('app-catalogue [name=cartesDuCatalogue]')?.className || '').includes('md:grid-cols-2')
+    );
+    verifier(
+        'V13 : la bascule ▤ / ▦ passe les résultats de la liste à la grille',
+        (await page.getAttribute('app-catalogue [name=cartesDuCatalogue]', 'class')).includes('md:grid-cols-2')
+    );
+    await page.click('app-catalogue button[name=vueListe]');
+    // Une recherche qui ne donne rien le dit, et propose de tout effacer.
+    await page.fill('app-catalogue input[name=recherche]', 'zzzintrouvable');
+    await page.waitForSelector('app-catalogue [name=aucunResultat]');
+    verifier(
+        'V13 : une recherche sans résultat explique quoi faire au lieu d’afficher une liste vide',
+        /Aucun actif ne correspond/.test(await page.textContent('app-catalogue [name=aucunResultat]'))
+    );
+    await page.click('app-catalogue button[name=effacerFiltres]');
+    await page.waitForSelector('app-catalogue .cat-card');
+    verifier(
+        'V13 : « Tout effacer » remet la recherche et les filtres à zéro',
+        (await page.inputValue('app-catalogue input[name=recherche]')) === ''
+    );
+    await capture('catalogue-v13');
 
     await page.click('a[href="/surveillance"]');
     await page.waitForSelector('app-surveillance tbody tr');
@@ -2648,13 +2707,13 @@ try {
     );
     // Depuis le catalogue : la fiche d'une table mène au parcours autour de cette table.
     await page.click('a[href="/catalogue"]');
-    await page.waitForSelector('app-catalogue .entree');
+    await page.waitForSelector('app-catalogue .cat-card');
     // Les tables ne sont pas dans la couche « métier » du catalogue : on demande à tout voir.
-    await page.click('app-catalogue input[name=couche]');
-    await page.fill('app-catalogue input.recherche', 'factures.csv');
+    await page.click('app-catalogue button[name=coucheTout]');
+    await page.fill('app-catalogue input[name=recherche]', 'factures.csv');
     // Le nom d'une table se lit dans le titre de sa carte ; « dans factures.csv » désignerait une colonne.
-    await page.waitForSelector('app-catalogue .entree strong:text-is("factures.csv")');
-    await page.click('app-catalogue .entree:has(strong:text-is("factures.csv"))');
+    await page.waitForSelector('app-catalogue .cat-card .font-bold:text-is("factures.csv")');
+    await page.click('app-catalogue .cat-card:has(.font-bold:text-is("factures.csv"))');
     await page.waitForSelector('app-catalogue button[name=parcoursDepuisCatalogue]');
     await page.click('app-catalogue button[name=parcoursDepuisCatalogue]');
     await page.waitForFunction(() => document.querySelector('app-lineage select[name=table]')?.value === 'factures.csv');
@@ -2665,11 +2724,11 @@ try {
     await capture('parcours-depuis-catalogue');
     // Depuis la fiche d'une colonne : ce qui serait touché si elle changeait.
     await page.click('a[href="/catalogue"]');
-    await page.waitForSelector('app-catalogue .entree');
-    await page.click('app-catalogue input[name=couche]');
-    await page.fill('app-catalogue input.recherche', 'optin_email');
-    await page.waitForSelector('app-catalogue .entree strong:text-is("optin_email")');
-    await page.click('app-catalogue .entree:has(strong:text-is("optin_email"))');
+    await page.waitForSelector('app-catalogue .cat-card');
+    await page.click('app-catalogue button[name=coucheTout]');
+    await page.fill('app-catalogue input[name=recherche]', 'optin_email');
+    await page.waitForSelector('app-catalogue .cat-card .font-bold:text-is("optin_email")');
+    await page.click('app-catalogue .cat-card:has(.font-bold:text-is("optin_email"))');
     await page.waitForSelector('app-catalogue button[name=parcoursDepuisCatalogue]');
     await page.click('app-catalogue button[name=parcoursDepuisCatalogue]');
     await page.waitForFunction(() => document.querySelector('app-lineage select[name=colonneImpact]')?.value === 'optin_email');

@@ -853,6 +853,7 @@ export class ClientApiService {
         const params: Record<string, string> = {};
         if (filtres.q) params['q'] = filtres.q;
         if (filtres.couche) params['couche'] = filtres.couche;
+        if (filtres.tri) params['tri'] = filtres.tri;
         for (const nom of ['type', 'domaine', 'sensibilite', 'proprietaire'] as const)
             if (filtres[nom]?.length) params[nom] = filtres[nom]!.join(',');
         return firstValueFrom(this.http.get<ResultatCatalogue>(`${this.racine}/catalogue`, { params }));

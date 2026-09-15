@@ -43,6 +43,8 @@ export type EntreeCatalogue = {
     motsCles: string[];
     /** Route Angular où ouvrir l'élément. */
     lien: string;
+    /** Quand l'élément a été rafraîchi pour la dernière fois (millisecondes), ou null si on ne le sait pas. */
+    fraicheur: number | null;
     /** Texte de recherche normalisé (rempli par l'index). */
     texte?: string;
 };
@@ -54,7 +56,26 @@ export type FiltresCatalogue = {
     sensibilite?: string[];
     proprietaire?: string[];
     couche?: 'metier' | 'tout';
+    /** L'ordre des résultats : par pertinence (défaut), par qualité, par fraîcheur ou par ordre alphabétique. */
+    tri?: TriCatalogue;
 };
+
+/** Les quatre ordres de tri du catalogue, dans l'ordre où le classique les propose. */
+export const TRIS_CATALOGUE = [
+    { cle: 'pertinence', libelle: 'Pertinence' },
+    { cle: 'qualite', libelle: 'Qualité' },
+    { cle: 'fraicheur', libelle: 'Fraîcheur' },
+    { cle: 'alpha', libelle: 'A → Z' }
+] as const;
+export type TriCatalogue = (typeof TRIS_CATALOGUE)[number]['cle'];
+
+/**
+ * Les quatre chiffres du bandeau du catalogue : ce que l'espace contient, et à quel point il est décrit.
+ * Les deux pourcentages sont ceux qui comptent pour un nouvel arrivant — « puis-je faire confiance à ce que
+ * je lis ? » : la part de sources qui portent une description, et la part de fiches validées par un
+ * responsable plutôt que laissées en brouillon.
+ */
+export type StatistiquesDuCatalogue = { actifs: number; domaines: number; sourcesDocumentees: number; validesParUnResponsable: number };
 export type Facettes = Record<'type' | 'domaine' | 'sensibilite' | 'proprietaire', { valeur: string; nombre: number }[]>;
 
 /** Texte comparable : minuscules, sans accents, espaces réduits. */
@@ -149,4 +170,47 @@ export function rechercher(
         },
         techniquesMasquees: pertinents.length - resultats.length
     };
+}
+
+/**
+ * Remet les résultats dans l'ordre demandé. La pertinence est l'ordre naturel, déjà posé par `rechercher` ;
+ * les trois autres classent sur une seule valeur, et ramènent en fin de liste ce qui ne la porte pas — un
+ * élément dont la qualité n'a jamais été mesurée ne doit pas passer devant un élément noté 100.
+ */
+export function trier(resultats: EntreeCatalogue[], tri: TriCatalogue | undefined): EntreeCatalogue[] {
+    const ordonnes = resultats.slice();
+    if (tri === 'qualite') ordonnes.sort((premier, second) => (second.qualite ?? -1) - (premier.qualite ?? -1));
+    else if (tri === 'fraicheur') ordonnes.sort((premier, second) => (second.fraicheur ?? 0) - (premier.fraicheur ?? 0));
+    else if (tri === 'alpha') ordonnes.sort((premier, second) => premier.titre.localeCompare(second.titre, 'fr'));
+    return ordonnes;
+}
+
+/**
+ * Les quatre chiffres du bandeau. Les statuts sont ceux des fiches de dictionnaire et des objets métier
+ * réunis, comme dans le classique : c'est la même question posée sur les deux, « un responsable a-t-il
+ * validé ce qui est écrit ? ».
+ */
+export function statistiquesDuCatalogue(
+    index: EntreeCatalogue[],
+    sources: { documentee: boolean }[],
+    statutsDeFiche: string[]
+): StatistiquesDuCatalogue {
+    const domaines = new Set(index.map(entree => entree.domaine).filter(domaine => domaine && domaine !== '—'));
+    const part = (combien: number, sur: number) => (sur ? Math.round((100 * combien) / sur) : 0);
+    return {
+        actifs: index.length,
+        domaines: domaines.size,
+        sourcesDocumentees: part(sources.filter(source => source.documentee).length, sources.length),
+        validesParUnResponsable: part(statutsDeFiche.filter(statut => statut === 'Validé').length, statutsDeFiche.length)
+    };
+}
+
+/**
+ * Les recherches proposées sous la barre (« Essayez : … »). Le classique en montre quatre, prises dans ce
+ * que l'espace contient réellement : le nom d'une source sans son extension, une recherche par
+ * confidentialité, le nom d'un objet métier, et le nom d'un propriétaire. Une piste vide est simplement
+ * omise — mieux vaut trois exemples justes que quatre dont un ne trouve rien.
+ */
+export function exemplesDeRecherche(premiereSource: string, premierObjet: string, premierProprietaire: string): string[] {
+    return [premiereSource.replace(/\.[^.]*$/, ''), 'données personnelles', premierObjet, premierProprietaire].filter(Boolean).slice(0, 4);
 }
