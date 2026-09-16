@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.4.0';
+        const V13_VERSION = '13.5.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.5.0',
+                d: '2026-09-16',
+                t: 'Codification : retrouver le code du référentiel sur chaque ligne d’une liste reçue',
+                items: [
+                    'Nouvel écran Codification, sous Exploitation. Une liste d’équipements aux libellés écrits à la main, une nomenclature en arbre, et le code du type retrouvé ligne à ligne — par le code déjà fourni, par la table de correspondance, par des règles de mots-clés, puis par la ressemblance du libellé.',
+                    'Les mots qui en valent d’autres : déclarez qu’une motopompe est une pompe, qu’une électrovanne est une vanne, que « centrif » veut dire « centrifuge ». Les variantes sont ramenées au mot retenu des deux côtés avant de comparer, même écrites en plusieurs mots, et même mal orthographiées si vous l’autorisez.',
+                    'Recherche enfermée dans la bonne branche de l’arbre quand la famille est connue : une vanne ne peut plus être codée en pompe parce que les libellés se ressemblent.',
+                    'Chaque ligne repart avec son code, par quelle règle il a été trouvé, avec quelle confiance, et le chemin complet famille › système › sous-système › type. Les cas douteux passent par la revue ; un clic tranche, et la décision descend dans la table de correspondance — à la livraison suivante, ce libellé est codé tout seul.'
+                ]
+            },
             {
                 v: '13.4.0',
                 d: '2026-09-16',

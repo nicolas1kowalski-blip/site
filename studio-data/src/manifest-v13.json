@@ -336,6 +336,14 @@
   {
    "file": "94-couche-v13/A5-v13-cle-composite.js",
    "role": "V13 : clé composite d'un lien (colonnes qui s'ajoutent à la correspondance) et contrôle des tables liées — mesure ce que chaque jointure fait au nombre de lignes et prévient quand elle multiplie"
+  },
+  {
+   "file": "94-couche-v13/A6-v13-codification-moteur.js",
+   "role": "V13 : codification — le moteur (pile de règles, synonymes et variantes, ressemblance des libellés, recherche dans la bonne branche de l'arbre, bilan)"
+  },
+  {
+   "file": "94-couche-v13/A7-v13-codification-ecran.js",
+   "role": "V13 : codification — l'écran (dix-septième onglet créé par la couche), réglages, synonymes, règles, résultat justifié et revue des cas douteux"
   }
  ]
 }
