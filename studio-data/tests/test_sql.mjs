@@ -27,20 +27,24 @@ const dk = `md5(concat_ws(chr(1),COALESCE(CAST("NOM" AS VARCHAR),chr(0)),COALESC
 const d = await q(`SELECT (COUNT(*)-COUNT(DISTINCT ${dk}))::BIGINT FROM "t_dup"`);
 ok('Doublons hors clé technique: 1', Number(d[0][0])===1);
 
-// Clé composite d'un lien (V13.4) : une liste d'éléments rangés par groupe, un arbre qui les classe.
-// E1 appartient à deux groupes ; joint sur le seul élément, l'arbre multiplie les lignes.
-await q(`CREATE TABLE "t_elem" AS SELECT * FROM (VALUES ('E1','G1'),('E2','G1'),('E1','G2')) v(CODE,GROUPE)`);
+// Clé composite d'un lien (V13.4), tel que le cas se présente vraiment : la liste des éléments ne porte pas le
+// groupe — elle a une clé vers la table des affectations, et c'est elle qui le donne. L'arbre classe
+// (élément, groupe). Joint sur le seul élément, il multiplie les lignes ; la clé doit comparer les deux groupes.
+await q(`CREATE TABLE "t_elem" AS SELECT * FROM (VALUES ('E1','A1'),('E2','A1'),('E1','A2')) v(CODE,ID_AFFECTATION)`);
+await q(`CREATE TABLE "t_affect" AS SELECT * FROM (VALUES ('A1','G1'),('A2','G2')) v(ID_AFFECTATION,GROUPE)`);
 await q(`CREATE TABLE "t_arbre" AS SELECT * FROM (VALUES ('E1','G1','atelier'),('E2','G1','atelier'),('E1','G2','entrepot')) v(ELEMENT,GROUPE,NIVEAU)`);
 const nk = (g,d) => `UPPER(TRIM(CAST(${g} AS VARCHAR))) = UPPER(TRIM(CAST(${d} AS VARCHAR)))`;
-const surLElement = nk('x1."ELEMENT"','x0."CODE"');
-const avecLeGroupe = surLElement + ' AND ' + nk('x1."GROUPE"','x0."GROUPE"');
-const compter = async on => Number((await q(`SELECT COUNT(*)::BIGINT FROM "t_elem" x0 LEFT JOIN "t_arbre" x1 ON ${on}`))[0][0]);
+const versLAffectation = `LEFT JOIN "t_affect" x1 ON ${nk('x1."ID_AFFECTATION"','x0."ID_AFFECTATION"')}`;
+const surLElement = nk('x2."ELEMENT"','x0."CODE"');
+const avecLeGroupe = surLElement + ' AND ' + nk('x2."GROUPE"','x1."GROUPE"');
+const compter = async on => Number((await q(`SELECT COUNT(*)::BIGINT FROM "t_elem" x0 ${versLAffectation} LEFT JOIN "t_arbre" x2 ON ${on}`))[0][0]);
 const sansLeGroupe = await compter(surLElement), avec = await compter(avecLeGroupe);
+ok('Clé composite: la table des affectations n\'ajoute aucune ligne (une par élément)', Number((await q(`SELECT COUNT(*)::BIGINT FROM "t_elem" x0 ${versLAffectation}`))[0][0])===3);
 ok('Clé composite: sur le seul élément, 3 lignes deviennent 5 (E1 revient par groupe)', sansLeGroupe===5);
-ok('Clé composite: avec le groupe dans la clé, une ligne par élément et par groupe', avec===3);
-ok('Clé composite: le contrôle voit la multiplication (facteur 1,67) et la disparition', Math.round(100*sansLeGroupe/3)/100===1.67 && avec/3===1);
-const niveaux = await q(`SELECT x0."CODE", x0."GROUPE", x1."NIVEAU" FROM "t_elem" x0 LEFT JOIN "t_arbre" x1 ON ${avecLeGroupe} ORDER BY 1,2`);
-ok('Clé composite: chaque élément reçoit le niveau de son propre groupe', niveaux.map(r=>r.join('|')).join(' ; ')==='E1|G1|atelier ; E1|G2|entrepot ; E2|G1|atelier');
+ok('Clé composite: le groupe pris sur la TROISIÈME table remet une ligne par élément', avec===3);
+ok('Clé composite: le contrôle voit la multiplication (facteur 1,67) et sa disparition', Math.round(100*sansLeGroupe/3)/100===1.67 && avec/3===1);
+const niveaux = await q(`SELECT x0."CODE", x1."GROUPE", x2."NIVEAU" FROM "t_elem" x0 ${versLAffectation} LEFT JOIN "t_arbre" x2 ON ${avecLeGroupe} ORDER BY 1,2`);
+ok('Clé composite: chaque élément reçoit le niveau du groupe que lui donne son affectation', niveaux.map(r=>r.join('|')).join(' ; ')==='E1|G1|atelier ; E1|G2|entrepot ; E2|G1|atelier');
 
 console.log(`\nSQL RÉEL : ${pass} réussis / ${fail} échoués`);
 process.exit(fail?1:0);

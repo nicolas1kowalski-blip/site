@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-16T14:40:11.925Z",
+ "generated": "2026-09-16T15:18:42.660Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 46840,
-  "codeLines": 44763,
-  "commentLines": 2077,
-  "templateLines": 9152,
+  "lines": 46934,
+  "codeLines": 44839,
+  "commentLines": 2095,
+  "templateLines": 9156,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6220,
+  "locals": 6228,
   "shortLocals": 844,
-  "functions": 1511,
+  "functions": 1515,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.13569131832797426
+  "shortLocalsRatio": 0.1355170199100835
  },
  "files": [
   {
@@ -1125,15 +1125,15 @@
   },
   {
    "file": "94-couche-v13/A5-v13-cle-composite.js",
-   "lines": 271,
-   "codeLines": 222,
-   "commentLines": 49,
-   "templateLines": 34,
+   "lines": 365,
+   "codeLines": 298,
+   "commentLines": 67,
+   "templateLines": 38,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 48,
+   "locals": 56,
    "shortLocals": 0,
-   "functions": 12,
+   "functions": 16,
    "longestLogic": 126,
    "shortLocalsRatio": 0
   },

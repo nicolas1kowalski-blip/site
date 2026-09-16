@@ -564,17 +564,19 @@ test('filtre fichier vide ou sans correspondance : ignoré, la requête reste va
     assert.match(sansLigne, /fichier0\(valeur0, rang\) AS \(SELECT NULL, 0 WHERE FALSE\)/, 'table vide mais valide');
 });
 
-test('clé composite : la jointure porte toutes les colonnes de la clé, la principale d’abord', () => {
-    // Un élément appartient à plusieurs groupes : joint sur le seul élément, il multiplie les lignes ;
-    // joint sur (groupe, élément), il ne les multiplie plus.
+test('clé composite : la condition en plus compare une TROISIÈME table, déjà jointe', () => {
+    // Le cas réel : la liste des éléments ne porte pas le groupe elle-même. C'est une autre table, atteinte
+    // par un lien, qui le donne — et c'est elle que la clé de l'arbre doit comparer.
     const spec = specification({
         jointures: [
+            { cle: 'r1', deTableId: 'a', deColonne: 'id_rattachement', versTableId: 'c', versColonne: 'id_rattachement' },
             {
+                cle: 'r2',
                 deTableId: 'a',
                 deColonne: 'element',
                 versTableId: 'b',
                 versColonne: 'element',
-                pairesEnPlus: [{ deColonne: 'groupe', versColonne: 'groupe' }]
+                conditionsEnPlus: [{ versColonne: 'groupe', tableComparee: 'c', routeComparee: 'r1', colonneComparee: 'groupe' }]
             }
         ],
         colonnes: [
@@ -583,30 +585,79 @@ test('clé composite : la jointure porte toutes les colonnes de la clé, la prin
         ]
     });
     const { sql } = construireSql(spec, contexte);
-    const jointure = sql.split('\n').find(ligne => ligne.startsWith('LEFT JOIN')) || '';
-    assert.match(jointure, /t1\."element".* = .*t0\."element"/, 'la colonne principale reste la première condition');
-    assert.match(jointure, / AND /, 'la colonne en plus est jointe par un AND');
-    assert.match(jointure, /t1\."groupe".* = .*t0\."groupe"/);
-    assert.equal(jointure.split(' AND ').length, 2, 'une condition par colonne de la clé, pas davantage');
+    const jointures = sql.split('\n').filter(ligne => ligne.startsWith('LEFT JOIN'));
+    assert.equal(jointures.length, 2);
+    assert.match(jointures[1], /t2\."element".* = .*t0\."element"/, 'la colonne principale reste la première condition');
+    assert.match(
+        jointures[1],
+        /AND .*t2\."groupe".* = .*t1\."groupe"/,
+        'le groupe est comparé à la table intermédiaire, pas à la table de départ'
+    );
+    assert.equal(jointures[1].split(' AND ').length, 2, 'une condition par colonne de la clé, pas davantage');
 });
 
-test('clé composite : sans colonne en plus, la jointure est exactement celle d’avant', () => {
+test('clé composite : une condition qui vise une table pas encore jointe est refusée, avec un message clair', () => {
+    assert.throws(
+        () =>
+            construireSql(
+                specification({
+                    jointures: [
+                        {
+                            deTableId: 'a',
+                            deColonne: 'element',
+                            versTableId: 'b',
+                            versColonne: 'element',
+                            conditionsEnPlus: [{ versColonne: 'groupe', tableComparee: 'c', routeComparee: '', colonneComparee: 'groupe' }]
+                        }
+                    ],
+                    colonnes: [{ tableId: 'a', nomColonne: 'nom' }]
+                }),
+                contexte
+            ),
+        /n'est pas encore jointe/
+    );
+});
+
+test('clé composite : la condition peut aussi comparer la table de départ, comme avant', () => {
+    const spec = specification({
+        jointures: [
+            {
+                deTableId: 'a',
+                deColonne: 'element',
+                versTableId: 'b',
+                versColonne: 'element',
+                conditionsEnPlus: [{ versColonne: 'groupe', tableComparee: 'a', routeComparee: '', colonneComparee: 'groupe' }]
+            }
+        ],
+        colonnes: [
+            { tableId: 'a', nomColonne: 'nom' },
+            { tableId: 'b', nomColonne: 'niveau' }
+        ]
+    });
+    const jointure =
+        construireSql(spec, contexte)
+            .sql.split('\n')
+            .find(ligne => ligne.startsWith('LEFT JOIN')) || '';
+    assert.match(jointure, /AND .*t1\."groupe".* = .*t0\."groupe"/);
+});
+
+test('clé composite : sans condition en plus, la jointure est exactement celle d’avant', () => {
     const avant = construireSql(
         specification({ jointures: [{ deTableId: 'a', deColonne: 'id_client', versTableId: 'b', versColonne: 'id_client' }] }),
         contexte
     ).sql;
     const apres = construireSql(
         specification({
-            jointures: [{ deTableId: 'a', deColonne: 'id_client', versTableId: 'b', versColonne: 'id_client', pairesEnPlus: [] }]
+            jointures: [{ deTableId: 'a', deColonne: 'id_client', versTableId: 'b', versColonne: 'id_client', conditionsEnPlus: [] }]
         }),
         contexte
     ).sql;
     assert.equal(apres, avant, 'une clé simple ne change pas d’un octet');
 });
 
-test('clé composite : une synthèse compte dans le seul groupe de la ligne, pas dans tous', () => {
+test('clé composite : une synthèse compte dans le seul groupe de la ligne, pris sur la table qui le porte', () => {
     const spec = specification({
-        jointures: [],
+        jointures: [{ cle: 'r1', deTableId: 'a', deColonne: 'id_rattachement', versTableId: 'c', versColonne: 'id_rattachement' }],
         colonnes: [
             { tableId: 'a', nomColonne: 'nom' },
             {
@@ -619,7 +670,7 @@ test('clé composite : une synthèse compte dans le seul groupe de la ligne, pas
                     deTableId: 'a',
                     deColonne: 'element',
                     versColonne: 'parent',
-                    pairesEnPlus: [{ deColonne: 'groupe', versColonne: 'groupe' }],
+                    conditionsEnPlus: [{ versColonne: 'groupe', tableComparee: 'c', routeComparee: 'r1', colonneComparee: 'groupe' }],
                     mode: 'count'
                 }
             }
@@ -627,5 +678,5 @@ test('clé composite : une synthèse compte dans le seul groupe de la ligne, pas
     });
     const { sql } = construireSql(spec, contexte);
     assert.match(sql, /SELECT COUNT\(\*\) FROM "t_b" s WHERE .*s\."parent".* = .*t0\."element"/);
-    assert.match(sql, /AND .*s\."groupe".* = .*t0\."groupe"/, 'le groupe entre aussi dans la condition');
+    assert.match(sql, /AND .*s\."groupe".* = .*t1\."groupe"/, 'le groupe vient de la table intermédiaire');
 });

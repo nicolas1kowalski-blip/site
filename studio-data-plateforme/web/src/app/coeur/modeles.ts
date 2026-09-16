@@ -134,8 +134,13 @@ export function genererIdentifiant(prefixe: string): string {
 }
 
 // ---- modèle de données et extraction ----
-/** Une paire de colonnes qui s'ajoute à la clé d'un lien : c'est ce qui rend la clé composite. */
-export type PaireDeColonnes = { sourceCol: string; targetCol: string };
+/**
+ * Une condition qui s'ajoute à celle d'un lien : c'est ce qui rend sa clé composite. Chaque côté nomme sa
+ * table, parce que la colonne qui complète la clé n'est pas toujours portée par les deux bouts du lien — la
+ * table qui donne le groupe peut se trouver plus loin dans le modèle. L'un des deux côtés est une extrémité
+ * du lien ; l'autre est n'importe quelle table. Les tables sont désignées par leur nom, comme dans les liens.
+ */
+export type ConditionDeLien = { deTable: string; deColonne: string; versTable: string; versColonne: string };
 
 export type Relation = {
     id: string;
@@ -144,11 +149,11 @@ export type Relation = {
     targetTable: string;
     targetCol: string;
     /**
-     * Colonnes qui s'ajoutent à la clé du lien, quand une seule ne suffit pas à l'identifier. Un élément
-     * présent dans plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il
-     * multiplie les lignes ; joint sur (groupe, élément), il ne les multiplie plus.
+     * Conditions qui s'ajoutent à celle du lien, quand une seule colonne ne suffit pas à l'identifier. Un
+     * élément présent dans plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il
+     * multiplie les lignes ; joint aussi sur le groupe, il ne les multiplie plus.
      */
-    extraCols?: PaireDeColonnes[];
+    extraCols?: ConditionDeLien[];
     cardinality?: string;
     kind?: string;
     /** Mesure sur les données (cardinalité constatée, orphelins), si elle a été faite. */
@@ -203,6 +208,11 @@ export type SyntheseExtraction = {
     deRoute?: string;
     deColonne: string;
     versColonne: string;
+    /**
+     * Les conditions en plus de la clé du lien résumé. Sans elles, une synthèse compterait les lignes de
+     * l'élément dans tous les groupes au lieu du seul groupe de la ligne.
+     */
+    conditionsEnPlus?: { versColonne: string; tableComparee: string; routeComparee: string; colonneComparee: string }[];
     mode: ModeSynthese;
     nomColonne: string;
     n: number;
@@ -258,8 +268,11 @@ export type JointureExtraction = {
     deColonne: string;
     versTableId: string;
     versColonne: string;
-    /** Les colonnes qui s'ajoutent à la condition de jointure, quand la clé du lien est composite. */
-    pairesEnPlus?: { deColonne: string; versColonne: string }[];
+    /**
+     * Les conditions qui s'ajoutent à la jointure, quand la clé du lien est composite : une colonne de la
+     * table ajoutée, comparée à une colonne d'une table déjà jointe, désignée par sa route.
+     */
+    conditionsEnPlus?: { versColonne: string; tableComparee: string; routeComparee: string; colonneComparee: string }[];
 };
 /** Fonction d'agrégation d'une mesure (« valeurs » n'a de sens que sur une colonne cochée, pas sur une mesure). */
 export type FonctionMesure = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';

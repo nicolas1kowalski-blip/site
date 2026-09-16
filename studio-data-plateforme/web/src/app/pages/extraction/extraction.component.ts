@@ -1605,6 +1605,15 @@ export class ExtractionComponent {
     colonnesDe(tableId: string): string[] {
         return this.sources().find(source => source.id === tableId)?.headers || [];
     }
+    /** Identifiant d'une table depuis son nom : les liens du modèle désignent leurs tables ainsi. */
+    idDeLaTable(nomTable: string): string | undefined {
+        return this.sources().find(source => source.name === nomTable)?.id;
+    }
+    /** Le plus court chemin vers une table, quand rien ne l'a encore demandée ; vide si elle est hors de portée. */
+    private cheminDeSecours(tableId: string): Chemin[] {
+        const chemins = this.cheminsParTable().get(tableId) || [];
+        return chemins.length ? [chemins[0]] : [];
+    }
     libelle(chemin: Chemin): string {
         return libelleChemin(chemin, tableId => this.nomDe(tableId));
     }
@@ -1870,6 +1879,13 @@ export class ExtractionComponent {
                 deRoute: ancrage,
                 deColonne: derniere.deColonne,
                 versColonne: derniere.versColonne,
+                // La clé du lien vaut aussi pour la synthèse : sans elle, on compterait tous les groupes.
+                conditionsEnPlus: derniere.conditionsEnPlus.map(condition => ({
+                    versColonne: condition.colonneJointe,
+                    tableComparee: this.idDeLaTable(condition.tableComparee) || '',
+                    routeComparee: '',
+                    colonneComparee: condition.colonneComparee
+                })),
                 mode: 'count',
                 nomColonne: '',
                 n: 3
@@ -1995,13 +2011,17 @@ export class ExtractionComponent {
             if (element.route === ROUTE_INDIFFERENTE) chemins.push(...(this.cheminsParTable().get(element.tableId) || []));
             else chemins.push(this.cheminDe(element.tableId, element.route));
         }
+        // Les tables qu'une synthèse compare doivent être dans l'extraction : sa condition les y cherche.
+        for (const colonne of this.colonnes())
+            for (const condition of colonne.synthese?.conditionsEnPlus || [])
+                if (condition.tableComparee) chemins.push(...this.cheminDeSecours(condition.tableComparee));
         return chemins;
     }
     specification(limite?: number): SpecificationExtraction {
         const limiteRetenue = limite ?? (this.apercuRapide() ? LIGNES_APERCU_RAPIDE : undefined);
         return {
             baseId: this.baseId(),
-            jointures: planifierJointures(this.cheminsUtilises(), this.baseId()),
+            jointures: planifierJointures(this.cheminsUtilises(), this.baseId(), this.relations(), nom => this.idDeLaTable(nom)),
             typeJointure: this.typeJointure(),
             colonnes: this.colonnes().map(colonne => this.colonnePourLeServeur(colonne)),
             filtres: this.filtres().filter(filtre => filtre.nomColonne),

@@ -22,8 +22,18 @@ import {
     sqlTestRegleLien
 } from './regles-liens';
 
-/** Une paire de colonnes qui s'ajoute à la clé d'un lien : c'est ce qui rend la clé composite. */
-export type PaireDeColonnes = { sourceCol: string; targetCol: string };
+/**
+ * Une condition qui s'ajoute à celle du lien : c'est ce qui rend sa clé composite.
+ *
+ * Elle nomme ses deux côtés par leur table, parce que la colonne qui complète la clé n'est pas toujours portée
+ * par les deux bouts du lien. La liste des éléments peut ne pas connaître le groupe elle-même : c'est une autre
+ * table, atteinte par un ou plusieurs liens, qui le porte. La condition dit alors « le groupe de l'arborescence
+ * doit être celui que donne cette table-là », et l'extraction joint cette table d'office si elle manque.
+ *
+ * L'un des deux côtés doit être une extrémité du lien — c'est lui qui est contraint ; l'autre est n'importe
+ * quelle table du modèle. Les tables sont désignées par leur nom, comme partout dans les liens.
+ */
+export type ConditionDeLien = { deTable: string; deColonne: string; versTable: string; versColonne: string };
 
 /** Lien tel qu'il est enregistré par l'application classique (par nom de table). */
 export type RelationEnregistree = {
@@ -32,11 +42,12 @@ export type RelationEnregistree = {
     targetTable: string;
     targetCol: string;
     /**
-     * Colonnes qui s'ajoutent à la clé du lien, quand une seule ne suffit pas à l'identifier. Un élément qui
-     * appartient à plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il multiplie
-     * les lignes. La clé (groupe, élément) rétablit la vérité. Absent ou vide = clé simple, comme avant.
+     * Conditions qui s'ajoutent à celle du lien, quand une seule colonne ne suffit pas à l'identifier. Un
+     * élément qui appartient à plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément,
+     * il multiplie les lignes ; joint aussi sur le groupe, il ne les multiplie plus. Absent ou vide = clé
+     * simple, comme avant.
      */
-    extraCols?: PaireDeColonnes[];
+    extraCols?: ConditionDeLien[];
     cardinality?: string;
     kind?: string;
     measured?: unknown;
@@ -128,7 +139,7 @@ export class ModeleService {
     async modifier(
         espaceId: string,
         id: string,
-        changements: { cardinality?: string; kind?: string; extraCols?: PaireDeColonnes[] },
+        changements: { cardinality?: string; kind?: string; extraCols?: ConditionDeLien[] },
         auteurId: string
     ): Promise<Relation[]> {
         const etat = await this.etat(espaceId);
@@ -138,15 +149,22 @@ export class ModeleService {
         if (changements.kind !== undefined) relation.kind = changements.kind;
         if (changements.extraCols !== undefined) {
             const sources = await this.sources.lister(espaceId);
-            for (const paire of changements.extraCols)
+            const extremites = [relation.sourceTable, relation.targetTable];
+            for (const condition of changements.extraCols) {
                 for (const [nomTable, nomColonne] of [
-                    [relation.sourceTable, paire.sourceCol],
-                    [relation.targetTable, paire.targetCol]
+                    [condition.deTable, condition.deColonne],
+                    [condition.versTable, condition.versColonne]
                 ]) {
                     const source = sources.find(candidat => candidat.name === nomTable);
                     if (!source || !(source.headers || []).includes(nomColonne))
                         throw erreurRequete(`La colonne « ${nomColonne} » n'existe pas dans « ${nomTable} ».`);
                 }
+                // Une condition qui ne touche aucun bout du lien ne contraindrait pas la correspondance.
+                if (!extremites.includes(condition.deTable) && !extremites.includes(condition.versTable))
+                    throw erreurRequete(
+                        `La condition doit porter sur « ${extremites[0]} » ou « ${extremites[1]} » : c'est la correspondance de ce lien qu'elle complète.`
+                    );
+            }
             relation.extraCols = changements.extraCols;
         }
         await this.enregistrer(espaceId, etat, auteurId);

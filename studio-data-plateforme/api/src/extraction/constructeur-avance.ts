@@ -26,8 +26,8 @@ export type Synthese = {
     deRoute: string;
     deColonne: string;
     versColonne: string;
-    /** Les colonnes en plus de la clé, quand le lien du modèle en porte une composite. */
-    pairesEnPlus?: { deColonne: string; versColonne: string }[];
+    /** Les conditions en plus de la clé, quand le lien du modèle en porte une composite. */
+    conditionsEnPlus?: { versColonne: string; tableComparee: string; routeComparee: string; colonneComparee: string }[];
     mode: ModeSynthese;
     nomColonne: string;
     n: number;

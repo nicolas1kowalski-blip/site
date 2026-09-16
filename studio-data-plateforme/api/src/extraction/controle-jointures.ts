@@ -24,7 +24,12 @@ export type JointureAControler = {
     alias: string;
     deColonne: string;
     versColonne: string;
-    pairesEnPlus: { deColonne: string; versColonne: string }[];
+    /**
+     * Les conditions en plus de la clé, déjà résolues en alias : la colonne de la table ajoutée, et la colonne
+     * d'une table déjà jointe (pas forcément celle d'où part la jointure — celle qui porte le groupe peut se
+     * trouver plus loin dans le modèle).
+     */
+    conditionsEnPlus: { versColonne: string; aliasCompare: string; colonneComparee: string }[];
 };
 
 /** Le rapport d'une jointure : ce qu'elle a fait au nombre de lignes. */
@@ -35,11 +40,18 @@ export type EtapeDuControle = { cle: string; nomTable: string; lignesAvant: numb
  * que la jointure ajoute, pas ce qu'un INNER retirerait — sans quoi une perte de lignes masquerait un gain.
  */
 export function sqlDuComptage(nomTableDeBase: string, jointures: JointureAControler[], combien: number): string {
-    const clauses = jointures.slice(0, combien).map(jointure => {
-        const conditions = [{ deColonne: jointure.deColonne, versColonne: jointure.versColonne }, ...jointure.pairesEnPlus].map(
-            paire =>
-                `${cleNormalisee(`${jointure.alias}.${identifiantSql(paire.versColonne)}`)} = ${cleNormalisee(`${jointure.aliasDepart}.${identifiantSql(paire.deColonne)}`)}`
-        );
+    const gardees = jointures.slice(0, combien);
+    // Une condition ne peut viser qu'un alias déjà posé : au-delà, la table n'existe pas encore dans la requête.
+    const aliasPoses = new Set(['t0', ...gardees.map(jointure => jointure.alias)]);
+    const clauses = gardees.map(jointure => {
+        const conditions = [
+            `${cleNormalisee(`${jointure.alias}.${identifiantSql(jointure.versColonne)}`)} = ${cleNormalisee(`${jointure.aliasDepart}.${identifiantSql(jointure.deColonne)}`)}`
+        ];
+        for (const condition of jointure.conditionsEnPlus)
+            if (aliasPoses.has(condition.aliasCompare))
+                conditions.push(
+                    `${cleNormalisee(`${jointure.alias}.${identifiantSql(condition.versColonne)}`)} = ${cleNormalisee(`${condition.aliasCompare}.${identifiantSql(condition.colonneComparee)}`)}`
+                );
         return `LEFT JOIN ${identifiantSql(jointure.nomTable)} AS ${jointure.alias} ON ${conditions.join(' AND ')}`;
     });
     return `SELECT COUNT(*) AS lignes FROM ${identifiantSql(nomTableDeBase)} AS t0${clauses.length ? '\n' + clauses.join('\n') : ''}`;

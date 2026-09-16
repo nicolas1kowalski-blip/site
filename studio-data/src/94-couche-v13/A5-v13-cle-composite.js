@@ -16,51 +16,101 @@
         //
         // Forme de la clé composite sur une relation : relation.extraCols = [{ sourceCol, targetCol }, …]
 
-        /** Les paires qui s'ajoutent à la clé d'un lien, nettoyées de ce qui n'existe plus dans les tables. */
-        function v13PairesDeLaCle(relation) {
+        /**
+         * Les conditions qui s'ajoutent à la clé d'un lien, nettoyées de ce qui n'existe plus. Chaque côté nomme
+         * sa table : la colonne qui complète la clé n'est pas toujours portée par les deux bouts du lien.
+         */
+        function v13ConditionsDeLaCle(relation) {
             const colonnesDe = tableId => (state.tables[tableId] || {}).headers || [];
             return (relation && Array.isArray(relation.extraCols) ? relation.extraCols : []).filter(
-                paire =>
-                    paire &&
-                    colonnesDe(relation.sourceTable).includes(paire.sourceCol) &&
-                    colonnesDe(relation.targetTable).includes(paire.targetCol)
+                condition =>
+                    condition &&
+                    colonnesDe(condition.deTable).includes(condition.deColonne) &&
+                    colonnesDe(condition.versTable).includes(condition.versColonne)
             );
         }
         /** Au-delà, la clé n'est plus lisible et le lien mérite d'être repensé. */
-        const V13_PAIRES_MAXIMUM = 6;
+        const V13_CONDITIONS_MAXIMUM = 6;
+        /**
+         * Les conditions d'un lien rapportées à la table que la jointure vient d'atteindre : une condition ne
+         * s'applique que si l'un de ses deux côtés porte sur cette table — c'est elle qu'elle contraint. L'autre
+         * côté désigne la table comparée, où qu'elle soit dans le modèle.
+         */
+        function v13ConditionsPourLaTable(relation, tableJointe) {
+            return v13ConditionsDeLaCle(relation)
+                .map(condition => {
+                    if (condition.versTable === tableJointe)
+                        return {
+                            colonneJointe: condition.versColonne,
+                            tableComparee: condition.deTable,
+                            colonneComparee: condition.deColonne
+                        };
+                    if (condition.deTable === tableJointe)
+                        return {
+                            colonneJointe: condition.deColonne,
+                            tableComparee: condition.versTable,
+                            colonneComparee: condition.versColonne
+                        };
+                    return null;
+                })
+                .filter(Boolean);
+        }
 
         // ---- 1. Greffe sur le moteur : les conditions supplémentaires de la jointure ----
-        // La fonction de base a posé une condition unique « x1.colonne = x0.colonne ». On lui ajoute les autres
-        // colonnes de la clé, du bon côté : l'alias de départ se lit dans la condition déjà écrite.
-        const V13_MOTIF_ALIAS_DEPART = /=\s*UPPER\(TRIM\(CAST\((x\d+)\./;
         /** Normalisation identique à celle du moteur : casse et espaces ignorés des deux côtés. */
         function v13ComparaisonNormalisee(gauche, droite) {
             return `UPPER(TRIM(CAST(${gauche} AS VARCHAR))) = UPPER(TRIM(CAST(${droite} AS VARCHAR)))`;
         }
-        /** La condition complète d'une jointure : la colonne du lien, puis les colonnes ajoutées à sa clé. */
-        function v13ConditionDeJointure(jointure) {
-            const paires = v13PairesDeLaCle(jointure.rel);
-            if (!paires.length) return jointure.on;
-            const aliasDepart = (String(jointure.on).match(V13_MOTIF_ALIAS_DEPART) || [])[1];
-            if (!aliasDepart) return jointure.on;
-            const jointeEstLaSource = jointure.rel.sourceTable === jointure.id;
-            const enPlus = paires.map(paire => {
-                const colonneJointe = jointeEstLaSource ? paire.sourceCol : paire.targetCol;
-                const colonneDepart = jointeEstLaSource ? paire.targetCol : paire.sourceCol;
-                return v13ComparaisonNormalisee(
-                    jointure.alias + '.' + sqlIdent(colonneJointe),
-                    aliasDepart + '.' + sqlIdent(colonneDepart)
-                );
-            });
-            return [jointure.on].concat(enPlus).join(' AND ');
+        /** Toutes les tables qu'un plan doit comparer, d'après les clés des liens qu'il emprunte. */
+        function v13TablesComparees(plan) {
+            const tables = [];
+            (plan.joins || []).forEach(jointure =>
+                v13ConditionsPourLaTable(jointure.rel, jointure.id).forEach(condition => tables.push(condition.tableComparee))
+            );
+            return [...new Set(tables)];
         }
+        /**
+         * Complète la condition d'une jointure avec les conditions de la clé du lien. La table comparée doit
+         * déjà être jointe : « aliasDisponible » ne connaît que les jointures posées avant celle-ci. Une
+         * condition dont la table manque est laissée de côté — le contrôle des tables liées la signalera.
+         */
+        function v13ConditionDeJointure(jointure, aliasDisponible) {
+            const enPlus = v13ConditionsPourLaTable(jointure.rel, jointure.id)
+                .map(condition => {
+                    const aliasCompare = aliasDisponible(condition.tableComparee);
+                    if (!aliasCompare) return null;
+                    return v13ComparaisonNormalisee(
+                        jointure.alias + '.' + sqlIdent(condition.colonneJointe),
+                        aliasCompare + '.' + sqlIdent(condition.colonneComparee)
+                    );
+                })
+                .filter(Boolean);
+            return enPlus.length ? [jointure.on].concat(enPlus).join(' AND ') : jointure.on;
+        }
+        /** Combien de fois l'on redemande un plan pour ramener les tables comparées, sans boucler. */
+        const V13_PASSES_DE_PLAN = 3;
         Studio.extend(
             'advPlanJoins',
             base =>
                 function (baseId, needs) {
-                    const plan = base(baseId, needs);
+                    const besoins = Array.isArray(needs) ? needs.slice() : [];
+                    let plan = base(baseId, besoins);
+                    // Les tables comparées par une clé sont jointes d'office, et AVANT celles qui en dépendent :
+                    // on les place en tête des besoins, là où le moteur pose ses premières jointures.
+                    for (let passe = 0; passe < V13_PASSES_DE_PLAN; passe++) {
+                        const manquantes = v13TablesComparees(plan).filter(
+                            tableId => tableId !== baseId && !plan.map[advRouteKey(tableId, '')]
+                        );
+                        if (!manquantes.length) break;
+                        besoins.unshift(...manquantes.map(tableId => ({ tableId, via: '' })));
+                        plan = base(baseId, besoins);
+                    }
                     if (plan && plan.joins) {
-                        plan.joins.forEach(jointure => (jointure.on = v13ConditionDeJointure(jointure)));
+                        const aliasParTable = { [baseId]: 'x0' };
+                        plan.joins.forEach(jointure => {
+                            jointure.on = v13ConditionDeJointure(jointure, tableId => aliasParTable[tableId]);
+                            if (!aliasParTable[jointure.id]) aliasParTable[jointure.id] = jointure.alias;
+                        });
                         // Mémorisé pour le contrôle : ce sont exactement les jointures que l'extraction va poser.
                         v13State.dernierPlan = { baseId, joins: plan.joins.slice() };
                     }
@@ -68,22 +118,41 @@
                 }
         );
 
-        // ---- 2. Écran Modèle de données : la colonne « Clé du lien » ----
-        /** Ajoute au lien la paire choisie dans les deux listes, si elle n'y est pas déjà. */
+        // ---- 2. Écran Modèle de données : la ligne « Clé du lien » ----
+        // Les listes gardent leur valeur d'un rendu à l'autre : c'est la saisie en cours, pas l'état du lien.
+        const v13SaisieDesCles = {};
+        /** La saisie en cours d'une condition : ce qu'affichent les quatre listes, ou ce qu'elles affichaient. */
+        function v13ConditionSaisie(relationId) {
+            const valeur = suffixe => {
+                const identifiant = 'v13-cle-' + suffixe + '-' + relationId;
+                const champ = el(identifiant);
+                return (champ ? champ.value : v13SaisieDesCles[identifiant]) || '';
+            };
+            return {
+                deTable: valeur('table-contrainte'),
+                deColonne: valeur('colonne-contrainte'),
+                versTable: valeur('table-comparee'),
+                versColonne: valeur('colonne-comparee')
+            };
+        }
+        /** Ajoute au lien la condition choisie, si elle est complète et n'y est pas déjà. */
         function v13AjouterALaCle(relationId) {
             const relation = (state.relations || []).find(r => r.id === relationId);
-            const listeSource = el('v13-cle-source-' + relationId);
-            const listeCible = el('v13-cle-cible-' + relationId);
-            if (!relation || !listeSource || !listeCible || !listeSource.value || !listeCible.value) return;
+            const condition = v13ConditionSaisie(relationId);
+            if (!relation) return;
+            if (!condition.deTable || !condition.deColonne || !condition.versTable || !condition.versColonne)
+                return showError('Choisissez une table et une colonne de chaque côté.');
             relation.extraCols = Array.isArray(relation.extraCols) ? relation.extraCols : [];
-            if (relation.extraCols.length >= V13_PAIRES_MAXIMUM)
-                return showError(`Une clé de lien ne peut pas dépasser ${V13_PAIRES_MAXIMUM} colonnes en plus.`);
-            if (relation.extraCols.some(p => p.sourceCol === listeSource.value && p.targetCol === listeCible.value)) return;
-            relation.extraCols.push({ sourceCol: listeSource.value, targetCol: listeCible.value });
+            if (relation.extraCols.length >= V13_CONDITIONS_MAXIMUM)
+                return showError(`Une clé de lien ne peut pas dépasser ${V13_CONDITIONS_MAXIMUM} conditions en plus.`);
+            if (condition.deTable === condition.versTable && condition.deColonne === condition.versColonne)
+                return showError('Une colonne comparée à elle-même ne contraint rien.');
+            if (relation.extraCols.some(autre => JSON.stringify(autre) === JSON.stringify(condition))) return;
+            relation.extraCols.push(condition);
             persistAppState();
             renderRelationsList();
         }
-        /** Retire la paire de rang donné de la clé du lien. */
+        /** Retire la condition de rang donné de la clé du lien. */
         function v13RetirerDeLaCle(relationId, rang) {
             const relation = (state.relations || []).find(r => r.id === relationId);
             if (!relation || !Array.isArray(relation.extraCols)) return;
@@ -91,29 +160,44 @@
             persistAppState();
             renderRelationsList();
         }
-        /** La ligne « Clé du lien » d'une relation : les paires déjà posées, et de quoi en ajouter une. */
-        function v13LigneCleDuLien(relation) {
-            const options = tableId =>
-                ((state.tables[tableId] || {}).headers || [])
-                    .map(colonne => `<option value="${escapeHTML(colonne)}">${escapeHTML(colonne)}</option>`)
-                    .join('');
-            const posees = v13PairesDeLaCle(relation)
+        /** Une liste déroulante de la ligne « Clé du lien », avec son invite et ses options. */
+        function v13ListeDeLaCle(relationId, suffixe, invite, valeurs, libelleDe) {
+            const options = valeurs
                 .map(
-                    (paire, rang) =>
-                        `<span class="v13-paire">+ ${escapeHTML(paire.sourceCol)} = ${escapeHTML(paire.targetCol)}
-                            <button onclick="v13RetirerDeLaCle('${relation.id}', ${rang})" title="Retirer cette colonne de la clé">✕</button></span>`
+                    valeur =>
+                        `<option value="${escapeHTML(valeur)}">${escapeHTML(libelleDe ? libelleDe(valeur) : valeur)}</option>`
                 )
                 .join('');
-            const colonnesDisponibles =
-                (state.tables[relation.sourceTable] || {}).headers && (state.tables[relation.targetTable] || {}).headers;
-            const ajout = colonnesDisponibles
-                ? `<select id="v13-cle-source-${relation.id}" class="border border-slate-200 p-1 rounded text-xs bg-white"><option value="">colonne de gauche…</option>${options(relation.sourceTable)}</select>
-                   <span class="text-slate-400">=</span>
-                   <select id="v13-cle-cible-${relation.id}" class="border border-slate-200 p-1 rounded text-xs bg-white"><option value="">colonne de droite…</option>${options(relation.targetTable)}</select>
-                   <button onclick="v13AjouterALaCle('${relation.id}')" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded font-bold hover:bg-indigo-100">+ Ajouter à la clé</button>`
-                : '<span class="text-[11px] text-slate-300 italic">choisissez les deux tables pour compléter la clé</span>';
+            return `<select id="v13-cle-${suffixe}-${relationId}" onchange="renderRelationsList()" class="border border-slate-200 p-1 rounded text-xs bg-white"><option value="">${escapeHTML(invite)}</option>${options}</select>`;
+        }
+        /** La ligne « Clé du lien » d'une relation : les conditions déjà posées, et de quoi en ajouter une. */
+        function v13LigneCleDuLien(relation) {
+            const nomDe = tableId => (state.tables[tableId] || {}).name || tableId;
+            const colonnesDe = tableId => (state.tables[tableId] || {}).headers || [];
+            const posees = v13ConditionsDeLaCle(relation)
+                .map(
+                    (condition, rang) =>
+                        `<span class="v13-paire">+ ${escapeHTML(nomDe(condition.deTable))}.${escapeHTML(condition.deColonne)} = ${escapeHTML(nomDe(condition.versTable))}.${escapeHTML(condition.versColonne)}
+                            <button onclick="v13RetirerDeLaCle('${relation.id}', ${rang})" title="Retirer cette condition de la clé">✕</button></span>`
+                )
+                .join('');
+            const saisie = v13ConditionSaisie(relation.id);
+            const toutesLesTables = Object.keys(state.tables);
+            const ajout =
+                v13ListeDeLaCle(
+                    relation.id,
+                    'table-contrainte',
+                    '+ contraindre…',
+                    [relation.sourceTable, relation.targetTable],
+                    nomDe
+                ) +
+                v13ListeDeLaCle(relation.id, 'colonne-contrainte', 'colonne…', colonnesDe(saisie.deTable)) +
+                '<span class="text-slate-400">=</span>' +
+                v13ListeDeLaCle(relation.id, 'table-comparee', 'table…', toutesLesTables, nomDe) +
+                v13ListeDeLaCle(relation.id, 'colonne-comparee', 'colonne…', colonnesDe(saisie.versTable)) +
+                `<button onclick="v13AjouterALaCle('${relation.id}')" class="text-[11px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded font-bold hover:bg-indigo-100">+ Ajouter à la clé</button>`;
             return `<div class="v13-cle-lien flex items-center gap-2 mt-2 flex-wrap pl-1" data-rel="${escapeHTML(relation.id)}">
-                <span class="text-[10px] uppercase font-bold text-slate-400" title="Les colonnes qui s'ajoutent à la correspondance : sans elles, une ligne peut revenir plusieurs fois">Clé du lien</span>
+                <span class="text-[10px] uppercase font-bold text-slate-400" title="Les conditions qui s'ajoutent à la correspondance : sans elles, une ligne peut revenir plusieurs fois">Clé du lien</span>
                 ${posees}${ajout}
             </div>`;
         }
@@ -121,8 +205,14 @@
             'renderRelationsList',
             base =>
                 function () {
-                    base();
                     const liste = el('relationsList');
+                    // On met de côté ce qui est en cours de saisie : la fonction de base réécrit toute la liste.
+                    if (liste)
+                        liste.querySelectorAll('.v13-cle-lien select').forEach(champ => {
+                            if (champ.value) v13SaisieDesCles[champ.id] = champ.value;
+                            else delete v13SaisieDesCles[champ.id];
+                        });
+                    base();
                     if (!liste || !state.relations.length) return;
                     // Les lignes suivent l'ordre du périmètre affiché, comme dans la fonction de base.
                     const visibles = mcdVisibleIds();
@@ -132,6 +222,10 @@
                         const ligne = liste.children[rang];
                         if (ligne && ligne.insertAdjacentHTML)
                             ligne.insertAdjacentHTML('beforeend', v13LigneCleDuLien(relation));
+                    });
+                    Object.entries(v13SaisieDesCles).forEach(([identifiant, valeur]) => {
+                        const champ = el(identifiant);
+                        if (champ) champ.value = valeur;
                     });
                 }
         );

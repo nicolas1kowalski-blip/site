@@ -632,44 +632,65 @@ test('synthèse « N premières valeurs » : les montants d’un client transpos
 });
 
 /**
- * Le cas qui motive la clé composite : une liste d'éléments, et un arbre qui range chaque élément dans un
- * groupe. Un élément n'apparaît qu'une fois par groupe, mais appartient à plusieurs groupes. Joint sur le
- * seul élément, l'arbre multiplie les lignes ; joint sur (groupe, élément), il ne les multiplie plus.
+ * Le cas qui motive la clé composite, tel qu'il se présente vraiment.
+ *
+ * La liste des éléments ne porte PAS le groupe : elle porte une clé vers une table de rattachement, et c'est
+ * cette table-là qui donne le groupe. L'arbre, lui, classe (élément, groupe). Joint sur le seul élément,
+ * l'arbre multiplie les lignes ; pour ne plus les multiplier, la clé du lien doit comparer le groupe de
+ * l'arbre à celui du rattachement — une TROISIÈME table, que l'extraction doit ramener d'office.
+ *
+ *      elements ──id_rattachement──▶ rattachements (groupe)
+ *          ▲                              ▲
+ *          └────── arbre (element, groupe)┘  ← la clé du lien compare ces deux groupes
  */
-test('clé composite : la jointure sur (groupe, élément) ne multiplie plus les lignes', async () => {
-    await deposerSource('elem', 'elements.csv', 'code;groupe;type_element\nE1;G1;machine\nE2;G1;machine\nE1;G2;machine\n', [
+test('clé composite : la condition porte sur une troisième table, et l’arbre ne multiplie plus', async () => {
+    await deposerSource('elem', 'elements.csv', 'code;id_rattachement;type_element\nE1;R1;machine\nE2;R1;machine\nE1;R2;machine\n', [
         'code',
-        'groupe',
+        'id_rattachement',
         'type_element'
     ]);
+    await deposerSource('affect', 'affectations.csv', 'id_rattachement;groupe\nR1;G1\nR2;G2\n', ['id_rattachement', 'groupe']);
     await deposerSource('arbre', 'arbre.csv', 'element;groupe;niveau\nE1;G1;atelier\nE2;G1;atelier\nE1;G2;entrepot\n', [
         'element',
         'groupe',
         'niveau'
     ]);
-    const identifiantDuLien = await appel({
-        method: 'POST',
-        url: '/api/modele/relations',
-        payload: { sourceTable: 'arbre.csv', sourceCol: 'element', targetTable: 'elements.csv', targetCol: 'code' }
-    }).then(
-        reponse =>
-            json(reponse).relations.find(
-                (relation: { sourceTable: string; targetTable: string }) =>
-                    relation.sourceTable === 'arbre.csv' && relation.targetTable === 'elements.csv'
-            ).id
-    );
+    const poserLeLien = async (payload: object) =>
+        json(await appel({ method: 'POST', url: '/api/modele/relations', payload })).relations as {
+            id: string;
+            sourceTable: string;
+            targetTable: string;
+        }[];
+    await poserLeLien({
+        sourceTable: 'elements.csv',
+        sourceCol: 'id_rattachement',
+        targetTable: 'affectations.csv',
+        targetCol: 'id_rattachement'
+    });
+    const liens = await poserLeLien({ sourceTable: 'arbre.csv', sourceCol: 'element', targetTable: 'elements.csv', targetCol: 'code' });
+    const identifiantDuLien = liens.find(lien => lien.sourceTable === 'arbre.csv' && lien.targetTable === 'elements.csv')!.id;
 
-    const extraire = (pairesEnPlus: { deColonne: string; versColonne: string }[]) =>
+    // La jointure telle que l'écran la construira : la table de rattachement d'abord, l'arbre ensuite.
+    const extraire = (conditionsEnPlus: object[]) =>
         appel({
             method: 'POST',
             url: '/api/extraction/apercu',
             payload: {
                 specification: {
                     baseId: 'elem',
-                    jointures: [{ deTableId: 'elem', deColonne: 'code', versTableId: 'arbre', versColonne: 'element', pairesEnPlus }],
+                    jointures: [
+                        {
+                            cle: 'r1',
+                            deTableId: 'elem',
+                            deColonne: 'id_rattachement',
+                            versTableId: 'affect',
+                            versColonne: 'id_rattachement'
+                        },
+                        { cle: 'r2', deTableId: 'elem', deColonne: 'code', versTableId: 'arbre', versColonne: 'element', conditionsEnPlus }
+                    ],
                     colonnes: [
                         { tableId: 'elem', nomColonne: 'code' },
-                        { tableId: 'elem', nomColonne: 'groupe' },
+                        { tableId: 'affect', nomColonne: 'groupe' },
                         { tableId: 'arbre', nomColonne: 'niveau' }
                     ]
                 }
@@ -677,64 +698,85 @@ test('clé composite : la jointure sur (groupe, élément) ne multiplie plus les
         }).then(reponse => json(reponse));
 
     const sansLeGroupe = await extraire([]);
-    assert.equal(sansLeGroupe.lignes.length, 5, 'sur le seul élément, E1 revient deux fois par groupe : 3 lignes deviennent 5');
+    assert.equal(sansLeGroupe.lignes.length, 5, 'sur le seul élément, E1 revient une fois par groupe : 3 lignes deviennent 5');
 
-    const avecLeGroupe = await extraire([{ deColonne: 'groupe', versColonne: 'groupe' }]);
-    assert.equal(avecLeGroupe.lignes.length, 3, 'avec le groupe dans la clé, on retrouve une ligne par élément et par groupe');
+    const avecLeGroupe = await extraire([
+        { versColonne: 'groupe', tableComparee: 'affect', routeComparee: 'r1', colonneComparee: 'groupe' }
+    ]);
+    assert.equal(avecLeGroupe.lignes.length, 3, 'le groupe pris sur la table de rattachement remet une ligne par élément');
     assert.deepEqual(
         avecLeGroupe.lignes.map((ligne: unknown[]) => ligne.join('|')).sort(),
         ['E1|G1|atelier', 'E1|G2|entrepot', 'E2|G1|atelier'],
-        'chaque élément reçoit le niveau de son propre groupe'
+        'chaque élément reçoit le niveau du groupe que lui donne son rattachement'
     );
 
-    // Déclarée sur le lien, la clé composite vaut pour toutes les extractions qui l'empruntent.
-    const apresDeclaration = json(
-        await appel({
-            method: 'PUT',
-            url: `/api/modele/relations/${encodeURIComponent(identifiantDuLien)}`,
-            payload: { extraCols: [{ sourceCol: 'groupe', targetCol: 'groupe' }] }
-        })
-    );
-    const lienDeclare = apresDeclaration.find((relation: { id: string }) => relation.id === identifiantDuLien);
-    assert.deepEqual(lienDeclare.extraCols, [{ sourceCol: 'groupe', targetCol: 'groupe' }]);
+    // Déclarée sur le lien, la condition vaut pour toutes les extractions qui l'empruntent.
+    const reponseDeclaration = await appel({
+        method: 'PUT',
+        url: `/api/modele/relations/${encodeURIComponent(identifiantDuLien)}`,
+        payload: {
+            extraCols: [{ deTable: 'arbre.csv', deColonne: 'groupe', versTable: 'affectations.csv', versColonne: 'groupe' }]
+        }
+    });
+    assert.equal(reponseDeclaration.statusCode, 200, json(reponseDeclaration).erreur);
+    const lienDeclare = json(reponseDeclaration).find((relation: { id: string }) => relation.id === identifiantDuLien);
+    assert.deepEqual(lienDeclare.extraCols, [
+        { deTable: 'arbre.csv', deColonne: 'groupe', versTable: 'affectations.csv', versColonne: 'groupe' }
+    ]);
 
     const colonneInconnue = await appel({
         method: 'PUT',
         url: `/api/modele/relations/${encodeURIComponent(identifiantDuLien)}`,
-        payload: { extraCols: [{ sourceCol: 'inexistante', targetCol: 'groupe' }] }
+        payload: { extraCols: [{ deTable: 'arbre.csv', deColonne: 'inexistante', versTable: 'affectations.csv', versColonne: 'groupe' }] }
     });
     assert.equal(colonneInconnue.statusCode, 400, 'une colonne qui n’existe pas est refusée, avec un message');
     assert.match(json(colonneInconnue).erreur, /inexistante/);
+
+    const horsDuLien = await appel({
+        method: 'PUT',
+        url: `/api/modele/relations/${encodeURIComponent(identifiantDuLien)}`,
+        payload: {
+            extraCols: [{ deTable: 'affectations.csv', deColonne: 'groupe', versTable: 'affectations.csv', versColonne: 'groupe' }]
+        }
+    });
+    assert.equal(horsDuLien.statusCode, 400, 'une condition qui ne touche aucun bout du lien ne contraindrait rien');
+    assert.match(json(horsDuLien).erreur, /arbre\.csv/);
 });
 
 /**
- * Le contrôle qui prévient : avant d'extraire, on mesure. Sur les mêmes données que ci-dessus, la jointure sur
- * le seul élément est dénoncée ; complétée par le groupe, elle est déclarée saine.
+ * Le contrôle qui prévient : avant d'extraire, on mesure. Sur les mêmes données, la jointure sur le seul
+ * élément est dénoncée ; complétée par le groupe du rattachement, elle est déclarée saine.
  */
 test('contrôle des jointures : l’écran sait dire laquelle multiplie les lignes, avant de lancer l’extraction', async () => {
-    const controler = (pairesEnPlus: { deColonne: string; versColonne: string }[]) =>
+    const controler = (conditionsEnPlus: object[]) =>
         appel({
             method: 'POST',
             url: '/api/extraction/controler-jointures',
             payload: {
                 baseId: 'elem',
-                jointures: [{ deTableId: 'elem', deColonne: 'code', versTableId: 'arbre', versColonne: 'element', pairesEnPlus }],
+                jointures: [
+                    { cle: 'r1', deTableId: 'elem', deColonne: 'id_rattachement', versTableId: 'affect', versColonne: 'id_rattachement' },
+                    { cle: 'r2', deTableId: 'elem', deColonne: 'code', versTableId: 'arbre', versColonne: 'element', conditionsEnPlus }
+                ],
                 colonnes: [{ tableId: 'elem', nomColonne: 'code' }]
             }
         }).then(reponse => json(reponse));
 
     const surLeSeulElement = await controler([]);
     assert.equal(surLeSeulElement.multiplie, true);
-    assert.equal(surLeSeulElement.jointures.length, 1);
-    assert.equal(surLeSeulElement.jointures[0].lignesAvant, 3);
-    assert.equal(surLeSeulElement.jointures[0].lignesApres, 5);
-    assert.equal(surLeSeulElement.jointures[0].facteur, 1.67);
-    assert.equal(surLeSeulElement.jointures[0].nomTable, 'arbre.csv', 'la table est nommée comme dans le catalogue, pas comme en base');
-    assert.match(surLeSeulElement.jointures[0].phrase, /multiplie les lignes : 3 → 5/);
+    assert.equal(surLeSeulElement.jointures.length, 2);
+    assert.equal(surLeSeulElement.jointures[0].multiplie, false, 'le rattachement n’ajoute aucune ligne : une par élément');
+    assert.equal(surLeSeulElement.jointures[1].lignesAvant, 3);
+    assert.equal(surLeSeulElement.jointures[1].lignesApres, 5);
+    assert.equal(surLeSeulElement.jointures[1].facteur, 1.67);
+    assert.equal(surLeSeulElement.jointures[1].nomTable, 'arbre.csv', 'la table est nommée comme dans le catalogue, pas comme en base');
+    assert.match(surLeSeulElement.jointures[1].phrase, /multiplie les lignes : 3 → 5/);
     assert.match(surLeSeulElement.phrase, /Modèle de données/);
 
-    const avecLeGroupe = await controler([{ deColonne: 'groupe', versColonne: 'groupe' }]);
+    const avecLeGroupe = await controler([
+        { versColonne: 'groupe', tableComparee: 'affect', routeComparee: 'r1', colonneComparee: 'groupe' }
+    ]);
     assert.equal(avecLeGroupe.multiplie, false);
-    assert.equal(avecLeGroupe.jointures[0].lignesApres, 3, 'la clé complétée rend une ligne par élément et par groupe');
+    assert.equal(avecLeGroupe.jointures[1].lignesApres, 3, 'la clé complétée rend une ligne par élément');
     assert.match(avecLeGroupe.phrase, /Aucune jointure ne multiplie/);
 });

@@ -233,7 +233,11 @@ export class ExtractionController {
                 alias,
                 deColonne: jointure.deColonne,
                 versColonne: jointure.versColonne,
-                pairesEnPlus: jointure.pairesEnPlus || []
+                conditionsEnPlus: (jointure.conditionsEnPlus || []).map(condition => ({
+                    versColonne: condition.versColonne,
+                    aliasCompare: aliasParCle.get(condition.routeComparee || condition.tableComparee) || '',
+                    colonneComparee: condition.colonneComparee
+                }))
             };
         });
         const compter = async (combien: number) =>

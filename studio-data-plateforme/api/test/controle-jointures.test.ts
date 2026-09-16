@@ -16,7 +16,7 @@ const jointure = (partielle: Partial<JointureAControler>): JointureAControler =>
     alias: 't1',
     deColonne: 'id_element',
     versColonne: 'id_element',
-    pairesEnPlus: [],
+    conditionsEnPlus: [],
     ...partielle
 });
 
@@ -33,12 +33,31 @@ test('comptage : la jointure est toujours posée en LEFT, pour mesurer ce qu’e
     );
 });
 
-test('comptage : une clé composite ajoute ses conditions avec AND, dans l’ordre déclaré', () => {
-    const sql = sqlDuComptage('t_elements', [jointure({ pairesEnPlus: [{ deColonne: 'id_groupe', versColonne: 'groupe' }] })], 1);
-    const conditions = sql.slice(sql.indexOf(' ON ') + 4).split(' AND ');
+test('comptage : une clé composite ajoute ses conditions avec AND, contre la table qu’elle nomme', () => {
+    const jointures = [
+        jointure({ cle: 'r1', nomTable: 't_rattachements', alias: 't1' }),
+        jointure({
+            cle: 'r2',
+            nomTable: 't_arbre',
+            alias: 't2',
+            conditionsEnPlus: [{ versColonne: 'groupe', aliasCompare: 't1', colonneComparee: 'groupe' }]
+        })
+    ];
+    const sql = sqlDuComptage('t_elements', jointures, 2);
+    const derniere = sql.split('\n').pop() || '';
+    const conditions = derniere.slice(derniere.indexOf(' ON ') + 4).split(' AND ');
     assert.equal(conditions.length, 2);
-    assert.match(conditions[0], /t1\."id_element".*t0\."id_element"/);
-    assert.match(conditions[1], /t1\."groupe".*t0\."id_groupe"/);
+    assert.match(conditions[0], /t2\."id_element".*t0\."id_element"/);
+    assert.match(conditions[1], /t2\."groupe".*t1\."groupe"/, 'le groupe vient de la table intermédiaire, pas de la table de départ');
+});
+
+test('comptage : une condition qui viserait une table pas encore posée est laissée de côté, jamais du SQL faux', () => {
+    const avecCondition = jointure({
+        conditionsEnPlus: [{ versColonne: 'groupe', aliasCompare: 't7', colonneComparee: 'groupe' }]
+    });
+    const sql = sqlDuComptage('t_elements', [avecCondition], 1);
+    assert.equal(sql.split(' AND ').length, 1);
+    assert.ok(!sql.includes('t7'));
 });
 
 test('comptage : on ne garde que les premières jointures, pour mesurer l’effet de chacune l’une après l’autre', () => {

@@ -100,36 +100,71 @@ test('planification : une jointure par route, préfixes partagés, chacune part 
     assert.deepEqual(planifierJointures([[]], 'contrats'), [], 'la table de départ ne demande aucune jointure');
 });
 
-test('clé composite : les colonnes en plus suivent le chemin, dans le sens du parcours', () => {
-    // Un élément appartient à plusieurs groupes : sans le groupe dans la clé, la jointure multiplie.
-    const lien = {
-        id: 'arbre',
-        sourceTable: 'arbre.csv',
-        sourceCol: 'element',
-        targetTable: 'elements.csv',
-        targetCol: 'code',
-        sourceId: 'arbre',
-        targetId: 'elements',
-        extraCols: [{ sourceCol: 'groupe', targetCol: 'type_groupe' }]
-    };
-    const chemins = cheminsVers('elements', 'arbre', [lien]);
-    assert.equal(chemins.length, 1);
-    const jointures = planifierJointures(chemins, 'elements');
-    assert.equal(jointures.length, 1);
-    assert.deepEqual(
-        jointures[0].pairesEnPlus,
-        [{ deColonne: 'type_groupe', versColonne: 'groupe' }],
-        'parcouru depuis les éléments, la colonne de départ est celle des éléments'
-    );
-    const retour = planifierJointures(cheminsVers('arbre', 'elements', [lien]), 'arbre');
-    assert.deepEqual(
-        retour[0].pairesEnPlus,
-        [{ deColonne: 'groupe', versColonne: 'type_groupe' }],
-        'parcouru dans l’autre sens, les deux colonnes s’échangent'
-    );
+// Le modèle du cas réel : la liste des éléments ne porte pas le groupe, c'est la table des affectations qui
+// le donne ; l'arbre classe (élément, groupe). La clé du lien vers l'arbre compare donc ces deux groupes.
+const LIEN_AFFECTATION = {
+    id: 'affectation',
+    sourceTable: 'elements.csv',
+    sourceCol: 'id_affectation',
+    targetTable: 'affectations.csv',
+    targetCol: 'id_affectation',
+    sourceId: 'elements',
+    targetId: 'affectations'
+};
+const LIEN_ARBRE = {
+    id: 'arbre',
+    sourceTable: 'arbre.csv',
+    sourceCol: 'element',
+    targetTable: 'elements.csv',
+    targetCol: 'code',
+    sourceId: 'arbre',
+    targetId: 'elements',
+    extraCols: [{ deTable: 'arbre.csv', deColonne: 'groupe', versTable: 'affectations.csv', versColonne: 'groupe' }]
+};
+const MODELE_DU_CAS = [LIEN_AFFECTATION, LIEN_ARBRE];
+const ID_DE_LA_TABLE = nom => ({ 'elements.csv': 'elements', 'affectations.csv': 'affectations', 'arbre.csv': 'arbre' })[nom];
+
+test('clé composite : la table comparée est ramenée d’office, et jointe avant celle qui en dépend', () => {
+    const chemins = cheminsVers('elements', 'arbre', MODELE_DU_CAS);
+    const jointures = planifierJointures(chemins, 'elements', MODELE_DU_CAS, ID_DE_LA_TABLE);
+    assert.equal(jointures.length, 2, 'la table des affectations est ajoutée, bien que rien ne l’ait demandée');
+    assert.equal(jointures[0].versTableId, 'affectations', 'elle est posée avant : sa valeur doit exister quand on la compare');
+    assert.equal(jointures[1].versTableId, 'arbre');
+    assert.deepEqual(jointures[1].conditionsEnPlus, [
+        { versColonne: 'groupe', tableComparee: 'affectations', routeComparee: 'affectation', colonneComparee: 'groupe' }
+    ]);
+    assert.deepEqual(jointures[0].conditionsEnPlus, [], 'le lien des affectations n’a pas de condition en plus');
 });
 
-test('clé simple : aucune colonne en plus, la jointure est celle d’avant', () => {
+test('clé composite : la condition ne contraint que la table qu’elle nomme, dans les deux sens de parcours', () => {
+    // Parcouru depuis l'arbre, c'est « elements » que l'étape atteint : la condition ne la vise pas, donc rien.
+    const depuisLArbre = planifierJointures(cheminsVers('arbre', 'elements', MODELE_DU_CAS), 'arbre', MODELE_DU_CAS, ID_DE_LA_TABLE);
+    assert.deepEqual(depuisLArbre[0].conditionsEnPlus, []);
+    // Parcouru depuis les éléments, c'est « arbre » : la condition s'applique, et la colonne contrainte est la sienne.
+    const depuisLesElements = planifierJointures(
+        cheminsVers('elements', 'arbre', MODELE_DU_CAS),
+        'elements',
+        MODELE_DU_CAS,
+        ID_DE_LA_TABLE
+    );
+    assert.equal(depuisLesElements[1].conditionsEnPlus[0].versColonne, 'groupe');
+});
+
+test('clé composite : la table comparée déjà présente n’est pas jointe une seconde fois', () => {
+    const chemins = [...cheminsVers('elements', 'affectations', MODELE_DU_CAS), ...cheminsVers('elements', 'arbre', MODELE_DU_CAS)];
+    const jointures = planifierJointures(chemins, 'elements', MODELE_DU_CAS, ID_DE_LA_TABLE);
+    assert.equal(jointures.length, 2);
+    assert.equal(jointures.filter(jointure => jointure.versTableId === 'affectations').length, 1);
+});
+
+test('clé composite : une table comparée hors de portée abandonne la condition plutôt que de casser la requête', () => {
+    const seulArbre = [LIEN_ARBRE];
+    const jointures = planifierJointures(cheminsVers('elements', 'arbre', seulArbre), 'elements', seulArbre, ID_DE_LA_TABLE);
+    assert.equal(jointures.length, 1);
+    assert.deepEqual(jointures[0].conditionsEnPlus, [], 'sans chemin vers les affectations, la condition est laissée de côté');
+});
+
+test('clé simple : aucune condition en plus, la jointure est celle d’avant', () => {
     const lien = {
         id: 'l1',
         sourceTable: 'commandes.csv',
@@ -140,5 +175,5 @@ test('clé simple : aucune colonne en plus, la jointure est celle d’avant', ()
         targetId: 'clients'
     };
     const jointures = planifierJointures(cheminsVers('commandes', 'clients', [lien]), 'commandes');
-    assert.deepEqual(jointures[0].pairesEnPlus, [], 'sans clé composite, la liste est vide et non absente');
+    assert.deepEqual(jointures[0].conditionsEnPlus, [], 'sans clé composite, la liste est vide et non absente');
 });

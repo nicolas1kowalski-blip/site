@@ -86,11 +86,19 @@ const schemaSynthese = z.object({
     deColonne: z.string().min(1),
     versColonne: z.string().min(1),
     /**
-     * Les colonnes qui s'ajoutent à la condition, quand la clé du lien est composite. Sans elles, une
-     * synthèse compterait les lignes de l'élément dans tous les groupes au lieu du seul groupe de la ligne.
+     * Les conditions qui s'ajoutent, quand la clé du lien est composite. Sans elles, une synthèse compterait
+     * les lignes de l'élément dans tous les groupes au lieu du seul groupe de la ligne. La table comparée
+     * n'est pas forcément la table d'ancrage : c'est parfois une autre table du modèle, jointe plus loin.
      */
-    pairesEnPlus: z
-        .array(z.object({ deColonne: z.string().min(1), versColonne: z.string().min(1) }))
+    conditionsEnPlus: z
+        .array(
+            z.object({
+                versColonne: z.string().min(1),
+                tableComparee: z.string().min(1),
+                routeComparee: z.string().default(''),
+                colonneComparee: z.string().min(1)
+            })
+        )
         .max(6)
         .default([]),
     mode: z.enum(Object.keys(MODES_SYNTHESE) as ['count', 'countd', 'values', 'first']).default('count'),
@@ -157,13 +165,25 @@ const schemaJointure = z.object({
     versTableId: z.string().min(1),
     versColonne: z.string().min(1),
     /**
-     * Colonnes qui s'ajoutent à la condition de jointure, quand une seule ne suffit pas. Un élément qui
+     * Conditions qui s'ajoutent à celle de la jointure, quand une seule colonne ne suffit pas. Un élément qui
      * appartient à plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il multiplie
-     * les lignes ; joint sur (groupe, élément), il ne les multiplie plus. Ces paires viennent de la clé
-     * composite déclarée sur le lien du modèle. Vide = jointure sur une seule colonne, comme avant.
+     * les lignes ; joint aussi sur le groupe, il ne les multiplie plus.
+     *
+     * Chaque condition compare une colonne de la table ajoutée à une colonne d'une table DÉJÀ jointe, désignée
+     * par sa route : ce n'est pas forcément la table d'où part la jointure, car celle qui porte le groupe peut
+     * se trouver plus loin dans le modèle. Elles viennent de la clé composite déclarée sur le lien.
      */
-    pairesEnPlus: z
-        .array(z.object({ deColonne: z.string().min(1), versColonne: z.string().min(1) }))
+    conditionsEnPlus: z
+        .array(
+            z.object({
+                /** Colonne de la table ajoutée par cette jointure. */
+                versColonne: z.string().min(1),
+                /** Table déjà présente dans l'extraction dont la valeur doit correspondre, et par quelle route. */
+                tableComparee: z.string().min(1),
+                routeComparee: z.string().default(''),
+                colonneComparee: z.string().min(1)
+            })
+        )
         .max(6)
         .default([])
 });
@@ -636,11 +656,20 @@ function clausesJointures(
         // La table reste aussi joignable par son seul identifiant : c'est la première route posée sur elle.
         if (!aliasDe.has(lien.versTableId)) aliasDe.set(lien.versTableId, alias);
         aliasParTable.set(lien.versTableId, [...(aliasParTable.get(lien.versTableId) || []), alias]);
-        // Toutes les colonnes de la clé, la principale d'abord : c'est ce qui empêche la jointure de multiplier.
-        const conditions = [{ deColonne: lien.deColonne, versColonne: lien.versColonne }, ...(lien.pairesEnPlus || [])].map(
-            paire =>
-                `${cleNormalisee(`${alias}.${identifiantSql(paire.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(paire.deColonne)}`)}`
-        );
+        // Toutes les conditions de la clé, la principale d'abord : c'est ce qui empêche la jointure de multiplier.
+        const conditions = [
+            `${cleNormalisee(`${alias}.${identifiantSql(lien.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deColonne)}`)}`
+        ];
+        for (const condition of lien.conditionsEnPlus || []) {
+            const aliasCompare = aliasDeRoute(aliasDe, condition.routeComparee, condition.tableComparee);
+            if (!aliasCompare)
+                throw new ErreurSpecification(
+                    `La clé du lien vers « ${contexte.nomSourceDe(lien.versTableId)} » compare « ${condition.colonneComparee} » de « ${contexte.nomSourceDe(condition.tableComparee)} », qui n'est pas encore jointe.`
+                );
+            conditions.push(
+                `${cleNormalisee(`${alias}.${identifiantSql(condition.versColonne)}`)} = ${cleNormalisee(`${aliasCompare}.${identifiantSql(condition.colonneComparee)}`)}`
+            );
+        }
         return `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${conditions.join(' AND ')}`;
     });
 }
@@ -739,9 +768,14 @@ function itemsDeLaSynthese(colonne: ColonneExtraction, entourage: EntourageColon
         ctes.push(cteValeursOrdonnees(nomCteValeurs, contexte.nomTableDe(synthese.tableId), synthese));
         jointuresHierarchie.push(jointureValeursOrdonnees(nomCteValeurs, expressionParent));
     }
-    const parentsEnPlus = (synthese.pairesEnPlus || []).map(paire => ({
-        versColonne: paire.versColonne,
-        expressionParent: parentDe(paire.deColonne)
+    const parentsEnPlus = (synthese.conditionsEnPlus || []).map(condition => ({
+        versColonne: condition.versColonne,
+        expressionParent: expressionSource(
+            { tableId: condition.tableComparee, route: condition.routeComparee, nomColonne: condition.colonneComparee },
+            aliasDe,
+            aliasParTable,
+            `La clé de la synthèse « ${aliasColonne} »`
+        )
     }));
     return expressionsSynthese(
         synthese,

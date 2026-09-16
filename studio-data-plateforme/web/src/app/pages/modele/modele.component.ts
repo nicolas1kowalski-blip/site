@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     PageLignes,
-    PaireDeColonnes,
+    ConditionDeLien,
     PropositionLien,
     RegleLien,
     Relation,
@@ -177,20 +177,28 @@ type BrouillonRegle = {
                                     <!--
                                         Clé composite : quand une seule colonne ne suffit pas à identifier le lien.
                                         Un élément présent dans plusieurs groupes se retrouve une fois par groupe ;
-                                        joint sur le seul élément, il multiplie les lignes. La clé (groupe, élément)
-                                        rétablit la vérité, une fois pour toutes et pour toutes les extractions.
+                                        joint sur le seul élément, il multiplie les lignes. La colonne qui manque
+                                        n'est pas toujours portée par les deux bouts du lien : c'est parfois une
+                                        autre table, plus loin dans le modèle, qui donne le groupe. On la nomme
+                                        alors, et l'extraction la ramène d'office.
                                     -->
                                     <div class="cle-du-lien" [attr.name]="'cleDuLien-' + relation.id">
-                                        <span class="paire principale">{{ relation.sourceCol }} = {{ relation.targetCol }}</span>
+                                        <span class="paire principale">
+                                            {{ relation.sourceTable }}.{{ relation.sourceCol }} = {{ relation.targetTable }}.{{
+                                                relation.targetCol
+                                            }}
+                                        </span>
                                         @for (
-                                            paire of relation.extraCols || [];
-                                            track paire.sourceCol + paire.targetCol;
+                                            condition of relation.extraCols || [];
+                                            track condition.deTable + condition.deColonne + condition.versTable + condition.versColonne;
                                             let rang = $index
                                         ) {
                                             <span class="paire">
-                                                + {{ paire.sourceCol }} = {{ paire.targetCol }}
+                                                + {{ condition.deTable }}.{{ condition.deColonne }} = {{ condition.versTable }}.{{
+                                                    condition.versColonne
+                                                }}
                                                 @if (session.peutEditer()) {
-                                                    <a title="Retirer cette colonne de la clé" (click)="retirerDeLaCle(relation, rang)"
+                                                    <a title="Retirer cette condition de la clé" (click)="retirerDeLaCle(relation, rang)"
                                                         >✕</a
                                                     >
                                                 }
@@ -202,22 +210,44 @@ type BrouillonRegle = {
                                             <select
                                                 class="champ"
                                                 style="width: auto"
-                                                [attr.name]="'cleSource-' + relation.id"
-                                                [(ngModel)]="colonneSourceEnPlus[relation.id]"
+                                                [attr.name]="'cleTableContrainte-' + relation.id"
+                                                [(ngModel)]="tableContrainte[relation.id]"
                                             >
-                                                <option value="">+ colonne de {{ relation.sourceTable }}…</option>
-                                                @for (colonne of colonnesDe(relation.sourceTable); track colonne) {
+                                                <option value="">+ contraindre…</option>
+                                                <option [value]="relation.sourceTable">{{ relation.sourceTable }}</option>
+                                                <option [value]="relation.targetTable">{{ relation.targetTable }}</option>
+                                            </select>
+                                            <select
+                                                class="champ"
+                                                style="width: auto"
+                                                [attr.name]="'cleColonneContrainte-' + relation.id"
+                                                [(ngModel)]="colonneContrainte[relation.id]"
+                                            >
+                                                <option value="">colonne…</option>
+                                                @for (colonne of colonnesDe(tableContrainte[relation.id] || ''); track colonne) {
                                                     <option [value]="colonne">{{ colonne }}</option>
+                                                }
+                                            </select>
+                                            <span class="egale">=</span>
+                                            <select
+                                                class="champ"
+                                                style="width: auto"
+                                                [attr.name]="'cleTableComparee-' + relation.id"
+                                                [(ngModel)]="tableComparee[relation.id]"
+                                            >
+                                                <option value="">table…</option>
+                                                @for (source of sources(); track source.id) {
+                                                    <option [value]="source.name">{{ source.name }}</option>
                                                 }
                                             </select>
                                             <select
                                                 class="champ"
                                                 style="width: auto"
-                                                [attr.name]="'cleCible-' + relation.id"
-                                                [(ngModel)]="colonneCibleEnPlus[relation.id]"
+                                                [attr.name]="'cleColonneComparee-' + relation.id"
+                                                [(ngModel)]="colonneComparee[relation.id]"
                                             >
-                                                <option value="">= colonne de {{ relation.targetTable }}…</option>
-                                                @for (colonne of colonnesDe(relation.targetTable); track colonne) {
+                                                <option value="">colonne…</option>
+                                                @for (colonne of colonnesDe(tableComparee[relation.id] || ''); track colonne) {
                                                     <option [value]="colonne">{{ colonne }}</option>
                                                 }
                                             </select>
@@ -624,8 +654,11 @@ export class ModeleComponent {
     vue: 'compacte' | 'schema' = 'compacte';
     nouveau = { sourceTable: '', sourceCol: '', targetTable: '', targetCol: '', cardinality: 'N-1' };
     /** La colonne que l'on est en train d'ajouter à la clé d'un lien, de chaque côté. */
-    colonneSourceEnPlus: Record<string, string> = {};
-    colonneCibleEnPlus: Record<string, string> = {};
+    /** Saisie en cours d'une condition de clé : le côté contraint, puis la table comparée et sa colonne. */
+    tableContrainte: Record<string, string> = {};
+    colonneContrainte: Record<string, string> = {};
+    tableComparee: Record<string, string> = {};
+    colonneComparee: Record<string, string> = {};
     brouillonRegle: BrouillonRegle = { relationId: '', sens: 'cible', condCol: '', condOp: '=', condVal: '', expect: '=', n: 1 };
 
     /**
@@ -786,30 +819,36 @@ export class ModeleComponent {
         }
     }
     /**
-     * Ajoute une colonne à la clé du lien. C'est ce qui empêche une jointure de multiplier les lignes : un
-     * élément présent dans plusieurs groupes se retrouve une fois par groupe, et seule la clé (groupe,
-     * élément) le retrouve une seule fois. Toutes les extractions qui passent par ce lien en profitent.
+     * Ajoute une condition à la clé du lien. C'est ce qui empêche une jointure de multiplier les lignes : un
+     * élément présent dans plusieurs groupes se retrouve une fois par groupe, et seule la condition sur le
+     * groupe le retrouve une seule fois. La table qui porte le groupe n'est pas forcément un bout du lien —
+     * elle peut être plus loin dans le modèle, et l'extraction la ramènera d'office.
      */
     async ajouterALaCle(relation: Relation): Promise<void> {
-        const sourceCol = this.colonneSourceEnPlus[relation.id] || '';
-        const targetCol = this.colonneCibleEnPlus[relation.id] || '';
-        if (!sourceCol || !targetCol) return this.notifications.erreur('Choisissez une colonne de chaque côté.');
+        const condition = {
+            deTable: this.tableContrainte[relation.id] || '',
+            deColonne: this.colonneContrainte[relation.id] || '',
+            versTable: this.tableComparee[relation.id] || '',
+            versColonne: this.colonneComparee[relation.id] || ''
+        };
+        if (!condition.deTable || !condition.deColonne || !condition.versTable || !condition.versColonne)
+            return this.notifications.erreur('Choisissez une table et une colonne de chaque côté.');
         const deja = relation.extraCols || [];
-        if (sourceCol === relation.sourceCol && targetCol === relation.targetCol)
-            return this.notifications.erreur('Cette paire est déjà la clé principale du lien.');
-        if (deja.some(paire => paire.sourceCol === sourceCol && paire.targetCol === targetCol))
-            return this.notifications.erreur('Cette paire fait déjà partie de la clé.');
-        await this.modifier(relation, { extraCols: [...deja, { sourceCol, targetCol }] });
-        this.colonneSourceEnPlus[relation.id] = '';
-        this.colonneCibleEnPlus[relation.id] = '';
+        if (condition.deTable === condition.versTable && condition.deColonne === condition.versColonne)
+            return this.notifications.erreur('Une colonne comparée à elle-même ne contraint rien.');
+        if (deja.some(autre => JSON.stringify(autre) === JSON.stringify(condition)))
+            return this.notifications.erreur('Cette condition fait déjà partie de la clé.');
+        await this.modifier(relation, { extraCols: [...deja, condition] });
+        for (const saisie of [this.tableContrainte, this.colonneContrainte, this.tableComparee, this.colonneComparee])
+            saisie[relation.id] = '';
     }
 
-    /** Retire une colonne de la clé : le lien redevient plus large, et peut de nouveau multiplier. */
+    /** Retire une condition de la clé : le lien redevient plus large, et peut de nouveau multiplier. */
     async retirerDeLaCle(relation: Relation, rang: number): Promise<void> {
-        await this.modifier(relation, { extraCols: (relation.extraCols || []).filter((paire, position) => position !== rang) });
+        await this.modifier(relation, { extraCols: (relation.extraCols || []).filter((_condition, position) => position !== rang) });
     }
 
-    async modifier(relation: Relation, changements: { cardinality?: string; kind?: string; extraCols?: PaireDeColonnes[] }): Promise<void> {
+    async modifier(relation: Relation, changements: { cardinality?: string; kind?: string; extraCols?: ConditionDeLien[] }): Promise<void> {
         try {
             this.relations.set(await this.api.modifierRelation(relation.id, changements));
         } catch (erreur) {
