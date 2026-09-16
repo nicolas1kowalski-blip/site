@@ -1,6 +1,6 @@
 /**
- * Test d'intégration de la codification : une liste d'équipements reçue, une nomenclature en arbre, et le
- * code type d'équipement retrouvé ligne à ligne — par le code déjà fourni, par la table de correspondance, par
+ * Test d’intégration de la codification : une liste d’équipements reçue, une nomenclature en arbre, et le
+ * code type d’équipement retrouvé ligne à ligne — par le code déjà fourni, par la table de correspondance, par
  * les règles de mots-clés, puis par la ressemblance du libellé, en restant dans la bonne famille.
  */
 import 'reflect-metadata';
@@ -62,34 +62,34 @@ before(async () => {
         'equi',
         'equipements.csv',
         [
-            'REPERE;LIBELLE;FAMILLE;CODE_FOURNI',
-            'EQ001;Pompe centrifuge alimentaire;POMPES;',
-            'EQ002;POMPE  CENTRIFUGE (X2);POMPES;',
-            'EQ003;Vanne papillon DN100;VANNES;',
-            'EQ004;Vanne DN80;VANNES;',
-            'EQ005;Échangeur à plaques;ECHANGEURS;ECH-P',
-            'EQ006;Bidule non identifiable;POMPES;',
-            'EQ007;Pompe à vide;POMPES;',
-            'EQ008;Groupe motopompe centrif;POMPES;',
-            'EQ009;Electrovanne papillon DN50;VANNES;',
+            'REPERE;LIBELLE;FAMILLE;CODE_FOURNI;DESIGNATION',
+            'EQ001;Pompe centrifuge alimentaire;POMPES;;PC ALIM',
+            'EQ002;POMPE  CENTRIFUGE (X2);POMPES;;PC X2',
+            'EQ003;Vanne papillon DN100;VANNES;;VP DN100',
+            'EQ004;Vanne DN80;VANNES;;VP DN80',
+            'EQ005;Échangeur à plaques;ECHANGEURS;ECH-P;EP 12',
+            'EQ006;Bidule non identifiable;POMPES;;ZZZ',
+            'EQ007;Pompe à vide;POMPES;;PV 3',
+            'EQ008;Groupe motopompe centrif;POMPES;;PC 7',
+            'EQ009;Electrovanne papillon DN50;VANNES;;VP DN50',
             ''
         ].join('\n'),
-        ['REPERE', 'LIBELLE', 'FAMILLE', 'CODE_FOURNI']
+        ['REPERE', 'LIBELLE', 'FAMILLE', 'CODE_FOURNI', 'DESIGNATION']
     );
     // La nomenclature : famille › système › sous-système › type, et le code du type tout en bas.
     await deposerSource(
         'nomen',
         'nomenclature.csv',
         [
-            'FAMILLE;SYSTEME;SOUS_SYSTEME;LIBELLE_TYPE;CODE_TYPE',
-            'POMPES;Transfert;Centrifuge;Pompe centrifuge;PMP-C',
-            'POMPES;Vide;Anneau liquide;Pompe a vide;PMP-V',
-            'VANNES;Sectionnement;Quart de tour;Vanne papillon;VAN-P',
-            'VANNES;Reglage;Lineaire;Vanne de reglage;VAN-R',
-            'ECHANGEURS;Thermique;Plaques;Echangeur a plaques;ECH-P',
+            'FAMILLE;SYSTEME;SOUS_SYSTEME;LIBELLE_TYPE;CODE_TYPE;ABREGE',
+            'POMPES;Transfert;Centrifuge;Pompe centrifuge;PMP-C;PC',
+            'POMPES;Vide;Anneau liquide;Pompe a vide;PMP-V;PV',
+            'VANNES;Sectionnement;Quart de tour;Vanne papillon;VAN-P;VP',
+            'VANNES;Reglage;Lineaire;Vanne de reglage;VAN-R;VR',
+            'ECHANGEURS;Thermique;Plaques;Echangeur a plaques;ECH-P;EP',
             ''
         ].join('\n'),
-        ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE', 'CODE_TYPE']
+        ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE', 'CODE_TYPE', 'ABREGE']
     );
 });
 after(async () => {
@@ -110,6 +110,7 @@ const codification = (partielle: object = {}) => ({
     restreindreSource: 'FAMILLE',
     restreindreNomenclature: 'FAMILLE',
     regles: [],
+    comparaisons: [],
     synonymes: [],
     correspondances: [],
     seuilAuto: 0.99,
@@ -131,7 +132,8 @@ const parRepere = (resultat: { colonnes: string[]; lignes: unknown[][] }) => {
                 code: ligne[indice('__code')] === null ? '' : String(ligne[indice('__code')]),
                 origine: String(ligne[indice('__origine')]),
                 statut: String(ligne[indice('__statut')]),
-                chemin: ligne[indice('__chemin')] === null ? '' : String(ligne[indice('__chemin')])
+                chemin: ligne[indice('__chemin')] === null ? '' : String(ligne[indice('__chemin')]),
+                score: Number(ligne[indice('__score')]) || 0
             }
         ])
     );
@@ -275,7 +277,7 @@ test('codification : une configuration incomplète est refusée avec un message,
 
 /**
  * Les synonymes : le jargon du site ne ressemble pas toujours à la nomenclature. « Groupe motopompe centrif »
- * est une pompe centrifuge, « Electrovanne papillon » une vanne papillon — à condition de l'avoir déclaré.
+ * est une pompe centrifuge, « Electrovanne papillon » une vanne papillon — à condition de l’avoir déclaré.
  */
 test('synonymes : un libellé écrit dans le jargon du site retrouve son type une fois les variantes déclarées', async () => {
     await enregistrer();
@@ -301,10 +303,54 @@ test('synonymes : « même mal orthographiée » rattrape la variante écrite de
     await enregistrer({
         synonymes: [{ id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: true }]
     });
-    // « CENTRIFF » n'est pas « CENTRIF », mais en est assez proche pour être reconnu comme lui.
+    // « CENTRIFF » n’est pas « CENTRIF », mais en est assez proche pour être reconnu comme lui.
     const cas = json(await appel({ method: 'POST', url: '/api/codification/cd1/revue', payload: { combien: 50 } }));
     assert.ok(Array.isArray(cas), 'la requête aux lambdas imbriquées passe bien sur le moteur');
     const strict = await enregistrer({ synonymes: [{ id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: false }] });
     assert.equal(strict.statusCode, 200);
     assert.equal((await executer()).bilan.total, 9, 'les neuf lignes sont toujours codées, quel que soit le réglage');
+});
+
+/**
+ * Ce que l’on compare n’est pas toujours le libellé. La liste porte parfois une désignation technique
+ * « VP DN80 » que la nomenclature reprend en abrégé « VP » — c’est ce couple-là qu’il faut rapprocher.
+ */
+test('comparaisons : on peut rapprocher un tout autre attribut, des deux côtés', async () => {
+    await enregistrer({
+        comparaisons: [{ id: 'c1', colonneSource: 'DESIGNATION', colonneNomenclature: 'ABREGE', poids: 1, methode: 'mots' }],
+        seuilAuto: 0.99,
+        seuilRevoir: 0.45
+    });
+    const lignes = parRepere(await executer());
+    assert.equal(lignes.EQ004.code, 'VAN-P', '« VP DN80 » contient l’abrégé « VP » : c’est une vanne papillon');
+    assert.equal(lignes.EQ004.origine, 'ressemblance');
+    assert.equal(lignes.EQ006.statut, 'absent', '« ZZZ » ne ressemble à aucun abrégé');
+});
+
+test('comparaisons : deux colonnes se combinent, et le poids fait pencher la balance', async () => {
+    await enregistrer({
+        comparaisons: [
+            { id: 'c1', colonneSource: 'LIBELLE', colonneNomenclature: 'LIBELLE_TYPE', poids: 3, methode: 'mots' },
+            { id: 'c2', colonneSource: 'DESIGNATION', colonneNomenclature: 'ABREGE', poids: 1, methode: 'mots' }
+        ],
+        seuilAuto: 0.99,
+        seuilRevoir: 0.45
+    });
+    const lignes = parRepere(await executer());
+    assert.equal(lignes.EQ001.code, 'PMP-C', 'le libellé et la désignation vont dans le même sens : la ligne est codée');
+    assert.equal(lignes.EQ003.code, 'VAN-P');
+    // Vanne DN80 ne donne qu’un mot sur deux au libelle, mais sa designation VP DN80 confirme le type.
+    assert.equal(lignes.EQ004.statut, 'revoir', 'les deux colonnes ne suffisent pas encore à trancher seules');
+    assert.ok(lignes.EQ004.score > 0.5, 'la désignation a tout de même remonté le score');
+});
+
+test('comparaisons : chacune peut avoir sa propre mesure, sans perturber les autres', async () => {
+    await enregistrer({
+        comparaisons: [
+            { id: 'c1', colonneSource: 'LIBELLE', colonneNomenclature: 'LIBELLE_TYPE', poids: 1, methode: 'mots' },
+            { id: 'c2', colonneSource: 'DESIGNATION', colonneNomenclature: 'ABREGE', poids: 1, methode: 'jw' }
+        ]
+    });
+    const bilan = (await executer()).bilan;
+    assert.equal(bilan.total, 9, 'les neuf lignes sont traitées, quelles que soient les mesures mêlées');
 });

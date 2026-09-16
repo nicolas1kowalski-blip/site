@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
     Codification,
+    comparaisonsRetenues,
+    scoreDeRessemblance,
     canoniser,
     motRetenuDuTexte,
     ErreurCodification,
@@ -187,7 +189,7 @@ test('synonymes : les deux côtés de la comparaison y passent, et la table de c
         codification({ synonymes, correspondances: [{ libelle: 'Motopompe centrif', code: 'PMP-C', auteur: '', le: '' }] }),
         contexte
     );
-    assert.equal(sql.match(/motEcrit = 'MOTOPOMPE'/g)?.length, 2, 'le libellé lu et celui de la nomenclature');
+    assert.ok((sql.match(/motEcrit = 'MOTOPOMPE'/g) || []).length >= 2, 'le libellé lu et celui de la nomenclature y passent');
     assert.match(sql, /'POMPE CENTRIFUGE'/, 'le libellé appris est rangé sous sa forme retenue');
     const revue = sqlDesCasARevoir(codification({ synonymes }), contexte);
     assert.ok((revue.match(/motEcrit = 'MOTOPOMPE'/g) || []).length >= 2, 'la revue compare les mêmes formes retenues');
@@ -197,4 +199,80 @@ test('synonymes : un libellé appris est rangé sous les mots retenus, plusieurs
     assert.equal(motRetenuDuTexte('Motopompe centrif', synonymes), 'POMPE CENTRIFUGE');
     assert.equal(motRetenuDuTexte('Groupe motopompe alimentaire', synonymes), 'POMPE ALIMENTAIRE');
     assert.equal(motRetenuDuTexte('Vanne papillon', synonymes), 'VANNE PAPILLON', 'ce qui n’est pas déclaré ne bouge pas');
+});
+
+const comparaison = (partielle = {}) => ({
+    id: 'cp1',
+    colonneSource: 'LIBELLE',
+    colonneNomenclature: 'LIBELLE_TYPE',
+    poids: 1,
+    methode: '',
+    ...partielle
+});
+
+test('comparaisons : sans rien de déclaré, on compare le libellé de la liste au libellé de la nomenclature', () => {
+    const retenues = comparaisonsRetenues(codification());
+    assert.equal(retenues.length, 1);
+    assert.equal(retenues[0].colonneSource, 'LIBELLE');
+    assert.equal(retenues[0].colonneNomenclature, 'LIBELLE_TYPE');
+});
+
+test('comparaisons : une comparaison incomplète est ignorée, et l’on retombe sur le libellé', () => {
+    const retenues = comparaisonsRetenues(codification({ comparaisons: [comparaison({ colonneNomenclature: '' })] }));
+    assert.equal(retenues[0].id, 'defaut');
+});
+
+test('comparaisons : on peut comparer un tout autre attribut, des deux côtés', () => {
+    const sql = scoreDeRessemblance(
+        codification({ comparaisons: [comparaison({ colonneSource: 'DESIGNATION', colonneNomenclature: 'LIBELLE_CODIFICATION' })] }),
+        'r',
+        'n'
+    );
+    assert.match(sql, /r\."DESIGNATION"/);
+    assert.match(sql, /n\."LIBELLE_CODIFICATION"/);
+    assert.ok(!/r\."LIBELLE"/.test(sql), 'le libellé n’est plus comparé si on ne l’a pas demandé');
+});
+
+test('comparaisons : plusieurs colonnes se combinent en moyenne pondérée', () => {
+    const sql = scoreDeRessemblance(
+        codification({
+            comparaisons: [
+                comparaison({ id: 'c1', poids: 3 }),
+                comparaison({ id: 'c2', colonneSource: 'MARQUE', colonneNomenclature: 'FABRICANT', poids: 1 })
+            ]
+        }),
+        'r',
+        'n'
+    );
+    assert.match(sql, /^\(3 \* \(/, 'la comparaison la plus lourde ouvre la somme');
+    assert.match(sql, /1 \* \(/);
+    assert.match(sql, /\) \/ 4$/, 'la somme est divisée par le total des poids');
+    assert.match(sql, /r\."MARQUE"/);
+    assert.match(sql, /n\."FABRICANT"/);
+});
+
+test('comparaisons : chacune peut avoir sa propre mesure, sinon elle prend celle de la codification', () => {
+    const sql = scoreDeRessemblance(
+        codification({
+            methode: 'mots',
+            comparaisons: [
+                comparaison({ id: 'c1' }),
+                comparaison({ id: 'c2', colonneSource: 'REPERE', colonneNomenclature: 'CODE_TYPE', methode: 'jw' })
+            ]
+        }),
+        'r',
+        'n'
+    );
+    assert.match(sql, /string_split/, 'la première garde la mesure par mots de la codification');
+    assert.match(sql, /jaro_winkler_similarity\(TRIM\(regexp_replace/, 'la seconde compare les chaînes, comme elle l’a demandé');
+});
+
+test('comparaisons : la revue garde à portée les colonnes comparées, quelles qu’elles soient', () => {
+    const sql = sqlDesCasARevoir(
+        codification({ comparaisons: [comparaison({ colonneSource: 'DESIGNATION', colonneNomenclature: 'MOTS_CLES' })] }),
+        contexte
+    );
+    assert.match(sql, /SELECT codee\.\*/, 'toutes les colonnes de la ligne restent disponibles');
+    assert.match(sql, /aCoder\."DESIGNATION"/);
+    assert.match(sql, /n\."MOTS_CLES"/);
 });

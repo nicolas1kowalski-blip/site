@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-16T17:48:31.158Z",
+ "generated": "2026-09-16T18:46:38.880Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 47913,
-  "codeLines": 45716,
-  "commentLines": 2197,
-  "templateLines": 9408,
+  "lines": 48034,
+  "codeLines": 45824,
+  "commentLines": 2210,
+  "templateLines": 9433,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6353,
-  "shortLocals": 844,
-  "functions": 1576,
+  "locals": 6367,
+  "shortLocals": 845,
+  "functions": 1584,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.1328506217535023
+  "shortLocalsRatio": 0.13271556463012407
  },
  "files": [
   {
@@ -1139,30 +1139,30 @@
   },
   {
    "file": "94-couche-v13/A6-v13-codification-moteur.js",
-   "lines": 407,
-   "codeLines": 344,
-   "commentLines": 63,
+   "lines": 446,
+   "codeLines": 373,
+   "commentLines": 73,
    "templateLines": 88,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 67,
-   "shortLocals": 0,
-   "functions": 27,
-   "longestLogic": 124,
-   "shortLocalsRatio": 0
+   "locals": 74,
+   "shortLocals": 1,
+   "functions": 30,
+   "longestLogic": 127,
+   "shortLocalsRatio": 0.013513513513513514
   },
   {
    "file": "94-couche-v13/A7-v13-codification-ecran.js",
-   "lines": 561,
-   "codeLines": 522,
-   "commentLines": 39,
-   "templateLines": 158,
+   "lines": 643,
+   "codeLines": 601,
+   "commentLines": 42,
+   "templateLines": 183,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 58,
+   "locals": 65,
    "shortLocals": 0,
-   "functions": 34,
-   "longestLogic": 124,
+   "functions": 39,
+   "longestLogic": 127,
    "shortLocalsRatio": 0
   },
   {

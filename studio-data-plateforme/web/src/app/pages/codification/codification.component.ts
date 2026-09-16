@@ -17,12 +17,14 @@ import { CasARevoir, Codification, ResultatCodification, Source, VocabulaireCodi
 import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import {
+    ComparaisonCodification,
     RegleCodification,
     SynonymeCodification,
     allureDuScore,
     allureDuStatut,
     motsSaisis,
     phraseDeLOrigine,
+    phraseDeLaComparaison,
     phraseDeLaRegle,
     phraseDuSynonyme,
     prochaineAction,
@@ -42,6 +44,7 @@ function codificationNeuve(): Codification {
         colonneCode: '',
         colonneLibelleRef: '',
         niveaux: [],
+        comparaisons: [],
         synonymes: [],
         restreindreSource: '',
         restreindreNomenclature: '',
@@ -225,7 +228,96 @@ function codificationNeuve(): Codification {
             </div>
 
             <div class="carte">
-                <h2>② Les mots qui en valent d'autres</h2>
+                <h2>② Ce que l'on compare</h2>
+                <p class="discret">
+                    Par défaut, le libellé de la liste contre le libellé de la nomenclature. Mais le rapprochement peut porter sur un tout
+                    autre attribut — une désignation technique contre un libellé de codification, une marque contre un fabricant — et sur
+                    plusieurs à la fois : le score est alors leur moyenne pondérée.
+                </p>
+                <table class="tableau">
+                    <thead>
+                        <tr>
+                            <th>Colonne de la liste</th>
+                            <th>Colonne de la nomenclature</th>
+                            <th>Poids</th>
+                            <th>Mesure</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (comparaison of codification.comparaisons; track comparaison.id; let rang = $index) {
+                            <tr [attr.name]="'comparaison-' + comparaison.id">
+                                <td>
+                                    <select
+                                        class="champ petit"
+                                        [(ngModel)]="comparaison.colonneSource"
+                                        [attr.name]="'cmpSource-' + comparaison.id"
+                                    >
+                                        <option value="">—</option>
+                                        @for (colonne of colonnesDe(codification.source); track colonne) {
+                                            <option [value]="colonne">{{ colonne }}</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <select
+                                        class="champ petit"
+                                        [(ngModel)]="comparaison.colonneNomenclature"
+                                        [attr.name]="'cmpNomenclature-' + comparaison.id"
+                                    >
+                                        <option value="">—</option>
+                                        @for (colonne of colonnesDe(codification.nomenclature); track colonne) {
+                                            <option [value]="colonne">{{ colonne }}</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <input
+                                        class="champ petit"
+                                        type="number"
+                                        min="0.1"
+                                        max="10"
+                                        step="0.5"
+                                        [(ngModel)]="comparaison.poids"
+                                        [attr.name]="'cmpPoids-' + comparaison.id"
+                                    />
+                                </td>
+                                <td>
+                                    <select
+                                        class="champ petit"
+                                        [(ngModel)]="comparaison.methode"
+                                        [attr.name]="'cmpMethode-' + comparaison.id"
+                                    >
+                                        <option value="">celle de la codification</option>
+                                        @for (methode of methodes(); track methode[0]) {
+                                            <option [value]="methode[0]">{{ methode[1] }}</option>
+                                        }
+                                    </select>
+                                    <div class="discret" [attr.name]="'phraseComparaison-' + comparaison.id">
+                                        {{ phraseDeLaComparaison(comparaison, vocabulaire()?.methodes || {}) }}
+                                    </div>
+                                </td>
+                                <td class="actions">
+                                    <button class="bouton petit danger" type="button" (click)="retirerLaComparaison(rang)" title="Retirer">
+                                        ✕
+                                    </button>
+                                </td>
+                            </tr>
+                        } @empty {
+                            <tr>
+                                <td colspan="5" class="discret">
+                                    Rien de déclaré : on compare « {{ codification.colonneLibelle || 'le libellé' }} » à «
+                                    {{ codification.colonneLibelleRef || 'le libellé du type' }} ».
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button class="bouton" type="button" name="ajouterComparaison" (click)="ajouterUneComparaison()">+ Comparaison</button>
+            </div>
+
+            <div class="carte">
+                <h2>③ Les mots qui en valent d'autres</h2>
                 <p class="discret">
                     Le jargon du site ne ressemble pas toujours à la nomenclature. Déclarez ici qu'une motopompe est une pompe, qu'une
                     électrovanne est une vanne, que « centrif » veut dire « centrifuge » : les variantes sont ramenées au mot retenu des
@@ -277,7 +369,7 @@ function codificationNeuve(): Codification {
             </div>
 
             <div class="carte">
-                <h2>③ Les règles, de la plus sûre à la plus souple</h2>
+                <h2>④ Les règles, de la plus sûre à la plus souple</h2>
                 <p class="discret">
                     La première qui répond gagne. Le code déjà fourni passe avant tout, puis la table de correspondance ({{
                         codification.correspondances.length
@@ -370,7 +462,7 @@ function codificationNeuve(): Codification {
 
         @if (resultat(); as resultat) {
             <div class="carte">
-                <h2>④ Le résultat</h2>
+                <h2>⑤ Le résultat</h2>
                 <div class="kpis">
                     <div class="kpi">
                         <span>Codées d'office</span><b class="succes" name="compteOffice">{{ resultat.bilan.office }}</b>
@@ -414,7 +506,7 @@ function codificationNeuve(): Codification {
 
         @if (casARevoir().length) {
             <div class="carte">
-                <h2>⑤ À revoir — {{ casARevoir().length }} cas</h2>
+                <h2>⑥ À revoir — {{ casARevoir().length }} cas</h2>
                 <p class="discret">
                     Chaque décision descend dans la table de correspondance : à la prochaine livraison, ce libellé sera codé tout seul.
                 </p>
@@ -535,6 +627,7 @@ export class CodificationComponent {
 
     readonly phraseDeLaRegle = phraseDeLaRegle;
     readonly phraseDuSynonyme = phraseDuSynonyme;
+    readonly phraseDeLaComparaison = phraseDeLaComparaison;
     readonly motsSaisis = motsSaisis;
     readonly saisieDesMots = saisieDesMots;
     readonly scoreLisible = scoreLisible;
@@ -582,6 +675,22 @@ export class CodificationComponent {
     retirerNiveau(rang: number): void {
         const codification = this.choisie();
         if (codification) codification.niveaux = codification.niveaux.filter((_niveau, position) => position !== rang);
+    }
+    ajouterUneComparaison(): void {
+        const codification = this.choisie();
+        if (!codification) return;
+        const comparaison: ComparaisonCodification = {
+            id: genererIdentifiant('cp_'),
+            colonneSource: codification.colonneLibelle,
+            colonneNomenclature: codification.colonneLibelleRef,
+            poids: 1,
+            methode: ''
+        };
+        codification.comparaisons = [...(codification.comparaisons || []), comparaison];
+    }
+    retirerLaComparaison(rang: number): void {
+        const codification = this.choisie();
+        if (codification) codification.comparaisons = codification.comparaisons.filter((_comparaison, position) => position !== rang);
     }
     ajouterUnSynonyme(): void {
         const codification = this.choisie();

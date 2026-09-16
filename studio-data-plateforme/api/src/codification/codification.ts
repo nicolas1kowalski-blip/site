@@ -75,6 +75,24 @@ export const schemaSynonyme = z.object({
 });
 export type Synonyme = z.infer<typeof schemaSynonyme>;
 
+/**
+ * Ce que l'on compare pour mesurer la ressemblance : une colonne de la liste reçue contre une colonne de la
+ * nomenclature. Ce n'est pas toujours le libellé contre le libellé — la liste peut porter la désignation
+ * technique et la nomenclature un libellé de codification, ou l'on peut vouloir peser aussi la marque contre
+ * le fabricant. Chaque comparaison a son poids ; le score est leur moyenne pondérée.
+ */
+export const schemaComparaison = z.object({
+    id: z.string().min(1),
+    // Vides tant que la ligne se remplit : une comparaison à moitié saisie n'empêche pas d'enregistrer.
+    colonneSource: z.string().default(''),
+    colonneNomenclature: z.string().default(''),
+    /** Ce que cette comparaison pèse dans le score, face aux autres. */
+    poids: z.number().min(0.1).max(10).default(1),
+    /** Sa propre mesure, ou vide pour celle de la codification. */
+    methode: z.enum(['', ...(Object.keys(METHODES_DE_RESSEMBLANCE) as MethodeDeRessemblance[])]).default('')
+});
+export type ComparaisonCodification = z.infer<typeof schemaComparaison>;
+
 export const schemaCorrespondance = z.object({
     /** Le libellé tel qu'il a été vu, ou une variante décidée à la revue. */
     libelle: z.string().min(1),
@@ -108,6 +126,11 @@ export const schemaCodification = z.object({
      * dans le jargon du site retrouve quand même son type. Les règles de mots-clés, elles, restent littérales :
      * on les a écrites exprès sur un mot précis.
      */
+    /**
+     * Ce que l'on compare, des deux côtés. Vide = le libellé de la liste contre le libellé de la
+     * nomenclature, comme lorsque l'on n'a rien dit.
+     */
+    comparaisons: z.array(schemaComparaison).max(10).default([]),
     synonymes: z.array(schemaSynonyme).max(500).default([]),
     regles: z.array(schemaRegle).max(500).default([]),
     correspondances: z.array(schemaCorrespondance).max(20_000).default([]),
@@ -249,9 +272,9 @@ function conditionDeLaVariante(variante: string, proche: boolean): string {
 }
 
 /** La part des mots du libellé de référence que l'on retrouve dans le libellé lu. */
-function motsRetrouves(lu: string, reference: string): string {
+function motsRetrouves(libelleLu: string, reference: string): string {
     const mots = `string_split(${reference}, ' ')`;
-    const retrouve = `len(list_filter(string_split(${lu}, ' '),
+    const retrouve = `len(list_filter(string_split(${libelleLu}, ' '),
             motLu -> motLu = motRef OR (length(motRef) >= ${LETTRES_POUR_TOLERER_UNE_FAUTE}
                 AND jaro_winkler_similarity(motLu, motRef) >= ${TOLERANCE_PAR_MOT}))) > 0`;
     return `list_aggregate(list_transform(${mots}, motRef -> CASE WHEN ${retrouve} THEN 1 ELSE 0 END), 'sum')::DOUBLE
@@ -267,6 +290,42 @@ export function ressemblance(gauche: string, droite: string, methode: MethodeDeR
             ELSE 1.0 - levenshtein(${gauche}, ${droite})::DOUBLE / GREATEST(length(${gauche}), length(${droite}), 1) END`;
     return `CASE WHEN ${gauche} IS NULL OR ${droite} IS NULL OR ${gauche} = '' OR ${droite} = '' THEN 0.0
         ELSE jaro_winkler_similarity(${gauche}, ${droite}) END`;
+}
+
+/**
+ * Les comparaisons réellement appliquées. Quand on n'a rien déclaré, c'est le libellé de la liste contre le
+ * libellé de la nomenclature : le cas courant n'oblige à rien dire.
+ */
+export function comparaisonsRetenues(codification: Codification): ComparaisonCodification[] {
+    const declarees = (codification.comparaisons || []).filter(comparaison => comparaison.colonneSource && comparaison.colonneNomenclature);
+    if (declarees.length) return declarees;
+    return [
+        {
+            id: 'defaut',
+            colonneSource: codification.colonneLibelle,
+            colonneNomenclature: codification.colonneLibelleRef,
+            poids: 1,
+            methode: ''
+        }
+    ];
+}
+
+/**
+ * Le score de ressemblance d'une ligne avec une ligne de la nomenclature : la moyenne pondérée des
+ * comparaisons déclarées. Les deux côtés passent par les synonymes avant d'être comparés.
+ */
+export function scoreDeRessemblance(codification: Codification, aliasSource: string, aliasNomenclature: string): string {
+    const comparaisons = comparaisonsRetenues(codification);
+    const total = comparaisons.reduce((somme, comparaison) => somme + (comparaison.poids || 1), 0) || 1;
+    const parts = comparaisons.map(comparaison => {
+        const libelleLu = canoniser(texteCompare(`${aliasSource}.${identifiantSql(comparaison.colonneSource)}`), codification.synonymes);
+        const reference = canoniser(
+            texteCompare(`${aliasNomenclature}.${identifiantSql(comparaison.colonneNomenclature)}`),
+            codification.synonymes
+        );
+        return `${comparaison.poids || 1} * (${ressemblance(libelleLu, reference, comparaison.methode || codification.methode)})`;
+    });
+    return `(${parts.join(' + ')}) / ${total}`;
 }
 
 /** La condition qui enferme la recherche dans la bonne branche de l'arbre — vraie partout si l'on ne restreint pas. */
@@ -328,11 +387,7 @@ export function sqlDeCodification(codification: Codification, contexte: Contexte
         ${codeDesRegles(codification, correspondances)} AS __code_regle,
         ${origineDesRegles(codification, correspondances)} AS __origine_regle
         FROM ${tableSource} s${correspondances ? `\n        LEFT JOIN ${correspondances} ON corr.libelle = ${libelle}` : ''}`;
-    const scoreDuVoisin = ressemblance(
-        'r.__libelle',
-        texteCompare(`n.${identifiantSql(codification.colonneLibelleRef)}`),
-        codification.methode
-    );
+    const scoreDuVoisin = scoreDeRessemblance(codification, 'r', 'n');
     const candidats = `SELECT r.__rn AS __rn, n.${identifiantSql(codification.colonneCode)} AS __code_voisin, (${scoreDuVoisin}) AS __score_voisin
         FROM reconnues r
         JOIN ${tableNomenclature} n ON ${conditionDeBranche(codification).replace(/\bs\./g, 'r.')}
@@ -395,18 +450,13 @@ export function sqlDesCasARevoir(codification: Codification, contexte: ContexteC
     const tableNomenclature = identifiantSql(contexte.nomTableDe(codification.nomenclature));
     const codeRef = identifiantSql(codification.colonneCode);
     const libelleRef = identifiantSql(codification.colonneLibelleRef);
-    const score = ressemblance(
-        'aCoder.__libelle',
-        canoniser(texteCompare(`n.${libelleRef}`), codification.synonymes),
-        codification.methode
-    );
+    const score = scoreDeRessemblance(codification, 'aCoder', 'n');
     const chemin = codification.niveaux.length
         ? `concat_ws(' › ', ${codification.niveaux.map(niveau => `CAST(n.${identifiantSql(niveau)} AS VARCHAR)`).join(', ')})`
         : `CAST(n.${codeRef} AS VARCHAR)`;
     const codee = sqlDeCodification(codification, contexte);
     return `WITH codee AS (\n${codee}\n), aCoder AS (
-    SELECT __rn, ${canoniser(texteCompare(`codee.${identifiantSql(codification.colonneLibelle)}`), codification.synonymes)} AS __libelle,
-        CAST(codee.${identifiantSql(codification.colonneLibelle)} AS VARCHAR) AS __texte
+    SELECT codee.*, CAST(codee.${identifiantSql(codification.colonneLibelle)} AS VARCHAR) AS __texte
     FROM codee WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${combien}
 )
 SELECT aCoder.__rn AS rang, aCoder.__texte AS libelle, CAST(n.${codeRef} AS VARCHAR) AS code,

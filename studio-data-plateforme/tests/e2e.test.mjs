@@ -2280,6 +2280,12 @@ try {
             /source\(s\) amont/.test(panneau) &&
             /usage\(s\) aval/.test(panneau)
     );
+    // La fiche d'identité se remplit après coup (volumétrie et cockpit sont chargés à l'ouverture du panneau).
+    await page
+        .waitForFunction(() => /Lignes/.test(document.querySelector('app-catalogue [name=ficheDidentite]')?.textContent || ''), null, {
+            timeout: 5000
+        })
+        .catch(() => {});
     verifier(
         'V13 : la fiche d’identité annonce le volume, la fraîcheur, le propriétaire et le domaine',
         /Lignes/.test(await page.textContent('app-catalogue [name=ficheDidentite]')) &&
@@ -2475,6 +2481,28 @@ try {
     await page.evaluate(() => document.querySelector('app-codification .kpis')?.scrollIntoView({ block: 'start' }));
     await page.evaluate(() => document.querySelectorAll('.notification').forEach(notification => notification.remove()));
     await capture('codification');
+    // Ce que l'on compare : le rapprochement peut porter sur un tout autre attribut, des deux côtés.
+    await page.click('app-codification button[name=ajouterComparaison]');
+    const comparaison = page.locator('app-codification tbody tr[name^=comparaison-]').first();
+    await comparaison.locator('select[name^=cmpSource-]').selectOption('DESIGNATION');
+    await comparaison.locator('select[name^=cmpNomenclature-]').selectOption('ABREGE');
+    const phraseComparaison = await comparaison.locator('div[name^=phraseComparaison-]').textContent();
+    verifier(
+        'codification : une comparaison se relit à voix haute — « DESIGNATION contre ABREGE »',
+        /DESIGNATION contre ABREGE/.test(phraseComparaison)
+    );
+    await page.click('app-codification button[name=coder]');
+    await page.waitForFunction(() =>
+        /codées d’office/.test(document.querySelector('app-codification [name=phraseBilan]')?.textContent || '')
+    );
+    const resultatParAbrege = await page.textContent('app-codification .resultat');
+    verifier(
+        'codification : le rapprochement porte alors sur la désignation contre l’abrégé, et « VP DN80 » trouve sa vanne papillon',
+        /VAN-P/.test(resultatParAbrege) && /ressemblance du libellé/.test(resultatParAbrege)
+    );
+    // On revient au libellé pour la suite : la comparaison déclarée remplace le défaut, elle ne s'y ajoute pas.
+    await comparaison.locator('button[title=Retirer]').click();
+
     // Les synonymes : le jargon du site ramené aux mots de la nomenclature.
     const synonymesADeclarer = [
         ['POMPE', 'motopompe ; groupe motopompe'],

@@ -6,6 +6,7 @@ import {
     allureDuStatut,
     motsSaisis,
     phraseDeLOrigine,
+    phraseDeLaComparaison,
     phraseDeLaRegle,
     phraseDuSynonyme,
     prochaineAction,
@@ -82,4 +83,20 @@ test('un synonyme se relit à voix haute, dans le bon sens', () => {
     );
     assert.match(phraseDuSynonyme({ id: 's3', motRetenu: '', variantes: [], proche: false }), /il manque le mot retenu/);
     assert.match(phraseDuSynonyme({ id: 's4', motRetenu: 'VANNE', variantes: [], proche: false }), /aucune variante/);
+});
+
+test('une comparaison se relit à voix haute, avec son poids et sa mesure', () => {
+    const methodes = { mots: 'Mots retrouvés (recommandé)', jw: 'Jaro-Winkler (compare les chaînes)' };
+    assert.equal(
+        phraseDeLaComparaison({ id: 'c1', colonneSource: 'LIBELLE', colonneNomenclature: 'LIBELLE_TYPE', poids: 1, methode: '' }, methodes),
+        'LIBELLE contre LIBELLE_TYPE'
+    );
+    assert.equal(
+        phraseDeLaComparaison({ id: 'c2', colonneSource: 'DESIGNATION', colonneNomenclature: 'ABREGE', poids: 3, methode: 'jw' }, methodes),
+        'DESIGNATION contre ABREGE, poids 3 (Jaro-Winkler)'
+    );
+    assert.match(
+        phraseDeLaComparaison({ id: 'c3', colonneSource: 'LIBELLE', colonneNomenclature: '', poids: 1, methode: '' }, methodes),
+        /comparaison incomplète/
+    );
 });

@@ -390,6 +390,17 @@ export type RegleCodification = {
     sauf: string[];
     motif: string;
 };
+/**
+ * Ce que l'on compare pour mesurer la ressemblance : une colonne de la liste reçue contre une colonne de la
+ * nomenclature. Ce n'est pas toujours le libellé contre le libellé. Chaque comparaison a son poids.
+ */
+export type ComparaisonCodification = {
+    id: string;
+    colonneSource: string;
+    colonneNomenclature: string;
+    poids: number;
+    methode: string;
+};
 /** Un mot qui en vaut d'autres : « MOTOPOMPE » vaut « POMPE ». Les variantes sont ramenées au mot retenu. */
 export type SynonymeCodification = { id: string; motRetenu: string; variantes: string[]; proche: boolean };
 /** Un libellé appris : ce qu'une décision de revue laisse derrière elle. */
@@ -409,6 +420,7 @@ export type Codification = {
     /** Ne chercher que dans la branche où la ligne se trouve déjà. Vide = chercher partout. */
     restreindreSource: string;
     restreindreNomenclature: string;
+    comparaisons: ComparaisonCodification[];
     synonymes: SynonymeCodification[];
     regles: RegleCodification[];
     correspondances: CorrespondanceCodification[];

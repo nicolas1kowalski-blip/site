@@ -16,22 +16,22 @@ await p.evaluate(()=>{ v11Prefs.tourDone=true; }); await p.waitForTimeout(1500);
 
 // La liste reçue et la nomenclature, telles qu'elles arrivent sur le terrain.
 const EQUIPEMENTS = [
-  ['EQ001','Pompe centrifuge alimentaire','POMPES',''],
-  ['EQ002','POMPE  CENTRIFUGE (X2)','POMPES',''],
-  ['EQ003','Vanne papillon DN100','VANNES',''],
-  ['EQ004','Vanne DN80','VANNES',''],
-  ['EQ005','Échangeur à plaques','ECHANGEURS','ECH-P'],
-  ['EQ006','Bidule non identifiable','POMPES',''],
-  ['EQ007','Pompe à vide','POMPES',''],
-  ['EQ008','Groupe motopompe centrif','POMPES',''],
-  ['EQ009','Electrovanne papillon DN50','VANNES','']
+  ['EQ001','Pompe centrifuge alimentaire','POMPES','','PC ALIM'],
+  ['EQ002','POMPE  CENTRIFUGE (X2)','POMPES','','PC X2'],
+  ['EQ003','Vanne papillon DN100','VANNES','','VP DN100'],
+  ['EQ004','Vanne DN80','VANNES','','VP DN80'],
+  ['EQ005','Échangeur à plaques','ECHANGEURS','ECH-P','EP 12'],
+  ['EQ006','Bidule non identifiable','POMPES','','ZZZ'],
+  ['EQ007','Pompe à vide','POMPES','','PV 3'],
+  ['EQ008','Groupe motopompe centrif','POMPES','','PC 7'],
+  ['EQ009','Electrovanne papillon DN50','VANNES','','VP DN50']
 ];
 const NOMENCLATURE = [
-  ['POMPES','Transfert','Centrifuge','Pompe centrifuge','PMP-C'],
-  ['POMPES','Vide','Anneau liquide','Pompe a vide','PMP-V'],
-  ['VANNES','Sectionnement','Quart de tour','Vanne papillon','VAN-P'],
-  ['VANNES','Reglage','Lineaire','Vanne de reglage','VAN-R'],
-  ['ECHANGEURS','Thermique','Plaques','Echangeur a plaques','ECH-P']
+  ['POMPES','Transfert','Centrifuge','Pompe centrifuge','PMP-C','PC'],
+  ['POMPES','Vide','Anneau liquide','Pompe a vide','PMP-V','PV'],
+  ['VANNES','Sectionnement','Quart de tour','Vanne papillon','VAN-P','VP'],
+  ['VANNES','Reglage','Lineaire','Vanne de reglage','VAN-R','VR'],
+  ['ECHANGEURS','Thermique','Plaques','Echangeur a plaques','ECH-P','EP']
 ];
 
 const out = await p.evaluate(async ()=>{
@@ -39,8 +39,8 @@ const out = await p.evaluate(async ()=>{
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
   try {
   ok('version : APP_VERSION = tête du journal = titre de l\'onglet (' + APP_VERSION + ')', APP_CHANGELOG[0].v===APP_VERSION && document.title==='Studio Data ' + APP_VERSION);
-  state.tables['eq']={id:'eq',name:'equipements.csv',type:'csv',status:'ready',headers:['REPERE','LIBELLE','FAMILLE','CODE_FOURNI'],config:{},columnsMeta:{}};
-  state.tables['nm']={id:'nm',name:'nomenclature.csv',type:'csv',status:'ready',headers:['FAMILLE','SYSTEME','SOUS_SYSTEME','LIBELLE_TYPE','CODE_TYPE'],config:{},columnsMeta:{}};
+  state.tables['eq']={id:'eq',name:'equipements.csv',type:'csv',status:'ready',headers:['REPERE','LIBELLE','FAMILLE','CODE_FOURNI','DESIGNATION'],config:{},columnsMeta:{}};
+  state.tables['nm']={id:'nm',name:'nomenclature.csv',type:'csv',status:'ready',headers:['FAMILLE','SYSTEME','SOUS_SYSTEME','LIBELLE_TYPE','CODE_TYPE','ABREGE'],config:{},columnsMeta:{}};
   renderTables();
 
   // ---- l'écran existe, sous Exploitation
@@ -65,6 +65,19 @@ const out = await p.evaluate(async ()=>{
   ok('les niveaux de l\'arbre sont déclarés dans l\'ordre, du plus haut au plus fin', C().niveaux.join('>')==='FAMILLE>SYSTEME>SOUS_SYSTEME>LIBELLE_TYPE' && el('step-17').querySelectorAll('#v13-codif-niveaux .v13-paire').length===4);
   v13EcrireDansLaCodification('restreindreSource','FAMILLE'); v13EcrireDansLaCodification('restreindreNomenclature','FAMILLE'); await wait(100);
   ok('la recherche est enfermée dans la branche de la famille', /FAMILLE/.test(v13ConditionDeBranche(C())) && v13ConditionDeBranche({}) === 'TRUE');
+
+  // ---- ce que l'on compare, des deux côtés
+  ok('sans rien de déclaré, on compare le libellé de la liste au libellé de la nomenclature', (()=>{ const r=v13ComparaisonsRetenues(C()); return r.length===1 && r[0].colonneSource==='LIBELLE' && r[0].colonneNomenclature==='LIBELLE_TYPE'; })());
+  v13AjouterUneComparaison(C().id); await wait(100);
+  const comparaison = C().comparaisons[0];
+  v13EcrireDansLaComparaison(C().id, comparaison.id, 'colonneSource', 'DESIGNATION');
+  v13EcrireDansLaComparaison(C().id, comparaison.id, 'colonneNomenclature', 'ABREGE');
+  v13EcrireDansLaComparaison(C().id, comparaison.id, 'poids', '3'); await wait(100);
+  ok('une comparaison se relit à voix haute, avec son poids', v13PhraseDeLaComparaison(C().comparaisons[0])==='DESIGNATION contre ABREGE, poids 3' && /DESIGNATION contre ABREGE, poids 3/.test(el('step-17').querySelector('.v13-codif-phrase-comparaison').textContent));
+  ok('une comparaison à moitié saisie est ignorée, et l’on retombe sur le libellé', v13ComparaisonsRetenues({ colonneLibelle:'LIBELLE', colonneLibelleRef:'LIBELLE_TYPE', comparaisons:[{id:'x',colonneSource:'DESIGNATION',colonneNomenclature:''}] })[0].id==='defaut');
+  ok('le score devient une moyenne pondérée des comparaisons déclarées', /^\(3 \* \(/.test(v13ScoreDeRessemblance(C(),'r','n')) && /\) \/ 3$/.test(v13ScoreDeRessemblance(C(),'r','n')));
+  window.__sqlAutreAttribut = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [] }));
+  C().comparaisons = [];
 
   // ---- les synonymes et les règles, relus en français
   v13AjouterUnSynonyme(C().id); await wait(100);
@@ -104,6 +117,7 @@ const out = await p.evaluate(async ()=>{
   return R;
 });
 const sqlSansSynonymes = await p.evaluate(()=>window.__sqlSansSynonymes);
+const sqlAutreAttribut = await p.evaluate(()=>window.__sqlAutreAttribut);
 const sqlAvecRegle = await p.evaluate(()=>window.__sqlAvecRegle);
 const sqlAvecSynonymes = await p.evaluate(()=>window.__sqlAvecSynonymes);
 const sqlRevue = await p.evaluate(()=>window.__sqlRevue);
@@ -115,8 +129,8 @@ const { DuckDBInstance } = await import('@duckdb/node-api');
 const instance = await DuckDBInstance.create(':memory:'); const conn = await instance.connect();
 const requete = async sql => (await (await conn.run(sql)).getRowObjects());
 const valeurs = lignes => lignes.map(ligne => '(' + ligne.map(v => `'${String(v).replace(/'/g,"''")}'`).join(', ') + ')').join(', ');
-await requete(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES ${valeurs(EQUIPEMENTS)}) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI)`);
-await requete(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES ${valeurs(NOMENCLATURE)}) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE)`);
+await requete(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES ${valeurs(EQUIPEMENTS)}) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+await requete(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES ${valeurs(NOMENCLATURE)}) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
 const ok=(n,c)=>out.push([n,!!c]);
 const parRepere = async sql => Object.fromEntries((await requete(sql)).map(l => [String(l.REPERE), l]));
 
@@ -137,6 +151,10 @@ ok('SQL réel : une décision de revue l’emporte sur tout le reste', tranchee.
 const revue = await requete(sqlRevue);
 ok('SQL réel : la revue propose au plus trois candidats par ligne, le plus probable en tête', revue.length>0 && revue.every(l=>Number(l.score)>0) && revue.filter(l=>Number(l.rang)===4).length<=3);
 ok('SQL réel : les propositions restent dans la famille de la ligne', revue.filter(l=>Number(l.rang)===4).every(l=>String(l.chemin).startsWith('VANNES')));
+
+const autreAttribut = await parRepere(sqlAutreAttribut);
+ok('SQL réel : le rapprochement porte sur la désignation contre l’abrégé, et non plus sur les libellés', autreAttribut.EQ004.__code==='VAN-P' && autreAttribut.EQ004.__origine==='ressemblance');
+ok('SQL réel : ce qui ne ressemble à aucun abrégé reste sans proposition', autreAttribut.EQ006.__statut==='absent');
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));

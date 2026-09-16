@@ -168,6 +168,44 @@
             if (methode === 'jw') return `CASE WHEN ${vide} THEN 0.0 ELSE jaro_winkler_similarity(${gauche}, ${droite}) END`;
             return `CASE WHEN ${vide} THEN 0.0 ELSE ${v13MotsRetrouves(gauche, droite)} END`;
         }
+        /**
+         * Les comparaisons réellement appliquées. Quand on n'a rien déclaré, c'est le libellé de la liste
+         * contre le libellé de la nomenclature : le cas courant n'oblige à rien dire.
+         */
+        function v13ComparaisonsRetenues(codification) {
+            const declarees = (codification.comparaisons || []).filter(
+                comparaison => comparaison.colonneSource && comparaison.colonneNomenclature
+            );
+            if (declarees.length) return declarees;
+            return [
+                {
+                    id: 'defaut',
+                    colonneSource: codification.colonneLibelle,
+                    colonneNomenclature: codification.colonneLibelleRef,
+                    poids: 1,
+                    methode: ''
+                }
+            ];
+        }
+        /**
+         * Le score de ressemblance d'une ligne avec une ligne de la nomenclature : la moyenne pondérée des
+         * comparaisons déclarées. Les deux côtés passent par les synonymes avant d'être comparés.
+         */
+        function v13ScoreDeRessemblance(codification, aliasSource, aliasNomenclature) {
+            const comparaisons = v13ComparaisonsRetenues(codification);
+            const total = comparaisons.reduce((somme, comparaison) => somme + (Number(comparaison.poids) || 1), 0) || 1;
+            const parts = comparaisons.map(comparaison => {
+                const lu = v13Canoniser(v13TexteCompare(`${aliasSource}.${sqlIdent(comparaison.colonneSource)}`), codification);
+                const reference = v13Canoniser(
+                    v13TexteCompare(`${aliasNomenclature}.${sqlIdent(comparaison.colonneNomenclature)}`),
+                    codification
+                );
+                const mesure = v13Ressemblance(lu, reference, comparaison.methode || codification.methode);
+                return `${Number(comparaison.poids) || 1} * (${mesure})`;
+            });
+            return `(${parts.join(' + ')}) / ${total}`;
+        }
+
         /** La condition qui enferme la recherche dans la bonne branche — vraie partout si l'on ne restreint pas. */
         function v13ConditionDeBranche(codification) {
             if (!codification.restreindreSource || !codification.restreindreNomenclature) return 'TRUE';
@@ -276,11 +314,7 @@
         ${v13CodeDesRegles(codification, correspondances)} AS __code_regle,
         ${v13OrigineDesRegles(codification, correspondances)} AS __origine_regle
             FROM ${tableSource} s${jointureCorrespondances}`;
-            const libelleDeReference = v13Canoniser(
-                v13TexteCompare(`n.${sqlIdent(codification.colonneLibelleRef)}`),
-                codification
-            );
-            const score = v13Ressemblance('r.__libelle', libelleDeReference, codification.methode);
+            const score = v13ScoreDeRessemblance(codification, 'r', 'n');
             const candidats = `SELECT r.__rn AS __rn, n.${sqlIdent(codification.colonneCode)} AS __code_voisin, (${score}) AS __score_voisin
             FROM reconnues r
             JOIN ${tableNomenclature} n ON ${v13ConditionDeBranche(codification).replace(/\bs\./g, 'r.')}
@@ -315,18 +349,14 @@
             const tableNomenclature = sqlIdent(duckTableName(tableByName(codification.nomenclature).id));
             const codeRef = sqlIdent(codification.colonneCode);
             const libelleRef = sqlIdent(codification.colonneLibelleRef);
-            const score = v13Ressemblance(
-                'aCoder.__libelle',
-                v13Canoniser(v13TexteCompare(`n.${libelleRef}`), codification),
-                codification.methode
-            );
+            const score = v13ScoreDeRessemblance(codification, 'aCoder', 'n');
             const niveaux = (codification.niveaux || []).filter(Boolean);
             const chemin = niveaux.length
                 ? `concat_ws(' › ', ${niveaux.map(niveau => `CAST(n.${sqlIdent(niveau)} AS VARCHAR)`).join(', ')})`
                 : `CAST(n.${codeRef} AS VARCHAR)`;
-            const libelleLu = v13Canoniser(v13TexteCompare(`codee.${sqlIdent(codification.colonneLibelle)}`), codification);
+            // « codee.* » : les colonnes comparées doivent rester à portée, quelles qu'elles soient.
             return `WITH codee AS (\n${v13SqlDeCodification(codification)}\n), aCoder AS (
-            SELECT __rn, ${libelleLu} AS __libelle, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte
+            SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte
             FROM codee WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${Number(combien) || 50}
         )
         SELECT aCoder.__rn AS rang, aCoder.__texte AS libelle, CAST(n.${codeRef} AS VARCHAR) AS code,
@@ -386,6 +416,16 @@
             const exclus = (regle.sauf || []).filter(Boolean);
             const sauf = exclus.length ? ` mais pas ${exclus.join(' ni ')}` : '';
             return `si ${colonne} contient ${voulus.join(regle.ou ? ' ou ' : ' et ')}${sauf} → ${regle.code}`;
+        }
+        /** La comparaison dite en français, pour vérifier qu'on n'a pas croisé les colonnes des deux côtés. */
+        function v13PhraseDeLaComparaison(comparaison) {
+            if (!comparaison.colonneSource || !comparaison.colonneNomenclature)
+                return 'comparaison incomplète : choisissez une colonne de chaque côté';
+            const mesure = comparaison.methode
+                ? ` (${String(V13_METHODES_DE_RESSEMBLANCE[comparaison.methode] || comparaison.methode).split(' (')[0]})`
+                : '';
+            const poids = Number(comparaison.poids) && Number(comparaison.poids) !== 1 ? `, poids ${comparaison.poids}` : '';
+            return `${comparaison.colonneSource} contre ${comparaison.colonneNomenclature}${poids}${mesure}`;
         }
         /** Le synonyme dit en français, pour vérifier d'un coup d'œil qu'on ne l'a pas écrit à l'envers. */
         function v13PhraseDuSynonyme(synonyme) {

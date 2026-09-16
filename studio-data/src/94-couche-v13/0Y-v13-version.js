@@ -1,7 +1,16 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.5.0';
+        const V13_VERSION = '13.6.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.6.0',
+                d: '2026-09-16',
+                t: 'Codification : choisir ce que l’on compare, des deux côtés',
+                items: [
+                    "Le rapprochement ne porte plus forcément sur le libellé : déclarez la colonne de la liste et celle de la nomenclature à confronter — une désignation technique contre un libellé de codification, une marque contre un fabricant.",
+                    "Plusieurs comparaisons à la fois, chacune avec son poids et, si besoin, sa propre mesure : le score est leur moyenne pondérée. Sans rien de déclaré, c’est le libellé contre le libellé, comme avant."
+                ]
+            },
             {
                 v: '13.5.0',
                 d: '2026-09-16',

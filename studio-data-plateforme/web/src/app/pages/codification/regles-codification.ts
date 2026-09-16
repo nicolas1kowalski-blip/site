@@ -32,6 +32,21 @@ export function phraseDeLaRegle(regle: RegleCodification, colonneParDefaut: stri
     return `si ${colonne} contient ${voulus}${exclus} → ${regle.code}`;
 }
 
+/** Une colonne de la liste comparée à une colonne de la nomenclature, avec son poids. */
+export type ComparaisonCodification = { id: string; colonneSource: string; colonneNomenclature: string; poids: number; methode: string };
+
+/**
+ * La comparaison dite en français : « le libellé de la liste contre le libellé du type, poids 3 ». C'est la
+ * phrase qui permet de vérifier qu'on n'a pas croisé les colonnes des deux côtés.
+ */
+export function phraseDeLaComparaison(comparaison: ComparaisonCodification, methodes: Record<string, string>): string {
+    if (!comparaison.colonneSource || !comparaison.colonneNomenclature)
+        return 'comparaison incomplète : choisissez une colonne de chaque côté';
+    const mesure = comparaison.methode ? ` (${(methodes[comparaison.methode] || comparaison.methode).split(' (')[0]})` : '';
+    const poids = comparaison.poids && comparaison.poids !== 1 ? `, poids ${comparaison.poids}` : '';
+    return `${comparaison.colonneSource} contre ${comparaison.colonneNomenclature}${poids}${mesure}`;
+}
+
 /** Un mot retenu et les autres façons de l'écrire. */
 export type SynonymeCodification = { id: string; motRetenu: string; variantes: string[]; proche: boolean };
 

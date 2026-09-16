@@ -23,6 +23,7 @@
                 colonneCode: '',
                 colonneLibelleRef: '',
                 niveaux: [],
+                comparaisons: [],
                 restreindreSource: '',
                 restreindreNomenclature: '',
                 synonymes: [],
@@ -93,6 +94,40 @@
             const codification = v13CodificationParIdentifiant(identifiant);
             if (!codification) return;
             codification.niveaux = (codification.niveaux || []).filter((niveau, position) => position !== rang);
+            persistAppState();
+            renderCodification();
+        }
+
+        // ---- ce que l'on compare ----
+        function v13AjouterUneComparaison(identifiant) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification) return;
+            codification.comparaisons = (codification.comparaisons || []).concat([
+                {
+                    id: 'cp_' + generateId(),
+                    colonneSource: codification.colonneLibelle,
+                    colonneNomenclature: codification.colonneLibelleRef,
+                    poids: 1,
+                    methode: ''
+                }
+            ]);
+            persistAppState();
+            renderCodification();
+        }
+        function v13EcrireDansLaComparaison(identifiant, identifiantComparaison, champ, valeur) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            const comparaison = ((codification || {}).comparaisons || []).find(
+                candidate => candidate.id === identifiantComparaison
+            );
+            if (!comparaison) return;
+            comparaison[champ] = champ === 'poids' ? parseFloat(valeur) || 1 : valeur;
+            persistAppState();
+            renderCodification();
+        }
+        function v13RetirerUneComparaison(identifiant, rang) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification) return;
+            codification.comparaisons = (codification.comparaisons || []).filter((comparaison, position) => position !== rang);
             persistAppState();
             renderCodification();
         }
@@ -303,7 +338,55 @@
                 ${v13Reglage('Proposer à la revue au-dessus de', `<input id="v13-codif-seuil-revoir" type="number" min="0" max="1" step="0.01" value="${Number(codification.seuilRevoir)}" onchange="${ecrire('seuilRevoir')}" class="border border-slate-300 p-1.5 rounded text-xs w-full">`)}
             </div>`;
         }
-        /** ② Les mots qui en valent d'autres. */
+        /** Une ligne de comparaison : ses deux colonnes, son poids et sa mesure. */
+        function v13LigneDeComparaison(codification, comparaison, rang) {
+            const identifiant = codification.id;
+            const ecrire = champ => `v13EcrireDansLaComparaison('${identifiant}', '${comparaison.id}', '${champ}', this.value)`;
+            const mesures = [['', 'celle de la codification']]
+                .concat(Object.keys(V13_METHODES_DE_RESSEMBLANCE).map(cle => [cle, V13_METHODES_DE_RESSEMBLANCE[cle]]))
+                .map(
+                    mesure =>
+                        `<option value="${mesure[0]}" ${comparaison.methode === mesure[0] ? 'selected' : ''}>${escapeHTML(mesure[1])}</option>`
+                )
+                .join('');
+            const colonnes = (valeurs, courante) =>
+                ['']
+                    .concat(valeurs)
+                    .map(
+                        colonne =>
+                            `<option value="${escapeHTML(colonne)}" ${courante === colonne ? 'selected' : ''}>${escapeHTML(colonne || '—')}</option>`
+                    )
+                    .join('');
+            return `<tr class="v13-codif-comparaison" data-comparaison="${escapeHTML(comparaison.id)}">
+                <td class="p-1.5"><select onchange="${ecrire('colonneSource')}" class="border border-slate-300 p-1 rounded text-xs bg-white w-full">${colonnes(v13ColonnesDe(codification.source), comparaison.colonneSource)}</select></td>
+                <td class="p-1.5"><select onchange="${ecrire('colonneNomenclature')}" class="border border-slate-300 p-1 rounded text-xs bg-white w-full">${colonnes(v13ColonnesDe(codification.nomenclature), comparaison.colonneNomenclature)}</select></td>
+                <td class="p-1.5"><input type="number" min="0.1" max="10" step="0.5" value="${Number(comparaison.poids) || 1}" onchange="${ecrire('poids')}" class="border border-slate-300 p-1 rounded text-xs w-16"></td>
+                <td class="p-1.5"><select onchange="${ecrire('methode')}" class="border border-slate-300 p-1 rounded text-xs bg-white">${mesures}</select>
+                    <div class="text-[11px] text-slate-500 v13-codif-phrase-comparaison">${escapeHTML(v13PhraseDeLaComparaison(comparaison))}</div></td>
+                <td class="p-1.5"><button onclick="v13RetirerUneComparaison('${identifiant}', ${rang})" class="text-red-500 font-bold" title="Retirer">✕</button></td>
+            </tr>`;
+        }
+        /** ② Ce que l'on compare, des deux côtés. */
+        function v13BlocDesComparaisons(codification) {
+            const lignes = (codification.comparaisons || [])
+                .map((comparaison, rang) => v13LigneDeComparaison(codification, comparaison, rang))
+                .join('');
+            const vide = `<tr><td colspan="5" class="p-3 text-[11px] text-slate-400 italic">Rien de déclaré : on compare « ${escapeHTML(codification.colonneLibelle || 'le libellé')} » à « ${escapeHTML(codification.colonneLibelleRef || 'le libellé du type')} ».</td>
+                </tr>`;
+            return `<p class="text-[11px] text-slate-500 mb-2">Par défaut, le libellé de la liste contre le libellé de la nomenclature. Mais le rapprochement peut porter sur un tout autre attribut — une désignation technique contre un libellé de codification, une marque contre un fabricant — et sur plusieurs à la fois : le score est alors leur moyenne pondérée.</p>
+            <table class="w-full text-left text-xs mb-2"><thead class="bg-slate-100 text-slate-600 font-bold">
+                <tr><th class="p-1.5">Colonne de la liste</th>
+                <th class="p-1.5">Colonne de la nomenclature</th>
+                <th class="p-1.5">Poids</th>
+                <th class="p-1.5">Mesure</th>
+                <th></th>
+                </tr>
+            </thead>
+                <tbody class="divide-y divide-slate-100">${lignes || vide}</tbody></table>
+            <button onclick="v13AjouterUneComparaison('${codification.id}')" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50">+ Comparaison</button>`;
+        }
+
+        /** ③ Les mots qui en valent d'autres. */
         function v13BlocDesSynonymes(codification) {
             const identifiant = codification.id;
             const lignes = (codification.synonymes || [])
@@ -333,7 +416,7 @@
             <button onclick="v13AjouterUnSynonyme('${identifiant}')" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50">+ Synonyme</button>`;
         }
 
-        /** ③ Les règles, de la plus sûre à la plus souple. */
+        /** ④ Les règles, de la plus sûre à la plus souple. */
         function v13BlocDesRegles(codification) {
             const identifiant = codification.id;
             const lignes = (codification.regles || [])
@@ -397,7 +480,7 @@
             </tr>`;
         }
 
-        /** ④ Le résultat : le bilan en chiffres, puis les lignes codées. */
+        /** ⑤ Le résultat : le bilan en chiffres, puis les lignes codées. */
         function v13BlocDuResultat(codification) {
             const resultat = v13Codification.resultat;
             if (!resultat) return '';
@@ -457,7 +540,7 @@
             return 'text-slate-500';
         }
 
-        /** ⑤ À revoir : chaque cas douteux avec ses meilleures propositions. */
+        /** ⑥ À revoir : chaque cas douteux avec ses meilleures propositions. */
         function v13BlocDeLaRevue(codification) {
             if (!v13Codification.casARevoir.length) return '';
             const cas = v13Codification.casARevoir
@@ -522,12 +605,13 @@
                 `<input id="v13-codif-nom" value="${escapeHTML(codification.nom)}" onchange="v13EcrireDansLaCodification('nom', this.value)" class="border border-slate-300 p-1.5 rounded text-sm font-bold mb-3 w-full max-w-md">
                 <p class="text-[11px] text-slate-500 mb-3" id="v13-codif-prochaine">${escapeHTML(v13ProchaineAction((v13Codification.resultat || {}).bilan))}</p>` +
                 v13BlocDeCodification('① La liste à coder, et la nomenclature de référence', v13BlocDesSources(codification)) +
-                v13BlocDeCodification("② Les mots qui en valent d'autres", v13BlocDesSynonymes(codification)) +
-                v13BlocDeCodification('③ Les règles, de la plus sûre à la plus souple', v13BlocDesRegles(codification)) +
-                (v13Codification.resultat ? v13BlocDeCodification('④ Le résultat', v13BlocDuResultat(codification)) : '') +
+                v13BlocDeCodification("② Ce que l'on compare", v13BlocDesComparaisons(codification)) +
+                v13BlocDeCodification("③ Les mots qui en valent d'autres", v13BlocDesSynonymes(codification)) +
+                v13BlocDeCodification('④ Les règles, de la plus sûre à la plus souple', v13BlocDesRegles(codification)) +
+                (v13Codification.resultat ? v13BlocDeCodification('⑤ Le résultat', v13BlocDuResultat(codification)) : '') +
                 (v13Codification.casARevoir.length
                     ? v13BlocDeCodification(
-                          `⑤ À revoir — ${v13Codification.casARevoir.length} cas`,
+                          `⑥ À revoir — ${v13Codification.casARevoir.length} cas`,
                           v13BlocDeLaRevue(codification)
                       )
                     : '');
