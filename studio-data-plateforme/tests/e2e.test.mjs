@@ -493,6 +493,15 @@ try {
         'extraction : le bilan qualité du résultat donne 4 lignes et 100 % de complétude sur les 3 colonnes',
         /4 ligne\(s\), 3 colonne\(s\)/.test(bilanExtraction) && (bilanExtraction.match(/100 %/g) || []).length === 3
     );
+    // Le contrôle des tables liées : il mesure sur les données et dit si une jointure fait revenir les lignes.
+    await page.click('app-extraction button[name=controlerJointures]');
+    await page.waitForSelector('app-extraction .controle-jointures');
+    const controleDesJointures = await page.textContent('app-extraction .controle-jointures');
+    verifier(
+        'extraction : le contrôle des tables liées rend un verdict chiffré sur commandes.csv',
+        /commandes\.csv/.test(controleDesJointures) && /ligne/.test(controleDesJointures)
+    );
+    await capture('extraction-controle-jointures');
     await page.click('app-extraction button[name=voirSql]');
     await page.waitForSelector('app-extraction textarea[name=sql]');
     const sqlGenere = await page.inputValue('app-extraction textarea[name=sql]');

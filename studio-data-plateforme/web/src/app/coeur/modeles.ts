@@ -333,6 +333,18 @@ export type ValeurSuggeree = { valeur: string; lignes: number };
 export type ApercuExtraction = { sql: string; colonnes: ColonneResultat[]; lignes: unknown[][]; limite: number };
 /** Bilan qualité du résultat d'une extraction : lignes et complétude de chaque colonne. */
 export type BilanExtraction = { total: number; colonnes: { nom: string; renseignees: number; part: number }[] };
+/** Ce qu'une table liée fait au nombre de lignes : le gonflement d'une jointure dont la clé est incomplète. */
+export type VerdictDeJointure = {
+    cle: string;
+    nomTable: string;
+    lignesAvant: number;
+    lignesApres: number;
+    facteur: number;
+    multiplie: boolean;
+    phrase: string;
+};
+/** Le bilan de toutes les tables liées d'une extraction, mesuré sur les données avant de l'extraire. */
+export type BilanDesJointures = { jointures: VerdictDeJointure[]; multiplie: boolean; phrase: string };
 export type ModeleExtraction = {
     id: string;
     nom: string;

@@ -20,6 +20,7 @@ import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
 import { SourcesService } from '../sources/sources.service';
 import { lireFeuilleExcel } from '../importation/classeur-excel';
 import { MODES_SYNTHESE } from './constructeur-avance';
+import { EtapeDuControle, JointureAControler, bilanDesJointures, sqlDuComptage } from './controle-jointures';
 import { COMPARAISONS_FICHIER, MODES_FICHIER, sqlValeursAbsentes } from './filtre-fichier';
 import { lireTexteDelimite, tableauDepuisLignes } from './tableau-fichier';
 import {
@@ -203,6 +204,53 @@ export class ExtractionController {
         const { moteur } = await this.espaces.ressources(espace);
         const resultat = await moteur.executer(`SELECT COUNT(*)::BIGINT FROM (${sql}) AS extraction`);
         return { total: Number(resultat.lignes[0][0]) };
+    }
+
+    @Post('controler-jointures')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({
+        summary: 'Mesure chaque table liée sur les données et dit laquelle multiplie les lignes (clé du lien incomplète).'
+    })
+    async controlerJointures(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaSpecification)) specification: Specification) {
+        const sources = await this.sources.listerAvecJeux(espace.id);
+        const nomDe = new Map(sources.map(source => [String(source.id), source.name]));
+        const { moteur } = await this.espaces.ressources(espace);
+        // Les alias suivent l'ordre des jointures, comme dans le constructeur : t0 au départ, puis t1, t2…
+        const aliasParCle = new Map<string, string>([
+            ['', 't0'],
+            [specification.baseId, 't0']
+        ]);
+        const aControler: JointureAControler[] = specification.jointures.map((jointure, rang) => {
+            const alias = 't' + (rang + 1);
+            const aliasDepart = aliasParCle.get(jointure.depuis || jointure.deTableId) || 't0';
+            const cle = jointure.cle || jointure.versTableId;
+            aliasParCle.set(cle, alias);
+            if (!aliasParCle.has(jointure.versTableId)) aliasParCle.set(jointure.versTableId, alias);
+            return {
+                cle,
+                aliasDepart,
+                nomTable: 't_' + jointure.versTableId,
+                alias,
+                deColonne: jointure.deColonne,
+                versColonne: jointure.versColonne,
+                pairesEnPlus: jointure.pairesEnPlus || []
+            };
+        });
+        const compter = async (combien: number) =>
+            Number((await moteur.executer(sqlDuComptage('t_' + specification.baseId, aControler, combien))).lignes[0][0]);
+        const etapes: EtapeDuControle[] = [];
+        let lignesAvant = await compter(0);
+        for (const [rang, jointure] of aControler.entries()) {
+            const lignesApres = await compter(rang + 1);
+            etapes.push({
+                cle: jointure.cle,
+                nomTable: nomDe.get(specification.jointures[rang].versTableId) || jointure.nomTable,
+                lignesAvant,
+                lignesApres
+            });
+            lignesAvant = lignesApres;
+        }
+        return bilanDesJointures(etapes);
     }
 
     @Post('bilan')

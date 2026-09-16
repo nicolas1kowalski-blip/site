@@ -706,3 +706,35 @@ test('clé composite : la jointure sur (groupe, élément) ne multiplie plus les
     assert.equal(colonneInconnue.statusCode, 400, 'une colonne qui n’existe pas est refusée, avec un message');
     assert.match(json(colonneInconnue).erreur, /inexistante/);
 });
+
+/**
+ * Le contrôle qui prévient : avant d'extraire, on mesure. Sur les mêmes données que ci-dessus, la jointure sur
+ * le seul élément est dénoncée ; complétée par le groupe, elle est déclarée saine.
+ */
+test('contrôle des jointures : l’écran sait dire laquelle multiplie les lignes, avant de lancer l’extraction', async () => {
+    const controler = (pairesEnPlus: { deColonne: string; versColonne: string }[]) =>
+        appel({
+            method: 'POST',
+            url: '/api/extraction/controler-jointures',
+            payload: {
+                baseId: 'elem',
+                jointures: [{ deTableId: 'elem', deColonne: 'code', versTableId: 'arbre', versColonne: 'element', pairesEnPlus }],
+                colonnes: [{ tableId: 'elem', nomColonne: 'code' }]
+            }
+        }).then(reponse => json(reponse));
+
+    const surLeSeulElement = await controler([]);
+    assert.equal(surLeSeulElement.multiplie, true);
+    assert.equal(surLeSeulElement.jointures.length, 1);
+    assert.equal(surLeSeulElement.jointures[0].lignesAvant, 3);
+    assert.equal(surLeSeulElement.jointures[0].lignesApres, 5);
+    assert.equal(surLeSeulElement.jointures[0].facteur, 1.67);
+    assert.equal(surLeSeulElement.jointures[0].nomTable, 'arbre.csv', 'la table est nommée comme dans le catalogue, pas comme en base');
+    assert.match(surLeSeulElement.jointures[0].phrase, /multiplie les lignes : 3 → 5/);
+    assert.match(surLeSeulElement.phrase, /Modèle de données/);
+
+    const avecLeGroupe = await controler([{ deColonne: 'groupe', versColonne: 'groupe' }]);
+    assert.equal(avecLeGroupe.multiplie, false);
+    assert.equal(avecLeGroupe.jointures[0].lignesApres, 3, 'la clé complétée rend une ligne par élément et par groupe');
+    assert.match(avecLeGroupe.phrase, /Aucune jointure ne multiplie/);
+});

@@ -93,6 +93,7 @@ import {
     Recette,
     TableConcue,
     VocabulaireTablesConcues,
+    BilanDesJointures,
     BilanExtraction,
     DefinitionRegle,
     DetailColonne,
@@ -338,6 +339,10 @@ export class ClientApiService {
     }
     bilanExtraction(specification: SpecificationExtraction): Promise<BilanExtraction> {
         return firstValueFrom(this.http.post<BilanExtraction>(`${this.racine}/extraction/bilan`, specification));
+    }
+    /** Mesure chaque table liée sur les données et dit laquelle multiplie les lignes (clé du lien incomplète). */
+    controlerJointures(specification: SpecificationExtraction): Promise<BilanDesJointures> {
+        return firstValueFrom(this.http.post<BilanDesJointures>(`${this.racine}/extraction/controler-jointures`, specification));
     }
     materialiserExtraction(specification: SpecificationExtraction, nom: string): Promise<Materialisation> {
         return firstValueFrom(this.http.post<Materialisation>(`${this.racine}/extraction/materialiser`, { specification, nom }));

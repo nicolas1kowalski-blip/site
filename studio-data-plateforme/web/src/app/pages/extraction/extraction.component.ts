@@ -24,10 +24,12 @@
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     Agregat,
     ApercuExtraction,
+    BilanDesJointures,
     BilanExtraction,
     ColonneExtraction,
     DedoublonnageExtraction,
@@ -144,6 +146,7 @@ const LIGNES_APERCU_RAPIDE = 500;
     imports: [
         PleinEcranComponent,
         FormsModule,
+        RouterLink,
         ScrollingModule,
         SelecteurColonneComponent,
         AssistantsColonnesComponent,
@@ -869,6 +872,16 @@ const LIGNES_APERCU_RAPIDE = 500;
                             <button class="bouton" type="button" name="bilan" (click)="bilanQualite()" [disabled]="!prete() || enCours()">
                                 ✅ Bilan qualité
                             </button>
+                            <button
+                                class="bouton"
+                                type="button"
+                                name="controlerJointures"
+                                (click)="controlerLesJointures()"
+                                [disabled]="!prete() || enCours()"
+                                title="Vérifie sur les données qu'aucune table liée ne multiplie les lignes"
+                            >
+                                🧮 Contrôler les tables liées
+                            </button>
                             <button class="bouton" type="button" name="voirSql" (click)="basculerSql()" [disabled]="!prete()">
                                 📝 Voir le SQL
                             </button>
@@ -934,6 +947,22 @@ const LIGNES_APERCU_RAPIDE = 500;
                             name="sql"
                             rows="10"
                         ></textarea>
+                    </div>
+                }
+                @if (bilanJointures(); as controle) {
+                    <div class="controle-jointures" [class.multiplie]="controle.multiplie" name="bilanDesJointures">
+                        <p class="verdict">{{ controle.multiplie ? '⚠️' : '✅' }} {{ controle.phrase }}</p>
+                        @for (jointure of controle.jointures; track jointure.cle) {
+                            <p class="detail" [class.fautive]="jointure.multiplie">{{ jointure.phrase }}</p>
+                        }
+                        @if (controle.multiplie) {
+                            <p class="detail">
+                                Une clé incomplète fait revenir la même ligne plusieurs fois : les totaux deviennent faux sans rien
+                                signaler. Ouvrez le Modèle de données, colonne « Clé du lien », et ajoutez la colonne qui manque — le
+                                groupe, la date, la version…
+                            </p>
+                            <a class="bouton" routerLink="/modele" name="allerAuModele">🔗 Ouvrir le Modèle de données</a>
+                        }
                     </div>
                 }
                 @if (bilan(); as bilan) {
@@ -1314,6 +1343,34 @@ const LIGNES_APERCU_RAPIDE = 500;
             color: var(--erreur);
             font-weight: 600;
         }
+        .controle-jointures {
+            margin: 10px 0;
+            padding: 10px 12px;
+            border: 1px solid var(--bordure);
+            border-left: 4px solid var(--succes, #16a34a);
+            border-radius: 8px;
+            background: var(--fond-2);
+        }
+        .controle-jointures.multiplie {
+            border-left-color: var(--alerte, #d97706);
+        }
+        .controle-jointures .verdict {
+            margin: 0 0 6px;
+            font-weight: 700;
+        }
+        .controle-jointures .detail {
+            margin: 2px 0;
+            font-size: 12px;
+            color: var(--texte-2);
+        }
+        .controle-jointures .detail.fautive {
+            color: var(--texte);
+            font-weight: 600;
+        }
+        .controle-jointures .bouton {
+            margin-top: 8px;
+            display: inline-block;
+        }
         .bilan {
             margin: 10px 0;
         }
@@ -1451,6 +1508,8 @@ export class ExtractionComponent {
     readonly apercu = signal<ApercuExtraction | null>(null);
     readonly total = signal<number | null>(null);
     readonly bilan = signal<BilanExtraction | null>(null);
+    /** Ce que les tables liées font au nombre de lignes ; rempli par le contrôle, et avant chaque aperçu. */
+    readonly bilanJointures = signal<BilanDesJointures | null>(null);
     readonly erreur = signal('');
     readonly enCours = signal(false);
 
@@ -1606,6 +1665,7 @@ export class ExtractionComponent {
         this.apercu.set(null);
         this.total.set(null);
         this.bilan.set(null);
+        this.bilanJointures.set(null);
         this.sqlPersonnaliseActif.set(false);
         for (const selecteur of [this.ajoutTableId, this.filtreTableId, this.critereTableId, this.mesureTableId]) selecteur.set(tableId);
         for (const selecteur of [this.ajoutRoute, this.filtreRoute, this.critereRoute, this.mesureRoute]) selecteur.set('');
@@ -1983,6 +2043,26 @@ export class ExtractionComponent {
             this.apercu.set(await this.api.apercuExtraction(this.specification(), this.apercuRapide() ? LIGNES_APERCU_RAPIDE : 200));
             if (this.sqlVisible() && !this.sqlPersonnaliseActif()) this.sqlAffiche.set(this.apercu()!.sql);
         });
+        await this.prevenirSiCaMultiplie();
+        this.montrerLaSortie();
+    }
+    /**
+     * Le contrôle discret qui accompagne l'aperçu : on prévient sans qu'on le demande, parce que personne ne
+     * pense à vérifier une multiplication qu'il ne soupçonne pas. Un contrôle qui échoue ne gâche pas l'aperçu.
+     */
+    private async prevenirSiCaMultiplie(): Promise<void> {
+        const specification = this.specification();
+        if (!specification.jointures?.length) return this.bilanJointures.set(null);
+        try {
+            const bilan = await this.api.controlerJointures(specification);
+            this.bilanJointures.set(bilan.multiplie ? bilan : null);
+        } catch {
+            this.bilanJointures.set(null);
+        }
+    }
+    /** Le contrôle demandé explicitement : il affiche son verdict même quand tout va bien, pour rassurer. */
+    async controlerLesJointures(): Promise<void> {
+        await this.executer(async () => this.bilanJointures.set(await this.api.controlerJointures(this.specification())));
         this.montrerLaSortie();
     }
     async compter(): Promise<void> {
