@@ -12,7 +12,7 @@ import { EspaceAvecRole } from '../authentification/contexte-requete';
 import { Utilisateur } from '../base-de-donnees/schema';
 import { erreurIntrouvable, erreurRequete, messageUtilisateur } from '../commun/erreurs';
 import { EspacesService } from '../espaces/espaces.service';
-import { identifiantSql } from '../espaces/moteur-duckdb';
+import { identifiantSql, litteralSql } from '../espaces/moteur-duckdb';
 import { EtatApplication, GouvernanceService } from '../gouvernance/gouvernance.service';
 import { nombre } from '../qualite/profilage';
 import { SourcesService } from '../sources/sources.service';
@@ -21,6 +21,7 @@ import { CE_QUE_LEXEMPLE_MONTRE, LISTE_DEXEMPLE, NOMENCLATURE_DEXEMPLE, SYNONYME
 import {
     BilanDeCodification,
     Codification,
+    ContexteCodification,
     ErreurCodification,
     bilanDeCodification,
     correspondanceApresDecision,
@@ -82,15 +83,21 @@ export class CodificationService {
         await this.gouvernance.enregistrer(espace, utilisateur, etat, 'codification.suppression', codification.nom);
     }
 
+    /** Où le résultat d'une codification est posé : une table par codification, refaite à chaque exécution. */
+    private static tableCodee(id: string): string {
+        return 'codee_' + id.replace(/[^a-zA-Z0-9_]/g, '_');
+    }
+
     /** Le contexte que le module pur attend : le nom en base d'une table, d'après son nom métier. */
-    private async contexte(espaceId: string): Promise<{ nomTableDe: (nomSource: string) => string }> {
+    private async contexte(espaceId: string, identifiant = ''): Promise<ContexteCodification> {
         const sources = await this.sources.lister(espaceId);
         return {
             nomTableDe: (nomSource: string) => {
                 const source = sources.find(candidat => candidat.name === nomSource);
                 if (!source) throw new ErreurCodification(`La source « ${nomSource} » n'est pas chargée.`);
                 return 't_' + source.id;
-            }
+            },
+            nomTableCodee: CodificationService.tableCodee(identifiant)
         };
     }
 
@@ -217,13 +224,21 @@ export class CodificationService {
     /** Code la liste et rend les premières lignes, avec le bilan porté sur la totalité. */
     async executer(espace: EspaceAvecRole, id: string): Promise<ResultatCodification> {
         const codification = await this.codificationDe(espace.id, id);
-        const contexte = await this.contexte(espace.id);
+        const contexte = await this.contexte(espace.id, id);
         try {
             const sql = this.sqlAvecDecisions(codification, contexte);
             const { moteur } = await this.espaces.ressources(espace);
+            // Codée UNE fois, posée dans une table : les lignes, les comptes et la revue la relisent au lieu
+            // de refaire le calcul à chaque question — c'est trois exécutions économisées sur quatre.
+            await moteur.abandonner(contexte.nomTableCodee);
+            await moteur.executer(`CREATE TABLE ${identifiantSql(contexte.nomTableCodee)} AS\n${sql}`);
             const [resultat, comptes] = await Promise.all([
-                moteur.executer(`SELECT * EXCLUDE (__rn) FROM (\n${sql}\n) codee ORDER BY __statut, __rn LIMIT ${LIGNES_MONTREES}`),
-                moteur.executer(`SELECT __statut, COUNT(*)::BIGINT AS lignes FROM (\n${sql}\n) codee GROUP BY __statut`)
+                moteur.executer(
+                    `SELECT * EXCLUDE (__rn) FROM ${identifiantSql(contexte.nomTableCodee)} ORDER BY __statut, __rn LIMIT ${LIGNES_MONTREES}`
+                ),
+                moteur.executer(
+                    `SELECT __statut, COUNT(*)::BIGINT AS lignes FROM ${identifiantSql(contexte.nomTableCodee)} GROUP BY __statut`
+                )
             ]);
             const bilan = bilanDeCodification(comptes.lignes.map(ligne => ({ statut: String(ligne[0]), lignes: nombre(ligne[1]) })));
             return { sql, colonnes: resultat.colonnes.map(colonne => colonne.nom), lignes: resultat.lignes, bilan };
@@ -236,7 +251,7 @@ export class CodificationService {
      * Le SQL de la codification, augmenté des lignes tranchées à la main. Une décision l'emporte sur tout le
      * reste : c'est un humain qui a regardé.
      */
-    private sqlAvecDecisions(codification: Codification, contexte: { nomTableDe: (nomSource: string) => string }): string {
+    private sqlAvecDecisions(codification: Codification, contexte: ContexteCodification): string {
         const sql = sqlDeCodification(codification, contexte);
         const decisions = Object.entries(codification.decisions || {})
             .map(entree => ({ rang: Number(entree[0]) || 0, code: String(entree[1] || '') }))
@@ -254,9 +269,14 @@ export class CodificationService {
     /** Les cas à revoir, chacun avec ses meilleures propositions, rangées de la plus probable à la moins. */
     async casARevoir(espace: EspaceAvecRole, id: string, combien = 50): Promise<CasARevoir[]> {
         const codification = await this.codificationDe(espace.id, id);
-        const contexte = await this.contexte(espace.id);
+        const contexte = await this.contexte(espace.id, id);
         try {
             const { moteur } = await this.espaces.ressources(espace);
+            // La revue relit la table posée par « executer » ; si l'on ne l'a pas encore codée, on le fait.
+            const posee = await moteur.executer(
+                `SELECT COUNT(*)::BIGINT FROM duckdb_tables() WHERE table_name = ${litteralSql(contexte.nomTableCodee)}`
+            );
+            if (!nombre(posee.lignes[0][0])) await this.executer(espace, id);
             const resultat = await moteur.executer(sqlDesCasARevoir(codification, contexte, combien));
             const cas = new Map<number, CasARevoir>();
             for (const [rang, libelle, code, libelleRef, chemin, score] of resultat.lignes as unknown[][]) {

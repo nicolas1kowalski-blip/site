@@ -144,7 +144,11 @@ export const schemaCodification = z.object({
 export type Codification = z.infer<typeof schemaCodification>;
 
 /** Ce que le module a besoin de savoir du monde extérieur : le nom en base d'une table, d'après son nom métier. */
-export type ContexteCodification = { nomTableDe: (nomSource: string) => string };
+export type ContexteCodification = {
+    nomTableDe: (nomSource: string) => string;
+    /** La table où le résultat de la codification a été posé : la revue la relit au lieu de tout recalculer. */
+    nomTableCodee: string;
+};
 
 /** Message d'une codification qu'on ne peut pas exécuter, dit en clair plutôt qu'en erreur SQL. */
 export class ErreurCodification extends Error {}
@@ -371,6 +375,84 @@ export type StatutDeLigne = keyof typeof STATUTS;
 export const COLONNES_AJOUTEES = ['__code', '__origine', '__score', '__statut', '__chemin'] as const;
 
 /**
+ * Sur combien de caractères on regroupe les mots pour former les couples à comparer. Quatre suffisent à
+ * rapprocher « PAPILLON » et « PAPILON », et à écarter tout le reste.
+ */
+export const TETE_DE_MOT = 4;
+/** Un mot qui désigne plus que cette part de la nomenclature ne distingue rien : il ne sert pas à choisir. */
+export const PART_MOT_TROP_COURANT = 0.05;
+/** Sur une petite nomenclature, un mot présent dans une vingtaine de types reste utilisable. */
+export const TYPES_TOLERES_PAR_MOT = 20;
+
+/**
+ * Les mots d'une colonne, réduits à leur tête. « projection » nomme la ligne dans la sous-requête qui
+ * découpe les mots ; « colonne » est le nom sous lequel on la relit ensuite.
+ */
+function tetesDeMots(expression: string, table: string, projection: string, colonne: string, ou: string): string {
+    return `SELECT mots.${colonne}, substr(mots.mot, 1, ${TETE_DE_MOT}) AS tete
+        FROM (SELECT ${projection}, unnest(string_split(${expression}, ' ')) AS mot FROM ${table}${ou}) mots
+        WHERE mots.mot <> ''`;
+}
+
+/**
+ * Les couples qu'il vaut la peine de comparer.
+ *
+ * Sans cela, on compare chaque ligne de la liste à CHAQUE ligne de la nomenclature : sur des dizaines de
+ * milliers de lignes de part et d'autre, cela fait des milliards de couples, chacun payant un calcul de
+ * ressemblance. La requête ne finit pas.
+ *
+ * On rapproche donc par les mots — mais par les mots qui DISTINGUENT. « POMPE » se trouve dans tous les
+ * types de pompes : rapprocher là-dessus revient à ne rien rapprocher du tout. On écarte donc les mots trop
+ * courants, et l'on garde les rares — un numéro de modèle, un terme propre au type. Une ligne dont tous les
+ * mots sont courants garde tout de même le moins courant d'entre eux : mieux vaut peu de candidats que zéro.
+ *
+ * La réserve : une faute dans les quatre premières lettres d'un mot fait manquer le couple. C'est le prix
+ * d'une requête qui se termine.
+ */
+function sqlDesRapprochables(codification: Codification, tableNomenclature: string): string {
+    const comparaisons = comparaisonsRetenues(codification);
+    const cote = (
+        colonne: (comparaison: ComparaisonCodification) => string,
+        table: string,
+        projection: string,
+        nom: string,
+        ou: string
+    ) =>
+        comparaisons
+            .map(comparaison =>
+                tetesDeMots(canoniser(texteCompare(colonne(comparaison)), codification.synonymes), table, projection, nom, ou)
+            )
+            .join('\n        UNION ALL\n        ');
+    const lus = cote(
+        comparaison => `r.${identifiantSql(comparaison.colonneSource)}`,
+        'reconnues r',
+        'r.__rn AS __rn',
+        '__rn',
+        ' WHERE r.__code_regle IS NULL'
+    );
+    const types = cote(
+        comparaison => `n.${identifiantSql(comparaison.colonneNomenclature)}`,
+        `${tableNomenclature} n`,
+        'n.rowid AS __ligne',
+        '__ligne',
+        ''
+    );
+    return `WITH motsLus AS (\n        ${lus}\n    ), motsTypes AS (\n        ${types}\n    ),
+    frequences AS (SELECT tete, COUNT(DISTINCT __ligne) AS types FROM motsTypes GROUP BY tete),
+    seuil AS (SELECT GREATEST(${TYPES_TOLERES_PAR_MOT}, CAST(${PART_MOT_TROP_COURANT} * COUNT(DISTINCT __ligne) AS BIGINT)) AS maximum FROM motsTypes),
+    tetesRetenues AS (
+        SELECT __rn, tete FROM (
+            SELECT DISTINCT lus.__rn, lus.tete, frequences.types,
+                row_number() OVER (PARTITION BY lus.__rn ORDER BY frequences.types) AS rang
+            FROM motsLus lus JOIN frequences ON frequences.tete = lus.tete
+        ) pesees, seuil
+        WHERE pesees.types <= seuil.maximum OR pesees.rang = 1
+    )
+    SELECT DISTINCT tetesRetenues.__rn, motsTypes.__ligne
+    FROM tetesRetenues JOIN motsTypes ON motsTypes.tete = tetesRetenues.tete`;
+}
+
+/**
  * Le SQL qui code chaque ligne de la liste.
  *
  * Trois temps : « reconnues » applique la pile de règles, « candidats » cherche le meilleur voisin dans la
@@ -387,13 +469,17 @@ export function sqlDeCodification(codification: Codification, contexte: Contexte
         ${codeDesRegles(codification, correspondances)} AS __code_regle,
         ${origineDesRegles(codification, correspondances)} AS __origine_regle
         FROM ${tableSource} s${correspondances ? `\n        LEFT JOIN ${correspondances} ON corr.libelle = ${libelle}` : ''}`;
-    const scoreDuVoisin = scoreDeRessemblance(codification, 'r', 'n');
-    const candidats = `SELECT r.__rn AS __rn, n.${identifiantSql(codification.colonneCode)} AS __code_voisin, (${scoreDuVoisin}) AS __score_voisin
-        FROM reconnues r
-        JOIN ${tableNomenclature} n ON ${conditionDeBranche(codification).replace(/\bs\./g, 'r.')}
-        WHERE r.__code_regle IS NULL AND (${scoreDuVoisin}) >= ${codification.seuilRevoir}
-        QUALIFY row_number() OVER (PARTITION BY r.__rn ORDER BY __score_voisin DESC) = 1`;
-    return `WITH reconnues AS (\n${reconnues}\n), candidats AS (\n${candidats}\n)\n${selectFinal(codification, tableNomenclature)}`;
+    // Le score n'est calculé qu'UNE fois par couple retenu, puis filtré : deux fois coûterait le double.
+    const notes = `SELECT r.__rn AS __rn, n.${identifiantSql(codification.colonneCode)} AS __code_voisin,
+            (${scoreDeRessemblance(codification, 'r', 'n')}) AS __score_voisin
+        FROM rapprochables p
+        JOIN reconnues r ON r.__rn = p.__rn
+        JOIN ${tableNomenclature} n ON n.rowid = p.__ligne
+        WHERE ${conditionDeBranche(codification).replace(/\bs\./g, 'r.')}`;
+    const candidats = `SELECT __rn, __code_voisin, __score_voisin FROM (\n${notes}\n    ) notes
+        WHERE __score_voisin >= ${codification.seuilRevoir}
+        QUALIFY row_number() OVER (PARTITION BY __rn ORDER BY __score_voisin DESC) = 1`;
+    return `WITH reconnues AS (\n${reconnues}\n), rapprochables AS (\n    ${sqlDesRapprochables(codification, tableNomenclature)}\n), candidats AS (\n${candidats}\n)\n${selectFinal(codification, tableNomenclature)}`;
 }
 
 /** Le code retenu, règle après règle, la première qui répond l'emportant. */
@@ -454,15 +540,24 @@ export function sqlDesCasARevoir(codification: Codification, contexte: ContexteC
     const chemin = codification.niveaux.length
         ? `concat_ws(' › ', ${codification.niveaux.map(niveau => `CAST(n.${identifiantSql(niveau)} AS VARCHAR)`).join(', ')})`
         : `CAST(n.${codeRef} AS VARCHAR)`;
-    const codee = sqlDeCodification(codification, contexte);
-    return `WITH codee AS (\n${codee}\n), aCoder AS (
+    // Même blocage que la codification : sans lui, chacun des cas à revoir serait comparé à toute la
+    // nomenclature. « codee » est la table déjà calculée : on ne recode pas la liste pour la relire.
+    const couples = sqlDesRapprochables(codification, tableNomenclature).replace(/\breconnues r\b/g, 'aCoder r').replace(
+        /r\.__code_regle IS NULL/g,
+        'TRUE'
+    );
+    return `WITH aCoder AS (
     SELECT codee.*, CAST(codee.${identifiantSql(codification.colonneLibelle)} AS VARCHAR) AS __texte
-    FROM codee WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${combien}
+    FROM ${identifiantSql(contexte.nomTableCodee)} codee WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${combien}
+), rapprochables AS (\n    ${couples}\n), notes AS (
+    SELECT aCoder.__rn AS rang, aCoder.__texte AS libelle, CAST(n.${codeRef} AS VARCHAR) AS code,
+        CAST(n.${libelleRef} AS VARCHAR) AS libelleRef, ${chemin} AS chemin, ROUND((${score}), 3) AS score
+    FROM rapprochables p
+    JOIN aCoder ON aCoder.__rn = p.__rn
+    JOIN ${tableNomenclature} n ON n.rowid = p.__ligne
 )
-SELECT aCoder.__rn AS rang, aCoder.__texte AS libelle, CAST(n.${codeRef} AS VARCHAR) AS code,
-    CAST(n.${libelleRef} AS VARCHAR) AS libelleRef, ${chemin} AS chemin, ROUND((${score}), 3) AS score
-FROM aCoder JOIN ${tableNomenclature} n ON (${score}) > 0
-QUALIFY row_number() OVER (PARTITION BY aCoder.__rn ORDER BY score DESC) <= ${CANDIDATS_MONTRES}
+SELECT * FROM notes WHERE score > 0
+QUALIFY row_number() OVER (PARTITION BY rang ORDER BY score DESC) <= ${CANDIDATS_MONTRES}
 ORDER BY rang, score DESC`;
 }
 

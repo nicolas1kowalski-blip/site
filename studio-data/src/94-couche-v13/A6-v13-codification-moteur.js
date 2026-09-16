@@ -29,6 +29,11 @@
         const V13_TOLERANCE_PAR_MOT = 0.9;
         /** Combien de propositions on montre à la revue : au-delà, on ne choisit plus, on hésite. */
         const V13_CANDIDATS_MONTRES = 3;
+        /**
+         * La table où le résultat de la codification est déposé avant d’être relu. Sans elle, chaque lecture
+         * — les lignes, les comptes, les cas à revoir — recoderait la liste entière.
+         */
+        const V13_TABLE_CODEE = 'v13_codee';
 
         /** La liste des codifications, rangée dans l'état de l'application comme les recettes et les liens. */
         function v13Codifications() {
@@ -215,6 +220,85 @@
             return `(${cote} = ${autre} OR ${v13EstVide(`s.${sqlIdent(codification.restreindreSource)}`)})`;
         }
 
+        /** Un mot réduit à sa tête : quatre lettres suffisent à rapprocher deux écritures voisines. */
+        const V13_TETE_DE_MOT = 4;
+        /** Un mot qui désigne plus que cette part de la nomenclature ne distingue rien : il ne sert pas à choisir. */
+        const V13_PART_MOT_TROP_COURANT = 0.05;
+        /** Sur une petite nomenclature, un mot présent dans une vingtaine de types reste utilisable. */
+        const V13_TYPES_TOLERES_PAR_MOT = 20;
+
+        /**
+         * Les mots d’une colonne, réduits à leur tête. « projection » nomme la ligne dans la sous-requête qui
+         * découpe les mots ; « colonne » est le nom sous lequel on la relit ensuite ; « filtre » restreint les
+         * lignes lues.
+         */
+        function v13TetesDeMots(expression, table, projection, colonne, filtre) {
+            return `SELECT mots.${colonne}, substr(mots.mot, 1, ${V13_TETE_DE_MOT}) AS tete
+        FROM (SELECT ${projection}, unnest(string_split(${expression}, ' ')) AS mot FROM ${table}${filtre}) mots
+        WHERE mots.mot <> ''`;
+        }
+        /** Les têtes de mots d’un côté de la comparaison, toutes colonnes comparées réunies. */
+        function v13TetesDUnCote(codification, colonneDe, table, projection, colonne, filtre) {
+            return v13ComparaisonsRetenues(codification)
+                .map(comparaison =>
+                    v13TetesDeMots(
+                        v13Canoniser(v13TexteCompare(colonneDe(comparaison)), codification),
+                        table,
+                        projection,
+                        colonne,
+                        filtre
+                    )
+                )
+                .join('\n        UNION ALL\n        ');
+        }
+        /**
+         * Les couples qu’il vaut la peine de comparer.
+         *
+         * Sans cela, on compare chaque ligne de la liste à CHAQUE ligne de la nomenclature : sur des dizaines de
+         * milliers de lignes de part et d’autre, cela fait des milliards de couples, chacun payant un calcul de
+         * ressemblance. La requête ne finit pas.
+         *
+         * On rapproche donc par les mots — mais par les mots qui DISTINGUENT. « POMPE » se trouve dans tous les
+         * types de pompes : rapprocher là-dessus revient à ne rien rapprocher du tout. On écarte donc les mots
+         * trop courants et l’on garde les rares — un numéro de modèle, un terme propre au type. Une ligne dont
+         * tous les mots sont courants garde tout de même le moins courant d’entre eux : mieux vaut peu de
+         * candidats que zéro.
+         *
+         * La réserve : une faute dans les quatre premières lettres d’un mot fait manquer le couple. C’est le
+         * prix d’une requête qui se termine.
+         */
+        function v13SqlDesRapprochables(codification, tableNomenclature) {
+            const lus = v13TetesDUnCote(
+                codification,
+                comparaison => `r.${sqlIdent(comparaison.colonneSource)}`,
+                'reconnues r',
+                'r.__rn AS __rn',
+                '__rn',
+                ' WHERE r.__code_regle IS NULL'
+            );
+            const types = v13TetesDUnCote(
+                codification,
+                comparaison => `n.${sqlIdent(comparaison.colonneNomenclature)}`,
+                `${tableNomenclature} n`,
+                'n.rowid AS __ligne',
+                '__ligne',
+                ''
+            );
+            return `WITH motsLus AS (\n        ${lus}\n    ), motsTypes AS (\n        ${types}\n    ),
+            frequences AS (SELECT tete, COUNT(DISTINCT __ligne) AS types FROM motsTypes GROUP BY tete),
+            seuil AS (SELECT GREATEST(${V13_TYPES_TOLERES_PAR_MOT}, CAST(${V13_PART_MOT_TROP_COURANT} * COUNT(DISTINCT __ligne) AS BIGINT)) AS maximum FROM motsTypes),
+            tetesRetenues AS (
+        SELECT __rn, tete FROM (
+            SELECT DISTINCT lus.__rn, lus.tete, frequences.types,
+                row_number() OVER (PARTITION BY lus.__rn ORDER BY frequences.types) AS rang
+            FROM motsLus lus JOIN frequences ON frequences.tete = lus.tete
+        ) pesees, seuil
+        WHERE pesees.types <= seuil.maximum OR pesees.rang = 1
+            )
+            SELECT DISTINCT tetesRetenues.__rn, motsTypes.__ligne
+            FROM tetesRetenues JOIN motsTypes ON motsTypes.tete = tetesRetenues.tete`;
+        }
+
         /** Vérifie qu'une codification dit tout ce qu'il faut pour être exécutée, et le dit en français sinon. */
         function v13VerifierLaCodification(codification) {
             const manques = [
@@ -314,14 +398,19 @@
         ${v13CodeDesRegles(codification, correspondances)} AS __code_regle,
         ${v13OrigineDesRegles(codification, correspondances)} AS __origine_regle
             FROM ${tableSource} s${jointureCorrespondances}`;
-            const score = v13ScoreDeRessemblance(codification, 'r', 'n');
-            const candidats = `SELECT r.__rn AS __rn, n.${sqlIdent(codification.colonneCode)} AS __code_voisin, (${score}) AS __score_voisin
-            FROM reconnues r
-            JOIN ${tableNomenclature} n ON ${v13ConditionDeBranche(codification).replace(/\bs\./g, 'r.')}
-            WHERE r.__code_regle IS NULL AND (${score}) >= ${Number(codification.seuilRevoir)}
-            QUALIFY row_number() OVER (PARTITION BY r.__rn ORDER BY __score_voisin DESC) = 1`;
+            // Le score n’est calculé qu’UNE fois par couple retenu, puis filtré : deux fois coûterait le double.
+            const notes = `SELECT r.__rn AS __rn, n.${sqlIdent(codification.colonneCode)} AS __code_voisin,
+                (${v13ScoreDeRessemblance(codification, 'r', 'n')}) AS __score_voisin
+            FROM rapprochables p
+            JOIN reconnues r ON r.__rn = p.__rn
+            JOIN ${tableNomenclature} n ON n.rowid = p.__ligne
+            WHERE ${v13ConditionDeBranche(codification).replace(/\bs\./g, 'r.')}`;
+            const candidats = `SELECT __rn, __code_voisin, __score_voisin FROM (\n${notes}\n        ) notes
+            WHERE __score_voisin >= ${Number(codification.seuilRevoir)}
+            QUALIFY row_number() OVER (PARTITION BY __rn ORDER BY __score_voisin DESC) = 1`;
+            const rapprochables = v13SqlDesRapprochables(codification, tableNomenclature);
             const decisions = v13SqlDesDecisions(codification);
-            const codee = `WITH reconnues AS (\n${reconnues}\n), candidats AS (\n${candidats}\n)\n${v13SelectFinal(codification, tableNomenclature)}`;
+            const codee = `WITH reconnues AS (\n${reconnues}\n), rapprochables AS (\n    ${rapprochables}\n), candidats AS (\n${candidats}\n)\n${v13SelectFinal(codification, tableNomenclature)}`;
             return decisions ? `SELECT codee.* REPLACE (${decisions}) FROM (\n${codee}\n) codee` : codee;
         }
 
@@ -344,7 +433,7 @@
          * Le SQL des cas à revoir : pour chaque ligne qu'aucune règle n'a reconnue, les meilleurs voisins de la
          * nomenclature, avec leur score et leur chemin. C'est de quoi trancher en un coup d'œil.
          */
-        function v13SqlDesCasARevoir(codification, combien) {
+        function v13SqlDesCasARevoir(codification, combien, tableCodee) {
             v13VerifierLaCodification(codification);
             const tableNomenclature = sqlIdent(duckTableName(tableByName(codification.nomenclature).id));
             const codeRef = sqlIdent(codification.colonneCode);
@@ -354,15 +443,25 @@
             const chemin = niveaux.length
                 ? `concat_ws(' › ', ${niveaux.map(niveau => `CAST(n.${sqlIdent(niveau)} AS VARCHAR)`).join(', ')})`
                 : `CAST(n.${codeRef} AS VARCHAR)`;
+            // Même blocage que la codification : sans lui, chacun des cas à revoir serait comparé à toute la
+            // nomenclature. La table codée est déjà calculée : on ne recode pas la liste pour la relire.
+            const couples = v13SqlDesRapprochables(codification, tableNomenclature)
+                .replace(/\breconnues r\b/g, 'aCoder r')
+                .replace(/r\.__code_regle IS NULL/g, 'TRUE');
             // « codee.* » : les colonnes comparées doivent rester à portée, quelles qu'elles soient.
-            return `WITH codee AS (\n${v13SqlDeCodification(codification)}\n), aCoder AS (
+            return `WITH aCoder AS (
             SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte
-            FROM codee WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${Number(combien) || 50}
+            FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
+            WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${Number(combien) || 50}
+        ), rapprochables AS (\n    ${couples}\n), notes AS (
+            SELECT aCoder.__rn AS rang, aCoder.__texte AS libelle, CAST(n.${codeRef} AS VARCHAR) AS code,
+                CAST(n.${libelleRef} AS VARCHAR) AS libelleRef, ${chemin} AS chemin, ROUND((${score}), 3) AS score
+            FROM rapprochables p
+            JOIN aCoder ON aCoder.__rn = p.__rn
+            JOIN ${tableNomenclature} n ON n.rowid = p.__ligne
         )
-        SELECT aCoder.__rn AS rang, aCoder.__texte AS libelle, CAST(n.${codeRef} AS VARCHAR) AS code,
-            CAST(n.${libelleRef} AS VARCHAR) AS libelleRef, ${chemin} AS chemin, ROUND((${score}), 3) AS score
-        FROM aCoder JOIN ${tableNomenclature} n ON (${score}) > 0
-        QUALIFY row_number() OVER (PARTITION BY aCoder.__rn ORDER BY score DESC) <= ${V13_CANDIDATS_MONTRES}
+        SELECT * FROM notes WHERE score > 0
+        QUALIFY row_number() OVER (PARTITION BY rang ORDER BY score DESC) <= ${V13_CANDIDATS_MONTRES}
         ORDER BY rang, score DESC`;
         }
 

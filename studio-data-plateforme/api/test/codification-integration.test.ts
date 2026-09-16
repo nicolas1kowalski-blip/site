@@ -452,3 +452,60 @@ test('exemple : réinstallé, il repart du même état quoi qu’on y ait fait',
     const second = json(await appel({ method: 'POST', url: '/api/codification/cd_exemple/executer' })).bilan;
     assert.deepEqual(second, premier);
 });
+
+/**
+ * Le volume : c'est là que le module se joue. Une liste de 4 000 équipements et une nomenclature de 800
+ * types font 3,2 millions de couples si on les compare tous — et un calcul de ressemblance sur chacun. En
+ * ne retenant que les couples qui partagent un début de mot, il en reste quelques dizaines de milliers.
+ */
+test('volume : 4 000 équipements contre 800 types sont codés en quelques secondes, pas en heures', async () => {
+    const familles = ['POMPES', 'VANNES', 'ECHANGEURS', 'MOTEURS'];
+    const racines = ['Pompe centrifuge', 'Vanne papillon', 'Echangeur a plaques', 'Moteur asynchrone'];
+    const types = Array.from({ length: 800 }, (index, rang) => {
+        const famille = familles[rang % familles.length];
+        return `${famille};Systeme ${rang % 40};Sous systeme ${rang % 120};${racines[rang % racines.length]} modele ${rang};TYP-${rang}`;
+    });
+    await deposerSource('vol_nom', 'nomenclature-volume.csv', ['FAMILLE;SYSTEME;SOUS_SYSTEME;LIBELLE_TYPE;CODE_TYPE', ...types, ''].join('\n'), [
+        'FAMILLE',
+        'SYSTEME',
+        'SOUS_SYSTEME',
+        'LIBELLE_TYPE',
+        'CODE_TYPE'
+    ]);
+    const equipements = Array.from({ length: 4000 }, (index, rang) => {
+        const type = rang % 800;
+        return `EQ${rang};${racines[type % racines.length]} modele ${type} numero ${rang};${familles[type % familles.length]}`;
+    });
+    await deposerSource('vol_eq', 'equipements-volume.csv', ['REPERE;LIBELLE;FAMILLE', ...equipements, ''].join('\n'), [
+        'REPERE',
+        'LIBELLE',
+        'FAMILLE'
+    ]);
+    await appel({
+        method: 'PUT',
+        url: '/api/codification/cd_volume',
+        payload: {
+            ...codification(),
+            nom: 'Volume',
+            source: 'equipements-volume.csv',
+            nomenclature: 'nomenclature-volume.csv',
+            colonneCodeExistant: '',
+            colonneCode: 'CODE_TYPE',
+            colonneLibelleRef: 'LIBELLE_TYPE',
+            niveaux: ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE'],
+            restreindreSource: 'FAMILLE',
+            restreindreNomenclature: 'FAMILLE'
+        }
+    });
+    const commence = Date.now();
+    const resultat = json(await appel({ method: 'POST', url: '/api/codification/cd_volume/executer' }));
+    const secondes = (Date.now() - commence) / 1000;
+    assert.equal(resultat.bilan.total, 4000);
+    assert.ok(resultat.bilan.office >= 3900, `la quasi-totalité est codée (${resultat.bilan.office})`);
+    console.error('   codification de 4 000 lignes :', secondes.toFixed(1), 's');
+    assert.ok(secondes < 30, `la codification doit tenir en quelques secondes, pas en heures (mesuré : ${secondes.toFixed(1)} s)`);
+
+    const revue = Date.now();
+    json(await appel({ method: 'POST', url: '/api/codification/cd_volume/revue', payload: { combien: 50 } }));
+    assert.ok((Date.now() - revue) / 1000 < 20, 'la revue relit le résultat posé au lieu de tout recalculer');
+});

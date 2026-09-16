@@ -213,20 +213,21 @@
             bgTaskStart('Codification de la liste');
             try {
                 const { conn } = await getDB();
-                const sql = v13SqlDeCodification(codification);
+                // La liste n’est codée qu’une fois : le résultat est déposé dans une table, puis relu trois fois.
+                const table = sqlIdent(V13_TABLE_CODEE);
+                await conn.query(`DROP TABLE IF EXISTS ${table}`);
+                await conn.query(`CREATE TABLE ${table} AS\n${v13SqlDeCodification(codification)}`);
                 const lignes = arrowResultToObjects(
                     await conn.query(
-                        `SELECT * EXCLUDE (__rn) FROM (\n${sql}\n) codee ORDER BY __statut, __rn LIMIT ${V13_LIGNES_MONTREES}`
+                        `SELECT * EXCLUDE (__rn) FROM ${table} ORDER BY __statut, __rn LIMIT ${V13_LIGNES_MONTREES}`
                     )
                 );
                 const comptes = arrowResultToObjects(
-                    await conn.query(
-                        `SELECT __statut AS statut, COUNT(*)::BIGINT AS lignes FROM (\n${sql}\n) codee GROUP BY __statut`
-                    )
+                    await conn.query(`SELECT __statut AS statut, COUNT(*)::BIGINT AS lignes FROM ${table} GROUP BY __statut`)
                 ).map(compte => ({ statut: String(compte.statut), lignes: Number(compte.lignes) }));
                 v13Codification.resultat = { lignes, bilan: v13BilanDeCodification(comptes) };
                 v13Codification.casARevoir = v13RangerLesCasARevoir(
-                    arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, 50)))
+                    arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, 50, V13_TABLE_CODEE)))
                 );
                 bgTaskEnd('🏷️ ' + v13Codification.resultat.bilan.phrase);
             } catch (erreur) {

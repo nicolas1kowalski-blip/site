@@ -148,6 +148,8 @@ ok('SQL réel : « electrovanne papillon » retrouve la vanne papillon', avec.EQ
 ok('SQL réel : ce qui marchait sans synonymes marche toujours avec', avec.EQ001.__code==='PMP-C' && avec.EQ005.__code==='ECH-P');
 const tranchee = await parRepere(sqlAvecDecision);
 ok('SQL réel : une décision de revue l’emporte sur tout le reste', tranchee.EQ004.__code==='VAN-P' && tranchee.EQ004.__origine==='decision' && tranchee.EQ004.__statut==='office');
+// La revue relit la table codée plutôt que de recoder la liste : il faut donc la déposer d'abord.
+await requete(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlSansSynonymes}`);
 const revue = await requete(sqlRevue);
 ok('SQL réel : la revue propose au plus trois candidats par ligne, le plus probable en tête', revue.length>0 && revue.every(l=>Number(l.score)>0) && revue.filter(l=>Number(l.rang)===4).length<=3);
 ok('SQL réel : les propositions restent dans la famille de la ligne', revue.filter(l=>Number(l.rang)===4).every(l=>String(l.chemin).startsWith('VANNES')));
@@ -155,6 +157,26 @@ ok('SQL réel : les propositions restent dans la famille de la ligne', revue.fil
 const autreAttribut = await parRepere(sqlAutreAttribut);
 ok('SQL réel : le rapprochement porte sur la désignation contre l’abrégé, et non plus sur les libellés', autreAttribut.EQ004.__code==='VAN-P' && autreAttribut.EQ004.__origine==='ressemblance');
 ok('SQL réel : ce qui ne ressemble à aucun abrégé reste sans proposition', autreAttribut.EQ006.__statut==='absent');
+
+// ---- le volume : ce qui décidait de tout, c'est que la requête se termine ----
+// Sur le terrain, la liste fait des milliers de lignes et la nomenclature des centaines. Sans blocage par
+// les mots rares, on comparerait chaque ligne à chaque type : la requête ne rendait jamais la main.
+const grosse = await (await DuckDBInstance.create(':memory:')).connect();
+const requeteGrosse = async sql => (await (await grosse.run(sql)).getRowObjects());
+await requeteGrosse(`CREATE TABLE "t_nm" AS SELECT 'POMPES' AS FAMILLE, 'Transfert' AS SYSTEME,
+    'Centrifuge' AS SOUS_SYSTEME, 'Pompe centrifuge modele ' || i AS LIBELLE_TYPE,
+    'PMP-' || i AS CODE_TYPE, 'PC' || i AS ABREGE FROM range(800) t(i)`);
+await requeteGrosse(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, 'EQ' || i AS REPERE,
+    'Pompe centrifuge modele ' || (i % 800) AS LIBELLE, 'POMPES' AS FAMILLE, '' AS CODE_FOURNI,
+    'PC' || (i % 800) AS DESIGNATION FROM range(4000) t(i)`);
+const depart = Date.now();
+const bilanGros = await requeteGrosse(`SELECT __statut AS statut, COUNT(*)::BIGINT AS lignes FROM (\n${sqlSansSynonymes}\n) codee GROUP BY __statut`);
+const secondes = (Date.now() - depart) / 1000;
+const compte = statut => Number((bilanGros.find(l => String(l.statut) === statut) || {}).lignes || 0);
+console.log(`   codification de 4 000 lignes contre 800 types : ${secondes.toFixed(1)} s`);
+ok('SQL réel : 4 000 lignes contre 800 types se codent en moins de 30 secondes', secondes < 30);
+ok('SQL réel : le blocage par les mots rares ne perd pas les lignes — toutes sont rendues', compte('office') + compte('revoir') + compte('absent') === 4000);
+ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('office') >= 3900);
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));

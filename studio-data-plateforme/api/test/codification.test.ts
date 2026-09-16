@@ -19,7 +19,7 @@ import {
     sqlDesCasARevoir
 } from '../src/codification/codification';
 
-const contexte = { nomTableDe: (nom: string) => 't_' + nom };
+const contexte = { nomTableDe: (nom: string) => 't_' + nom, nomTableCodee: 'codee_cd1' };
 const codification = (partielle: object = {}): Codification =>
     schemaCodification.parse({
         id: 'cd1',
@@ -108,8 +108,8 @@ test('ressemblance : par défaut on compte les mots du type de référence retro
 test('SQL : la ressemblance ne cherche que pour les lignes qu’aucune règle n’a reconnues', () => {
     const sql = sqlDeCodification(codification({ methode: 'jw' }), contexte);
     assert.match(sql, /jaro_winkler_similarity/);
-    assert.match(sql, /WHERE r\.__code_regle IS NULL/);
-    assert.match(sql, /row_number\(\) OVER \(PARTITION BY r\.__rn ORDER BY __score_voisin DESC\) = 1/);
+    assert.match(sql, /WHERE r\.__code_regle IS NULL/, 'seules les lignes qu’aucune règle n’a reconnues sont rapprochées');
+    assert.match(sql, /row_number\(\) OVER \(PARTITION BY __rn ORDER BY __score_voisin DESC\) = 1/, 'un seul candidat par ligne');
     assert.match(sqlDeCodification(codification({ methode: 'lev' }), contexte), /1\.0 - levenshtein/);
 });
 
@@ -130,7 +130,15 @@ test('SQL de la revue : les meilleures propositions par ligne, les plus probable
     const sql = sqlDesCasARevoir(codification(), contexte, 25);
     assert.match(sql, /__statut = 'revoir'/);
     assert.match(sql, /LIMIT 25/);
-    assert.match(sql, /row_number\(\) OVER \(PARTITION BY aCoder\.__rn ORDER BY score DESC\) <= 3/);
+    assert.match(sql, /row_number\(\) OVER \(PARTITION BY rang ORDER BY score DESC\) <= 3/);
+});
+
+test('SQL de la revue : elle relit le résultat déjà posé, et bloque ses couples comme la codification', () => {
+    const sql = sqlDesCasARevoir(codification(), contexte, 25);
+    assert.match(sql, /FROM "codee_cd1" codee/, 'on ne recode pas la liste pour la relire');
+    assert.ok(!/WITH reconnues AS/.test(sql), 'la codification entière n’est pas réinjectée dans la revue');
+    assert.match(sql, /rapprochables AS \(/, 'les cas à revoir ne sont pas comparés à toute la nomenclature');
+    assert.match(sql, /frequences AS \(SELECT tete, COUNT\(DISTINCT __ligne\)/, 'les mots courants sont écartés là aussi');
 });
 
 test('bilan : la couverture et la phrase disent où l’on en est, sans jargon', () => {
@@ -275,4 +283,45 @@ test('comparaisons : la revue garde à portée les colonnes comparées, quelles 
     assert.match(sql, /SELECT codee\.\*/, 'toutes les colonnes de la ligne restent disponibles');
     assert.match(sql, /aCoder\."DESIGNATION"/);
     assert.match(sql, /n\."MOTS_CLES"/);
+});
+
+test('volume : on ne compare que les couples qui partagent un mot, et le score n’est calculé qu’une fois', () => {
+    const sql = sqlDeCodification(codification(), contexte);
+    assert.match(sql, /rapprochables AS \(/, 'les couples à comparer sont choisis avant d’être notés');
+    assert.match(sql, /substr\(mots\.mot, 1, 4\) AS tete/, 'on regroupe sur le début des mots');
+    assert.match(sql, /JOIN "t_nomenclature" n ON n\.rowid = p\.__ligne/, 'la nomenclature n’est lue que sur les couples retenus');
+    assert.ok(
+        !/JOIN "t_nomenclature" n ON TRUE/.test(sql) && !/JOIN "t_nomenclature" n ON \(/.test(sql),
+        'plus aucun produit cartésien entre la liste et la nomenclature'
+    );
+    // Le seuil s'applique au score déjà calculé : le recalculer dans le WHERE doublerait le travail.
+    assert.match(sql, /WHERE __score_voisin >= 0\.45/);
+    assert.equal(sql.match(/AS __score_voisin/g)?.length, 1, 'le score n’est produit qu’une fois');
+});
+
+test('volume : chaque comparaison déclarée apporte ses propres couples, aucune n’est oubliée', () => {
+    const sql = sqlDeCodification(
+        codification({
+            comparaisons: [
+                { id: 'c1', colonneSource: 'LIBELLE', colonneNomenclature: 'LIBELLE_TYPE', poids: 1, methode: '' },
+                { id: 'c2', colonneSource: 'DESIGNATION', colonneNomenclature: 'ABREGE', poids: 1, methode: '' }
+            ]
+        }),
+        contexte
+    );
+    const blocage = sql.slice(sql.indexOf('rapprochables AS ('), sql.indexOf('candidats AS ('));
+    assert.match(blocage, /UNION ALL/, 'les couples des deux comparaisons sont réunis');
+    assert.match(blocage, /r\."DESIGNATION"/);
+    assert.match(blocage, /n\."ABREGE"/);
+});
+
+test('volume : un mot présent partout ne rapproche rien — seuls les mots qui distinguent sont retenus', () => {
+    const sql = sqlDeCodification(codification(), contexte);
+    assert.match(sql, /frequences AS \(SELECT tete, COUNT\(DISTINCT __ligne\) AS types FROM motsTypes GROUP BY tete\)/);
+    assert.match(sql, /GREATEST\(20, CAST\(0\.05 \* COUNT\(DISTINCT __ligne\) AS BIGINT\)\)/, 'le seuil suit la taille de la nomenclature');
+    assert.match(
+        sql,
+        /WHERE pesees\.types <= seuil\.maximum OR pesees\.rang = 1/,
+        'une ligne dont tous les mots sont courants garde tout de même le moins courant'
+    );
 });
