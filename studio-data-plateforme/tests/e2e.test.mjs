@@ -2452,9 +2452,9 @@ try {
     await page.waitForSelector('app-codification [name=phraseBilan]');
     const bilanCodification = await page.textContent('app-codification [name=phraseBilan]');
     verifier(
-        'codification : 5 lignes sur 7 codées d’office — code déjà fourni, libellés retrouvés malgré la casse, les accents et les mots en trop',
-        /5 ligne\(s\) codées d’office sur 7/.test(bilanCodification) &&
-            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '1' &&
+        'codification : 5 lignes sur 9 codées d’office — code déjà fourni, libellés retrouvés malgré la casse, les accents et les mots en trop',
+        /5 ligne\(s\) codées d’office sur 9/.test(bilanCodification) &&
+            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '3' &&
             (await page.textContent('app-codification [name=compteAbsent]')).trim() === '1'
     );
     const tableauCode = await page.textContent('app-codification .ligne-codee');
@@ -2475,12 +2475,41 @@ try {
     await page.evaluate(() => document.querySelector('app-codification .kpis')?.scrollIntoView({ block: 'start' }));
     await page.evaluate(() => document.querySelectorAll('.notification').forEach(notification => notification.remove()));
     await capture('codification');
+    // Les synonymes : le jargon du site ramené aux mots de la nomenclature.
+    const synonymesADeclarer = [
+        ['POMPE', 'motopompe ; groupe motopompe'],
+        ['CENTRIFUGE', 'centrif'],
+        ['VANNE', 'electrovanne']
+    ];
+    for (const [rang, [retenu, variantes]] of synonymesADeclarer.entries()) {
+        await page.click('app-codification button[name=ajouterSynonyme]');
+        // La ligne doit exister avant qu'on y écrive : sinon les trois saisies tombent dans la même.
+        await page.waitForFunction(
+            attendues => document.querySelectorAll('app-codification tbody tr[name^=synonyme-]').length === attendues,
+            rang + 1
+        );
+        const synonyme = page.locator('app-codification tbody tr[name^=synonyme-]').nth(rang);
+        await synonyme.locator('input[name^=retenu-]').fill(retenu);
+        await synonyme.locator('input[name^=variantes-]').fill(variantes);
+    }
+    const phraseSynonyme = await page.locator('app-codification div[name^=phraseSynonyme-]').first().textContent();
+    verifier(
+        'codification : un synonyme se relit à voix haute — « motopompe, groupe motopompe valent POMPE »',
+        /motopompe, groupe motopompe valent POMPE/.test(phraseSynonyme)
+    );
+    await page.click('app-codification button[name=coder]');
+    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteOffice]')?.textContent || '').trim() === '7');
+    verifier(
+        'codification : les variantes déclarées rattrapent le jargon du site — « groupe motopompe centrif » et « electrovanne papillon » codées',
+        (await page.textContent('app-codification [name=compteOffice]')).trim() === '7' &&
+            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '1'
+    );
     // Trancher : la décision code la ligne et descend dans la table de correspondance.
     await page.click('app-codification .cas-a-revoir .candidat >> nth=0');
-    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteOffice]')?.textContent || '').trim() === '6');
+    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteOffice]')?.textContent || '').trim() === '8');
     verifier(
-        'codification : trancher un cas le code aussitôt (6 d’office) et le libellé est retenu pour les prochaines livraisons',
-        (await page.textContent('app-codification [name=compteOffice]')).trim() === '6' &&
+        'codification : trancher un cas le code aussitôt (8 d’office) et le libellé est retenu pour les prochaines livraisons',
+        (await page.textContent('app-codification [name=compteOffice]')).trim() === '8' &&
             (await page.textContent('app-codification [name=compteRevoir]')).trim() === '0'
     );
     // Une règle de mots-clés attrape ce qu'aucune ressemblance ne trouve.

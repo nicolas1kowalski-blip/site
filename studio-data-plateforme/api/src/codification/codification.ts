@@ -64,6 +64,17 @@ export const schemaRegle = z.object({
 });
 export type RegleCodification = z.infer<typeof schemaRegle>;
 
+export const schemaSynonyme = z.object({
+    id: z.string().min(1),
+    /** Le mot retenu : c'est lui qui remplacera toutes ses variantes, des deux côtés de la comparaison. */
+    motRetenu: z.string().min(1, 'mot retenu requis'),
+    /** Les autres façons de l'écrire : abréviations, jargon du site, pluriels, formes en plusieurs mots. */
+    variantes: z.array(z.string().min(1)).max(50).default([]),
+    /** Vrai : la variante est reconnue même mal orthographiée (à partir de quatre lettres). */
+    proche: z.boolean().default(false)
+});
+export type Synonyme = z.infer<typeof schemaSynonyme>;
+
 export const schemaCorrespondance = z.object({
     /** Le libellé tel qu'il a été vu, ou une variante décidée à la revue. */
     libelle: z.string().min(1),
@@ -91,6 +102,13 @@ export const schemaCodification = z.object({
     /** Ne chercher que dans la branche où la ligne se trouve déjà : c'est ce qui fait la précision. */
     restreindreSource: z.string().default(''),
     restreindreNomenclature: z.string().default(''),
+    /**
+     * Les mots qui en valent d'autres : « MOTOPOMPE » vaut « POMPE », « CENTRIF » vaut « CENTRIFUGE ». Les
+     * variantes sont ramenées au mot retenu des deux côtés avant de comparer, de sorte qu'un libellé écrit
+     * dans le jargon du site retrouve quand même son type. Les règles de mots-clés, elles, restent littérales :
+     * on les a écrites exprès sur un mot précis.
+     */
+    synonymes: z.array(schemaSynonyme).max(500).default([]),
     regles: z.array(schemaRegle).max(500).default([]),
     correspondances: z.array(schemaCorrespondance).max(20_000).default([]),
     /** Au-dessus, on code d'office ; entre les deux, on demande ; en dessous, on ne propose rien. */
@@ -148,10 +166,35 @@ export function motCompare(mot: string): string {
         .trim();
 }
 
+/**
+ * Le même travail que « canoniser », mais sur un texte que l'on tient déjà : c'est ainsi qu'un libellé appris
+ * est rangé, pour qu'il retrouve plus tard les libellés écrits autrement.
+ */
+export function motRetenuDuTexte(texte: string, synonymes: Synonyme[]): string {
+    let mots = motCompare(texte);
+    const retenus = synonymes
+        .map(synonyme => ({
+            retenu: motCompare(synonyme.motRetenu),
+            variantes: synonyme.variantes.map(motCompare).filter(Boolean)
+        }))
+        .filter(synonyme => synonyme.retenu && synonyme.variantes.length);
+    for (const synonyme of retenus)
+        for (const variante of synonyme.variantes.filter(variante => variante.includes(' ')))
+            mots = ` ${mots} `.split(` ${variante} `).join(` ${synonyme.retenu} `).trim();
+    const retenuDuMot = new Map<string, string>();
+    for (const synonyme of retenus)
+        for (const variante of synonyme.variantes.filter(variante => !variante.includes(' '))) retenuDuMot.set(variante, synonyme.retenu);
+    return mots
+        .split(' ')
+        .map(mot => retenuDuMot.get(mot) || mot)
+        .join(' ')
+        .trim();
+}
+
 /** La table de correspondance, portée dans la requête : un libellé réduit, un code. */
 function tableDesCorrespondances(codification: Codification): string {
     const lignes = codification.correspondances
-        .map(correspondance => ({ libelle: motCompare(correspondance.libelle), code: correspondance.code }))
+        .map(correspondance => ({ libelle: motRetenuDuTexte(correspondance.libelle, codification.synonymes), code: correspondance.code }))
         .filter(correspondance => correspondance.libelle);
     if (!lignes.length) return '';
     const valeurs = lignes.map(ligne => `(${litteralSql(ligne.libelle)}, ${litteralSql(ligne.code)})`).join(', ');
@@ -164,6 +207,46 @@ function tableDesCorrespondances(codification: Codification): string {
  */
 const LETTRES_POUR_TOLERER_UNE_FAUTE = 4;
 const TOLERANCE_PAR_MOT = 0.9;
+
+/**
+ * Le texte où chaque variante déclarée a laissé place au mot retenu. On le fait des deux côtés avant de
+ * comparer : « MOTOPOMPE CENTRIF » et « Pompe centrifuge » deviennent tous deux « POMPE CENTRIFUGE », et se
+ * retrouvent. Deux passes, parce qu'une variante en plusieurs mots ne se remplace pas mot à mot :
+ *   1. les variantes en plusieurs mots, remplacées telles quelles dans la chaîne ;
+ *   2. les variantes d'un seul mot, remplacées mot à mot — exactement, ou à une faute près si on l'a demandé.
+ */
+export function canoniser(expression: string, synonymes: Synonyme[]): string {
+    const retenus = synonymes
+        .map(synonyme => ({
+            retenu: motCompare(synonyme.motRetenu),
+            proche: synonyme.proche,
+            variantes: synonyme.variantes.map(motCompare).filter(Boolean)
+        }))
+        .filter(synonyme => synonyme.retenu && synonyme.variantes.length);
+    if (!retenus.length) return expression;
+    let texte = `' ' || ${expression} || ' '`;
+    for (const synonyme of retenus)
+        for (const variante of synonyme.variantes.filter(variante => variante.includes(' ')))
+            texte = `replace(${texte}, ${litteralSql(` ${variante} `)}, ${litteralSql(` ${synonyme.retenu} `)})`;
+    const cas = retenus
+        .map(synonyme => {
+            const simples = synonyme.variantes.filter(variante => !variante.includes(' '));
+            if (!simples.length) return '';
+            const reconnait = simples.map(variante => conditionDeLaVariante(variante, synonyme.proche)).join(' OR ');
+            return `WHEN ${reconnait} THEN ${litteralSql(synonyme.retenu)}`;
+        })
+        .filter(Boolean);
+    const nettoye = `TRIM(${texte})`;
+    if (!cas.length) return nettoye;
+    return `array_to_string(list_transform(string_split(${nettoye}, ' '), motEcrit -> CASE ${cas.join(' ')} ELSE motEcrit END), ' ')`;
+}
+
+/** Un mot écrit est-il cette variante-là : tel quel, ou à une faute près quand on l'a autorisé. */
+function conditionDeLaVariante(variante: string, proche: boolean): string {
+    const egal = `motEcrit = ${litteralSql(variante)}`;
+    if (!proche || variante.length < LETTRES_POUR_TOLERER_UNE_FAUTE) return egal;
+    return `(${egal} OR jaro_winkler_similarity(motEcrit, ${litteralSql(variante)}) >= ${TOLERANCE_PAR_MOT})`;
+}
 
 /** La part des mots du libellé de référence que l'on retrouve dans le libellé lu. */
 function motsRetrouves(lu: string, reference: string): string {
@@ -239,7 +322,7 @@ export function sqlDeCodification(codification: Codification, contexte: Contexte
     verifierLaCodification(codification);
     const tableSource = identifiantSql(contexte.nomTableDe(codification.source));
     const tableNomenclature = identifiantSql(contexte.nomTableDe(codification.nomenclature));
-    const libelle = texteCompare(`s.${identifiantSql(codification.colonneLibelle)}`);
+    const libelle = canoniser(texteCompare(`s.${identifiantSql(codification.colonneLibelle)}`), codification.synonymes);
     const correspondances = tableDesCorrespondances(codification);
     const reconnues = `SELECT s.*, ${libelle} AS __libelle,
         ${codeDesRegles(codification, correspondances)} AS __code_regle,
@@ -312,13 +395,17 @@ export function sqlDesCasARevoir(codification: Codification, contexte: ContexteC
     const tableNomenclature = identifiantSql(contexte.nomTableDe(codification.nomenclature));
     const codeRef = identifiantSql(codification.colonneCode);
     const libelleRef = identifiantSql(codification.colonneLibelleRef);
-    const score = ressemblance('aCoder.__libelle', texteCompare(`n.${libelleRef}`), codification.methode);
+    const score = ressemblance(
+        'aCoder.__libelle',
+        canoniser(texteCompare(`n.${libelleRef}`), codification.synonymes),
+        codification.methode
+    );
     const chemin = codification.niveaux.length
         ? `concat_ws(' › ', ${codification.niveaux.map(niveau => `CAST(n.${identifiantSql(niveau)} AS VARCHAR)`).join(', ')})`
         : `CAST(n.${codeRef} AS VARCHAR)`;
     const codee = sqlDeCodification(codification, contexte);
     return `WITH codee AS (\n${codee}\n), aCoder AS (
-    SELECT __rn, ${texteCompare(`codee.${identifiantSql(codification.colonneLibelle)}`)} AS __libelle,
+    SELECT __rn, ${canoniser(texteCompare(`codee.${identifiantSql(codification.colonneLibelle)}`), codification.synonymes)} AS __libelle,
         CAST(codee.${identifiantSql(codification.colonneLibelle)} AS VARCHAR) AS __texte
     FROM codee WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${combien}
 )

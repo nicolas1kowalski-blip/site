@@ -32,6 +32,20 @@ export function phraseDeLaRegle(regle: RegleCodification, colonneParDefaut: stri
     return `si ${colonne} contient ${voulus}${exclus} → ${regle.code}`;
 }
 
+/** Un mot retenu et les autres façons de l'écrire. */
+export type SynonymeCodification = { id: string; motRetenu: string; variantes: string[]; proche: boolean };
+
+/**
+ * Le synonyme dit en français, pour se relire : « MOTOPOMPE, GROUPE MOTOPOMPE valent POMPE ». C'est la
+ * phrase qui permet de vérifier d'un coup d'œil qu'on n'a pas écrit l'équivalence à l'envers.
+ */
+export function phraseDuSynonyme(synonyme: SynonymeCodification): string {
+    if (!synonyme.motRetenu.trim()) return 'synonyme incomplet : il manque le mot retenu';
+    if (!synonyme.variantes.length) return `« ${synonyme.motRetenu} » : aucune variante déclarée`;
+    const tolerance = synonyme.proche ? ', même mal orthographiées' : '';
+    return `${synonyme.variantes.join(', ')} ${synonyme.variantes.length > 1 ? 'valent' : 'vaut'} ${synonyme.motRetenu}${tolerance}`;
+}
+
 /** Les mots d'une saisie libre : séparés par des virgules ou des points-virgules, les vides écartés. */
 export function motsSaisis(saisie: string): string[] {
     return saisie

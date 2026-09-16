@@ -70,6 +70,8 @@ before(async () => {
             'EQ005;Échangeur à plaques;ECHANGEURS;ECH-P',
             'EQ006;Bidule non identifiable;POMPES;',
             'EQ007;Pompe à vide;POMPES;',
+            'EQ008;Groupe motopompe centrif;POMPES;',
+            'EQ009;Electrovanne papillon DN50;VANNES;',
             ''
         ].join('\n'),
         ['REPERE', 'LIBELLE', 'FAMILLE', 'CODE_FOURNI']
@@ -108,6 +110,7 @@ const codification = (partielle: object = {}) => ({
     restreindreSource: 'FAMILLE',
     restreindreNomenclature: 'FAMILLE',
     regles: [],
+    synonymes: [],
     correspondances: [],
     seuilAuto: 0.99,
     seuilRevoir: 0.45,
@@ -174,10 +177,10 @@ test('codification : un libellé approchant est mis à revoir, un libellé incon
 
 test('codification : le bilan dit combien de lignes sont codées, à revoir et sans proposition', async () => {
     const { bilan } = await executer();
-    assert.equal(bilan.total, 7);
-    assert.equal(bilan.office + bilan.revoir + bilan.absent, 7);
+    assert.equal(bilan.total, 9);
+    assert.equal(bilan.office + bilan.revoir + bilan.absent, 9);
     assert.ok(bilan.office >= 4, 'la majorité est codée sans intervention');
-    assert.match(bilan.phrase, /codées d’office sur 7/);
+    assert.match(bilan.phrase, /codées d’office sur 9/);
 });
 
 test('codification : une règle de mots-clés l’emporte sur la ressemblance, et ses exclusions sont respectées', async () => {
@@ -268,4 +271,40 @@ test('codification : une configuration incomplète est refusée avec un message,
     const refus = await appel({ method: 'POST', url: '/api/codification/cd1/executer' });
     assert.equal(refus.statusCode, 400);
     assert.match(json(refus).erreur, /la colonne du libellé/);
+});
+
+/**
+ * Les synonymes : le jargon du site ne ressemble pas toujours à la nomenclature. « Groupe motopompe centrif »
+ * est une pompe centrifuge, « Electrovanne papillon » une vanne papillon — à condition de l'avoir déclaré.
+ */
+test('synonymes : un libellé écrit dans le jargon du site retrouve son type une fois les variantes déclarées', async () => {
+    await enregistrer();
+    const sansSynonymes = parRepere(await executer());
+    assert.equal(sansSynonymes.EQ008.statut, 'revoir', 'sans rien de déclaré, « motopompe centrif » ne convainc pas');
+    assert.notEqual(sansSynonymes.EQ009.code, 'VAN-P', '« Electrovanne » n’est pas « Vanne » pour la machine');
+
+    await enregistrer({
+        synonymes: [
+            { id: 's1', motRetenu: 'POMPE', variantes: ['MOTOPOMPE', 'GROUPE MOTOPOMPE'], proche: false },
+            { id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: true },
+            { id: 's3', motRetenu: 'VANNE', variantes: ['ELECTROVANNE'], proche: false }
+        ]
+    });
+    const avecSynonymes = parRepere(await executer());
+    assert.equal(avecSynonymes.EQ008.code, 'PMP-C', '« Groupe motopompe centrif » vaut « Pompe centrifuge »');
+    assert.equal(avecSynonymes.EQ008.statut, 'office');
+    assert.equal(avecSynonymes.EQ009.code, 'VAN-P', '« Electrovanne papillon DN50 » vaut « Vanne papillon »');
+    assert.equal(avecSynonymes.EQ001.code, 'PMP-C', 'ce qui marchait avant marche toujours');
+});
+
+test('synonymes : « même mal orthographiée » rattrape la variante écrite de travers', async () => {
+    await enregistrer({
+        synonymes: [{ id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: true }]
+    });
+    // « CENTRIFF » n'est pas « CENTRIF », mais en est assez proche pour être reconnu comme lui.
+    const cas = json(await appel({ method: 'POST', url: '/api/codification/cd1/revue', payload: { combien: 50 } }));
+    assert.ok(Array.isArray(cas), 'la requête aux lambdas imbriquées passe bien sur le moteur');
+    const strict = await enregistrer({ synonymes: [{ id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: false }] });
+    assert.equal(strict.statusCode, 200);
+    assert.equal((await executer()).bilan.total, 9, 'les neuf lignes sont toujours codées, quel que soit le réglage');
 });

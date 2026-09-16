@@ -390,6 +390,8 @@ export type RegleCodification = {
     sauf: string[];
     motif: string;
 };
+/** Un mot qui en vaut d'autres : « MOTOPOMPE » vaut « POMPE ». Les variantes sont ramenées au mot retenu. */
+export type SynonymeCodification = { id: string; motRetenu: string; variantes: string[]; proche: boolean };
 /** Un libellé appris : ce qu'une décision de revue laisse derrière elle. */
 export type CorrespondanceCodification = { libelle: string; code: string; auteur: string; le: string };
 /** Une codification : la liste à coder, la nomenclature de référence, et la pile de règles. */
@@ -407,6 +409,7 @@ export type Codification = {
     /** Ne chercher que dans la branche où la ligne se trouve déjà. Vide = chercher partout. */
     restreindreSource: string;
     restreindreNomenclature: string;
+    synonymes: SynonymeCodification[];
     regles: RegleCodification[];
     correspondances: CorrespondanceCodification[];
     seuilAuto: number;

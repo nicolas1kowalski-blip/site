@@ -7,6 +7,7 @@ import {
     motsSaisis,
     phraseDeLOrigine,
     phraseDeLaRegle,
+    phraseDuSynonyme,
     prochaineAction,
     saisieDesMots,
     scoreLisible
@@ -68,4 +69,17 @@ test('l’écran dit toujours quoi faire ensuite, plutôt que de laisser devant 
     assert.match(prochaineAction({ total: 100, revoir: 47, absent: 6 }), /Passez les 47 cas à revoir/);
     assert.match(prochaineAction({ total: 100, revoir: 0, absent: 6 }), /6 ligne\(s\) sans proposition/);
     assert.match(prochaineAction({ total: 100, revoir: 0, absent: 0 }), /Tout est codé/);
+});
+
+test('un synonyme se relit à voix haute, dans le bon sens', () => {
+    assert.equal(
+        phraseDuSynonyme({ id: 's1', motRetenu: 'POMPE', variantes: ['MOTOPOMPE', 'GROUPE MOTOPOMPE'], proche: false }),
+        'MOTOPOMPE, GROUPE MOTOPOMPE valent POMPE'
+    );
+    assert.equal(
+        phraseDuSynonyme({ id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: true }),
+        'CENTRIF vaut CENTRIFUGE, même mal orthographiées'
+    );
+    assert.match(phraseDuSynonyme({ id: 's3', motRetenu: '', variantes: [], proche: false }), /il manque le mot retenu/);
+    assert.match(phraseDuSynonyme({ id: 's4', motRetenu: 'VANNE', variantes: [], proche: false }), /aucune variante/);
 });

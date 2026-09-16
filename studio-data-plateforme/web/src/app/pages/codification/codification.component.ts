@@ -18,11 +18,13 @@ import { NotificationsService } from '../../coeur/notifications.service';
 import { SessionService } from '../../coeur/session.service';
 import {
     RegleCodification,
+    SynonymeCodification,
     allureDuScore,
     allureDuStatut,
     motsSaisis,
     phraseDeLOrigine,
     phraseDeLaRegle,
+    phraseDuSynonyme,
     prochaineAction,
     saisieDesMots,
     scoreLisible
@@ -40,6 +42,7 @@ function codificationNeuve(): Codification {
         colonneCode: '',
         colonneLibelleRef: '',
         niveaux: [],
+        synonymes: [],
         restreindreSource: '',
         restreindreNomenclature: '',
         regles: [],
@@ -222,7 +225,59 @@ function codificationNeuve(): Codification {
             </div>
 
             <div class="carte">
-                <h2>② Les règles, de la plus sûre à la plus souple</h2>
+                <h2>② Les mots qui en valent d'autres</h2>
+                <p class="discret">
+                    Le jargon du site ne ressemble pas toujours à la nomenclature. Déclarez ici qu'une motopompe est une pompe, qu'une
+                    électrovanne est une vanne, que « centrif » veut dire « centrifuge » : les variantes sont ramenées au mot retenu des
+                    deux côtés avant de comparer. Les règles de mots-clés, elles, restent littérales — on les a écrites exprès sur un mot
+                    précis.
+                </p>
+                <table class="tableau">
+                    <thead>
+                        <tr>
+                            <th>Mot retenu</th>
+                            <th>Autres façons de l'écrire</th>
+                            <th>Même mal écrit</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (synonyme of codification.synonymes; track synonyme.id; let rang = $index) {
+                            <tr [attr.name]="'synonyme-' + synonyme.id">
+                                <td>
+                                    <input class="champ petit" [(ngModel)]="synonyme.motRetenu" [attr.name]="'retenu-' + synonyme.id" />
+                                </td>
+                                <td>
+                                    <input
+                                        class="champ"
+                                        [ngModel]="saisieDesMots(synonyme.variantes)"
+                                        (ngModelChange)="synonyme.variantes = motsSaisis($event)"
+                                        [attr.name]="'variantes-' + synonyme.id"
+                                        placeholder="motopompe ; groupe motopompe"
+                                    />
+                                    <div class="discret" [attr.name]="'phraseSynonyme-' + synonyme.id">
+                                        {{ phraseDuSynonyme(synonyme) }}
+                                    </div>
+                                </td>
+                                <td><input type="checkbox" [(ngModel)]="synonyme.proche" [attr.name]="'proche-' + synonyme.id" /></td>
+                                <td class="actions">
+                                    <button class="bouton petit danger" type="button" (click)="retirerLeSynonyme(rang)" title="Retirer">
+                                        ✕
+                                    </button>
+                                </td>
+                            </tr>
+                        } @empty {
+                            <tr>
+                                <td colspan="4" class="discret">Aucun synonyme : les libellés sont comparés tels qu'ils sont écrits.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button class="bouton" type="button" name="ajouterSynonyme" (click)="ajouterUnSynonyme()">+ Synonyme</button>
+            </div>
+
+            <div class="carte">
+                <h2>③ Les règles, de la plus sûre à la plus souple</h2>
                 <p class="discret">
                     La première qui répond gagne. Le code déjà fourni passe avant tout, puis la table de correspondance ({{
                         codification.correspondances.length
@@ -315,7 +370,7 @@ function codificationNeuve(): Codification {
 
         @if (resultat(); as resultat) {
             <div class="carte">
-                <h2>③ Le résultat</h2>
+                <h2>④ Le résultat</h2>
                 <div class="kpis">
                     <div class="kpi">
                         <span>Codées d'office</span><b class="succes" name="compteOffice">{{ resultat.bilan.office }}</b>
@@ -359,7 +414,7 @@ function codificationNeuve(): Codification {
 
         @if (casARevoir().length) {
             <div class="carte">
-                <h2>④ À revoir — {{ casARevoir().length }} cas</h2>
+                <h2>⑤ À revoir — {{ casARevoir().length }} cas</h2>
                 <p class="discret">
                     Chaque décision descend dans la table de correspondance : à la prochaine livraison, ce libellé sera codé tout seul.
                 </p>
@@ -479,6 +534,7 @@ export class CodificationComponent {
     readonly methodes = computed(() => Object.entries(this.vocabulaire()?.methodes || {}));
 
     readonly phraseDeLaRegle = phraseDeLaRegle;
+    readonly phraseDuSynonyme = phraseDuSynonyme;
     readonly motsSaisis = motsSaisis;
     readonly saisieDesMots = saisieDesMots;
     readonly scoreLisible = scoreLisible;
@@ -526,6 +582,16 @@ export class CodificationComponent {
     retirerNiveau(rang: number): void {
         const codification = this.choisie();
         if (codification) codification.niveaux = codification.niveaux.filter((_niveau, position) => position !== rang);
+    }
+    ajouterUnSynonyme(): void {
+        const codification = this.choisie();
+        if (!codification) return;
+        const synonyme: SynonymeCodification = { id: genererIdentifiant('sy_'), motRetenu: '', variantes: [], proche: false };
+        codification.synonymes = [...(codification.synonymes || []), synonyme];
+    }
+    retirerLeSynonyme(rang: number): void {
+        const codification = this.choisie();
+        if (codification) codification.synonymes = codification.synonymes.filter((_synonyme, position) => position !== rang);
     }
     ajouterUneRegle(): void {
         const codification = this.choisie();

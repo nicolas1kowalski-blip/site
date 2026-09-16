@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
     Codification,
+    canoniser,
+    motRetenuDuTexte,
     ErreurCodification,
     RegleCodification,
     bilanDeCodification,
@@ -150,4 +152,49 @@ test('décision : le libellé tranché entre dans la table de correspondance, et
     assert.equal(remplacee.length, 1, 'le même libellé écrit autrement remplace le précédent, il ne s’ajoute pas');
     assert.equal(remplacee[0].code, 'PMP-V');
     assert.deepEqual(correspondanceApresDecision(remplacee, 'Pompe centrifuge', '', 'Bob', '2026-09-17'), []);
+});
+
+const synonymes = [
+    { id: 's1', motRetenu: 'POMPE', variantes: ['MOTOPOMPE', 'GROUPE MOTOPOMPE'], proche: false },
+    { id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: true }
+];
+
+test('synonymes : sans rien de déclaré, le texte est laissé exactement comme il était', () => {
+    assert.equal(canoniser('x', []), 'x');
+    assert.equal(canoniser('x', [{ id: 's', motRetenu: 'POMPE', variantes: [], proche: false }]), 'x');
+});
+
+test('synonymes : les variantes en plusieurs mots sont remplacées dans la chaîne, les autres mot à mot', () => {
+    const sql = canoniser('x', synonymes);
+    assert.match(sql, /replace\(' ' \|\| x \|\| ' ', ' GROUPE MOTOPOMPE ', ' POMPE '\)/, 'la variante en deux mots passe par replace');
+    assert.match(sql, /list_transform\(string_split/, 'les variantes d’un mot passent par la liste des mots');
+    assert.match(sql, /motEcrit = 'MOTOPOMPE'/);
+    assert.match(sql, /THEN 'POMPE'/);
+});
+
+test('synonymes : « même mal orthographiée » n’est toléré que sur les variantes assez longues', () => {
+    const sql = canoniser('x', [
+        { id: 's2', motRetenu: 'CENTRIFUGE', variantes: ['CENTRIF'], proche: true },
+        { id: 's3', motRetenu: 'DIAMETRE', variantes: ['DN'], proche: true }
+    ]);
+    assert.match(sql, /jaro_winkler_similarity\(motEcrit, 'CENTRIF'\) >= 0\.9/);
+    assert.ok(!/jaro_winkler_similarity\(motEcrit, 'DN'\)/.test(sql), 'sur deux lettres, une faute change tout');
+    assert.match(sql, /motEcrit = 'DN'/, 'la variante courte reste reconnue, mais exactement');
+});
+
+test('synonymes : les deux côtés de la comparaison y passent, et la table de correspondance aussi', () => {
+    const sql = sqlDeCodification(
+        codification({ synonymes, correspondances: [{ libelle: 'Motopompe centrif', code: 'PMP-C', auteur: '', le: '' }] }),
+        contexte
+    );
+    assert.equal(sql.match(/motEcrit = 'MOTOPOMPE'/g)?.length, 2, 'le libellé lu et celui de la nomenclature');
+    assert.match(sql, /'POMPE CENTRIFUGE'/, 'le libellé appris est rangé sous sa forme retenue');
+    const revue = sqlDesCasARevoir(codification({ synonymes }), contexte);
+    assert.ok((revue.match(/motEcrit = 'MOTOPOMPE'/g) || []).length >= 2, 'la revue compare les mêmes formes retenues');
+});
+
+test('synonymes : un libellé appris est rangé sous les mots retenus, plusieurs mots compris', () => {
+    assert.equal(motRetenuDuTexte('Motopompe centrif', synonymes), 'POMPE CENTRIFUGE');
+    assert.equal(motRetenuDuTexte('Groupe motopompe alimentaire', synonymes), 'POMPE ALIMENTAIRE');
+    assert.equal(motRetenuDuTexte('Vanne papillon', synonymes), 'VANNE PAPILLON', 'ce qui n’est pas déclaré ne bouge pas');
 });
