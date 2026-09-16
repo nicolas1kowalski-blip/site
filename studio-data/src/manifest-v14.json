@@ -346,6 +346,10 @@
    "role": "V13 : vue « Mon domaine », accueil gouvernance en mode première fois, tâches à faire, mots du métier en premier, « Proposer une correction » sur les fiches en lecture"
   },
   {
+   "file": "94-couche-v13/A5-v13-cle-composite.js",
+   "role": "V13 : clé composite d'un lien (colonnes qui s'ajoutent à la correspondance) et contrôle des tables liées — mesure ce que chaque jointure fait au nombre de lignes et prévient quand elle multiplie"
+  },
+  {
    "file": "96-couche-v14/B0-v14-architecture.js",
    "role": "V14 : panneau « Architecture du code » — modules par domaine et par couche, chaîne d'extensions de chaque fonction, auto-contrôle Studio.selfCheck, export de l'index de l'API ; accès par l'aide « ? » et la palette"
   },

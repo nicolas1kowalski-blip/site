@@ -332,6 +332,10 @@
   {
    "file": "94-couche-v13/A4-v13-domaine-accueil.js",
    "role": "V13 : vue « Mon domaine », accueil gouvernance en mode première fois, tâches à faire, mots du métier en premier, « Proposer une correction » sur les fiches en lecture"
+  },
+  {
+   "file": "94-couche-v13/A5-v13-cle-composite.js",
+   "role": "V13 : clé composite d'un lien (colonnes qui s'ajoutent à la correspondance) et contrôle des tables liées — mesure ce que chaque jointure fait au nombre de lignes et prévient quand elle multiplie"
   }
  ]
 }

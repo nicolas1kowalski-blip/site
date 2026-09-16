@@ -1,7 +1,16 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.3.2';
+        const V13_VERSION = '13.4.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.4.0',
+                d: '2026-09-16',
+                t: 'Une ligne qui revient plusieurs fois : la clé du lien, et le contrôle qui prévient',
+                items: [
+                    "Modèle de données : la « Clé du lien » peut porter plusieurs colonnes. Un élément rangé dans plusieurs groupes ne revient plus autant de fois qu'il a de groupes : on ajoute le groupe à la clé, et toutes les extractions qui empruntent ce lien en profitent.",
+                    "Extraire : bouton « 🧮 Contrôler les tables liées » — on mesure sur les données ce que chaque table jointe fait au nombre de lignes, et l'on dit laquelle multiplie. Le contrôle se déclenche aussi tout seul après un aperçu, parce que personne ne vérifie une multiplication qu'il ne soupçonne pas."
+                ]
+            },
             {
                 v: '13.3.2',
                 d: '2026-09-10',
