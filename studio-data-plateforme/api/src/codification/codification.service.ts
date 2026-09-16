@@ -7,13 +7,17 @@
  * correspondance, pour que le même libellé ne soit plus jamais à trancher.
  */
 import { Injectable } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { EspaceAvecRole } from '../authentification/contexte-requete';
 import { Utilisateur } from '../base-de-donnees/schema';
 import { erreurIntrouvable, erreurRequete, messageUtilisateur } from '../commun/erreurs';
 import { EspacesService } from '../espaces/espaces.service';
+import { identifiantSql } from '../espaces/moteur-duckdb';
 import { EtatApplication, GouvernanceService } from '../gouvernance/gouvernance.service';
 import { nombre } from '../qualite/profilage';
 import { SourcesService } from '../sources/sources.service';
+import { ColonneObservee, PropositionDeCodification, devinerLaCodification } from './deviner-codification';
+import { CE_QUE_LEXEMPLE_MONTRE, LISTE_DEXEMPLE, NOMENCLATURE_DEXEMPLE, SYNONYMES_DEXEMPLE, TableDExemple } from './exemple-codification';
 import {
     BilanDeCodification,
     Codification,
@@ -100,6 +104,114 @@ export class CodificationService {
     private lisible(erreur: unknown): never {
         if (erreur instanceof ErreurCodification) throw erreurRequete(erreur.message);
         throw erreurRequete(messageUtilisateur(erreur));
+    }
+
+    /** Combien de valeurs on regarde par colonne pour se faire une idée : assez pour juger, pas pour ramer. */
+    private static readonly VALEURS_OBSERVEES = 300;
+
+    /**
+     * Ce qu'il faut savoir d'une table pour deviner son rôle : par colonne, le nombre de valeurs différentes,
+     * de lignes renseignées, la longueur moyenne, et quelques valeurs.
+     */
+    private async observer(espace: EspaceAvecRole, nomSource: string): Promise<ColonneObservee[]> {
+        const sources = await this.sources.lister(espace.id);
+        const source = sources.find(candidat => candidat.name === nomSource);
+        if (!source) throw erreurRequete(`La source « ${nomSource} » n'est pas chargée.`);
+        const colonnes = (source.headers || []).filter(colonne => colonne !== '__rn');
+        if (!colonnes.length) return [];
+        const { moteur } = await this.espaces.ressources(espace);
+        const table = `"t_${source.id}"`;
+        const mesures = colonnes
+            .map(
+                (colonne, rang) =>
+                    `COUNT(DISTINCT NULLIF(TRIM(CAST("${colonne.replace(/"/g, '""')}" AS VARCHAR)), ''))::BIGINT AS d${rang},
+                     COUNT(NULLIF(TRIM(CAST("${colonne.replace(/"/g, '""')}" AS VARCHAR)), ''))::BIGINT AS r${rang},
+                     COALESCE(AVG(length(TRIM(CAST("${colonne.replace(/"/g, '""')}" AS VARCHAR)))), 0) AS l${rang}`
+            )
+            .join(', ');
+        const [comptes, echantillon] = await Promise.all([
+            moteur.executer(`SELECT ${mesures} FROM ${table}`),
+            moteur.executer(`SELECT * FROM ${table} LIMIT ${CodificationService.VALEURS_OBSERVEES}`)
+        ]);
+        const ligneDesComptes = comptes.lignes[0] || [];
+        const rangDe = (nom: string) => echantillon.colonnes.findIndex(colonne => colonne.nom === nom);
+        return colonnes.map((colonne, rang) => ({
+            nom: colonne,
+            distinctes: nombre(ligneDesComptes[3 * rang]),
+            renseignees: nombre(ligneDesComptes[3 * rang + 1]),
+            longueurMoyenne: Number(ligneDesComptes[3 * rang + 2]) || 0,
+            exemples: echantillon.lignes.map(ligne => String(ligne[rangDe(colonne)] ?? '')).filter(valeur => valeur.trim())
+        }));
+    }
+
+    /**
+     * Propose toute la configuration à partir des deux tables : quelle colonne porte le libellé, laquelle le
+     * code, quels sont les niveaux de l'arbre, quelle famille restreindre — et pourquoi.
+     */
+    async deviner(espace: EspaceAvecRole, source: string, nomenclature: string): Promise<PropositionDeCodification> {
+        const [liste, arbre] = await Promise.all([this.observer(espace, source), this.observer(espace, nomenclature)]);
+        return devinerLaCodification(liste, arbre);
+    }
+
+    /**
+     * Installe une table de l'exemple : une table DuckDB et la source qui la déclare. Si elle est déjà là, on
+     * la refait — l'exemple doit toujours repartir du même état, quoi qu'on y ait fait.
+     */
+    private async installerUneTable(espace: EspaceAvecRole, table: TableDExemple): Promise<void> {
+        const sources = await this.sources.lister(espace.id);
+        const existante = sources.find(candidat => candidat.name === table.nom);
+        const identifiant = existante?.id || 'tb_' + randomBytes(6).toString('hex');
+        const { moteur } = await this.espaces.ressources(espace);
+        const nomTable = 't_' + identifiant;
+        const valeurs = table.lignes.map(ligne => `(${ligne.map(valeur => `'${valeur.replace(/'/g, "''")}'`).join(', ')})`).join(', ');
+        await moteur.abandonner(nomTable);
+        await moteur.executer(
+            `CREATE TABLE ${identifiantSql(nomTable)} AS SELECT row_number() OVER () AS __rn, * FROM (VALUES ${valeurs}) v(${table.colonnes.map(identifiantSql).join(', ')})`
+        );
+        await this.sources.ecrire(espace.id, identifiant, {
+            id: identifiant,
+            name: table.nom,
+            type: 'csv',
+            headers: table.colonnes,
+            status: 'ready'
+        } as never);
+    }
+
+    /**
+     * Installe l'exemple : les deux tables, et une codification déjà réglée sur elles. On peut la lancer
+     * aussitôt et voir ce qui se passe — c'est la documentation, mais sur des données que l'on manipule.
+     */
+    async installerLExemple(espace: EspaceAvecRole, utilisateur: Utilisateur): Promise<{ codification: Codification; montre: string[] }> {
+        await this.installerUneTable(espace, LISTE_DEXEMPLE);
+        await this.installerUneTable(espace, NOMENCLATURE_DEXEMPLE);
+        const proposition = await this.deviner(espace, LISTE_DEXEMPLE.nom, NOMENCLATURE_DEXEMPLE.nom);
+        const codification = await this.ecrire(espace, utilisateur, 'cd_exemple', {
+            nom: 'Exemple — codes équipements',
+            source: LISTE_DEXEMPLE.nom,
+            nomenclature: NOMENCLATURE_DEXEMPLE.nom,
+            colonneLibelle: proposition.colonneLibelle,
+            colonneCodeExistant: proposition.colonneCodeExistant,
+            colonneCode: proposition.colonneCode,
+            colonneLibelleRef: proposition.colonneLibelleRef,
+            niveaux: proposition.niveaux,
+            restreindreSource: proposition.restreindreSource,
+            restreindreNomenclature: proposition.restreindreNomenclature,
+            // Les variantes sont proposées mais pas posées : l'exemple doit d'abord montrer ce qui leur manque.
+            comparaisons: [],
+            synonymes: [],
+            regles: [],
+            correspondances: [],
+            seuilAuto: 0.99,
+            seuilRevoir: 0.45,
+            methode: 'mots',
+            decisions: {}
+        });
+        return { codification, montre: CE_QUE_LEXEMPLE_MONTRE };
+    }
+
+    /** Les variantes que l'exemple propose de déclarer, une fois le premier résultat vu. */
+    synonymesDeLExemple() {
+        return SYNONYMES_DEXEMPLE;
     }
 
     /** Code la liste et rend les premières lignes, avec le bilan porté sur la totalité. */

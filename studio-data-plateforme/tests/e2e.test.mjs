@@ -2426,7 +2426,7 @@ try {
     );
     await capture('surveillance');
 
-    // ---- codification : rattacher le code du référentiel à chaque ligne d'une liste reçue ----
+    // ---- codification : deux tables suffisent, l'application propose le reste ----
     await page.click('a[href="/sources"]');
     await page.waitForSelector('app-sources');
     for (const fichier of ['equipements.csv', 'nomenclature.csv']) {
@@ -2440,132 +2440,129 @@ try {
 
     await page.click('a[href="/codification"]');
     await page.waitForSelector('app-codification');
+    // L'exemple : un clic, et l'on voit le module fonctionner avant d'y toucher.
+    await page.click('app-codification button[name=voirUnExemple]');
+    await page.waitForSelector('app-codification [name=ceQueLExempleMontre]');
+    await page.waitForFunction(() => document.querySelector('app-codification [name=phraseBilan]'));
+    const exempleMontre = await page.textContent('app-codification [name=ceQueLExempleMontre]');
+    verifier(
+        'codification : « Voir un exemple » installe deux tables, les code aussitôt, et dit ce que chaque ligne illustre',
+        /Bidule non identifiable/.test(exempleMontre) &&
+            /Vanne DN80/.test(exempleMontre) &&
+            /codées d’office/.test(await page.textContent('app-codification [name=phraseBilan]'))
+    );
+    verifier(
+        'codification : l’exemple montre les trois issues — codé, à revoir, sans proposition',
+        Number(await page.textContent('app-codification [name=compteOffice]')) >= 4 &&
+            Number(await page.textContent('app-codification [name=compteRevoir]')) >= 1 &&
+            Number(await page.textContent('app-codification [name=compteAbsent]')) >= 1
+    );
+    verifier(
+        'codification : l’écran dit ce qui reste à faire, et pourquoi, plutôt que d’aligner tous les réglages',
+        /à revoir/.test(await page.textContent('app-codification [name=suggestions]')) &&
+            /variante/.test(await page.textContent('app-codification [name=suggestions]'))
+    );
+    await capture('codification-exemple');
+    // Les variantes proposées par l'exemple : on voit ce qu'elles changent.
+    const avantVariantes = Number(await page.textContent('app-codification [name=compteOffice]'));
+    await page.click('app-codification button[name=poserLesVariantesDeLExemple]');
+    await page.waitForFunction(
+        avant => Number(document.querySelector('app-codification [name=compteOffice]')?.textContent || 0) > avant,
+        avantVariantes
+    );
+    verifier(
+        'codification : déclarer les variantes de l’exemple code davantage de lignes, sous les yeux',
+        Number(await page.textContent('app-codification [name=compteOffice]')) > avantVariantes
+    );
+    await page.click('app-codification button[name=fermerLExemple]');
+
+    // Sur ses propres données : on ne choisit que les deux tables, tout le reste est proposé.
     await page.click('app-codification button[name=nouvelleCodification]');
-    await page.fill('app-codification input[name=nomCodification]', 'Codes équipements');
     await page.selectOption('app-codification select[name=sourceCodification]', 'equipements.csv');
-    await page.selectOption('app-codification select[name=colonneLibelle]', 'LIBELLE');
-    await page.selectOption('app-codification select[name=colonneCodeExistant]', 'CODE_FOURNI');
     await page.selectOption('app-codification select[name=nomenclatureCodification]', 'nomenclature.csv');
-    await page.selectOption('app-codification select[name=colonneCode]', 'CODE_TYPE');
-    await page.selectOption('app-codification select[name=colonneLibelleRef]', 'LIBELLE_TYPE');
-    for (const niveau of ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE']) {
-        await page.selectOption('app-codification select[name=niveauAAjouter]', niveau);
-        await page.click('app-codification button[name=ajouterNiveau]');
-    }
-    await page.selectOption('app-codification select[name=restreindreSource]', 'FAMILLE');
-    await page.selectOption('app-codification select[name=restreindreNomenclature]', 'FAMILLE');
-    await page.click('app-codification button[name=coder]');
-    await page.waitForSelector('app-codification [name=phraseBilan]');
-    const bilanCodification = await page.textContent('app-codification [name=phraseBilan]');
+    await page.waitForSelector('app-codification [name=propositionDevinee]');
+    const propositionLue = await page.textContent('app-codification [name=propositionDevinee]');
     verifier(
-        'codification : 5 lignes sur 9 codées d’office — code déjà fourni, libellés retrouvés malgré la casse, les accents et les mots en trop',
-        /5 ligne\(s\) codées d’office sur 9/.test(bilanCodification) &&
-            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '3' &&
-            (await page.textContent('app-codification [name=compteAbsent]')).trim() === '1'
+        'codification : les deux tables suffisent — la configuration est proposée, et chaque choix justifié',
+        /« LIBELLE » porte le libellé/.test(propositionLue) &&
+            /« CODE_TYPE » porte le code/.test(propositionLue) &&
+            /FAMILLE › SYSTEME › SOUS_SYSTEME › LIBELLE_TYPE/.test(propositionLue) &&
+            /valeurs communes/.test(propositionLue)
     );
-    const tableauCode = await page.textContent('app-codification .ligne-codee');
     verifier(
-        'codification : chaque ligne porte son code, par quoi il a été trouvé, et son chemin dans l’arbre',
-        /PMP-C|VAN-P|ECH-P/.test(await page.textContent('app-codification .resultat')) &&
-            /POMPES › Transfert › Centrifuge/.test(await page.textContent('app-codification .resultat')) &&
-            /ressemblance du libellé|code déjà fourni/.test(await page.textContent('app-codification .resultat')) &&
-            tableauCode.length > 0
-    );
-    await page.waitForSelector('app-codification .cas-a-revoir');
-    const casDouteux = await page.textContent('app-codification .cas-a-revoir');
-    verifier(
-        'codification : « Vanne DN80 » passe à la revue, avec des propositions qui restent dans sa famille',
-        /Vanne DN80/.test(casDouteux) && /VANNES › /.test(casDouteux) && !/POMPES/.test(casDouteux)
-    );
-    // On cadre sur le résultat et la revue : c'est là que l'écran se juge.
-    await page.evaluate(() => document.querySelector('app-codification .kpis')?.scrollIntoView({ block: 'start' }));
-    await page.evaluate(() => document.querySelectorAll('.notification').forEach(notification => notification.remove()));
-    await capture('codification');
-    // Ce que l'on compare : le rapprochement peut porter sur un tout autre attribut, des deux côtés.
-    await page.click('app-codification button[name=ajouterComparaison]');
-    const comparaison = page.locator('app-codification tbody tr[name^=comparaison-]').first();
-    await comparaison.locator('select[name^=cmpSource-]').selectOption('DESIGNATION');
-    await comparaison.locator('select[name^=cmpNomenclature-]').selectOption('ABREGE');
-    const phraseComparaison = await comparaison.locator('div[name^=phraseComparaison-]').textContent();
-    verifier(
-        'codification : une comparaison se relit à voix haute — « DESIGNATION contre ABREGE »',
-        /DESIGNATION contre ABREGE/.test(phraseComparaison)
+        'codification : les réglages fins sont repliés, et l’exigence se dit en français',
+        (await page.$eval('app-codification details[name=affiner]', details => details.open)) === false &&
+            /Accepter quand tous les mots/.test(await page.textContent('app-codification [name=explicationExigence]'))
     );
     await page.click('app-codification button[name=coder]');
     await page.waitForFunction(() =>
         /codées d’office/.test(document.querySelector('app-codification [name=phraseBilan]')?.textContent || '')
     );
-    const resultatParAbrege = await page.textContent('app-codification .resultat');
     verifier(
-        'codification : le rapprochement porte alors sur la désignation contre l’abrégé, et « VP DN80 » trouve sa vanne papillon',
-        /VAN-P/.test(resultatParAbrege) && /ressemblance du libellé/.test(resultatParAbrege)
+        'codification : codée sans avoir rien réglé — 5 lignes sur 9 d’office',
+        /5 ligne\(s\) codées d’office sur 9/.test(await page.textContent('app-codification [name=phraseBilan]'))
     );
-    // On revient au libellé pour la suite : la comparaison déclarée remplace le défaut, elle ne s'y ajoute pas.
-    await comparaison.locator('button[title=Retirer]').click();
+    await capture('codification');
 
-    // Les synonymes : le jargon du site ramené aux mots de la nomenclature.
-    const synonymesADeclarer = [
-        ['POMPE', 'motopompe ; groupe motopompe'],
-        ['CENTRIFUGE', 'centrif'],
-        ['VANNE', 'electrovanne']
-    ];
-    for (const [rang, [retenu, variantes]] of synonymesADeclarer.entries()) {
-        await page.click('app-codification button[name=ajouterSynonyme]');
-        // La ligne doit exister avant qu'on y écrive : sinon les trois saisies tombent dans la même.
-        await page.waitForFunction(
-            attendues => document.querySelectorAll('app-codification tbody tr[name^=synonyme-]').length === attendues,
-            rang + 1
-        );
-        const synonyme = page.locator('app-codification tbody tr[name^=synonyme-]').nth(rang);
-        await synonyme.locator('input[name^=retenu-]').fill(retenu);
-        await synonyme.locator('input[name^=variantes-]').fill(variantes);
-    }
-    const phraseSynonyme = await page.locator('app-codification div[name^=phraseSynonyme-]').first().textContent();
+    // Les réglages fins restent là pour qui en a besoin : variantes, comparaison sur un autre attribut, règles.
+    await page.click('app-codification details[name=affiner] > summary');
+    await page.click('app-codification button[name=ajouterSynonyme]');
+    const synonyme = page.locator('app-codification tbody tr[name^=synonyme-]').first();
+    await synonyme.locator('input[name^=retenu-]').fill('POMPE');
+    await synonyme.locator('input[name^=variantes-]').fill('motopompe ; groupe motopompe');
+    const phraseSynonyme = await synonyme.locator('div[name^=phraseSynonyme-]').textContent();
     verifier(
         'codification : un synonyme se relit à voix haute — « motopompe, groupe motopompe valent POMPE »',
         /motopompe, groupe motopompe valent POMPE/.test(phraseSynonyme)
     );
-    await page.click('app-codification button[name=coder]');
-    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteOffice]')?.textContent || '').trim() === '7');
+    await page.click('app-codification button[name=ajouterComparaison]');
+    const comparaison = page.locator('app-codification tbody tr[name^=comparaison-]').first();
+    await comparaison.locator('select[name^=cmpSource-]').selectOption('DESIGNATION');
+    await comparaison.locator('select[name^=cmpNomenclature-]').selectOption('ABREGE');
     verifier(
-        'codification : les variantes déclarées rattrapent le jargon du site — « groupe motopompe centrif » et « electrovanne papillon » codées',
-        (await page.textContent('app-codification [name=compteOffice]')).trim() === '7' &&
-            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '1'
+        'codification : une comparaison se relit à voix haute — « DESIGNATION contre ABREGE »',
+        /DESIGNATION contre ABREGE/.test(await comparaison.locator('div[name^=phraseComparaison-]').textContent())
     );
-    // Trancher : la décision code la ligne et descend dans la table de correspondance.
-    await page.click('app-codification .cas-a-revoir .candidat >> nth=0');
-    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteOffice]')?.textContent || '').trim() === '8');
-    verifier(
-        'codification : trancher un cas le code aussitôt (8 d’office) et le libellé est retenu pour les prochaines livraisons',
-        (await page.textContent('app-codification [name=compteOffice]')).trim() === '8' &&
-            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '0'
-    );
-    // Une règle de mots-clés attrape ce qu'aucune ressemblance ne trouve.
+    await comparaison.locator('button[title=Retirer]').click();
     await page.click('app-codification button[name=ajouterRegle]');
     const regle = page.locator('app-codification tbody tr[name^=regle-]').first();
     await regle.locator('input[name^=contient-]').fill('bidule');
     await regle.locator('input[name^=code-]').fill('PMP-C');
-    const phraseRegle = await regle.locator('div[name^=phraseRegle-]').textContent();
     verifier(
         'codification : une règle se relit en français — « si LIBELLE contient bidule → PMP-C »',
-        /si LIBELLE contient bidule → PMP-C/.test(phraseRegle)
+        /si LIBELLE contient bidule → PMP-C/.test(await regle.locator('div[name^=phraseRegle-]').textContent())
     );
     await page.click('app-codification button[name=coder]');
     await page.waitForFunction(() => (document.querySelector('app-codification [name=compteAbsent]')?.textContent || '').trim() === '0');
     verifier(
-        'codification : la règle attrape la ligne que personne ne trouvait — plus aucune ligne sans code',
+        'codification : la règle attrape la ligne que personne ne trouvait — plus aucune ligne sans proposition',
         (await page.textContent('app-codification [name=compteAbsent]')).trim() === '0' &&
-            /100 %/.test(await page.textContent('app-codification [name=couverture]'))
+            Number(await page.textContent('app-codification [name=compteOffice]')) === 7 &&
+            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '2'
     );
+    // Trancher le dernier cas : la décision descend dans la table de correspondance.
+    if ((await page.$$('app-codification .cas-a-revoir .candidat')).length) {
+        const avantDecision = Number(await page.textContent('app-codification [name=compteOffice]'));
+        await page.click('app-codification .cas-a-revoir .candidat >> nth=0');
+        await page.waitForFunction(
+            avant => Number(document.querySelector('app-codification [name=compteOffice]')?.textContent || 0) > avant,
+            avantDecision
+        );
+        verifier(
+            'codification : trancher un cas le code aussitôt, et le libellé est retenu pour les prochaines livraisons',
+            Number(await page.textContent('app-codification [name=compteOffice]')) === 8 &&
+                (await page.textContent('app-codification [name=compteRevoir]')).trim() === '1'
+        );
+    }
 
     await page.click('a[href="/sauvegarde"]');
     await page.waitForSelector('app-sauvegarde');
     const exportEspace = await page.evaluate(async () => await (await fetch('/api/sauvegarde/export')).json());
     verifier(
-        'sauvegarde : l’export de l’espace contient les documents partagés et les 9 sources (dont le jeu promu)',
+        'sauvegarde : l’export de l’espace contient les documents partagés et les 11 sources (dont le jeu promu et l’exemple de codification)',
         exportEspace.kind === 'studio-data-espace' &&
             exportEspace.documents.appState.governance.businessObjects.length === 1 &&
-            exportEspace.sources.length === 9
+            exportEspace.sources.length === 11
     );
     const dossierHtml = await page.evaluate(async () => await (await fetch('/api/sauvegarde/dossier')).text());
     verifier(
@@ -2876,7 +2873,7 @@ try {
     }));
     verifier(
         'application classique : les sources déposées depuis Angular (dont la livraison ZIP et la fusion), la table conçue, la comparaison, la table préparée et l’extraction enregistrée sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 11 &&
+        classique.tables.length === 13 &&
             classique.tables.every(table => table.status === 'ready') &&
             classique.tables.filter(table => table.headers === 3).length === 4 &&
             classique.tables.some(table => table.name === 'Clients et produits' && table.headers === 7) &&

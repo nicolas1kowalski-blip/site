@@ -354,3 +354,101 @@ test('comparaisons : chacune peut avoir sa propre mesure, sans perturber les aut
     const bilan = (await executer()).bilan;
     assert.equal(bilan.total, 9, 'les neuf lignes sont traitées, quelles que soient les mesures mêlées');
 });
+
+/**
+ * La devination : l'écran ne demande que les deux tables, et propose tout le reste. C'est ce qui fait la
+ * différence entre un module que l'on essaie et un module que l'on referme.
+ */
+test('devination : les deux tables suffisent, l’application propose toute la configuration', async () => {
+    const proposition = json(
+        await appel({
+            method: 'POST',
+            url: '/api/codification/deviner',
+            payload: { source: 'equipements.csv', nomenclature: 'nomenclature.csv' }
+        })
+    );
+    assert.equal(proposition.colonneLibelle, 'LIBELLE');
+    assert.equal(proposition.colonneCode, 'CODE_TYPE');
+    assert.equal(proposition.colonneLibelleRef, 'LIBELLE_TYPE');
+    assert.deepEqual(proposition.niveaux, ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE']);
+    assert.equal(proposition.restreindreSource, 'FAMILLE');
+    assert.equal(proposition.restreindreNomenclature, 'FAMILLE');
+    assert.ok(proposition.raisons.length >= 5, 'chaque choix est justifié');
+});
+
+test('devination : la configuration proposée code effectivement la liste, sans qu’on y touche', async () => {
+    const proposition = json(
+        await appel({
+            method: 'POST',
+            url: '/api/codification/deviner',
+            payload: { source: 'equipements.csv', nomenclature: 'nomenclature.csv' }
+        })
+    );
+    await appel({
+        method: 'PUT',
+        url: '/api/codification/cd2',
+        payload: { ...codification(), ...proposition, nom: 'Devinée', raisons: undefined }
+    });
+    const resultat = json(await appel({ method: 'POST', url: '/api/codification/cd2/executer' }));
+    assert.equal(resultat.bilan.total, 9);
+    assert.ok(resultat.bilan.office >= 5, 'la proposition seule code déjà la majorité des lignes');
+});
+
+test('devination : une source inconnue est refusée avec un message, pas une erreur serveur', async () => {
+    const refus = await appel({
+        method: 'POST',
+        url: '/api/codification/deviner',
+        payload: { source: 'absente.csv', nomenclature: 'nomenclature.csv' }
+    });
+    assert.equal(refus.statusCode, 400);
+    assert.match(json(refus).erreur, /absente\.csv/);
+});
+
+/**
+ * L'exemple prêt à l'emploi : un clic, et l'on voit le module fonctionner sur des données que l'on peut lire
+ * en entier. C'est la documentation la plus utile — celle que l'on manipule.
+ */
+test('exemple : un clic installe deux tables et une codification déjà réglée, prête à lancer', async () => {
+    const pose = json(await appel({ method: 'POST', url: '/api/codification/exemple' }));
+    assert.equal(pose.codification.source, 'equipements-exemple.csv');
+    assert.equal(pose.codification.nomenclature, 'nomenclature-exemple.csv');
+    assert.equal(pose.codification.colonneLibelle, 'LIBELLE', 'la configuration est devinée, pas laissée vide');
+    assert.equal(pose.codification.colonneCode, 'CODE_TYPE');
+    assert.deepEqual(pose.codification.niveaux, ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE']);
+    assert.ok(pose.montre.length >= 5, 'l’exemple dit ce que chaque ligne illustre');
+    assert.match(pose.montre.join(' '), /Bidule non identifiable/);
+});
+
+test('exemple : lancé tel quel, il montre les trois issues — codé, à revoir, sans proposition', async () => {
+    await appel({ method: 'POST', url: '/api/codification/exemple' });
+    const resultat = json(await appel({ method: 'POST', url: '/api/codification/cd_exemple/executer' }));
+    assert.equal(resultat.bilan.total, 9);
+    assert.ok(resultat.bilan.office >= 4, 'la majorité est codée sans rien régler');
+    assert.ok(resultat.bilan.revoir >= 1, 'il reste de quoi apprendre la revue');
+    assert.ok(resultat.bilan.absent >= 1, 'et de quoi comprendre à quoi sert une règle');
+});
+
+test('exemple : les variantes proposées rattrapent le jargon, et le montrent', async () => {
+    await appel({ method: 'POST', url: '/api/codification/exemple' });
+    const avant = json(await appel({ method: 'POST', url: '/api/codification/cd_exemple/executer' })).bilan;
+    const synonymes = json(await appel({ method: 'GET', url: '/api/codification/synonymes-exemple' }));
+    assert.ok(synonymes.some((synonyme: { motRetenu: string }) => synonyme.motRetenu === 'POMPE'));
+    const codification = (json(await appel({ method: 'GET', url: '/api/codification' })) as { id: string }[]).find(
+        candidat => candidat.id === 'cd_exemple'
+    );
+    await appel({ method: 'PUT', url: '/api/codification/cd_exemple', payload: { ...codification, synonymes } });
+    const apres = json(await appel({ method: 'POST', url: '/api/codification/cd_exemple/executer' })).bilan;
+    assert.ok(apres.office > avant.office, 'déclarer les variantes code davantage de lignes');
+});
+
+test('exemple : réinstallé, il repart du même état quoi qu’on y ait fait', async () => {
+    await appel({ method: 'POST', url: '/api/codification/exemple' });
+    const premier = json(await appel({ method: 'POST', url: '/api/codification/cd_exemple/executer' })).bilan;
+    const codification = (json(await appel({ method: 'GET', url: '/api/codification' })) as { id: string }[]).find(
+        candidat => candidat.id === 'cd_exemple'
+    );
+    await appel({ method: 'PUT', url: '/api/codification/cd_exemple', payload: { ...codification, regles: [], synonymes: [] } });
+    await appel({ method: 'POST', url: '/api/codification/exemple' });
+    const second = json(await appel({ method: 'POST', url: '/api/codification/cd_exemple/executer' })).bilan;
+    assert.deepEqual(second, premier);
+});

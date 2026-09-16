@@ -127,3 +127,71 @@ export function prochaineAction(bilan: { total: number; revoir: number; absent: 
     if (bilan.absent) return `${bilan.absent} ligne(s) sans proposition : ajoutez une règle de mots-clés pour les attraper.`;
     return 'Tout est codé : le résultat peut partir.';
 }
+
+/**
+ * Les seuils dits en français. « Coder d'office au-dessus de 0,99 » ne veut rien dire à quelqu'un qui découvre
+ * l'écran ; « n'accepter que les correspondances parfaites » se comprend sans explication. Les nombres restent
+ * accessibles sous « Affiner », pour qui veut les régler au centième.
+ */
+export const EXIGENCES: { cle: string; libelle: string; explication: string; seuilAuto: number; seuilRevoir: number }[] = [
+    {
+        cle: 'stricte',
+        libelle: 'Stricte',
+        explication: 'N’accepter que les correspondances parfaites ; tout le reste passe à la revue.',
+        seuilAuto: 1,
+        seuilRevoir: 0.6
+    },
+    {
+        cle: 'normale',
+        libelle: 'Normale',
+        explication: 'Accepter quand tous les mots du type se retrouvent ; demander dès qu’il en manque un.',
+        seuilAuto: 0.99,
+        seuilRevoir: 0.45
+    },
+    {
+        cle: 'souple',
+        libelle: 'Souple',
+        explication: 'Accepter dès que l’essentiel correspond ; il y aura moins à revoir, et quelques erreurs.',
+        seuilAuto: 0.8,
+        seuilRevoir: 0.3
+    }
+];
+
+/** L'exigence qui correspond aux seuils courants, ou « sur mesure » quand on les a réglés à la main. */
+export function exigenceDesSeuils(seuilAuto: number, seuilRevoir: number): string {
+    const trouvee = EXIGENCES.find(exigence => exigence.seuilAuto === seuilAuto && exigence.seuilRevoir === seuilRevoir);
+    return trouvee ? trouvee.cle : 'surmesure';
+}
+
+/**
+ * Ce que l'on gagnerait à régler, d'après le résultat. C'est ce qui remplace la liste de tous les réglages :
+ * on ne montre un outil qu'au moment où il servirait, et l'on dit à quoi il sert.
+ */
+export type Suggestion = { titre: string; explication: string; section: 'comparaisons' | 'synonymes' | 'regles' };
+
+export function suggestionsApresCodification(bilan: { total: number; revoir: number; absent: number } | null): Suggestion[] {
+    if (!bilan || !bilan.total) return [];
+    const suggestions: Suggestion[] = [];
+    if (bilan.revoir)
+        suggestions.push({
+            titre: `${bilan.revoir} ligne(s) à revoir`,
+            explication:
+                'Tranchez-les une à une ci-dessous — chaque décision servira aux prochaines livraisons. Si le même mot revient souvent, déclarez-le comme variante : il sera reconnu tout seul.',
+            section: 'synonymes'
+        });
+    if (bilan.absent)
+        suggestions.push({
+            titre: `${bilan.absent} ligne(s) sans aucune proposition`,
+            explication:
+                'Leur libellé ne ressemble à rien de la nomenclature. Soit un mot du métier manque au vocabulaire, soit il faut une règle « si le libellé contient tel mot, alors tel code ».',
+            section: 'regles'
+        });
+    if (bilan.absent && bilan.absent > bilan.total / 4)
+        suggestions.push({
+            titre: 'Beaucoup de lignes sans proposition',
+            explication:
+                'Ce n’est peut-être pas le libellé qu’il faut comparer : essayez un autre attribut de la liste, ou une autre colonne de la nomenclature.',
+            section: 'comparaisons'
+        });
+    return suggestions;
+}

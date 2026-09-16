@@ -2,7 +2,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+    EXIGENCES,
     allureDuScore,
+    exigenceDesSeuils,
     allureDuStatut,
     motsSaisis,
     phraseDeLOrigine,
@@ -11,7 +13,8 @@ import {
     phraseDuSynonyme,
     prochaineAction,
     saisieDesMots,
-    scoreLisible
+    scoreLisible,
+    suggestionsApresCodification
 } from '../web/src/app/pages/codification/regles-codification.ts';
 
 const regle = (partielle = {}) => ({
@@ -98,5 +101,30 @@ test('une comparaison se relit à voix haute, avec son poids et sa mesure', () =
     assert.match(
         phraseDeLaComparaison({ id: 'c3', colonneSource: 'LIBELLE', colonneNomenclature: '', poids: 1, methode: '' }, methodes),
         /comparaison incomplète/
+    );
+});
+
+test('les seuils se disent en français, et « sur mesure » quand on les a réglés soi-même', () => {
+    assert.equal(exigenceDesSeuils(0.99, 0.45), 'normale');
+    assert.equal(exigenceDesSeuils(1, 0.6), 'stricte');
+    assert.equal(exigenceDesSeuils(0.8, 0.3), 'souple');
+    assert.equal(exigenceDesSeuils(0.93, 0.5), 'surmesure');
+    assert.equal(EXIGENCES.length, 3);
+    assert.ok(EXIGENCES.every(exigence => exigence.explication.length > 30, 'chaque exigence explique ce qu’elle fait'));
+});
+
+test('on ne propose un réglage qu’au moment où il servirait, en disant à quoi il sert', () => {
+    assert.deepEqual(suggestionsApresCodification(null), []);
+    assert.deepEqual(suggestionsApresCodification({ total: 10, revoir: 0, absent: 0 }), []);
+    const aRevoir = suggestionsApresCodification({ total: 10, revoir: 3, absent: 0 });
+    assert.equal(aRevoir.length, 1);
+    assert.match(aRevoir[0].titre, /3 ligne\(s\) à revoir/);
+    assert.equal(aRevoir[0].section, 'synonymes');
+    const sansProposition = suggestionsApresCodification({ total: 100, revoir: 0, absent: 2 });
+    assert.equal(sansProposition[0].section, 'regles');
+    const beaucoup = suggestionsApresCodification({ total: 10, revoir: 0, absent: 6 });
+    assert.ok(
+        beaucoup.some(suggestion => suggestion.section === 'comparaisons'),
+        'quand rien ne ressemble, c’est peut-être la mauvaise colonne que l’on compare'
     );
 });

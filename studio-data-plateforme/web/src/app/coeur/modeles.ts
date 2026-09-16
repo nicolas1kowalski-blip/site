@@ -439,6 +439,19 @@ export type CasARevoir = {
     libelle: string;
     candidats: { code: string; libelleRef: string; chemin: string; score: number }[];
 };
+/** Ce que l'application a compris de deux tables, avec une phrase par choix. */
+export type PropositionDeCodification = {
+    colonneLibelle: string;
+    colonneCodeExistant: string;
+    colonneCode: string;
+    colonneLibelleRef: string;
+    niveaux: string[];
+    restreindreSource: string;
+    restreindreNomenclature: string;
+    raisons: string[];
+};
+/** L'exemple installé : la codification prête, et ce que chacune de ses lignes illustre. */
+export type ExempleDeCodification = { codification: Codification; montre: string[] };
 export type VocabulaireCodification = {
     typesDeRegle: Record<string, string>;
     methodes: Record<string, string>;

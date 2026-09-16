@@ -9,6 +9,7 @@ import { valider } from '../commun/validation';
 import { CANDIDATS_MONTRES, METHODES_DE_RESSEMBLANCE, ORIGINES, STATUTS, TYPES_DE_REGLE, schemaCodification } from './codification';
 import { CodificationService } from './codification.service';
 
+const schemaDevination = z.object({ source: z.string().min(1), nomenclature: z.string().min(1) });
 const schemaRevue = z.object({ combien: z.number().int().min(1).max(500).default(50) });
 const schemaDecision = z.object({
     rang: z.number().int().min(0),
@@ -39,6 +40,27 @@ export class CodificationController {
     @RoleEspaceRequis('lecteur')
     lister(@EspaceCourant() espace: EspaceAvecRole) {
         return this.codification.lister(espace.id);
+    }
+
+    @Post('exemple')
+    @RoleEspaceRequis('editeur')
+    @ApiOperation({ summary: 'Installe un exemple prêt à l’emploi : deux petites tables et une codification déjà réglée.' })
+    exemple(@EspaceCourant() espace: EspaceAvecRole, @UtilisateurCourant() utilisateur: Utilisateur) {
+        return this.codification.installerLExemple(espace, utilisateur);
+    }
+
+    @Get('synonymes-exemple')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Les variantes que l’exemple propose de déclarer, une fois le premier résultat vu.' })
+    synonymesDeLExemple() {
+        return this.codification.synonymesDeLExemple();
+    }
+
+    @Post('deviner')
+    @RoleEspaceRequis('lecteur')
+    @ApiOperation({ summary: 'Propose toute la configuration d’après les deux tables, et dit pourquoi chaque choix.' })
+    deviner(@EspaceCourant() espace: EspaceAvecRole, @Body(valider(schemaDevination)) corps: z.infer<typeof schemaDevination>) {
+        return this.codification.deviner(espace, corps.source, corps.nomenclature);
     }
 
     @Put(':id')

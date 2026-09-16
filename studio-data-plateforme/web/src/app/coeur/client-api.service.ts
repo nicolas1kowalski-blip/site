@@ -96,6 +96,7 @@ import {
     BilanDesJointures,
     CasARevoir,
     Codification,
+    ExempleDeCodification,
     BilanExtraction,
     DefinitionRegle,
     DetailColonne,
@@ -125,7 +126,9 @@ import {
     TableauFichier,
     TermeGlossaire,
     Utilisateur,
+    PropositionDeCodification,
     ResultatCodification,
+    SynonymeCodification,
     ValeurSuggeree,
     VocabulaireCodification,
     VerificationFichier,
@@ -319,6 +322,18 @@ export class ClientApiService {
     // ---- codification ----
     vocabulaireCodification(): Promise<VocabulaireCodification> {
         return firstValueFrom(this.http.get<VocabulaireCodification>(`${this.racine}/codification/vocabulaire`));
+    }
+    /** Propose toute la configuration d'après les deux tables, et dit pourquoi chaque choix. */
+    devinerCodification(source: string, nomenclature: string): Promise<PropositionDeCodification> {
+        return firstValueFrom(this.http.post<PropositionDeCodification>(`${this.racine}/codification/deviner`, { source, nomenclature }));
+    }
+    /** Installe l'exemple prêt à l'emploi : deux petites tables et une codification déjà réglée. */
+    installerLExempleDeCodification(): Promise<ExempleDeCodification> {
+        return firstValueFrom(this.http.post<ExempleDeCodification>(`${this.racine}/codification/exemple`, {}));
+    }
+    /** Les variantes que l'exemple propose de déclarer, une fois le premier résultat vu. */
+    synonymesDeLExempleDeCodification(): Promise<SynonymeCodification[]> {
+        return firstValueFrom(this.http.get<SynonymeCodification[]>(`${this.racine}/codification/synonymes-exemple`));
     }
     codifications(): Promise<Codification[]> {
         return firstValueFrom(this.http.get<Codification[]>(`${this.racine}/codification`));
