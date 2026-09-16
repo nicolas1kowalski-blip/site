@@ -16,6 +16,7 @@ import { Router } from '@angular/router';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { libelleDuParcours, lienDuParcours } from '../../coeur/lien-parcours';
 import { EntreeCatalogue, FiltresCatalogue, ResultatCatalogue, TriCatalogue, TypeCatalogue } from '../../coeur/modeles';
+import { CibleDeFiche, FicheDuCatalogue, LigneDeFiche, ReferentielDeFiche, ficheDuCatalogue } from './fiche-catalogue';
 import { NotificationsService } from '../../coeur/notifications.service';
 import { couleurDeResponsable, initialesDe } from '../../coeur/pastille-personne';
 import {
@@ -57,7 +58,7 @@ const TRIS: { cle: TriCatalogue; libelle: string }[] = [
             <!-- Le bandeau : ce qu'est le catalogue, la recherche, quelques pistes, et quatre chiffres. -->
             <div class="cat-hero">
                 <h2 class="text-lg font-black flex items-center gap-2 m-0">🔎 Catalogue de données</h2>
-                <p class="text-[12px] text-slate-300 mt-0.5 mb-3">
+                <p class="text-[12px] text-slate-500 mt-0.5 mb-3">
                     Trouvez la donnée dont vous avez besoin, vérifiez si vous pouvez lui faire confiance, comprenez comment l'utiliser.
                 </p>
                 <div class="cat-bigsearch">
@@ -247,8 +248,8 @@ const TRIS: { cle: TriCatalogue; libelle: string }[] = [
                                         tabindex="0"
                                         role="button"
                                         [attr.aria-label]="'Fiche de ' + entree.titre"
-                                        (click)="ouverte.set(entree)"
-                                        (keydown.enter)="ouverte.set(entree)"
+                                        (click)="ouvrirLaFiche(entree)"
+                                        (keydown.enter)="ouvrirLaFiche(entree)"
                                     >
                                         <div class="flex items-start gap-3">
                                             <span class="cat-tico" [style.background]="allure(entree.type).couleur" aria-hidden="true">
@@ -340,65 +341,185 @@ const TRIS: { cle: TriCatalogue; libelle: string }[] = [
                         }
                     }
                 </div>
-
-                <!-- La fiche du résultat choisi : ce qu'on en sait, et où aller pour en faire quelque chose. -->
-                @if (ouverte(); as entree) {
-                    <aside class="carte fiche">
-                        <div class="entete-page" style="margin: 0 0 8px">
-                            <h2 class="espace">{{ entree.titre }}</h2>
-                            <button class="bouton petit" (click)="ouverte.set(null)">Fermer</button>
-                        </div>
-                        <div class="discret">{{ allure(entree.type).libelle }} · {{ entree.sousTitre }}</div>
-                        <p>{{ entree.description || 'Sans description.' }}</p>
-                        <dl>
-                            <dt>Domaine</dt>
-                            <dd>{{ entree.domaine }}</dd>
-                            <dt>Propriétaire</dt>
-                            <dd>{{ entree.proprietaire || '—' }}</dd>
-                            <dt>Qualité</dt>
-                            <dd>{{ entree.qualite === null ? 'non mesurée' : entree.qualite + ' %' }}</dd>
-                            <dt title="Terme technique : sensibilité">Confidentialité</dt>
-                            <dd>{{ libelleValeur('sensibilite', entree.sensibilite || '') }}</dd>
-                            <dt>Dernier rafraîchissement</dt>
-                            <dd>{{ fraicheur(entree.fraicheur) || '—' }}</dd>
-                            <dt>Étiquettes</dt>
-                            <dd>{{ entree.etiquettes.join(', ') || '—' }}</dd>
-                            @if (entree.motsCles.length) {
-                                <dt>Liens</dt>
-                                <dd>{{ entree.motsCles.join(', ') }}</dd>
-                            }
-                        </dl>
-                        <div class="ligne-champs">
-                            <button class="bouton principal" (click)="ouvrirEcran(entree)">Ouvrir dans l'écran dédié</button>
-                            <!-- V13 : on va au parcours depuis ce que l'on regarde, pas seulement par le menu. -->
-                            @if (lienParcours(entree); as lien) {
-                                <button class="bouton" name="parcoursDepuisCatalogue" (click)="ouvrirParcours(lien)">
-                                    {{ libelleParcours(entree.type) }}
-                                </button>
-                            }
-                        </div>
-                    </aside>
-                }
             </div>
+
+            <!--
+                La fiche, en panneau latéral — reprise de la V13. Elle répond dans l'ordre aux questions que
+                l'on se pose : à quoi ça sert, qui en répond, d'où ça vient, qui s'en sert. Chaque ligne est
+                cliquable et ouvre la fiche de ce qu'elle nomme : c'est ce qui fait qu'on circule dans le
+                catalogue au lieu d'y retomber toujours au même endroit.
+            -->
+            @if (ouverte(); as entree) {
+                @let fiche = ficheOuverte();
+                <div class="tiroir-fiche" name="ficheDuCatalogue">
+                    <div class="entete-tiroir">
+                        <span class="cat-tico" [style.background]="allure(entree.type).couleur" aria-hidden="true">
+                            {{ allure(entree.type).pictogramme }}
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-black text-[15px] text-slate-800 truncate">{{ entree.titre }}</div>
+                            <div class="text-[11px] text-slate-500">{{ fiche.sousTitre }}</div>
+                        </div>
+                        <button type="button" name="fermerLaFiche" class="bouton petit" (click)="fermerLaFiche()">Fermer</button>
+                    </div>
+
+                    <div class="corps-tiroir">
+                        <!-- D'où l'on vient : le retour, puis les trois dernières fiches visitées. -->
+                        @if (fichePrecedente(); as precedente) {
+                            <div class="cat-nav" name="navigationDesFiches">
+                                <button
+                                    type="button"
+                                    class="cat-back"
+                                    title="Revenir à la fiche précédente"
+                                    (click)="revenirALaFichePrecedente()"
+                                >
+                                    ← {{ precedente.titre }}
+                                </button>
+                                <span class="fil">
+                                    @for (visitee of filDesFiches(); track visitee.type + visitee.id; let dernier = $last) {
+                                        @if (dernier) {
+                                            <b>{{ visitee.titre }}</b>
+                                        } @else {
+                                            <button type="button" (click)="ouvrirLaFiche(visitee)">{{ visitee.titre }}</button> ›
+                                        }
+                                    }
+                                </span>
+                            </div>
+                        }
+
+                        <!-- Les signaux de confiance, d'abord : c'est la première chose que l'on cherche. -->
+                        <div class="section-fiche">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                @if (entree.qualite !== null) {
+                                    <span class="qual" [class]="'qual ' + classeQualite(entree.qualite)"
+                                        >◆ Qualité {{ entree.qualite }}/100</span
+                                    >
+                                }
+                                @if (libelleConfidentialite(entree.sensibilite); as confidentialite) {
+                                    <span class="cat-sens" [class]="'cat-sens sens-' + entree.sensibilite">{{ confidentialite }}</span>
+                                }
+                                @if (libelleValidation(entree.validation); as validation) {
+                                    <span class="cat-val" [class]="'cat-val val-' + entree.validation">{{ validation }}</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="section-fiche">
+                            <h4>À quoi ça sert</h4>
+                            <div class="encadre" [class.absent]="fiche.aQuoiCaSertAbsent" name="aQuoiCaSert">{{ fiche.aQuoiCaSert }}</div>
+                        </div>
+
+                        <div class="section-fiche">
+                            <h4>Fiche d'identité</h4>
+                            <div class="cellules" name="ficheDidentite">
+                                @for (champ of fiche.identite; track champ.cle) {
+                                    <div class="cellule">
+                                        <div class="cle">{{ champ.cle }}</div>
+                                        <div class="valeur">{{ champ.valeur }}</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="section-fiche">
+                            <h4>Traçabilité (lineage)</h4>
+                            <div class="flex items-center gap-2 text-center text-[12px]" name="tracabilite">
+                                <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2">
+                                    <div class="text-base font-black">{{ fiche.tracabilite.amont }}</div>
+                                    <div class="text-[10px] text-slate-400">source(s) amont</div>
+                                </div>
+                                <span class="text-slate-300" aria-hidden="true">→</span>
+                                <div class="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg py-2">
+                                    <div class="text-[12px] font-black text-emerald-700 truncate px-1">{{ entree.titre }}</div>
+                                    <div class="text-[10px] text-slate-400">cet actif</div>
+                                </div>
+                                <span class="text-slate-300" aria-hidden="true">→</span>
+                                <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2">
+                                    <div class="text-base font-black">{{ fiche.tracabilite.aval }}</div>
+                                    <div class="text-[10px] text-slate-400">usage(s) aval</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Puis ce qui dépend de ce que l'on regarde : appartenance, provenance, usages, chaîne… -->
+                        @for (section of fiche.sections; track section.titre) {
+                            <div class="section-fiche">
+                                <h4>{{ section.titre }}</h4>
+                                @if (section.genre === 'champs') {
+                                    <div class="cellules">
+                                        @for (champ of section.champs; track champ.cle) {
+                                            <div class="cellule">
+                                                <div class="cle">{{ champ.cle }}</div>
+                                                <div class="valeur">{{ champ.valeur }}</div>
+                                            </div>
+                                        }
+                                    </div>
+                                } @else {
+                                    @for (ligne of section.lignes; track ligne.libelle + ligne.precision) {
+                                        <button
+                                            type="button"
+                                            class="ligne-fiche"
+                                            [class.inerte]="!ligne.cible"
+                                            [disabled]="!ligne.cible"
+                                            (click)="suivreLaLigne(ligne)"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="nom">{{ ligne.pictogramme }} {{ ligne.libelle }}</span>
+                                                <span class="precision">{{ ligne.precision }}</span>
+                                            </span>
+                                            @if (ligne.cible) {
+                                                <span class="ml-auto text-slate-300">›</span>
+                                            }
+                                        </button>
+                                    } @empty {
+                                        <p class="text-[11.5px] text-slate-400 italic">{{ section.siVide }}</p>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pied-tiroir">
+                        @for (action of fiche.actions; track action.cle) {
+                            <button
+                                type="button"
+                                class="bouton-action"
+                                [class]="action.cle === 'utiliser' ? 'bouton-action principale' : 'bouton-action'"
+                                [attr.name]="'action-' + action.cle"
+                                (click)="lancerLAction(action.cle, entree)"
+                            >
+                                {{ action.libelle }}
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
         </div>
     `,
+
     styles: `
-        /* Le bandeau sombre du catalogue, repris tel quel du classique. */
+        /*
+            Le bandeau du catalogue. Le classique le dessinait sombre à l'origine ; son thème actuel le
+            repeint en clair (02-styles-theme-v7.css : « les dégradés de leur époque »). C'est cette
+            version-là que l'on reprend — celle que l'on voit réellement à l'écran.
+        */
         .cat-hero {
-            background: linear-gradient(135deg, #0f172a, #1e3a5f);
-            color: #fff;
-            border-radius: 12px;
-            padding: 18px 20px;
+            background: var(--surface);
+            color: var(--texte);
+            border: 1px solid var(--bordure);
+            border-radius: 18px;
+            padding: 26px 28px;
             margin-bottom: 16px;
         }
         .cat-bigsearch {
             display: flex;
             align-items: center;
             gap: 10px;
-            background: #fff;
+            background: var(--surface);
+            border: 1px solid var(--bordure);
             border-radius: 11px;
             padding: 11px 15px;
-            box-shadow: 0 10px 30px rgb(15 23 42 / 0.25);
+            box-shadow: 0 2px 10px rgb(15 23 42 / 0.06);
             max-width: 720px;
         }
         .cat-bigsearch input {
@@ -410,9 +531,9 @@ const TRIS: { cle: TriCatalogue; libelle: string }[] = [
             background: none;
         }
         .cat-ex {
-            background: rgb(255 255 255 / 0.1);
-            border: 1px solid rgb(255 255 255 / 0.2);
-            color: #e2e8f0;
+            background: var(--surface-2);
+            border: 1px solid var(--bordure);
+            color: var(--texte-2);
             border-radius: 20px;
             padding: 3px 11px;
             font-size: 11px;
@@ -420,17 +541,17 @@ const TRIS: { cle: TriCatalogue; libelle: string }[] = [
             cursor: pointer;
         }
         .cat-ex:hover {
-            background: rgb(255 255 255 / 0.22);
+            background: var(--accent-2);
         }
         .cat-hs {
             display: flex;
             flex-direction: column;
             font-size: 10.5px;
-            color: #93a4bd;
+            color: var(--texte-2);
         }
         .cat-hs b {
             font-size: 17px;
-            color: #fff;
+            color: var(--texte);
             font-weight: 800;
         }
         /* Une facette cochable, avec son compteur aligné à droite. */
@@ -620,16 +741,158 @@ const TRIS: { cle: TriCatalogue; libelle: string }[] = [
             border-radius: 12px;
             padding: 34px 20px;
         }
-        .fiche {
-            width: 300px;
+        /* Le panneau latéral de la fiche : fixe à droite, il défile seul et garde ses actions sous la main. */
+        .tiroir-fiche {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 430px;
+            max-width: 92vw;
+            background: var(--surface);
+            border-left: 1px solid var(--bordure);
+            box-shadow: -8px 0 28px rgb(15 23 42 / 0.12);
+            display: flex;
+            flex-direction: column;
+            z-index: 40;
         }
-        .fiche dt {
-            font-size: 11px;
+        .entete-tiroir {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--bordure);
+        }
+        .corps-tiroir {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 12px 16px;
+        }
+        .pied-tiroir {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            border-top: 1px solid var(--bordure);
+            background: var(--surface-2);
+        }
+        .bouton-action {
+            flex: 1;
+            border: 1px solid var(--bordure);
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 8px 6px;
+            font-size: 11.5px;
+            font-weight: 700;
             color: var(--texte-2);
-            margin-top: 6px;
+            cursor: pointer;
         }
-        .fiche dd {
-            margin: 0;
+        .bouton-action.principale {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+        }
+        /* D'où l'on vient : le retour, et les trois dernières fiches visitées. */
+        .cat-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .cat-back {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #4338ca;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }
+        .cat-nav .fil {
+            font-size: 10.5px;
+            color: var(--texte-2);
+        }
+        .cat-nav .fil button {
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
+            color: #4338ca;
+            cursor: pointer;
+        }
+        .section-fiche {
+            margin-bottom: 14px;
+        }
+        .section-fiche h4 {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 800;
+            color: var(--texte-2);
+            margin: 0 0 6px;
+        }
+        .encadre {
+            font-size: 12.5px;
+            background: var(--surface-2);
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+        .encadre.absent {
+            color: var(--texte-2);
+            font-style: italic;
+        }
+        .cellules {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .cellule {
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 6px 8px;
+        }
+        .cellule .cle {
+            font-size: 9.5px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--texte-2);
+        }
+        .cellule .valeur {
+            font-size: 12.5px;
+        }
+        /* Une ligne qui mène à une autre fiche : c'est ce qui rend le catalogue parcourable. */
+        .ligne-fiche {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            padding: 7px 10px;
+            margin-bottom: 6px;
+            background: var(--surface);
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+        }
+        .ligne-fiche:hover:not(.inerte) {
+            background: var(--surface-2);
+        }
+        .ligne-fiche.inerte {
+            cursor: default;
+        }
+        .ligne-fiche .nom {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--texte);
+        }
+        .ligne-fiche .precision {
+            display: block;
+            font-size: 10px;
+            color: var(--texte-2);
         }
     `
 })
@@ -641,6 +904,16 @@ export class CatalogueComponent {
     readonly ouverte = signal<EntreeCatalogue | null>(null);
     /** Vrai en vue grille (deux colonnes), faux en vue liste — comme la bascule ▤ / ▦ du classique. */
     readonly grille = signal(false);
+    /**
+     * Les fiches déjà ouvertes, dans l'ordre de visite : la dernière est celle qui s'affiche. C'est ce qui
+     * donne le « ← retour » et le fil des trois dernières — on suit un lien sans perdre son chemin.
+     */
+    private readonly visitees = signal<EntreeCatalogue[]>([]);
+    /** Tout ce que la fiche va chercher ailleurs, lu une seule fois à la première ouverture. */
+    private readonly referentiel = signal<ReferentielDeFiche | null>(null);
+    private referentielCharge = false;
+    /** L'index complet de l'espace : il permet d'ouvrir une fiche que la recherche en cours ne montre pas. */
+    private readonly indexComplet = signal<EntreeCatalogue[]>([]);
     readonly nomsFacettes = Object.keys(NOMS_FACETTES) as (keyof typeof NOMS_FACETTES)[];
     readonly tris = TRIS;
     filtres: FiltresCatalogue = {
@@ -653,6 +926,30 @@ export class CatalogueComponent {
         tri: 'pertinence'
     };
     private minuterie: ReturnType<typeof setTimeout> | null = null;
+    /** La fiche du résultat ouvert, recomposée à chaque fois que le référentiel ou la sélection change. */
+    readonly ficheOuverte = computed<FicheDuCatalogue>(() => {
+        const entree = this.ouverte();
+        const referentiel = this.referentiel();
+        const vide: ReferentielDeFiche = {
+            objets: [],
+            termes: [],
+            actifs: [],
+            sources: [],
+            fiches: {},
+            liensDuParcours: [],
+            volumetrie: [],
+            voisins: []
+        };
+        return ficheDuCatalogue(entree as EntreeCatalogue, referentiel || vide);
+    });
+    /** La fiche d'où l'on vient, quand on a suivi un lien. */
+    readonly fichePrecedente = computed(() => {
+        const visitees = this.visitees();
+        return visitees.length > 1 ? visitees[visitees.length - 2] : null;
+    });
+    /** Les trois dernières fiches visitées : le chemin parcouru, en un coup d'œil. */
+    readonly filDesFiches = computed(() => this.visitees().slice(-3));
+
     /** Les filtres posés, à plat, pour les rappeler un par un au-dessus des résultats. */
     private readonly filtresPoses = signal<{ nom: keyof typeof NOMS_FACETTES; valeur: string }[]>([]);
     readonly filtresActifs = computed(() => this.filtresPoses());
@@ -738,6 +1035,114 @@ export class CatalogueComponent {
         for (const nom of this.nomsFacettes) this.filtres[nom] = [];
         this.filtres.q = '';
         void this.rechercher();
+    }
+
+    // ---- la fiche en panneau latéral (V13) ----
+
+    /**
+     * Ouvre une fiche et la pose sur le chemin parcouru. Rouvrir une fiche déjà visitée ne l'empile pas
+     * deux fois : on revient dessus, le chemin se raccourcit.
+     */
+    ouvrirLaFiche(entree: EntreeCatalogue): void {
+        this.ouverte.set(entree);
+        this.visitees.update(visitees => {
+            const deja = visitees.findIndex(visitee => visitee.type === entree.type && visitee.id === entree.id);
+            if (deja >= 0) return visitees.slice(0, deja + 1);
+            return [...visitees, entree].slice(-30);
+        });
+        void this.chargerCeQuilFautPourLaFiche();
+    }
+
+    fermerLaFiche(): void {
+        this.ouverte.set(null);
+        this.visitees.set([]);
+    }
+
+    revenirALaFichePrecedente(): void {
+        const precedente = this.fichePrecedente();
+        if (!precedente) return;
+        this.visitees.update(visitees => visitees.slice(0, -1));
+        this.ouverte.set(precedente);
+    }
+
+    /**
+     * Suit une ligne de la fiche : on ouvre ce qu'elle nomme. On le cherche d'abord dans les résultats
+     * affichés, puis dans l'index complet de l'espace — sans quoi un lien vers un objet que la recherche
+     * en cours ne montre pas resterait mort.
+     */
+    suivreLaLigne(ligne: LigneDeFiche): void {
+        if (!ligne.cible) return;
+        const trouvee = this.chercherDansLIndex(ligne.cible);
+        if (trouvee) return this.ouvrirLaFiche(trouvee);
+        this.notifications.erreur(`« ${ligne.libelle} » n'est plus dans le catalogue de cet espace.`);
+    }
+
+    private chercherDansLIndex(cible: CibleDeFiche): EntreeCatalogue | null {
+        const correspond = (candidat: EntreeCatalogue) => candidat.type === cible.type && candidat.id === cible.id;
+        return this.resultat()?.resultats.find(correspond) || this.indexComplet().find(correspond) || null;
+    }
+
+    /** Ce que la fiche va chercher ailleurs : la gouvernance, le parcours de la donnée, les volumes. */
+    private async chargerCeQuilFautPourLaFiche(): Promise<void> {
+        if (this.referentielCharge) return;
+        this.referentielCharge = true;
+        try {
+            const [objets, termes, actifs, sources, fiches, carte, cockpit, tout] = await Promise.all([
+                this.api.objetsMetier(),
+                this.api.glossaire(),
+                this.api.actifs(),
+                this.api.sources(),
+                this.api.dictionnaire(),
+                this.api.carteFlux(),
+                this.api.cockpit(),
+                this.api.catalogue({ couche: 'tout' })
+            ]);
+            const nomDuNoeud = new Map(carte.noeuds.map(noeud => [noeud.id, String(noeud.tableName || noeud.name || '')]));
+            this.referentiel.set({
+                objets,
+                termes,
+                actifs,
+                sources,
+                fiches,
+                liensDuParcours: carte.liens.map(lien => ({
+                    de: nomDuNoeud.get(lien.source) || '',
+                    vers: nomDuNoeud.get(lien.target) || ''
+                })),
+                volumetrie: cockpit.volumetrie,
+                voisins: tout.resultats
+            });
+            this.indexComplet.set(tout.resultats);
+        } catch (erreur) {
+            this.referentielCharge = false;
+            this.notifications.erreur(erreur as Error);
+        }
+    }
+
+    /** Les trois boutons du pied, chacun vers l'écran qui prolonge ce que la fiche montre. */
+    lancerLAction(action: 'lineage' | 'objet' | 'utiliser', entree: EntreeCatalogue): void {
+        if (action === 'lineage') {
+            const lien = lienDuParcours(entree);
+            return void this.routeur.navigateByUrl(lien || '/lineage');
+        }
+        if (action === 'objet') {
+            const objet = entree.type === 'bo' ? entree.id : entree.id.split('.')[0];
+            return void this.routeur.navigateByUrl(`/objets-metier?objet=${encodeURIComponent(objet)}`);
+        }
+        // « Utiliser cette donnée » : on ouvre les lignes quand il y a une table derrière, l'écran dédié sinon.
+        const table = this.tableDeLEntree(entree);
+        void this.routeur.navigateByUrl(table ? `/navigateur?table=${encodeURIComponent(table)}` : entree.lien);
+    }
+
+    /** La table derrière un résultat, quand il y en a une : c'est elle que l'on va explorer. */
+    private tableDeLEntree(entree: EntreeCatalogue): string {
+        const referentiel = this.referentiel();
+        if (!referentiel) return '';
+        if (entree.type === 'table' || entree.type === 'view')
+            return referentiel.sources.find(source => source.id === entree.id)?.name || '';
+        if (entree.type === 'column') return entree.sousTitre.replace(/^dans /, '');
+        const objet = referentiel.objets.find(candidat => candidat.id === entree.id.split('.')[0]);
+        if (!objet) return '';
+        return (objet.sources.find(source => source.role === 'maitre') || objet.sources[0])?.table || '';
     }
 
     ouvrirEcran(entree: EntreeCatalogue): void {

@@ -5,6 +5,7 @@
  * valeur. Le serveur (DuckDB) exécute la requête ; l'écran en construit le SQL (identifiants et valeurs échappés).
  */
 import { Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import { Relation, ResultatSql, Source } from '../../coeur/modeles';
@@ -165,6 +166,9 @@ export class NavigateurComponent {
     readonly source = computed(() => this.sources().find(source => source.id === this.tableId()) || null);
     readonly aDesFiltres = computed(() => Object.values(this.filtres()).some(valeur => valeur.trim()));
 
+    /** Table demandée dans l'adresse (/navigateur?table=nom) : « ➜ Utiliser cette donnée » s'en sert. */
+    private readonly tableDemandee = inject(ActivatedRoute).snapshot.queryParamMap.get('table') || '';
+
     constructor() {
         this.charger();
     }
@@ -173,6 +177,8 @@ export class NavigateurComponent {
             const [sources, relations] = await Promise.all([this.api.sourcesEtJeux(), this.api.relations()]);
             this.sources.set(sources);
             this.relations.set(relations);
+            const demandee = sources.find(source => source.name === this.tableDemandee);
+            if (demandee) this.choisirTable(demandee.id);
         } catch (erreur) {
             this.notifications.erreur(erreur as Error);
         }

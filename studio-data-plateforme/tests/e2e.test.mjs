@@ -2255,13 +2255,71 @@ try {
     );
     // La carte de la table elle-même (son titre est exactement « clients.csv »), pas celle d'une de ses colonnes (« dans clients.csv »).
     await page.locator('app-catalogue .cat-card', { has: page.locator('.font-bold', { hasText: /^clients\.csv$/ }) }).click();
-    await page.waitForSelector('app-catalogue .fiche');
-    const ficheCatalogue = await page.textContent('app-catalogue .fiche');
+    await page.waitForSelector('app-catalogue [name=ficheDuCatalogue]');
+    const ficheCatalogue = await page.textContent('app-catalogue [name=ficheDuCatalogue]');
     verifier(
-        'catalogue : la couche « tout » montre la table clients.csv, sa fiche affiche la qualité mesurée (71 % après la règle par groupe) et la sensibilité',
-        /Qualité\s*71 %/.test(ficheCatalogue) && /données personnelles/.test(ficheCatalogue)
+        'catalogue : la couche « tout » montre la table clients.csv, sa fiche affiche la qualité mesurée (71/100 après la règle par groupe) et la confidentialité',
+        /Qualité 71\/100/.test(ficheCatalogue) && /Personnelle/.test(ficheCatalogue)
     );
+    // ---- V13 : la fiche en panneau latéral — à quoi ça sert, identité, traçabilité, et on circule ----
+    const panneau = await page.textContent('app-catalogue [name=ficheDuCatalogue]');
+    verifier(
+        'V13 : la fiche répond d’abord « à quoi ça sert », puis donne l’identité et la traçabilité',
+        /À quoi ça sert/.test(panneau) &&
+            /Fiche d'identité/.test(panneau) &&
+            /Traçabilité \(lineage\)/.test(panneau) &&
+            /source\(s\) amont/.test(panneau) &&
+            /usage\(s\) aval/.test(panneau)
+    );
+    verifier(
+        'V13 : la fiche d’identité annonce le volume, la fraîcheur, le propriétaire et le domaine',
+        /Lignes/.test(await page.textContent('app-catalogue [name=ficheDidentite]')) &&
+            /Propriétaire/.test(await page.textContent('app-catalogue [name=ficheDidentite]')) &&
+            /Domaine/.test(await page.textContent('app-catalogue [name=ficheDidentite]'))
+    );
+    verifier(
+        'V13 : la fiche porte les trois actions du classique — voir le lineage, et utiliser la donnée',
+        (await page.$$('app-catalogue button[name=action-lineage]')).length === 1 &&
+            (await page.$$('app-catalogue button[name=action-utiliser]')).length === 1
+    );
+    // On circule : depuis la fiche de l'objet métier, une ligne mène à l'information qu'elle nomme,
+    // et le chemin parcouru permet de revenir. Le panneau recouvre la droite de l'écran : on le referme
+    // d'abord pour reprendre la main sur la liste, comme on le ferait à la main.
+    await page.click('app-catalogue button[name=fermerLaFiche]');
+    await page.waitForFunction(() => !document.querySelector('app-catalogue [name=ficheDuCatalogue]'));
+    await page.click('app-catalogue button[name=coucheMetier]');
+    await page.fill('app-catalogue input[name=recherche]', 'Client');
+    await page.waitForFunction(() => document.querySelector('app-catalogue .cat-card .font-bold')?.textContent.trim() === 'Client');
+    await page
+        .locator('app-catalogue .cat-card', { has: page.locator('.font-bold', { hasText: /^Client$/ }) })
+        .first()
+        .click();
+    await page.waitForSelector('app-catalogue [name=ficheDuCatalogue]');
+    const ficheDeLObjet = await page.textContent('app-catalogue [name=ficheDuCatalogue]');
+    verifier(
+        'V13 : la fiche d’un objet métier montre ses attributs et sa chaîne amont → aval',
+        /Attributs et leurs termes/.test(ficheDeLObjet) && /Chaîne de l’objet|Chaîne de l'objet/.test(ficheDeLObjet)
+    );
+    await page.locator('app-catalogue .ligne-fiche:not(.inerte)').first().click();
+    await page.waitForSelector('app-catalogue [name=navigationDesFiches]');
+    verifier(
+        'V13 : une ligne de la fiche ouvre la fiche de ce qu’elle nomme, et le chemin parcouru reste visible',
+        /Appartient à/.test(await page.textContent('app-catalogue [name=ficheDuCatalogue]')) &&
+            /←/.test(await page.textContent('app-catalogue [name=navigationDesFiches]'))
+    );
+    await page.click('app-catalogue [name=navigationDesFiches] .cat-back');
+    await page.waitForFunction(() => !document.querySelector('app-catalogue [name=navigationDesFiches]'));
+    verifier(
+        'V13 : « ← » ramène à la fiche précédente',
+        /Attributs et leurs termes/.test(await page.textContent('app-catalogue [name=ficheDuCatalogue]'))
+    );
+    await capture('catalogue-fiche-v13');
+
     await capture('catalogue');
+    // Le panneau de la fiche recouvre la droite de l'écran, comme dans le classique : on le referme
+    // avant de reprendre la main sur la liste.
+    await page.click('app-catalogue button[name=fermerLaFiche]');
+    await page.waitForFunction(() => !document.querySelector('app-catalogue [name=ficheDuCatalogue]'));
 
     // ---- V13 : le bandeau, le tri, les puces de filtre et la bascule liste / grille ----
     const chiffresDuCatalogue = await page.textContent('app-catalogue [name=chiffresDuCatalogue]');
@@ -2893,8 +2951,8 @@ try {
     // Le nom d'une table se lit dans le titre de sa carte ; « dans factures.csv » désignerait une colonne.
     await page.waitForSelector('app-catalogue .cat-card .font-bold:text-is("factures.csv")');
     await page.click('app-catalogue .cat-card:has(.font-bold:text-is("factures.csv"))');
-    await page.waitForSelector('app-catalogue button[name=parcoursDepuisCatalogue]');
-    await page.click('app-catalogue button[name=parcoursDepuisCatalogue]');
+    await page.waitForSelector('app-catalogue button[name=action-lineage]');
+    await page.click('app-catalogue button[name=action-lineage]');
     await page.waitForFunction(() => document.querySelector('app-lineage select[name=table]')?.value === 'factures.csv');
     verifier(
         'gouvernance V13 : « 🔎 Parcours » d’une table du catalogue ouvre le parcours autour de cette table',
@@ -2908,8 +2966,8 @@ try {
     await page.fill('app-catalogue input[name=recherche]', 'optin_email');
     await page.waitForSelector('app-catalogue .cat-card .font-bold:text-is("optin_email")');
     await page.click('app-catalogue .cat-card:has(.font-bold:text-is("optin_email"))');
-    await page.waitForSelector('app-catalogue button[name=parcoursDepuisCatalogue]');
-    await page.click('app-catalogue button[name=parcoursDepuisCatalogue]');
+    await page.waitForSelector('app-catalogue button[name=action-lineage]');
+    await page.click('app-catalogue button[name=action-lineage]');
     await page.waitForFunction(() => document.querySelector('app-lineage select[name=colonneImpact]')?.value === 'optin_email');
     await page.waitForSelector('app-lineage ul.impact li');
     verifier(
