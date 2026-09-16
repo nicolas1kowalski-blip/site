@@ -30,6 +30,7 @@ import { ModeleObjetsComponent } from './pages/modele-objets/modele-objets.compo
 import { ObjetsMetierComponent } from './pages/objets-metier/objets-metier.component';
 import { PerimetresComponent } from './pages/perimetres/perimetres.component';
 import { PersonnesComponent } from './pages/personnes/personnes.component';
+import { CodificationComponent } from './pages/codification/codification.component';
 import { PreparationComponent } from './pages/preparation/preparation.component';
 import { PropositionsComponent } from './pages/propositions/propositions.component';
 import { QualiteComponent } from './pages/qualite/qualite.component';
@@ -66,6 +67,7 @@ export const routes: Routes = [
             { path: 'explorateur', component: ExplorateurComponent, title: 'Explorateur SQL — Studio Data' },
             { path: 'navigateur', component: NavigateurComponent, title: 'Navigateur de données — Studio Data' },
             { path: 'preparation', component: PreparationComponent, title: 'Préparation — Studio Data' },
+            { path: 'codification', component: CodificationComponent, title: 'Codification — Studio Data' },
             { path: 'statistiques', component: StatistiquesComponent, title: 'Statistiques — Studio Data' },
             { path: 'explorateur-360', component: Explorateur360Component, title: 'Explorateur 360° — Studio Data' },
             { path: 'tableaux-de-bord', component: TableauxDeBordComponent, title: 'Tableaux de bord — Studio Data' },

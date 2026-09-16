@@ -32,6 +32,7 @@ export const GROUPES_NAVIGATION: GroupeNavigation[] = [
             { chemin: '/extraction', libelle: 'Extraire', icone: '⤓' },
             { chemin: '/jeux', libelle: 'Jeux temporaires', icone: '⏳' },
             { chemin: '/preparation', libelle: 'Préparation', icone: '🧹' },
+            { chemin: '/codification', libelle: 'Codification', icone: '🏷' },
             { chemin: '/tableaux-de-bord', libelle: 'Tableaux de bord', icone: '▤' },
             { chemin: '/comparateur', libelle: 'Comparer', icone: '⇆' },
             { chemin: '/navigateur', libelle: 'Explorer', icone: '⌕' },

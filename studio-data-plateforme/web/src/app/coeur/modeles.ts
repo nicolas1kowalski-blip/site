@@ -377,6 +377,61 @@ export type VocabulaireExtraction = {
 };
 export type Materialisation = { sourceId: string; nom: string; lignes: number; colonnes: string[] };
 
+// ---- codification : rattacher le code d'un référentiel à chaque ligne d'une liste reçue ----
+/** Une condition écrite à la main : des mots-clés à trouver, ou une expression régulière. */
+export type RegleCodification = {
+    id: string;
+    actif: boolean;
+    code: string;
+    colonne: string;
+    type: 'motscles' | 'expression';
+    contient: string[];
+    ou: boolean;
+    sauf: string[];
+    motif: string;
+};
+/** Un libellé appris : ce qu'une décision de revue laisse derrière elle. */
+export type CorrespondanceCodification = { libelle: string; code: string; auteur: string; le: string };
+/** Une codification : la liste à coder, la nomenclature de référence, et la pile de règles. */
+export type Codification = {
+    id: string;
+    nom: string;
+    source: string;
+    colonneLibelle: string;
+    colonneCodeExistant: string;
+    nomenclature: string;
+    colonneCode: string;
+    colonneLibelleRef: string;
+    /** Les colonnes de l'arbre, du plus haut au plus fin : famille, système, sous-système… */
+    niveaux: string[];
+    /** Ne chercher que dans la branche où la ligne se trouve déjà. Vide = chercher partout. */
+    restreindreSource: string;
+    restreindreNomenclature: string;
+    regles: RegleCodification[];
+    correspondances: CorrespondanceCodification[];
+    seuilAuto: number;
+    seuilRevoir: number;
+    methode: string;
+    /** Les lignes tranchées à la main : rang de la ligne → code retenu. */
+    decisions: Record<string, string>;
+};
+/** Ce qu'une codification a donné : les lignes codées, et le compte de chaque statut. */
+export type BilanCodification = { total: number; office: number; revoir: number; absent: number; couverture: number; phrase: string };
+export type ResultatCodification = { sql: string; colonnes: string[]; lignes: unknown[][]; bilan: BilanCodification };
+/** Un cas douteux et ses meilleures propositions, la plus probable en tête. */
+export type CasARevoir = {
+    rang: number;
+    libelle: string;
+    candidats: { code: string; libelleRef: string; chemin: string; score: number }[];
+};
+export type VocabulaireCodification = {
+    typesDeRegle: Record<string, string>;
+    methodes: Record<string, string>;
+    origines: Record<string, string>;
+    statuts: Record<string, string>;
+    candidatsMontres: number;
+};
+
 /** Les opérateurs qui n'attendent aucune valeur, et celui qui en attend deux. */
 export const OPERATEURS_SANS_VALEUR: OperateurFiltre[] = ['empty', 'notempty', 'list'];
 export const OPERATEUR_DEUX_VALEURS: OperateurFiltre = 'between';

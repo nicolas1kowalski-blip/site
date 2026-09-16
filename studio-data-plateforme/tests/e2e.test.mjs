@@ -2420,14 +2420,95 @@ try {
     );
     await capture('surveillance');
 
+    // ---- codification : rattacher le code du référentiel à chaque ligne d'une liste reçue ----
+    await page.click('a[href="/sources"]');
+    await page.waitForSelector('app-sources');
+    for (const fichier of ['equipements.csv', 'nomenclature.csv']) {
+        await page.setInputFiles('app-sources .entete-page input[type=file]', path.join(dossierTests, 'donnees', fichier));
+        // Enregistrée côté serveur, avec ses colonnes : c'est ce que l'écran Codification ira lire.
+        await page.waitForFunction(
+            async nom => (await (await fetch('/api/tables')).json()).some(table => table.name === nom && (table.headers || []).length),
+            fichier
+        );
+    }
+
+    await page.click('a[href="/codification"]');
+    await page.waitForSelector('app-codification');
+    await page.click('app-codification button[name=nouvelleCodification]');
+    await page.fill('app-codification input[name=nomCodification]', 'Codes équipements');
+    await page.selectOption('app-codification select[name=sourceCodification]', 'equipements.csv');
+    await page.selectOption('app-codification select[name=colonneLibelle]', 'LIBELLE');
+    await page.selectOption('app-codification select[name=colonneCodeExistant]', 'CODE_FOURNI');
+    await page.selectOption('app-codification select[name=nomenclatureCodification]', 'nomenclature.csv');
+    await page.selectOption('app-codification select[name=colonneCode]', 'CODE_TYPE');
+    await page.selectOption('app-codification select[name=colonneLibelleRef]', 'LIBELLE_TYPE');
+    for (const niveau of ['FAMILLE', 'SYSTEME', 'SOUS_SYSTEME', 'LIBELLE_TYPE']) {
+        await page.selectOption('app-codification select[name=niveauAAjouter]', niveau);
+        await page.click('app-codification button[name=ajouterNiveau]');
+    }
+    await page.selectOption('app-codification select[name=restreindreSource]', 'FAMILLE');
+    await page.selectOption('app-codification select[name=restreindreNomenclature]', 'FAMILLE');
+    await page.click('app-codification button[name=coder]');
+    await page.waitForSelector('app-codification [name=phraseBilan]');
+    const bilanCodification = await page.textContent('app-codification [name=phraseBilan]');
+    verifier(
+        'codification : 5 lignes sur 7 codées d’office — code déjà fourni, libellés retrouvés malgré la casse, les accents et les mots en trop',
+        /5 ligne\(s\) codées d’office sur 7/.test(bilanCodification) &&
+            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '1' &&
+            (await page.textContent('app-codification [name=compteAbsent]')).trim() === '1'
+    );
+    const tableauCode = await page.textContent('app-codification .ligne-codee');
+    verifier(
+        'codification : chaque ligne porte son code, par quoi il a été trouvé, et son chemin dans l’arbre',
+        /PMP-C|VAN-P|ECH-P/.test(await page.textContent('app-codification .resultat')) &&
+            /POMPES › Transfert › Centrifuge/.test(await page.textContent('app-codification .resultat')) &&
+            /ressemblance du libellé|code déjà fourni/.test(await page.textContent('app-codification .resultat')) &&
+            tableauCode.length > 0
+    );
+    await page.waitForSelector('app-codification .cas-a-revoir');
+    const casDouteux = await page.textContent('app-codification .cas-a-revoir');
+    verifier(
+        'codification : « Vanne DN80 » passe à la revue, avec des propositions qui restent dans sa famille',
+        /Vanne DN80/.test(casDouteux) && /VANNES › /.test(casDouteux) && !/POMPES/.test(casDouteux)
+    );
+    // On cadre sur le résultat et la revue : c'est là que l'écran se juge.
+    await page.evaluate(() => document.querySelector('app-codification .kpis')?.scrollIntoView({ block: 'start' }));
+    await page.evaluate(() => document.querySelectorAll('.notification').forEach(notification => notification.remove()));
+    await capture('codification');
+    // Trancher : la décision code la ligne et descend dans la table de correspondance.
+    await page.click('app-codification .cas-a-revoir .candidat >> nth=0');
+    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteOffice]')?.textContent || '').trim() === '6');
+    verifier(
+        'codification : trancher un cas le code aussitôt (6 d’office) et le libellé est retenu pour les prochaines livraisons',
+        (await page.textContent('app-codification [name=compteOffice]')).trim() === '6' &&
+            (await page.textContent('app-codification [name=compteRevoir]')).trim() === '0'
+    );
+    // Une règle de mots-clés attrape ce qu'aucune ressemblance ne trouve.
+    await page.click('app-codification button[name=ajouterRegle]');
+    const regle = page.locator('app-codification tbody tr[name^=regle-]').first();
+    await regle.locator('input[name^=contient-]').fill('bidule');
+    await regle.locator('input[name^=code-]').fill('PMP-C');
+    const phraseRegle = await regle.locator('div[name^=phraseRegle-]').textContent();
+    verifier(
+        'codification : une règle se relit en français — « si LIBELLE contient bidule → PMP-C »',
+        /si LIBELLE contient bidule → PMP-C/.test(phraseRegle)
+    );
+    await page.click('app-codification button[name=coder]');
+    await page.waitForFunction(() => (document.querySelector('app-codification [name=compteAbsent]')?.textContent || '').trim() === '0');
+    verifier(
+        'codification : la règle attrape la ligne que personne ne trouvait — plus aucune ligne sans code',
+        (await page.textContent('app-codification [name=compteAbsent]')).trim() === '0' &&
+            /100 %/.test(await page.textContent('app-codification [name=couverture]'))
+    );
+
     await page.click('a[href="/sauvegarde"]');
     await page.waitForSelector('app-sauvegarde');
     const exportEspace = await page.evaluate(async () => await (await fetch('/api/sauvegarde/export')).json());
     verifier(
-        'sauvegarde : l’export de l’espace contient les documents partagés et les 7 sources (dont le jeu promu)',
+        'sauvegarde : l’export de l’espace contient les documents partagés et les 9 sources (dont le jeu promu)',
         exportEspace.kind === 'studio-data-espace' &&
             exportEspace.documents.appState.governance.businessObjects.length === 1 &&
-            exportEspace.sources.length === 7
+            exportEspace.sources.length === 9
     );
     const dossierHtml = await page.evaluate(async () => await (await fetch('/api/sauvegarde/dossier')).text());
     verifier(
@@ -2738,7 +2819,7 @@ try {
     }));
     verifier(
         'application classique : les sources déposées depuis Angular (dont la livraison ZIP et la fusion), la table conçue, la comparaison, la table préparée et l’extraction enregistrée sont restaurées prêtes (sans ré-ingestion)',
-        classique.tables.length === 9 &&
+        classique.tables.length === 11 &&
             classique.tables.every(table => table.status === 'ready') &&
             classique.tables.filter(table => table.headers === 3).length === 4 &&
             classique.tables.some(table => table.name === 'Clients et produits' && table.headers === 7) &&

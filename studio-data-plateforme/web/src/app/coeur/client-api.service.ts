@@ -94,6 +94,8 @@ import {
     TableConcue,
     VocabulaireTablesConcues,
     BilanDesJointures,
+    CasARevoir,
+    Codification,
     BilanExtraction,
     DefinitionRegle,
     DetailColonne,
@@ -123,7 +125,9 @@ import {
     TableauFichier,
     TermeGlossaire,
     Utilisateur,
+    ResultatCodification,
     ValeurSuggeree,
+    VocabulaireCodification,
     VerificationFichier,
     VocabulaireExtraction,
     VocabulaireQualite
@@ -310,6 +314,33 @@ export class ClientApiService {
     }
     detecterRelations(): Promise<PropositionLien[]> {
         return firstValueFrom(this.http.post<PropositionLien[]>(`${this.racine}/modele/relations/detecter`, {}));
+    }
+
+    // ---- codification ----
+    vocabulaireCodification(): Promise<VocabulaireCodification> {
+        return firstValueFrom(this.http.get<VocabulaireCodification>(`${this.racine}/codification/vocabulaire`));
+    }
+    codifications(): Promise<Codification[]> {
+        return firstValueFrom(this.http.get<Codification[]>(`${this.racine}/codification`));
+    }
+    enregistrerCodification(codification: Codification): Promise<Codification> {
+        const { id, ...corps } = codification;
+        return firstValueFrom(this.http.put<Codification>(`${this.racine}/codification/${encodeURIComponent(id)}`, corps));
+    }
+    supprimerCodification(id: string): Promise<{ ok: boolean }> {
+        return firstValueFrom(this.http.delete<{ ok: boolean }>(`${this.racine}/codification/${encodeURIComponent(id)}`));
+    }
+    /** Code chaque ligne de la liste et rend le bilan : codées d'office, à revoir, non trouvées. */
+    executerCodification(id: string): Promise<ResultatCodification> {
+        return firstValueFrom(this.http.post<ResultatCodification>(`${this.racine}/codification/${encodeURIComponent(id)}/executer`, {}));
+    }
+    /** Les cas à revoir, chacun avec les meilleures propositions de la nomenclature. */
+    revueCodification(id: string, combien = 50): Promise<CasARevoir[]> {
+        return firstValueFrom(this.http.post<CasARevoir[]>(`${this.racine}/codification/${encodeURIComponent(id)}/revue`, { combien }));
+    }
+    /** Tranche un cas : la ligne reçoit son code, et le libellé entre dans la table de correspondance. */
+    deciderCodification(id: string, decision: { rang: number; code: string; libelle: string }): Promise<Codification> {
+        return firstValueFrom(this.http.post<Codification>(`${this.racine}/codification/${encodeURIComponent(id)}/decider`, decision));
     }
 
     // ---- extraction ----

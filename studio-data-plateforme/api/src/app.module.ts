@@ -24,6 +24,7 @@ import { QualiteModule } from './qualite/qualite.module';
 import { SanteController } from './sante/sante.controller';
 import { SauvegardeModule } from './sauvegarde/sauvegarde.module';
 import { CockpitModule } from './cockpit/cockpit.module';
+import { CodificationModule } from './codification/codification.module';
 import { PreparationModule } from './preparation/preparation.module';
 import { SourcesModule } from './sources/sources.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
@@ -60,6 +61,7 @@ export class AppModule {
                 SauvegardeModule,
                 CockpitModule,
                 PreparationModule,
+                CodificationModule,
                 DemonstrationModule
             ],
             controllers: [SanteController, SqlController, FichiersController, FrontController],

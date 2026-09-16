@@ -1,0 +1,633 @@
+/**
+ * Codification : rattacher à chaque ligne d'une liste reçue le code d'un référentiel.
+ *
+ * On reçoit une liste d'équipements — des libellés écrits à la main, une famille. À côté, une nomenclature en
+ * arbre dont le niveau le plus fin porte le code du type d'équipement. L'écran empile des règles, de la plus
+ * sûre à la plus souple, et la première qui répond gagne : le code déjà fourni, la table de correspondance,
+ * les règles de mots-clés, puis la ressemblance du libellé — en restant dans la bonne branche de l'arbre.
+ *
+ * Les cas douteux passent par la revue, où un clic tranche ; et cette décision descend dans la table de
+ * correspondance, de sorte qu'à la livraison suivante ce libellé-là est codé tout seul.
+ */
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { PleinEcranComponent } from '../../composants/plein-ecran.component';
+import { ClientApiService } from '../../coeur/client-api.service';
+import { CasARevoir, Codification, ResultatCodification, Source, VocabulaireCodification, genererIdentifiant } from '../../coeur/modeles';
+import { NotificationsService } from '../../coeur/notifications.service';
+import { SessionService } from '../../coeur/session.service';
+import {
+    RegleCodification,
+    allureDuScore,
+    allureDuStatut,
+    motsSaisis,
+    phraseDeLOrigine,
+    phraseDeLaRegle,
+    prochaineAction,
+    saisieDesMots,
+    scoreLisible
+} from './regles-codification';
+
+/** Une codification toute neuve, avec les seuils qui vont bien pour des libellés d'équipements. */
+function codificationNeuve(): Codification {
+    return {
+        id: genererIdentifiant('cd_'),
+        nom: 'Nouvelle codification',
+        source: '',
+        colonneLibelle: '',
+        colonneCodeExistant: '',
+        nomenclature: '',
+        colonneCode: '',
+        colonneLibelleRef: '',
+        niveaux: [],
+        restreindreSource: '',
+        restreindreNomenclature: '',
+        regles: [],
+        correspondances: [],
+        seuilAuto: 0.99,
+        seuilRevoir: 0.45,
+        methode: 'mots',
+        decisions: {}
+    };
+}
+
+@Component({
+    selector: 'app-codification',
+    imports: [FormsModule, PleinEcranComponent],
+    template: `
+        <div class="entete-page">
+            <div class="espace">
+                <h1>Codification</h1>
+                <p class="discret">
+                    Retrouvez, pour chaque ligne d'une liste reçue, le code de votre référentiel — par le code déjà fourni, par la table de
+                    correspondance, par des règles de mots-clés, puis par la ressemblance du libellé.
+                </p>
+            </div>
+            @if (session.peutEditer()) {
+                <button class="bouton principal" type="button" name="nouvelleCodification" (click)="creer()">
+                    + Nouvelle codification
+                </button>
+            }
+        </div>
+
+        <div class="carte">
+            <div class="ligne-outils">
+                <select class="champ" name="codificationChoisie" [ngModel]="choisieId()" (ngModelChange)="choisir($event)">
+                    <option value="">— choisir une codification —</option>
+                    @for (codification of codifications(); track codification.id) {
+                        <option [value]="codification.id">{{ codification.nom }}</option>
+                    }
+                </select>
+                @if (choisie(); as codification) {
+                    <input class="champ" name="nomCodification" [(ngModel)]="codification.nom" placeholder="Nom" />
+                    @if (session.peutEditer()) {
+                        <button class="bouton" type="button" name="enregistrerCodification" (click)="enregistrer()">Enregistrer</button>
+                        <button class="bouton danger" type="button" name="supprimerCodification" (click)="supprimer()">Supprimer</button>
+                    }
+                }
+            </div>
+            <p class="discret" name="prochaineAction">{{ prochaine() }}</p>
+        </div>
+
+        @if (choisie(); as codification) {
+            <div class="carte">
+                <h2>① La liste à coder, et la nomenclature de référence</h2>
+                <div class="grille-reglages">
+                    <label>
+                        Liste reçue
+                        <select class="champ" name="sourceCodification" [(ngModel)]="codification.source">
+                            <option value="">—</option>
+                            @for (source of sources(); track source.id) {
+                                <option [value]="source.name">{{ source.name }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Colonne du libellé
+                        <select class="champ" name="colonneLibelle" [(ngModel)]="codification.colonneLibelle">
+                            <option value="">—</option>
+                            @for (colonne of colonnesDe(codification.source); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Code déjà fourni (facultatif)
+                        <select class="champ" name="colonneCodeExistant" [(ngModel)]="codification.colonneCodeExistant">
+                            <option value="">— aucun —</option>
+                            @for (colonne of colonnesDe(codification.source); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Nomenclature
+                        <select class="champ" name="nomenclatureCodification" [(ngModel)]="codification.nomenclature">
+                            <option value="">—</option>
+                            @for (source of sources(); track source.id) {
+                                <option [value]="source.name">{{ source.name }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Colonne du code
+                        <select class="champ" name="colonneCode" [(ngModel)]="codification.colonneCode">
+                            <option value="">—</option>
+                            @for (colonne of colonnesDe(codification.nomenclature); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Colonne du libellé de référence
+                        <select class="champ" name="colonneLibelleRef" [(ngModel)]="codification.colonneLibelleRef">
+                            <option value="">—</option>
+                            @for (colonne of colonnesDe(codification.nomenclature); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+                <h3>Les niveaux de l'arbre, du plus haut au plus fin</h3>
+                <p class="discret">Famille, système, sous-système… c'est ce chemin qui accompagnera chaque code trouvé.</p>
+                <div class="ligne-outils">
+                    @for (niveau of codification.niveaux; track niveau; let rang = $index) {
+                        <span class="badge">{{ niveau }} <a (click)="retirerNiveau(rang)" title="Retirer ce niveau">✕</a></span>
+                    }
+                    <select class="champ" name="niveauAAjouter" [(ngModel)]="niveauAAjouter">
+                        <option value="">+ niveau…</option>
+                        @for (colonne of colonnesDe(codification.nomenclature); track colonne) {
+                            <option [value]="colonne">{{ colonne }}</option>
+                        }
+                    </select>
+                    <button class="bouton petit" type="button" name="ajouterNiveau" (click)="ajouterNiveau()">Ajouter</button>
+                </div>
+                <h3>Chercher dans la bonne branche</h3>
+                <p class="discret">
+                    Quand la famille est déjà connue dans la liste, on ne cherche que dans sa branche de l'arbre : c'est ce qui empêche de
+                    coder une vanne en pompe parce que les libellés se ressemblent.
+                </p>
+                <div class="grille-reglages">
+                    <label>
+                        Colonne de la liste
+                        <select class="champ" name="restreindreSource" [(ngModel)]="codification.restreindreSource">
+                            <option value="">— ne pas restreindre —</option>
+                            @for (colonne of colonnesDe(codification.source); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        doit correspondre à
+                        <select class="champ" name="restreindreNomenclature" [(ngModel)]="codification.restreindreNomenclature">
+                            <option value="">—</option>
+                            @for (colonne of colonnesDe(codification.nomenclature); track colonne) {
+                                <option [value]="colonne">{{ colonne }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Ressemblance des libellés
+                        <select class="champ" name="methodeCodification" [(ngModel)]="codification.methode">
+                            @for (methode of methodes(); track methode[0]) {
+                                <option [value]="methode[0]">{{ methode[1] }}</option>
+                            }
+                        </select>
+                    </label>
+                    <label>
+                        Coder d'office au-dessus de
+                        <input
+                            class="champ"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            name="seuilAuto"
+                            [(ngModel)]="codification.seuilAuto"
+                        />
+                    </label>
+                    <label>
+                        Proposer à la revue au-dessus de
+                        <input
+                            class="champ"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            name="seuilRevoir"
+                            [(ngModel)]="codification.seuilRevoir"
+                        />
+                    </label>
+                </div>
+            </div>
+
+            <div class="carte">
+                <h2>② Les règles, de la plus sûre à la plus souple</h2>
+                <p class="discret">
+                    La première qui répond gagne. Le code déjà fourni passe avant tout, puis la table de correspondance ({{
+                        codification.correspondances.length
+                    }}
+                    libellé(s) appris), puis ces règles, puis la ressemblance.
+                </p>
+                <table class="tableau">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>La règle, en français</th>
+                            <th>Code</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (regle of codification.regles; track regle.id; let rang = $index) {
+                            <tr [attr.name]="'regle-' + regle.id">
+                                <td><input type="checkbox" [(ngModel)]="regle.actif" [attr.name]="'actif-' + regle.id" /></td>
+                                <td>
+                                    <div class="phrase-regle" [attr.name]="'phraseRegle-' + regle.id">
+                                        {{ phraseDeLaRegle(regle, codification.colonneLibelle) }}
+                                    </div>
+                                    <div class="ligne-outils">
+                                        <select class="champ petit" [(ngModel)]="regle.type" [attr.name]="'type-' + regle.id">
+                                            @for (type of typesDeRegle(); track type[0]) {
+                                                <option [value]="type[0]">{{ type[1] }}</option>
+                                            }
+                                        </select>
+                                        <select class="champ petit" [(ngModel)]="regle.colonne" [attr.name]="'colonne-' + regle.id">
+                                            <option value="">le libellé</option>
+                                            @for (colonne of colonnesDe(codification.source); track colonne) {
+                                                <option [value]="colonne">{{ colonne }}</option>
+                                            }
+                                        </select>
+                                        @if (regle.type === 'motscles') {
+                                            <input
+                                                class="champ"
+                                                [ngModel]="saisieDesMots(regle.contient)"
+                                                (ngModelChange)="regle.contient = motsSaisis($event)"
+                                                [attr.name]="'contient-' + regle.id"
+                                                placeholder="contient : pompe ; centrifuge"
+                                            />
+                                            <label class="case">
+                                                <input type="checkbox" [(ngModel)]="regle.ou" [attr.name]="'ou-' + regle.id" /> un seul
+                                                suffit
+                                            </label>
+                                            <input
+                                                class="champ"
+                                                [ngModel]="saisieDesMots(regle.sauf)"
+                                                (ngModelChange)="regle.sauf = motsSaisis($event)"
+                                                [attr.name]="'sauf-' + regle.id"
+                                                placeholder="mais pas : vide"
+                                            />
+                                        } @else {
+                                            <input
+                                                class="champ"
+                                                [(ngModel)]="regle.motif"
+                                                [attr.name]="'motif-' + regle.id"
+                                                placeholder="expression régulière"
+                                            />
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <input class="champ petit" [(ngModel)]="regle.code" [attr.name]="'code-' + regle.id" />
+                                </td>
+                                <td class="actions">
+                                    <button class="bouton petit" type="button" (click)="monterLaRegle(rang)" title="Monter">↑</button>
+                                    <button class="bouton petit danger" type="button" (click)="retirerLaRegle(rang)" title="Retirer">
+                                        ✕
+                                    </button>
+                                </td>
+                            </tr>
+                        } @empty {
+                            <tr>
+                                <td colspan="4" class="discret">Aucune règle : seules la correspondance et la ressemblance joueront.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="ligne-outils">
+                    <button class="bouton" type="button" name="ajouterRegle" (click)="ajouterUneRegle()">+ Règle</button>
+                    <button class="bouton principal" type="button" name="coder" (click)="coder()" [disabled]="enCours()">
+                        {{ enCours() ? 'Codification…' : '▶ Coder la liste' }}
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (resultat(); as resultat) {
+            <div class="carte">
+                <h2>③ Le résultat</h2>
+                <div class="kpis">
+                    <div class="kpi">
+                        <span>Codées d'office</span><b class="succes" name="compteOffice">{{ resultat.bilan.office }}</b>
+                    </div>
+                    <div class="kpi">
+                        <span>À revoir</span><b class="alerte" name="compteRevoir">{{ resultat.bilan.revoir }}</b>
+                    </div>
+                    <div class="kpi">
+                        <span>Non trouvées</span><b name="compteAbsent">{{ resultat.bilan.absent }}</b>
+                    </div>
+                    <div class="kpi">
+                        <span>Couverture</span><b name="couverture">{{ scoreLisible(resultat.bilan.couverture) }}</b>
+                    </div>
+                </div>
+                <p class="discret" name="phraseBilan">{{ resultat.bilan.phrase }}</p>
+                <div class="carte resultat">
+                    <app-plein-ecran />
+                    <table class="tableau">
+                        <thead>
+                            <tr>
+                                @for (colonne of resultat.colonnes; track colonne) {
+                                    <th>{{ enTete(colonne) }}</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (ligne of resultat.lignes; track $index) {
+                                <tr class="ligne-codee">
+                                    @for (cellule of ligne; track $index; let colonne = $index) {
+                                        <td [class]="classeDeLaCellule(resultat.colonnes[colonne], cellule)">
+                                            {{ celluleLisible(resultat.colonnes[colonne], cellule) }}
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (casARevoir().length) {
+            <div class="carte">
+                <h2>④ À revoir — {{ casARevoir().length }} cas</h2>
+                <p class="discret">
+                    Chaque décision descend dans la table de correspondance : à la prochaine livraison, ce libellé sera codé tout seul.
+                </p>
+                @for (cas of casARevoir(); track cas.rang) {
+                    <div class="cas-a-revoir" [attr.name]="'cas-' + cas.rang">
+                        <div class="libelle-lu">{{ cas.libelle }}</div>
+                        <div class="candidats">
+                            @for (candidat of cas.candidats; track candidat.code) {
+                                <button
+                                    class="candidat"
+                                    type="button"
+                                    [attr.name]="'choisir-' + cas.rang + '-' + candidat.code"
+                                    [disabled]="!session.peutEditer()"
+                                    (click)="trancher(cas, candidat.code)"
+                                >
+                                    <b>{{ candidat.code }}</b>
+                                    <span class="chemin">{{ candidat.chemin }}</span>
+                                    <span class="badge" [class]="allureDuScore(candidat.score, seuilAuto())">
+                                        {{ scoreLisible(candidat.score) }}
+                                    </span>
+                                </button>
+                            }
+                            <button
+                                class="bouton petit"
+                                type="button"
+                                [attr.name]="'aucun-' + cas.rang"
+                                [disabled]="!session.peutEditer()"
+                                (click)="trancher(cas, '')"
+                            >
+                                aucun ne convient
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    `,
+    styles: `
+        .grille-reglages {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .grille-reglages label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--texte-2);
+        }
+        .phrase-regle {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .cas-a-revoir {
+            border-top: 1px solid var(--bordure);
+            padding: 10px 0;
+        }
+        .libelle-lu {
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .candidats {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .candidat {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            border: 1px solid var(--bordure);
+            border-radius: 8px;
+            background: var(--fond-2);
+            padding: 6px 10px;
+            cursor: pointer;
+            text-align: left;
+        }
+        .candidat:hover:not(:disabled) {
+            border-color: var(--accent);
+        }
+        .candidat .chemin {
+            font-size: 11px;
+            color: var(--texte-2);
+        }
+        td.statut-office {
+            color: var(--succes, #16a34a);
+            font-weight: 600;
+        }
+        td.statut-revoir {
+            color: var(--alerte, #d97706);
+            font-weight: 600;
+        }
+    `
+})
+export class CodificationComponent {
+    private readonly api = inject(ClientApiService);
+    private readonly notifications = inject(NotificationsService);
+    readonly session = inject(SessionService);
+
+    readonly codifications = signal<Codification[]>([]);
+    readonly sources = signal<Source[]>([]);
+    readonly vocabulaire = signal<VocabulaireCodification | null>(null);
+    readonly choisieId = signal('');
+    readonly resultat = signal<ResultatCodification | null>(null);
+    readonly casARevoir = signal<CasARevoir[]>([]);
+    readonly enCours = signal(false);
+    niveauAAjouter = '';
+
+    readonly choisie = computed(() => this.codifications().find(candidate => candidate.id === this.choisieId()) || null);
+    readonly seuilAuto = computed(() => this.choisie()?.seuilAuto ?? 0.99);
+    readonly prochaine = computed(() => prochaineAction(this.resultat()?.bilan || null));
+    readonly typesDeRegle = computed(() => Object.entries(this.vocabulaire()?.typesDeRegle || {}));
+    readonly methodes = computed(() => Object.entries(this.vocabulaire()?.methodes || {}));
+
+    readonly phraseDeLaRegle = phraseDeLaRegle;
+    readonly motsSaisis = motsSaisis;
+    readonly saisieDesMots = saisieDesMots;
+    readonly scoreLisible = scoreLisible;
+    readonly allureDuScore = allureDuScore;
+
+    constructor() {
+        void this.charger();
+    }
+
+    private async charger(): Promise<void> {
+        try {
+            const [codifications, sources, vocabulaire] = await Promise.all([
+                this.api.codifications(),
+                this.api.sources(),
+                this.api.vocabulaireCodification()
+            ]);
+            this.codifications.set(codifications);
+            this.sources.set(sources);
+            this.vocabulaire.set(vocabulaire);
+            if (!this.choisieId() && codifications.length) this.choisieId.set(codifications[0].id);
+        } catch (erreur) {
+            this.notifications.erreur(String(erreur));
+        }
+    }
+
+    colonnesDe(nomSource: string): string[] {
+        return this.sources().find(source => source.name === nomSource)?.headers || [];
+    }
+    choisir(id: string): void {
+        this.choisieId.set(id);
+        this.resultat.set(null);
+        this.casARevoir.set([]);
+    }
+    creer(): void {
+        const codification = codificationNeuve();
+        this.codifications.set([...this.codifications(), codification]);
+        this.choisir(codification.id);
+    }
+    ajouterNiveau(): void {
+        const codification = this.choisie();
+        if (!codification || !this.niveauAAjouter || codification.niveaux.includes(this.niveauAAjouter)) return;
+        codification.niveaux = [...codification.niveaux, this.niveauAAjouter];
+        this.niveauAAjouter = '';
+    }
+    retirerNiveau(rang: number): void {
+        const codification = this.choisie();
+        if (codification) codification.niveaux = codification.niveaux.filter((_niveau, position) => position !== rang);
+    }
+    ajouterUneRegle(): void {
+        const codification = this.choisie();
+        if (!codification) return;
+        const regle: RegleCodification = {
+            id: genererIdentifiant('rg_'),
+            actif: true,
+            code: '',
+            colonne: '',
+            type: 'motscles',
+            contient: [],
+            ou: false,
+            sauf: [],
+            motif: ''
+        };
+        codification.regles = [...codification.regles, regle];
+    }
+    monterLaRegle(rang: number): void {
+        const codification = this.choisie();
+        if (!codification || rang <= 0) return;
+        const regles = [...codification.regles];
+        [regles[rang - 1], regles[rang]] = [regles[rang], regles[rang - 1]];
+        codification.regles = regles;
+    }
+    retirerLaRegle(rang: number): void {
+        const codification = this.choisie();
+        if (codification) codification.regles = codification.regles.filter((_regle, position) => position !== rang);
+    }
+
+    async enregistrer(): Promise<void> {
+        const codification = this.choisie();
+        if (!codification) return;
+        try {
+            await this.api.enregistrerCodification(codification);
+            this.notifications.succes(`Codification « ${codification.nom} » enregistrée.`);
+        } catch (erreur) {
+            this.notifications.erreur(String(erreur));
+        }
+    }
+    async supprimer(): Promise<void> {
+        const codification = this.choisie();
+        if (!codification || !confirm(`Supprimer la codification « ${codification.nom} » ?`)) return;
+        try {
+            await this.api.supprimerCodification(codification.id);
+            this.codifications.set(this.codifications().filter(candidate => candidate.id !== codification.id));
+            this.choisir(this.codifications()[0]?.id || '');
+        } catch (erreur) {
+            this.notifications.erreur(String(erreur));
+        }
+    }
+
+    /** Enregistre puis code : la codification exécutée est toujours celle que l'on voit à l'écran. */
+    async coder(): Promise<void> {
+        const codification = this.choisie();
+        if (!codification) return;
+        this.enCours.set(true);
+        try {
+            if (this.session.peutEditer()) await this.api.enregistrerCodification(codification);
+            this.resultat.set(await this.api.executerCodification(codification.id));
+            this.casARevoir.set(await this.api.revueCodification(codification.id));
+        } catch (erreur) {
+            this.notifications.erreur(String(erreur));
+        } finally {
+            this.enCours.set(false);
+        }
+    }
+
+    /** Tranche un cas : la ligne reçoit son code, le libellé entre dans la table de correspondance, on recode. */
+    async trancher(cas: CasARevoir, code: string): Promise<void> {
+        const codification = this.choisie();
+        if (!codification) return;
+        try {
+            const apres = await this.api.deciderCodification(codification.id, { rang: cas.rang, code, libelle: cas.libelle });
+            this.codifications.set(this.codifications().map(candidate => (candidate.id === apres.id ? apres : candidate)));
+            this.notifications.succes(code ? `« ${cas.libelle} » → ${code}, retenu pour les prochaines fois.` : 'Cas laissé sans code.');
+            await this.coder();
+        } catch (erreur) {
+            this.notifications.erreur(String(erreur));
+        }
+    }
+
+    /** L'en-tête d'une colonne technique, dit en clair. */
+    enTete(colonne: string): string {
+        const noms: Record<string, string> = {
+            __code: 'Code trouvé',
+            __origine: 'Par quoi',
+            __score: 'Confiance',
+            __statut: 'Statut',
+            __chemin: "Chemin dans l'arbre"
+        };
+        return noms[colonne] || colonne;
+    }
+    /** La valeur d'une cellule, traduite quand elle est technique. */
+    celluleLisible(colonne: string, valeur: unknown): string {
+        if (valeur === null || valeur === undefined) return '';
+        if (colonne === '__statut') return allureDuStatut(String(valeur)).libelle;
+        if (colonne === '__origine') return phraseDeLOrigine(String(valeur), this.choisie()?.regles || []);
+        if (colonne === '__score') return scoreLisible(Number(valeur));
+        return String(valeur);
+    }
+    /** La couleur d'une cellule de statut : l'œil trie avant de lire. */
+    classeDeLaCellule(colonne: string, valeur: unknown): string {
+        return colonne === '__statut' ? 'statut-' + String(valeur) : '';
+    }
+}
