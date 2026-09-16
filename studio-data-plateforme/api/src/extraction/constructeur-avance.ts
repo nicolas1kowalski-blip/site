@@ -26,6 +26,8 @@ export type Synthese = {
     deRoute: string;
     deColonne: string;
     versColonne: string;
+    /** Les colonnes en plus de la clé, quand le lien du modèle en porte une composite. */
+    pairesEnPlus?: { deColonne: string; versColonne: string }[];
     mode: ModeSynthese;
     nomColonne: string;
     n: number;
@@ -83,10 +85,14 @@ export function expressionsSynthese(
     nomTableEnfant: string,
     expressionParent: string,
     aliasSortie: string,
-    nomCteTransposition = ''
+    nomCteTransposition = '',
+    /** Les colonnes en plus de la clé, quand le lien en porte une composite. */
+    parentsEnPlus: { versColonne: string; expressionParent: string }[] = []
 ): ExpressionNommee[] {
     const table = identifiantSql(nomTableEnfant);
-    const condition = `${cleNormalisee('s.' + identifiantSql(synthese.versColonne))} = ${cleNormalisee(expressionParent)}`;
+    const condition = [{ versColonne: synthese.versColonne, expressionParent }, ...parentsEnPlus]
+        .map(paire => `${cleNormalisee('s.' + identifiantSql(paire.versColonne))} = ${cleNormalisee(paire.expressionParent)}`)
+        .join(' AND ');
     const colonne = synthese.nomColonne ? `TRIM(CAST(s.${identifiantSql(synthese.nomColonne)} AS VARCHAR))` : null;
     switch (synthese.mode) {
         case 'count':

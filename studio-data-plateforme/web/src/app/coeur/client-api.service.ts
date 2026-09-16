@@ -83,6 +83,7 @@ import {
     ListeValeurs,
     ObjetMetier,
     OrigineJeu,
+    PaireDeColonnes,
     Perimetre,
     Personne,
     Proposition,
@@ -276,7 +277,7 @@ export class ClientApiService {
     supprimerRelation(id: string): Promise<Relation[]> {
         return firstValueFrom(this.http.delete<Relation[]>(`${this.racine}/modele/relations/${encodeURIComponent(id)}`));
     }
-    modifierRelation(id: string, changements: { cardinality?: string; kind?: string }): Promise<Relation[]> {
+    modifierRelation(id: string, changements: { cardinality?: string; kind?: string; extraCols?: PaireDeColonnes[] }): Promise<Relation[]> {
         return firstValueFrom(this.http.put<Relation[]>(`${this.racine}/modele/relations/${encodeURIComponent(id)}`, changements));
     }
     mesurerRelation(id: string): Promise<MesureRelation> {

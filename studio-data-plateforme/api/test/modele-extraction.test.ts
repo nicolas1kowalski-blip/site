@@ -630,3 +630,79 @@ test('synthèse « N premières valeurs » : les montants d’un client transpos
     ]);
     assert.equal(apercu.sql.match(/FROM "t_tb_commandes"/g).length, 1, 'une seule lecture de la table liée');
 });
+
+/**
+ * Le cas qui motive la clé composite : une liste d'éléments, et un arbre qui range chaque élément dans un
+ * groupe. Un élément n'apparaît qu'une fois par groupe, mais appartient à plusieurs groupes. Joint sur le
+ * seul élément, l'arbre multiplie les lignes ; joint sur (groupe, élément), il ne les multiplie plus.
+ */
+test('clé composite : la jointure sur (groupe, élément) ne multiplie plus les lignes', async () => {
+    await deposerSource('elem', 'elements.csv', 'code;groupe;type_element\nE1;G1;machine\nE2;G1;machine\nE1;G2;machine\n', [
+        'code',
+        'groupe',
+        'type_element'
+    ]);
+    await deposerSource('arbre', 'arbre.csv', 'element;groupe;niveau\nE1;G1;atelier\nE2;G1;atelier\nE1;G2;entrepot\n', [
+        'element',
+        'groupe',
+        'niveau'
+    ]);
+    const identifiantDuLien = await appel({
+        method: 'POST',
+        url: '/api/modele/relations',
+        payload: { sourceTable: 'arbre.csv', sourceCol: 'element', targetTable: 'elements.csv', targetCol: 'code' }
+    }).then(
+        reponse =>
+            json(reponse).relations.find(
+                (relation: { sourceTable: string; targetTable: string }) =>
+                    relation.sourceTable === 'arbre.csv' && relation.targetTable === 'elements.csv'
+            ).id
+    );
+
+    const extraire = (pairesEnPlus: { deColonne: string; versColonne: string }[]) =>
+        appel({
+            method: 'POST',
+            url: '/api/extraction/apercu',
+            payload: {
+                specification: {
+                    baseId: 'elem',
+                    jointures: [{ deTableId: 'elem', deColonne: 'code', versTableId: 'arbre', versColonne: 'element', pairesEnPlus }],
+                    colonnes: [
+                        { tableId: 'elem', nomColonne: 'code' },
+                        { tableId: 'elem', nomColonne: 'groupe' },
+                        { tableId: 'arbre', nomColonne: 'niveau' }
+                    ]
+                }
+            }
+        }).then(reponse => json(reponse));
+
+    const sansLeGroupe = await extraire([]);
+    assert.equal(sansLeGroupe.lignes.length, 5, 'sur le seul élément, E1 revient deux fois par groupe : 3 lignes deviennent 5');
+
+    const avecLeGroupe = await extraire([{ deColonne: 'groupe', versColonne: 'groupe' }]);
+    assert.equal(avecLeGroupe.lignes.length, 3, 'avec le groupe dans la clé, on retrouve une ligne par élément et par groupe');
+    assert.deepEqual(
+        avecLeGroupe.lignes.map((ligne: unknown[]) => ligne.join('|')).sort(),
+        ['E1|G1|atelier', 'E1|G2|entrepot', 'E2|G1|atelier'],
+        'chaque élément reçoit le niveau de son propre groupe'
+    );
+
+    // Déclarée sur le lien, la clé composite vaut pour toutes les extractions qui l'empruntent.
+    const apresDeclaration = json(
+        await appel({
+            method: 'PUT',
+            url: `/api/modele/relations/${encodeURIComponent(identifiantDuLien)}`,
+            payload: { extraCols: [{ sourceCol: 'groupe', targetCol: 'groupe' }] }
+        })
+    );
+    const lienDeclare = apresDeclaration.find((relation: { id: string }) => relation.id === identifiantDuLien);
+    assert.deepEqual(lienDeclare.extraCols, [{ sourceCol: 'groupe', targetCol: 'groupe' }]);
+
+    const colonneInconnue = await appel({
+        method: 'PUT',
+        url: `/api/modele/relations/${encodeURIComponent(identifiantDuLien)}`,
+        payload: { extraCols: [{ sourceCol: 'inexistante', targetCol: 'groupe' }] }
+    });
+    assert.equal(colonneInconnue.statusCode, 400, 'une colonne qui n’existe pas est refusée, avec un message');
+    assert.match(json(colonneInconnue).erreur, /inexistante/);
+});

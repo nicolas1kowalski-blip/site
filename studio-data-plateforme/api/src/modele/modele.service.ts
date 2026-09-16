@@ -22,12 +22,21 @@ import {
     sqlTestRegleLien
 } from './regles-liens';
 
+/** Une paire de colonnes qui s'ajoute à la clé d'un lien : c'est ce qui rend la clé composite. */
+export type PaireDeColonnes = { sourceCol: string; targetCol: string };
+
 /** Lien tel qu'il est enregistré par l'application classique (par nom de table). */
 export type RelationEnregistree = {
     sourceTable: string;
     sourceCol: string;
     targetTable: string;
     targetCol: string;
+    /**
+     * Colonnes qui s'ajoutent à la clé du lien, quand une seule ne suffit pas à l'identifier. Un élément qui
+     * appartient à plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il multiplie
+     * les lignes. La clé (groupe, élément) rétablit la vérité. Absent ou vide = clé simple, comme avant.
+     */
+    extraCols?: PaireDeColonnes[];
     cardinality?: string;
     kind?: string;
     measured?: unknown;
@@ -115,11 +124,11 @@ export class ModeleService {
         return true;
     }
 
-    /** Modifie la cardinalité déclarée ou la nature (composition, agrégation, référence) d'un lien. */
+    /** Modifie la cardinalité déclarée, la nature (composition, agrégation, référence) ou la clé d'un lien. */
     async modifier(
         espaceId: string,
         id: string,
-        changements: { cardinality?: string; kind?: string },
+        changements: { cardinality?: string; kind?: string; extraCols?: PaireDeColonnes[] },
         auteurId: string
     ): Promise<Relation[]> {
         const etat = await this.etat(espaceId);
@@ -127,6 +136,19 @@ export class ModeleService {
         if (!relation) throw erreurIntrouvable('Lien inconnu.');
         if (changements.cardinality !== undefined) relation.cardinality = changements.cardinality;
         if (changements.kind !== undefined) relation.kind = changements.kind;
+        if (changements.extraCols !== undefined) {
+            const sources = await this.sources.lister(espaceId);
+            for (const paire of changements.extraCols)
+                for (const [nomTable, nomColonne] of [
+                    [relation.sourceTable, paire.sourceCol],
+                    [relation.targetTable, paire.targetCol]
+                ]) {
+                    const source = sources.find(candidat => candidat.name === nomTable);
+                    if (!source || !(source.headers || []).includes(nomColonne))
+                        throw erreurRequete(`La colonne « ${nomColonne} » n'existe pas dans « ${nomTable} ».`);
+                }
+            relation.extraCols = changements.extraCols;
+        }
         await this.enregistrer(espaceId, etat, auteurId);
         return this.relations(espaceId);
     }

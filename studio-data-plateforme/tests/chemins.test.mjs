@@ -99,3 +99,46 @@ test('planification : une jointure par route, préfixes partagés, chacune part 
     assert.equal(planifierJointures([parSouscripteur, parSouscripteur], 'contrats').length, 1);
     assert.deepEqual(planifierJointures([[]], 'contrats'), [], 'la table de départ ne demande aucune jointure');
 });
+
+test('clé composite : les colonnes en plus suivent le chemin, dans le sens du parcours', () => {
+    // Un élément appartient à plusieurs groupes : sans le groupe dans la clé, la jointure multiplie.
+    const lien = {
+        id: 'arbre',
+        sourceTable: 'arbre.csv',
+        sourceCol: 'element',
+        targetTable: 'elements.csv',
+        targetCol: 'code',
+        sourceId: 'arbre',
+        targetId: 'elements',
+        extraCols: [{ sourceCol: 'groupe', targetCol: 'type_groupe' }]
+    };
+    const chemins = cheminsVers('elements', 'arbre', [lien]);
+    assert.equal(chemins.length, 1);
+    const jointures = planifierJointures(chemins, 'elements');
+    assert.equal(jointures.length, 1);
+    assert.deepEqual(
+        jointures[0].pairesEnPlus,
+        [{ deColonne: 'type_groupe', versColonne: 'groupe' }],
+        'parcouru depuis les éléments, la colonne de départ est celle des éléments'
+    );
+    const retour = planifierJointures(cheminsVers('arbre', 'elements', [lien]), 'arbre');
+    assert.deepEqual(
+        retour[0].pairesEnPlus,
+        [{ deColonne: 'groupe', versColonne: 'type_groupe' }],
+        'parcouru dans l’autre sens, les deux colonnes s’échangent'
+    );
+});
+
+test('clé simple : aucune colonne en plus, la jointure est celle d’avant', () => {
+    const lien = {
+        id: 'l1',
+        sourceTable: 'commandes.csv',
+        sourceCol: 'id_client',
+        targetTable: 'clients.csv',
+        targetCol: 'id_client',
+        sourceId: 'commandes',
+        targetId: 'clients'
+    };
+    const jointures = planifierJointures(cheminsVers('commandes', 'clients', [lien]), 'commandes');
+    assert.deepEqual(jointures[0].pairesEnPlus, [], 'sans clé composite, la liste est vide et non absente');
+});

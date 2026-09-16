@@ -134,12 +134,21 @@ export function genererIdentifiant(prefixe: string): string {
 }
 
 // ---- modèle de données et extraction ----
+/** Une paire de colonnes qui s'ajoute à la clé d'un lien : c'est ce qui rend la clé composite. */
+export type PaireDeColonnes = { sourceCol: string; targetCol: string };
+
 export type Relation = {
     id: string;
     sourceTable: string;
     sourceCol: string;
     targetTable: string;
     targetCol: string;
+    /**
+     * Colonnes qui s'ajoutent à la clé du lien, quand une seule ne suffit pas à l'identifier. Un élément
+     * présent dans plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il
+     * multiplie les lignes ; joint sur (groupe, élément), il ne les multiplie plus.
+     */
+    extraCols?: PaireDeColonnes[];
     cardinality?: string;
     kind?: string;
     /** Mesure sur les données (cardinalité constatée, orphelins), si elle a été faite. */
@@ -249,6 +258,8 @@ export type JointureExtraction = {
     deColonne: string;
     versTableId: string;
     versColonne: string;
+    /** Les colonnes qui s'ajoutent à la condition de jointure, quand la clé du lien est composite. */
+    pairesEnPlus?: { deColonne: string; versColonne: string }[];
 };
 /** Fonction d'agrégation d'une mesure (« valeurs » n'a de sens que sur une colonne cochée, pas sur une mesure). */
 export type FonctionMesure = 'count' | 'countd' | 'sum' | 'avg' | 'min' | 'max';

@@ -18,7 +18,17 @@ const schemaRelation = z.object({
     cardinality: z.string().optional(),
     kind: z.string().optional()
 });
-const schemaModificationRelation = z.object({ cardinality: z.string().optional(), kind: z.string().optional() });
+/** Une colonne de plus dans la clé du lien : celle de la source, celle de la cible. */
+const schemaPaireDeColonnes = z.object({
+    sourceCol: z.string().min(1, 'colonne source requise'),
+    targetCol: z.string().min(1, 'colonne cible requise')
+});
+const schemaModificationRelation = z.object({
+    cardinality: z.string().optional(),
+    kind: z.string().optional(),
+    /** La clé composite : les colonnes qui s'ajoutent à la paire principale. Liste vide = clé simple. */
+    extraCols: z.array(schemaPaireDeColonnes).max(6).optional()
+});
 
 @ApiTags('Modèle de données')
 @Controller('api/modele')

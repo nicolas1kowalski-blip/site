@@ -85,6 +85,14 @@ const schemaSynthese = z.object({
     deRoute: z.string().default(''),
     deColonne: z.string().min(1),
     versColonne: z.string().min(1),
+    /**
+     * Les colonnes qui s'ajoutent à la condition, quand la clé du lien est composite. Sans elles, une
+     * synthèse compterait les lignes de l'élément dans tous les groupes au lieu du seul groupe de la ligne.
+     */
+    pairesEnPlus: z
+        .array(z.object({ deColonne: z.string().min(1), versColonne: z.string().min(1) }))
+        .max(6)
+        .default([]),
     mode: z.enum(Object.keys(MODES_SYNTHESE) as ['count', 'countd', 'values', 'first']).default('count'),
     nomColonne: z.string().default(''),
     n: z.number().int().min(1).max(12).default(3)
@@ -147,7 +155,17 @@ const schemaJointure = z.object({
     deColonne: z.string().min(1),
     /** Table ajoutée par cette jointure. */
     versTableId: z.string().min(1),
-    versColonne: z.string().min(1)
+    versColonne: z.string().min(1),
+    /**
+     * Colonnes qui s'ajoutent à la condition de jointure, quand une seule ne suffit pas. Un élément qui
+     * appartient à plusieurs groupes se retrouve une fois par groupe : joint sur le seul élément, il multiplie
+     * les lignes ; joint sur (groupe, élément), il ne les multiplie plus. Ces paires viennent de la clé
+     * composite déclarée sur le lien du modèle. Vide = jointure sur une seule colonne, comme avant.
+     */
+    pairesEnPlus: z
+        .array(z.object({ deColonne: z.string().min(1), versColonne: z.string().min(1) }))
+        .max(6)
+        .default([])
 });
 /**
  * Critère d'une mesure : la même chose qu'un filtre, mais il ne s'applique qu'à cette mesure. C'est ce qui
@@ -618,7 +636,12 @@ function clausesJointures(
         // La table reste aussi joignable par son seul identifiant : c'est la première route posée sur elle.
         if (!aliasDe.has(lien.versTableId)) aliasDe.set(lien.versTableId, alias);
         aliasParTable.set(lien.versTableId, [...(aliasParTable.get(lien.versTableId) || []), alias]);
-        return `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${cleNormalisee(`${alias}.${identifiantSql(lien.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(lien.deColonne)}`)}`;
+        // Toutes les colonnes de la clé, la principale d'abord : c'est ce qui empêche la jointure de multiplier.
+        const conditions = [{ deColonne: lien.deColonne, versColonne: lien.versColonne }, ...(lien.pairesEnPlus || [])].map(
+            paire =>
+                `${cleNormalisee(`${alias}.${identifiantSql(paire.versColonne)}`)} = ${cleNormalisee(`${aliasDepart}.${identifiantSql(paire.deColonne)}`)}`
+        );
+        return `${jointure} ${identifiantSql(contexte.nomTableDe(lien.versTableId))} AS ${alias} ON ${conditions.join(' AND ')}`;
     });
 }
 
@@ -691,32 +714,54 @@ type EntourageColonne = {
 };
 
 /** Les expressions produites par une colonne (une, ou plusieurs pour une synthèse « N premières » et une hiérarchie). */
+/**
+ * Une colonne de synthèse : ce que la table liée dit de la ligne, sans la joindre — donc sans multiplier.
+ * Quand le lien porte une clé composite, chaque colonne de la clé entre dans la condition : sans quoi la
+ * synthèse compterait les lignes de l'élément dans tous les groupes au lieu du seul groupe de la ligne.
+ */
+function itemsDeLaSynthese(colonne: ColonneExtraction, entourage: EntourageColonne): ItemSortie[] {
+    const { alias: aliasColonne, contexte, aliasDe, aliasParTable, ctes, jointures: jointuresHierarchie } = entourage;
+    const synthese = colonne.synthese as Synthese | undefined;
+    if (!synthese) throw new ErreurSpecification('Synthèse incomplète : table liée et relation requises.');
+    // La table d'ancrage peut être ramenée par plusieurs liens : « quel qu'il soit » les réunit.
+    const parentDe = (nomColonne: string) =>
+        expressionSource(
+            { tableId: synthese.deTableId, route: synthese.deRoute, nomColonne },
+            aliasDe,
+            aliasParTable,
+            `La synthèse « ${aliasColonne} »`
+        );
+    const expressionParent = parentDe(synthese.deColonne);
+    // « N premières valeurs » : la table liée est lue une seule fois, rangée en liste ordonnée.
+    let nomCteValeurs = '';
+    if (synthese.mode === 'first') {
+        nomCteValeurs = 'transpose' + ctes.length;
+        ctes.push(cteValeursOrdonnees(nomCteValeurs, contexte.nomTableDe(synthese.tableId), synthese));
+        jointuresHierarchie.push(jointureValeursOrdonnees(nomCteValeurs, expressionParent));
+    }
+    const parentsEnPlus = (synthese.pairesEnPlus || []).map(paire => ({
+        versColonne: paire.versColonne,
+        expressionParent: parentDe(paire.deColonne)
+    }));
+    return expressionsSynthese(
+        synthese,
+        contexte.nomTableDe(synthese.tableId),
+        expressionParent,
+        aliasColonne,
+        nomCteValeurs,
+        parentsEnPlus
+    );
+}
+
 function expressionsColonne(colonne: ColonneExtraction, entourage: EntourageColonne): ItemSortie[] {
-    const { aliasTable, expressionColonne, alias: aliasColonne, contexte, aliasDe, aliasParTable, ctes } = entourage;
+    const { aliasTable, expressionColonne, alias: aliasColonne, contexte, ctes } = entourage;
     const { resoudreReference, jointures: jointuresHierarchie } = entourage;
     try {
         switch (colonne.genre) {
             case 'calcul':
                 return [{ expression: `(${formuleEnSql(colonne.formule || '', resoudreReference)})`, alias: aliasColonne }];
-            case 'synthese': {
-                const synthese = colonne.synthese as Synthese | undefined;
-                if (!synthese) throw new ErreurSpecification('Synthèse incomplète : table liée et relation requises.');
-                // La table d'ancrage peut être ramenée par plusieurs liens : « quel qu'il soit » les réunit.
-                const expressionParent = expressionSource(
-                    { tableId: synthese.deTableId, route: synthese.deRoute, nomColonne: synthese.deColonne },
-                    aliasDe,
-                    aliasParTable,
-                    `La synthèse « ${aliasColonne} »`
-                );
-                // « N premières valeurs » : la table liée est lue une seule fois, rangée en liste ordonnée.
-                let nomCteValeurs = '';
-                if (synthese.mode === 'first') {
-                    nomCteValeurs = 'transpose' + ctes.length;
-                    ctes.push(cteValeursOrdonnees(nomCteValeurs, contexte.nomTableDe(synthese.tableId), synthese));
-                    jointuresHierarchie.push(jointureValeursOrdonnees(nomCteValeurs, expressionParent));
-                }
-                return expressionsSynthese(synthese, contexte.nomTableDe(synthese.tableId), expressionParent, aliasColonne, nomCteValeurs);
-            }
+            case 'synthese':
+                return itemsDeLaSynthese(colonne, entourage);
             case 'hierarchie': {
                 const hierarchie = colonne.hierarchie as Hierarchie | undefined;
                 if (!hierarchie) throw new ErreurSpecification('Hiérarchie incomplète : colonnes identifiant et parent requises.');

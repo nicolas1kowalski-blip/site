@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../coeur/client-api.service';
 import {
     PageLignes,
+    PaireDeColonnes,
     PropositionLien,
     RegleLien,
     Relation,
@@ -143,6 +144,7 @@ type BrouillonRegle = {
                             <th>Source (côté N)</th>
                             <th></th>
                             <th>Cible (côté 1)</th>
+                            <th title="Les colonnes qui identifient le lien. Une seule ne suffit pas toujours.">Clé du lien</th>
                             <th>Cardinalité déclarée</th>
                             <th>Nature</th>
                             <th>Mesure sur les données</th>
@@ -169,6 +171,65 @@ type BrouillonRegle = {
                                         <span class="badge alerte" title="Une des deux sources n'est pas chargée dans cet espace"
                                             >source absente</span
                                         >
+                                    }
+                                </td>
+                                <td>
+                                    <!--
+                                        Clé composite : quand une seule colonne ne suffit pas à identifier le lien.
+                                        Un élément présent dans plusieurs groupes se retrouve une fois par groupe ;
+                                        joint sur le seul élément, il multiplie les lignes. La clé (groupe, élément)
+                                        rétablit la vérité, une fois pour toutes et pour toutes les extractions.
+                                    -->
+                                    <div class="cle-du-lien" [attr.name]="'cleDuLien-' + relation.id">
+                                        <span class="paire principale">{{ relation.sourceCol }} = {{ relation.targetCol }}</span>
+                                        @for (
+                                            paire of relation.extraCols || [];
+                                            track paire.sourceCol + paire.targetCol;
+                                            let rang = $index
+                                        ) {
+                                            <span class="paire">
+                                                + {{ paire.sourceCol }} = {{ paire.targetCol }}
+                                                @if (session.peutEditer()) {
+                                                    <a title="Retirer cette colonne de la clé" (click)="retirerDeLaCle(relation, rang)"
+                                                        >✕</a
+                                                    >
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (session.peutEditer()) {
+                                        <div class="ajout-cle">
+                                            <select
+                                                class="champ"
+                                                style="width: auto"
+                                                [attr.name]="'cleSource-' + relation.id"
+                                                [(ngModel)]="colonneSourceEnPlus[relation.id]"
+                                            >
+                                                <option value="">+ colonne de {{ relation.sourceTable }}…</option>
+                                                @for (colonne of colonnesDe(relation.sourceTable); track colonne) {
+                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                }
+                                            </select>
+                                            <select
+                                                class="champ"
+                                                style="width: auto"
+                                                [attr.name]="'cleCible-' + relation.id"
+                                                [(ngModel)]="colonneCibleEnPlus[relation.id]"
+                                            >
+                                                <option value="">= colonne de {{ relation.targetTable }}…</option>
+                                                @for (colonne of colonnesDe(relation.targetTable); track colonne) {
+                                                    <option [value]="colonne">{{ colonne }}</option>
+                                                }
+                                            </select>
+                                            <button
+                                                class="bouton petit"
+                                                type="button"
+                                                [attr.name]="'ajouterALaCle-' + relation.id"
+                                                (click)="ajouterALaCle(relation)"
+                                            >
+                                                Ajouter à la clé
+                                            </button>
+                                        </div>
                                     }
                                 </td>
                                 <td>
@@ -491,6 +552,34 @@ type BrouillonRegle = {
         </div>
     `,
     styles: `
+        /* La clé d'un lien : la paire principale, puis les colonnes qui s'y ajoutent. */
+        .cle-du-lien {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        .cle-du-lien .paire {
+            font-size: 11px;
+            padding: 1px 6px;
+            border: 1px solid var(--bordure);
+            border-radius: 6px;
+            background: var(--surface-2);
+            white-space: nowrap;
+        }
+        .cle-du-lien .paire.principale {
+            border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        }
+        .cle-du-lien .paire a {
+            cursor: pointer;
+            margin-left: 4px;
+            color: var(--erreur);
+        }
+        .ajout-cle {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
         .orphelin td {
             opacity: 0.6;
         }
@@ -534,6 +623,9 @@ export class ModeleComponent {
     readonly natures = Object.entries(NATURES_LIEN);
     vue: 'compacte' | 'schema' = 'compacte';
     nouveau = { sourceTable: '', sourceCol: '', targetTable: '', targetCol: '', cardinality: 'N-1' };
+    /** La colonne que l'on est en train d'ajouter à la clé d'un lien, de chaque côté. */
+    colonneSourceEnPlus: Record<string, string> = {};
+    colonneCibleEnPlus: Record<string, string> = {};
     brouillonRegle: BrouillonRegle = { relationId: '', sens: 'cible', condCol: '', condOp: '=', condVal: '', expect: '=', n: 1 };
 
     /**
@@ -693,7 +785,31 @@ export class ModeleComponent {
             this.notifications.erreur(erreur as Error);
         }
     }
-    async modifier(relation: Relation, changements: { cardinality?: string; kind?: string }): Promise<void> {
+    /**
+     * Ajoute une colonne à la clé du lien. C'est ce qui empêche une jointure de multiplier les lignes : un
+     * élément présent dans plusieurs groupes se retrouve une fois par groupe, et seule la clé (groupe,
+     * élément) le retrouve une seule fois. Toutes les extractions qui passent par ce lien en profitent.
+     */
+    async ajouterALaCle(relation: Relation): Promise<void> {
+        const sourceCol = this.colonneSourceEnPlus[relation.id] || '';
+        const targetCol = this.colonneCibleEnPlus[relation.id] || '';
+        if (!sourceCol || !targetCol) return this.notifications.erreur('Choisissez une colonne de chaque côté.');
+        const deja = relation.extraCols || [];
+        if (sourceCol === relation.sourceCol && targetCol === relation.targetCol)
+            return this.notifications.erreur('Cette paire est déjà la clé principale du lien.');
+        if (deja.some(paire => paire.sourceCol === sourceCol && paire.targetCol === targetCol))
+            return this.notifications.erreur('Cette paire fait déjà partie de la clé.');
+        await this.modifier(relation, { extraCols: [...deja, { sourceCol, targetCol }] });
+        this.colonneSourceEnPlus[relation.id] = '';
+        this.colonneCibleEnPlus[relation.id] = '';
+    }
+
+    /** Retire une colonne de la clé : le lien redevient plus large, et peut de nouveau multiplier. */
+    async retirerDeLaCle(relation: Relation, rang: number): Promise<void> {
+        await this.modifier(relation, { extraCols: (relation.extraCols || []).filter((paire, position) => position !== rang) });
+    }
+
+    async modifier(relation: Relation, changements: { cardinality?: string; kind?: string; extraCols?: PaireDeColonnes[] }): Promise<void> {
         try {
             this.relations.set(await this.api.modifierRelation(relation.id, changements));
         } catch (erreur) {

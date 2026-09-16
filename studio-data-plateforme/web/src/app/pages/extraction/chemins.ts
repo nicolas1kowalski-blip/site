@@ -19,6 +19,11 @@ export type EtapeChemin = {
     deColonne: string;
     versTableId: string;
     versColonne: string;
+    /**
+     * Les colonnes qui s'ajoutent à la condition, quand la clé du lien est composite. Elles suivent le sens
+     * de parcours : parcouru à l'envers, la colonne de la source devient celle d'arrivée.
+     */
+    pairesEnPlus: { deColonne: string; versColonne: string }[];
 };
 export type Chemin = EtapeChemin[];
 
@@ -41,20 +46,23 @@ export function cleChemin(chemin: Chemin): string {
 /** Les deux sens de parcours d'un lien ; un lien dont une extrémité n'est pas chargée est ignoré. */
 function etapesDuLien(relation: Relation): EtapeChemin[] {
     if (!relation.sourceId || !relation.targetId) return [];
+    const clePlus = relation.extraCols || [];
     return [
         {
             relationId: relation.id,
             deTableId: relation.sourceId,
             deColonne: relation.sourceCol,
             versTableId: relation.targetId,
-            versColonne: relation.targetCol
+            versColonne: relation.targetCol,
+            pairesEnPlus: clePlus.map(paire => ({ deColonne: paire.sourceCol, versColonne: paire.targetCol }))
         },
         {
             relationId: relation.id,
             deTableId: relation.targetId,
             deColonne: relation.targetCol,
             versTableId: relation.sourceId,
-            versColonne: relation.sourceCol
+            versColonne: relation.sourceCol,
+            pairesEnPlus: clePlus.map(paire => ({ deColonne: paire.targetCol, versColonne: paire.sourceCol }))
         }
     ];
 }
@@ -127,7 +135,8 @@ export function planifierJointures(cheminsUtilises: Chemin[], baseId: string): J
                 deTableId: etape.deTableId,
                 deColonne: etape.deColonne,
                 versTableId: etape.versTableId,
-                versColonne: etape.versColonne
+                versColonne: etape.versColonne,
+                pairesEnPlus: etape.pairesEnPlus
             });
         }
     return jointures;
