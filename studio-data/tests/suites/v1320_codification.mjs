@@ -64,7 +64,8 @@ const out = await p.evaluate(async ()=>{
   await wait(150);
   ok('les niveaux de l\'arbre sont déclarés dans l\'ordre, du plus haut au plus fin', C().niveaux.join('>')==='FAMILLE>SYSTEME>SOUS_SYSTEME>LIBELLE_TYPE' && el('step-17').querySelectorAll('#v13-codif-niveaux .v13-paire').length===4);
   v13EcrireDansLaCodification('restreindreSource','FAMILLE'); v13EcrireDansLaCodification('restreindreNomenclature','FAMILLE'); await wait(100);
-  ok('la recherche est enfermée dans la branche de la famille', /FAMILLE/.test(v13ConditionDeBranche(C())) && v13ConditionDeBranche({}) === 'TRUE');
+  ok('la recherche est enfermée dans la branche de la famille', /__branche_liste = types\.__branche_type/.test(v13ConditionDeBranche(C())) && v13ConditionDeBranche({}) === 'TRUE');
+  ok('la branche est préparée une fois par ligne, des deux côtés', /FAMILLE.*AS __branche_liste/s.test(v13ListePreparee(C(),'reconnues r')) && /FAMILLE.*AS __branche_type/s.test(v13TypesPrepares(C(),'"t_nm"')));
 
   // ---- ce que l'on compare, des deux côtés
   ok('sans rien de déclaré, on compare le libellé de la liste au libellé de la nomenclature', (()=>{ const r=v13ComparaisonsRetenues(C()); return r.length===1 && r[0].colonneSource==='LIBELLE' && r[0].colonneNomenclature==='LIBELLE_TYPE'; })());
@@ -75,7 +76,7 @@ const out = await p.evaluate(async ()=>{
   v13EcrireDansLaComparaison(C().id, comparaison.id, 'poids', '3'); await wait(100);
   ok('une comparaison se relit à voix haute, avec son poids', v13PhraseDeLaComparaison(C().comparaisons[0])==='DESIGNATION contre ABREGE, poids 3' && /DESIGNATION contre ABREGE, poids 3/.test(el('step-17').querySelector('.v13-codif-phrase-comparaison').textContent));
   ok('une comparaison à moitié saisie est ignorée, et l’on retombe sur le libellé', v13ComparaisonsRetenues({ colonneLibelle:'LIBELLE', colonneLibelleRef:'LIBELLE_TYPE', comparaisons:[{id:'x',colonneSource:'DESIGNATION',colonneNomenclature:''}] })[0].id==='defaut');
-  ok('le score devient une moyenne pondérée des comparaisons déclarées', /^\(3 \* \(/.test(v13ScoreDeRessemblance(C(),'r','n')) && /\) \/ 3$/.test(v13ScoreDeRessemblance(C(),'r','n')));
+  ok('le score devient une moyenne pondérée des comparaisons déclarées', /^\(3 \* \(/.test(v13ScoreDeRessemblance(C())) && /\) \/ 3$/.test(v13ScoreDeRessemblance(C())));
   window.__sqlAutreAttribut = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [] }));
   C().comparaisons = [];
 
@@ -99,11 +100,16 @@ const out = await p.evaluate(async ()=>{
   ok('l\'écran dit toujours quoi faire ensuite', /Passez les 3 cas à revoir/.test(v13ProchaineAction({total:9,revoir:3,absent:1})) && /Tout est codé/.test(v13ProchaineAction({total:9,revoir:0,absent:0})));
   ok('une codification incomplète est refusée en français, pas en erreur SQL', (()=>{ try { v13SqlDeCodification(Object.assign({}, C(), {colonneLibelle:''})); return false; } catch(e) { return /la colonne du libellé/.test(e.message); } })());
 
+  // ---- la préparation : canoniser et découper une fois par ligne, jamais par couple
+  ok('les deux côtés sont préparés avant d’être comparés : un texte canonisé, puis ses mots', /string_split\(pretes\.__texte_liste_0, ' '\) AS __mots_liste_0/.test(v13ListePreparee(C(),'reconnues r')) && /string_split\(pretes\.__texte_type_0, ' '\) AS __mots_type_0/.test(v13TypesPrepares(C(),'"t_nm"')));
+  ok('le score ne recanonise ni ne redécoupe rien : il lit les colonnes préparées', !/strip_accents|string_split/.test(v13ScoreDeRessemblance(C())) && /__mots_liste_0/.test(v13ScoreDeRessemblance(C())));
+  ok('le meilleur voisin est retenu par regroupement, sans trier tous les couples', /arg_max\(__code_voisin, __score_voisin\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
+
   // ---- la mémoire du navigateur, quand elle ne suffit pas
   ok('une erreur de mémoire est traduite en français, avec quoi faire', /la mémoire du navigateur n’a pas suffi/.test(v13PhraseDeLErreur(new Error('Invalid Error: HTML FileReaders do not support writing'))) && /Chercher dans la bonne branche/.test(v13PhraseDeLErreur(new Error('Out of Memory Error'))));
   ok('une erreur ordinaire est rendue telle quelle, sans bavardage', v13PhraseDeLErreur(new Error('Colonne inconnue'))==='Colonne inconnue');
   ok('la codification s\'ex\u00e9cute sans jamais d\u00e9border sur disque', /v12State\.noSpill\+\+/.test(String(v13CoderLaListe)) && /v12State\.noSpill--/.test(String(v13CoderLaListe)));
-  ok('les d\u00e9coupages en mots ne sont calcul\u00e9s qu\'une fois, quoi qu\'il en co\u00fbte \u00e0 les relire', (v13SqlDesRapprochables(C(), '"t_nm"').match(/AS MATERIALIZED/g)||[]).length===2);
+  ok('les d\u00e9coupages en mots ne sont calcul\u00e9s qu\'une fois, quoi qu\'il en co\u00fbte \u00e0 les relire', (v13SqlDesRapprochables(C()).match(/AS MATERIALIZED/g)||[]).length===2);
 
   // ---- le SQL produit, rendu à node pour être exécuté sur un vrai moteur
   window.__sqlSansSynonymes = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [] }));
@@ -183,6 +189,72 @@ console.log(`   codification de 4 000 lignes contre 800 types : ${secondes.toFix
 ok('SQL réel : 4 000 lignes contre 800 types se codent en moins de 30 secondes', secondes < 30);
 ok('SQL réel : le blocage par les mots rares ne perd pas les lignes — toutes sont rendues', compte('office') + compte('revoir') + compte('absent') === 4000);
 ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('office') >= 3900);
+
+// ---- le cas qui ne passait pas : des mots qui se ressemblent tous ----
+// Une nomenclature où aucun mot n'est vraiment rare, et où les mots se confondent sur leurs premières
+// lettres. C'est la forme des vrais référentiels d'équipements, et c'est celle qui faisait tomber la
+// codification : le rapprochement ramenait plus de mille types par ligne, soit 22 millions de couples.
+// On reproduit ici la contrainte du navigateur : mémoire plafonnée, aucune écriture sur le disque.
+const VOCABULAIRE_QUI_SE_RESSEMBLE = `
+CREATE TABLE "t_nm" AS
+  WITH mots AS (SELECT i, 'MOT' || i AS mot FROM range(300) t(i))
+  SELECT 'POMPES' AS FAMILLE, 'Transfert' AS SYSTEME, 'Centrifuge' AS SOUS_SYSTEME,
+    'Pompe centrifuge ' || a.mot || ' ' || b.mot || ' ' || c.mot AS LIBELLE_TYPE,
+    'PMP-' || n AS CODE_TYPE, 'PC' || n AS ABREGE
+  FROM range(3000) t(n)
+  JOIN mots a ON a.i = (n * 7) % 300 JOIN mots b ON b.i = (n * 13) % 300 JOIN mots c ON c.i = (n * 29) % 300;
+CREATE TABLE "t_eq" AS
+  WITH mots AS (SELECT i, 'MOT' || i AS mot FROM range(300) t(i))
+  SELECT row_number() OVER () AS __rn, 'EQ' || m AS REPERE,
+    'Pompe centrifuge ' || a.mot || ' ' || b.mot || ' ' || c.mot AS LIBELLE,
+    'POMPES' AS FAMILLE, '' AS CODE_FOURNI, 'PC' || (m % 3000) AS DESIGNATION
+  FROM range(20000) t(m)
+  JOIN mots a ON a.i = (m * 7) % 300 JOIN mots b ON b.i = (m * 13) % 300 JOIN mots c ON c.i = (m * 29) % 300;`;
+
+// ---- et le cas où chaque type a un mot bien à lui : le plafond ne doit rien perdre ----
+const VOCABULAIRE_QUI_DISTINGUE = `
+CREATE TABLE "t_nm" AS
+  WITH rares AS (SELECT i, upper(substr(md5('r' || i), 1, 8)) AS mot FROM range(300) t(i)),
+       courants AS (SELECT i, upper(substr(md5('c' || i), 1, 8)) AS mot FROM range(10) t(i))
+  SELECT 'POMPES' AS FAMILLE, 'Transfert' AS SYSTEME, 'Centrifuge' AS SOUS_SYSTEME,
+    'Pompe centrifuge ' || c.mot || ' ' || r.mot AS LIBELLE_TYPE,
+    'PMP-' || n AS CODE_TYPE, 'PC' || n AS ABREGE
+  FROM range(3000) t(n)
+  JOIN rares r ON r.i = n % 300 JOIN courants c ON c.i = n // 300;
+CREATE TABLE "t_eq" AS
+  WITH rares AS (SELECT i, upper(substr(md5('r' || i), 1, 8)) AS mot FROM range(300) t(i)),
+       courants AS (SELECT i, upper(substr(md5('c' || i), 1, 8)) AS mot FROM range(10) t(i))
+  SELECT row_number() OVER () AS __rn, 'EQ' || m AS REPERE,
+    'Pompe centrifuge ' || c.mot || ' ' || r.mot || ' installee' AS LIBELLE,
+    'POMPES' AS FAMILLE, '' AS CODE_FOURNI, 'PC' || (m % 3000) AS DESIGNATION
+  FROM range(20000) t(m)
+  JOIN rares r ON r.i = (m % 3000) % 300 JOIN courants c ON c.i = (m % 3000) // 300;`;
+
+/** Code 20 000 lignes contre 3 000 types dans un moteur bridé comme l'est le navigateur. */
+async function coderSousContrainte(fixture) {
+  const serree = await (await DuckDBInstance.create(':memory:')).connect();
+  const demande = async sql => (await (await serree.run(sql)).getRowObjects());
+  for (const ordre of fixture.split(';').map(s => s.trim()).filter(Boolean)) await demande(ordre);
+  await demande("SET memory_limit='512MB'");
+  await demande("SET temp_directory=''");
+  const depart = Date.now();
+  try { await demande(`CREATE TABLE "v13_codee" AS\n${sqlSansSynonymes}`); }
+  catch (e) { return { tenu: false, secondes: (Date.now() - depart) / 1000, detail: String(e.message || e) }; }
+  return { tenu: true, secondes: (Date.now() - depart) / 1000, demande };
+}
+
+const serre = await coderSousContrainte(VOCABULAIRE_QUI_SE_RESSEMBLE);
+console.log(`   20 000 lignes contre 3 000 types, vocabulaire indistinct, 512 Mo : ${serre.tenu ? serre.secondes.toFixed(1) + ' s' : '\u00c9CHEC \u2014 ' + serre.detail}`);
+ok('SQL r\u00e9el : une nomenclature dont aucun mot n\u2019est rare tient quand m\u00eame dans 512 Mo', serre.tenu);
+if (serre.tenu)
+  ok('SQL r\u00e9el : sous cette contrainte, les 20 000 lignes sont toutes rendues',
+    Number((await serre.demande('SELECT COUNT(*)::BIGINT AS lignes FROM "v13_codee"'))[0].lignes) === 20000);
+
+const distinct = await coderSousContrainte(VOCABULAIRE_QUI_DISTINGUE);
+console.log(`   20 000 lignes contre 3 000 types, vocabulaire distinctif, 512 Mo : ${distinct.tenu ? distinct.secondes.toFixed(1) + ' s' : '\u00c9CHEC \u2014 ' + distinct.detail}`);
+ok('SQL r\u00e9el : quand chaque type a un mot bien \u00e0 lui, le plafond des candidats ne perd rien', distinct.tenu &&
+  Number((await distinct.demande(`SELECT COUNT(*)::BIGINT AS lignes FROM "v13_codee"
+    WHERE __code = 'PMP-' || (CAST(substr(REPERE, 3) AS BIGINT) % 3000)`))[0].lignes) === 20000);
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));

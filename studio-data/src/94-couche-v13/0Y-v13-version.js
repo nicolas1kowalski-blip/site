@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.7.1';
+        const V13_VERSION = '13.7.2';
         const V13_CHANGELOG = [
+            {
+                v: '13.7.2',
+                d: '2026-09-17',
+                t: 'Codification : la vraie cause du manque de mémoire',
+                items: [
+                    'La 13.7.1 relançait la codification en mémoire pure ; cela ne suffisait pas, parce que le travail demandé était tout simplement trop grand. Mesuré sur une nomenclature ordinaire : le rapprochement retenait plus de mille types pour CHAQUE ligne, soit 22 millions de couples à comparer.',
+                    'Deux causes. Les mots étaient rapprochés sur leurs quatre premières lettres, ce qui confond « VANNE » et « VANNAGE » ou « MOTEUR » et « MOTOPOMPE » : on compare maintenant sur six lettres. Et rien ne bornait le nombre de candidats : on en examine désormais 200 au plus par ligne, les mots les plus rares servis les premiers, donc les meilleurs candidats d’abord.',
+                    'Les libellés sont aussi mis en majuscules, privés d’accents, ramenés aux mots retenus et découpés en mots UNE fois par ligne, et non plus à chaque couple examiné — c’était des millions de fois le même calcul.',
+                    'Mesuré : 20 000 lignes contre 3 000 types, dans 512 Mo et sans aucune écriture sur le disque, là où la version précédente s’arrêtait faute de mémoire. Et sur une nomenclature où chaque type a un mot bien à lui, les 20 000 lignes retrouvent toutes leur code exact : le plafond ne perd rien.'
+                ]
+            },
             {
                 v: '13.7.1',
                 d: '2026-09-17',
