@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.19.0';
+        const V13_VERSION = '13.20.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.20.0',
+                d: '2026-09-17',
+                t: 'Codification : les codes du résultat deviennent lisibles',
+                items: [
+                    'La colonne <b>Chemin dans l’arbre</b> restait vide sur toutes les lignes sans code retenu — c’est-à-dire précisément celles que l’on doit examiner. Elle donne maintenant le chemin complet de la <b>proposition faite dans la famille</b> : « J01 › Thermique chauffage › … › Disconnecteur BA zpr-ctr. ».',
+                    'Le code trouvé <b>hors famille</b> s’affichait seul : « 37010909.D » ne dit rien tant qu’on n’a pas ouvert la nomenclature en face. Deux colonnes le rendent lisible à leur tour — <b>Libellé de ce code</b> et <b>Chemin dans l’arbre de ce code</b>, ce dernier partant de la famille où ce code-là a réellement été trouvé.',
+                    'Le fichier résultat se lit donc de bout en bout sans rouvrir l’arborescence : pour chaque ligne, ce que l’on propose dans sa famille, d’où cela vient, et ce que l’on a vu ailleurs.'
+                ]
+            },
             {
                 v: '13.19.0',
                 d: '2026-09-17',

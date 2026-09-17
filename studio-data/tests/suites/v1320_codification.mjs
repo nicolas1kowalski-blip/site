@@ -436,6 +436,13 @@ ok('SQL réel : un code rangé sous deux familles est proposé DANS celle de la 
   ['37010909.B','37010909.D'].includes(String(ligneDeux.__code_propose)) && Number(ligneDeux.__score_propose) > 0);
 ok('SQL réel : et le libellé rendu est bien celui d\'un disconnecteur',
   /Disconnecteur/.test(String(ligneDeux.__libelle_propose)));
+ok('SQL réel : le chemin dans l\'arbre mène à la proposition, il n\'est plus vide',
+  /Disconnecteur/.test(String(ligneDeux.__chemin)) && String(ligneDeux.__chemin).startsWith('J01'));
+ok('SQL réel : le code trouvé hors famille est rendu lisible, lui aussi',
+  /Disconnecteur/.test(String(ligneDeux.__libelle_autre_branche))
+  && /Disconnecteur/.test(String(ligneDeux.__chemin_autre_branche)));
+ok('SQL réel : et son chemin part bien de la famille où ce code-là a été trouvé',
+  String(ligneDeux.__chemin_autre_branche).startsWith(String(ligneDeux.__branche_trouvee)));
 
 // Et sur le volume, avec une famille déclarée : la nouvelle étape ne doit rien coûter de plus.
 const volumeFamille = await (await DuckDBInstance.create(':memory:')).connect();

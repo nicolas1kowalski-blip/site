@@ -560,6 +560,7 @@
                 FROM typesPrets GROUP BY 1, 2) arbreFamille`;
             // Un chemin par défaut, et la liste de toutes les familles où ce code existe.
             const arbre = `(SELECT ${cleDuCode} AS __cle, any_value(__chemin_type) AS __chemin_type,
+                any_value(__libelle_type) AS __libelle_type,
                 array_to_string(list_sort(list_distinct(list(__branche_type))), ', ') AS __familles
                 FROM typesPrets GROUP BY 1) arbre`;
             /*
@@ -573,15 +574,26 @@
              */
             const proposeeDansLaFamille = brancheConnue
                 ? `(SELECT ${cleDuCode} AS __cle, __branche_type AS __branche,
-                any_value(__libelle_type) AS __libelle_type
+                any_value(__libelle_type) AS __libelle_type, any_value(__chemin_type) AS __chemin_type
                 FROM typesPrets GROUP BY 1, 2) proposee`
                 : `(SELECT ${cleDuCode} AS __cle, NULL AS __branche,
-                any_value(__libelle_type) AS __libelle_type
+                any_value(__libelle_type) AS __libelle_type, any_value(__chemin_type) AS __chemin_type
                 FROM typesPrets GROUP BY 1) proposee`;
+            /*
+             * Et le même service pour le code trouvé HORS de la famille : son libellé et son chemin.
+             * Un code seul ne se lit pas — « 37010909.D » ne dit rien tant qu'on n'a pas ouvert la
+             * nomenclature en face. On le rend donc lisible là où il s'affiche, comme celui de la famille.
+             */
+            const trouveeHorsFamille = `(SELECT ${cleDuCode} AS __cle, __branche_type AS __branche,
+                any_value(__libelle_type) AS __libelle_type, any_value(__chemin_type) AS __chemin_type
+                FROM typesPrets GROUP BY 1, 2) horsFamille`;
             const desaccord = brancheConnue
                 ? `(${brancheDeLaLigne} IS NOT NULL AND ${brancheDeLaLigne} <> ''
                 AND arbre.__cle IS NOT NULL AND arbreFamille.__cle IS NULL)`
                 : 'FALSE';
+            // Le code imprimé en face de la ligne quand il vient d'ailleurs : soit le code retenu dont la
+            // famille contredit l'arbre, soit le meilleur voisin trouvé hors de la famille de la ligne.
+            const codeAutre = `CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN ${code} ELSE ${hors} END`;
             const seuil = Number(codification.seuilRevoir);
             const statut = `CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN 'branche'
                 WHEN ${code} IS NOT NULL THEN 'office'
@@ -594,11 +606,15 @@
             COALESCE(reconnues.__origine_regle, CASE WHEN ${code} IS NOT NULL THEN 'ressemblance' ELSE 'aucune' END) AS __origine,
             ROUND(COALESCE(candidats.__score_dans, candidats.__score_hors, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
             ${statut} AS __statut,
-            COALESCE(arbreFamille.__chemin_type, arbre.__chemin_type) AS __chemin,
+            COALESCE(arbreFamille.__chemin_type, arbre.__chemin_type, proposee.__chemin_type) AS __chemin,
             CASE WHEN ${code} IS NULL THEN ${meilleur} END AS __code_propose,
             CASE WHEN ${code} IS NULL THEN proposee.__libelle_type END AS __libelle_propose,
             CASE WHEN ${code} IS NULL THEN ROUND(candidats.__score_dans, 3) END AS __score_propose,
-            CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN ${code} ELSE ${hors} END AS __code_autre_branche,
+            ${codeAutre} AS __code_autre_branche,
+            CASE WHEN ${codeAutre} IS NOT NULL
+                THEN COALESCE(horsFamille.__libelle_type, arbre.__libelle_type) END AS __libelle_autre_branche,
+            CASE WHEN ${codeAutre} IS NOT NULL
+                THEN COALESCE(horsFamille.__chemin_type, arbre.__chemin_type) END AS __chemin_autre_branche,
             CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN arbre.__familles
                 WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
         FROM reconnues
@@ -607,7 +623,9 @@
         LEFT JOIN ${arbreDeLaFamille} ON arbreFamille.__cle = ${v13TexteCompare(code)}
             AND arbreFamille.__branche = ${brancheDeLaLigne}
         LEFT JOIN ${proposeeDansLaFamille} ON proposee.__cle = ${v13TexteCompare(meilleur)}
-            AND proposee.__branche IS NOT DISTINCT FROM ${brancheConnue ? brancheDeLaLigne : 'NULL'}`;
+            AND proposee.__branche IS NOT DISTINCT FROM ${brancheConnue ? brancheDeLaLigne : 'NULL'}
+        LEFT JOIN ${trouveeHorsFamille} ON horsFamille.__cle = ${v13TexteCompare(hors)}
+            AND horsFamille.__branche IS NOT DISTINCT FROM candidats.__branche_hors`;
         }
 
         /**

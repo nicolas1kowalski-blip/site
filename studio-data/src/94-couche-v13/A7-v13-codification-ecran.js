@@ -618,6 +618,8 @@
                 __libelle_propose: 'Libellé de cette proposition',
                 __score_propose: 'Confiance de cette proposition',
                 __code_autre_branche: 'Code en cause, ou trouvé hors famille',
+                __libelle_autre_branche: 'Libellé de ce code',
+                __chemin_autre_branche: "Chemin dans l'arbre de ce code",
                 __branche_trouvee: 'Familles où ce code existe'
             };
             const corps = resultat.lignes
