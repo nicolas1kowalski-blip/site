@@ -263,6 +263,7 @@
                     code: String(ligne.code || ''),
                     libelleRef: String(ligne.libelleRef || ''),
                     chemin: String(ligne.chemin || ''),
+                    memeBranche: ligne.memeBranche === undefined ? true : !!ligne.memeBranche,
                     score: Number(ligne.score) || 0
                 });
             });
@@ -550,7 +551,9 @@
                 __origine: 'Par quoi',
                 __score: 'Confiance',
                 __statut: 'Statut',
-                __chemin: "Chemin dans l'arbre"
+                __chemin: "Chemin dans l'arbre",
+                __code_autre_branche: 'Trouvé ailleurs dans l’arbre',
+                __branche_trouvee: 'Branche de ce type'
             };
             const corps = resultat.lignes
                 .map(
@@ -563,9 +566,10 @@
                             .join('')}</tr>`
                 )
                 .join('');
-            return `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2" id="v13-codif-chiffres">
+            return `<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2" id="v13-codif-chiffres">
                 ${chiffre("Codées d'office", bilan.office, 'text-emerald-600')}
                 ${chiffre('À revoir', bilan.revoir, 'text-amber-600')}
+                ${chiffre('Autre branche', bilan.branche || 0, 'text-violet-600')}
                 ${chiffre('Non trouvées', bilan.absent, '')}
                 ${chiffre('Couverture', Math.round(100 * bilan.couverture) + ' %', '')}
             </div>
@@ -587,7 +591,10 @@
         function v13CelluleLisible(codification, colonne, valeur) {
             if (valeur === null || valeur === undefined) return '';
             if (colonne === '__statut')
-                return { office: "Codé d'office", revoir: 'À revoir', absent: 'Non trouvé' }[valeur] || String(valeur);
+                return (
+                    { office: "Codé d'office", revoir: 'À revoir', branche: 'Autre branche', absent: 'Non trouvé' }[valeur] ||
+                    String(valeur)
+                );
             if (colonne === '__origine') return v13PhraseDeLOrigine(valeur, codification.regles);
             if (colonne === '__score') return Math.round(100 * (Number(valeur) || 0)) + ' %';
             return String(valeur);
@@ -597,6 +604,7 @@
             if (colonne !== '__statut') return '';
             if (valeur === 'office') return 'text-emerald-600 font-bold';
             if (valeur === 'revoir') return 'text-amber-600 font-bold';
+            if (valeur === 'branche') return 'text-violet-600 font-bold';
             return 'text-slate-500';
         }
 
@@ -608,9 +616,9 @@
                     const propositions = unCas.candidats
                         .map(
                             candidat =>
-                                `<button onclick="v13TrancherLeCas('${codification.id}', ${unCas.rang}, ${JSON.stringify(unCas.libelle).replace(/"/g, '&quot;')}, ${JSON.stringify(candidat.code).replace(/"/g, '&quot;')})" class="v13-codif-candidat">
+                                `<button onclick="v13TrancherLeCas('${codification.id}', ${unCas.rang}, ${JSON.stringify(unCas.libelle).replace(/"/g, '&quot;')}, ${JSON.stringify(candidat.code).replace(/"/g, '&quot;')})" class="v13-codif-candidat${candidat.memeBranche ? '' : ' hors-branche'}">
                                     <b>${escapeHTML(candidat.code)}</b>
-                                    <span class="chemin">${escapeHTML(candidat.chemin)}</span>
+                                    <span class="chemin">${escapeHTML(candidat.chemin)}${candidat.memeBranche ? '' : ' — autre branche'}</span>
                                     <span class="score">${Math.round(100 * candidat.score)} %</span>
                                 </button>`
                         )

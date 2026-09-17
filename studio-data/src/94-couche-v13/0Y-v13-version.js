@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.9.0';
+        const V13_VERSION = '13.10.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.10.0',
+                d: '2026-09-17',
+                t: 'Codification : ne plus trancher à la place de l’humain quand il n’y a pas de quoi trancher',
+                items: [
+                    '<b>La bonne branche se dit, au lieu de se taire.</b> Une ligne dont la famille ne mène à aucun type de l’arbre était rangée « non trouvée », sans un mot — alors que son libellé désignait un type parfaitement identifiable, rangé sous une AUTRE branche. Nouveau statut « Autre branche », avec le code trouvé et la branche où il se trouve : c’est une contradiction entre votre liste et la nomenclature, et elle doit se voir.',
+                    '<b>Les ex æquo ne sont plus tirés au sort.</b> « Moteur asynchrone » et « Moteur synchrone » se ressemblent assez pour obtenir le MÊME score : l’un des deux était retenu d’office, au hasard. Désormais, quand deux types arrivent à égalité en tête, la ligne part à la revue avec ses deux propositions. C’est à vous de trancher, et vous avez de nouveau de quoi le faire.',
+                    'La revue montre aussi ce qui a été trouvé hors branche, marqué comme tel et rangé après les propositions de la bonne branche : vous voyez d’un coup d’œil si c’est la famille de la ligne qui est fausse, ou la colonne de branche que vous avez choisie.',
+                    'Le bilan compte ces lignes à part, et l’écran dit quoi faire d’elles en priorité.'
+                ]
+            },
             {
                 v: '13.9.0',
                 d: '2026-09-17',

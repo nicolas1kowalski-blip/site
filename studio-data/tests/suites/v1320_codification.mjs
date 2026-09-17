@@ -103,7 +103,12 @@ const out = await p.evaluate(async ()=>{
   // ---- la préparation : canoniser et découper une fois par ligne, jamais par couple
   ok('les deux côtés sont préparés avant d’être comparés : un texte canonisé, puis ses mots', /string_split\(pretes\.__texte_liste_0, ' '\) AS __mots_liste_0/.test(v13ListePreparee(C(),'reconnues r')) && /string_split\(pretes\.__texte_type_0, ' '\) AS __mots_type_0/.test(v13TypesPrepares(C(),'"t_nm"')));
   ok('le score ne recanonise ni ne redécoupe rien : il lit les colonnes préparées', !/strip_accents|string_split/.test(v13ScoreDeRessemblance(C())) && /__mots_liste_0/.test(v13ScoreDeRessemblance(C())));
-  ok('le meilleur voisin est retenu par regroupement, sans trier tous les couples', /arg_max\(__code_voisin, __score_voisin\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
+  ok('les deux meilleurs voisins sont retenus par regroupement, sans trier tous les couples', /max_by\(__code_voisin, CASE WHEN __meme_branche.*, 2\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
+  ok('le meilleur voisin hors branche est gard\u00e9 lui aussi, pour pouvoir le dire', /__score_hors/.test(v13SqlDeCodification(C())) && /__code_autre_branche/.test(v13SqlDeCodification(C())));
+  ok('deux types au m\u00eame score ne sont pas tranch\u00e9s d\'office', /__scores_voisins\[2\] = candidats\.__scores_voisins\[1\]/.test(v13SqlDeCodification(C())));
+  ok('le bilan compte \u00e0 part les lignes trouv\u00e9es dans une autre branche', (()=>{ const b=v13BilanDeCodification([{statut:'office',lignes:5},{statut:'branche',lignes:2},{statut:'absent',lignes:1}]);
+    return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
+  ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
   // ---- les choix faits, relus sans rien déplier, et gardés d’une session à l’autre
   ok('le r\u00e9capitulatif dit en fran\u00e7ais ce que l\'on code et contre quoi', (()=>{ const r=v13RecapDeLaCodification(C());
@@ -139,6 +144,7 @@ const out = await p.evaluate(async ()=>{
   });
   window.__sqlAvecSynonymes = v13SqlDeCodification(avecTout);
   window.__sqlRevue = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
+  window.__sqlRevueAilleurs = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
   window.__sqlAvecDecision = v13SqlDeCodification(Object.assign({}, avecTout, { decisions: { 4: 'VAN-P' } }));
   } catch(e) { R.push(['ERREUR '+e.message+' @ '+String(e.stack).split('\n')[1], false]); }
   return R;
@@ -148,6 +154,7 @@ const sqlAutreAttribut = await p.evaluate(()=>window.__sqlAutreAttribut);
 const sqlAvecRegle = await p.evaluate(()=>window.__sqlAvecRegle);
 const sqlAvecSynonymes = await p.evaluate(()=>window.__sqlAvecSynonymes);
 const sqlRevue = await p.evaluate(()=>window.__sqlRevue);
+const v13SqlRevueAilleurs = await p.evaluate(()=>window.__sqlRevueAilleurs);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 await b.close();
 
@@ -204,6 +211,40 @@ console.log(`   codification de 4 000 lignes contre 800 types : ${secondes.toFix
 ok('SQL réel : 4 000 lignes contre 800 types se codent en moins de 30 secondes', secondes < 30);
 ok('SQL réel : le blocage par les mots rares ne perd pas les lignes — toutes sont rendues', compte('office') + compte('revoir') + compte('absent') === 4000);
 ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('office') >= 3900);
+
+// ---- la branche contredite, et les ex æquo : deux cas où la machine ne doit PAS trancher ----
+// Une ligne dont la famille ne correspond à aucune branche du type trouvé n'est pas « non trouvée » :
+// elle est trouvée AILLEURS, et c'est une contradiction entre la liste et l'arbre. Deux types à égalité
+// parfaite ne se tranchent pas non plus — « moteur asynchrone » et « moteur synchrone » se ressemblent
+// assez pour obtenir le même score, et choisir au hasard serait pire que demander.
+const ailleurs = await (await DuckDBInstance.create(':memory:')).connect();
+const interroge = async sql => (await (await ailleurs.run(sql)).getRowObjects());
+await interroge(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
+  ('POMPES','Transfert','Centrifuge','Pompe centrifuge','PMP-C','PC'),
+  ('VANNES','Sectionnement','Quart de tour','Vanne papillon','VAN-P','VP'),
+  ('MOTEURS','Entrainement','Asynchrone','Moteur asynchrone','MOT-A','MA'),
+  ('MOTEURS','Entrainement','Synchrone','Moteur synchrone','MOT-S','MS')
+) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
+await interroge(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES
+  ('EQA','Pompe centrifuge','VANNES','',''),
+  ('EQB','Pompe centrifuge','POMPES','',''),
+  ('EQC','Moteur asynchrone','MOTEURS','','')
+) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+const tranches = Object.fromEntries((await interroge(`SELECT REPERE, __code, __statut, __code_autre_branche, __branche_trouvee FROM (\n${sqlSansSynonymes}\n) f`)).map(l => [String(l.REPERE), l]));
+ok('SQL r\u00e9el : une ligne dont la famille contredit l\u2019arbre n\u2019est plus \u00ab non trouv\u00e9e \u00bb, elle est signal\u00e9e',
+  tranches.EQA.__statut === 'branche' && tranches.EQA.__code === null);
+ok('SQL r\u00e9el : et l\u2019on dit quel type a \u00e9t\u00e9 trouv\u00e9, et sous quelle branche',
+  String(tranches.EQA.__code_autre_branche) === 'PMP-C' && String(tranches.EQA.__branche_trouvee) === 'POMPES');
+ok('SQL r\u00e9el : la m\u00eame ligne dans la bonne famille reste cod\u00e9e d\u2019office',
+  tranches.EQB.__statut === 'office' && String(tranches.EQB.__code) === 'PMP-C');
+ok('SQL r\u00e9el : deux types au m\u00eame score partent \u00e0 la revue au lieu d\u2019\u00eatre tir\u00e9s au sort',
+  tranches.EQC.__statut === 'revoir' && tranches.EQC.__code === null);
+await interroge(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlSansSynonymes}`);
+const propositions = await interroge(v13SqlRevueAilleurs);
+ok('SQL r\u00e9el : la revue propose aussi ce qui a \u00e9t\u00e9 trouv\u00e9 hors branche, en le disant',
+  propositions.some(l => Number(l.rang) === 1 && String(l.code) === 'PMP-C' && l.memeBranche === false));
+ok('SQL r\u00e9el : les ex \u00e6quo arrivent \u00e0 la revue avec leurs deux propositions',
+  propositions.filter(l => Number(l.rang) === 3).length >= 2);
 
 // ---- le même code à plusieurs endroits de l'arbre : une ligne reçue, une ligne rendue ----
 // Un même type d'équipement figure presque toujours sous plusieurs systèmes de l'arborescence. En

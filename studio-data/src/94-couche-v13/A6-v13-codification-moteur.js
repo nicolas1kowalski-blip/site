@@ -440,28 +440,31 @@
         }
         /** Le code final, son origine, son score, son statut, et le chemin déplié dans l'arbre. */
         function v13SelectFinal(codification) {
+            // Le meilleur voisin de la bonne branche, s’il y en a un.
+            const meilleur = 'CASE WHEN candidats.__score_dans IS NOT NULL THEN candidats.__codes_voisins[1] END';
+            // Deux types différents au même score : la machine ne peut pas choisir. Elle ne choisit donc pas.
+            const exaequo = `(candidats.__score_dans IS NOT NULL AND len(candidats.__scores_voisins) > 1
+                AND candidats.__scores_voisins[2] = candidats.__scores_voisins[1]
+                AND candidats.__codes_voisins[2] IS DISTINCT FROM candidats.__codes_voisins[1])`;
+            // Le meilleur voisin trouvé AILLEURS dans l’arbre, quand la branche l’a écarté.
+            const hors = 'CASE WHEN candidats.__score_hors IS NOT NULL THEN candidats.__code_hors END';
             const code = `COALESCE(reconnues.__code_regle,
-                CASE WHEN candidats.__score_voisin >= ${Number(codification.seuilAuto)} THEN candidats.__code_voisin END)`;
+                CASE WHEN candidats.__score_dans >= ${Number(codification.seuilAuto)} AND NOT ${exaequo} THEN ${meilleur} END)`;
             const statut = `CASE WHEN ${code} IS NOT NULL THEN 'office'
-                WHEN candidats.__code_voisin IS NOT NULL THEN 'revoir' ELSE 'absent' END`;
-            /*
-             * Le chemin de l’arbre est lu sur UNE seule ligne par code.
-             *
-             * Un même code de type revient presque toujours à plusieurs endroits de l’arborescence : le même
-             * type de pompe sous le transfert, sous l’alimentation, sous le secours. En joignant la
-             * nomenclature entière sur le code, chaque ligne codée ressortait autant de fois qu’il y avait
-             * de lignes portant ce code — 450 000 lignes en entrée en rendaient 1 437 576. On dédoublonne
-             * donc par code avant de joindre : le décompte de sortie égale celui d’entrée, toujours.
-             */
+                WHEN ${meilleur} IS NOT NULL THEN 'revoir'
+                WHEN ${hors} IS NOT NULL AND candidats.__score_hors >= ${Number(codification.seuilRevoir)} THEN 'branche'
+                ELSE 'absent' END`;
             const cleDuCode = v13TexteCompare('typesPrets.__code_type');
-            const arbre = `(SELECT __code_type, __chemin_type FROM typesPrets
+            const arbre = `(SELECT __code_type, __chemin_type, __branche_type FROM typesPrets
                 QUALIFY row_number() OVER (PARTITION BY ${cleDuCode} ORDER BY __ligne) = 1) arbre`;
             return `SELECT reconnues.* EXCLUDE (__libelle, __code_regle, __origine_regle),
             ${code} AS __code,
             COALESCE(reconnues.__origine_regle, CASE WHEN ${code} IS NOT NULL THEN 'ressemblance' ELSE 'aucune' END) AS __origine,
-            ROUND(COALESCE(candidats.__score_voisin, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
+            ROUND(COALESCE(candidats.__score_dans, candidats.__score_hors, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
             ${statut} AS __statut,
-            arbre.__chemin_type AS __chemin
+            arbre.__chemin_type AS __chemin,
+            ${hors} AS __code_autre_branche,
+            CASE WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
         FROM reconnues
         LEFT JOIN candidats ON candidats.__rn = reconnues.__rn
         LEFT JOIN ${arbre} ON ${v13TexteCompare('arbre.__code_type')} = ${v13TexteCompare(code)}`;
@@ -485,19 +488,38 @@
         ${v13CodeDesRegles(codification, correspondances)} AS __code_regle,
         ${v13OrigineDesRegles(codification, correspondances)} AS __origine_regle
             FROM ${tableSource} s${jointureCorrespondances}`;
-            // Le score n’est calculé qu’UNE fois par couple retenu.
+            /*
+             * Le score n’est calculé qu’UNE fois par couple retenu, et l’on garde DEUX choses par ligne :
+             * le meilleur voisin dans la bonne branche, et le meilleur voisin hors branche.
+             *
+             * Le second sert à dire pourquoi une ligne n’a rien trouvé. Sans lui, une ligne dont la famille
+             * ne correspond à aucune famille de l’arbre ressortait « non trouvée », sans un mot — alors que
+             * le libellé désignait un type parfaitement identifiable, rangé sous une autre branche. C’est
+             * une contradiction entre la liste et la nomenclature, et elle doit se voir.
+             */
             const notes = `SELECT liste.__rn AS __rn, types.__code_type AS __code_voisin,
+                types.__branche_type AS __branche_type,
+                (${v13ConditionDeBranche(codification)}) AS __meme_branche,
                 (${v13ScoreDeRessemblance(codification)}) AS __score_voisin
             FROM rapprochables p
             JOIN listePrete liste ON liste.__rn = p.__rn
-            JOIN typesPrets types ON types.__ligne = p.__ligne
-            WHERE ${v13ConditionDeBranche(codification)}`;
-            // « arg_max » garde le meilleur voisin de chaque ligne en un seul regroupement. Une fenêtre aurait
-            // d’abord retenu TOUS les couples pour les trier : c’est là que la mémoire du navigateur s’épuisait.
-            const candidats = `SELECT __rn, arg_max(__code_voisin, __score_voisin) AS __code_voisin,
-                max(__score_voisin) AS __score_voisin
+            JOIN typesPrets types ON types.__ligne = p.__ligne`;
+            const dansLaBranche = 'CASE WHEN __meme_branche THEN __score_voisin ELSE -1 END';
+            const horsBranche = 'CASE WHEN __meme_branche THEN -1 ELSE __score_voisin END';
+            const scoreDans = 'max(CASE WHEN __meme_branche THEN __score_voisin END)';
+            const scoreHors = 'max(CASE WHEN NOT __meme_branche THEN __score_voisin END)';
+            // On retient les DEUX meilleurs : si le second est à égalité avec le premier, la machine ne sait
+            // pas choisir, et elle ne doit pas faire semblant. Un regroupement suffit à les obtenir.
+            const candidats = `SELECT __rn,
+                max_by(__code_voisin, ${dansLaBranche}, 2) AS __codes_voisins,
+                max_by(__score_voisin, ${dansLaBranche}, 2) AS __scores_voisins,
+                ${scoreDans} AS __score_dans,
+                max_by(__code_voisin, ${horsBranche}) AS __code_hors,
+                max_by(__branche_type, ${horsBranche}) AS __branche_hors,
+                ${scoreHors} AS __score_hors
             FROM (\n${notes}\n        ) notes
-            GROUP BY __rn HAVING max(__score_voisin) >= ${Number(codification.seuilRevoir)}`;
+            GROUP BY __rn
+            HAVING GREATEST(COALESCE(${scoreDans}, 0), COALESCE(${scoreHors}, 0)) >= ${Number(codification.seuilRevoir)}`;
             const decisions = v13SqlDesDecisions(codification);
             const codee = `WITH reconnues AS (\n${reconnues}\n), listePrete AS MATERIALIZED (\n${v13ListePreparee(codification, 'reconnues r WHERE r.__code_regle IS NULL')}\n), typesPrets AS MATERIALIZED (\n${v13TypesPrepares(codification, tableNomenclature)}\n), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n), candidats AS (\n${candidats}\n)\n${v13SelectFinal(codification)}`;
             return decisions ? `SELECT codee.* REPLACE (${decisions}) FROM (\n${codee}\n) codee` : codee;
@@ -525,28 +547,34 @@
         function v13SqlDesCasARevoir(codification, combien, tableCodee) {
             v13VerifierLaCodification(codification);
             const tableNomenclature = sqlIdent(duckTableName(tableByName(codification.nomenclature).id));
-            // La table codée est déjà calculée : on ne recode pas la liste pour la relire. Seules les
-            // quelques lignes à revoir sont préparées, puis rapprochées comme à la codification.
+            /*
+             * La table codée est déjà calculée : on ne recode pas la liste pour la relire. Seules les
+             * quelques lignes à trancher sont préparées, puis rapprochées comme à la codification.
+             *
+             * Les propositions ne sont PAS filtrées par la branche : celles de la bonne branche passent
+             * devant, mais on montre aussi ce que l’on a trouvé ailleurs. C’est ce qui permet de voir que la
+             * famille portée par la ligne contredit celle de l’arbre, et de trancher en connaissance de cause.
+             */
             return `WITH aCoder AS (
             SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte
             FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
-            WHERE __statut = 'revoir' ORDER BY __rn LIMIT ${Number(combien) || 50}
+            WHERE __statut IN ('revoir', 'branche') ORDER BY __rn LIMIT ${Number(combien) || 50}
         ), listePrete AS MATERIALIZED (\n${v13ListePreparee(codification, 'aCoder r')}\n
         ), typesPrets AS MATERIALIZED (\n${v13TypesPrepares(codification, tableNomenclature)}\n
         ), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n
         ), notes AS (
             SELECT liste.__rn AS rang, aCoder.__texte AS libelle, CAST(types.__code_type AS VARCHAR) AS code,
                 types.__libelle_type AS libelleRef, types.__chemin_type AS chemin,
+                (${v13ConditionDeBranche(codification)}) AS memeBranche,
                 ROUND((${v13ScoreDeRessemblance(codification)}), 3) AS score
             FROM rapprochables p
             JOIN listePrete liste ON liste.__rn = p.__rn
             JOIN aCoder ON aCoder.__rn = liste.__rn
             JOIN typesPrets types ON types.__ligne = p.__ligne
-            WHERE ${v13ConditionDeBranche(codification)}
         )
         SELECT * FROM notes WHERE score > 0
-        QUALIFY row_number() OVER (PARTITION BY rang ORDER BY score DESC) <= ${V13_CANDIDATS_MONTRES}
-        ORDER BY rang, score DESC`;
+        QUALIFY row_number() OVER (PARTITION BY rang ORDER BY memeBranche DESC, score DESC) <= ${V13_CANDIDATS_MONTRES}
+        ORDER BY rang, memeBranche DESC, score DESC`;
         }
 
         /**
@@ -640,22 +668,25 @@
             const compte = statut => (comptes.find(candidat => candidat.statut === statut) || {}).lignes || 0;
             const office = compte('office');
             const revoir = compte('revoir');
+            const branche = compte('branche');
             const absent = compte('absent');
-            const total = office + revoir + absent;
+            const total = office + revoir + branche + absent;
             const couverture = total ? Math.round((1000 * office) / total) / 1000 : 0;
             const enFrancais = nombre => Number(nombre).toLocaleString('fr-FR');
-            if (!total) return { total, office, revoir, absent, couverture, phrase: 'Aucune ligne à coder.' };
-            const reste =
-                revoir || absent
-                    ? ` — ${enFrancais(revoir)} à revoir, ${enFrancais(absent)} sans proposition.`
-                    : ' — rien à revoir.';
+            if (!total) return { total, office, revoir, branche, absent, couverture, phrase: 'Aucune ligne \u00e0 coder.' };
+            const restes = [];
+            if (revoir) restes.push(`${enFrancais(revoir)} \u00e0 revoir`);
+            if (branche) restes.push(`${enFrancais(branche)} trouv\u00e9e(s) dans une autre branche`);
+            if (absent) restes.push(`${enFrancais(absent)} sans proposition`);
+            const reste = restes.length ? ` \u2014 ${restes.join(', ')}.` : ' \u2014 rien \u00e0 revoir.';
             return {
                 total,
                 office,
                 revoir,
+                branche,
                 absent,
                 couverture,
-                phrase: `${enFrancais(office)} ligne(s) codées d’office sur ${enFrancais(total)} (${Math.round(100 * couverture)} %)${reste}`
+                phrase: `${enFrancais(office)} ligne(s) cod\u00e9es d\u2019office sur ${enFrancais(total)} (${Math.round(100 * couverture)} %)${reste}`
             };
         }
 
@@ -722,6 +753,8 @@
         /** La prochaine chose à faire, d'après le bilan : un écran qui dit « 47 à revoir » sans dire quoi faire ne sert à rien. */
         function v13ProchaineAction(bilan) {
             if (!bilan || !bilan.total) return 'Choisissez la liste à coder et la nomenclature, puis lancez la codification.';
+            if (bilan.branche)
+                return `${bilan.branche} ligne(s) désignent un type rangé sous une AUTRE branche que leur famille : vérifiez la famille de ces lignes, ou la colonne de branche que vous avez choisie.`;
             if (bilan.revoir)
                 return `Passez les ${bilan.revoir} cas à revoir : chaque décision servira aux prochaines livraisons.`;
             if (bilan.absent)
