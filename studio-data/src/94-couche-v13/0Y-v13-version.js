@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.12.0';
+        const V13_VERSION = '13.12.1';
         const V13_CHANGELOG = [
+            {
+                v: '13.12.1',
+                d: '2026-09-17',
+                t: 'Codification : un code appartient souvent à plusieurs familles',
+                items: [
+                    'Le contrôle de branche livré en 13.12.0 comparait la famille de la ligne à <b>une seule</b> occurrence du code dans l’arbre, prise au hasard. Or un même code de type figure presque toujours sous plusieurs familles : une ligne parfaitement correcte était signalée à tort, et le chemin affiché était celui d’une autre famille.',
+                    'La question posée est désormais la bonne : <b>ce code existe-t-il sous la famille de la ligne ?</b> Si oui, rien à signaler, et le chemin affiché est celui de SA famille. Si non, on nomme <b>toutes</b> les familles où ce code existe, pas une au hasard.',
+                    'Et une phrase sous le résultat dit ce qui cloche, ligne par ligne : d’où vient le code — code déjà fourni, règle, libellé appris, ressemblance —, la famille portée par la ligne, et celles où ce code vit réellement. De quoi décider si c’est la famille de la liste qui est fausse, ou l’arborescence qui est incomplète.'
+                ]
+            },
             {
                 v: '13.12.0',
                 d: '2026-09-17',

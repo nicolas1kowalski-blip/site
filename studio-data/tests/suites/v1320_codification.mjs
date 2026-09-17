@@ -110,6 +110,15 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- dire ce qui cloche quand la famille et l\u2019arbre se contredisent
+  ok('la phrase du d\u00e9saccord nomme l\u2019origine du code, la famille de la ligne et celles du code', (()=>{
+    const dite = v13PhraseDuDesaccord({ __code:'PMP-C', __origine:'existant', __branche_trouvee:'POMPES, UTILITES', FAMILLE:'VANNES' }, C());
+    return /code d\u00e9j\u00e0 fourni/.test(dite) && /VANNES/.test(dite) && /POMPES, UTILITES/.test(dite) && /PMP-C/.test(dite); })());
+  ok('et quand rien n\u2019a \u00e9t\u00e9 trouv\u00e9 sous la famille, elle le dit autrement', (()=>{
+    const dite = v13PhraseDuDesaccord({ __code:null, __code_autre_branche:'PMP-C', __origine:'aucune', __branche_trouvee:'POMPES', FAMILLE:'VANNES' }, C());
+    return /Rien ne correspond sous/.test(dite) && /VANNES/.test(dite) && /POMPES/.test(dite); })());
+  ok('une ligne sans d\u00e9saccord ne produit aucune phrase', v13PhraseDuDesaccord({ __code:null, __code_autre_branche:null }, C())==='');
+
   // ---- le pluriel ne doit plus s\u00e9parer deux mots identiques
   ok('un mot au pluriel est ramen\u00e9 au singulier, \u00e0 partir de quatre lettres', v13AuSingulier('POMPES')==='POMPE' && v13AuSingulier('VANNES')==='VANNE'
     && v13AuSingulier('CHEVAUX')==='CHEVAU' && v13AuSingulier('VIS')==='VIS' && v13AuSingulier('BAC')==='BAC');
@@ -242,17 +251,28 @@ ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('offic
 // qui commençait par une autre famille que la sienne, sans un mot.
 const contredit = await (await DuckDBInstance.create(':memory:')).connect();
 const verifie = async sql => (await (await contredit.run(sql)).getRowObjects());
+// Le m\u00eame code figure sous DEUX familles de l'arbre : la question n'est pas \u00ab est-ce CETTE famille \u00bb
+// mais \u00ab ce code existe-t-il sous la famille de la ligne \u00bb.
 await verifie(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
-  ('POMPES','T','C','Pompe centrifuge','PMP-C','PC'), ('VANNES','S','Q','Vanne papillon','VAN-P','VP')
+  ('POMPES','Transfert','C','Pompe centrifuge','PMP-C','PC'),
+  ('UTILITES','Eau glacee','C','Pompe centrifuge','PMP-C','PC'),
+  ('VANNES','Sectionnement','Q','Vanne papillon','VAN-P','VP')
 ) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
 await verifie(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES
-  ('E1','Materiel divers','VANNES','PMP-C',''), ('E2','Materiel divers','POMPES','PMP-C','')
+  ('E1','Materiel divers','UTILITES','PMP-C',''),
+  ('E2','Materiel divers','POMPES','PMP-C',''),
+  ('E3','Materiel divers','VANNES','PMP-C','')
 ) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
-const fournis = Object.fromEntries((await verifie(`SELECT REPERE, __code, __statut, __branche_trouvee FROM (\n${sqlCodeFourni}\n) f`)).map(l => [String(l.REPERE), l]));
-ok('SQL r\u00e9el : un code d\u00e9j\u00e0 fourni qui d\u00e9signe une autre branche est signal\u00e9, pas cod\u00e9 d\u2019office en silence',
-  fournis.E1.__statut === 'branche' && String(fournis.E1.__branche_trouvee) === 'POMPES');
-ok('SQL r\u00e9el : le code est conserv\u00e9, on ne d\u00e9truit pas l\u2019information', String(fournis.E1.__code) === 'PMP-C');
-ok('SQL r\u00e9el : le m\u00eame code sur une ligne de la bonne famille reste cod\u00e9 d\u2019office', fournis.E2.__statut === 'office');
+const fournis = Object.fromEntries((await verifie(`SELECT REPERE, FAMILLE, __code, __origine, __statut, __branche_trouvee, __chemin FROM (\n${sqlCodeFourni}\n) f`)).map(l => [String(l.REPERE), l]));
+ok('SQL r\u00e9el : un code qui existe sous la famille de la ligne n\u2019est PAS signal\u00e9, m\u00eame s\u2019il existe ailleurs aussi',
+  fournis.E1.__statut === 'office' && fournis.E2.__statut === 'office');
+ok('SQL r\u00e9el : et chacune re\u00e7oit le chemin de SA famille, pas celui d\u2019une autre',
+  /^UTILITES/.test(String(fournis.E1.__chemin)) && /^POMPES/.test(String(fournis.E2.__chemin)));
+ok('SQL r\u00e9el : un code absent de la famille de la ligne est signal\u00e9, pas cod\u00e9 d\u2019office en silence', fournis.E3.__statut === 'branche');
+ok('SQL r\u00e9el : et l\u2019on nomme TOUTES les familles o\u00f9 ce code existe, pas une au hasard',
+  String(fournis.E3.__branche_trouvee) === 'POMPES, UTILITES');
+ok('SQL r\u00e9el : le code est conserv\u00e9, on ne d\u00e9truit pas l\u2019information', String(fournis.E3.__code) === 'PMP-C');
+ok('SQL r\u00e9el : et l\u2019origine dit que le code venait de la liste', String(fournis.E3.__origine) === 'existant');
 
 // ---- le même libellé n fois : une seule question, une seule décision ----
 // Dans une liste reçue, le même libellé revient des centaines de fois. La revue posait la question

@@ -477,35 +477,49 @@
                 CASE WHEN candidats.__score_dans >= ${Number(codification.seuilAuto)} AND NOT ${exaequo} THEN ${meilleur} END)`;
             /*
              * La branche du code retenu doit s’accorder avec celle de la ligne, QUELLE QUE SOIT l’origine du
-             * code. La vérification ne portait que sur la ressemblance : un code déjà fourni dans la liste,
-             * une règle de mots-clés ou un libellé appris passaient sans contrôle, et la ligne ressortait
-             * codée d’office avec un chemin qui commençait par une autre famille que la sienne. On le dit.
+             * code — code déjà fourni dans la liste, règle de mots-clés, libellé appris ou ressemblance.
+             *
+             * Un même code figure souvent sous PLUSIEURS familles de l’arborescence. La question n’est donc
+             * pas « la famille de la ligne est-elle celle de ce code » — il n’y en a pas qu’une — mais
+             * « ce code existe-t-il sous la famille de la ligne ». Et quand la réponse est non, on ne nomme
+             * pas une famille au hasard : on les nomme TOUTES, pour que l’on voie où ce code vit réellement.
              */
-            const brancheDeLaLigne = codification.restreindreSource
+            const brancheConnue = !!(codification.restreindreSource && codification.restreindreNomenclature);
+            const brancheDeLaLigne = brancheConnue
                 ? v13TexteCompare(`reconnues.${sqlIdent(codification.restreindreSource)}`)
                 : 'NULL';
-            const desaccord = `(${brancheDeLaLigne} IS NOT NULL AND ${brancheDeLaLigne} <> ''
-                AND arbre.__branche_type IS NOT NULL AND arbre.__branche_type <> ${brancheDeLaLigne})`;
+            const cleDuCode = v13TexteCompare('typesPrets.__code_type');
+            // Le chemin de ce code DANS la famille de la ligne, quand il y existe.
+            const arbreDeLaFamille = `(SELECT ${cleDuCode} AS __cle, __branche_type AS __branche,
+                any_value(__chemin_type) AS __chemin_type
+                FROM typesPrets GROUP BY 1, 2) arbreFamille`;
+            // Un chemin par défaut, et la liste de toutes les familles où ce code existe.
+            const arbre = `(SELECT ${cleDuCode} AS __cle, any_value(__chemin_type) AS __chemin_type,
+                array_to_string(list_sort(list_distinct(list(__branche_type))), ', ') AS __familles
+                FROM typesPrets GROUP BY 1) arbre`;
+            const desaccord = brancheConnue
+                ? `(${brancheDeLaLigne} IS NOT NULL AND ${brancheDeLaLigne} <> ''
+                AND arbre.__cle IS NOT NULL AND arbreFamille.__cle IS NULL)`
+                : 'FALSE';
             const statut = `CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN 'branche'
                 WHEN ${code} IS NOT NULL THEN 'office'
                 WHEN ${meilleur} IS NOT NULL THEN 'revoir'
                 WHEN ${hors} IS NOT NULL AND candidats.__score_hors >= ${Number(codification.seuilRevoir)} THEN 'branche'
                 ELSE 'absent' END`;
-            const cleDuCode = v13TexteCompare('typesPrets.__code_type');
-            const arbre = `(SELECT __code_type, __chemin_type, __branche_type FROM typesPrets
-                QUALIFY row_number() OVER (PARTITION BY ${cleDuCode} ORDER BY __ligne) = 1) arbre`;
             return `SELECT reconnues.* EXCLUDE (__libelle, __code_regle, __origine_regle),
             ${code} AS __code,
             COALESCE(reconnues.__origine_regle, CASE WHEN ${code} IS NOT NULL THEN 'ressemblance' ELSE 'aucune' END) AS __origine,
             ROUND(COALESCE(candidats.__score_dans, candidats.__score_hors, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
             ${statut} AS __statut,
-            arbre.__chemin_type AS __chemin,
+            COALESCE(arbreFamille.__chemin_type, arbre.__chemin_type) AS __chemin,
             CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN ${code} ELSE ${hors} END AS __code_autre_branche,
-            CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN arbre.__branche_type
+            CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN arbre.__familles
                 WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
         FROM reconnues
         LEFT JOIN candidats ON candidats.__rn = reconnues.__rn
-        LEFT JOIN ${arbre} ON ${v13TexteCompare('arbre.__code_type')} = ${v13TexteCompare(code)}`;
+        LEFT JOIN ${arbre} ON arbre.__cle = ${v13TexteCompare(code)}
+        LEFT JOIN ${arbreDeLaFamille} ON arbreFamille.__cle = ${v13TexteCompare(code)}
+            AND arbreFamille.__branche = ${brancheDeLaLigne}`;
         }
 
         /**
@@ -652,6 +666,22 @@
                 'retirez les comparaisons les moins utiles, ou codez la liste en plusieurs morceaux. Détail : ' +
                 message
             );
+        }
+
+        /**
+         * Ce qui cloche sur une ligne rangée en « autre branche », dit d’une phrase. On nomme l’origine du
+         * code, la famille portée par la ligne, et celles où ce code existe vraiment : c’est de quoi décider
+         * si c’est la famille de la liste qui est fausse, ou l’arborescence qui est incomplète.
+         */
+        function v13PhraseDuDesaccord(ligne, codification) {
+            const code = String((ligne || {}).__code || (ligne || {}).__code_autre_branche || '');
+            const familles = String((ligne || {}).__branche_trouvee || '');
+            const famille = codification.restreindreSource ? String(ligne[codification.restreindreSource] || '') : '';
+            const parQuoi = v13PhraseDeLOrigine((ligne || {}).__origine, codification.regles);
+            if (!code) return '';
+            if ((ligne || {}).__code)
+                return `Le code ${code} vient du ${parQuoi}, mais il n’existe pas sous « ${famille} » : on le trouve sous ${familles || '—'}.`;
+            return `Rien ne correspond sous « ${famille} ». Le libellé désigne le code ${code}, rangé sous ${familles || '—'}.`;
         }
 
         /**

@@ -563,8 +563,8 @@
                 __score: 'Confiance',
                 __statut: 'Statut',
                 __chemin: "Chemin dans l'arbre",
-                __code_autre_branche: 'Trouvé ailleurs dans l’arbre',
-                __branche_trouvee: 'Branche de ce type'
+                __code_autre_branche: 'Code en cause',
+                __branche_trouvee: 'Familles où ce code existe'
             };
             const corps = resultat.lignes
                 .map(
@@ -590,12 +590,26 @@
                 <button id="v13-codif-utiliser" onclick="v13UtiliserLeResultat('${codification.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg" title="Le résultat devient un jeu utilisable dans Extraire, Comparer, Qualité — et promouvable en source">→ Utiliser le résultat</button>
                 <span class="text-[10px] text-slate-400">Les ${escapeHTML(Number(bilan.total).toLocaleString('fr-FR'))} lignes codées partent dans un jeu : de là, vous pouvez les extraire, les exporter en CSV, ou en faire une vraie source.</span>
             </div>
+            ${v13ExplicationDesDesaccords(codification, resultat)}
             <div class="overflow-x-auto border border-slate-200 rounded-lg" id="v13-codif-resultat">
                 <table class="w-full text-left text-[11px]"><thead class="bg-slate-100 text-slate-600 font-bold"><tr>
                     ${colonnes.map(colonne => `<th class="p-1.5 whitespace-nowrap">${escapeHTML(enTetes[colonne] || colonne)}</th>`).join('')}
                 </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">${corps}</tbody></table>
+            </div>`;
+        }
+        /**
+         * Les lignes rangées en « autre branche », expliquées en français sous le tableau. Le statut seul ne
+         * suffit pas : il faut dire d’où vient le code et où ce code existe vraiment.
+         */
+        function v13ExplicationDesDesaccords(codification, resultat) {
+            const fautives = (resultat.lignes || []).filter(ligne => ligne.__statut === 'branche').slice(0, 5);
+            if (!fautives.length) return '';
+            const phrases = fautives.map(ligne => `<li>${escapeHTML(v13PhraseDuDesaccord(ligne, codification))}</li>`).join('');
+            return `<div class="bg-violet-50 border border-violet-200 rounded-lg p-3 mb-2 text-[11px] text-violet-900" id="v13-codif-desaccords">
+                <div class="font-bold mb-1">La famille de la ligne et l’arbre ne disent pas la même chose</div>
+                <ul class="list-disc pl-4 space-y-0.5">${phrases}</ul>
             </div>`;
         }
         /** La valeur d'une cellule, traduite quand elle est technique. */
