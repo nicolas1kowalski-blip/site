@@ -555,15 +555,34 @@
              * devant, mais on montre aussi ce que l’on a trouvé ailleurs. C’est ce qui permet de voir que la
              * famille portée par la ligne contredit celle de l’arbre, et de trancher en connaissance de cause.
              */
-            return `WITH aCoder AS (
-            SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte
+            /*
+             * Une question par LIBELLÉ, pas une par ligne.
+             *
+             * Le même libellé revient des centaines de fois dans une liste reçue. Posée ligne à ligne, la
+             * revue reposait la même question autant de fois, et les cinquante places disponibles partaient
+             * en doublons d’une poignée de libellés. On regroupe donc par libellé ramené aux mots retenus,
+             * les plus fréquents d’abord : une décision, et toutes les lignes qui portent ce libellé sont
+             * codées d’un coup. Les libellés déjà écartés à la main ne sont plus reproposés.
+             */
+            const cleDuLibelle = v13Canoniser(v13TexteCompare(`codee.${sqlIdent(codification.colonneLibelle)}`), codification);
+            const ecartes = (codification.refus || []).filter(Boolean);
+            const sansLesEcartes = ecartes.length ? ` AND ${cleDuLibelle} NOT IN (${ecartes.map(sqlLiteral).join(', ')})` : '';
+            return `WITH clesARevoir AS (
+            SELECT ${cleDuLibelle} AS __cle, COUNT(*) AS __combien, min(codee.__rn) AS __rn
             FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
-            WHERE __statut IN ('revoir', 'branche') ORDER BY __rn LIMIT ${Number(combien) || 50}
+            WHERE __statut IN ('revoir', 'branche')${sansLesEcartes}
+            GROUP BY 1 ORDER BY __combien DESC, __rn LIMIT ${Number(combien) || 50}
+        ), aCoder AS (
+            SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte,
+                clesARevoir.__combien AS __combien
+            FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
+            JOIN clesARevoir ON clesARevoir.__rn = codee.__rn
         ), listePrete AS MATERIALIZED (\n${v13ListePreparee(codification, 'aCoder r')}\n
         ), typesPrets AS MATERIALIZED (\n${v13TypesPrepares(codification, tableNomenclature)}\n
         ), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n
         ), notes AS (
-            SELECT liste.__rn AS rang, aCoder.__texte AS libelle, CAST(types.__code_type AS VARCHAR) AS code,
+            SELECT liste.__rn AS rang, aCoder.__texte AS libelle, aCoder.__combien AS combien,
+                CAST(types.__code_type AS VARCHAR) AS code,
                 types.__libelle_type AS libelleRef, types.__chemin_type AS chemin,
                 (${v13ConditionDeBranche(codification)}) AS memeBranche,
                 ROUND((${v13ScoreDeRessemblance(codification)}), 3) AS score
@@ -595,6 +614,23 @@
                 'retirez les comparaisons les moins utiles, ou codez la liste en plusieurs morceaux. Détail : ' +
                 message
             );
+        }
+
+        /**
+         * Les libellés écartés à la main : « pour celui-là, aucun type ne convient ». Sans cette mémoire, la
+         * revue reposait la question à chaque exécution, et l’on repassait éternellement sur les mêmes.
+         * On range le libellé ramené aux mots retenus, donc toutes ses façons de s’écrire sont couvertes.
+         */
+        function v13RefusApresDecision(codification, libelle) {
+            const compare = v13MotRetenuDuTexte(libelle, codification);
+            const refus = (codification.refus || []).filter(Boolean);
+            if (!compare || refus.includes(compare)) return refus;
+            return refus.concat([compare]);
+        }
+        /** Un libellé que l’on avait écarté et sur lequel on revient : il redevient une question. */
+        function v13RefusSansLeLibelle(codification, libelle) {
+            const compare = v13MotRetenuDuTexte(libelle, codification);
+            return (codification.refus || []).filter(candidate => candidate && candidate !== compare);
         }
 
         /**

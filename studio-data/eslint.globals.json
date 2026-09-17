@@ -1754,6 +1754,8 @@
  "v13SqlDesDecisions": "writable",
  "v13SqlDesCasARevoir": "writable",
  "v13PhraseDeLErreur": "writable",
+ "v13RefusApresDecision": "writable",
+ "v13RefusSansLeLibelle": "writable",
  "v13RecapDeLaCodification": "writable",
  "v13PhraseDuDecompte": "writable",
  "v13BilanDeCodification": "writable",

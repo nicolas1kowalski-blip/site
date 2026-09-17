@@ -28,6 +28,7 @@
     .v13-codif-cas{border-top:1px solid var(--v11-line);padding:10px 0;font-size:12.5px}
     .v13-codif-candidat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid var(--v11-line);border-radius:8px;background:var(--v7-surface-2);padding:6px 10px;cursor:pointer;text-align:left}
     .v13-codif-candidat:hover{border-color:var(--v11-acc-bd);background:var(--v11-acc-soft)}
+    .v13-codif-combien{font-size:10px;font-weight:700;color:var(--v11-acc);background:var(--v11-acc-soft);border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle}
     .v13-codif-candidat.hors-branche{border-color:#c4b5fd;background:#f5f3ff}
     .v13-codif-candidat.hors-branche .chemin{color:#7c3aed}
     .v13-codif-candidat b{font-size:12.5px;color:var(--v7-txt)} .v13-codif-candidat .chemin{font-size:11px;color:var(--v7-muted)}

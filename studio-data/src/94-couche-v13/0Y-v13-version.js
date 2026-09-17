@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.10.0';
+        const V13_VERSION = '13.11.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.11.0',
+                d: '2026-09-17',
+                t: 'Codification : une question par libellé, pas une par ligne',
+                items: [
+                    'Le même libellé revient des centaines de fois dans une liste reçue. La revue posait la question ligne à ligne : on répondait cinquante fois à la même chose, et les cinquante places disponibles partaient en doublons d’une poignée de libellés. <b>La revue regroupe désormais par libellé</b>, les plus fréquents servis d’abord.',
+                    'Chaque question annonce combien de lignes elle couvre, et votre choix les code toutes d’un seul coup — y compris celles qui s’écrivent autrement, puisque la décision est rangée sous le libellé ramené aux mots retenus.',
+                    '<b>« Aucun ne convient » est enfin mémorisé.</b> Ce libellé n’est plus reproposé à chaque exécution ; il suffit de le recoder pour revenir dessus.'
+                ]
+            },
             {
                 v: '13.10.0',
                 d: '2026-09-17',

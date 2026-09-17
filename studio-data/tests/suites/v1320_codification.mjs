@@ -110,6 +110,17 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- une question par libellé, pas une par ligne
+  ok('la revue regroupe par libell\u00e9 et sert les plus fr\u00e9quents d\'abord', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
+    return /clesARevoir AS \(/.test(sql) && /GROUP BY 1 ORDER BY __combien DESC/.test(sql) && /__combien AS combien/.test(sql); })());
+  ok('un libell\u00e9 \u00e9cart\u00e9 \u00e0 la main n\'est plus repropos\u00e9', (()=>{ const refuse=Object.assign({}, C(), { refus: v13RefusApresDecision(C(), 'Bidule non identifiable') });
+    return refuse.refus.includes('BIDULE NON IDENTIFIABLE') && /NOT IN \('BIDULE NON IDENTIFIABLE'\)/.test(v13SqlDesCasARevoir(refuse, 50, 'v13_codee')); })());
+  ok('et l\'on peut revenir dessus : le libell\u00e9 redevient une question', (()=>{ const refuse=Object.assign({}, C(), { refus: ['BIDULE NON IDENTIFIABLE', 'AUTRE CHOSE'] });
+    const rendu=v13RefusSansLeLibelle(refuse, 'bidule non identifiable'); return rendu.length===1 && rendu[0]==='AUTRE CHOSE'; })());
+  ok('une d\u00e9cision est rang\u00e9e sous le libell\u00e9, donc elle vaut pour toutes ses \u00e9critures', (()=>{
+    const apres=v13CorrespondanceApresDecision(C(), 'POMPE  CENTRIFUGE (X2)', 'PMP-C');
+    return apres.length===1 && v13MotRetenuDuTexte(apres[0].libelle, C())==='POMPE CENTRIFUGE X2'; })());
+
   // ---- les choix faits, relus sans rien déplier, et gardés d’une session à l’autre
   ok('le r\u00e9capitulatif dit en fran\u00e7ais ce que l\'on code et contre quoi', (()=>{ const r=v13RecapDeLaCodification(C());
     const ligne = intitule => (r.find(x=>x.intitule===intitule)||{}).valeur || '';
@@ -145,6 +156,9 @@ const out = await p.evaluate(async ()=>{
   window.__sqlAvecSynonymes = v13SqlDeCodification(avecTout);
   window.__sqlRevue = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
   window.__sqlRevueAilleurs = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
+  const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
+  window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
+    correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
   window.__sqlAvecDecision = v13SqlDeCodification(Object.assign({}, avecTout, { decisions: { 4: 'VAN-P' } }));
   } catch(e) { R.push(['ERREUR '+e.message+' @ '+String(e.stack).split('\n')[1], false]); }
   return R;
@@ -155,6 +169,7 @@ const sqlAvecRegle = await p.evaluate(()=>window.__sqlAvecRegle);
 const sqlAvecSynonymes = await p.evaluate(()=>window.__sqlAvecSynonymes);
 const sqlRevue = await p.evaluate(()=>window.__sqlRevue);
 const v13SqlRevueAilleurs = await p.evaluate(()=>window.__sqlRevueAilleurs);
+const sqlDecisionGroupee = await p.evaluate(()=>window.__sqlDecisionGroupee);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 await b.close();
 
@@ -211,6 +226,28 @@ console.log(`   codification de 4 000 lignes contre 800 types : ${secondes.toFix
 ok('SQL réel : 4 000 lignes contre 800 types se codent en moins de 30 secondes', secondes < 30);
 ok('SQL réel : le blocage par les mots rares ne perd pas les lignes — toutes sont rendues', compte('office') + compte('revoir') + compte('absent') === 4000);
 ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('office') >= 3900);
+
+// ---- le même libellé n fois : une seule question, une seule décision ----
+// Dans une liste reçue, le même libellé revient des centaines de fois. La revue posait la question
+// ligne à ligne : cinquante places gaspillées en doublons d'une poignée de libellés.
+const repetee = await (await DuckDBInstance.create(':memory:')).connect();
+const consulte = async sql => (await (await repetee.run(sql)).getRowObjects());
+await consulte(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
+  ('POMPES','Transfert','Centrifuge','Pompe centrifuge','PMP-C','PC')
+) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
+await consulte(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES
+  ('EQ1','Pompe alim','POMPES','',''), ('EQ2','Pompe alim','POMPES','',''), ('EQ3','Pompe alim','POMPES','',''),
+  ('EQ4','POMPE  ALIM.','POMPES','',''), ('EQ5','Vanne trois voies','POMPES','','')
+) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+await consulte(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlSansSynonymes}`);
+const questions = await consulte(`SELECT DISTINCT rang, libelle, combien FROM (\n${sqlRevue}\n) v`);
+ok('SQL r\u00e9el : quatre lignes du m\u00eame libell\u00e9 ne font qu\u2019UNE question', questions.length === 1 && Number(questions[0].combien) === 4);
+ok('SQL r\u00e9el : et la question annonce combien de lignes elle couvre', Number(questions[0].combien) === 4);
+const apresDecision = await consulte(`SELECT REPERE, __code, __origine FROM (\n${sqlDecisionGroupee}\n) f ORDER BY REPERE`);
+const codees = apresDecision.filter(l => String(l.__code || '') === 'PMP-C');
+ok('SQL r\u00e9el : une seule d\u00e9cision code les quatre lignes, quelle que soit leur \u00e9criture', codees.length === 4);
+ok('SQL r\u00e9el : la ligne qui ne porte pas ce libell\u00e9 n\u2019est pas touch\u00e9e',
+  String((apresDecision.find(l => String(l.REPERE) === 'EQ5') || {}).__code || '') === '');
 
 // ---- la branche contredite, et les ex æquo : deux cas où la machine ne doit PAS trancher ----
 // Une ligne dont la famille ne correspond à aucune branche du type trouvé n'est pas « non trouvée » :

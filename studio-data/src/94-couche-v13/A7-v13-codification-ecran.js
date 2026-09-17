@@ -256,7 +256,7 @@
                 const rang = Number(ligne.rang);
                 let trouve = cas.find(candidate => candidate.rang === rang);
                 if (!trouve) {
-                    trouve = { rang, libelle: String(ligne.libelle || ''), candidats: [] };
+                    trouve = { rang, libelle: String(ligne.libelle || ''), combien: Number(ligne.combien) || 1, candidats: [] };
                     cas.push(trouve);
                 }
                 trouve.candidats.push({
@@ -273,14 +273,25 @@
          * Tranche un cas : la ligne reçoit son code, le libellé entre dans la table de correspondance, et l'on
          * recode. C'est ce qui fait qu'un cas tranché une fois ne revient jamais.
          */
-        async function v13TrancherLeCas(identifiant, rang, libelle, code) {
+        async function v13TrancherLeCas(identifiant, rang, libelle, code, combien) {
             const codification = v13CodificationParIdentifiant(identifiant);
             if (!codification) return;
+            const lignes = Number(combien) || 1;
             codification.decisions = Object.assign({}, codification.decisions || {});
             codification.decisions[String(rang)] = code;
+            // La décision est rangée sous le LIBELLÉ, pas sous la ligne : toutes celles qui portent ce
+            // libellé sont codées du même coup, aujourd’hui comme à la prochaine livraison.
             codification.correspondances = v13CorrespondanceApresDecision(codification, libelle, code);
+            codification.refus = code
+                ? v13RefusSansLeLibelle(codification, libelle)
+                : v13RefusApresDecision(codification, libelle);
             persistAppState();
-            showSuccess(code ? `« ${libelle} » → ${code}, retenu pour les prochaines fois.` : 'Cas laissé sans code.');
+            const combienDit = lignes > 1 ? ` — ${lignes.toLocaleString('fr-FR')} lignes codées d’un coup` : '';
+            showSuccess(
+                code
+                    ? `« ${libelle} » → ${code}${combienDit}, retenu pour les prochaines fois.`
+                    : `« ${libelle} » écarté : on ne vous le repropose plus.`
+            );
             await v13CoderLaListe(identifiant);
         }
 
@@ -613,25 +624,32 @@
             if (!v13Codification.casARevoir.length) return '';
             const cas = v13Codification.casARevoir
                 .map(unCas => {
+                    const pourTous = `'${codification.id}', ${unCas.rang}, ${JSON.stringify(unCas.libelle).replace(/"/g, '&quot;')}`;
                     const propositions = unCas.candidats
                         .map(
                             candidat =>
-                                `<button onclick="v13TrancherLeCas('${codification.id}', ${unCas.rang}, ${JSON.stringify(unCas.libelle).replace(/"/g, '&quot;')}, ${JSON.stringify(candidat.code).replace(/"/g, '&quot;')})" class="v13-codif-candidat${candidat.memeBranche ? '' : ' hors-branche'}">
+                                `<button onclick="v13TrancherLeCas(${pourTous}, ${JSON.stringify(candidat.code).replace(/"/g, '&quot;')}, ${unCas.combien || 1})" class="v13-codif-candidat${candidat.memeBranche ? '' : ' hors-branche'}">
                                     <b>${escapeHTML(candidat.code)}</b>
                                     <span class="chemin">${escapeHTML(candidat.chemin)}${candidat.memeBranche ? '' : ' — autre branche'}</span>
                                     <span class="score">${Math.round(100 * candidat.score)} %</span>
                                 </button>`
                         )
                         .join('');
-                    return `<div class="v13-codif-cas" data-rang="${unCas.rang}">
-                        <div class="font-bold mb-1">${escapeHTML(unCas.libelle)}</div>
+                    const lignes = Number(unCas.combien) || 1;
+                    const combienDit =
+                        lignes > 1
+                            ? `<span class="v13-codif-combien" title="Votre choix codera ces ${lignes} lignes d’un seul coup">${lignes.toLocaleString('fr-FR')} lignes portent ce libellé</span>`
+                            : '<span class="v13-codif-combien">1 ligne</span>';
+                    return `<div class="v13-codif-cas" data-rang="${unCas.rang}" data-combien="${lignes}">
+                        <div class="font-bold mb-1">${escapeHTML(unCas.libelle)} ${combienDit}</div>
                         <div class="flex gap-2 flex-wrap">${propositions}
-                            <button onclick="v13TrancherLeCas('${codification.id}', ${unCas.rang}, ${JSON.stringify(unCas.libelle).replace(/"/g, '&quot;')}, '')" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50">aucun ne convient</button>
+                            <button onclick="v13TrancherLeCas(${pourTous}, '', ${lignes})" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50" title="Ce libellé ne sera plus reproposé">aucun ne convient</button>
                         </div>
                     </div>`;
                 })
                 .join('');
-            return `<p class="text-[11px] text-slate-500 mb-2">Chaque décision descend dans la table de correspondance : à la prochaine livraison, ce libellé sera codé tout seul.</p>${cas}`;
+            const total = v13Codification.casARevoir.reduce((somme, unCas) => somme + (Number(unCas.combien) || 1), 0);
+            return `<p class="text-[11px] text-slate-500 mb-2">Une question par libellé, les plus fréquents d’abord : ces ${v13Codification.casARevoir.length} décisions couvrent ${total.toLocaleString('fr-FR')} ligne(s). Chaque décision descend dans la table de correspondance — à la prochaine livraison, ce libellé sera codé tout seul.</p>${cas}`;
         }
 
         /** Un bloc de l'écran : son titre numéroté, et son contenu. */
