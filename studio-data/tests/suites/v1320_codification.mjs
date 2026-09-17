@@ -110,6 +110,16 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- la famille d\u2019abord, puis l\u2019\u00e9largissement
+  ok('on montre huit propositions par d\u00e9faut, et le nombre se r\u00e8gle', v13CombienDePropositions({})===8
+    && v13CombienDePropositions({propositions:12})===12 && v13CombienDePropositions({propositions:0})===1
+    && v13CombienDePropositions({propositions:99})===V13_PROPOSITIONS_MAXIMUM);
+  ok('le quota de la famille et celui de l\u2019\u00e9largissement sont s\u00e9par\u00e9s', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
+    return /PARTITION BY rang, memeBranche ORDER BY score DESC/.test(sql) && /CASE WHEN memeBranche THEN 8 ELSE 3 END/.test(sql); })());
+  ok('le r\u00e9glage est offert \u00e0 l\'\u00e9cran, \u00e0 c\u00f4t\u00e9 des seuils', !!el('v13-codif-propositions'));
+  ok('et le r\u00e9capitulatif le dit', /8 dans la famille de la ligne, puis 3 prises ailleurs/.test(
+    (v13RecapDeLaCodification(C()).find(l=>l.intitule==='Propositions montr\u00e9es')||{}).valeur||''));
+
   // ---- dire ce qui cloche quand la famille et l\u2019arbre se contredisent
   ok('la phrase du d\u00e9saccord nomme l\u2019origine du code, la famille de la ligne et celles du code', (()=>{
     const dite = v13PhraseDuDesaccord({ __code:'PMP-C', __origine:'existant', __branche_trouvee:'POMPES, UTILITES', FAMILLE:'VANNES' }, C());
@@ -173,6 +183,8 @@ const out = await p.evaluate(async ()=>{
   window.__sqlRevue = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
   window.__sqlRevueAilleurs = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
   window.__sqlCodeFourni = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [], colonneCodeExistant: 'CODE_FOURNI', niveaux: ['FAMILLE','LIBELLE_TYPE'] }));
+  const largement = Object.assign({}, C(), { synonymes: [], regles: [], seuilRevoir: 0.2, niveaux: ['FAMILLE','LIBELLE_TYPE'] });
+  window.__sqlLargeRevue = { code: v13SqlDeCodification(largement), revue: v13SqlDesCasARevoir(largement, 50, 'v13_codee') };
   const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
   window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
     correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
@@ -188,6 +200,7 @@ const sqlRevue = await p.evaluate(()=>window.__sqlRevue);
 const v13SqlRevueAilleurs = await p.evaluate(()=>window.__sqlRevueAilleurs);
 const sqlDecisionGroupee = await p.evaluate(()=>window.__sqlDecisionGroupee);
 const sqlCodeFourni = await p.evaluate(()=>window.__sqlCodeFourni);
+const sqlLargeRevue = await p.evaluate(()=>window.__sqlLargeRevue);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 await b.close();
 
@@ -273,6 +286,28 @@ ok('SQL r\u00e9el : et l\u2019on nomme TOUTES les familles o\u00f9 ce code exist
   String(fournis.E3.__branche_trouvee) === 'POMPES, UTILITES');
 ok('SQL r\u00e9el : le code est conserv\u00e9, on ne d\u00e9truit pas l\u2019information', String(fournis.E3.__code) === 'PMP-C');
 ok('SQL r\u00e9el : et l\u2019origine dit que le code venait de la liste', String(fournis.E3.__origine) === 'existant');
+
+// ---- la famille de la ligne servie la première, et largement ----
+// Trois propositions en tout : dès qu'un type d'une autre famille se gliçait dans le lot, il prenait la
+// place d'un candidat légitime. La famille de la ligne a désormais son propre quota, servi en premier.
+const large = await (await DuckDBInstance.create(':memory:')).connect();
+const propose = async sql => (await (await large.run(sql)).getRowObjects());
+await propose(`CREATE TABLE "t_nm" AS
+  SELECT 'POMPES' AS FAMILLE, 'S' AS SYSTEME, 'SS' AS SOUS_SYSTEME, 'Pompe ' || mot AS LIBELLE_TYPE,
+    'PMP-' || mot AS CODE_TYPE, 'PC' AS ABREGE
+  FROM (VALUES ('centrifuge'),('volumetrique'),('peristaltique'),('doseuse'),('immergee'),('vide')) v(mot)
+  UNION ALL SELECT 'UTILITES','S','SS','Pompe ' || mot || ' utilite','UTI-' || mot,'PU'
+  FROM (VALUES ('centrifuge'),('doseuse')) v(mot)
+  UNION ALL SELECT 'VANNES','S','SS','Pompe de vanne papillon','VAN-P','VP'`);
+await propose(`CREATE TABLE "t_eq" AS SELECT 1 AS __rn, 'E1' AS REPERE, 'Pompe' AS LIBELLE, 'POMPES' AS FAMILLE,
+  '' AS CODE_FOURNI, '' AS DESIGNATION`);
+await propose(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlLargeRevue.code}`);
+const offertes = await propose(sqlLargeRevue.revue);
+ok('SQL r\u00e9el : on propose bien plus que trois types quand la famille en offre plus',
+  offertes.filter(l => l.memeBranche).length === 6);
+ok('SQL r\u00e9el : la famille de la ligne passe enti\u00e8rement avant l\u2019\u00e9largissement',
+  offertes.slice(0, 6).every(l => l.memeBranche === true) && offertes.slice(6).every(l => l.memeBranche === false));
+ok('SQL r\u00e9el : l\u2019\u00e9largissement reste born\u00e9, il ne noie pas la famille', offertes.filter(l => !l.memeBranche).length === 3);
 
 // ---- le même libellé n fois : une seule question, une seule décision ----
 // Dans une liste reçue, le même libellé revient des centaines de fois. La revue posait la question

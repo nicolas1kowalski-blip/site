@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.12.1';
+        const V13_VERSION = '13.13.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.13.0',
+                d: '2026-09-17',
+                t: 'Codification : la famille de la ligne servie la première, et largement',
+                items: [
+                    'La revue ne montrait que <b>trois</b> propositions en tout. Dès qu’un type d’une autre famille se gliçait dans le lot, il prenait la place d’un candidat légitime : on se retrouvait à choisir entre deux types de la bonne famille alors qu’elle en offrait six.',
+                    'La famille de la ligne a désormais <b>son propre quota, servi en premier</b> : huit propositions par défaut, réglables jusqu’à vingt à côté des seuils. L’élargissement aux autres familles vient <b>ensuite</b>, borné à trois, et jamais à la place : trois propositions de plus, pas trois de moins.',
+                    'Chaque cas de la revue annonce la répartition — combien viennent de la famille de la ligne, combien d’ailleurs dans l’arbre.'
+                ]
+            },
             {
                 v: '13.12.1',
                 d: '2026-09-17',

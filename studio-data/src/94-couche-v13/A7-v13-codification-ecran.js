@@ -66,7 +66,8 @@
         function v13EcrireDansLaCodification(champ, valeur) {
             const codification = v13CodificationOuverte();
             if (!codification) return;
-            codification[champ] = champ === 'seuilAuto' || champ === 'seuilRevoir' ? parseFloat(valeur) || 0 : valeur;
+            const chiffres = ['seuilAuto', 'seuilRevoir', 'propositions'];
+            codification[champ] = chiffres.includes(champ) ? parseFloat(valeur) || 0 : valeur;
             persistAppState();
             renderCodification();
         }
@@ -360,6 +361,7 @@
                 )}
                 ${v13Reglage("Coder d'office au-dessus de", `<input id="v13-codif-seuil-auto" type="number" min="0" max="1" step="0.01" value="${Number(codification.seuilAuto)}" onchange="${ecrire('seuilAuto')}" class="border border-slate-300 p-1.5 rounded text-xs w-full">`)}
                 ${v13Reglage('Proposer à la revue au-dessus de', `<input id="v13-codif-seuil-revoir" type="number" min="0" max="1" step="0.01" value="${Number(codification.seuilRevoir)}" onchange="${ecrire('seuilRevoir')}" class="border border-slate-300 p-1.5 rounded text-xs w-full">`)}
+                ${v13Reglage('Propositions montrées', `<input id="v13-codif-propositions" type="number" min="1" max="${V13_PROPOSITIONS_MAXIMUM}" step="1" value="${v13CombienDePropositions(codification)}" onchange="${ecrire('propositions')}" class="border border-slate-300 p-1.5 rounded text-xs w-full" title="Combien de types de la famille de la ligne on propose à la revue. ${V13_CANDIDATS_ELARGIS} propositions prises ailleurs dans l’arbre viennent ensuite, jamais à la place.">`)}
             </div>`;
         }
         /** Une ligne de comparaison : ses deux colonnes, son poids et sa mesure. */
@@ -649,6 +651,8 @@
                                 </button>`
                         )
                         .join('');
+                    const dansLaFamille = unCas.candidats.filter(candidat => candidat.memeBranche).length;
+                    const elargies = unCas.candidats.length - dansLaFamille;
                     const lignes = Number(unCas.combien) || 1;
                     const combienDit =
                         lignes > 1
@@ -656,6 +660,7 @@
                             : '<span class="v13-codif-combien">1 ligne</span>';
                     return `<div class="v13-codif-cas" data-rang="${unCas.rang}" data-combien="${lignes}">
                         <div class="font-bold mb-1">${escapeHTML(unCas.libelle)} ${combienDit}</div>
+                        ${elargies ? `<div class="text-[10px] text-slate-400 mb-1">${dansLaFamille} proposition(s) dans la famille de la ligne, puis ${elargies} prise(s) ailleurs dans l’arbre.</div>` : ''}
                         <div class="flex gap-2 flex-wrap">${propositions}
                             <button onclick="v13TrancherLeCas(${pourTous}, '', ${lignes})" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50" title="Ce libellé ne sera plus reproposé">aucun ne convient</button>
                         </div>

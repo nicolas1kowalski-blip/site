@@ -27,8 +27,27 @@
         /** Un mot compte pour retrouvé à une faute près, mais seulement à partir de quatre lettres. */
         const V13_LETTRES_POUR_TOLERER_UNE_FAUTE = 4;
         const V13_TOLERANCE_PAR_MOT = 0.9;
-        /** Combien de propositions on montre à la revue : au-delà, on ne choisit plus, on hésite. */
-        const V13_CANDIDATS_MONTRES = 3;
+        /**
+         * Combien de propositions on montre à la revue, DANS la famille de la ligne. Trois ne suffisaient
+         * pas : dès qu’un type d’une autre famille se gliçait dans le lot, il prenait la place d’un
+         * candidat légitime. La famille de la ligne est servie la première, et largement.
+         */
+        const V13_CANDIDATS_MONTRES = 8;
+        /**
+         * Et combien on en montre EN PLUS, pris ailleurs dans l’arbre. Ils viennent après, jamais à la place :
+         * c’est ce qui permet de voir qu’un type existe, mais rangé sous une autre famille.
+         */
+        const V13_CANDIDATS_ELARGIS = 3;
+        /** Ce que l’on montre au plus, quelle que soit la codification : au-delà on n’choisit plus, on hésite. */
+        const V13_PROPOSITIONS_MAXIMUM = 20;
+        /** Combien de propositions cette codification demande, borné à quelque chose de lisible. */
+        function v13CombienDePropositions(codification) {
+            // Rien de déclaré : le réglage par défaut. Un nombre saisi : on le respecte, ramené dans le lisible.
+            const declare = (codification || {}).propositions;
+            const demande = declare === '' || declare === null || declare === undefined ? NaN : Number(declare);
+            if (!Number.isFinite(demande)) return V13_CANDIDATS_MONTRES;
+            return Math.max(1, Math.min(V13_PROPOSITIONS_MAXIMUM, Math.round(demande)));
+        }
         /**
          * La table où le résultat de la codification est déposé avant d’être relu. Sans elle, chaque lecture
          * — les lignes, les comptes, les cas à revoir — recoderait la liste entière.
@@ -644,7 +663,8 @@
             JOIN typesPrets types ON types.__ligne = p.__ligne
         )
         SELECT * FROM notes WHERE score > 0
-        QUALIFY row_number() OVER (PARTITION BY rang ORDER BY memeBranche DESC, score DESC) <= ${V13_CANDIDATS_MONTRES}
+        QUALIFY row_number() OVER (PARTITION BY rang, memeBranche ORDER BY score DESC)
+            <= CASE WHEN memeBranche THEN ${v13CombienDePropositions(codification)} ELSE ${V13_CANDIDATS_ELARGIS} END
         ORDER BY rang, memeBranche DESC, score DESC`;
         }
 
@@ -747,6 +767,10 @@
                     intitule: 'Règles actives',
                     valeur: regles.map(regle => v13PhraseDeLaRegle(regle, codification.colonneLibelle)).join(' · ')
                 });
+            lignes.push({
+                intitule: 'Propositions montrées',
+                valeur: `${v13CombienDePropositions(codification)} dans la famille de la ligne, puis ${V13_CANDIDATS_ELARGIS} prises ailleurs dans l’arbre`
+            });
             if ((codification.correspondances || []).length)
                 lignes.push({
                     intitule: 'Libellés appris',
