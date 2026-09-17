@@ -624,10 +624,11 @@
                             .join('')}</tr>`
                 )
                 .join('');
-            return `<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2" id="v13-codif-chiffres">
+            return `<div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-2" id="v13-codif-chiffres">
                 ${chiffre("Codées d'office", bilan.office, 'text-emerald-600')}
                 ${chiffre('À revoir', bilan.revoir, 'text-amber-600')}
                 ${chiffre('Autre branche', bilan.branche || 0, 'text-violet-600')}
+                ${chiffre('Proposition faible', bilan.faible || 0, 'text-sky-600')}
                 ${chiffre('Non trouvées', bilan.absent, '')}
                 ${chiffre('Couverture', Math.round(100 * bilan.couverture) + ' %', '')}
             </div>
@@ -635,7 +636,7 @@
             <p class="text-[11px] mb-2 ${resultat.lignesEnEntree && resultat.lignesEnEntree !== bilan.total ? 'text-red-600 font-bold' : 'text-slate-500'}" id="v13-codif-decompte">${escapeHTML(v13PhraseDuDecompte(resultat.lignesEnEntree, bilan.total))}</p>
             <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <button id="v13-codif-utiliser" onclick="v13UtiliserLeResultat('${codification.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg" title="Le résultat devient un jeu utilisable dans Extraire, Comparer, Qualité — et promouvable en source">→ Utiliser le résultat</button>
-                ${bilan.revoir + (bilan.branche || 0) ? `<button id="v13-codif-exporter-revue" onclick="v13ExporterLesCasARevoir('${codification.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 font-bold px-3 py-1.5 rounded-lg" title="Tous les libellés à trancher, avec leurs propositions — sans le plafond de l’écran">→ Tous les cas à revoir</button>` : ''}
+                ${bilan.revoir + (bilan.branche || 0) + (bilan.faible || 0) ? `<button id="v13-codif-exporter-revue" onclick="v13ExporterLesCasARevoir('${codification.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 font-bold px-3 py-1.5 rounded-lg" title="Tous les libellés à trancher, avec leurs propositions — sans le plafond de l’écran">→ Tous les cas à revoir</button>` : ''}
                 <span class="text-[10px] text-slate-400">Les ${escapeHTML(Number(bilan.total).toLocaleString('fr-FR'))} lignes codées partent dans un jeu — <b>toutes</b>, sans plafond : de là, vous pouvez les extraire, les exporter en CSV, ou en faire une vraie source. Le tableau ci-dessous n’en montre que ${V13_LIGNES_MONTREES}.</span>
             </div>
             ${v13AlerteDeLaBranche()}
@@ -691,8 +692,13 @@
             if (valeur === null || valeur === undefined) return '';
             if (colonne === '__statut')
                 return (
-                    { office: "Codé d'office", revoir: 'À revoir', branche: 'Autre branche', absent: 'Non trouvé' }[valeur] ||
-                    String(valeur)
+                    {
+                        office: "Codé d'office",
+                        revoir: 'À revoir',
+                        branche: 'Autre branche',
+                        faible: 'Proposition faible',
+                        absent: 'Non trouvé'
+                    }[valeur] || String(valeur)
                 );
             if (colonne === '__origine') return v13PhraseDeLOrigine(valeur, codification.regles);
             if (colonne === '__score') return Math.round(100 * (Number(valeur) || 0)) + ' %';
@@ -704,6 +710,7 @@
             if (valeur === 'office') return 'text-emerald-600 font-bold';
             if (valeur === 'revoir') return 'text-amber-600 font-bold';
             if (valeur === 'branche') return 'text-violet-600 font-bold';
+            if (valeur === 'faible') return 'text-sky-600 font-bold';
             return 'text-slate-500';
         }
 

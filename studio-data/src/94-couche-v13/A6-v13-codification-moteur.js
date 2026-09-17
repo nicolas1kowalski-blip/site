@@ -520,10 +520,12 @@
                 ? `(${brancheDeLaLigne} IS NOT NULL AND ${brancheDeLaLigne} <> ''
                 AND arbre.__cle IS NOT NULL AND arbreFamille.__cle IS NULL)`
                 : 'FALSE';
+            const seuil = Number(codification.seuilRevoir);
             const statut = `CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN 'branche'
                 WHEN ${code} IS NOT NULL THEN 'office'
-                WHEN ${meilleur} IS NOT NULL THEN 'revoir'
-                WHEN ${hors} IS NOT NULL AND candidats.__score_hors >= ${Number(codification.seuilRevoir)} THEN 'branche'
+                WHEN candidats.__score_dans >= ${seuil} THEN 'revoir'
+                WHEN candidats.__score_hors >= ${seuil} AND ${meilleur} IS NULL THEN 'branche'
+                WHEN candidats.__score_dans > 0 OR candidats.__score_hors > 0 THEN 'faible'
                 ELSE 'absent' END`;
             return `SELECT reconnues.* EXCLUDE (__libelle, __code_regle, __origine_regle),
             ${code} AS __code,
@@ -581,6 +583,15 @@
             const scoreHors = 'max(CASE WHEN NOT __meme_branche THEN __score_voisin END)';
             // On retient les DEUX meilleurs : si le second est à égalité avec le premier, la machine ne sait
             // pas choisir, et elle ne doit pas faire semblant. Un regroupement suffit à les obtenir.
+            /*
+             * On ne jette RIEN sous le seuil.
+             *
+             * Le meilleur voisin était écarté dès qu'il passait sous le seuil « à revoir » : la ligne
+             * ressortait « non trouvée » avec un score de 0, alors que des types partageaient un mot avec
+             * elle et avaient bel et bien été notés. « Disconnecteur CES Le Vigneret » contre
+             * « Disconnecteur BA zpr-ctr. » vaut 25 % — trop peu pour décider, bien assez pour être montré.
+             * Le seuil ne décide plus de ce que l'on garde, seulement du statut que l'on donne.
+             */
             const candidats = `SELECT __rn,
                 max_by(__code_voisin, ${dansLaBranche}, 2) AS __codes_voisins,
                 max_by(__score_voisin, ${dansLaBranche}, 2) AS __scores_voisins,
@@ -589,8 +600,7 @@
                 max_by(__branche_type, ${horsBranche}) AS __branche_hors,
                 ${scoreHors} AS __score_hors
             FROM (\n${notes}\n        ) notes
-            GROUP BY __rn
-            HAVING GREATEST(COALESCE(${scoreDans}, 0), COALESCE(${scoreHors}, 0)) >= ${Number(codification.seuilRevoir)}`;
+            GROUP BY __rn`;
             const decisions = v13SqlDesDecisions(codification);
             const codee = `WITH reconnues AS (\n${reconnues}\n), listePrete AS MATERIALIZED (\n${v13ListePreparee(codification, 'reconnues r WHERE r.__code_regle IS NULL')}\n), typesPrets AS MATERIALIZED (\n${v13TypesPrepares(codification, tableNomenclature)}\n), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n), candidats AS (\n${candidats}\n)\n${v13SelectFinal(codification)}`;
             return decisions ? `SELECT codee.* REPLACE (${decisions}) FROM (\n${codee}\n) codee` : codee;
@@ -650,7 +660,7 @@
             return `WITH clesARevoir AS (
             SELECT ${cleDuLibelle} AS __cle, COUNT(*) AS __combien, min(codee.__rn) AS __rn
             FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
-            WHERE __statut IN ('revoir', 'branche')${sansLesEcartes}
+            WHERE __statut IN ('revoir', 'branche', 'faible')${sansLesEcartes}
             GROUP BY 1 ORDER BY __combien DESC, __rn${v13PlafondDesCas(combien)}
         ), aCoder AS (
             SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte,
@@ -879,24 +889,27 @@
             const office = compte('office');
             const revoir = compte('revoir');
             const branche = compte('branche');
+            const faible = compte('faible');
             const absent = compte('absent');
-            const total = office + revoir + branche + absent;
+            const total = office + revoir + branche + faible + absent;
             const couverture = total ? Math.round((1000 * office) / total) / 1000 : 0;
             const enFrancais = nombre => Number(nombre).toLocaleString('fr-FR');
-            if (!total) return { total, office, revoir, branche, absent, couverture, phrase: 'Aucune ligne \u00e0 coder.' };
+            if (!total) return { total, office, revoir, branche, faible, absent, couverture, phrase: 'Aucune ligne à coder.' };
             const restes = [];
-            if (revoir) restes.push(`${enFrancais(revoir)} \u00e0 revoir`);
-            if (branche) restes.push(`${enFrancais(branche)} trouv\u00e9e(s) dans une autre branche`);
+            if (revoir) restes.push(`${enFrancais(revoir)} à revoir`);
+            if (branche) restes.push(`${enFrancais(branche)} trouvée(s) dans une autre branche`);
+            if (faible) restes.push(`${enFrancais(faible)} à proposition faible`);
             if (absent) restes.push(`${enFrancais(absent)} sans proposition`);
-            const reste = restes.length ? ` \u2014 ${restes.join(', ')}.` : ' \u2014 rien \u00e0 revoir.';
+            const reste = restes.length ? ` — ${restes.join(', ')}.` : ' — rien à revoir.';
             return {
                 total,
                 office,
                 revoir,
                 branche,
+                faible,
                 absent,
                 couverture,
-                phrase: `${enFrancais(office)} ligne(s) cod\u00e9es d\u2019office sur ${enFrancais(total)} (${Math.round(100 * couverture)} %)${reste}`
+                phrase: `${enFrancais(office)} ligne(s) codées d’office sur ${enFrancais(total)} (${Math.round(100 * couverture)} %)${reste}`
             };
         }
 
@@ -967,6 +980,8 @@
                 return `${bilan.branche} ligne(s) désignent un type rangé sous une AUTRE branche que leur famille : vérifiez la famille de ces lignes, ou la colonne de branche que vous avez choisie.`;
             if (bilan.revoir)
                 return `Passez les ${bilan.revoir} cas à revoir : chaque décision servira aux prochaines livraisons.`;
+            if (bilan.faible)
+                return `${bilan.faible} ligne(s) n'ont que des propositions faibles : elles partagent un mot avec un type sans lui ressembler assez. Regardez-les, baissez le seuil « à revoir », ou ajoutez un synonyme.`;
             if (bilan.absent)
                 return `${bilan.absent} ligne(s) sans proposition : ajoutez une règle de mots-clés pour les attraper.`;
             return 'Tout est codé : le résultat peut partir.';

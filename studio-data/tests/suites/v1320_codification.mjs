@@ -104,34 +104,43 @@ const out = await p.evaluate(async ()=>{
   ok('les deux côtés sont préparés avant d’être comparés : un texte canonisé, puis ses mots', /string_split\(pretes\.__texte_liste_0, ' '\) AS __mots_liste_0/.test(v13ListePreparee(C(),'reconnues r')) && /string_split\(pretes\.__texte_type_0, ' '\) AS __mots_type_0/.test(v13TypesPrepares(C(),'"t_nm"')));
   ok('le score ne recanonise ni ne redécoupe rien : il lit les colonnes préparées', !/strip_accents|string_split/.test(v13ScoreDeRessemblance(C())) && /__mots_liste_0/.test(v13ScoreDeRessemblance(C())));
   ok('les deux meilleurs voisins sont retenus par regroupement, sans trier tous les couples', /max_by\(__code_voisin, CASE WHEN __meme_branche.*, 2\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
-  ok('le meilleur voisin hors branche est gard\u00e9 lui aussi, pour pouvoir le dire', /__score_hors/.test(v13SqlDeCodification(C())) && /__code_autre_branche/.test(v13SqlDeCodification(C())));
-  ok('deux types au m\u00eame score ne sont pas tranch\u00e9s d\'office', /__scores_voisins\[2\] = candidats\.__scores_voisins\[1\]/.test(v13SqlDeCodification(C())));
-  ok('le bilan compte \u00e0 part les lignes trouv\u00e9es dans une autre branche', (()=>{ const b=v13BilanDeCodification([{statut:'office',lignes:5},{statut:'branche',lignes:2},{statut:'absent',lignes:1}]);
-    return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
-  ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
+  ok('le meilleur voisin hors branche est gardé lui aussi, pour pouvoir le dire', /__score_hors/.test(v13SqlDeCodification(C())) && /__code_autre_branche/.test(v13SqlDeCodification(C())));
+  ok('deux types au même score ne sont pas tranchés d\'office', /__scores_voisins\[2\] = candidats\.__scores_voisins\[1\]/.test(v13SqlDeCodification(C())));
+  ok('le bilan compte à part les lignes trouvées dans une autre branche', (()=>{ const b=v13BilanDeCodification([{statut:'office',lignes:5},{statut:'branche',lignes:2},{statut:'absent',lignes:1}]);
+    return b.branche===2 && b.total===8 && /2 trouvée\(s\) dans une autre branche/.test(b.phrase); })());
+  ok('et l\'écran dit quoi faire de ces lignes-là en priorité', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
-  // ---- la vue compl\u00e8te : l\u2019\u00e9cran plafonne, l\u2019export non
-  ok('l\'\u00e9cran pose cinquante questions au plus', /LIMIT 50/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee'))
+  // ---- une proposition faible n'est pas une absence
+  ok('le seuil ne décide plus de ce que l\'on garde, seulement du statut', (()=>{ const sql=v13SqlDeCodification(C());
+    return !/HAVING GREATEST/.test(sql) && /THEN 'faible'/.test(sql); })());
+  ok('le bilan compte à part les propositions faibles', (()=>{ const b=v13BilanDeCodification([
+    {statut:'office',lignes:5},{statut:'faible',lignes:3},{statut:'absent',lignes:1}]);
+    return b.faible===3 && b.total===9 && /3 à proposition faible/.test(b.phrase); })());
+  ok('et l\'écran dit quoi en faire', /propositions faibles/.test(v13ProchaineAction({total:9,office:5,revoir:0,branche:0,faible:3,absent:1})));
+  ok('la revue prend aussi ces cas', /IN \('revoir', 'branche', 'faible'\)/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee')));
+
+  // ---- la vue complète : l’écran plafonne, l’export non
+  ok('l\'écran pose cinquante questions au plus', /LIMIT 50/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee'))
     && /LIMIT 50/.test(v13SqlDesCasARevoir(C(), undefined, 'v13_codee')));
-  ok('l\'export, lui, ne conna\u00eet aucun plafond', !/LIMIT/.test(v13SqlDesCasARevoir(C(), 0, 'v13_codee').split('GROUP BY 1 ORDER BY __combien DESC, __rn')[1].split(')')[0]));
-  ok('le plafond se lit \u00e0 part, et z\u00e9ro veut dire toutes', v13PlafondDesCas(50)===' LIMIT 50' && v13PlafondDesCas(0)===''
+  ok('l\'export, lui, ne connaît aucun plafond', !/LIMIT/.test(v13SqlDesCasARevoir(C(), 0, 'v13_codee').split('GROUP BY 1 ORDER BY __combien DESC, __rn')[1].split(')')[0]));
+  ok('le plafond se lit à part, et zéro veut dire toutes', v13PlafondDesCas(50)===' LIMIT 50' && v13PlafondDesCas(0)===''
     && v13PlafondDesCas(-1)==='' && v13PlafondDesCas(undefined)===' LIMIT 50');
-  ok('le r\u00e9sultat cod\u00e9, lui, part en entier \u2014 aucun plafond dans son export',
+  ok('le résultat codé, lui, part en entier — aucun plafond dans son export',
     /SELECT \* EXCLUDE \(__rn\) FROM \$\{sqlIdent\(V13_TABLE_CODEE\)\}/.test(String(v13UtiliserLeResultat))
     && !/LIMIT/.test(String(v13UtiliserLeResultat)));
-  ok('et un bouton sort tous les cas \u00e0 revoir', /v13SqlDesCasARevoir\(codification, 0, V13_TABLE_CODEE\)/.test(String(v13ExporterLesCasARevoir)));
+  ok('et un bouton sort tous les cas à revoir', /v13SqlDesCasARevoir\(codification, 0, V13_TABLE_CODEE\)/.test(String(v13ExporterLesCasARevoir)));
 
   // ---- pourquoi aucune proposition de ma famille ?
-  ok('le contr\u00f4le compare les familles des deux c\u00f4t\u00e9s', (()=>{ const sql=v13SqlDuControleDeBranche(C());
+  ok('le contrôle compare les familles des deux côtés', (()=>{ const sql=v13SqlDuControleDeBranche(C());
     return /famillesDeLaListe AS/.test(sql) && /famillesDeLArbre AS/.test(sql) && /ORDER BY connue, lignes DESC/.test(sql); })());
-  ok('sans colonne de branche d\u00e9clar\u00e9e, il n\'y a rien \u00e0 contr\u00f4ler', v13SqlDuControleDeBranche(Object.assign({}, C(), {restreindreSource:''}))==='');
+  ok('sans colonne de branche déclarée, il n\'y a rien à contrôler', v13SqlDuControleDeBranche(Object.assign({}, C(), {restreindreSource:''}))==='');
   ok('quand aucune famille ne se retrouve, on le dit franchement', (()=>{ const bilan=v13BilanDuControleDeBranche([
     {famille:'CHAUDIERE', lignes:27, connue:false}, {famille:'CTA', lignes:37, connue:false}]);
-    return !bilan.accord && /AUCUNE famille de la liste/.test(bilan.phrase) && /v\u00e9rifiez laquelle vous avez choisie/.test(bilan.phrase); })());
+    return !bilan.accord && /AUCUNE famille de la liste/.test(bilan.phrase) && /vérifiez laquelle vous avez choisie/.test(bilan.phrase); })());
   ok('quand seules certaines manquent, on les nomme et on compte les lignes', (()=>{ const bilan=v13BilanDuControleDeBranche([
     {famille:'J01', lignes:100, connue:true}, {famille:'ZZZ', lignes:27, connue:false}]);
     return !bilan.accord && bilan.lignesInconnues===27 && /27 ligne\(s\) portent une famille/.test(bilan.phrase)
-      && /\u00ab ZZZ \u00bb/.test(bilan.phrase) && bilan.familles.includes('J01'); })());
+      && /« ZZZ »/.test(bilan.phrase) && bilan.familles.includes('J01'); })());
   ok('et quand tout concorde, il le dit aussi', (()=>{ const bilan=v13BilanDuControleDeBranche([{famille:'J01', lignes:100, connue:true}]);
     return bilan.accord && /existent toutes dans la nomenclature/.test(bilan.phrase); })());
   ok('la revue rend la famille de la ligne, pour pouvoir expliquer', /AS famille, CAST/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee')));
@@ -141,55 +150,55 @@ const out = await p.evaluate(async ()=>{
     const presente = v13PourquoiAucuneDansLaFamille({ famille:'J01' }, 0);
     const servie = v13PourquoiAucuneDansLaFamille({ famille:'J01' }, 3);
     v13Codification.branche = null;
-    return /n\u2019existe pas dans la nomenclature/.test(absente) && /aucun de ses types ne partage de mot/.test(presente) && servie===''; })());
+    return /n’existe pas dans la nomenclature/.test(absente) && /aucun de ses types ne partage de mot/.test(presente) && servie===''; })());
 
-  // ---- la famille d\u2019abord, puis l\u2019\u00e9largissement
-  ok('on montre huit propositions par d\u00e9faut, et le nombre se r\u00e8gle', v13CombienDePropositions({})===8
+  // ---- la famille d’abord, puis l’élargissement
+  ok('on montre huit propositions par défaut, et le nombre se règle', v13CombienDePropositions({})===8
     && v13CombienDePropositions({propositions:12})===12 && v13CombienDePropositions({propositions:0})===1
     && v13CombienDePropositions({propositions:99})===V13_PROPOSITIONS_MAXIMUM);
-  ok('le quota de la famille et celui de l\u2019\u00e9largissement sont s\u00e9par\u00e9s', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
+  ok('le quota de la famille et celui de l’élargissement sont séparés', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
     return /PARTITION BY rang, memeBranche ORDER BY score DESC/.test(sql) && /CASE WHEN memeBranche THEN 8 ELSE 3 END/.test(sql); })());
-  ok('le r\u00e9glage est offert \u00e0 l\'\u00e9cran, \u00e0 c\u00f4t\u00e9 des seuils', !!el('v13-codif-propositions'));
-  ok('et le r\u00e9capitulatif le dit', /8 dans la famille de la ligne, puis 3 prises ailleurs/.test(
-    (v13RecapDeLaCodification(C()).find(l=>l.intitule==='Propositions montr\u00e9es')||{}).valeur||''));
+  ok('le réglage est offert à l\'écran, à côté des seuils', !!el('v13-codif-propositions'));
+  ok('et le récapitulatif le dit', /8 dans la famille de la ligne, puis 3 prises ailleurs/.test(
+    (v13RecapDeLaCodification(C()).find(l=>l.intitule==='Propositions montrées')||{}).valeur||''));
 
-  // ---- dire ce qui cloche quand la famille et l\u2019arbre se contredisent
-  ok('la phrase du d\u00e9saccord nomme l\u2019origine du code, la famille de la ligne et celles du code', (()=>{
+  // ---- dire ce qui cloche quand la famille et l’arbre se contredisent
+  ok('la phrase du désaccord nomme l’origine du code, la famille de la ligne et celles du code', (()=>{
     const dite = v13PhraseDuDesaccord({ __code:'PMP-C', __origine:'existant', __branche_trouvee:'POMPES, UTILITES', FAMILLE:'VANNES' }, C());
-    return /code d\u00e9j\u00e0 fourni/.test(dite) && /VANNES/.test(dite) && /POMPES, UTILITES/.test(dite) && /PMP-C/.test(dite); })());
-  ok('et quand rien n\u2019a \u00e9t\u00e9 trouv\u00e9 sous la famille, elle le dit autrement', (()=>{
+    return /code déjà fourni/.test(dite) && /VANNES/.test(dite) && /POMPES, UTILITES/.test(dite) && /PMP-C/.test(dite); })());
+  ok('et quand rien n’a été trouvé sous la famille, elle le dit autrement', (()=>{
     const dite = v13PhraseDuDesaccord({ __code:null, __code_autre_branche:'PMP-C', __origine:'aucune', __branche_trouvee:'POMPES', FAMILLE:'VANNES' }, C());
     return /Rien ne correspond sous/.test(dite) && /VANNES/.test(dite) && /POMPES/.test(dite); })());
-  ok('une ligne sans d\u00e9saccord ne produit aucune phrase', v13PhraseDuDesaccord({ __code:null, __code_autre_branche:null }, C())==='');
+  ok('une ligne sans désaccord ne produit aucune phrase', v13PhraseDuDesaccord({ __code:null, __code_autre_branche:null }, C())==='');
 
-  // ---- le pluriel ne doit plus s\u00e9parer deux mots identiques
-  ok('un mot au pluriel est ramen\u00e9 au singulier, \u00e0 partir de quatre lettres', v13AuSingulier('POMPES')==='POMPE' && v13AuSingulier('VANNES')==='VANNE'
+  // ---- le pluriel ne doit plus séparer deux mots identiques
+  ok('un mot au pluriel est ramené au singulier, à partir de quatre lettres', v13AuSingulier('POMPES')==='POMPE' && v13AuSingulier('VANNES')==='VANNE'
     && v13AuSingulier('CHEVAUX')==='CHEVAU' && v13AuSingulier('VIS')==='VIS' && v13AuSingulier('BAC')==='BAC');
-  ok('le libell\u00e9 est rang\u00e9 au singulier avant tout le reste', v13MotRetenuDuTexte('Pompes centrifuges ALIM.', C())==='POMPE CENTRIFUGE ALIM');
-  ok('et le SQL fait le m\u00eame passage au singulier des deux c\u00f4t\u00e9s', (()=>{ const sql=v13SqlDeCodification(C());
+  ok('le libellé est rangé au singulier avant tout le reste', v13MotRetenuDuTexte('Pompes centrifuges ALIM.', C())==='POMPE CENTRIFUGE ALIM');
+  ok('et le SQL fait le même passage au singulier des deux côtés', (()=>{ const sql=v13SqlDeCodification(C());
     return (sql.match(/ends_with\(mot, 'S'\)/g)||[]).length >= 2; })());
 
   // ---- une question par libellé, pas une par ligne
-  ok('la revue regroupe par libell\u00e9 et sert les plus fr\u00e9quents d\'abord', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
+  ok('la revue regroupe par libellé et sert les plus fréquents d\'abord', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
     return /clesARevoir AS \(/.test(sql) && /GROUP BY 1 ORDER BY __combien DESC/.test(sql) && /__combien AS combien/.test(sql); })());
-  ok('un libell\u00e9 \u00e9cart\u00e9 \u00e0 la main n\'est plus repropos\u00e9', (()=>{ const refuse=Object.assign({}, C(), { refus: v13RefusApresDecision(C(), 'Bidule non identifiable') });
+  ok('un libellé écarté à la main n\'est plus reproposé', (()=>{ const refuse=Object.assign({}, C(), { refus: v13RefusApresDecision(C(), 'Bidule non identifiable') });
     return refuse.refus.includes('BIDULE NON IDENTIFIABLE') && /NOT IN \('BIDULE NON IDENTIFIABLE'\)/.test(v13SqlDesCasARevoir(refuse, 50, 'v13_codee')); })());
-  ok('et l\'on peut revenir dessus : le libell\u00e9 redevient une question', (()=>{ const refuse=Object.assign({}, C(), { refus: ['BIDULE NON IDENTIFIABLE', 'AUTRE CHOSE'] });
+  ok('et l\'on peut revenir dessus : le libellé redevient une question', (()=>{ const refuse=Object.assign({}, C(), { refus: ['BIDULE NON IDENTIFIABLE', 'AUTRE CHOSE'] });
     const rendu=v13RefusSansLeLibelle(refuse, 'bidule non identifiable'); return rendu.length===1 && rendu[0]==='AUTRE CHOSE'; })());
-  ok('une d\u00e9cision est rang\u00e9e sous le libell\u00e9, donc elle vaut pour toutes ses \u00e9critures', (()=>{
+  ok('une décision est rangée sous le libellé, donc elle vaut pour toutes ses écritures', (()=>{
     const apres=v13CorrespondanceApresDecision(C(), 'POMPE  CENTRIFUGE (X2)', 'PMP-C');
     return apres.length===1 && v13MotRetenuDuTexte(apres[0].libelle, C())==='POMPE CENTRIFUGE X2'; })());
 
   // ---- les choix faits, relus sans rien déplier, et gardés d’une session à l’autre
-  ok('le r\u00e9capitulatif dit en fran\u00e7ais ce que l\'on code et contre quoi', (()=>{ const r=v13RecapDeLaCodification(C());
+  ok('le récapitulatif dit en français ce que l\'on code et contre quoi', (()=>{ const r=v13RecapDeLaCodification(C());
     const ligne = intitule => (r.find(x=>x.intitule===intitule)||{}).valeur || '';
-    return /equipements\.csv \u00b7 colonne LIBELLE/.test(ligne('\u00c0 coder')) && /nomenclature\.csv \u00b7 code CODE_TYPE/.test(ligne('Contre'))
-      && /FAMILLE \u203a SYSTEME/.test(ligne('Chemin de l\u2019arbre')) && /FAMILLE doit correspondre \u00e0 FAMILLE/.test(ligne('Branche')); })());
-  ok('le r\u00e9capitulatif est affich\u00e9 en haut de l\'\u00e9cran, pas cach\u00e9 dans les r\u00e9glages', (()=>{ const bloc=el('v13-codif-recap');
+    return /equipements\.csv · colonne LIBELLE/.test(ligne('À coder')) && /nomenclature\.csv · code CODE_TYPE/.test(ligne('Contre'))
+      && /FAMILLE › SYSTEME/.test(ligne('Chemin de l’arbre')) && /FAMILLE doit correspondre à FAMILLE/.test(ligne('Branche')); })());
+  ok('le récapitulatif est affiché en haut de l\'écran, pas caché dans les réglages', (()=>{ const bloc=el('v13-codif-recap');
     return bloc && /Ce que fait cette codification/.test(bloc.textContent) && /equipements\.csv/.test(bloc.textContent); })());
-  ok('le d\u00e9compte rassure quand il est juste, et alerte quand il ne l\'est pas',
-    /9 ligne\(s\) en entr\u00e9e, autant en sortie/.test(v13PhraseDuDecompte(9, 9)) && /\u26a0/.test(v13PhraseDuDecompte(9, 27)));
-  ok('les param\u00e9trages de codification sont sauvegard\u00e9s avec le reste', (()=>{ const garde=collectPersistedConfig();
+  ok('le décompte rassure quand il est juste, et alerte quand il ne l\'est pas',
+    /9 ligne\(s\) en entrée, autant en sortie/.test(v13PhraseDuDecompte(9, 9)) && /⚠/.test(v13PhraseDuDecompte(9, 27)));
+  ok('les paramétrages de codification sont sauvegardés avec le reste', (()=>{ const garde=collectPersistedConfig();
     return Array.isArray(garde.codifications) && garde.codifications.some(x=>x.id===C().id && x.colonneLibelle==='LIBELLE'); })());
   ok('et ils sont relus au retour', (()=>{ const garde=collectPersistedConfig(); const avant=state.codifications;
     state.codifications=[]; applyPersistedConfig(garde); const revenu=state.codifications.some(x=>x.id===avant[0].id && x.nomenclature==='nomenclature.csv');
@@ -198,8 +207,8 @@ const out = await p.evaluate(async ()=>{
   // ---- la mémoire du navigateur, quand elle ne suffit pas
   ok('une erreur de mémoire est traduite en français, avec quoi faire', /la mémoire du navigateur n’a pas suffi/.test(v13PhraseDeLErreur(new Error('Invalid Error: HTML FileReaders do not support writing'))) && /Chercher dans la bonne branche/.test(v13PhraseDeLErreur(new Error('Out of Memory Error'))));
   ok('une erreur ordinaire est rendue telle quelle, sans bavardage', v13PhraseDeLErreur(new Error('Colonne inconnue'))==='Colonne inconnue');
-  ok('la codification s\'ex\u00e9cute sans jamais d\u00e9border sur disque', /v12State\.noSpill\+\+/.test(String(v13CoderLaListe)) && /v12State\.noSpill--/.test(String(v13CoderLaListe)));
-  ok('les d\u00e9coupages en mots ne sont calcul\u00e9s qu\'une fois, quoi qu\'il en co\u00fbte \u00e0 les relire', (v13SqlDesRapprochables(C()).match(/AS MATERIALIZED/g)||[]).length===2);
+  ok('la codification s\'exécute sans jamais déborder sur disque', /v12State\.noSpill\+\+/.test(String(v13CoderLaListe)) && /v12State\.noSpill--/.test(String(v13CoderLaListe)));
+  ok('les découpages en mots ne sont calculés qu\'une fois, quoi qu\'il en coûte à les relire', (v13SqlDesRapprochables(C()).match(/AS MATERIALIZED/g)||[]).length===2);
 
   // ---- le SQL produit, rendu à node pour être exécuté sur un vrai moteur
   window.__sqlSansSynonymes = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [] }));
@@ -218,6 +227,9 @@ const out = await p.evaluate(async ()=>{
   window.__sqlCodeFourni = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [], colonneCodeExistant: 'CODE_FOURNI', niveaux: ['FAMILLE','LIBELLE_TYPE'] }));
   const largement = Object.assign({}, C(), { synonymes: [], regles: [], seuilRevoir: 0.2, niveaux: ['FAMILLE','LIBELLE_TYPE'] });
   window.__sqlLargeRevue = { code: v13SqlDeCodification(largement), revue: v13SqlDesCasARevoir(largement, 50, 'v13_codee') };
+  const basSeuil = Object.assign({}, C(), { synonymes: [], regles: [], niveaux: ['FAMILLE','LIBELLE_TYPE'] });
+  window.__sqlFaible = v13SqlDeCodification(basSeuil);
+  window.__sqlFaibleRevue = v13SqlDesCasARevoir(basSeuil, 50, 'v13_codee');
   const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
   window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
     correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
@@ -234,6 +246,8 @@ const v13SqlRevueAilleurs = await p.evaluate(()=>window.__sqlRevueAilleurs);
 const sqlDecisionGroupee = await p.evaluate(()=>window.__sqlDecisionGroupee);
 const sqlCodeFourni = await p.evaluate(()=>window.__sqlCodeFourni);
 const sqlLargeRevue = await p.evaluate(()=>window.__sqlLargeRevue);
+const sqlFaible = await p.evaluate(()=>window.__sqlFaible);
+const sqlFaibleRevue = await p.evaluate(()=>window.__sqlFaibleRevue);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 await b.close();
 
@@ -297,8 +311,8 @@ ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('offic
 // qui commençait par une autre famille que la sienne, sans un mot.
 const contredit = await (await DuckDBInstance.create(':memory:')).connect();
 const verifie = async sql => (await (await contredit.run(sql)).getRowObjects());
-// Le m\u00eame code figure sous DEUX familles de l'arbre : la question n'est pas \u00ab est-ce CETTE famille \u00bb
-// mais \u00ab ce code existe-t-il sous la famille de la ligne \u00bb.
+// Le même code figure sous DEUX familles de l'arbre : la question n'est pas « est-ce CETTE famille »
+// mais « ce code existe-t-il sous la famille de la ligne ».
 await verifie(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
   ('POMPES','Transfert','C','Pompe centrifuge','PMP-C','PC'),
   ('UTILITES','Eau glacee','C','Pompe centrifuge','PMP-C','PC'),
@@ -310,15 +324,39 @@ await verifie(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FRO
   ('E3','Materiel divers','VANNES','PMP-C','')
 ) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
 const fournis = Object.fromEntries((await verifie(`SELECT REPERE, FAMILLE, __code, __origine, __statut, __branche_trouvee, __chemin FROM (\n${sqlCodeFourni}\n) f`)).map(l => [String(l.REPERE), l]));
-ok('SQL r\u00e9el : un code qui existe sous la famille de la ligne n\u2019est PAS signal\u00e9, m\u00eame s\u2019il existe ailleurs aussi',
+ok('SQL réel : un code qui existe sous la famille de la ligne n’est PAS signalé, même s’il existe ailleurs aussi',
   fournis.E1.__statut === 'office' && fournis.E2.__statut === 'office');
-ok('SQL r\u00e9el : et chacune re\u00e7oit le chemin de SA famille, pas celui d\u2019une autre',
+ok('SQL réel : et chacune reçoit le chemin de SA famille, pas celui d’une autre',
   /^UTILITES/.test(String(fournis.E1.__chemin)) && /^POMPES/.test(String(fournis.E2.__chemin)));
-ok('SQL r\u00e9el : un code absent de la famille de la ligne est signal\u00e9, pas cod\u00e9 d\u2019office en silence', fournis.E3.__statut === 'branche');
-ok('SQL r\u00e9el : et l\u2019on nomme TOUTES les familles o\u00f9 ce code existe, pas une au hasard',
+ok('SQL réel : un code absent de la famille de la ligne est signalé, pas codé d’office en silence', fournis.E3.__statut === 'branche');
+ok('SQL réel : et l’on nomme TOUTES les familles où ce code existe, pas une au hasard',
   String(fournis.E3.__branche_trouvee) === 'POMPES, UTILITES');
-ok('SQL r\u00e9el : le code est conserv\u00e9, on ne d\u00e9truit pas l\u2019information', String(fournis.E3.__code) === 'PMP-C');
-ok('SQL r\u00e9el : et l\u2019origine dit que le code venait de la liste', String(fournis.E3.__origine) === 'existant');
+ok('SQL réel : le code est conservé, on ne détruit pas l’information', String(fournis.E3.__code) === 'PMP-C');
+ok('SQL réel : et l’origine dit que le code venait de la liste', String(fournis.E3.__origine) === 'existant');
+
+// ---- un mot partagé, un score sous le seuil : c'est faible, pas absent ----
+// « Disconnecteur CES Le Vigneret » contre « Disconnecteur BA zpr-ctr. » : un mot sur quatre, soit 25 %.
+// Trop peu pour décider, bien assez pour être montré. La ligne ressortait « non trouvée », score 0 —
+// l'information était détruite alors que le couple avait été retenu ET noté.
+const faibles = await (await DuckDBInstance.create(':memory:')).connect();
+const note = async sql => (await (await faibles.run(sql)).getRowObjects());
+await note(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
+  ('J01','S','SS','Disconnecteur BA zpr-ctr.','37010909.B','DBA'),
+  ('J01','S','SS','Disconnecteur CA non-ctr.','37010909.C','DCA'),
+  ('J01','S','SS','Chaudiere+br.gaz EC','22390503.A','CBG')
+) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
+await note(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES
+  ('E1','Disconnecteur CES Le Vigneret','J01','',''),
+  ('E2','Chaudiere N 1 CES Le Vigneret','J01','',''),
+  ('E3','Tableau electrique batiment C','J01','','')
+) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+const rendus = Object.fromEntries((await note(`SELECT REPERE, __statut, __score FROM (\n${sqlFaible}\n) f`)).map(l => [String(l.REPERE), l]));
+ok('SQL réel : un mot partagé sous le seuil donne « faible », plus « absent »', rendus.E1.__statut === 'faible' && rendus.E2.__statut === 'faible');
+ok('SQL réel : et le score rendu est le vrai score, plus zéro', Number(rendus.E1.__score) > 0.2 && Number(rendus.E1.__score) < 0.45);
+ok('SQL réel : une ligne qui ne partage AUCUN mot reste bien « non trouvée »', rendus.E3.__statut === 'absent' && Number(rendus.E3.__score) === 0);
+await note(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlFaible}`);
+const aTrancher = await note(`SELECT DISTINCT libelle FROM (\n${sqlFaibleRevue}\n) v`);
+ok('SQL réel : ces lignes arrivent à la revue au lieu d\'être perdues', aTrancher.length === 2);
 
 // ---- la famille de la ligne servie la première, et largement ----
 // Trois propositions en tout : dès qu'un type d'une autre famille se gliçait dans le lot, il prenait la
@@ -336,11 +374,11 @@ await propose(`CREATE TABLE "t_eq" AS SELECT 1 AS __rn, 'E1' AS REPERE, 'Pompe' 
   '' AS CODE_FOURNI, '' AS DESIGNATION`);
 await propose(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlLargeRevue.code}`);
 const offertes = await propose(sqlLargeRevue.revue);
-ok('SQL r\u00e9el : on propose bien plus que trois types quand la famille en offre plus',
+ok('SQL réel : on propose bien plus que trois types quand la famille en offre plus',
   offertes.filter(l => l.memeBranche).length === 6);
-ok('SQL r\u00e9el : la famille de la ligne passe enti\u00e8rement avant l\u2019\u00e9largissement',
+ok('SQL réel : la famille de la ligne passe entièrement avant l’élargissement',
   offertes.slice(0, 6).every(l => l.memeBranche === true) && offertes.slice(6).every(l => l.memeBranche === false));
-ok('SQL r\u00e9el : l\u2019\u00e9largissement reste born\u00e9, il ne noie pas la famille', offertes.filter(l => !l.memeBranche).length === 3);
+ok('SQL réel : l’élargissement reste borné, il ne noie pas la famille', offertes.filter(l => !l.memeBranche).length === 3);
 
 // ---- le même libellé n fois : une seule question, une seule décision ----
 // Dans une liste reçue, le même libellé revient des centaines de fois. La revue posait la question
@@ -356,12 +394,12 @@ await consulte(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FR
 ) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
 await consulte(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlSansSynonymes}`);
 const questions = await consulte(`SELECT DISTINCT rang, libelle, combien FROM (\n${sqlRevue}\n) v`);
-ok('SQL r\u00e9el : quatre lignes du m\u00eame libell\u00e9 ne font qu\u2019UNE question', questions.length === 1 && Number(questions[0].combien) === 4);
-ok('SQL r\u00e9el : et la question annonce combien de lignes elle couvre', Number(questions[0].combien) === 4);
+ok('SQL réel : quatre lignes du même libellé ne font qu’UNE question', questions.length === 1 && Number(questions[0].combien) === 4);
+ok('SQL réel : et la question annonce combien de lignes elle couvre', Number(questions[0].combien) === 4);
 const apresDecision = await consulte(`SELECT REPERE, __code, __origine FROM (\n${sqlDecisionGroupee}\n) f ORDER BY REPERE`);
 const codees = apresDecision.filter(l => String(l.__code || '') === 'PMP-C');
-ok('SQL r\u00e9el : une seule d\u00e9cision code les quatre lignes, quelle que soit leur \u00e9criture', codees.length === 4);
-ok('SQL r\u00e9el : la ligne qui ne porte pas ce libell\u00e9 n\u2019est pas touch\u00e9e',
+ok('SQL réel : une seule décision code les quatre lignes, quelle que soit leur écriture', codees.length === 4);
+ok('SQL réel : la ligne qui ne porte pas ce libellé n’est pas touchée',
   String((apresDecision.find(l => String(l.REPERE) === 'EQ5') || {}).__code || '') === '');
 
 // ---- la branche contredite, et les ex æquo : deux cas où la machine ne doit PAS trancher ----
@@ -383,19 +421,19 @@ await interroge(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * F
   ('EQC','Moteur asynchrone','MOTEURS','','')
 ) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
 const tranches = Object.fromEntries((await interroge(`SELECT REPERE, __code, __statut, __code_autre_branche, __branche_trouvee FROM (\n${sqlSansSynonymes}\n) f`)).map(l => [String(l.REPERE), l]));
-ok('SQL r\u00e9el : une ligne dont la famille contredit l\u2019arbre n\u2019est plus \u00ab non trouv\u00e9e \u00bb, elle est signal\u00e9e',
+ok('SQL réel : une ligne dont la famille contredit l’arbre n’est plus « non trouvée », elle est signalée',
   tranches.EQA.__statut === 'branche' && tranches.EQA.__code === null);
-ok('SQL r\u00e9el : et l\u2019on dit quel type a \u00e9t\u00e9 trouv\u00e9, et sous quelle branche',
+ok('SQL réel : et l’on dit quel type a été trouvé, et sous quelle branche',
   String(tranches.EQA.__code_autre_branche) === 'PMP-C' && String(tranches.EQA.__branche_trouvee) === 'POMPES');
-ok('SQL r\u00e9el : la m\u00eame ligne dans la bonne famille reste cod\u00e9e d\u2019office',
+ok('SQL réel : la même ligne dans la bonne famille reste codée d’office',
   tranches.EQB.__statut === 'office' && String(tranches.EQB.__code) === 'PMP-C');
-ok('SQL r\u00e9el : deux types au m\u00eame score partent \u00e0 la revue au lieu d\u2019\u00eatre tir\u00e9s au sort',
+ok('SQL réel : deux types au même score partent à la revue au lieu d’être tirés au sort',
   tranches.EQC.__statut === 'revoir' && tranches.EQC.__code === null);
 await interroge(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlSansSynonymes}`);
 const propositions = await interroge(v13SqlRevueAilleurs);
-ok('SQL r\u00e9el : la revue propose aussi ce qui a \u00e9t\u00e9 trouv\u00e9 hors branche, en le disant',
+ok('SQL réel : la revue propose aussi ce qui a été trouvé hors branche, en le disant',
   propositions.some(l => Number(l.rang) === 1 && String(l.code) === 'PMP-C' && l.memeBranche === false));
-ok('SQL r\u00e9el : les ex \u00e6quo arrivent \u00e0 la revue avec leurs deux propositions',
+ok('SQL réel : les ex æquo arrivent à la revue avec leurs deux propositions',
   propositions.filter(l => Number(l.rang) === 3).length >= 2);
 
 // ---- le même code à plusieurs endroits de l'arbre : une ligne reçue, une ligne rendue ----
@@ -412,11 +450,11 @@ await demande(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
 ) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
 await demande(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES ${valeurs(EQUIPEMENTS)}) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
 const rendues = Number((await demande(`SELECT COUNT(*)::BIGINT AS lignes FROM (\n${sqlSansSynonymes}\n) f`))[0].lignes);
-ok('SQL r\u00e9el : un code pr\u00e9sent \u00e0 trois endroits de l\u2019arbre ne triple pas les lignes', rendues === EQUIPEMENTS.length);
+ok('SQL réel : un code présent à trois endroits de l’arbre ne triple pas les lignes', rendues === EQUIPEMENTS.length);
 const reperes = await demande(`SELECT REPERE, COUNT(*)::BIGINT AS lignes FROM (\n${sqlSansSynonymes}\n) f GROUP BY REPERE HAVING COUNT(*) > 1`);
-ok('SQL r\u00e9el : aucun rep\u00e8re ne ressort deux fois', reperes.length === 0);
+ok('SQL réel : aucun repère ne ressort deux fois', reperes.length === 0);
 const chemin = await demande(`SELECT __chemin FROM (\n${sqlSansSynonymes}\n) f WHERE REPERE = 'EQ001'`);
-ok('SQL r\u00e9el : le chemin de l\u2019arbre reste renseign\u00e9, une seule fois', /POMPES/.test(String(chemin[0].__chemin)));
+ok('SQL réel : le chemin de l’arbre reste renseigné, une seule fois', /POMPES/.test(String(chemin[0].__chemin)));
 
 // ---- le cas qui ne passait pas : des mots qui se ressemblent tous ----
 // Une nomenclature où aucun mot n'est vraiment rare, et où les mots se confondent sur leurs premières
@@ -472,15 +510,15 @@ async function coderSousContrainte(fixture) {
 }
 
 const serre = await coderSousContrainte(VOCABULAIRE_QUI_SE_RESSEMBLE);
-console.log(`   20 000 lignes contre 3 000 types, vocabulaire indistinct, 512 Mo : ${serre.tenu ? serre.secondes.toFixed(1) + ' s' : '\u00c9CHEC \u2014 ' + serre.detail}`);
-ok('SQL r\u00e9el : une nomenclature dont aucun mot n\u2019est rare tient quand m\u00eame dans 512 Mo', serre.tenu);
+console.log(`   20 000 lignes contre 3 000 types, vocabulaire indistinct, 512 Mo : ${serre.tenu ? serre.secondes.toFixed(1) + ' s' : 'ÉCHEC — ' + serre.detail}`);
+ok('SQL réel : une nomenclature dont aucun mot n’est rare tient quand même dans 512 Mo', serre.tenu);
 if (serre.tenu)
-  ok('SQL r\u00e9el : sous cette contrainte, les 20 000 lignes sont toutes rendues',
+  ok('SQL réel : sous cette contrainte, les 20 000 lignes sont toutes rendues',
     Number((await serre.demande('SELECT COUNT(*)::BIGINT AS lignes FROM "v13_codee"'))[0].lignes) === 20000);
 
 const distinct = await coderSousContrainte(VOCABULAIRE_QUI_DISTINGUE);
-console.log(`   20 000 lignes contre 3 000 types, vocabulaire distinctif, 512 Mo : ${distinct.tenu ? distinct.secondes.toFixed(1) + ' s' : '\u00c9CHEC \u2014 ' + distinct.detail}`);
-ok('SQL r\u00e9el : quand chaque type a un mot bien \u00e0 lui, le plafond des candidats ne perd rien', distinct.tenu &&
+console.log(`   20 000 lignes contre 3 000 types, vocabulaire distinctif, 512 Mo : ${distinct.tenu ? distinct.secondes.toFixed(1) + ' s' : 'ÉCHEC — ' + distinct.detail}`);
+ok('SQL réel : quand chaque type a un mot bien à lui, le plafond des candidats ne perd rien', distinct.tenu &&
   Number((await distinct.demande(`SELECT COUNT(*)::BIGINT AS lignes FROM "v13_codee"
     WHERE __code = 'PMP-' || (CAST(substr(REPERE, 3) AS BIGINT) % 3000)`))[0].lignes) === 20000);
 

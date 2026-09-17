@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.15.0';
+        const V13_VERSION = '13.16.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.16.0',
+                d: '2026-09-17',
+                t: 'Codification : une proposition faible n’est pas une absence',
+                items: [
+                    '<b>Des lignes ressortaient « non trouvées » avec un score de 0 alors que des types de leur famille partageaient un mot avec elles.</b> « Disconnecteur CES Le Vigneret » contre « Disconnecteur BA zpr-ctr. » vaut 25 % : le couple était bien retenu et bien noté, mais le seuil « à revoir » de 0,45 le jetait — et avec lui toute trace de son existence.',
+                    'Le seuil ne décide plus de ce que l’on GARDE, seulement du statut que l’on donne. Nouveau statut <b>« Proposition faible »</b> : un type de la bonne famille a été trouvé, mais il ressemble trop peu pour qu’on décide. Le vrai score est affiché, plus zéro.',
+                    'Ces lignes arrivent désormais à la revue et dans « Tous les cas à revoir », au lieu d’être perdues. « Non trouvé » ne veut plus dire que ce qu’il dit : aucun type ne partage le moindre mot avec cette ligne.',
+                    'Le bilan les compte à part, et l’écran dit quoi en faire : les regarder, baisser le seuil « à revoir », ou ajouter un synonyme.'
+                ]
+            },
             {
                 v: '13.15.0',
                 d: '2026-09-17',
