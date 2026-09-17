@@ -110,6 +110,14 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouvée\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'écran dit quoi faire de ces lignes-là en priorité', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- la famille d'abord : la rareté d'un mot se mesure aussi DANS la famille
+  ok('le rapprochement compte les mots par famille, en plus de les compter partout', (()=>{ const sql=v13SqlDeCodification(C());
+    return /frequencesDeLaFamille AS/.test(sql) && /seuilDeLaFamille AS/.test(sql) && /tetesDeLaFamille AS/.test(sql)
+      && /frequencesPartout AS/.test(sql) && /tetesPartout AS/.test(sql); })());
+  ok('les deux étapes s\'ajoutent, l\'une n\'enlève rien à l\'autre', /UNION ALL/.test(v13SqlDeCodification(C())));
+  ok('sans famille déclarée, il n\'y a qu\'une étape', (()=>{ const sansFamille=v13SqlDeCodification(Object.assign({}, C(), {restreindreSource:'', restreindreNomenclature:''}));
+    return !/tetesDeLaFamille/.test(sansFamille) && /tetesPartout AS/.test(sansFamille); })());
+
   // ---- une proposition faible n'est pas une absence
   ok('le seuil ne décide plus de ce que l\'on garde, seulement du statut', (()=>{ const sql=v13SqlDeCodification(C());
     return !/HAVING GREATEST/.test(sql) && /THEN 'faible'/.test(sql); })());
@@ -230,6 +238,8 @@ const out = await p.evaluate(async ()=>{
   const basSeuil = Object.assign({}, C(), { synonymes: [], regles: [], niveaux: ['FAMILLE','LIBELLE_TYPE'] });
   window.__sqlFaible = v13SqlDeCodification(basSeuil);
   window.__sqlFaibleRevue = v13SqlDesCasARevoir(basSeuil, 50, 'v13_codee');
+  const parFamille = Object.assign({}, C(), { synonymes: [], regles: [], niveaux: ['FAMILLE','LIBELLE_TYPE'] });
+  window.__sqlFamilleDabord = { code: v13SqlDeCodification(parFamille), revue: v13SqlDesCasARevoir(parFamille, 50, 'v13_codee') };
   const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
   window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
     correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
@@ -248,6 +258,7 @@ const sqlCodeFourni = await p.evaluate(()=>window.__sqlCodeFourni);
 const sqlLargeRevue = await p.evaluate(()=>window.__sqlLargeRevue);
 const sqlFaible = await p.evaluate(()=>window.__sqlFaible);
 const sqlFaibleRevue = await p.evaluate(()=>window.__sqlFaibleRevue);
+const sqlFamilleDabord = await p.evaluate(()=>window.__sqlFamilleDabord);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 await b.close();
 
@@ -333,6 +344,45 @@ ok('SQL réel : et l’on nomme TOUTES les familles où ce code existe, pas une 
   String(fournis.E3.__branche_trouvee) === 'POMPES, UTILITES');
 ok('SQL réel : le code est conservé, on ne détruit pas l’information', String(fournis.E3.__code) === 'PMP-C');
 ok('SQL réel : et l’origine dit que le code venait de la liste', String(fournis.E3.__origine) === 'existant');
+
+// ---- un mot répandu partout, mais rare dans la famille ----
+// « CHAUDIERE » est porté par 400 types de l'arbre : jugé trop courant, il était écarté, et la ligne
+// n'examinait JAMAIS les chaudières de sa propre famille — on lui proposait une vanne. Or dans sa famille,
+// ce mot n'est porté que par trois types : c'est précisément lui qui distingue.
+const rareDansLaFamille = await (await DuckDBInstance.create(':memory:')).connect();
+const cherche = async sql => (await (await rareDansLaFamille.run(sql)).getRowObjects());
+await cherche(`CREATE TABLE "t_nm" AS
+  SELECT 'A' || (i % 20) AS FAMILLE, 'S' AS SYSTEME, 'SS' AS SOUS_SYSTEME,
+    'Chaudiere variante ' || i AS LIBELLE_TYPE, 'X-' || i AS CODE_TYPE, 'CV' AS ABREGE FROM range(400) t(i)
+  UNION ALL SELECT 'J01','S','SS','Chaudiere+br.gaz EC','22390503.A','CBG'
+  UNION ALL SELECT 'J01','S','SS','Chaudiere+br.fod EC','22390504.A','CBF'
+  UNION ALL SELECT 'J01','S','SS','Chaudiere EC biomasse granules','22390505.A','CBB'
+  UNION ALL SELECT 'J01','S','SS','Vanne 2 voies motorisee','22390406.A','V2V'`);
+await cherche(`CREATE TABLE "t_eq" AS SELECT 1 AS __rn, 'E1' AS REPERE, 'Chaudiere 2' AS LIBELLE,
+  'J01' AS FAMILLE, '' AS CODE_FOURNI, '' AS DESIGNATION`);
+await cherche(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlFamilleDabord.code}`);
+const proposeesFamille = await cherche(sqlFamilleDabord.revue);
+const deLaFamille = proposeesFamille.filter(l => l.memeBranche === true).map(l => String(l.code));
+ok('SQL réel : les trois chaudières de la famille sont proposées, plus seulement une vanne',
+  deLaFamille.includes('22390503.A') && deLaFamille.includes('22390504.A') && deLaFamille.includes('22390505.A'));
+ok('SQL réel : et elles passent avant les propositions prises ailleurs',
+  proposeesFamille.slice(0, deLaFamille.length).every(l => l.memeBranche === true));
+
+// Et sur le volume, avec une famille déclarée : la nouvelle étape ne doit rien coûter de plus.
+const volumeFamille = await (await DuckDBInstance.create(':memory:')).connect();
+const mesure = async sql => (await (await volumeFamille.run(sql)).getRowObjects());
+await mesure(`CREATE TABLE "t_nm" AS SELECT 'F' || (i % 30) AS FAMILLE, 'S' AS SYSTEME, 'SS' AS SOUS_SYSTEME,
+  'Pompe centrifuge modele ' || i AS LIBELLE_TYPE, 'PMP-' || i AS CODE_TYPE, 'PC' AS ABREGE FROM range(3000) t(i)`);
+await mesure(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, 'EQ' || i AS REPERE,
+  'Pompe centrifuge modele ' || (i % 3000) AS LIBELLE, 'F' || (i % 30) AS FAMILLE, '' AS CODE_FOURNI,
+  '' AS DESIGNATION FROM range(20000) t(i)`);
+await mesure("SET memory_limit='512MB'");
+await mesure("SET temp_directory=''");
+const departFamille = Date.now();
+let tenuFamille = true;
+try { await mesure(`CREATE TABLE "v13_codee" AS\n${sqlFamilleDabord.code}`); } catch (e) { tenuFamille = false; }
+console.log(`   20 000 lignes contre 3 000 types, famille déclarée, 512 Mo : ${tenuFamille ? ((Date.now() - departFamille) / 1000).toFixed(1) + ' s' : 'ÉCHEC'}`);
+ok('SQL réel : chercher d\'abord dans la famille tient aussi sur le volume', tenuFamille);
 
 // ---- un mot partagé, un score sous le seuil : c'est faible, pas absent ----
 // « Disconnecteur CES Le Vigneret » contre « Disconnecteur BA zpr-ctr. » : un mot sur quatre, soit 25 %.

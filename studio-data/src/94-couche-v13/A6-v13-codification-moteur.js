@@ -368,14 +368,48 @@
         const V13_TYPES_TOLERES_PAR_MOT = 20;
 
         /** Les mots d’un côté préparé, réduits à leur tête : c’est par eux que l’on rapproche. */
-        function v13TetesDeMots(codification, cote, table, identite) {
+        function v13TetesDeMots(codification, cote, table, identite, branche) {
+            const avecBranche = branche ? `, ${branche}` : '';
             return v13ComparaisonsRetenues(codification)
                 .map(
-                    (comparaison, rang) => `SELECT mots.${identite}, substr(mots.mot, 1, ${V13_TETE_DE_MOT}) AS tete
-        FROM (SELECT ${identite}, unnest(${v13NomDesMotsPrets(cote, rang)}) AS mot FROM ${table}) mots
+                    (
+                        comparaison,
+                        rang
+                    ) => `SELECT mots.${identite}${avecBranche}, substr(mots.mot, 1, ${V13_TETE_DE_MOT}) AS tete
+        FROM (SELECT ${identite}${avecBranche}, unnest(${v13NomDesMotsPrets(cote, rang)}) AS mot FROM ${table}) mots
         WHERE mots.mot <> ''`
                 )
                 .join('\n        UNION ALL\n        ');
+        }
+        /**
+         * Le choix des têtes de mots d'une ligne : les plus rares d'abord, tant que le nombre de types
+         * atteints reste sous le plafond.
+         *
+         * « parFamille » dit OÙ la rareté se mesure. Dans tout l'arbre, « CHAUDIERE » est un mot répandu :
+         * il était écarté, et la ligne n'examinait jamais les chaudières de sa propre famille. Or dans cette
+         * famille-là, il n'est peut-être porté que par cinq types — c'est justement lui qui distingue. La
+         * rareté se mesure donc aussi famille par famille, et ce choix-là passe en premier.
+         */
+        function v13ChoixDesTetes(parFamille) {
+            const memeFamille = parFamille ? ' AND frequences.branche = lus.__branche_liste' : '';
+            const memeSeuil = parFamille ? 'seuil.branche = lus.__branche_liste' : 'TRUE';
+            const frequences = parFamille ? 'frequencesDeLaFamille' : 'frequencesPartout';
+            const seuil = parFamille ? 'seuilDeLaFamille' : 'seuilPartout';
+            const branche = parFamille ? 'classees.branche, ' : '';
+            const brancheLue = parFamille ? 'lus.__branche_liste AS branche, ' : '';
+            return `SELECT ${branche}classees.__rn, classees.tete FROM (
+            SELECT ${parFamille ? 'pesees.branche, ' : ''}pesees.__rn, pesees.tete, pesees.types, pesees.maximum,
+                row_number() OVER (PARTITION BY pesees.__rn ORDER BY pesees.types, pesees.tete) AS rang,
+                SUM(pesees.types) OVER (PARTITION BY pesees.__rn ORDER BY pesees.types, pesees.tete
+                    ROWS UNBOUNDED PRECEDING) AS portee
+            FROM (SELECT DISTINCT ${brancheLue}lus.__rn AS __rn, lus.tete AS tete,
+                    frequences.types AS types, seuil.maximum AS maximum
+                FROM motsLus lus
+                JOIN ${frequences} AS frequences ON frequences.tete = lus.tete${memeFamille}
+                JOIN ${seuil} AS seuil ON ${memeSeuil}) pesees
+        ) classees
+        WHERE classees.rang = 1
+            OR (classees.types <= classees.maximum AND classees.portee <= ${V13_TYPES_EXAMINES})`;
         }
         /**
          * Les couples qu’il vaut la peine de comparer, lus sur les deux côtés déjà préparés.
@@ -394,28 +428,40 @@
          * prix d’une requête qui se termine.
          */
         function v13SqlDesRapprochables(codification) {
-            const lus = v13TetesDeMots(codification, 'liste', 'listePrete', '__rn');
-            const types = v13TetesDeMots(codification, 'type', 'typesPrets', '__ligne');
+            // La famille n'est connue que si elle est déclarée des deux côtés ; sinon on ne sait pas comparer.
+            const parFamille = !!(codification.restreindreSource && codification.restreindreNomenclature);
+            const lus = v13TetesDeMots(codification, 'liste', 'listePrete', '__rn', parFamille ? '__branche_liste' : '');
+            const types = v13TetesDeMots(codification, 'type', 'typesPrets', '__ligne', parFamille ? '__branche_type' : '');
+            const compte = 'COUNT(DISTINCT __ligne)';
+            const plafond = `GREATEST(${V13_TYPES_TOLERES_PAR_MOT}, CAST(${V13_PART_MOT_TROP_COURANT} * ${compte} AS BIGINT))`;
+            // Les comptes par famille, et le choix des têtes qui va avec : c'est l'étape qui manquait.
+            const parFamilleSql = parFamille
+                ? `,
+            frequencesDeLaFamille AS (
+        SELECT __branche_type AS branche, tete, ${compte} AS types FROM motsTypes GROUP BY 1, 2
+            ),
+            seuilDeLaFamille AS (
+        SELECT __branche_type AS branche, ${plafond} AS maximum FROM motsTypes GROUP BY 1
+            ),
+            tetesDeLaFamille AS (\n        ${v13ChoixDesTetes(true)}\n            )`
+                : '';
+            // Étape 1 : les types de la famille de la ligne. Étape 2 : le reste de l'arbre. Dans cet ordre,
+            // et l'un n'enlève jamais rien à l'autre — c'est l'union des deux qui part au calcul du score.
+            const dansLaFamille = parFamille
+                ? `
+        UNION ALL
+        SELECT tetesDeLaFamille.__rn AS __rn, motsTypes.__ligne AS __ligne
+        FROM tetesDeLaFamille JOIN motsTypes ON motsTypes.tete = tetesDeLaFamille.tete
+            AND motsTypes.__branche_type = tetesDeLaFamille.branche`
+                : '';
             return `WITH motsLus AS MATERIALIZED (\n        ${lus}\n    ), motsTypes AS MATERIALIZED (\n        ${types}\n    ),
-            frequences AS (SELECT tete, COUNT(DISTINCT __ligne) AS types FROM motsTypes GROUP BY tete),
-            seuil AS (SELECT GREATEST(${V13_TYPES_TOLERES_PAR_MOT}, CAST(${V13_PART_MOT_TROP_COURANT} * COUNT(DISTINCT __ligne) AS BIGINT)) AS maximum FROM motsTypes),
-            pesees AS (
-        SELECT DISTINCT lus.__rn AS __rn, lus.tete AS tete, frequences.types AS types
-        FROM motsLus lus JOIN frequences ON frequences.tete = lus.tete
-            ),
-            classees AS (
-        SELECT __rn, tete, types,
-            row_number() OVER (PARTITION BY __rn ORDER BY types, tete) AS rang,
-            SUM(types) OVER (PARTITION BY __rn ORDER BY types, tete ROWS UNBOUNDED PRECEDING) AS portee
-        FROM pesees
-            ),
-            tetesRetenues AS (
-        SELECT classees.__rn, classees.tete FROM classees, seuil
-        WHERE classees.rang = 1
-            OR (classees.types <= seuil.maximum AND classees.portee <= ${V13_TYPES_EXAMINES})
-            )
-            SELECT DISTINCT tetesRetenues.__rn, motsTypes.__ligne
-            FROM tetesRetenues JOIN motsTypes ON motsTypes.tete = tetesRetenues.tete`;
+            frequencesPartout AS (SELECT tete, ${compte} AS types FROM motsTypes GROUP BY tete),
+            seuilPartout AS (SELECT ${plafond} AS maximum FROM motsTypes),
+            tetesPartout AS (\n        ${v13ChoixDesTetes(false)}\n            )${parFamilleSql}
+            SELECT DISTINCT couples.__rn, couples.__ligne FROM (
+        SELECT tetesPartout.__rn AS __rn, motsTypes.__ligne AS __ligne
+        FROM tetesPartout JOIN motsTypes ON motsTypes.tete = tetesPartout.tete${dansLaFamille}
+            ) couples`;
         }
 
         /** Vérifie qu'une codification dit tout ce qu'il faut pour être exécutée, et le dit en français sinon. */

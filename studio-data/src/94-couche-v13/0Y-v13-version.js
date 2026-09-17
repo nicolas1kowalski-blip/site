@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.16.0';
+        const V13_VERSION = '13.17.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.17.0',
+                d: '2026-09-17',
+                t: 'Codification : la famille d’abord, vraiment',
+                items: [
+                    'Le rapprochement était <b>aveugle à la famille</b>. Il choisissait les mots sur lesquels chercher d’après leur rareté dans TOUT l’arbre : « CHAUDIERE », porté par des centaines de types, était jugé trop courant et écarté. La ligne n’examinait donc jamais les chaudières de sa propre famille. Mesuré : « Chaudière 2 » en J01 ne recevait qu’une proposition de sa famille — <b>une vanne</b> — plus une chaudière d’une autre famille.',
+                    'La rareté d’un mot se mesure désormais <b>aussi famille par famille</b>. Dans la famille J01, « CHAUDIERE » n’est porté que par trois types : c’est précisément lui qui distingue, et il est retenu. On cherche donc d’abord dans la famille de la ligne, puis dans le reste de l’arbre — et la seconde étape n’enlève jamais rien à la première.',
+                    'Même cas après correction : les <b>trois chaudières J01</b> arrivent en tête, puis la vanne, puis l’élargissement.',
+                    'Mesuré sur le volume : 20 000 lignes contre 3 000 types répartis en 30 familles, dans 512 Mo et sans écriture disque, en 0,2 seconde. Chercher d’abord dans la famille ne coûte rien.'
+                ]
+            },
             {
                 v: '13.16.0',
                 d: '2026-09-17',

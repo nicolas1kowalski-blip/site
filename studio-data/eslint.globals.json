@@ -1747,6 +1747,7 @@
  "v13ScoreDeRessemblance": "writable",
  "v13ConditionDeBranche": "writable",
  "v13TetesDeMots": "writable",
+ "v13ChoixDesTetes": "writable",
  "v13SqlDesRapprochables": "writable",
  "v13VerifierLaCodification": "writable",
  "v13TableDesCorrespondances": "writable",
