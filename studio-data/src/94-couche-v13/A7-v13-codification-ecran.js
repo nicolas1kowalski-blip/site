@@ -229,7 +229,13 @@
                 const comptes = arrowResultToObjects(
                     await conn.query(`SELECT __statut AS statut, COUNT(*)::BIGINT AS lignes FROM ${table} GROUP BY __statut`)
                 ).map(compte => ({ statut: String(compte.statut), lignes: Number(compte.lignes) }));
-                v13Codification.resultat = { lignes, bilan: v13BilanDeCodification(comptes) };
+                // Le décompte d’entrée est relu sur la source : c’est lui qui prouve qu’aucune ligne n’a été
+                // perdue ni démultipliée, et c’est la première chose que l’on veut vérifier sur un vrai volume.
+                const tableSource = sqlIdent(duckTableName(tableByName(codification.source).id));
+                const lignesEnEntree = Number(
+                    arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS lignes FROM ${tableSource}`))[0].lignes
+                );
+                v13Codification.resultat = { lignes, bilan: v13BilanDeCodification(comptes), lignesEnEntree };
                 v13Codification.casARevoir = v13RangerLesCasARevoir(
                     arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, 50, V13_TABLE_CODEE)))
                 );
@@ -487,6 +493,49 @@
         }
 
         /** ⑤ Le résultat : le bilan en chiffres, puis les lignes codées. */
+        /**
+         * Le récapitulatif des choix, toujours visible. Les réglages sont nombreux et répartis en quatre
+         * blocs ; sans ce rappel, on ne sait plus ce que l’on a paramétré sans tout rouvrir.
+         */
+        function v13BlocDuRecapitulatif(codification) {
+            const lignes = v13RecapDeLaCodification(codification)
+                .map(
+                    ligne => `<div class="flex gap-2 text-[11px] leading-5">
+                        <span class="font-bold text-slate-500 shrink-0 w-40">${escapeHTML(ligne.intitule)}</span>
+                        <span class="text-slate-700">${escapeHTML(ligne.valeur)}</span>
+                    </div>`
+                )
+                .join('');
+            return `<div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3" id="v13-codif-recap">
+                <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Ce que fait cette codification</div>
+                ${lignes}
+            </div>`;
+        }
+        /**
+         * Le résultat envoyé vers un jeu temporaire : de là il s’extrait, s’exporte en CSV, s’audite, et peut
+         * être promu en vraie source. On ne recode rien : la table codée est déjà là.
+         */
+        async function v13UtiliserLeResultat(identifiant) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification || !v13Codification.resultat) return;
+            bgTaskStart('Préparation du résultat codé');
+            try {
+                await v12TmpFromSql(
+                    `SELECT * EXCLUDE (__rn) FROM ${sqlIdent(V13_TABLE_CODEE)}`,
+                    `${codification.source} codé`,
+                    {
+                        kind: 'extract',
+                        origin: `Codification « ${codification.nom} »`,
+                        from: [codification.source, codification.nomenclature]
+                    }
+                );
+                bgTaskEnd();
+            } catch (erreur) {
+                bgTaskEnd();
+                showError('Impossible de préparer le résultat : ' + v13PhraseDeLErreur(erreur));
+            }
+        }
+
         function v13BlocDuResultat(codification) {
             const resultat = v13Codification.resultat;
             if (!resultat) return '';
@@ -520,7 +569,12 @@
                 ${chiffre('Non trouvées', bilan.absent, '')}
                 ${chiffre('Couverture', Math.round(100 * bilan.couverture) + ' %', '')}
             </div>
-            <p class="text-[11px] text-slate-500 mb-2" id="v13-codif-phrase-bilan">${escapeHTML(bilan.phrase)}</p>
+            <p class="text-[11px] text-slate-500 mb-1" id="v13-codif-phrase-bilan">${escapeHTML(bilan.phrase)}</p>
+            <p class="text-[11px] mb-2 ${resultat.lignesEnEntree && resultat.lignesEnEntree !== bilan.total ? 'text-red-600 font-bold' : 'text-slate-500'}" id="v13-codif-decompte">${escapeHTML(v13PhraseDuDecompte(resultat.lignesEnEntree, bilan.total))}</p>
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <button id="v13-codif-utiliser" onclick="v13UtiliserLeResultat('${codification.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg" title="Le résultat devient un jeu utilisable dans Extraire, Comparer, Qualité — et promouvable en source">→ Utiliser le résultat</button>
+                <span class="text-[10px] text-slate-400">Les ${escapeHTML(Number(bilan.total).toLocaleString('fr-FR'))} lignes codées partent dans un jeu : de là, vous pouvez les extraire, les exporter en CSV, ou en faire une vraie source.</span>
+            </div>
             <div class="overflow-x-auto border border-slate-200 rounded-lg" id="v13-codif-resultat">
                 <table class="w-full text-left text-[11px]"><thead class="bg-slate-100 text-slate-600 font-bold"><tr>
                     ${colonnes.map(colonne => `<th class="p-1.5 whitespace-nowrap">${escapeHTML(enTetes[colonne] || colonne)}</th>`).join('')}
@@ -610,6 +664,7 @@
                 entete +
                 `<input id="v13-codif-nom" value="${escapeHTML(codification.nom)}" onchange="v13EcrireDansLaCodification('nom', this.value)" class="border border-slate-300 p-1.5 rounded text-sm font-bold mb-3 w-full max-w-md">
                 <p class="text-[11px] text-slate-500 mb-3" id="v13-codif-prochaine">${escapeHTML(v13ProchaineAction((v13Codification.resultat || {}).bilan))}</p>` +
+                v13BlocDuRecapitulatif(codification) +
                 v13BlocDeCodification('① La liste à coder, et la nomenclature de référence', v13BlocDesSources(codification)) +
                 v13BlocDeCodification("② Ce que l'on compare", v13BlocDesComparaisons(codification)) +
                 v13BlocDeCodification("③ Les mots qui en valent d'autres", v13BlocDesSynonymes(codification)) +

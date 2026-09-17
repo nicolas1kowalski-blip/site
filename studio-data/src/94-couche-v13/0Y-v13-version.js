@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.8.0';
+        const V13_VERSION = '13.9.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.9.0',
+                d: '2026-09-17',
+                t: 'Codification : une ligne reçue, une ligne rendue — et un résultat que l’on peut emporter',
+                items: [
+                    '<b>La démultiplication est corrigée.</b> 450 000 lignes en entrée en rendaient 1 437 576. En cause, la recherche du chemin dans l’arbre : un même code de type figure presque toujours à plusieurs endroits de l’arborescence, et la ligne codée ressortait autant de fois. Le chemin est désormais lu sur une seule ligne par code. Un libellé appris deux fois ne dédouble plus rien non plus.',
+                    'Le résultat annonce désormais les lignes reçues et les lignes rendues, côte à côte. S’ils diffèrent, l’écran le dit en rouge au lieu de laisser croire au total.',
+                    '<b>« → Utiliser le résultat »</b> : les lignes codées partent dans un jeu, d’où elles s’extraient, s’exportent en CSV, s’auditent, et peuvent être promues en vraie source.',
+                    '<b>Les paramétrages de codification sont enfin sauvegardés.</b> Ils étaient perdus à chaque rechargement — d’où l’impression que les choix de mapping avaient disparu. Ils reviennent maintenant avec le reste de la configuration, sous le nom que vous leur donnez.',
+                    'Et un <b>récapitulatif</b> en haut de l’écran, toujours visible : ce que l’on code, contre quoi, ce que l’on compare, la branche, le chemin de l’arbre, les synonymes et les règles actives — sans rien avoir à rouvrir.'
+                ]
+            },
             {
                 v: '13.8.0',
                 d: '2026-09-17',

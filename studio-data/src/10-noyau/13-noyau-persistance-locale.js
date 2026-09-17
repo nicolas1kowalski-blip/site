@@ -349,7 +349,10 @@
                     delete c2.targetId;
                     return c2;
                 }),
-                extractPresets: state.extractPresets || []
+                extractPresets: state.extractPresets || [],
+                // Les paramétrages de codification : ils désignent leurs tables par NOM, comme les recettes,
+                // donc ils se relisent tels quels d’une session à l’autre.
+                codifications: state.codifications || []
             };
         }
 
@@ -429,6 +432,7 @@
             if (saved.qualityMinScore != null) state.qualityMinScore = saved.qualityMinScore;
             if (Array.isArray(saved.connectors)) state.connectors = saved.connectors;
             if (Array.isArray(saved.extractPresets)) state.extractPresets = saved.extractPresets;
+            if (Array.isArray(saved.codifications)) state.codifications = saved.codifications;
         }
 
         // v3.7 : les « cas d'usage » fusionnent dans les processus (Applis & processus).

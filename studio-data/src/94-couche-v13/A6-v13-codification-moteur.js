@@ -400,8 +400,12 @@
                     code: correspondance.code
                 }))
                 .filter(correspondance => correspondance.libelle && correspondance.code);
-            if (!lignes.length) return '';
-            const valeurs = lignes.map(ligne => `(${sqlLiteral(ligne.libelle)}, ${sqlLiteral(ligne.code)})`).join(', ');
+            // Un libellé appris deux fois ne doit pas faire ressortir la ligne deux fois : la dernière
+            // décision prise sur ce libellé l’emporte, et elle est seule dans la table.
+            const codeParLibelle = new Map();
+            lignes.forEach(ligne => codeParLibelle.set(ligne.libelle, ligne.code));
+            if (!codeParLibelle.size) return '';
+            const valeurs = [...codeParLibelle].map(paire => `(${sqlLiteral(paire[0])}, ${sqlLiteral(paire[1])})`).join(', ');
             return `(VALUES ${valeurs}) AS corr(libelle, code)`;
         }
         /** Le code retenu, règle après règle, la première qui répond l'emportant. */
@@ -435,24 +439,32 @@
             return cas.length ? `CASE ${cas.join(' ')} ELSE NULL END` : 'NULL';
         }
         /** Le code final, son origine, son score, son statut, et le chemin déplié dans l'arbre. */
-        function v13SelectFinal(codification, tableNomenclature) {
+        function v13SelectFinal(codification) {
             const code = `COALESCE(reconnues.__code_regle,
                 CASE WHEN candidats.__score_voisin >= ${Number(codification.seuilAuto)} THEN candidats.__code_voisin END)`;
             const statut = `CASE WHEN ${code} IS NOT NULL THEN 'office'
                 WHEN candidats.__code_voisin IS NOT NULL THEN 'revoir' ELSE 'absent' END`;
-            const niveaux = (codification.niveaux || []).filter(Boolean);
-            const chemin = niveaux.length
-                ? `concat_ws(' › ', ${niveaux.map(niveau => `CAST(arbre.${sqlIdent(niveau)} AS VARCHAR)`).join(', ')})`
-                : 'NULL';
+            /*
+             * Le chemin de l’arbre est lu sur UNE seule ligne par code.
+             *
+             * Un même code de type revient presque toujours à plusieurs endroits de l’arborescence : le même
+             * type de pompe sous le transfert, sous l’alimentation, sous le secours. En joignant la
+             * nomenclature entière sur le code, chaque ligne codée ressortait autant de fois qu’il y avait
+             * de lignes portant ce code — 450 000 lignes en entrée en rendaient 1 437 576. On dédoublonne
+             * donc par code avant de joindre : le décompte de sortie égale celui d’entrée, toujours.
+             */
+            const cleDuCode = v13TexteCompare('typesPrets.__code_type');
+            const arbre = `(SELECT __code_type, __chemin_type FROM typesPrets
+                QUALIFY row_number() OVER (PARTITION BY ${cleDuCode} ORDER BY __ligne) = 1) arbre`;
             return `SELECT reconnues.* EXCLUDE (__libelle, __code_regle, __origine_regle),
             ${code} AS __code,
             COALESCE(reconnues.__origine_regle, CASE WHEN ${code} IS NOT NULL THEN 'ressemblance' ELSE 'aucune' END) AS __origine,
             ROUND(COALESCE(candidats.__score_voisin, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
             ${statut} AS __statut,
-            ${chemin} AS __chemin
+            arbre.__chemin_type AS __chemin
         FROM reconnues
         LEFT JOIN candidats ON candidats.__rn = reconnues.__rn
-        LEFT JOIN ${tableNomenclature} arbre ON ${v13TexteCompare(`arbre.${sqlIdent(codification.colonneCode)}`)} = ${v13TexteCompare(code)}`;
+        LEFT JOIN ${arbre} ON ${v13TexteCompare('arbre.__code_type')} = ${v13TexteCompare(code)}`;
         }
 
         /**
@@ -487,7 +499,7 @@
             FROM (\n${notes}\n        ) notes
             GROUP BY __rn HAVING max(__score_voisin) >= ${Number(codification.seuilRevoir)}`;
             const decisions = v13SqlDesDecisions(codification);
-            const codee = `WITH reconnues AS (\n${reconnues}\n), listePrete AS MATERIALIZED (\n${v13ListePreparee(codification, 'reconnues r WHERE r.__code_regle IS NULL')}\n), typesPrets AS MATERIALIZED (\n${v13TypesPrepares(codification, tableNomenclature)}\n), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n), candidats AS (\n${candidats}\n)\n${v13SelectFinal(codification, tableNomenclature)}`;
+            const codee = `WITH reconnues AS (\n${reconnues}\n), listePrete AS MATERIALIZED (\n${v13ListePreparee(codification, 'reconnues r WHERE r.__code_regle IS NULL')}\n), typesPrets AS MATERIALIZED (\n${v13TypesPrepares(codification, tableNomenclature)}\n), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n), candidats AS (\n${candidats}\n)\n${v13SelectFinal(codification)}`;
             return decisions ? `SELECT codee.* REPLACE (${decisions}) FROM (\n${codee}\n) codee` : codee;
         }
 
@@ -555,6 +567,72 @@
                 'retirez les comparaisons les moins utiles, ou codez la liste en plusieurs morceaux. Détail : ' +
                 message
             );
+        }
+
+        /**
+         * Le récapitulatif des choix faits, en français, pour qu’on les relise sans déplier les réglages.
+         * Une ligne par décision : ce que l’on code, contre quoi, ce que l’on compare, ce que l’on a appris.
+         */
+        function v13RecapDeLaCodification(codification) {
+            const dit = valeur => (String(valeur || '').trim() ? String(valeur).trim() : '— à choisir —');
+            const comparaisons = (codification.comparaisons || []).filter(
+                comparaison => comparaison.colonneSource && comparaison.colonneNomenclature
+            );
+            const niveaux = (codification.niveaux || []).filter(Boolean);
+            const regles = (codification.regles || []).filter(regle => regle.actif);
+            const lignes = [
+                { intitule: 'À coder', valeur: `${dit(codification.source)} · colonne ${dit(codification.colonneLibelle)}` },
+                {
+                    intitule: 'Contre',
+                    valeur: `${dit(codification.nomenclature)} · code ${dit(codification.colonneCode)} · libellé ${dit(codification.colonneLibelleRef)}`
+                },
+                {
+                    intitule: 'Comparaison',
+                    valeur: comparaisons.length
+                        ? comparaisons.map(v13PhraseDeLaComparaison).join(' · ')
+                        : `${dit(codification.colonneLibelle)} contre ${dit(codification.colonneLibelleRef)}`
+                },
+                {
+                    intitule: 'Mesure',
+                    valeur: `${V13_METHODES_DE_RESSEMBLANCE[codification.methode] || codification.methode} · d’office au-dessus de ${codification.seuilAuto} · à revoir au-dessus de ${codification.seuilRevoir}`
+                }
+            ];
+            if (codification.colonneCodeExistant)
+                lignes.push({ intitule: 'Code déjà fourni', valeur: `${codification.colonneCodeExistant}, gardé tel quel` });
+            if (codification.restreindreSource && codification.restreindreNomenclature)
+                lignes.push({
+                    intitule: 'Branche',
+                    valeur: `${codification.restreindreSource} doit correspondre à ${codification.restreindreNomenclature}`
+                });
+            if (niveaux.length) lignes.push({ intitule: 'Chemin de l’arbre', valeur: niveaux.join(' › ') });
+            if ((codification.synonymes || []).length)
+                lignes.push({
+                    intitule: 'Mots qui en valent d’autres',
+                    valeur: codification.synonymes.map(v13PhraseDuSynonyme).join(' · ')
+                });
+            if (regles.length)
+                lignes.push({
+                    intitule: 'Règles actives',
+                    valeur: regles.map(regle => v13PhraseDeLaRegle(regle, codification.colonneLibelle)).join(' · ')
+                });
+            if ((codification.correspondances || []).length)
+                lignes.push({
+                    intitule: 'Libellés appris',
+                    valeur: `${codification.correspondances.length} libellé(s) tranché(s) à la main`
+                });
+            return lignes;
+        }
+
+        /**
+         * Ce qu’il faut dire du décompte : la codification rend exactement autant de lignes qu’elle en a reçu.
+         * Si ce n’est pas le cas, c’est un défaut, et il vaut mieux le dire que laisser croire au résultat.
+         */
+        function v13PhraseDuDecompte(lignesEnEntree, lignesEnSortie) {
+            const enFrancais = nombre => Number(nombre || 0).toLocaleString('fr-FR');
+            if (!lignesEnEntree) return `${enFrancais(lignesEnSortie)} ligne(s) codée(s).`;
+            if (lignesEnEntree === lignesEnSortie)
+                return `${enFrancais(lignesEnSortie)} ligne(s) en entrée, autant en sortie : aucune ligne n’a été perdue ni démultipliée.`;
+            return `⚠️ ${enFrancais(lignesEnEntree)} ligne(s) en entrée mais ${enFrancais(lignesEnSortie)} en sortie. Signalez-le : une codification doit rendre exactement ce qu’elle a reçu.`;
         }
 
         /** Le bilan d'une codification, à partir du compte de chaque statut. */

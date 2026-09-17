@@ -105,6 +105,21 @@ const out = await p.evaluate(async ()=>{
   ok('le score ne recanonise ni ne redécoupe rien : il lit les colonnes préparées', !/strip_accents|string_split/.test(v13ScoreDeRessemblance(C())) && /__mots_liste_0/.test(v13ScoreDeRessemblance(C())));
   ok('le meilleur voisin est retenu par regroupement, sans trier tous les couples', /arg_max\(__code_voisin, __score_voisin\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
 
+  // ---- les choix faits, relus sans rien déplier, et gardés d’une session à l’autre
+  ok('le r\u00e9capitulatif dit en fran\u00e7ais ce que l\'on code et contre quoi', (()=>{ const r=v13RecapDeLaCodification(C());
+    const ligne = intitule => (r.find(x=>x.intitule===intitule)||{}).valeur || '';
+    return /equipements\.csv \u00b7 colonne LIBELLE/.test(ligne('\u00c0 coder')) && /nomenclature\.csv \u00b7 code CODE_TYPE/.test(ligne('Contre'))
+      && /FAMILLE \u203a SYSTEME/.test(ligne('Chemin de l\u2019arbre')) && /FAMILLE doit correspondre \u00e0 FAMILLE/.test(ligne('Branche')); })());
+  ok('le r\u00e9capitulatif est affich\u00e9 en haut de l\'\u00e9cran, pas cach\u00e9 dans les r\u00e9glages', (()=>{ const bloc=el('v13-codif-recap');
+    return bloc && /Ce que fait cette codification/.test(bloc.textContent) && /equipements\.csv/.test(bloc.textContent); })());
+  ok('le d\u00e9compte rassure quand il est juste, et alerte quand il ne l\'est pas',
+    /9 ligne\(s\) en entr\u00e9e, autant en sortie/.test(v13PhraseDuDecompte(9, 9)) && /\u26a0/.test(v13PhraseDuDecompte(9, 27)));
+  ok('les param\u00e9trages de codification sont sauvegard\u00e9s avec le reste', (()=>{ const garde=collectPersistedConfig();
+    return Array.isArray(garde.codifications) && garde.codifications.some(x=>x.id===C().id && x.colonneLibelle==='LIBELLE'); })());
+  ok('et ils sont relus au retour', (()=>{ const garde=collectPersistedConfig(); const avant=state.codifications;
+    state.codifications=[]; applyPersistedConfig(garde); const revenu=state.codifications.some(x=>x.id===avant[0].id && x.nomenclature==='nomenclature.csv');
+    state.codifications=avant; return revenu; })());
+
   // ---- la mémoire du navigateur, quand elle ne suffit pas
   ok('une erreur de mémoire est traduite en français, avec quoi faire', /la mémoire du navigateur n’a pas suffi/.test(v13PhraseDeLErreur(new Error('Invalid Error: HTML FileReaders do not support writing'))) && /Chercher dans la bonne branche/.test(v13PhraseDeLErreur(new Error('Out of Memory Error'))));
   ok('une erreur ordinaire est rendue telle quelle, sans bavardage', v13PhraseDeLErreur(new Error('Colonne inconnue'))==='Colonne inconnue');
@@ -189,6 +204,26 @@ console.log(`   codification de 4 000 lignes contre 800 types : ${secondes.toFix
 ok('SQL réel : 4 000 lignes contre 800 types se codent en moins de 30 secondes', secondes < 30);
 ok('SQL réel : le blocage par les mots rares ne perd pas les lignes — toutes sont rendues', compte('office') + compte('revoir') + compte('absent') === 4000);
 ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('office') >= 3900);
+
+// ---- le même code à plusieurs endroits de l'arbre : une ligne reçue, une ligne rendue ----
+// Un même type d'équipement figure presque toujours sous plusieurs systèmes de l'arborescence. En
+// joignant la nomenclature entière sur le code pour retrouver le chemin, chaque ligne codée ressortait
+// autant de fois qu'il y avait de lignes portant ce code : 450 000 en entrée en rendaient 1 437 576.
+const arbreRepete = await (await DuckDBInstance.create(':memory:')).connect();
+const demande = async sql => (await (await arbreRepete.run(sql)).getRowObjects());
+await demande(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
+  ('POMPES','Transfert','Centrifuge','Pompe centrifuge','PMP-C','PC'),
+  ('POMPES','Alimentation','Centrifuge','Pompe centrifuge','PMP-C','PC'),
+  ('POMPES','Secours','Centrifuge','Pompe centrifuge','PMP-C','PC'),
+  ('VANNES','Sectionnement','Quart de tour','Vanne papillon','VAN-P','VP')
+) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
+await demande(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES ${valeurs(EQUIPEMENTS)}) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+const rendues = Number((await demande(`SELECT COUNT(*)::BIGINT AS lignes FROM (\n${sqlSansSynonymes}\n) f`))[0].lignes);
+ok('SQL r\u00e9el : un code pr\u00e9sent \u00e0 trois endroits de l\u2019arbre ne triple pas les lignes', rendues === EQUIPEMENTS.length);
+const reperes = await demande(`SELECT REPERE, COUNT(*)::BIGINT AS lignes FROM (\n${sqlSansSynonymes}\n) f GROUP BY REPERE HAVING COUNT(*) > 1`);
+ok('SQL r\u00e9el : aucun rep\u00e8re ne ressort deux fois', reperes.length === 0);
+const chemin = await demande(`SELECT __chemin FROM (\n${sqlSansSynonymes}\n) f WHERE REPERE = 'EQ001'`);
+ok('SQL r\u00e9el : le chemin de l\u2019arbre reste renseign\u00e9, une seule fois', /POMPES/.test(String(chemin[0].__chemin)));
 
 // ---- le cas qui ne passait pas : des mots qui se ressemblent tous ----
 // Une nomenclature où aucun mot n'est vraiment rare, et où les mots se confondent sur leurs premières
