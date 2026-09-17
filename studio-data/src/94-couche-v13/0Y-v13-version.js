@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.18.0';
+        const V13_VERSION = '13.19.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.19.0',
+                d: '2026-09-17',
+                t: 'Codification : la proposition de la famille s’imprime dans le résultat',
+                items: [
+                    'Le fichier résultat n’avait <b>aucune colonne</b> pour la proposition faite dans la famille de la ligne. Il n’imprimait que le code trouvé <i>ailleurs</i> dans l’arbre. Une ligne « Disconnecteur CES » en J01, notée 0,333 contre un disconnecteur de sa propre famille, ressortait avec un code de la famille K04 en face d’elle : on lisait que la machine « avait choisi K04 », alors qu’elle n’avait rien choisi et avait bel et bien regardé la famille en premier.',
+                    'Le résultat porte maintenant trois colonnes de plus : <b>Proposition dans sa famille</b>, <b>Libellé de cette proposition</b> et <b>Confiance de cette proposition</b>. Le code trouvé hors famille reste imprimé à côté — il ne la remplace plus.',
+                    'Le cas du terrain est couvert par un test : un même code rangé sous deux familles est proposé sous celle de la ligne, avec son libellé, et non sous l’autre.'
+                ]
+            },
             {
                 v: '13.18.0',
                 d: '2026-09-17',

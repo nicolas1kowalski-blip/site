@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-17T19:22:10.283Z",
+ "generated": "2026-09-17T19:43:50.969Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 49093,
-  "codeLines": 46612,
-  "commentLines": 2481,
-  "templateLines": 9718,
+  "lines": 49127,
+  "codeLines": 46637,
+  "commentLines": 2490,
+  "templateLines": 9738,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6475,
+  "locals": 6476,
   "shortLocals": 844,
   "functions": 1615,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.13034749034749035
+  "shortLocalsRatio": 0.13032736256948735
  },
  "files": [
   {
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 247,
-   "codeLines": 245,
+   "lines": 257,
+   "codeLines": 255,
    "commentLines": 2,
-   "templateLines": 122,
+   "templateLines": 127,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
@@ -1139,13 +1139,13 @@
   },
   {
    "file": "94-couche-v13/A6-v13-codification-moteur.js",
-   "lines": 1061,
-   "codeLines": 789,
-   "commentLines": 272,
-   "templateLines": 232,
+   "lines": 1082,
+   "codeLines": 801,
+   "commentLines": 281,
+   "templateLines": 243,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 148,
+   "locals": 149,
    "shortLocals": 0,
    "functions": 53,
    "longestLogic": 159,
@@ -1153,10 +1153,10 @@
   },
   {
    "file": "94-couche-v13/A7-v13-codification-ecran.js",
-   "lines": 862,
-   "codeLines": 775,
+   "lines": 865,
+   "codeLines": 778,
    "commentLines": 87,
-   "templateLines": 233,
+   "templateLines": 237,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 91,

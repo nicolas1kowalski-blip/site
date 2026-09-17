@@ -407,6 +407,36 @@ ok('SQL réel : les trois chaudières de la famille sont proposées, plus seulem
 ok('SQL réel : et elles passent avant les propositions prises ailleurs',
   proposeesFamille.slice(0, deLaFamille.length).every(l => l.memeBranche === true));
 
+// ---- et cette proposition de la famille doit SE VOIR dans le fichier résultat ----
+// Le résultat n'imprimait que le code trouvé hors famille : on lisait « K04 » en face d'une ligne J01 et
+// l'on comprenait que la machine avait choisi K04, alors qu'elle avait une proposition dans la famille.
+const resultatFamille = await cherche('SELECT * FROM "v13_codee" WHERE REPERE = \'E1\'');
+const ligneE1 = resultatFamille[0];
+ok('SQL réel : le résultat imprime la proposition faite dans la famille de la ligne',
+  ['22390503.A','22390504.A','22390505.A'].includes(String(ligneE1.__code_propose)));
+ok('SQL réel : avec son libellé et sa confiance, pour qu\'elle soit lisible sans rouvrir la nomenclature',
+  /Chaudiere/.test(String(ligneE1.__libelle_propose)) && Number(ligneE1.__score_propose) > 0);
+ok('SQL réel : le code trouvé hors famille reste imprimé à côté, il ne la remplace plus',
+  ligneE1.__code_autre_branche === null || String(ligneE1.__code_autre_branche) !== String(ligneE1.__code_propose));
+
+// Le cas exact du terrain : un même code rangé sous DEUX familles, la ligne étant dans la première.
+const deuxFamilles = await (await DuckDBInstance.create(':memory:')).connect();
+const deux = async sql => (await (await deuxFamilles.run(sql)).getRowObjects());
+await deux(`CREATE TABLE "t_nm" AS
+  SELECT 'B' || (i % 20) AS FAMILLE, 'S' AS SYSTEME, 'SS' AS SOUS_SYSTEME,
+    'Disconnecteur modele ' || i AS LIBELLE_TYPE, 'Y-' || i AS CODE_TYPE, 'DM' AS ABREGE FROM range(400) t(i)
+  UNION ALL SELECT 'J01','S','SS','Disconnecteur BA zpr-ctr.','37010909.B','DBA'
+  UNION ALL SELECT 'J01','S','SS','Disconnecteur HA ext-ctr.','37010909.D','DHA'
+  UNION ALL SELECT 'K04','S','SS','Disconnecteur HA ext-ctr.','37010909.D','DHA'`);
+await deux(`CREATE TABLE "t_eq" AS SELECT 1 AS __rn, 'E1' AS REPERE,
+  'Disconnecteur CES Le Vigneret' AS LIBELLE, 'J01' AS FAMILLE, '' AS CODE_FOURNI, '' AS DESIGNATION`);
+await deux(`CREATE OR REPLACE TABLE "v13_codee" AS\n${sqlFamilleDabord.code}`);
+const ligneDeux = (await deux('SELECT * FROM "v13_codee"'))[0];
+ok('SQL réel : un code rangé sous deux familles est proposé DANS celle de la ligne, pas dans l\'autre',
+  ['37010909.B','37010909.D'].includes(String(ligneDeux.__code_propose)) && Number(ligneDeux.__score_propose) > 0);
+ok('SQL réel : et le libellé rendu est bien celui d\'un disconnecteur',
+  /Disconnecteur/.test(String(ligneDeux.__libelle_propose)));
+
 // Et sur le volume, avec une famille déclarée : la nouvelle étape ne doit rien coûter de plus.
 const volumeFamille = await (await DuckDBInstance.create(':memory:')).connect();
 const mesure = async sql => (await (await volumeFamille.run(sql)).getRowObjects());

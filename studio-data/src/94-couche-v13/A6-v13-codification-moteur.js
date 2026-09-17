@@ -562,6 +562,22 @@
             const arbre = `(SELECT ${cleDuCode} AS __cle, any_value(__chemin_type) AS __chemin_type,
                 array_to_string(list_sort(list_distinct(list(__branche_type))), ', ') AS __familles
                 FROM typesPrets GROUP BY 1) arbre`;
+            /*
+             * Le libellé de la proposition faite DANS la famille de la ligne.
+             *
+             * Le fichier résultat ne disait rien de cette proposition : il n'imprimait que le code trouvé
+             * ailleurs dans l'arbre. Une ligne « Disconnecteur CES » en J01, notée 0,333 contre un
+             * disconnecteur de sa propre famille, ressortait avec un code de la famille K04 en face d'elle
+             * — et il fallait comprendre que la machine « avait choisi K04 », alors qu'elle n'avait rien
+             * choisi du tout et avait bel et bien regardé la famille en premier. On imprime donc les deux.
+             */
+            const proposeeDansLaFamille = brancheConnue
+                ? `(SELECT ${cleDuCode} AS __cle, __branche_type AS __branche,
+                any_value(__libelle_type) AS __libelle_type
+                FROM typesPrets GROUP BY 1, 2) proposee`
+                : `(SELECT ${cleDuCode} AS __cle, NULL AS __branche,
+                any_value(__libelle_type) AS __libelle_type
+                FROM typesPrets GROUP BY 1) proposee`;
             const desaccord = brancheConnue
                 ? `(${brancheDeLaLigne} IS NOT NULL AND ${brancheDeLaLigne} <> ''
                 AND arbre.__cle IS NOT NULL AND arbreFamille.__cle IS NULL)`
@@ -579,6 +595,9 @@
             ROUND(COALESCE(candidats.__score_dans, candidats.__score_hors, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
             ${statut} AS __statut,
             COALESCE(arbreFamille.__chemin_type, arbre.__chemin_type) AS __chemin,
+            CASE WHEN ${code} IS NULL THEN ${meilleur} END AS __code_propose,
+            CASE WHEN ${code} IS NULL THEN proposee.__libelle_type END AS __libelle_propose,
+            CASE WHEN ${code} IS NULL THEN ROUND(candidats.__score_dans, 3) END AS __score_propose,
             CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN ${code} ELSE ${hors} END AS __code_autre_branche,
             CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN arbre.__familles
                 WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
@@ -586,7 +605,9 @@
         LEFT JOIN candidats ON candidats.__rn = reconnues.__rn
         LEFT JOIN ${arbre} ON arbre.__cle = ${v13TexteCompare(code)}
         LEFT JOIN ${arbreDeLaFamille} ON arbreFamille.__cle = ${v13TexteCompare(code)}
-            AND arbreFamille.__branche = ${brancheDeLaLigne}`;
+            AND arbreFamille.__branche = ${brancheDeLaLigne}
+        LEFT JOIN ${proposeeDansLaFamille} ON proposee.__cle = ${v13TexteCompare(meilleur)}
+            AND proposee.__branche IS NOT DISTINCT FROM ${brancheConnue ? brancheDeLaLigne : 'NULL'}`;
         }
 
         /**

@@ -614,7 +614,10 @@
                 __score: 'Confiance',
                 __statut: 'Statut',
                 __chemin: "Chemin dans l'arbre",
-                __code_autre_branche: 'Code en cause',
+                __code_propose: 'Proposition dans sa famille',
+                __libelle_propose: 'Libellé de cette proposition',
+                __score_propose: 'Confiance de cette proposition',
+                __code_autre_branche: 'Code en cause, ou trouvé hors famille',
                 __branche_trouvee: 'Familles où ce code existe'
             };
             const corps = resultat.lignes
