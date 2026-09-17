@@ -9,7 +9,7 @@
         /** Combien de lignes on montre d'un coup : de quoi juger sans noyer le navigateur. */
         const V13_LIGNES_MONTREES = 200;
         /** Ce que l'écran garde entre deux rendus : la codification ouverte, son dernier résultat, sa revue. */
-        const v13Codification = { ouverte: '', resultat: null, casARevoir: [], enCours: false };
+        const v13Codification = { ouverte: '', resultat: null, casARevoir: [], branche: null, enCours: false };
 
         /** Une codification toute neuve, avec les seuils qui vont bien pour des libellés d'équipements. */
         function v13CodificationNeuve() {
@@ -51,6 +51,7 @@
             v13Codification.ouverte = identifiant;
             v13Codification.resultat = null;
             v13Codification.casARevoir = [];
+            v13Codification.branche = null;
             renderCodification();
         }
         function v13SupprimerLaCodification(identifiant) {
@@ -237,6 +238,12 @@
                     arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS lignes FROM ${tableSource}`))[0].lignes
                 );
                 v13Codification.resultat = { lignes, bilan: v13BilanDeCodification(comptes), lignesEnEntree };
+                // Le contrôle de la colonne de branche : deux GROUP BY, et l’on sait si les deux côtés
+                // parlent de la même chose. C’est la réponse à « pourquoi aucune proposition de ma famille ».
+                const controle = v13SqlDuControleDeBranche(codification);
+                v13Codification.branche = controle
+                    ? v13BilanDuControleDeBranche(arrowResultToObjects(await conn.query(controle)))
+                    : null;
                 v13Codification.casARevoir = v13RangerLesCasARevoir(
                     arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, 50, V13_TABLE_CODEE)))
                 );
@@ -257,7 +264,13 @@
                 const rang = Number(ligne.rang);
                 let trouve = cas.find(candidate => candidate.rang === rang);
                 if (!trouve) {
-                    trouve = { rang, libelle: String(ligne.libelle || ''), combien: Number(ligne.combien) || 1, candidats: [] };
+                    trouve = {
+                        rang,
+                        libelle: String(ligne.libelle || ''),
+                        combien: Number(ligne.combien) || 1,
+                        famille: String(ligne.famille || ''),
+                        candidats: []
+                    };
                     cas.push(trouve);
                 }
                 trouve.candidats.push({
@@ -592,6 +605,7 @@
                 <button id="v13-codif-utiliser" onclick="v13UtiliserLeResultat('${codification.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg" title="Le résultat devient un jeu utilisable dans Extraire, Comparer, Qualité — et promouvable en source">→ Utiliser le résultat</button>
                 <span class="text-[10px] text-slate-400">Les ${escapeHTML(Number(bilan.total).toLocaleString('fr-FR'))} lignes codées partent dans un jeu : de là, vous pouvez les extraire, les exporter en CSV, ou en faire une vraie source.</span>
             </div>
+            ${v13AlerteDeLaBranche()}
             ${v13ExplicationDesDesaccords(codification, resultat)}
             <div class="overflow-x-auto border border-slate-200 rounded-lg" id="v13-codif-resultat">
                 <table class="w-full text-left text-[11px]"><thead class="bg-slate-100 text-slate-600 font-bold"><tr>
@@ -599,6 +613,31 @@
                 </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">${corps}</tbody></table>
+            </div>`;
+        }
+        /**
+         * Pourquoi ce cas n’a reçu aucune proposition de sa famille. Deux raisons possibles, et il vaut
+         * mieux savoir laquelle : ou bien cette famille n’existe pas dans la nomenclature — c’est alors la
+         * colonne de branche qu’il faut revoir —, ou bien elle existe mais aucun de ses types ne partage de
+         * mot avec ce libellé — et c’est le libellé ou les synonymes qu’il faut reprendre.
+         */
+        function v13PourquoiAucuneDansLaFamille(unCas, dansLaFamille) {
+            if (dansLaFamille || !unCas.famille) return '';
+            const controle = v13Codification.branche;
+            const connue = controle && (controle.familles || []).includes(unCas.famille);
+            if (controle && !connue) return `La famille « ${unCas.famille} » de cette ligne n’existe pas dans la nomenclature.`;
+            return `La famille « ${unCas.famille} » existe dans la nomenclature, mais aucun de ses types ne partage de mot avec ce libellé.`;
+        }
+        /**
+         * L’alerte sur la colonne de branche. Quand une famille de la liste n’existe pas dans la
+         * nomenclature, aucune ligne de cette famille ne peut recevoir de proposition — et rien ne le disait.
+         */
+        function v13AlerteDeLaBranche() {
+            const controle = v13Codification.branche;
+            if (!controle || controle.accord || !controle.phrase) return '';
+            return `<div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-2 text-[11px] text-amber-900" id="v13-codif-alerte-branche">
+                <div class="font-bold mb-1">⚠️ La colonne de branche ne correspond pas des deux côtés</div>
+                ${escapeHTML(controle.phrase)}
             </div>`;
         }
         /**
@@ -660,7 +699,7 @@
                             : '<span class="v13-codif-combien">1 ligne</span>';
                     return `<div class="v13-codif-cas" data-rang="${unCas.rang}" data-combien="${lignes}">
                         <div class="font-bold mb-1">${escapeHTML(unCas.libelle)} ${combienDit}</div>
-                        ${elargies ? `<div class="text-[10px] text-slate-400 mb-1">${dansLaFamille} proposition(s) dans la famille de la ligne, puis ${elargies} prise(s) ailleurs dans l’arbre.</div>` : ''}
+                        ${elargies ? `<div class="text-[10px] text-slate-400 mb-1">${dansLaFamille} proposition(s) dans la famille de la ligne, puis ${elargies} prise(s) ailleurs dans l’arbre. ${escapeHTML(v13PourquoiAucuneDansLaFamille(unCas, dansLaFamille))}</div>` : ''}
                         <div class="flex gap-2 flex-wrap">${propositions}
                             <button onclick="v13TrancherLeCas(${pourTous}, '', ${lignes})" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50" title="Ce libellé ne sera plus reproposé">aucun ne convient</button>
                         </div>

@@ -653,7 +653,7 @@
         ), rapprochables AS (\n    ${v13SqlDesRapprochables(codification)}\n
         ), notes AS (
             SELECT liste.__rn AS rang, aCoder.__texte AS libelle, aCoder.__combien AS combien,
-                CAST(types.__code_type AS VARCHAR) AS code,
+                ${codification.restreindreSource ? v13TexteCompare(`aCoder.${sqlIdent(codification.restreindreSource)}`) : "''"} AS famille, CAST(types.__code_type AS VARCHAR) AS code,
                 types.__libelle_type AS libelleRef, types.__chemin_type AS chemin,
                 (${v13ConditionDeBranche(codification)}) AS memeBranche,
                 ROUND((${v13ScoreDeRessemblance(codification)}), 3) AS score
@@ -702,6 +702,79 @@
             if ((ligne || {}).__code)
                 return `Le code ${code} vient du ${parQuoi}, mais il n’existe pas sous « ${famille} » : on le trouve sous ${familles || '—'}.`;
             return `Rien ne correspond sous « ${famille} ». Le libellé désigne le code ${code}, rangé sous ${familles || '—'}.`;
+        }
+
+        /**
+         * Le contrôle de la colonne de branche : les familles de la liste existent-elles dans l’arbre ?
+         *
+         * C’est la première chose à vérifier quand une ligne ne reçoit aucune proposition de sa famille. Deux
+         * colonnes peuvent porter le même nom et ne pas dire la même chose : « CHAUDIERE » d’un côté et
+         * « J01 » de l’autre ne se rencontreront jamais, et tout finit « dans une autre branche » sans que
+         * l’on comprenne pourquoi. On compte donc les lignes par famille, et l’on dit lesquelles l’arbre
+         * ignore.
+         */
+        function v13SqlDuControleDeBranche(codification) {
+            v13VerifierLaCodification(codification);
+            if (!codification.restreindreSource || !codification.restreindreNomenclature) return '';
+            const tableSource = sqlIdent(duckTableName(tableByName(codification.source).id));
+            const tableNomenclature = sqlIdent(duckTableName(tableByName(codification.nomenclature).id));
+            const cote = v13TexteCompare(`liste.${sqlIdent(codification.restreindreSource)}`);
+            const autre = v13TexteCompare(`arbre.${sqlIdent(codification.restreindreNomenclature)}`);
+            return `WITH famillesDeLaListe AS (
+            SELECT ${cote} AS famille, COUNT(*)::BIGINT AS lignes FROM ${tableSource} liste GROUP BY 1
+        ), famillesDeLArbre AS (
+            SELECT DISTINCT ${autre} AS famille FROM ${tableNomenclature} arbre
+        )
+        SELECT famillesDeLaListe.famille AS famille, famillesDeLaListe.lignes AS lignes,
+            (famillesDeLArbre.famille IS NOT NULL) AS connue
+        FROM famillesDeLaListe LEFT JOIN famillesDeLArbre ON famillesDeLArbre.famille = famillesDeLaListe.famille
+        ORDER BY connue, lignes DESC`;
+        }
+        /** Combien on nomme de familles inconnues avant de dire « et d’autres ». */
+        const V13_FAMILLES_NOMMEES = 6;
+        /**
+         * Ce que dit le contrôle, en français. Le cas le plus grave — AUCUNE famille de la liste ne se
+         * retrouve dans l’arbre — veut presque toujours dire que l’une des deux colonnes n’est pas la bonne.
+         */
+        function v13BilanDuControleDeBranche(lignes) {
+            const enFrancais = nombre => Number(nombre || 0).toLocaleString('fr-FR');
+            const rangees = (lignes || []).map(ligne => ({
+                famille: String(ligne.famille || ''),
+                lignes: Number(ligne.lignes) || 0,
+                connue: !!ligne.connue
+            }));
+            const inconnues = rangees.filter(ligne => !ligne.connue && ligne.famille);
+            const connues = rangees.filter(ligne => ligne.connue);
+            const lignesInconnues = inconnues.reduce((somme, ligne) => somme + ligne.lignes, 0);
+            const nommees = inconnues
+                .slice(0, V13_FAMILLES_NOMMEES)
+                .map(ligne => `« ${ligne.famille} »`)
+                .join(', ');
+            const etDAutres =
+                inconnues.length > V13_FAMILLES_NOMMEES ? `, et ${inconnues.length - V13_FAMILLES_NOMMEES} autre(s)` : '';
+            // La liste des familles connues sert à expliquer, cas par cas, pourquoi rien n’a été proposé.
+            const familles = connues.map(ligne => ligne.famille);
+            if (!rangees.length) return { accord: true, lignesInconnues: 0, familles, phrase: '' };
+            if (!inconnues.length)
+                return {
+                    accord: true,
+                    lignesInconnues: 0,
+                    familles,
+                    phrase: `Les ${connues.length} famille(s) de la liste existent toutes dans la nomenclature.`
+                };
+            if (!connues.length)
+                return {
+                    accord: false,
+                    lignesInconnues,
+                    familles,
+                    phrase: `AUCUNE famille de la liste ne se retrouve dans la nomenclature : ${nommees}${etDAutres}. Les deux colonnes de branche ne parlent pas de la même chose — vérifiez laquelle vous avez choisie de chaque côté.`
+                };
+            return {
+                accord: false,
+                lignesInconnues,
+                familles,
+                phrase: `${enFrancais(lignesInconnues)} ligne(s) portent une famille que la nomenclature ne connaît pas : ${nommees}${etDAutres}. Ces lignes ne peuvent recevoir aucune proposition de leur famille.`
+            };
         }
 
         /**

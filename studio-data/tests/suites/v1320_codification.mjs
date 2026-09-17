@@ -110,6 +110,28 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- pourquoi aucune proposition de ma famille ?
+  ok('le contr\u00f4le compare les familles des deux c\u00f4t\u00e9s', (()=>{ const sql=v13SqlDuControleDeBranche(C());
+    return /famillesDeLaListe AS/.test(sql) && /famillesDeLArbre AS/.test(sql) && /ORDER BY connue, lignes DESC/.test(sql); })());
+  ok('sans colonne de branche d\u00e9clar\u00e9e, il n\'y a rien \u00e0 contr\u00f4ler', v13SqlDuControleDeBranche(Object.assign({}, C(), {restreindreSource:''}))==='');
+  ok('quand aucune famille ne se retrouve, on le dit franchement', (()=>{ const bilan=v13BilanDuControleDeBranche([
+    {famille:'CHAUDIERE', lignes:27, connue:false}, {famille:'CTA', lignes:37, connue:false}]);
+    return !bilan.accord && /AUCUNE famille de la liste/.test(bilan.phrase) && /v\u00e9rifiez laquelle vous avez choisie/.test(bilan.phrase); })());
+  ok('quand seules certaines manquent, on les nomme et on compte les lignes', (()=>{ const bilan=v13BilanDuControleDeBranche([
+    {famille:'J01', lignes:100, connue:true}, {famille:'ZZZ', lignes:27, connue:false}]);
+    return !bilan.accord && bilan.lignesInconnues===27 && /27 ligne\(s\) portent une famille/.test(bilan.phrase)
+      && /\u00ab ZZZ \u00bb/.test(bilan.phrase) && bilan.familles.includes('J01'); })());
+  ok('et quand tout concorde, il le dit aussi', (()=>{ const bilan=v13BilanDuControleDeBranche([{famille:'J01', lignes:100, connue:true}]);
+    return bilan.accord && /existent toutes dans la nomenclature/.test(bilan.phrase); })());
+  ok('la revue rend la famille de la ligne, pour pouvoir expliquer', /AS famille, CAST/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee')));
+  ok('et le cas sans proposition de sa famille dit laquelle des deux raisons s\'applique', (()=>{
+    v13Codification.branche = { accord:false, familles:['J01'], phrase:'x' };
+    const absente = v13PourquoiAucuneDansLaFamille({ famille:'CHAUDIERE' }, 0);
+    const presente = v13PourquoiAucuneDansLaFamille({ famille:'J01' }, 0);
+    const servie = v13PourquoiAucuneDansLaFamille({ famille:'J01' }, 3);
+    v13Codification.branche = null;
+    return /n\u2019existe pas dans la nomenclature/.test(absente) && /aucun de ses types ne partage de mot/.test(presente) && servie===''; })());
+
   // ---- la famille d\u2019abord, puis l\u2019\u00e9largissement
   ok('on montre huit propositions par d\u00e9faut, et le nombre se r\u00e8gle', v13CombienDePropositions({})===8
     && v13CombienDePropositions({propositions:12})===12 && v13CombienDePropositions({propositions:0})===1

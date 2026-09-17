@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.13.0';
+        const V13_VERSION = '13.14.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.14.0',
+                d: '2026-09-17',
+                t: 'Codification : pourquoi aucune proposition de ma famille ?',
+                items: [
+                    '« 0 proposition dans la famille de la ligne » ne disait pas POURQUOI. Il n’y a que deux raisons, et il fallait pouvoir les distinguer : ou bien la famille de la ligne n’existe pas dans la nomenclature — c’est alors la colonne de branche qu’il faut revoir —, ou bien elle existe mais aucun de ses types ne partage de mot avec ce libellé.',
+                    '<b>Un contrôle de la colonne de branche</b> est joué après chaque codification : il compte les lignes par famille et dit lesquelles la nomenclature ignore. Si AUCUNE ne se retrouve, il le dit franchement : les deux colonnes ne parlent pas de la même chose, et il faut vérifier laquelle a été choisie de chaque côté.',
+                    'Et chaque cas de la revue sans proposition de sa famille nomme la raison qui s’applique à lui.'
+                ]
+            },
             {
                 v: '13.13.0',
                 d: '2026-09-17',
