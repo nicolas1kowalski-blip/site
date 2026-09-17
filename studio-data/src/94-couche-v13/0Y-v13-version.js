@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.7.0';
+        const V13_VERSION = '13.7.1';
         const V13_CHANGELOG = [
+            {
+                v: '13.7.1',
+                d: '2026-09-17',
+                t: 'Codification : plus de « HTML FileReaders do not support writing »',
+                items: [
+                    'Sur une vraie liste, la codification s’arrêtait sur « Invalid Error: HTML FileReaders do not support writing ». En clair : DuckDB voulait écrire un fichier temporaire, ce que le navigateur interdit. La codification se relance désormais en mémoire pure avec une limite relevée, exactement comme les actions d’Extraire depuis la 13.3.2.',
+                    'Le découpage des libellés en mots n’est plus refait à chaque fois qu’il est relu : il est calculé une seule fois, ce qui divise d’autant la mémoire demandée.',
+                    'Et si la mémoire ne suffit toujours pas, le message ne parle plus de fichiers temporaires mais de ce que vous pouvez faire : renseigner « Chercher dans la bonne branche », retirer une comparaison, ou coder la liste en plusieurs morceaux.'
+                ]
+            },
             {
                 v: '13.7.0',
                 d: '2026-09-16',

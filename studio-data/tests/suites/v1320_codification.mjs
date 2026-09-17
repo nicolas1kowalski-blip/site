@@ -99,6 +99,12 @@ const out = await p.evaluate(async ()=>{
   ok('l\'écran dit toujours quoi faire ensuite', /Passez les 3 cas à revoir/.test(v13ProchaineAction({total:9,revoir:3,absent:1})) && /Tout est codé/.test(v13ProchaineAction({total:9,revoir:0,absent:0})));
   ok('une codification incomplète est refusée en français, pas en erreur SQL', (()=>{ try { v13SqlDeCodification(Object.assign({}, C(), {colonneLibelle:''})); return false; } catch(e) { return /la colonne du libellé/.test(e.message); } })());
 
+  // ---- la mémoire du navigateur, quand elle ne suffit pas
+  ok('une erreur de mémoire est traduite en français, avec quoi faire', /la mémoire du navigateur n’a pas suffi/.test(v13PhraseDeLErreur(new Error('Invalid Error: HTML FileReaders do not support writing'))) && /Chercher dans la bonne branche/.test(v13PhraseDeLErreur(new Error('Out of Memory Error'))));
+  ok('une erreur ordinaire est rendue telle quelle, sans bavardage', v13PhraseDeLErreur(new Error('Colonne inconnue'))==='Colonne inconnue');
+  ok('la codification s\'ex\u00e9cute sans jamais d\u00e9border sur disque', /v12State\.noSpill\+\+/.test(String(v13CoderLaListe)) && /v12State\.noSpill--/.test(String(v13CoderLaListe)));
+  ok('les d\u00e9coupages en mots ne sont calcul\u00e9s qu\'une fois, quoi qu\'il en co\u00fbte \u00e0 les relire', (v13SqlDesRapprochables(C(), '"t_nm"').match(/AS MATERIALIZED/g)||[]).length===2);
+
   // ---- le SQL produit, rendu à node pour être exécuté sur un vrai moteur
   window.__sqlSansSynonymes = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [] }));
   window.__sqlAvecRegle = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [] }));

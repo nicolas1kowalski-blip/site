@@ -211,6 +211,10 @@
             v13Codification.enCours = true;
             renderCodification();
             bgTaskStart('Codification de la liste');
+            // DuckDB dans le navigateur n’a pas toujours de dossier temporaire inscriptible : dès qu’une
+            // requête déborde, il échoue sur « HTML FileReaders do not support writing ». Comme les actions
+            // d’Extraire, la codification est donc relancée en mémoire pure, limite relevée, si cela arrive.
+            v12State.noSpill++;
             try {
                 const { conn } = await getDB();
                 // La liste n’est codée qu’une fois : le résultat est déposé dans une table, puis relu trois fois.
@@ -232,8 +236,9 @@
                 bgTaskEnd('🏷️ ' + v13Codification.resultat.bilan.phrase);
             } catch (erreur) {
                 bgTaskEnd();
-                showError('Codification impossible : ' + erreur.message);
+                showError('Codification impossible : ' + v13PhraseDeLErreur(erreur));
             } finally {
+                v12State.noSpill--;
                 v13Codification.enCours = false;
                 renderCodification();
             }

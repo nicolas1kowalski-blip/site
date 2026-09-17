@@ -1746,6 +1746,7 @@
  "v13SqlDeCodification": "writable",
  "v13SqlDesDecisions": "writable",
  "v13SqlDesCasARevoir": "writable",
+ "v13PhraseDeLErreur": "writable",
  "v13BilanDeCodification": "writable",
  "v13CorrespondanceApresDecision": "writable",
  "v13PhraseDeLaRegle": "writable",

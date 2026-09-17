@@ -284,7 +284,7 @@
                 '__ligne',
                 ''
             );
-            return `WITH motsLus AS (\n        ${lus}\n    ), motsTypes AS (\n        ${types}\n    ),
+            return `WITH motsLus AS MATERIALIZED (\n        ${lus}\n    ), motsTypes AS MATERIALIZED (\n        ${types}\n    ),
             frequences AS (SELECT tete, COUNT(DISTINCT __ligne) AS types FROM motsTypes GROUP BY tete),
             seuil AS (SELECT GREATEST(${V13_TYPES_TOLERES_PAR_MOT}, CAST(${V13_PART_MOT_TROP_COURANT} * COUNT(DISTINCT __ligne) AS BIGINT)) AS maximum FROM motsTypes),
             tetesRetenues AS (
@@ -463,6 +463,26 @@
         SELECT * FROM notes WHERE score > 0
         QUALIFY row_number() OVER (PARTITION BY rang ORDER BY score DESC) <= ${V13_CANDIDATS_MONTRES}
         ORDER BY rang, score DESC`;
+        }
+
+        /**
+         * Ce qu’il faut dire quand la codification échoue. Deux échecs sur trois viennent de la mémoire du
+         * navigateur : le message brut de DuckDB parle alors de fichiers temporaires, ce qui n’aide personne.
+         * On le remplace par ce que l’on peut réellement faire.
+         */
+        function v13PhraseDeLErreur(erreur) {
+            const message = String((erreur && erreur.message) || erreur);
+            const memoire =
+                /do not support writing|temp_directory|temporary|out of memory|memory limit|cannot allocate|Failed to allocate/i.test(
+                    message
+                );
+            if (!memoire) return message;
+            return (
+                'la mémoire du navigateur n’a pas suffi, et ce navigateur ne permet pas d’écrire sur le disque. ' +
+                'Renseignez « Chercher dans la bonne branche » pour ne comparer que dans la famille de chaque ligne, ' +
+                'retirez les comparaisons les moins utiles, ou codez la liste en plusieurs morceaux. Détail : ' +
+                message
+            );
         }
 
         /** Le bilan d'une codification, à partir du compte de chaque statut. */
