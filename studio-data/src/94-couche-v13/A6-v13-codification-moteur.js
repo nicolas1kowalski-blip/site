@@ -615,6 +615,15 @@
          * Le SQL des cas à revoir : pour chaque ligne qu'aucune règle n'a reconnue, les meilleurs voisins de la
          * nomenclature, avec leur score et leur chemin. C'est de quoi trancher en un coup d'œil.
          */
+        /**
+         * Le plafond de questions. Zéro ou moins veut dire « toutes » : c’est ce que demande l’export, qui
+         * doit rendre la vue complète et non les cinquante premières. L’écran, lui, reste borné.
+         */
+        function v13PlafondDesCas(combien) {
+            const demande = Number(combien);
+            if (!Number.isFinite(demande)) return ' LIMIT 50';
+            return demande > 0 ? ` LIMIT ${Math.round(demande)}` : '';
+        }
         function v13SqlDesCasARevoir(codification, combien, tableCodee) {
             v13VerifierLaCodification(codification);
             const tableNomenclature = sqlIdent(duckTableName(tableByName(codification.nomenclature).id));
@@ -642,7 +651,7 @@
             SELECT ${cleDuLibelle} AS __cle, COUNT(*) AS __combien, min(codee.__rn) AS __rn
             FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
             WHERE __statut IN ('revoir', 'branche')${sansLesEcartes}
-            GROUP BY 1 ORDER BY __combien DESC, __rn LIMIT ${Number(combien) || 50}
+            GROUP BY 1 ORDER BY __combien DESC, __rn${v13PlafondDesCas(combien)}
         ), aCoder AS (
             SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte,
                 clesARevoir.__combien AS __combien

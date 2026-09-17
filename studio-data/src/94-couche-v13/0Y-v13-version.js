@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.14.0';
+        const V13_VERSION = '13.15.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.15.0',
+                d: '2026-09-17',
+                t: 'Codification : la vue complète des cas à revoir',
+                items: [
+                    'Mise au point sur les plafonds, parce que le doute était légitime. <b>Le résultat codé part en entier</b> : « → Utiliser le résultat » envoie les 450 000 lignes, pas un échantillon. Seul le tableau de l’écran n’en montre que 200, et il le dit désormais.',
+                    'En revanche la revue, elle, plafonnait bien : <b>cinquante questions</b>, les libellés les plus fréquents d’abord. C’est ce qu’on peut trancher à la main sans se perdre, mais cela ne donne aucune vision d’ensemble.',
+                    'Nouveau bouton <b>« → Tous les cas à revoir »</b> : tous les libellés à trancher, sans plafond, une ligne par proposition — le libellé, sa famille, le nombre de lignes qu’il couvre, le code proposé, son chemin, son score, et s’il vient de la bonne famille. De quoi juger de l’ensemble dans un tableur, repérer les gros volumes et les libellés sans proposition de leur famille.',
+                    'Et la revue annonce son plafond quand elle l’atteint, au lieu de laisser croire qu’il n’y a que cinquante cas.'
+                ]
+            },
             {
                 v: '13.14.0',
                 d: '2026-09-17',

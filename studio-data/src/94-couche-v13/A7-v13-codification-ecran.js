@@ -8,6 +8,8 @@
         const V13_ECRAN_CODIFICATION = 17;
         /** Combien de lignes on montre d'un coup : de quoi juger sans noyer le navigateur. */
         const V13_LIGNES_MONTREES = 200;
+        /** Combien de questions l’écran pose d’un coup ; l’export, lui, ne connaît pas de plafond. */
+        const V13_CAS_MONTRES = 50;
         /** Ce que l'écran garde entre deux rendus : la codification ouverte, son dernier résultat, sa revue. */
         const v13Codification = { ouverte: '', resultat: null, casARevoir: [], branche: null, enCours: false };
 
@@ -245,7 +247,7 @@
                     ? v13BilanDuControleDeBranche(arrowResultToObjects(await conn.query(controle)))
                     : null;
                 v13Codification.casARevoir = v13RangerLesCasARevoir(
-                    arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, 50, V13_TABLE_CODEE)))
+                    arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, V13_CAS_MONTRES, V13_TABLE_CODEE)))
                 );
                 bgTaskEnd('🏷️ ' + v13Codification.resultat.bilan.phrase);
             } catch (erreur) {
@@ -539,6 +541,36 @@
             </div>`;
         }
         /**
+         * TOUS les cas à revoir, avec leurs propositions, envoyés vers un jeu temporaire.
+         *
+         * L’écran ne montre que les cinquante libellés les plus fréquents : c’est ce qu’on peut trancher à
+         * la main sans se perdre. Mais pour juger de l’ensemble — combien de libellés restent, lesquels
+         * n’ont aucune proposition de leur famille, où sont les gros volumes — il faut la vue complète,
+         * dans un tableur. Une ligne par proposition, avec le libellé, sa famille, le nombre de lignes
+         * qu’il couvre, le code proposé, son chemin, son score, et s’il vient de la bonne famille.
+         */
+        async function v13ExporterLesCasARevoir(identifiant) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification || !v13Codification.resultat) return;
+            bgTaskStart('Préparation de tous les cas à revoir');
+            try {
+                const jeu = await v12TmpFromSql(
+                    v13SqlDesCasARevoir(codification, 0, V13_TABLE_CODEE),
+                    `${codification.source} à revoir`,
+                    {
+                        kind: 'extract',
+                        origin: `Codification « ${codification.nom} » — tous les cas à revoir`,
+                        from: [codification.source, codification.nomenclature]
+                    }
+                );
+                bgTaskEnd(`🔎 ${Number(jeu.rows || 0).toLocaleString('fr-FR')} proposition(s) à examiner.`);
+            } catch (erreur) {
+                bgTaskEnd();
+                showError('Impossible de préparer les cas à revoir : ' + v13PhraseDeLErreur(erreur));
+            }
+        }
+
+        /**
          * Le résultat envoyé vers un jeu temporaire : de là il s’extrait, s’exporte en CSV, s’audite, et peut
          * être promu en vraie source. On ne recode rien : la table codée est déjà là.
          */
@@ -603,7 +635,8 @@
             <p class="text-[11px] mb-2 ${resultat.lignesEnEntree && resultat.lignesEnEntree !== bilan.total ? 'text-red-600 font-bold' : 'text-slate-500'}" id="v13-codif-decompte">${escapeHTML(v13PhraseDuDecompte(resultat.lignesEnEntree, bilan.total))}</p>
             <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <button id="v13-codif-utiliser" onclick="v13UtiliserLeResultat('${codification.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg" title="Le résultat devient un jeu utilisable dans Extraire, Comparer, Qualité — et promouvable en source">→ Utiliser le résultat</button>
-                <span class="text-[10px] text-slate-400">Les ${escapeHTML(Number(bilan.total).toLocaleString('fr-FR'))} lignes codées partent dans un jeu : de là, vous pouvez les extraire, les exporter en CSV, ou en faire une vraie source.</span>
+                ${bilan.revoir + (bilan.branche || 0) ? `<button id="v13-codif-exporter-revue" onclick="v13ExporterLesCasARevoir('${codification.id}')" class="text-xs bg-white border border-indigo-300 text-indigo-700 font-bold px-3 py-1.5 rounded-lg" title="Tous les libellés à trancher, avec leurs propositions — sans le plafond de l’écran">→ Tous les cas à revoir</button>` : ''}
+                <span class="text-[10px] text-slate-400">Les ${escapeHTML(Number(bilan.total).toLocaleString('fr-FR'))} lignes codées partent dans un jeu — <b>toutes</b>, sans plafond : de là, vous pouvez les extraire, les exporter en CSV, ou en faire une vraie source. Le tableau ci-dessous n’en montre que ${V13_LIGNES_MONTREES}.</span>
             </div>
             ${v13AlerteDeLaBranche()}
             ${v13ExplicationDesDesaccords(codification, resultat)}
@@ -707,7 +740,11 @@
                 })
                 .join('');
             const total = v13Codification.casARevoir.reduce((somme, unCas) => somme + (Number(unCas.combien) || 1), 0);
-            return `<p class="text-[11px] text-slate-500 mb-2">Une question par libellé, les plus fréquents d’abord : ces ${v13Codification.casARevoir.length} décisions couvrent ${total.toLocaleString('fr-FR')} ligne(s). Chaque décision descend dans la table de correspondance — à la prochaine livraison, ce libellé sera codé tout seul.</p>${cas}`;
+            const plafond =
+                v13Codification.casARevoir.length >= V13_CAS_MONTRES
+                    ? ` L’écran s’arrête à ${V13_CAS_MONTRES} questions : « → Tous les cas à revoir », plus haut, les sort tous.`
+                    : '';
+            return `<p class="text-[11px] text-slate-500 mb-2">Une question par libellé, les plus fréquents d’abord : ces ${v13Codification.casARevoir.length} décisions couvrent ${total.toLocaleString('fr-FR')} ligne(s).${plafond} Chaque décision descend dans la table de correspondance — à la prochaine livraison, ce libellé sera codé tout seul.</p>${cas}`;
         }
 
         /** Un bloc de l'écran : son titre numéroté, et son contenu. */

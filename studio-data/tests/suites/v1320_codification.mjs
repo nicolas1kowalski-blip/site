@@ -110,6 +110,17 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- la vue compl\u00e8te : l\u2019\u00e9cran plafonne, l\u2019export non
+  ok('l\'\u00e9cran pose cinquante questions au plus', /LIMIT 50/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee'))
+    && /LIMIT 50/.test(v13SqlDesCasARevoir(C(), undefined, 'v13_codee')));
+  ok('l\'export, lui, ne conna\u00eet aucun plafond', !/LIMIT/.test(v13SqlDesCasARevoir(C(), 0, 'v13_codee').split('GROUP BY 1 ORDER BY __combien DESC, __rn')[1].split(')')[0]));
+  ok('le plafond se lit \u00e0 part, et z\u00e9ro veut dire toutes', v13PlafondDesCas(50)===' LIMIT 50' && v13PlafondDesCas(0)===''
+    && v13PlafondDesCas(-1)==='' && v13PlafondDesCas(undefined)===' LIMIT 50');
+  ok('le r\u00e9sultat cod\u00e9, lui, part en entier \u2014 aucun plafond dans son export',
+    /SELECT \* EXCLUDE \(__rn\) FROM \$\{sqlIdent\(V13_TABLE_CODEE\)\}/.test(String(v13UtiliserLeResultat))
+    && !/LIMIT/.test(String(v13UtiliserLeResultat)));
+  ok('et un bouton sort tous les cas \u00e0 revoir', /v13SqlDesCasARevoir\(codification, 0, V13_TABLE_CODEE\)/.test(String(v13ExporterLesCasARevoir)));
+
   // ---- pourquoi aucune proposition de ma famille ?
   ok('le contr\u00f4le compare les familles des deux c\u00f4t\u00e9s', (()=>{ const sql=v13SqlDuControleDeBranche(C());
     return /famillesDeLaListe AS/.test(sql) && /famillesDeLArbre AS/.test(sql) && /ORDER BY connue, lignes DESC/.test(sql); })());
