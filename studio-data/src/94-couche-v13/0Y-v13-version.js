@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.17.0';
+        const V13_VERSION = '13.18.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.18.0',
+                d: '2026-09-17',
+                t: 'Codification : l’application dit quelle colonne de famille choisir',
+                items: [
+                    'Quand les familles de la liste ne se retrouvent pas dans la nomenclature, <b>aucune ligne ne peut recevoir de proposition de sa famille</b> : l’application le signalait, mais laissait chercher laquelle des deux colonnes n’était pas la bonne.',
+                    'Elle <b>essaie maintenant chaque colonne</b> des deux fichiers et compte, pour chacune, la part de ses valeurs que l’autre fichier reconnaît. Quand une colonne fait nettement mieux que celle qui est déclarée, elle est nommée : « Dans « equipements.csv », la colonne « NIV1 » reconnaît 100 % de ces valeurs, contre 0 % pour « GENRE ». C’est sans doute elle qu’il faut choisir. »',
+                    'Le conseil ne s’affiche que s’il est sûr : la colonne proposée doit reconnaître au moins la moitié des valeurs, et faire au moins 20 points de mieux que celle qui est déclarée. Sinon l’application se tait plutôt que d’envoyer sur une fausse piste.'
+                ]
+            },
             {
                 v: '13.17.0',
                 d: '2026-09-17',

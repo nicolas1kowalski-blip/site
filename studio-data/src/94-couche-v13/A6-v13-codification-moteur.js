@@ -795,6 +795,58 @@
         FROM famillesDeLaListe LEFT JOIN famillesDeLArbre ON famillesDeLArbre.famille = famillesDeLaListe.famille
         ORDER BY connue, lignes DESC`;
         }
+        /**
+         * Quelle colonne de l'autre fichier reconnaît le mieux les valeurs de la colonne choisie ?
+         *
+         * Quand aucune proposition ne vient de la famille de la ligne, c'est presque toujours que les deux
+         * colonnes de branche ne parlent pas de la même chose : « CHAUDIERE » d'un côté, « J01 » de l'autre.
+         * Dire « elles ne correspondent pas » ne suffit pas — il faut dire LAQUELLE il aurait fallu prendre.
+         * On essaie donc chacune des colonnes de l'autre fichier et l'on compte ce qu'elle reconnaît.
+         */
+        function v13SqlDesColonnesDeBranche(codification, cote) {
+            v13VerifierLaCodification(codification);
+            if (!codification.restreindreSource || !codification.restreindreNomenclature) return '';
+            const surLaListe = cote === 'liste';
+            const nomChoisi = surLaListe ? codification.restreindreNomenclature : codification.restreindreSource;
+            const nomEssaye = surLaListe ? codification.source : codification.nomenclature;
+            const tableChoisie = tableByName(surLaListe ? codification.nomenclature : codification.source);
+            const tableEssayee = tableByName(nomEssaye);
+            const colonnes = (tableEssayee.headers || []).filter(Boolean);
+            if (!colonnes.length) return '';
+            const referentes = `SELECT DISTINCT ${v13TexteCompare(`choisie.${sqlIdent(nomChoisi)}`)} AS valeur
+        FROM ${sqlIdent(duckTableName(tableChoisie.id))} choisie
+        WHERE NOT ${v13EstVide(`choisie.${sqlIdent(nomChoisi)}`)}`;
+            const essais = colonnes
+                .map(colonne => {
+                    const valeur = v13TexteCompare(`essayee.${sqlIdent(colonne)}`);
+                    return `SELECT ${sqlLiteral(colonne)} AS colonne,
+            COUNT(*) FILTER (WHERE ${valeur} IN (SELECT valeur FROM referentes))::BIGINT AS reconnues,
+            COUNT(*) FILTER (WHERE NOT ${v13EstVide(`essayee.${sqlIdent(colonne)}`)})::BIGINT AS remplies
+        FROM ${sqlIdent(duckTableName(tableEssayee.id))} essayee`;
+                })
+                .join('\n        UNION ALL\n        ');
+            return `WITH referentes AS (\n        ${referentes}\n    )\n        ${essais}\n        ORDER BY reconnues DESC`;
+        }
+        /**
+         * Ce que l'essai des colonnes conseille, en une phrase. On ne conseille que si une colonne fait
+         * nettement mieux que celle qui est déclarée : sinon on se tait plutôt que d'envoyer sur une piste.
+         */
+        function v13ConseilDeColonne(lignes, colonneDeclaree, nomDuFichier) {
+            const rangees = (lignes || [])
+                .map(ligne => ({
+                    colonne: String(ligne.colonne || ''),
+                    part: Number(ligne.remplies) ? Number(ligne.reconnues) / Number(ligne.remplies) : 0
+                }))
+                .sort((une, autre) => autre.part - une.part);
+            const declaree = rangees.find(ligne => ligne.colonne === colonneDeclaree);
+            const meilleure = rangees[0];
+            const partDeclaree = declaree ? declaree.part : 0;
+            if (!meilleure || meilleure.part < 0.5 || meilleure.colonne === colonneDeclaree) return '';
+            if (meilleure.part <= partDeclaree + 0.2) return '';
+            const pourCent = part => Math.round(100 * part) + ' %';
+            return `Dans ${nomDuFichier}, la colonne « ${meilleure.colonne} » reconnaît ${pourCent(meilleure.part)} de ces valeurs, contre ${pourCent(partDeclaree)} pour « ${colonneDeclaree} ». C'est sans doute elle qu'il faut choisir.`;
+        }
+
         /** Combien on nomme de familles inconnues avant de dire « et d’autres ». */
         const V13_FAMILLES_NOMMEES = 6;
         /**

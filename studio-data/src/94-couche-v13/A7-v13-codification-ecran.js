@@ -246,6 +246,10 @@
                 v13Codification.branche = controle
                     ? v13BilanDuControleDeBranche(arrowResultToObjects(await conn.query(controle)))
                     : null;
+                // Quand les familles ne se retrouvent pas, on essaie les AUTRES colonnes des deux fichiers :
+                // c'est ce qui permet de dire « prenez plutôt celle-là » au lieu de « ça ne correspond pas ».
+                if (v13Codification.branche && !v13Codification.branche.accord)
+                    v13Codification.branche.conseils = await v13ConseilsDesColonnes(codification, conn);
                 v13Codification.casARevoir = v13RangerLesCasARevoir(
                     arrowResultToObjects(await conn.query(v13SqlDesCasARevoir(codification, V13_CAS_MONTRES, V13_TABLE_CODEE)))
                 );
@@ -662,6 +666,33 @@
             if (controle && !connue) return `La famille « ${unCas.famille} » de cette ligne n’existe pas dans la nomenclature.`;
             return `La famille « ${unCas.famille} » existe dans la nomenclature, mais aucun de ses types ne partage de mot avec ce libellé.`;
         }
+        /** Les deux essais de colonnes, côté nomenclature puis côté liste, rendus en phrases. */
+        async function v13ConseilsDesColonnes(codification, conn) {
+            const essais = [
+                {
+                    cote: 'nomenclature',
+                    declaree: codification.restreindreNomenclature,
+                    fichier: `« ${codification.nomenclature} »`
+                },
+                { cote: 'liste', declaree: codification.restreindreSource, fichier: `« ${codification.source} »` }
+            ];
+            const phrases = [];
+            for (const essai of essais) {
+                const sql = v13SqlDesColonnesDeBranche(codification, essai.cote);
+                if (!sql) continue;
+                try {
+                    const phrase = v13ConseilDeColonne(
+                        arrowResultToObjects(await conn.query(sql)),
+                        essai.declaree,
+                        essai.fichier
+                    );
+                    if (phrase) phrases.push(phrase);
+                } catch (erreur) {
+                    console.warn('Essai des colonnes de branche ignoré :', erreur);
+                }
+            }
+            return phrases;
+        }
         /**
          * L’alerte sur la colonne de branche. Quand une famille de la liste n’existe pas dans la
          * nomenclature, aucune ligne de cette famille ne peut recevoir de proposition — et rien ne le disait.
@@ -672,6 +703,7 @@
             return `<div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-2 text-[11px] text-amber-900" id="v13-codif-alerte-branche">
                 <div class="font-bold mb-1">⚠️ La colonne de branche ne correspond pas des deux côtés</div>
                 ${escapeHTML(controle.phrase)}
+                ${(controle.conseils || []).map(phrase => `<div class="mt-1 font-bold">${escapeHTML(phrase)}</div>`).join('')}
             </div>`;
         }
         /**

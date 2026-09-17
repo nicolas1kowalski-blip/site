@@ -151,6 +151,27 @@ const out = await p.evaluate(async ()=>{
       && /« ZZZ »/.test(bilan.phrase) && bilan.familles.includes('J01'); })());
   ok('et quand tout concorde, il le dit aussi', (()=>{ const bilan=v13BilanDuControleDeBranche([{famille:'J01', lignes:100, connue:true}]);
     return bilan.accord && /existent toutes dans la nomenclature/.test(bilan.phrase); })());
+  // ---- quand les familles ne concordent pas : dire QUELLE colonne il fallait choisir ----
+  // Le contrôle dit « ça ne concorde pas » ; il ne disait pas quoi faire. L'essai passe chaque colonne du
+  // fichier en revue et compte celles de ses valeurs que l'autre fichier reconnaît.
+  ok('sans colonne de branche declaree, il n\'y a aucune colonne a essayer',
+    v13SqlDesColonnesDeBranche(Object.assign({}, C(), {restreindreSource:''}), 'liste')==='');
+  ok('l\'essai passe en revue toutes les colonnes du fichier', (()=>{
+    const sql=v13SqlDesColonnesDeBranche(Object.assign({}, C(), {restreindreSource:'DESIGNATION'}), 'liste');
+    return ['REPERE','LIBELLE','FAMILLE','CODE_FOURNI','DESIGNATION'].every(c=>sql.includes("'"+c+"'"))
+      && /WITH referentes AS/.test(sql) && /ORDER BY reconnues DESC/.test(sql); })());
+  ok('l\'essai se fait aussi dans l\'autre sens, sur la nomenclature', (()=>{
+    const sql=v13SqlDesColonnesDeBranche(C(), 'nomenclature');
+    return sql.includes("'LIBELLE_TYPE'") && sql.includes("'FAMILLE'"); })());
+  ok('le conseil nomme la colonne qui reconnait les valeurs, et celle qui ne les reconnait pas', (()=>{
+    const phrase=v13ConseilDeColonne([{colonne:'FAMILLE', reconnues:9, remplies:9},
+      {colonne:'DESIGNATION', reconnues:0, remplies:9}], 'DESIGNATION', '« equipements.csv »');
+    return /« FAMILLE »/.test(phrase) && /100 %/.test(phrase) && /0 %/.test(phrase)
+      && /« DESIGNATION »/.test(phrase) && /equipements\.csv/.test(phrase); })());
+  ok('quand la colonne declaree est deja la meilleure, on ne conseille rien',
+    v13ConseilDeColonne([{colonne:'FAMILLE', reconnues:9, remplies:9}], 'FAMILLE', '« e.csv »')==='');
+  ok('et quand aucune colonne ne reconnait grand-chose, on se tait plutot que d\'egarer',
+    v13ConseilDeColonne([{colonne:'REPERE', reconnues:2, remplies:9}], 'DESIGNATION', '« e.csv »')==='');
   ok('la revue rend la famille de la ligne, pour pouvoir expliquer', /AS famille, CAST/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee')));
   ok('et le cas sans proposition de sa famille dit laquelle des deux raisons s\'applique', (()=>{
     v13Codification.branche = { accord:false, familles:['J01'], phrase:'x' };
@@ -243,6 +264,10 @@ const out = await p.evaluate(async ()=>{
   const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
   window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
     correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
+  window.__essaiColonnes = {
+    liste: v13SqlDesColonnesDeBranche(Object.assign({}, C(), { restreindreSource: 'DESIGNATION' }), 'liste'),
+    nomenclature: v13SqlDesColonnesDeBranche(Object.assign({}, C(), { restreindreNomenclature: 'ABREGE' }), 'nomenclature')
+  };
   window.__sqlAvecDecision = v13SqlDeCodification(Object.assign({}, avecTout, { decisions: { 4: 'VAN-P' } }));
   } catch(e) { R.push(['ERREUR '+e.message+' @ '+String(e.stack).split('\n')[1], false]); }
   return R;
@@ -260,6 +285,7 @@ const sqlFaible = await p.evaluate(()=>window.__sqlFaible);
 const sqlFaibleRevue = await p.evaluate(()=>window.__sqlFaibleRevue);
 const sqlFamilleDabord = await p.evaluate(()=>window.__sqlFamilleDabord);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
+const essaiColonnes = await p.evaluate(()=>window.__essaiColonnes);
 await b.close();
 
 // ---- le SQL produit par l'écran, exécuté sur un vrai DuckDB ----
@@ -295,6 +321,19 @@ ok('SQL réel : les propositions restent dans la famille de la ligne', revue.fil
 const autreAttribut = await parRepere(sqlAutreAttribut);
 ok('SQL réel : le rapprochement porte sur la désignation contre l’abrégé, et non plus sur les libellés', autreAttribut.EQ004.__code==='VAN-P' && autreAttribut.EQ004.__origine==='ressemblance');
 ok('SQL réel : ce qui ne ressemble à aucun abrégé reste sans proposition', autreAttribut.EQ006.__statut==='absent');
+
+// ---- l'essai des colonnes de branche, sur un vrai DuckDB ----
+// L'utilisateur avait déclaré DESIGNATION comme colonne de famille : aucune de ses valeurs n'existe dans
+// l'arbre, donc aucune ligne ne pouvait recevoir de proposition de sa famille. L'essai doit désigner FAMILLE.
+const essaiListe = await requete(essaiColonnes.liste);
+const parColonne = Object.fromEntries(essaiListe.map(l => [String(l.colonne), l]));
+ok('SQL réel : l\'essai compte, colonne par colonne, ce que l\'autre fichier reconnaît',
+  Number(parColonne.FAMILLE.reconnues) === 9 && Number(parColonne.FAMILLE.remplies) === 9
+  && Number(parColonne.DESIGNATION.reconnues) === 0);
+ok('SQL réel : la colonne qui reconnaît tout arrive en tête', String(essaiListe[0].colonne) === 'FAMILLE');
+const essaiNomenclature = await requete(essaiColonnes.nomenclature);
+ok('SQL réel : l\'essai fonctionne aussi dans l\'autre sens, sur la nomenclature',
+  String(essaiNomenclature[0].colonne) === 'FAMILLE' && Number(essaiNomenclature[0].reconnues) === 5);
 
 // ---- le volume : ce qui décidait de tout, c'est que la requête se termine ----
 // Sur le terrain, la liste fait des milliers de lignes et la nomenclature des centaines. Sans blocage par
