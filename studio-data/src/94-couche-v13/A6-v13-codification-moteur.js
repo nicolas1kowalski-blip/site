@@ -60,6 +60,26 @@
         function v13TexteCompare(expression) {
             return `TRIM(regexp_replace(strip_accents(UPPER(CAST(${expression} AS VARCHAR))), '[^A-Z0-9]+', ' ', 'g'))`;
         }
+        /**
+         * Un mot ramené au singulier : on retire le S ou le X final des mots de plus de trois lettres.
+         *
+         * Sans cela, « POMPES » et « POMPE » sont deux mots étrangers l’un à l’autre : ils ne se rapprochent
+         * pas, et ils ne comptent pas comme retrouvés. Mesuré sur un vocabulaire d’équipements français, la
+         * moitié des lignes ne trouvaient rien alors qu’elles partageaient un mot avec leur type. Trois
+         * lettres au minimum, pour ne pas réduire « VIS » à « VI ».
+         */
+        const V13_LETTRES_POUR_OTER_LE_PLURIEL = 3;
+        function v13AuSingulier(mot) {
+            const ecrit = String(mot || '');
+            return ecrit.length > V13_LETTRES_POUR_OTER_LE_PLURIEL && /[SX]$/.test(ecrit) ? ecrit.slice(0, -1) : ecrit;
+        }
+        /** Le même passage au singulier, mot à mot, sur une expression SQL. */
+        function v13MotsAuSingulier(expression) {
+            const ramene = `CASE WHEN length(mot) > ${V13_LETTRES_POUR_OTER_LE_PLURIEL}
+                AND (ends_with(mot, 'S') OR ends_with(mot, 'X')) THEN substr(mot, 1, length(mot) - 1) ELSE mot END`;
+            return `array_to_string(list_transform(string_split(${expression}, ' '), mot -> ${ramene}), ' ')`;
+        }
+
         /** Une valeur vide, quelle que soit la façon dont elle est vide. */
         function v13EstVide(expression) {
             return `(${expression} IS NULL OR TRIM(CAST(${expression} AS VARCHAR)) = '')`;
@@ -69,9 +89,11 @@
         function v13SynonymesUtiles(codification) {
             return ((codification || {}).synonymes || [])
                 .map(synonyme => ({
-                    retenu: v13MotCompare(synonyme.motRetenu),
+                    retenu: v13AuSingulier(v13MotCompare(synonyme.motRetenu)),
                     proche: !!synonyme.proche,
-                    variantes: (synonyme.variantes || []).map(v13MotCompare).filter(Boolean)
+                    variantes: (synonyme.variantes || [])
+                        .map(variante => v13AuSingulier(v13MotCompare(variante)))
+                        .filter(Boolean)
                 }))
                 .filter(synonyme => synonyme.retenu && synonyme.variantes.length);
         }
@@ -87,9 +109,12 @@
          * Deux passes, parce qu'une variante en plusieurs mots ne se remplace pas mot à mot.
          */
         function v13Canoniser(expression, codification) {
+            // Le singulier D'ABORD : les variantes déclarées sont elles aussi rangées au singulier, donc les
+            // deux côtés se reconnaissent, « motopompes » comme « motopompe ».
+            const auSingulier = v13MotsAuSingulier(expression);
             const synonymes = v13SynonymesUtiles(codification);
-            if (!synonymes.length) return expression;
-            let texte = `' ' || ${expression} || ' '`;
+            if (!synonymes.length) return auSingulier;
+            let texte = `' ' || ${auSingulier} || ' '`;
             synonymes.forEach(synonyme =>
                 synonyme.variantes
                     .filter(variante => variante.includes(' '))
@@ -112,7 +137,7 @@
         /** Le même travail, sur un texte que l'on tient déjà : c'est ainsi qu'un libellé appris est rangé. */
         function v13MotRetenuDuTexte(texte, codification) {
             const synonymes = v13SynonymesUtiles(codification);
-            let mots = v13MotCompare(texte);
+            let mots = v13MotCompare(texte).split(' ').map(v13AuSingulier).join(' ');
             synonymes.forEach(synonyme =>
                 synonyme.variantes
                     .filter(variante => variante.includes(' '))
@@ -450,7 +475,19 @@
             const hors = 'CASE WHEN candidats.__score_hors IS NOT NULL THEN candidats.__code_hors END';
             const code = `COALESCE(reconnues.__code_regle,
                 CASE WHEN candidats.__score_dans >= ${Number(codification.seuilAuto)} AND NOT ${exaequo} THEN ${meilleur} END)`;
-            const statut = `CASE WHEN ${code} IS NOT NULL THEN 'office'
+            /*
+             * La branche du code retenu doit s’accorder avec celle de la ligne, QUELLE QUE SOIT l’origine du
+             * code. La vérification ne portait que sur la ressemblance : un code déjà fourni dans la liste,
+             * une règle de mots-clés ou un libellé appris passaient sans contrôle, et la ligne ressortait
+             * codée d’office avec un chemin qui commençait par une autre famille que la sienne. On le dit.
+             */
+            const brancheDeLaLigne = codification.restreindreSource
+                ? v13TexteCompare(`reconnues.${sqlIdent(codification.restreindreSource)}`)
+                : 'NULL';
+            const desaccord = `(${brancheDeLaLigne} IS NOT NULL AND ${brancheDeLaLigne} <> ''
+                AND arbre.__branche_type IS NOT NULL AND arbre.__branche_type <> ${brancheDeLaLigne})`;
+            const statut = `CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN 'branche'
+                WHEN ${code} IS NOT NULL THEN 'office'
                 WHEN ${meilleur} IS NOT NULL THEN 'revoir'
                 WHEN ${hors} IS NOT NULL AND candidats.__score_hors >= ${Number(codification.seuilRevoir)} THEN 'branche'
                 ELSE 'absent' END`;
@@ -463,8 +500,9 @@
             ROUND(COALESCE(candidats.__score_dans, candidats.__score_hors, CASE WHEN reconnues.__code_regle IS NOT NULL THEN 1.0 ELSE 0.0 END), 3) AS __score,
             ${statut} AS __statut,
             arbre.__chemin_type AS __chemin,
-            ${hors} AS __code_autre_branche,
-            CASE WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
+            CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN ${code} ELSE ${hors} END AS __code_autre_branche,
+            CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN arbre.__branche_type
+                WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
         FROM reconnues
         LEFT JOIN candidats ON candidats.__rn = reconnues.__rn
         LEFT JOIN ${arbre} ON ${v13TexteCompare('arbre.__code_type')} = ${v13TexteCompare(code)}`;

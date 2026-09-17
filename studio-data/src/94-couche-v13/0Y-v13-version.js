@@ -1,7 +1,16 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.11.0';
+        const V13_VERSION = '13.12.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.12.0',
+                d: '2026-09-17',
+                t: 'Codification : le pluriel ne sépare plus deux mots identiques, et la branche est vérifiée partout',
+                items: [
+                    '<b>« POMPES » et « POMPE » étaient deux mots étrangers l’un à l’autre.</b> Ils ne se rapprochaient pas, et ne comptaient pas comme retrouvés. Mesuré sur un vocabulaire d’équipements français où chaque ligne partage un mot avec son type : <b>18 lignes rapprochées sur 36</b>. Les mots de plus de trois lettres sont désormais ramenés au singulier des deux côtés, avant les synonymes : <b>36 sur 36</b>.',
+                    '<b>La branche est vérifiée quelle que soit l’origine du code.</b> Le contrôle ne portait que sur la ressemblance : un code déjà fourni dans la liste, une règle de mots-clés ou un libellé appris passaient sans contrôle, et la ligne ressortait codée d’office avec un chemin qui commençait par une autre famille que la sienne. Ces lignes passent en « Autre branche », le code est conservé, et la branche du type est affichée à côté.'
+                ]
+            },
             {
                 v: '13.11.0',
                 d: '2026-09-17',

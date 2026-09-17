@@ -110,6 +110,13 @@ const out = await p.evaluate(async ()=>{
     return b.branche===2 && b.total===8 && /2 trouv\u00e9e\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'\u00e9cran dit quoi faire de ces lignes-l\u00e0 en priorit\u00e9', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
 
+  // ---- le pluriel ne doit plus s\u00e9parer deux mots identiques
+  ok('un mot au pluriel est ramen\u00e9 au singulier, \u00e0 partir de quatre lettres', v13AuSingulier('POMPES')==='POMPE' && v13AuSingulier('VANNES')==='VANNE'
+    && v13AuSingulier('CHEVAUX')==='CHEVAU' && v13AuSingulier('VIS')==='VIS' && v13AuSingulier('BAC')==='BAC');
+  ok('le libell\u00e9 est rang\u00e9 au singulier avant tout le reste', v13MotRetenuDuTexte('Pompes centrifuges ALIM.', C())==='POMPE CENTRIFUGE ALIM');
+  ok('et le SQL fait le m\u00eame passage au singulier des deux c\u00f4t\u00e9s', (()=>{ const sql=v13SqlDeCodification(C());
+    return (sql.match(/ends_with\(mot, 'S'\)/g)||[]).length >= 2; })());
+
   // ---- une question par libellé, pas une par ligne
   ok('la revue regroupe par libell\u00e9 et sert les plus fr\u00e9quents d\'abord', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
     return /clesARevoir AS \(/.test(sql) && /GROUP BY 1 ORDER BY __combien DESC/.test(sql) && /__combien AS combien/.test(sql); })());
@@ -156,6 +163,7 @@ const out = await p.evaluate(async ()=>{
   window.__sqlAvecSynonymes = v13SqlDeCodification(avecTout);
   window.__sqlRevue = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
   window.__sqlRevueAilleurs = v13SqlDesCasARevoir(Object.assign({}, C(), { synonymes: [], regles: [] }), 50);
+  window.__sqlCodeFourni = v13SqlDeCodification(Object.assign({}, C(), { synonymes: [], regles: [], colonneCodeExistant: 'CODE_FOURNI', niveaux: ['FAMILLE','LIBELLE_TYPE'] }));
   const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
   window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
     correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
@@ -170,6 +178,7 @@ const sqlAvecSynonymes = await p.evaluate(()=>window.__sqlAvecSynonymes);
 const sqlRevue = await p.evaluate(()=>window.__sqlRevue);
 const v13SqlRevueAilleurs = await p.evaluate(()=>window.__sqlRevueAilleurs);
 const sqlDecisionGroupee = await p.evaluate(()=>window.__sqlDecisionGroupee);
+const sqlCodeFourni = await p.evaluate(()=>window.__sqlCodeFourni);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 await b.close();
 
@@ -226,6 +235,24 @@ console.log(`   codification de 4 000 lignes contre 800 types : ${secondes.toFix
 ok('SQL réel : 4 000 lignes contre 800 types se codent en moins de 30 secondes', secondes < 30);
 ok('SQL réel : le blocage par les mots rares ne perd pas les lignes — toutes sont rendues', compte('office') + compte('revoir') + compte('absent') === 4000);
 ok('SQL réel : sur ce volume, presque tout est codé d’office', compte('office') >= 3900);
+
+// ---- un code fourni qui désigne une autre branche que la famille de la ligne ----
+// La vérification de branche ne portait que sur la ressemblance. Un code déjà présent dans la liste, une
+// règle ou un libellé appris passaient sans contrôle : la ligne ressortait codée d'office avec un chemin
+// qui commençait par une autre famille que la sienne, sans un mot.
+const contredit = await (await DuckDBInstance.create(':memory:')).connect();
+const verifie = async sql => (await (await contredit.run(sql)).getRowObjects());
+await verifie(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES
+  ('POMPES','T','C','Pompe centrifuge','PMP-C','PC'), ('VANNES','S','Q','Vanne papillon','VAN-P','VP')
+) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
+await verifie(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES
+  ('E1','Materiel divers','VANNES','PMP-C',''), ('E2','Materiel divers','POMPES','PMP-C','')
+) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+const fournis = Object.fromEntries((await verifie(`SELECT REPERE, __code, __statut, __branche_trouvee FROM (\n${sqlCodeFourni}\n) f`)).map(l => [String(l.REPERE), l]));
+ok('SQL r\u00e9el : un code d\u00e9j\u00e0 fourni qui d\u00e9signe une autre branche est signal\u00e9, pas cod\u00e9 d\u2019office en silence',
+  fournis.E1.__statut === 'branche' && String(fournis.E1.__branche_trouvee) === 'POMPES');
+ok('SQL r\u00e9el : le code est conserv\u00e9, on ne d\u00e9truit pas l\u2019information', String(fournis.E1.__code) === 'PMP-C');
+ok('SQL r\u00e9el : le m\u00eame code sur une ligne de la bonne famille reste cod\u00e9 d\u2019office', fournis.E2.__statut === 'office');
 
 // ---- le même libellé n fois : une seule question, une seule décision ----
 // Dans une liste reçue, le même libellé revient des centaines de fois. La revue posait la question
