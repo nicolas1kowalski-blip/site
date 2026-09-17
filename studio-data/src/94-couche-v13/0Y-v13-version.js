@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.7.2';
+        const V13_VERSION = '13.8.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.8.0',
+                d: '2026-09-17',
+                t: 'Tables conçues : fin de « Maximum call stack size exceeded »',
+                items: [
+                    'Construire une table avec beaucoup d’enrichissements s’arrêtait sur « Construction impossible : Maximum call stack size exceeded ». Chaque enrichissement ouvrait sa propre requête imbriquée, même quand il ne dépendait d’aucun autre ; au-delà d’une trentaine, le moteur du navigateur s’arrêtait net sur la profondeur.',
+                    'Les enrichissements sont désormais posés par COUCHES : tous ceux qui s’accrochent à ce qui existe déjà entrent dans la même couche, côte à côte. Seul celui qui s’accroche à un attribut ramené par un autre — le chaînage — attend la couche suivante. Mesuré sur le vrai moteur du navigateur : 150 enrichissements indépendants passent, là où 40 échouaient.',
+                    'Le chaînage lui-même reste borné à trente niveaux, et le dit en français avant de lancer la requête : construisez une première table avec le début de la chaîne, puis une seconde qui part de celle-là.',
+                    'Et si le moteur s’arrête tout de même sur un plantage de pile, le message ne recopie plus son jargon : il nomme la cause probable et dit quoi faire.'
+                ]
+            },
             {
                 v: '13.7.2',
                 d: '2026-09-17',

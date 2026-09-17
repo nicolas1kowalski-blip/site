@@ -521,6 +521,12 @@
                     return null;
             }
         }
+        /**
+         * Combien de niveaux de chaînage on accepte entre enrichissements. Chaque niveau emboîte une
+         * requête de plus, et le moteur du navigateur s'arrête net au-delà d'une trentaine — mieux vaut
+         * le dire en français que le laisser tomber sur « memory access out of bounds ».
+         */
+        const TD_COUCHES_MAX = 30;
         function tdBuildSql(d) {
             const branches = d.sources.map(s => {
                 const table = tableByName(s.src);
@@ -578,18 +584,10 @@
                     groups.get(k).rows.push(j);
                 });
                 let count = 0;
-                // Application EN COUCHES successives : chaque enrichissement est joint sur le
-                // résultat des précédents, si bien que son attribut d'accroche peut être une
-                // colonne ramenée par un enrichissement antérieur (chaînage 3e, 4e niveau, ...).
-                const addLayer = (alias, joinSql, cols) => {
-                    sql =
-                        'SELECT u.*, ' +
-                        cols.map(c => alias + '.' + sqlIdent(c.as)).join(', ') +
-                        ' FROM (\n' +
-                        sql +
-                        '\n) u\n' +
-                        joinSql;
-                };
+                // Chaque enrichissement est d'abord PRÉPARÉ sans être posé : on retient son alias, sa
+                // jointure et les colonnes qu'il ramène. Le rangement en couches vient ensuite.
+                const prepares = [];
+                const addLayer = (alias, joinSql, cols, attr) => prepares.push({ alias, joinSql, cols, attr });
                 for (const g of groups.values()) {
                     const table = tableByName(g.src);
                     if (!table || table.status !== 'ready')
@@ -608,7 +606,8 @@
                         addLayer(
                             alias,
                             `LEFT JOIN (SELECT ${nrm('lk.' + sqlIdent(j0.viaIn))} AS __k, ${g.cols.map(c => `CAST(tg.${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(lt.id))} lk JOIN ${sqlIdent(duckTableName(table.id))} tg ON ${nrm('tg.' + sqlIdent(g.srcKey))} = ${nrm('lk.' + sqlIdent(j0.viaOut))} WHERE ${nrm('lk.' + sqlIdent(j0.viaIn))} IS NOT NULL${validSql(j0, 'lk')} QUALIFY row_number() OVER (PARTITION BY ${nrm('lk.' + sqlIdent(j0.viaIn))} ORDER BY ${ordSql}) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`,
-                            g.cols
+                            g.cols,
+                            g.attr
                         );
                         continue;
                     }
@@ -622,8 +621,47 @@
                     addLayer(
                         alias,
                         `LEFT JOIN (SELECT ${kn} AS __k, ${g.cols.map(c => `CAST(t0.${sqlIdent(c.col)} AS VARCHAR) AS ${sqlIdent(c.as)}`).join(', ')} FROM ${sqlIdent(duckTableName(table.id))} t0 WHERE 1=1${j0 ? validSql(j0, 't0') : ''} QUALIFY row_number() OVER (PARTITION BY ${kn} ORDER BY ${ordD}) = 1) ${alias} ON COALESCE(UPPER(TRIM(CAST(u.${sqlIdent(g.attr)} AS VARCHAR))), chr(3)) = ${alias}.__k`,
-                        g.cols
+                        g.cols,
+                        g.attr
                     );
+                }
+                /*
+                 * Rangement en COUCHES.
+                 *
+                 * Tous les enrichissements qui s'accrochent à ce qui existe déjà sont posés dans la MÊME
+                 * couche, côte à côte. Seul celui qui s'accroche à un attribut ramené par un autre attend la
+                 * couche suivante — c'est le chaînage, et lui seul a besoin d'un niveau de plus.
+                 *
+                 * Auparavant chaque enrichissement ouvrait sa propre requête imbriquée, même quand il ne
+                 * dépendait de personne. Au-delà d'une trentaine d'enrichissements, le moteur du navigateur
+                 * s'arrêtait net sur la profondeur d'imbrication — « Maximum call stack size exceeded » ou
+                 * « memory access out of bounds ». Désormais vingt enrichissements indépendants ne font
+                 * qu'une seule couche.
+                 */
+                const posees = new Set([...d.attrs, 'SOURCE_ORIGINE']);
+                const restantes = prepares.slice();
+                const poserUneCouche = couche => {
+                    sql =
+                        'SELECT u.*, ' +
+                        couche.flatMap(plan => plan.cols.map(c => plan.alias + '.' + sqlIdent(c.as))).join(', ') +
+                        ' FROM (\n' +
+                        sql +
+                        '\n) u\n' +
+                        couche.map(plan => plan.joinSql).join('\n');
+                    couche.forEach(plan => plan.cols.forEach(c => posees.add(c.as)));
+                };
+                let couches = 0;
+                while (restantes.length) {
+                    if (++couches > TD_COUCHES_MAX)
+                        throw new Error(
+                            `Trop d'enrichissements s'accrochent les uns aux autres : ${couches} niveaux de chaînage, ${TD_COUCHES_MAX} au plus. Le moteur du navigateur ne sait pas emboîter une requête aussi profonde. Construisez une première table avec le début de la chaîne, puis une seconde qui part de celle-là.`
+                        );
+                    // Ceux dont l'accroche est déjà disponible ; à défaut, tout le reste d'un coup, pour que
+                    // le moteur nomme lui-même la colonne introuvable plutôt que de tourner sans fin.
+                    let couche = restantes.filter(plan => posees.has(plan.attr));
+                    if (!couche.length) couche = restantes.slice();
+                    couche.forEach(plan => restantes.splice(restantes.indexOf(plan), 1));
+                    poserUneCouche(couche);
                 }
             }
             const calcs = d.calcs.filter(cx => cx.name && String(cx.formula || '').trim());
@@ -660,7 +698,7 @@
                     await tdMaterialize(JSON.parse(JSON.stringify(dt.design)));
                     showSuccess(`🧱 Table "${dt.name}" reconstruite (source "${srcName}" mise à jour).`);
                 } catch (e) {
-                    showError(`Reconstruction de la table "${dt.name}" impossible : ` + e.message);
+                    showError(`Reconstruction de la table "${dt.name}" impossible : ` + tdPhraseDeLErreur(e));
                 }
             }
             if (deps.length && currentTab === 10) renderTablesDesign();
@@ -779,6 +817,24 @@
             return tId;
         }
 
+        /**
+         * Ce qu'il faut dire quand la construction échoue. Quand la requête emboîte trop de niveaux, le
+         * moteur du navigateur ne rend pas un message de SQL mais un plantage de pile — « Maximum call
+         * stack size exceeded », « memory access out of bounds ». Illisible, et sans rapport apparent avec
+         * ce que l'on vient de faire. On le remplace par la cause probable et par quoi faire.
+         */
+        function tdPhraseDeLErreur(erreur) {
+            const message = String((erreur && erreur.message) || erreur);
+            if (!/Maximum call stack|call stack size|memory access out of bounds|RuntimeError/i.test(message)) return message;
+            return (
+                "la requête emboîte trop de niveaux pour le moteur du navigateur. C'est presque toujours le " +
+                "chaînage des enrichissements : chacun qui s'accroche à un attribut ramené par un autre ajoute " +
+                'un niveau. Construisez une première table avec le début de la chaîne, puis une seconde qui ' +
+                'part de celle-là. Détail : ' +
+                message
+            );
+        }
+
         async function tdSaveDesign(btn) {
             const design = tdState.editing;
             if (!design) return;
@@ -812,7 +868,7 @@
                 renderTablesDesign();
             } catch (e) {
                 bgTaskEnd();
-                showError('Construction impossible : ' + e.message);
+                showError('Construction impossible : ' + tdPhraseDeLErreur(e));
             } finally {
                 if (btn) btn.disabled = false;
             }
@@ -831,7 +887,7 @@
                 renderTablesDesign();
             } catch (e) {
                 bgTaskEnd();
-                showError('Reconstruction impossible : ' + e.message);
+                showError('Reconstruction impossible : ' + tdPhraseDeLErreur(e));
             } finally {
                 if (btn) btn.disabled = false;
             }
