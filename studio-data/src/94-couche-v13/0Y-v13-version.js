@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.20.0';
+        const V13_VERSION = '13.21.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.21.0',
+                d: '2026-09-18',
+                t: 'Codification : voir, retirer et vider ce que l’on a décidé',
+                items: [
+                    'Les décisions prises à la revue s’accumulaient <b>sans aucun écran pour les relire</b>. On ne savait ni ce qui était retenu, ni comment revenir sur un choix : la seule trace était un « (N libellé(s) appris) » au milieu d’une phrase.',
+                    'Un bloc <b>⑤ Ce que vous avez décidé</b> les rassemble : un tableau des libellés appris — le libellé, le code retenu, par qui, quand — et, en dessous, les libellés écartés. Le <b>✕</b> oublie un choix (le libellé redevient une question à la prochaine codification), le <b>↺</b> remet un libellé écarté en question.',
+                    '<b>Exporter en CSV</b> emporte la liste pour la relire ailleurs ou la faire valider. <b>Tout vider</b> efface les choix appris, après confirmation — c’est une perte de travail, elle ne peut pas se faire par mégarde.',
+                    'Retirer un libellé appris retire aussi la décision attachée à la ligne qui l’avait produite : plus rien ne survit en silence.'
+                ]
+            },
             {
                 v: '13.20.0',
                 d: '2026-09-17',

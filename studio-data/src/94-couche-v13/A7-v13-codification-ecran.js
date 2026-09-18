@@ -461,6 +461,97 @@
             <button onclick="v13AjouterUnSynonyme('${identifiant}')" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50">+ Synonyme</button>`;
         }
 
+        /**
+         * ⑤ Ce que vous avez décidé : la liste des choix appris, relisible, retirable, videcomplet.
+         * Sans cet écran, on décidait sans jamais pouvoir revenir en arrière ni même savoir ce qui était retenu.
+         */
+        function v13BlocDesDecisions(codification) {
+            const identifiant = codification.id;
+            const decisions = v13DecisionsPrises(codification);
+            const bouton = (action, intitule, titre) =>
+                `<button onclick="${action}" class="text-red-500 font-bold" title="${escapeHTML(titre)}">${intitule}</button>`;
+            const pour = libelle => `'${identifiant}', ${JSON.stringify(libelle).replace(/"/g, '&quot;')}`;
+            const apprises = decisions.apprises
+                .map(
+                    apprise => `<tr class="v13-codif-decision">
+                        <td class="p-1.5">${escapeHTML(apprise.libelle)}</td>
+                        <td class="p-1.5 font-bold text-emerald-700">${escapeHTML(apprise.code)}</td>
+                        <td class="p-1.5 text-slate-500">${escapeHTML(apprise.auteur)}</td>
+                        <td class="p-1.5 text-slate-500">${escapeHTML(apprise.le)}</td>
+                        <td class="p-1.5">${bouton(`v13OublierUneDecision(${pour(apprise.libelle)})`, '✕', 'Oublier ce choix : ce libellé redeviendra une question')}</td>
+                    </tr>`
+                )
+                .join('');
+            const ecartees = decisions.ecartees
+                .map(
+                    ecartee => `<tr class="v13-codif-decision v13-codif-ecartee">
+                        <td class="p-1.5">${escapeHTML(ecartee)}</td>
+                        <td class="p-1.5 italic text-slate-500" colspan="3">écarté — plus reproposé</td>
+                        <td class="p-1.5">${bouton(`v13OublierUneDecision(${pour(ecartee)})`, '↺', 'Remettre ce libellé en question')}</td>
+                    </tr>`
+                )
+                .join('');
+            const vide = `<tr><td colspan="5" class="p-3 text-[11px] text-slate-400 italic">Aucun choix pour l'instant : les décisions prises dans « À revoir » viendront s'inscrire ici.</td>
+                </tr>`;
+            const surUneLigne = decisions.surUneLigne
+                ? `<p class="text-[10px] text-slate-400 mb-2" id="v13-codif-decisions-lignes">Et ${decisions.surUneLigne.toLocaleString('fr-FR')} décision(s) attachée(s) à une ligne précise, retirées avec le libellé qui les a produites.</p>`
+                : '';
+            return `<p class="text-[11px] text-slate-500 mb-2" id="v13-codif-decisions-phrase">${escapeHTML(v13PhraseDesDecisions(decisions))}</p>
+            <table class="w-full text-left text-xs mb-2" id="v13-codif-decisions"><thead class="bg-slate-100 text-slate-600 font-bold">
+                <tr><th class="p-1.5">Libellé de votre liste</th>
+                <th class="p-1.5">Code retenu</th>
+                <th class="p-1.5">Par</th>
+                <th class="p-1.5">Le</th>
+                <th></th>
+                </tr>
+            </thead>
+                <tbody class="divide-y divide-slate-100">${apprises + ecartees || vide}</tbody></table>
+            ${surUneLigne}
+            <div class="flex items-center gap-2 flex-wrap">
+                <button id="v13-codif-decisions-exporter" onclick="v13ExporterLesDecisions('${identifiant}')" ${decisions.combien ? '' : 'disabled'} class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50">→ Exporter en CSV</button>
+                <button id="v13-codif-decisions-vider" onclick="v13ViderLesDecisions('${identifiant}')" ${decisions.combien ? '' : 'disabled'} class="text-xs bg-red-50 border border-red-200 text-red-600 px-3 py-1.5 rounded-lg font-bold">Tout vider</button>
+            </div>`;
+        }
+        /** Oublier ce qui a été décidé sur un libellé : il redevient une question dès la prochaine codification. */
+        function v13OublierUneDecision(identifiant, libelle) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification) return;
+            Object.assign(codification, v13SansCetteDecision(codification, libelle));
+            persistAppState();
+            showSuccess(`« ${libelle} » oublié : il vous sera reproposé à la prochaine codification.`);
+            renderCodification();
+        }
+        /** Tout vider, après confirmation : c'est une perte de travail, elle ne peut pas se faire par mégarde. */
+        function v13ViderLesDecisions(identifiant) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification) return;
+            const decisions = v13DecisionsPrises(codification);
+            if (!decisions.combien) return;
+            if (
+                !confirm(
+                    `Vider les ${decisions.combien} choix appris de « ${codification.nom} » ? Ils ne seront plus rejoués, et les libellés concernés reviendront à revoir.`
+                )
+            )
+                return;
+            Object.assign(codification, v13DecisionsVidees());
+            persistAppState();
+            showSuccess('Tous les choix appris ont été vidés.');
+            renderCodification();
+        }
+        /** Les décisions en CSV : pour les relire ailleurs, les faire valider, ou simplement les garder. */
+        function v13ExporterLesDecisions(identifiant) {
+            const codification = v13CodificationParIdentifiant(identifiant);
+            if (!codification) return;
+            const blob = new Blob([v13CsvDesDecisions(codification)], { type: 'text/csv;charset=utf-8' });
+            const lien = document.createElement('a');
+            lien.href = URL.createObjectURL(blob);
+            lien.download = `DECISIONS_${String(codification.nom).replace(/[^A-Za-z0-9]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(lien);
+            lien.click();
+            lien.remove();
+            showSuccess('📥 Vos décisions sont téléchargées.');
+        }
+
         /** ④ Les règles, de la plus sûre à la plus souple. */
         function v13BlocDesRegles(codification) {
             const identifiant = codification.id;
@@ -834,10 +925,11 @@
                 v13BlocDeCodification("② Ce que l'on compare", v13BlocDesComparaisons(codification)) +
                 v13BlocDeCodification("③ Les mots qui en valent d'autres", v13BlocDesSynonymes(codification)) +
                 v13BlocDeCodification('④ Les règles, de la plus sûre à la plus souple', v13BlocDesRegles(codification)) +
-                (v13Codification.resultat ? v13BlocDeCodification('⑤ Le résultat', v13BlocDuResultat(codification)) : '') +
+                v13BlocDeCodification('⑤ Ce que vous avez décidé', v13BlocDesDecisions(codification)) +
+                (v13Codification.resultat ? v13BlocDeCodification('⑥ Le résultat', v13BlocDuResultat(codification)) : '') +
                 (v13Codification.casARevoir.length
                     ? v13BlocDeCodification(
-                          `⑥ À revoir — ${v13Codification.casARevoir.length} cas`,
+                          `⑦ À revoir — ${v13Codification.casARevoir.length} cas`,
                           v13BlocDeLaRevue(codification)
                       )
                     : '');

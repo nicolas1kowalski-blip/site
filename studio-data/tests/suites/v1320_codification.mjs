@@ -172,6 +172,60 @@ const out = await p.evaluate(async ()=>{
     v13ConseilDeColonne([{colonne:'FAMILLE', reconnues:9, remplies:9}], 'FAMILLE', '« e.csv »')==='');
   ok('et quand aucune colonne ne reconnait grand-chose, on se tait plutot que d\'egarer',
     v13ConseilDeColonne([{colonne:'REPERE', reconnues:2, remplies:9}], 'DESIGNATION', '« e.csv »')==='');
+  // ---- voir, retirer et vider ce que l'on a décidé ----
+  // Les décisions s'accumulaient sans écran pour les relire : impossible de savoir ce qui était retenu,
+  // ni de revenir sur un choix. Trois libellés appris, un écarté, une décision sur une ligne précise.
+  const avecDesChoix = () => Object.assign({}, C(), {
+    correspondances: [
+      { libelle:'Chaudiere 2', code:'22390503.A', auteur:'Nicolas', le:'2026-09-18' },
+      { libelle:'Disconnecteur CES', code:'37010909.B', auteur:'Nicolas', le:'2026-09-18' }
+    ],
+    refus: [v13MotRetenuDuTexte('Bidule non identifiable', C())],
+    decisions: { 4:'22390503.A', 7:'VAN-P' } });
+  ok('on voit ce qui a ete appris, ce qui a ete ecarte, et combien tient a une ligne', (()=>{
+    const vues = v13DecisionsPrises(avecDesChoix());
+    return vues.apprises.length===2 && vues.ecartees.length===1 && vues.surUneLigne===2 && vues.combien===3
+      && vues.apprises[0].code==='22390503.A' && vues.apprises[0].auteur==='Nicolas'; })());
+  ok('et une phrase les compte, ou dit qu\'il n\'y a rien', (()=>{
+    const pleine = v13PhraseDesDecisions(v13DecisionsPrises(avecDesChoix()));
+    const vide = v13PhraseDesDecisions(v13DecisionsPrises(Object.assign({}, C(), {correspondances:[], refus:[], decisions:{}})));
+    return /2 libellés appris/.test(pleine) && /1 libellé écarté/.test(pleine) && /rien décidé/.test(vide); })());
+  ok('retirer un choix retire le libellé appris ET la décision de ligne qui en découlait', (()=>{
+    const apres = v13SansCetteDecision(avecDesChoix(), 'Chaudiere 2');
+    return apres.correspondances.length===1 && apres.correspondances[0].code==='37010909.B'
+      && !apres.decisions['4'] && apres.decisions['7']==='VAN-P'; })());
+  ok('remettre en question un libellé écarté le sort bien de la liste des écartés', (()=>{
+    const apres = v13SansCetteDecision(avecDesChoix(), 'Bidule non identifiable');
+    return apres.refus.length===0 && apres.correspondances.length===2; })());
+  ok('tout vider ne laisse aucun choix appris, écarté ni attaché à une ligne', (()=>{
+    const apres = v13DecisionsVidees();
+    return apres.correspondances.length===0 && apres.refus.length===0 && !Object.keys(apres.decisions).length; })());
+  ok('les décisions s\'exportent en CSV, les apprises comme les écartées', (()=>{
+    const csv = v13CsvDesDecisions(avecDesChoix()).split('\r\n');
+    return csv[0]==='libelle;decision;code;par;le' && csv.length===4
+      && /^Chaudiere 2;appris;22390503\.A;Nicolas;2026-09-18$/.test(csv[1])
+      && /;ecarte;;;$/.test(csv[3]); })());
+  ok('un libellé qui contient un point-virgule ne casse pas le CSV', (()=>{
+    const csv = v13CsvDesDecisions(Object.assign({}, C(), {correspondances:[{libelle:'Vanne ; papillon', code:'VAN-P'}], refus:[]}));
+    return /"Vanne ; papillon";appris;VAN-P/.test(csv); })());
+  // Et l'écran, réellement : le bloc ⑤ existe, il montre les choix, et le ✕ en retire un pour de bon.
+  const avant = { correspondances: C().correspondances, refus: C().refus, decisions: C().decisions };
+  Object.assign(C(), { correspondances:[{libelle:'Chaudiere 2', code:'22390503.A', auteur:'Nicolas', le:'2026-09-18'}],
+    refus:['BIDULE'], decisions:{} });
+  renderCodification(); await wait(120);
+  ok('l\'écran montre un bloc « Ce que vous avez décidé », avec une ligne par choix',
+    el('v13-codif-decisions') && el('v13-codif-decisions').querySelectorAll('tr.v13-codif-decision').length===2
+    && el('v13-codif-decisions').querySelectorAll('tr.v13-codif-ecartee').length===1);
+  ok('les boutons « Exporter » et « Tout vider » sont actifs quand il y a des choix',
+    !el('v13-codif-decisions-exporter').disabled && !el('v13-codif-decisions-vider').disabled);
+  el('v13-codif-decisions').querySelector('tr.v13-codif-decision button').click(); await wait(120);
+  ok('le ✕ retire vraiment le choix, et l\'écran se remet à jour', C().correspondances.length===0
+    && el('v13-codif-decisions').querySelectorAll('tr.v13-codif-decision').length===1);
+  Object.assign(C(), { correspondances:[], refus:[], decisions:{} });
+  renderCodification(); await wait(120);
+  ok('sans aucun choix, l\'écran le dit et n\'offre rien à vider',
+    /rien décidé/.test(el('v13-codif-decisions-phrase').textContent) && el('v13-codif-decisions-vider').disabled);
+  Object.assign(C(), avant);
   ok('la revue rend la famille de la ligne, pour pouvoir expliquer', /AS famille, CAST/.test(v13SqlDesCasARevoir(C(), 50, 'v13_codee')));
   ok('et le cas sans proposition de sa famille dit laquelle des deux raisons s\'applique', (()=>{
     v13Codification.branche = { accord:false, familles:['J01'], phrase:'x' };

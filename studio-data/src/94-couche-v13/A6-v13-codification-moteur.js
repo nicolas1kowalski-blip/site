@@ -951,6 +951,80 @@
         }
 
         /**
+         * Tout ce que l’on a décidé jusqu’ici, rassemblé en un seul endroit pour être relu, retiré, vidé.
+         *
+         * Une décision vit à trois endroits : le libellé APPRIS (« cette écriture-là vaut ce code », c’est
+         * elle qui code toutes les lignes portant ce libellé, aujourd’hui et à la prochaine livraison), le
+         * libellé ÉCARTÉ (« aucune proposition ne convient, ne me le redemandez plus ») et, en dessous, la
+         * décision prise sur une ligne précise. Sans écran pour les voir, elles s’accumulaient à l’aveugle.
+         */
+        function v13DecisionsPrises(codification) {
+            const apprises = (codification.correspondances || [])
+                .filter(correspondance => correspondance && correspondance.libelle && correspondance.code)
+                .map(correspondance => ({
+                    libelle: String(correspondance.libelle),
+                    code: String(correspondance.code),
+                    auteur: String(correspondance.auteur || ''),
+                    le: String(correspondance.le || '')
+                }));
+            const ecartees = (codification.refus || []).filter(Boolean).map(String);
+            const surUneLigne = Object.keys(codification.decisions || {}).length;
+            return { apprises, ecartees, surUneLigne, combien: apprises.length + ecartees.length };
+        }
+        /** Ce que dit l’écran quand on n’a encore rien décidé, ou ce que l’on a décidé, en une phrase. */
+        function v13PhraseDesDecisions(decisions) {
+            const compte = (nombre, un, plusieurs) => `${nombre.toLocaleString('fr-FR')} ${nombre > 1 ? plusieurs : un}`;
+            if (!decisions.combien)
+                return 'Vous n’avez encore rien décidé : cette liste se remplira au fur et à mesure de la revue.';
+            const morceaux = [];
+            if (decisions.apprises.length)
+                morceaux.push(compte(decisions.apprises.length, 'libellé appris', 'libellés appris'));
+            if (decisions.ecartees.length)
+                morceaux.push(compte(decisions.ecartees.length, 'libellé écarté', 'libellés écartés'));
+            return `${morceaux.join(' et ')}. Ces choix sont rejoués à chaque codification — y compris sur une livraison plus récente.`;
+        }
+        /**
+         * Oublier ce qui a été décidé sur un libellé : il redevient une question à la prochaine codification.
+         *
+         * On retire aussi les décisions prises ligne à ligne qui portaient ce code. Le lien entre une ligne et
+         * le libellé qui l’a fait coder n’est pas conservé : on en retire donc une de trop dans le cas rare où
+         * deux libellés différents ont mené au même code. Aucune information n’est perdue pour autant —
+         * l’autre libellé reste appris, et il code ses lignes comme avant.
+         */
+        function v13SansCetteDecision(codification, libelle) {
+            const correspondances = v13CorrespondanceApresDecision(codification, libelle, '');
+            const retire = (codification.correspondances || []).find(
+                correspondance =>
+                    correspondance &&
+                    v13MotRetenuDuTexte(correspondance.libelle, codification) === v13MotRetenuDuTexte(libelle, codification)
+            );
+            const code = retire ? String(retire.code) : '';
+            const decisions = {};
+            Object.keys(codification.decisions || {}).forEach(rang => {
+                if (!code || String(codification.decisions[rang]) !== code) decisions[rang] = codification.decisions[rang];
+            });
+            return { correspondances, refus: v13RefusSansLeLibelle(codification, libelle), decisions };
+        }
+        /** Tout vider : on repart des seules règles déclarées, sans aucun choix appris. */
+        function v13DecisionsVidees() {
+            return { correspondances: [], refus: [], decisions: {} };
+        }
+        /** Les décisions en CSV, pour les relire ailleurs, les faire valider, ou les garder. */
+        function v13CsvDesDecisions(codification) {
+            const decisions = v13DecisionsPrises(codification);
+            const cellule = valeur => {
+                const ecrit = String(valeur === null || valeur === undefined ? '' : valeur);
+                return /[;"\n]/.test(ecrit) ? '"' + ecrit.replace(/"/g, '""') + '"' : ecrit;
+            };
+            const lignes = [['libelle', 'decision', 'code', 'par', 'le']];
+            decisions.apprises.forEach(apprise =>
+                lignes.push([apprise.libelle, 'appris', apprise.code, apprise.auteur, apprise.le])
+            );
+            decisions.ecartees.forEach(ecartee => lignes.push([ecartee, 'ecarte', '', '', '']));
+            return lignes.map(ligne => ligne.map(cellule).join(';')).join('\r\n');
+        }
+
+        /**
          * Le récapitulatif des choix faits, en français, pour qu’on les relise sans déplier les réglages.
          * Une ligne par décision : ce que l’on code, contre quoi, ce que l’on compare, ce que l’on a appris.
          */
