@@ -644,24 +644,61 @@
          * dans un tableur. Une ligne par proposition, avec le libellé, sa famille, le nombre de lignes
          * qu’il couvre, le code proposé, son chemin, son score, et s’il vient de la bonne famille.
          */
+        /**
+         * La table de tous les cas à revoir : d'un coup si la mémoire suffit, par paquets de libellés sinon.
+         *
+         * D'un coup, le moteur doit tenir en même temps la table codée entière ET tout le rapprochement
+         * refait par-dessus. Sur une liste de plusieurs centaines de milliers de lignes dans un navigateur
+         * — qui ne peut pas écrire sur le disque — il s'arrête faute de place. Par paquets, chaque morceau
+         * est écrit avant que le suivant ne commence : la mémoire ne dépend plus que de la taille d'un
+         * paquet. C'est trois fois plus lent, alors on ne s'y résout qu'après avoir manqué de place.
+         */
+        async function v13PreparerLaRevue(codification, conn, table, cas) {
+            try {
+                await conn.query(
+                    `CREATE OR REPLACE TABLE ${table} AS\n${v13SqlDesCasARevoir(codification, 0, V13_TABLE_CODEE)}`
+                );
+                return false;
+            } catch (erreur) {
+                if (!v13ManqueDeMemoire(erreur)) throw erreur;
+            }
+            const enFrancais = nombre => Number(nombre || 0).toLocaleString('fr-FR');
+            for (let depuis = 0; depuis === 0 || depuis < cas; depuis += V13_CAS_PAR_PAQUET) {
+                const paquet = v13SqlDesCasARevoir(codification, V13_CAS_PAR_PAQUET, V13_TABLE_CODEE, depuis);
+                await conn.query(depuis ? `INSERT INTO ${table}\n${paquet}` : `CREATE OR REPLACE TABLE ${table} AS\n${paquet}`);
+                bgTaskStart(
+                    `Préparation des cas à revoir, par paquets — ${enFrancais(Math.min(depuis + V13_CAS_PAR_PAQUET, cas))} / ${enFrancais(cas)} libellés`
+                );
+            }
+            return true;
+        }
         async function v13ExporterLesCasARevoir(identifiant) {
             const codification = v13CodificationParIdentifiant(identifiant);
             if (!codification || !v13Codification.resultat) return;
             bgTaskStart('Préparation de tous les cas à revoir');
+            // Comme la codification : ce navigateur ne peut pas écrire sur le disque, on relance en
+            // mémoire pure plutôt que de laisser le moteur chercher un fichier temporaire qui n'existe pas.
+            v12State.noSpill++;
+            const enFrancais = nombre => Number(nombre || 0).toLocaleString('fr-FR');
+            const table = sqlIdent(V13_TABLE_REVUE);
             try {
-                const jeu = await v12TmpFromSql(
-                    v13SqlDesCasARevoir(codification, 0, V13_TABLE_CODEE),
-                    `${codification.source} à revoir`,
-                    {
-                        kind: 'extract',
-                        origin: `Codification « ${codification.nom} » — tous les cas à revoir`,
-                        from: [codification.source, codification.nomenclature]
-                    }
+                const { conn } = await getDB();
+                const cas = Number(
+                    arrowResultToObjects(await conn.query(v13SqlDuNombreDeCasARevoir(codification, V13_TABLE_CODEE)))[0].cas
                 );
-                bgTaskEnd(`🔎 ${Number(jeu.rows || 0).toLocaleString('fr-FR')} proposition(s) à examiner.`);
+                await v13PreparerLaRevue(codification, conn, table, cas);
+                const jeu = await v12TmpFromSql(`SELECT * FROM ${table}`, `${codification.source} à revoir`, {
+                    kind: 'extract',
+                    origin: `Codification « ${codification.nom} » — tous les cas à revoir`,
+                    from: [codification.source, codification.nomenclature]
+                });
+                await conn.query(`DROP TABLE IF EXISTS ${table}`);
+                bgTaskEnd(`🔎 ${enFrancais(jeu.rows)} proposition(s) à examiner, sur ${enFrancais(cas)} libellé(s).`);
             } catch (erreur) {
                 bgTaskEnd();
                 showError('Impossible de préparer les cas à revoir : ' + v13PhraseDeLErreur(erreur));
+            } finally {
+                v12State.noSpill--;
             }
         }
 

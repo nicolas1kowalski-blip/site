@@ -136,7 +136,24 @@ const out = await p.evaluate(async ()=>{
   ok('le résultat codé, lui, part en entier — aucun plafond dans son export',
     /SELECT \* EXCLUDE \(__rn\) FROM \$\{sqlIdent\(V13_TABLE_CODEE\)\}/.test(String(v13UtiliserLeResultat))
     && !/LIMIT/.test(String(v13UtiliserLeResultat)));
-  ok('et un bouton sort tous les cas à revoir', /v13SqlDesCasARevoir\(codification, 0, V13_TABLE_CODEE\)/.test(String(v13ExporterLesCasARevoir)));
+  ok('et un bouton sort tous les cas à revoir, sans plafond', (()=>{ const code=String(v13ExporterLesCasARevoir);
+    return /v13SqlDuNombreDeCasARevoir/.test(code) && /v13PreparerLaRevue/.test(code)
+      && /DROP TABLE IF EXISTS \$\{table\}/.test(code) && /v12State\.noSpill\+\+/.test(code); })());
+  ok('il essaie d\'abord d\'un coup, et ne se replie sur les paquets qu\'en manquant de place', (()=>{
+    const code=String(v13PreparerLaRevue);
+    return /v13SqlDesCasARevoir\(codification, 0, V13_TABLE_CODEE\)/.test(code)
+      && /if \(!v13ManqueDeMemoire\(erreur\)\) throw erreur/.test(code)
+      && /v13SqlDesCasARevoir\(codification, V13_CAS_PAR_PAQUET, V13_TABLE_CODEE, depuis\)/.test(code)
+      && /INSERT INTO \$\{table\}/.test(code) && /depuis \+= V13_CAS_PAR_PAQUET/.test(code); })());
+  ok('et l\'on sait reconnaître un manque de place d\'une vraie erreur', v13ManqueDeMemoire(new Error('Out of Memory Error: x'))
+    && v13ManqueDeMemoire(new Error('HTML FileReaders do not support writing')) && !v13ManqueDeMemoire(new Error('Binder Error: y')));
+  ok('le découpage saute bien les libellés déjà sortis', (()=>{
+    const premier=v13SqlDesCasARevoir(C(), 5000, 'v13_codee', 0);
+    const suivant=v13SqlDesCasARevoir(C(), 5000, 'v13_codee', 5000);
+    return / LIMIT 5000$/m.test(premier.split('\n').find(l=>/LIMIT/.test(l))||'')===false
+      ? /LIMIT 5000/.test(premier) && /LIMIT 5000 OFFSET 5000/.test(suivant) : true; })());
+  ok('et demander tout ce qui reste à partir d\'un rang garde bien le saut',
+    / LIMIT ALL OFFSET 120$/m.test(v13PlafondDesCas(0, 120)) && v13PlafondDesCas(0, 0)==='');
 
   // ---- pourquoi aucune proposition de ma famille ?
   ok('le contrôle compare les familles des deux côtés', (()=>{ const sql=v13SqlDuControleDeBranche(C());
@@ -240,7 +257,11 @@ const out = await p.evaluate(async ()=>{
     && v13CombienDePropositions({propositions:12})===12 && v13CombienDePropositions({propositions:0})===1
     && v13CombienDePropositions({propositions:99})===V13_PROPOSITIONS_MAXIMUM);
   ok('le quota de la famille et celui de l’élargissement sont séparés', (()=>{ const sql=v13SqlDesCasARevoir(C(), 50, 'v13_codee');
-    return /PARTITION BY rang, memeBranche ORDER BY score DESC/.test(sql) && /CASE WHEN memeBranche THEN 8 ELSE 3 END/.test(sql); })());
+    return /GROUP BY rang, memeBranche/.test(sql) && /CASE WHEN memeBranche\s+THEN 8 ELSE 3 END/.test(sql); })());
+  ok('les meilleures sont retenues au passage, sans trier tout ce qui a été noté', (()=>{
+    const sql=v13SqlDesCasARevoir(C(), 0, 'v13_codee');
+    return /max_by\(\{'code': code, 'libelleRef': libelleRef, 'chemin': chemin, 'score': score\},\s+score, 8\)/.test(sql)
+      && !/PARTITION BY rang, memeBranche/.test(sql); })());
   ok('le réglage est offert à l\'écran, à côté des seuils', !!el('v13-codif-propositions'));
   ok('et le récapitulatif le dit', /8 dans la famille de la ligne, puis 3 prises ailleurs/.test(
     (v13RecapDeLaCodification(C()).find(l=>l.intitule==='Propositions montrées')||{}).valeur||''));
@@ -318,6 +339,11 @@ const out = await p.evaluate(async ()=>{
   const decidee = Object.assign({}, C(), { synonymes: [], regles: [] });
   window.__sqlDecisionGroupee = v13SqlDeCodification(Object.assign({}, decidee, {
     correspondances: v13CorrespondanceApresDecision(decidee, 'Pompe alim', 'PMP-C') }));
+  // Le même export, d'un coup et par paquets de 3 libellés : le résultat doit être identique.
+  const tout = Object.assign({}, C(), { synonymes: [], regles: [], niveaux: ['FAMILLE','LIBELLE_TYPE'], seuilRevoir: 0.2 });
+  window.__revueEntiere = { code: v13SqlDeCodification(tout), dUnCoup: v13SqlDesCasARevoir(tout, 0, 'v13_codee'),
+    combien: v13SqlDuNombreDeCasARevoir(tout, 'v13_codee'),
+    paquets: [0,3,6,9].map(depuis => v13SqlDesCasARevoir(tout, 3, 'v13_codee', depuis)) };
   window.__essaiColonnes = {
     liste: v13SqlDesColonnesDeBranche(Object.assign({}, C(), { restreindreSource: 'DESIGNATION' }), 'liste'),
     nomenclature: v13SqlDesColonnesDeBranche(Object.assign({}, C(), { restreindreNomenclature: 'ABREGE' }), 'nomenclature')
@@ -340,6 +366,7 @@ const sqlFaibleRevue = await p.evaluate(()=>window.__sqlFaibleRevue);
 const sqlFamilleDabord = await p.evaluate(()=>window.__sqlFamilleDabord);
 const sqlAvecDecision = await p.evaluate(()=>window.__sqlAvecDecision);
 const essaiColonnes = await p.evaluate(()=>window.__essaiColonnes);
+const revueEntiere = await p.evaluate(()=>window.__revueEntiere);
 await b.close();
 
 // ---- le SQL produit par l'écran, exécuté sur un vrai DuckDB ----
@@ -375,6 +402,26 @@ ok('SQL réel : les propositions restent dans la famille de la ligne', revue.fil
 const autreAttribut = await parRepere(sqlAutreAttribut);
 ok('SQL réel : le rapprochement porte sur la désignation contre l’abrégé, et non plus sur les libellés', autreAttribut.EQ004.__code==='VAN-P' && autreAttribut.EQ004.__origine==='ressemblance');
 ok('SQL réel : ce qui ne ressemble à aucun abrégé reste sans proposition', autreAttribut.EQ006.__statut==='absent');
+
+// ---- l'export de TOUS les cas à revoir, par paquets ----
+// Tout demander d'un coup faisait tenir en mémoire la table codée entière ET le rapprochement refait
+// par-dessus : sur une vraie liste, le navigateur s'arrêtait. Par paquets, le résultat doit être le même.
+const parPaquets = await (await DuckDBInstance.create(':memory:')).connect();
+const paquet = async sql => (await (await parPaquets.run(sql)).getRowObjects());
+await paquet(`CREATE TABLE "t_eq" AS SELECT row_number() OVER () AS __rn, * FROM (VALUES ${valeurs(EQUIPEMENTS)}) v(REPERE,LIBELLE,FAMILLE,CODE_FOURNI,DESIGNATION)`);
+await paquet(`CREATE TABLE "t_nm" AS SELECT * FROM (VALUES ${valeurs(NOMENCLATURE)}) v(FAMILLE,SYSTEME,SOUS_SYSTEME,LIBELLE_TYPE,CODE_TYPE,ABREGE)`);
+await paquet(`CREATE TABLE "v13_codee" AS\n${revueEntiere.code}`);
+const casComptes = Number((await paquet(revueEntiere.combien))[0].cas);
+const dUnCoup = await paquet(revueEntiere.dUnCoup);
+let assemblees = [];
+for (const sql of revueEntiere.paquets) assemblees = assemblees.concat(await paquet(sql));
+const enTexte = lignes => lignes.map(l => [l.rang, l.code, l.score].join('|')).sort().join(' ; ');
+ok('SQL réel : on sait compter les libellés à trancher avant de les préparer',
+  casComptes > 0 && casComptes === new Set(dUnCoup.map(l => String(l.rang))).size);
+ok('SQL réel : l\'export par paquets rend exactement ce que l\'export d\'un coup rendait',
+  assemblees.length === dUnCoup.length && enTexte(assemblees) === enTexte(dUnCoup));
+ok('SQL réel : et aucun libellé n\'est servi deux fois d\'un paquet à l\'autre',
+  new Set(assemblees.map(l => String(l.rang))).size === casComptes);
 
 // ---- l'essai des colonnes de branche, sur un vrai DuckDB ----
 // L'utilisateur avait déclaré DESIGNATION comme colonne de famille : aucune de ses valeurs n'existe dans

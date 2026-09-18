@@ -53,6 +53,13 @@
          * — les lignes, les comptes, les cas à revoir — recoderait la liste entière.
          */
         const V13_TABLE_CODEE = 'v13_codee';
+        /** Où s'assemble, paquet par paquet, la revue complète avant de devenir un jeu. */
+        const V13_TABLE_REVUE = 'v13_revue';
+        /**
+         * Combien de libellés par paquet à l'export. Assez grand pour ne pas multiplier les allers-retours,
+         * assez petit pour que le rapprochement d'un paquet tienne dans la mémoire d'un navigateur.
+         */
+        const V13_CAS_PAR_PAQUET = 5000;
 
         /** La liste des codifications, rangée dans l'état de l'application comme les recettes et les liens. */
         function v13Codifications() {
@@ -714,12 +721,36 @@
          * Le plafond de questions. Zéro ou moins veut dire « toutes » : c’est ce que demande l’export, qui
          * doit rendre la vue complète et non les cinquante premières. L’écran, lui, reste borné.
          */
-        function v13PlafondDesCas(combien) {
+        function v13PlafondDesCas(combien, depuis) {
+            const saute = Math.max(0, Math.round(Number(depuis) || 0));
+            const apres = saute ? ` OFFSET ${saute}` : '';
             const demande = Number(combien);
-            if (!Number.isFinite(demande)) return ' LIMIT 50';
-            return demande > 0 ? ` LIMIT ${Math.round(demande)}` : '';
+            if (!Number.isFinite(demande)) return ' LIMIT 50' + apres;
+            // Un OFFSET sans LIMIT n'a pas de sens : on demande alors tout ce qui reste.
+            if (demande > 0) return ` LIMIT ${Math.round(demande)}${apres}`;
+            return saute ? ` LIMIT ALL${apres}` : '';
         }
-        function v13SqlDesCasARevoir(codification, combien, tableCodee) {
+        /**
+         * Combien de libellés distincts restent à trancher. C'est ce qui permet de préparer l'export
+         * par paquets au lieu de tout demander d'un coup — voir v13SqlDesCasARevoir.
+         */
+        function v13SqlDuNombreDeCasARevoir(codification, tableCodee) {
+            v13VerifierLaCodification(codification);
+            const cleDuLibelle = v13Canoniser(v13TexteCompare(`codee.${sqlIdent(codification.colonneLibelle)}`), codification);
+            const ecartes = (codification.refus || []).filter(Boolean);
+            const sansLesEcartes = ecartes.length ? ` AND ${cleDuLibelle} NOT IN (${ecartes.map(sqlLiteral).join(', ')})` : '';
+            return `SELECT COUNT(DISTINCT ${cleDuLibelle})::BIGINT AS cas
+        FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
+        WHERE __statut IN ('revoir', 'branche', 'faible')${sansLesEcartes}`;
+        }
+        /**
+         * « depuis » saute les premiers libellés : c'est ce qui permet de préparer l'export par paquets.
+         *
+         * Demander les deux cent mille libellés d'un coup faisait tenir en mémoire, en même temps, la table
+         * codée entière ET tout le rapprochement refait par-dessus. Le navigateur, qui ne peut pas écrire sur
+         * le disque, s'arrêtait. Par paquets, la mémoire ne dépend plus que de la taille d'un paquet.
+         */
+        function v13SqlDesCasARevoir(codification, combien, tableCodee, depuis) {
             v13VerifierLaCodification(codification);
             const tableNomenclature = sqlIdent(duckTableName(tableByName(codification.nomenclature).id));
             /*
@@ -746,7 +777,7 @@
             SELECT ${cleDuLibelle} AS __cle, COUNT(*) AS __combien, min(codee.__rn) AS __rn
             FROM ${sqlIdent(tableCodee || V13_TABLE_CODEE)} codee
             WHERE __statut IN ('revoir', 'branche', 'faible')${sansLesEcartes}
-            GROUP BY 1 ORDER BY __combien DESC, __rn${v13PlafondDesCas(combien)}
+            GROUP BY 1 ORDER BY __combien DESC, __rn${v13PlafondDesCas(combien, depuis)}
         ), aCoder AS (
             SELECT codee.*, CAST(codee.${sqlIdent(codification.colonneLibelle)} AS VARCHAR) AS __texte,
                 clesARevoir.__combien AS __combien
@@ -765,10 +796,35 @@
             JOIN listePrete liste ON liste.__rn = p.__rn
             JOIN aCoder ON aCoder.__rn = liste.__rn
             JOIN typesPrets types ON types.__ligne = p.__ligne
+        ), meilleures AS (
+            /*
+             * Ne garder que les meilleures propositions, SANS trier tout ce qui a été noté.
+             *
+             * Un classement par fenêtre (« row_number() OVER … ORDER BY score ») oblige le moteur à ranger
+             * l'intégralité des couples notés avant d'en jeter la quasi-totalité. Sur une liste entière —
+             * plus de deux cent mille libellés à revoir, chacun contre des dizaines de types — cela veut dire
+             * des dizaines de millions de lignes à trier en mémoire, et le navigateur, qui ne peut pas écrire
+             * sur le disque, s'arrête. « max_by » fait le même travail en ne retenant que les meilleures au
+             * passage : la mémoire ne dépend plus que du nombre de libellés, plus de celui des couples.
+             *
+             * Les quatre valeurs d'une proposition voyagent dans une seule structure : séparées, quatre
+             * « max_by » pourraient départager deux ex æquo différemment et mélanger un code avec le libellé
+             * d'un autre.
+             */
+            SELECT rang, memeBranche, any_value(libelle) AS libelle, any_value(combien) AS combien,
+                any_value(famille) AS famille,
+                max_by({'code': code, 'libelleRef': libelleRef, 'chemin': chemin, 'score': score},
+                    score, ${Math.max(v13CombienDePropositions(codification), V13_CANDIDATS_ELARGIS)}) AS tetes
+            FROM notes WHERE score > 0 GROUP BY rang, memeBranche
+        ), retenues AS (
+            SELECT rang, libelle, combien, famille, memeBranche,
+                unnest(list_slice(tetes, 1, CASE WHEN memeBranche
+                    THEN ${v13CombienDePropositions(codification)} ELSE ${V13_CANDIDATS_ELARGIS} END)) AS tete
+            FROM meilleures
         )
-        SELECT * FROM notes WHERE score > 0
-        QUALIFY row_number() OVER (PARTITION BY rang, memeBranche ORDER BY score DESC)
-            <= CASE WHEN memeBranche THEN ${v13CombienDePropositions(codification)} ELSE ${V13_CANDIDATS_ELARGIS} END
+        SELECT rang, libelle, combien, famille, tete.code AS code, tete.libelleRef AS libelleRef,
+            tete.chemin AS chemin, memeBranche, tete.score AS score
+        FROM retenues
         ORDER BY rang, memeBranche DESC, score DESC`;
         }
 
@@ -777,13 +833,14 @@
          * navigateur : le message brut de DuckDB parle alors de fichiers temporaires, ce qui n’aide personne.
          * On le remplace par ce que l’on peut réellement faire.
          */
+        function v13ManqueDeMemoire(erreur) {
+            return /do not support writing|temp_directory|temporary|out of memory|memory limit|cannot allocate|Failed to allocate/i.test(
+                String((erreur && erreur.message) || erreur)
+            );
+        }
         function v13PhraseDeLErreur(erreur) {
             const message = String((erreur && erreur.message) || erreur);
-            const memoire =
-                /do not support writing|temp_directory|temporary|out of memory|memory limit|cannot allocate|Failed to allocate/i.test(
-                    message
-                );
-            if (!memoire) return message;
+            if (!v13ManqueDeMemoire(erreur)) return message;
             return (
                 'la mémoire du navigateur n’a pas suffi, et ce navigateur ne permet pas d’écrire sur le disque. ' +
                 'Renseignez « Chercher dans la bonne branche » pour ne comparer que dans la famille de chaque ligne, ' +

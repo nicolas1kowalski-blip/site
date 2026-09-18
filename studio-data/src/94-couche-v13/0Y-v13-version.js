@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.21.0';
+        const V13_VERSION = '13.22.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.22.0',
+                d: '2026-09-18',
+                t: 'Codification : « Tous les cas à revoir » tient sur une vraie liste',
+                items: [
+                    '« Tous les cas à revoir » s’arrêtait sur <b>« la mémoire du navigateur n’a pas suffi »</b>. Le bouton demandait les deux cent mille libellés d’un coup : le moteur devait tenir en même temps la table codée entière et tout le rapprochement refait par-dessus.',
+                    'Deux corrections. D’abord le <b>classement des propositions</b> : il obligeait à ranger l’intégralité des couples notés — des dizaines de millions — avant d’en jeter la quasi-totalité. Les meilleures sont désormais retenues <b>au passage</b> : la mémoire ne dépend plus que du nombre de libellés. Mesuré sur 450 000 lignes et 120 000 libellés à trancher, dans 1,4 Go et sans écriture disque : l’ancien plan s’arrête, le nouveau sort les 455 998 propositions en 4 secondes.',
+                    'Ensuite un <b>repli par paquets</b> de 5 000 libellés, quand même cela ne suffit pas : chaque morceau est écrit avant que le suivant ne commence, et l’écran affiche l’avancement. C’est trois fois plus lent, alors on ne s’y résout qu’après avoir manqué de place. Un test prouve que les paquets rendent exactement ce que l’export d’un coup rendait, sans jamais servir un libellé deux fois.',
+                    'Et cet export s’exécute maintenant, comme la codification, en <b>mémoire pure</b> : ce navigateur ne peut pas écrire sur le disque, inutile de laisser le moteur chercher un fichier temporaire qui n’existe pas.'
+                ]
+            },
             {
                 v: '13.21.0',
                 d: '2026-09-18',
