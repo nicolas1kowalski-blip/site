@@ -209,6 +209,73 @@
             return null;
         }
 
+        /*
+         * ---- Quand le moteur de ce navigateur ne connaît pas « encoding » ----
+         *
+         * L'option « encoding » de read_csv_auto n'existe que dans les moteurs récents. Sur un moteur plus
+         * ancien, choisir « Windows / ANSI » ou « UTF-16 » faisait échouer la lecture sur
+         * « Binder Error: Invalid named parameter "encoding" for function read_csv_auto », et les trois
+         * replis échouaient pareillement puisqu'ils repassaient la même option.
+         *
+         * On fait alors le travail nous-mêmes : le fichier est relu dans son encodage d'origine et réécrit
+         * en UTF-8, par morceaux, puis remis au moteur qui n'a plus qu'à lire de l'UTF-8.
+         */
+        function erreurDEncodageInconnu(erreur) {
+            return /Invalid named parameter "encoding"/i.test(String((erreur && erreur.message) || erreur));
+        }
+        /** Le nom que le navigateur donne à cet encodage, ou rien s'il n'y a pas de conversion à faire. */
+        function decodeurDuFichier(enc) {
+            if (enc === 'ISO-8859-1') return 'windows-1252';
+            if (enc === 'UTF-16') return 'utf-16le';
+            return '';
+        }
+        /** Par quelle taille de tranches on relit le fichier : assez grand pour être rapide, assez petit pour tenir. */
+        const OCTETS_PAR_TRANCHE = 8 * 1024 * 1024;
+        /**
+         * Au-delà, on refuse de convertir : le fichier converti devrait tenir entier dans la mémoire du
+         * navigateur, et mieux vaut le dire franchement que de le faire tomber.
+         */
+        const TAILLE_MAX_A_RECODER = 300 * 1024 * 1024;
+        /**
+         * Le fichier, relu dans son encodage d'origine et réécrit en UTF-8. Le décodeur travaille en flux :
+         * une lettre accentuée coupée entre deux tranches est recollée au lieu d'être perdue.
+         */
+        async function recoderLeFichierEnUtf8(fichier, enc) {
+            const nomDuDecodeur = decodeurDuFichier(enc);
+            if (!nomDuDecodeur) return null;
+            if (fichier.size > TAILLE_MAX_A_RECODER)
+                throw new Error(
+                    `Ce fichier est en ${enc === 'UTF-16' ? 'UTF-16' : 'Windows / ANSI'} et le moteur de ce navigateur ` +
+                        `ne sait pas lire cet encodage lui-même. Il faudrait le convertir, mais il est trop volumineux ` +
+                        `pour être converti ici (${Math.round(fichier.size / 1048576)} Mo). Enregistrez-le en UTF-8 avant de le charger.`
+                );
+            const decodeur = new TextDecoder(nomDuDecodeur);
+            const encodeur = new TextEncoder();
+            const morceaux = [];
+            let taille = 0;
+            for (let debut = 0; debut < fichier.size; debut += OCTETS_PAR_TRANCHE) {
+                const tranche = await fichier.slice(debut, Math.min(debut + OCTETS_PAR_TRANCHE, fichier.size)).arrayBuffer();
+                const octets = encodeur.encode(decodeur.decode(new Uint8Array(tranche), { stream: true }));
+                morceaux.push(octets);
+                taille += octets.length;
+            }
+            const reste = encodeur.encode(decodeur.decode());
+            if (reste.length) {
+                morceaux.push(reste);
+                taille += reste.length;
+            }
+            const tout = new Uint8Array(taille);
+            let curseur = 0;
+            morceaux.forEach(morceau => {
+                tout.set(morceau, curseur);
+                curseur += morceau.length;
+            });
+            return tout;
+        }
+        /** La même configuration de lecture, mais sans l'encodage : le fichier vient d'être converti en UTF-8. */
+        function configSansEncodage(config) {
+            return Object.assign({}, config || {}, { enc: 'UTF-8' });
+        }
         function csvReadClauses(config) {
             config = config || {};
             let text = '';
@@ -241,10 +308,13 @@
                 if (db.dropFile) await db.dropFile(virtualName);
             } catch (e) {}
             await db.registerFileHandle(virtualName, table.file, window.duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+            // La configuration de lecture peut changer en cours de route : si le moteur ne connaît pas
+            // « encoding », on convertit le fichier en UTF-8 et l'on relit sans cette option.
+            let lecture = table.config;
             const readExpr = withFrn =>
                 withFrn
-                    ? `SELECT file_row_number + 1 AS __rn, * EXCLUDE (file_row_number) FROM read_csv_auto(${sqlLiteral(virtualName)}, header=true, all_varchar=true, file_row_number=true${csvReadClauses(table.config)})`
-                    : `SELECT row_number() OVER () AS __rn, * FROM read_csv_auto(${sqlLiteral(virtualName)}, header=true, all_varchar=true${csvReadClauses(table.config)})`;
+                    ? `SELECT file_row_number + 1 AS __rn, * EXCLUDE (file_row_number) FROM read_csv_auto(${sqlLiteral(virtualName)}, header=true, all_varchar=true, file_row_number=true${csvReadClauses(lecture)})`
+                    : `SELECT row_number() OVER () AS __rn, * FROM read_csv_auto(${sqlLiteral(virtualName)}, header=true, all_varchar=true${csvReadClauses(lecture)})`;
             const asView = table.file && table.file.size > csvViewThreshold();
             const create = async (kind, withFrn) => {
                 await duckDropTable(tId);
@@ -259,6 +329,20 @@
                     table.storage = 'table';
                 }
             } catch (e) {
+                // Ce moteur ne connaît pas « encoding » : on convertit le fichier nous-mêmes en UTF-8 et
+                // l'on repart de zéro, sans cette option. C'est la seule lecture correcte possible ici.
+                if (erreurDEncodageInconnu(e) && decodeurDuFichier(table.config && table.config.enc)) {
+                    const enUtf8 = await recoderLeFichierEnUtf8(table.file, table.config.enc);
+                    try {
+                        if (db.dropFile) await db.dropFile(virtualName);
+                    } catch (eDrop) {}
+                    await db.registerFileBuffer(virtualName, enUtf8);
+                    lecture = configSansEncodage(table.config);
+                    table.encRecode = true;
+                    await create(asView ? 'VIEW' : 'TABLE', true);
+                    table.storage = asView ? 'view' : 'table';
+                    return duckTableHeaders(tId);
+                }
                 // Repli ROBUSTE, quelle que soit l'erreur : on tente d'abord la lecture directe (vue),
                 // qui ne matérialise rien — c'est le mode le plus sûr contre l'"Out of Memory". On ne
                 // retente JAMAIS une matérialisation d'un gros fichier ici (ce serait un nouvel OOM).
@@ -291,12 +375,15 @@
             const list = '[' + vnames.map(v => sqlLiteral(v)).join(', ') + ']';
             // union_by_name : tolère des ordres/sous-ensembles de colonnes différents entre fichiers.
             const totalSize = table.files.reduce((a, f) => a + (f.size || 0), 0);
+            // Comme pour un fichier unique : la configuration de lecture peut perdre son encodage en
+            // route, si ce moteur ne connaît pas « encoding » et qu'on a dû convertir les fichiers.
+            let lecture = table.config;
             const doCreate = async kind => {
                 await duckDropTable(tId);
                 await conn.query(`
                     CREATE ${kind} ${sqlIdent(tName)} AS
                     SELECT row_number() OVER () AS __rn, *
-                    FROM read_csv_auto(${list}, header=true, all_varchar=true, union_by_name=true${csvReadClauses(table.config)})
+                    FROM read_csv_auto(${list}, header=true, all_varchar=true, union_by_name=true${csvReadClauses(lecture)})
                 `);
             };
             try {
@@ -305,7 +392,19 @@
                 await doCreate('TABLE');
                 table.storage = 'table';
             } catch (e) {
-                if (/memory|allocation/i.test(String(e.message || e)) || totalSize > CSV_VIEW_THRESHOLD) {
+                if (erreurDEncodageInconnu(e) && decodeurDuFichier(table.config && table.config.enc)) {
+                    for (let i = 0; i < table.files.length; i++) {
+                        const enUtf8 = await recoderLeFichierEnUtf8(table.files[i], table.config.enc);
+                        try {
+                            if (db.dropFile) await db.dropFile(vnames[i]);
+                        } catch (eDrop) {}
+                        await db.registerFileBuffer(vnames[i], enUtf8);
+                    }
+                    lecture = configSansEncodage(table.config);
+                    table.encRecode = true;
+                    await doCreate('TABLE');
+                    table.storage = 'table';
+                } else if (/memory|allocation/i.test(String(e.message || e)) || totalSize > CSV_VIEW_THRESHOLD) {
                     await doCreate('VIEW');
                     table.storage = 'view';
                 } else throw e;

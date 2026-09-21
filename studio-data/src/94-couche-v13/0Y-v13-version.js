@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.24.0';
+        const V13_VERSION = '13.25.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.25.0',
+                d: '2026-09-21',
+                t: 'Un fichier Windows / ANSI se charge, même sur un moteur qui ne sait pas le lire',
+                items: [
+                    'Choisir l’encodage <b>« Windows / ANSI (Latin-1) »</b> ou <b>« UTF-16 »</b> faisait échouer la lecture sur <b>« Binder Error: Invalid named parameter "encoding" »</b>. L’option <i>encoding</i> n’existe que dans les moteurs récents, et les trois replis prévus échouaient tous pareillement puisqu’ils repassaient la même option.',
+                    'L’application fait désormais le travail elle-même quand le moteur ne sait pas : le fichier est <b>relu dans son encodage d’origine et réécrit en UTF-8</b>, par tranches de 8 Mo, puis remis au moteur qui n’a plus qu’à lire de l’UTF-8. Le décodage travaille en flux, donc un caractère coupé entre deux tranches est recollé au lieu d’être perdu — y compris un pictogramme, écrit sur deux unités.',
+                    'Le rattrapage vaut pour une source d’un seul fichier comme pour une source <b>découpée en plusieurs fichiers</b>.',
+                    'Au-delà de 300 Mo, la conversion est refusée <b>avec une phrase claire</b> — « enregistrez-le en UTF-8 avant de le charger » — plutôt qu’un plantage : le fichier converti devrait tenir entier dans la mémoire du navigateur.'
+                ]
+            },
             {
                 v: '13.24.0',
                 d: '2026-09-21',

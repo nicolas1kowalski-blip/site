@@ -134,6 +134,56 @@ ok('et le chargeur des sources ne passe plus par du JSON ni par une chaîne géa
   }));
 fs.unlinkSync(CSV_SOURCE);
 
+// ---- un moteur qui ne connaît pas « encoding » ----
+// Choisir « Windows / ANSI » faisait echouer la lecture sur « Binder Error: Invalid named parameter
+// "encoding" », et les trois replis echouaient pareillement puisqu'ils repassaient la meme option.
+const encodages = await p.evaluate(async () => {
+  const R = [];
+  const ok = (n, c) => R.push([n, !!c]);
+  ok('on reconnaît le refus du moteur, et pas une autre erreur',
+    erreurDEncodageInconnu(new Error('Binder Error: Invalid named parameter "encoding" for function read_csv_auto'))
+    && !erreurDEncodageInconnu(new Error('Binder Error: Referenced table "x" not found')));
+  ok('chaque encodage proposé à l\'écran a son décodeur, et l\'UTF-8 n\'en demande aucun',
+    decodeurDuFichier('ISO-8859-1') === 'windows-1252' && decodeurDuFichier('UTF-16') === 'utf-16le'
+    && decodeurDuFichier('UTF-8') === '');
+  // Un fichier Windows / ANSI : « Chaudière ; brûleur » en octets Latin-1.
+  const ansi = new Uint8Array([0x43,0x68,0x61,0x75,0x64,0x69,0xE8,0x72,0x65,0x3B,0x62,0x72,0xFB,0x6C,0x65,0x75,0x72]);
+  const enUtf8 = await recoderLeFichierEnUtf8(new Blob([ansi]), 'ISO-8859-1');
+  ok('un fichier Windows / ANSI est réécrit en UTF-8, accents compris',
+    new TextDecoder('utf-8').decode(enUtf8) === 'Chaudière;brûleur');
+  // Un fichier UTF-16 dont un caractère est à cheval sur deux tranches de lecture. Les tranches tombent
+  // sur un nombre pair d'octets : ce qui peut être coupé, c'est un caractère écrit sur DEUX unités —
+  // ici un pictogramme, dont la première moitié finit une tranche et la seconde commence la suivante.
+  const seize = new Uint8Array(OCTETS_PAR_TRANCHE + 4);
+  for (let i = 0; i < seize.length; i += 2) { seize[i] = 0x61; seize[i + 1] = 0x00; }
+  seize[OCTETS_PAR_TRANCHE - 2] = 0x3D; seize[OCTETS_PAR_TRANCHE - 1] = 0xD8;
+  seize[OCTETS_PAR_TRANCHE] = 0x0E; seize[OCTETS_PAR_TRANCHE + 1] = 0xDD;
+  const coupe = String.fromCodePoint(0x1f50e);
+  const seizeUtf8 = new TextDecoder('utf-8').decode(await recoderLeFichierEnUtf8(new Blob([seize]), 'UTF-16'));
+  ok('un caractère coupé entre deux tranches est recollé, pas perdu',
+    seizeUtf8.length === (OCTETS_PAR_TRANCHE + 4) / 2 && seizeUtf8.indexOf(coupe) === (OCTETS_PAR_TRANCHE - 2) / 2
+    && !/\ufffd/.test(seizeUtf8));
+  // Trop gros pour être converti ici : on le dit en français plutôt que de tomber.
+  let dit = '';
+  try { await recoderLeFichierEnUtf8({ size: TAILLE_MAX_A_RECODER + 1 }, 'ISO-8859-1'); } catch (e) { dit = e.message; }
+  ok('un fichier trop gros pour être converti le dit clairement, en français',
+    /Windows \/ ANSI/.test(dit) && /Enregistrez-le en UTF-8/.test(dit) && /Mo\)/.test(dit));
+  // Et les deux chargeurs de CSV savent se rattraper.
+  const unSeul = String(ingestCsvIntoDuckDB);
+  const plusieurs = String(ingestCsvMultiIntoDuckDB);
+  ok('le chargement d\'un CSV convertit puis relit sans l\'option refusée',
+    /erreurDEncodageInconnu\(e\)/.test(unSeul) && /recoderLeFichierEnUtf8\(table\.file/.test(unSeul)
+    && /registerFileBuffer\(virtualName, enUtf8\)/.test(unSeul) && /configSansEncodage/.test(unSeul));
+  ok('et une source en plusieurs fichiers les convertit tous',
+    /erreurDEncodageInconnu\(e\)/.test(plusieurs) && /recoderLeFichierEnUtf8\(table\.files\[i\]/.test(plusieurs)
+    && /configSansEncodage/.test(plusieurs));
+  ok('après conversion, plus aucune clause « encoding » n\'est produite',
+    !/encoding=/.test(csvReadClauses(configSansEncodage({ enc: 'ISO-8859-1', delim: ';' })))
+    && /delim=';'/.test(csvReadClauses(configSansEncodage({ enc: 'ISO-8859-1', delim: ';' }))));
+  return R;
+});
+encodages.forEach(([n, c]) => ok(n, c));
+
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));
