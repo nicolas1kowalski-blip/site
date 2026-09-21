@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.22.0';
+        const V13_VERSION = '13.23.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.23.0',
+                d: '2026-09-21',
+                t: 'Charger un gros fichier ne fait plus tomber le moteur',
+                items: [
+                    'Déposer un fichier volumineux s’arrêtait sur <b>« Impossible de charger le fichier dans le moteur : memory access out of bounds »</b>.',
+                    'Le tableau était remis au moteur en <b>JSON</b>, avec le <b>nom de chaque colonne répété à chaque ligne</b>, le tout assemblé en une seule chaîne de texte avant d’être recopié. Sur 450 000 lignes et vingt colonnes : 218 Mo de JSON, soit 437 Mo une fois en mémoire comme texte, puis une troisième copie dans le moteur. Il n’y avait pas la place.',
+                    'Le tableau est maintenant écrit en <b>CSV, directement en octets et par paquets de 20 000 lignes</b> : 130 Mo, sans chaîne géante intermédiaire. Sur ces mêmes données, <b>cinq fois moins de mémoire</b> traverse le navigateur.',
+                    'Rien ne se perd au passage : virgules, points-virgules, guillemets, sauts de ligne, tabulations et accents sont préservés, une valeur absente reste absente et une chaîne vide reste une chaîne vide. Une lettre témoin devant chaque valeur garantit qu’aucune donnée réelle ne peut être confondue avec la marque d’absence — tout cela vérifié sur un vrai moteur.',
+                    'La même correction s’applique à la <b>liste d’entrée</b> de l’extraction, qui chargeait ses lignes de la même façon.'
+                ]
+            },
             {
                 v: '13.22.0',
                 d: '2026-09-18',

@@ -124,24 +124,11 @@
                 for (const f of lf) {
                     const sig = f.id + ':' + f.list.rows.length + ':' + f.list.cols.join('|');
                     if (v12State.listReady[f.id] === sig) continue;
-                    const vn = 'liste_' + f.id + '.ndjson';
-                    try {
-                        if (db.dropFile) await db.dropFile(vn);
-                    } catch (e) {}
-                    const nd = f.list.rows
-                        .map(rw => {
-                            const o = {};
-                            f.list.cols.forEach((c, i) => {
-                                const value = rw[i];
-                                o[c] = value === undefined || value === null ? null : String(value);
-                            });
-                            return JSON.stringify(o);
-                        })
-                        .join('\n');
-                    await db.registerFileText(vn, nd);
-                    const colSpec = '{' + f.list.cols.map(h => `${sqlLiteral(h)}: 'VARCHAR'`).join(', ') + '}';
+                    // Même dépôt que les jeux temporaires : en octets CSV, et par morceaux. Le JSON
+                    // répétait le nom de chaque colonne à chaque ligne et passait par une chaîne géante.
+                    const lecture = await v12DeposerDesLignes(db, 'liste_' + f.id + '.csv', f.list.cols, f.list.rows);
                     await conn.query(
-                        `CREATE OR REPLACE TABLE ${v12ListTable(f)} AS SELECT row_number() OVER () AS __ln, * FROM read_json(${sqlLiteral(vn)}, columns=${colSpec}, format='newline_delimited')`
+                        `CREATE OR REPLACE TABLE ${v12ListTable(f)} AS SELECT row_number() OVER () AS __ln, * FROM ${lecture} q`
                     );
                     v12State.listReady[f.id] = sig;
                 }

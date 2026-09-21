@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-18T15:00:51.846Z",
+ "generated": "2026-09-21T15:15:37.338Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 49437,
-  "codeLines": 46872,
-  "commentLines": 2565,
-  "templateLines": 9822,
+  "lines": 49491,
+  "codeLines": 46899,
+  "commentLines": 2592,
+  "templateLines": 9831,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6513,
-  "shortLocals": 844,
-  "functions": 1627,
+  "locals": 6522,
+  "shortLocals": 838,
+  "functions": 1631,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12958697988638107
+  "shortLocalsRatio": 0.1284881938055811
  },
  "files": [
   {
@@ -906,34 +906,34 @@
   },
   {
    "file": "92-couche-v12/98-v12-liste-entree.js",
-   "lines": 602,
-   "codeLines": 585,
-   "commentLines": 17,
+   "lines": 589,
+   "codeLines": 570,
+   "commentLines": 19,
    "templateLines": 75,
    "longLogicLines": 1,
    "multiStatementLines": 0,
-   "locals": 106,
-   "shortLocals": 26,
+   "locals": 102,
+   "shortLocals": 23,
    "functions": 20,
    "longestLogic": 209,
-   "shortLocalsRatio": 0.24528301886792453,
+   "shortLocalsRatio": 0.22549019607843138,
    "longLinesSample": [
     "`${v12ListNorm((map[advRouteKey(k.tableId, k.via || '')] ? advAlias(map, k) : alias) + '.' + sqlIdent(k.col), "
    ]
   },
   {
    "file": "92-couche-v12/99-v12-jeux-temporaires.js",
-   "lines": 726,
-   "codeLines": 704,
-   "commentLines": 22,
-   "templateLines": 93,
+   "lines": 781,
+   "codeLines": 734,
+   "commentLines": 47,
+   "templateLines": 95,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 79,
-   "shortLocals": 12,
-   "functions": 30,
+   "locals": 92,
+   "shortLocals": 9,
+   "functions": 34,
    "longestLogic": 148,
-   "shortLocalsRatio": 0.1518987341772152
+   "shortLocalsRatio": 0.09782608695652174
   },
   {
    "file": "92-couche-v12/9A-v12-lien-auto.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 289,
-   "codeLines": 287,
+   "lines": 301,
+   "codeLines": 299,
    "commentLines": 2,
-   "templateLines": 144,
+   "templateLines": 151,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

@@ -73,7 +73,46 @@ const out = await p.evaluate(async ()=>{
   } catch(e) { R.push(['ERREUR '+e.message+' @ '+String(e.stack).split('\n')[1], false]); }
   return R;
 });
+const ok=(n,c)=>out.push([n,!!c]);
+// ---- le chargement d'un tableau dans le moteur, éprouvé sur un vrai DuckDB ----
+// Le chargement passait par du JSON, avec le nom de chaque colonne répété à chaque ligne et une chaîne
+// JavaScript géante : sur un gros fichier le moteur s'arrêtait sur « memory access out of bounds ».
+// Il écrit maintenant du CSV en octets. Ce qui compte : que rien ne se perde au passage.
+const CSV_FICHIER = D + 'zz_depot.csv';
+const MECHANTES = [
+  ['simple', 'deux mots', 'ok'],
+  ['virgule, dedans', 'point-virgule ; dedans', 'tabulation\tdedans'],
+  ['guillemet " seul', 'doubles "" guillemets', 'apostrophe \' ici'],
+  ['saut\nde ligne', 'retour\r\nchariot', 'accents éàüç ➜ 中文'],
+  ['', null, undefined],
+  ['@', '"@"', 'v'],
+  ['vvv', '"vtriche"', '@@NUL@@']
+];
+const depot = await p.evaluate(([cols, lignes, fichier]) => {
+  const octets = v12OctetsCsvDesLignes(cols, lignes);
+  return { octets: Array.from(octets), lecture: v12SqlDeLectureCsv(fichier, cols) };
+}, [['A','B','C'], MECHANTES, CSV_FICHIER]);
+fs.writeFileSync(CSV_FICHIER, Buffer.from(depot.octets));
+const { DuckDBInstance } = await import('@duckdb/node-api');
+const lecteur = await (await DuckDBInstance.create(':memory:')).connect();
+const relu = await (await lecteur.run(`SELECT * FROM ${depot.lecture} q`)).getRowObjects();
+const attendu = MECHANTES.map(ligne => ligne.map(v => (v === undefined || v === null ? null : v)));
+const rendu = relu.map(ligne => [ligne.A, ligne.B, ligne.C].map(v => (v === undefined ? null : v)));
+ok('le dépôt rend exactement les lignes déposées — virgules, guillemets, sauts de ligne, accents',
+  JSON.stringify(rendu) === JSON.stringify(attendu));
+ok('une valeur absente reste absente, et une chaîne vide reste une chaîne vide',
+  rendu[4][0] === '' && rendu[4][1] === null && rendu[4][2] === null);
+ok('aucune valeur ne peut être prise pour la marque d\'absence',
+  rendu[5][0] === '@' && rendu[6][2] === '@@NUL@@' && rendu[5][2] === 'v' && rendu[6][0] === 'vvv');
+ok('le CSV ne répète plus le nom des colonnes à chaque ligne',
+  !Buffer.from(depot.octets).toString('utf8').includes('"A"'));
+ok('et il est bien plus court que le JSON qu\'il remplace', (()=>{
+  const json = MECHANTES.map(l => JSON.stringify({A:l[0], B:l[1]===undefined?null:l[1], C:l[2]===undefined?null:l[2]})).join('\n');
+  return depot.octets.length < Buffer.byteLength(json, 'utf8'); })());
+fs.unlinkSync(CSV_FICHIER);
+
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
+
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));
 for (const theme of ['light','dark']) {
   const q = await b.newPage({ viewport: { width: 1500, height: 950 }, colorScheme: theme==='dark'?'dark':'light' });

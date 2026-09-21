@@ -61,28 +61,83 @@
             );
             return v12TmpFinish(id, name, meta);
         }
+        /*
+         * ---- Charger un tableau de lignes dans le moteur, sans faire exploser la mémoire ----
+         *
+         * Le chargement passait par du JSON : une ligne de texte par ligne du tableau, avec le NOM DE CHAQUE
+         * COLONNE RÉPÉTÉ à chaque fois, le tout assemblé en une seule chaîne JavaScript avant d'être recopié
+         * dans le moteur. Sur un fichier de quelques centaines de milliers de lignes et d'une vingtaine de
+         * colonnes, cela fait trois copies successives de plusieurs centaines de méga-octets, et le moteur
+         * s'arrête sur « memory access out of bounds ».
+         *
+         * On écrit donc du CSV, directement en octets et par morceaux : les noms de colonnes ne sont plus
+         * répétés, la chaîne JavaScript géante disparaît, et il ne reste qu'un tampon d'octets à remettre au
+         * moteur. Sur les mêmes données, c'est de l'ordre de cinq fois moins de mémoire.
+         */
+        /** Combien de lignes on transforme d'un coup avant d'en faire des octets. */
+        const V12_LIGNES_PAR_MORCEAU = 20000;
+        /**
+         * Ce que l'on écrit à la place d'une valeur absente. Il n'est jamais ambigu : toute valeur réelle est
+         * écrite entre guillemets ET précédée d'une lettre témoin, donc aucune ne peut lui ressembler.
+         */
+        const V12_MARQUE_ABSENTE = '@';
+        const V12_LETTRE_TEMOIN = 'v';
+        /** Une valeur, écrite en CSV : absente, ou entre guillemets derrière la lettre témoin. */
+        function v12CelluleCsv(valeur) {
+            if (valeur === undefined || valeur === null) return V12_MARQUE_ABSENTE;
+            return '"' + V12_LETTRE_TEMOIN + String(valeur).replace(/"/g, '""') + '"';
+        }
+        /**
+         * Le tableau entier, en octets CSV. « valeurDe » dit où lire une cellule : les lignes sont tantôt des
+         * tableaux (un fichier déposé), tantôt des objets (des lignes déjà nommées).
+         */
+        function v12OctetsCsvDesLignes(cols, rows, valeurDe) {
+            const lire = valeurDe || ((ligne, colonne, rang) => ligne && ligne[rang]);
+            const encodeur = new TextEncoder();
+            const morceaux = [];
+            let taille = 0;
+            for (let debut = 0; debut < rows.length; debut += V12_LIGNES_PAR_MORCEAU) {
+                const fin = Math.min(debut + V12_LIGNES_PAR_MORCEAU, rows.length);
+                let texte = '';
+                for (let ligne = debut; ligne < fin; ligne++) {
+                    for (let rang = 0; rang < cols.length; rang++)
+                        texte += (rang ? ',' : '') + v12CelluleCsv(lire(rows[ligne], cols[rang], rang));
+                    texte += '\n';
+                }
+                const octets = encodeur.encode(texte);
+                morceaux.push(octets);
+                taille += octets.length;
+            }
+            const tout = new Uint8Array(taille);
+            let curseur = 0;
+            morceaux.forEach(morceau => {
+                tout.set(morceau, curseur);
+                curseur += morceau.length;
+            });
+            return tout;
+        }
+        /** La lecture de ce CSV : le schéma est imposé, et la lettre témoin retirée de chaque valeur. */
+        function v12SqlDeLectureCsv(nomVirtuel, cols) {
+            const colSpec = '{' + cols.map(h => `${sqlLiteral(h)}: 'VARCHAR'`).join(', ') + '}';
+            const sansLeTemoin = cols.map(h => `substr(brut.${sqlIdent(h)}, 2) AS ${sqlIdent(h)}`).join(', ');
+            return `(SELECT ${sansLeTemoin} FROM read_csv(${sqlLiteral(nomVirtuel)}, columns=${colSpec},
+                header=false, delim=',', quote='"', escape='"', nullstr=${sqlLiteral(V12_MARQUE_ABSENTE)}) brut)`;
+        }
+        /** Dépose ces lignes dans le moteur sous un nom de fichier virtuel, et rend la lecture qui va avec. */
+        async function v12DeposerDesLignes(db, nomVirtuel, cols, rows, valeurDe) {
+            try {
+                if (db.dropFile) await db.dropFile(nomVirtuel);
+            } catch (e) {}
+            await db.registerFileBuffer(nomVirtuel, v12OctetsCsvDesLignes(cols, rows, valeurDe));
+            return v12SqlDeLectureCsv(nomVirtuel, cols);
+        }
         async function v12TmpFromRows(cols, rows, name, meta) {
             const id = 'tmp_' + generateId();
             meta = meta || {};
             const { db, conn } = await getDB();
-            const vn = 'jeu_' + id + '.ndjson';
-            try {
-                if (db.dropFile) await db.dropFile(vn);
-            } catch (e) {}
-            const nd = rows
-                .map(rw => {
-                    const o = {};
-                    cols.forEach((c, i) => {
-                        const value = rw[i];
-                        o[c] = value === undefined || value === null ? null : String(value);
-                    });
-                    return JSON.stringify(o);
-                })
-                .join('\n');
-            await db.registerFileText(vn, nd);
-            const colSpec = '{' + cols.map(h => `${sqlLiteral(h)}: 'VARCHAR'`).join(', ') + '}';
+            const lecture = await v12DeposerDesLignes(db, 'jeu_' + id + '.csv', cols, rows);
             await conn.query(
-                `CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(id))} AS SELECT row_number() OVER () AS __rn, * FROM read_json(${sqlLiteral(vn)}, columns=${colSpec}, format='newline_delimited')`
+                `CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(id))} AS SELECT row_number() OVER () AS __rn, * FROM ${lecture} q`
             );
             return v12TmpFinish(id, name, meta);
         }
