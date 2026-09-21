@@ -124,9 +124,15 @@
                 for (const f of lf) {
                     const sig = f.id + ':' + f.list.rows.length + ':' + f.list.cols.join('|');
                     if (v12State.listReady[f.id] === sig) continue;
-                    // Même dépôt que les jeux temporaires : en octets CSV, et par morceaux. Le JSON
-                    // répétait le nom de chaque colonne à chaque ligne et passait par une chaîne géante.
-                    const lecture = await v12DeposerDesLignes(db, 'liste_' + f.id + '.csv', f.list.cols, f.list.rows);
+                    // Même dépôt que partout ailleurs : en octets CSV, par morceaux (voir deposerDesLignes).
+                    // Ici les lignes sont des tableaux, d'où la lecture par rang plutôt que par nom.
+                    const lecture = await deposerDesLignes(
+                        db,
+                        'liste_' + f.id + '.csv',
+                        f.list.cols,
+                        f.list.rows,
+                        (ligne, colonne, rang) => ligne && ligne[rang]
+                    );
                     await conn.query(
                         `CREATE OR REPLACE TABLE ${v12ListTable(f)} AS SELECT row_number() OVER () AS __ln, * FROM ${lecture} q`
                     );

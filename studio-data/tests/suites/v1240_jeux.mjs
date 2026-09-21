@@ -89,8 +89,8 @@ const MECHANTES = [
   ['vvv', '"vtriche"', '@@NUL@@']
 ];
 const depot = await p.evaluate(([cols, lignes, fichier]) => {
-  const octets = v12OctetsCsvDesLignes(cols, lignes);
-  return { octets: Array.from(octets), lecture: v12SqlDeLectureCsv(fichier, cols) };
+  const octets = octetsCsvDesLignes(cols, lignes, (ligne, colonne, rang) => ligne && ligne[rang]);
+  return { octets: Array.from(octets), lecture: sqlDeLectureCsv(fichier, cols) };
 }, [['A','B','C'], MECHANTES, CSV_FICHIER]);
 fs.writeFileSync(CSV_FICHIER, Buffer.from(depot.octets));
 const { DuckDBInstance } = await import('@duckdb/node-api');
@@ -110,6 +110,29 @@ ok('et il est bien plus court que le JSON qu\'il remplace', (()=>{
   const json = MECHANTES.map(l => JSON.stringify({A:l[0], B:l[1]===undefined?null:l[1], C:l[2]===undefined?null:l[2]})).join('\n');
   return depot.octets.length < Buffer.byteLength(json, 'utf8'); })());
 fs.unlinkSync(CSV_FICHIER);
+
+// Le même dépôt sert aussi aux SOURCES : là, les lignes sont des objets nommés par colonne.
+const CSV_SOURCE = D + 'zz_source.csv';
+const NOMMEES = [
+  { A: 'Chaudière N°4', B: 'gaz, fioul ; mixte', C: null },
+  { A: 'Disconnecteur "BA"', B: '', C: 'J01' },
+  { A: 'ligne\nbrisée', B: undefined, C: '@' }
+];
+const source = await p.evaluate(([cols, lignes, fichier]) =>
+  ({ octets: Array.from(octetsCsvDesLignes(cols, lignes)), lecture: sqlDeLectureCsv(fichier, cols) }),
+  [['A','B','C'], NOMMEES, CSV_SOURCE]);
+fs.writeFileSync(CSV_SOURCE, Buffer.from(source.octets));
+const reluSource = await (await lecteur.run(`SELECT * FROM ${source.lecture} q`)).getRowObjects();
+ok('une source chargée ligne par ligne rend exactement ce qu\'on lui a donné',
+  JSON.stringify(reluSource.map(l => [l.A, l.B, l.C])) === JSON.stringify(
+    NOMMEES.map(l => [l.A, l.B === undefined ? null : l.B, l.C === undefined ? null : l.C])));
+ok('et le chargeur des sources ne passe plus par du JSON ni par une chaîne géante',
+  await p.evaluate(() => {
+    const code = String(ingestRowsIntoDuckDB);
+    return /deposerDesLignes\(db, virtualName, cols, rows\)/.test(code)
+      && !/read_json/.test(code) && !/registerFileText/.test(code) && !/JSON\.stringify/.test(code);
+  }));
+fs.unlinkSync(CSV_SOURCE);
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 

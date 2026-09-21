@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.23.0';
+        const V13_VERSION = '13.24.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.24.0',
+                d: '2026-09-21',
+                t: 'Le même défaut de mémoire touchait aussi le chargement d’une SOURCE',
+                items: [
+                    'La 13.23 avait corrigé le chargement d’un fichier déposé comme jeu temporaire. Le chargement d’une <b>source</b> passait par un troisième chemin, écrit à l’identique, et tombait donc de la même façon.',
+                    'La correction est maintenant écrite <b>une seule fois, dans le cœur</b> : les trois chemins — une source, un fichier déposé, la liste d’entrée de l’extraction — déposent leurs lignes par la même fonction. Plus de copie à maintenir en trois endroits.',
+                    'Mêmes garanties, vérifiées sur un vrai moteur pour les deux formes de lignes qui existent : celles d’un fichier déposé (un tableau de valeurs) et celles d’une source (un objet nommé par colonne).'
+                ]
+            },
             {
                 v: '13.23.0',
                 d: '2026-09-21',

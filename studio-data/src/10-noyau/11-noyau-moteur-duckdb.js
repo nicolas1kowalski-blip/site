@@ -313,12 +313,89 @@
             return duckTableHeaders(tId);
         }
 
+        /*
+         * ---- Remettre un tableau de lignes au moteur, sans faire exploser la mémoire ----
+         *
+         * Le chargement passait par du JSON : une ligne de texte par ligne du tableau, avec le NOM DE CHAQUE
+         * COLONNE RÉPÉTÉ à chaque fois, le tout assemblé en une seule chaîne JavaScript avant d'être recopié
+         * dans le moteur. Sur un fichier de quelques centaines de milliers de lignes et d'une vingtaine de
+         * colonnes, cela fait trois copies successives de plusieurs centaines de méga-octets — mesuré sur
+         * 450 000 lignes et vingt colonnes : 218 Mo de JSON, 437 Mo une fois en mémoire comme texte, puis une
+         * troisième copie — et le moteur s'arrête sur « memory access out of bounds ».
+         *
+         * On écrit donc du CSV, directement en octets et par morceaux : les noms de colonnes ne sont plus
+         * répétés, la chaîne géante disparaît, et il ne reste qu'un tampon d'octets. Cinq fois moins de
+         * mémoire à traverser, sur les mêmes données.
+         */
+        /** Combien de lignes on transforme d'un coup avant d'en faire des octets. */
+        const LIGNES_PAR_MORCEAU = 20000;
+        /**
+         * Ce que l'on écrit à la place d'une valeur absente. Il n'est jamais ambigu : toute valeur réelle est
+         * écrite entre guillemets ET précédée d'une lettre témoin, donc aucune ne peut lui ressembler. Sans
+         * cette lettre, une donnée qui vaudrait exactement le marqueur serait lue comme absente — le moteur
+         * applique le marqueur aux valeurs entre guillemets aussi.
+         */
+        const MARQUE_ABSENTE = '@';
+        const LETTRE_TEMOIN = 'v';
+        /** Une valeur, écrite en CSV : absente, ou entre guillemets derrière la lettre témoin. */
+        function celluleCsv(valeur) {
+            if (valeur === undefined || valeur === null) return MARQUE_ABSENTE;
+            return '"' + LETTRE_TEMOIN + String(valeur).replace(/"/g, '""') + '"';
+        }
+        /**
+         * Le tableau entier, en octets CSV. « valeurDe » dit où lire une cellule : les lignes sont tantôt des
+         * tableaux (un fichier déposé), tantôt des objets nommés par colonne (une source, une extraction).
+         */
+        function octetsCsvDesLignes(cols, rows, valeurDe) {
+            const lire = valeurDe || ((ligne, colonne) => (ligne ? ligne[colonne] : null));
+            const encodeur = new TextEncoder();
+            const morceaux = [];
+            let taille = 0;
+            for (let debut = 0; debut < rows.length; debut += LIGNES_PAR_MORCEAU) {
+                const fin = Math.min(debut + LIGNES_PAR_MORCEAU, rows.length);
+                let texte = '';
+                for (let ligne = debut; ligne < fin; ligne++) {
+                    for (let rang = 0; rang < cols.length; rang++)
+                        texte += (rang ? ',' : '') + celluleCsv(lire(rows[ligne], cols[rang], rang));
+                    texte += '\n';
+                }
+                const octets = encodeur.encode(texte);
+                morceaux.push(octets);
+                taille += octets.length;
+            }
+            const tout = new Uint8Array(taille);
+            let curseur = 0;
+            morceaux.forEach(morceau => {
+                tout.set(morceau, curseur);
+                curseur += morceau.length;
+            });
+            return tout;
+        }
+        /**
+         * La lecture de ce CSV : on impose le schéma au lieu de le faire deviner — les noms de colonnes sont
+         * exactement ceux qu'on a calculés, tout reste en VARCHAR — et la lettre témoin est retirée.
+         */
+        function sqlDeLectureCsv(nomVirtuel, cols) {
+            const colSpec = '{' + cols.map(h => `${sqlLiteral(h)}: 'VARCHAR'`).join(', ') + '}';
+            const sansLeTemoin = cols.map(h => `substr(brut.${sqlIdent(h)}, 2) AS ${sqlIdent(h)}`).join(', ');
+            return `(SELECT ${sansLeTemoin} FROM read_csv(${sqlLiteral(nomVirtuel)}, columns=${colSpec},
+                header=false, delim=',', quote='"', escape='"', nullstr=${sqlLiteral(MARQUE_ABSENTE)}) brut)`;
+        }
+        /** Dépose ces lignes dans le moteur sous un nom de fichier virtuel, et rend la lecture qui va avec. */
+        async function deposerDesLignes(db, nomVirtuel, cols, rows, valeurDe) {
+            try {
+                if (db.dropFile) await db.dropFile(nomVirtuel);
+            } catch (e) {}
+            await db.registerFileBuffer(nomVirtuel, octetsCsvDesLignes(cols, rows, valeurDe));
+            return sqlDeLectureCsv(nomVirtuel, cols);
+        }
+
         // Charge un tableau de lignes JS (API, XLSX déjà lu, ou résultat d'extraction) dans DuckDB.
         // Les valeurs sont pré-converties en texte pour que toutes les tables restent uniformément VARCHAR.
         async function ingestRowsIntoDuckDB(tId, rows, headers) {
             const { db, conn } = await getDB();
             const tName = duckTableName(tId);
-            const virtualName = 'src_' + tId + '.ndjson';
+            const virtualName = 'src_' + tId + '.csv';
             await duckDropTable(tId);
             if (rows.length === 0) {
                 const cols = headers.length ? headers.map(h => `${sqlIdent(h)} VARCHAR`).join(', ') : '__empty VARCHAR';
@@ -341,27 +418,11 @@
                 throw new Error(
                     "Aucune colonne détectée dans cette source : le fichier ne contient pas de tableau de lignes exploitable (attendu : une ligne d'en-têtes puis des lignes de données)."
                 );
-            try {
-                if (db.dropFile) await db.dropFile(virtualName);
-            } catch (e) {}
-            const ndjson = rows
-                .map(r => {
-                    const o = {};
-                    cols.forEach(h => {
-                        const v = r ? r[h] : null;
-                        o[h] = v === undefined || v === null ? null : String(v);
-                    });
-                    return JSON.stringify(o);
-                })
-                .join('\n');
-            await db.registerFileText(virtualName, ndjson);
-            // On impose le schéma au lieu de le faire deviner : les noms de colonnes sont
-            // exactement ceux qu'on a calculés, et tout reste en VARCHAR comme partout ailleurs.
-            const colSpec = '{' + cols.map(h => `${sqlLiteral(h)}: 'VARCHAR'`).join(', ') + '}';
+            const lecture = await deposerDesLignes(db, virtualName, cols, rows);
             await conn.query(`
                 CREATE TABLE ${sqlIdent(tName)} AS
                 SELECT row_number() OVER () AS __rn, *
-                FROM read_json(${sqlLiteral(virtualName)}, columns=${colSpec}, format='newline_delimited')
+                FROM ${lecture} q
             `);
             const got = await duckTableHeaders(tId);
             // Garde-fou : si malgré tout on retombe sur la colonne « json », mieux vaut le dire

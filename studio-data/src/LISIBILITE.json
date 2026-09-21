@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-21T15:15:37.338Z",
+ "generated": "2026-09-21T15:26:15.662Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 49491,
-  "codeLines": 46899,
-  "commentLines": 2592,
-  "templateLines": 9831,
+  "lines": 49503,
+  "codeLines": 46907,
+  "commentLines": 2596,
+  "templateLines": 9836,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6522,
-  "shortLocals": 838,
+  "locals": 6519,
+  "shortLocals": 836,
   "functions": 1631,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.1284881938055811
+  "shortLocalsRatio": 0.12824052768829575
  },
  "files": [
   {
@@ -63,17 +63,17 @@
   },
   {
    "file": "10-noyau/11-noyau-moteur-duckdb.js",
-   "lines": 692,
-   "codeLines": 606,
-   "commentLines": 86,
-   "templateLines": 47,
+   "lines": 752,
+   "codeLines": 637,
+   "commentLines": 115,
+   "templateLines": 49,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 120,
-   "shortLocals": 18,
-   "functions": 25,
+   "locals": 134,
+   "shortLocals": 16,
+   "functions": 29,
    "longestLogic": 133,
-   "shortLocalsRatio": 0.15
+   "shortLocalsRatio": 0.11940298507462686
   },
   {
    "file": "10-noyau/12-modele-donnees-graphe.js",
@@ -906,8 +906,8 @@
   },
   {
    "file": "92-couche-v12/98-v12-liste-entree.js",
-   "lines": 589,
-   "codeLines": 570,
+   "lines": 595,
+   "codeLines": 576,
    "commentLines": 19,
    "templateLines": 75,
    "longLogicLines": 1,
@@ -923,17 +923,17 @@
   },
   {
    "file": "92-couche-v12/99-v12-jeux-temporaires.js",
-   "lines": 781,
-   "codeLines": 734,
-   "commentLines": 47,
-   "templateLines": 95,
+   "lines": 717,
+   "codeLines": 695,
+   "commentLines": 22,
+   "templateLines": 93,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 92,
+   "locals": 75,
    "shortLocals": 9,
-   "functions": 34,
+   "functions": 30,
    "longestLogic": 148,
-   "shortLocalsRatio": 0.09782608695652174
+   "shortLocalsRatio": 0.12
   },
   {
    "file": "92-couche-v12/9A-v12-lien-auto.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 301,
-   "codeLines": 299,
+   "lines": 311,
+   "codeLines": 309,
    "commentLines": 2,
-   "templateLines": 151,
+   "templateLines": 156,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
