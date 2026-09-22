@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-22T19:30:14.238Z",
+ "generated": "2026-09-22T19:46:03.257Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50073,
-  "codeLines": 47363,
-  "commentLines": 2710,
-  "templateLines": 9902,
+  "lines": 50162,
+  "codeLines": 47431,
+  "commentLines": 2731,
+  "templateLines": 9941,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6590,
+  "locals": 6594,
   "shortLocals": 837,
-  "functions": 1649,
+  "functions": 1650,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12701062215477996
+  "shortLocalsRatio": 0.12693357597816196
  },
  "files": [
   {
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 374,
-   "codeLines": 372,
+   "lines": 385,
+   "codeLines": 383,
    "commentLines": 2,
-   "templateLines": 189,
+   "templateLines": 195,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
@@ -1055,17 +1055,17 @@
   },
   {
    "file": "94-couche-v13/A0-v13-vocabulaire.js",
-   "lines": 193,
-   "codeLines": 188,
-   "commentLines": 5,
-   "templateLines": 72,
+   "lines": 271,
+   "codeLines": 245,
+   "commentLines": 26,
+   "templateLines": 105,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 16,
+   "locals": 20,
    "shortLocals": 1,
-   "functions": 3,
+   "functions": 4,
    "longestLogic": 113,
-   "shortLocalsRatio": 0.0625
+   "shortLocalsRatio": 0.05
   },
   {
    "file": "94-couche-v13/A1-v13-proposer.js",

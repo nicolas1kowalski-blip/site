@@ -5932,7 +5932,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const readyTables = Object.values(state.tables).filter(t => t.status === 'ready');
             let html = `<div class="flex items-center justify-between mb-2">
                 <div><h3 class="text-base font-black text-slate-800">🎚️ Listes de valeurs</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Déclarez ce qu'un attribut a le droit de contenir. Un attribut rattaché à une liste n'est plus jugé sur la <strong>rareté</strong> de ses valeurs — un code peu fréquent reste normal — mais sur leur <strong>appartenance</strong> au référentiel.</p>
+                <p class="text-xs text-slate-500 mt-0.5">Dites quelles valeurs ont le droit d'apparaître, et ce qu'elles veulent dire — « A = Actif », « R = Résilié ». L'audit cesse alors de signaler <strong>les valeurs rares</strong> — un code peu fréquent reste un code valable — et signale à la place <strong>celles qui ne sont pas dans votre liste</strong>.</p>
                 </div>
                 <button onclick="vlAdd()" class="text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold whitespace-nowrap">+ Liste</button>
             </div>`;
@@ -15511,7 +15511,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
                 );
             const tabBtn = (k, lbl) =>
                 `<button data-ro="keep" onclick="swSet('tool','${k}')" class="px-3 py-1.5 text-xs font-bold rounded-lg border ${swState.tool === k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}">${lbl}</button>`;
-            let html = `<p class="text-sm text-slate-500 mb-3">Surveillez les sources reçues d'applications amont : fraîcheur, dérive, conformité au schéma attendu, changements entre chargements, cohérence entre sources.</p>
+            let html = `<p class="text-sm text-slate-500 mb-3">Les fichiers que vous recevez changent sans prévenir. On regarde ici s'ils arrivent à l'heure, s'ils gardent les mêmes colonnes que celles <span title="Conformité au schéma attendu">convenues</span>, ce qui a <span title="Delta entre deux chargements">bougé depuis la dernière livraison</span>, et si deux fichiers qui devraient dire la même chose la disent vraiment.</p>
                 <div class="flex gap-2 mb-4 flex-wrap">${tabBtn('monitor', '📡 Moniteur & fraîcheur')}${tabBtn('contract', '📜 Contrat de données')}${tabBtn('delta', '🔁 Changements (delta)')}${tabBtn('recon', '🔗 Réconciliation')}</div>`;
 
             if (swState.tool === 'monitor') {
@@ -24504,7 +24504,7 @@ html[data-theme="dark"] .text-white\/80{color:#eef2f8 !important}
             const acts = pvCfg().actions;
             const plan = pvPlan(tn);
             const nPerso = plan.filter(p2 => p2.level === 'personnel').length;
-            return `<p class="text-sm text-slate-500 mb-4">Classez chaque colonne (pré-rempli depuis la détection RGPD et le dictionnaire), choisissez l'action par niveau, puis exportez un <strong>jeu anonymisé partageable</strong> avec son rapport. La pseudonymisation est <strong>stable au sein d'un export</strong> (même valeur → même jeton) grâce à un sel de session jamais conservé.</p>
+            return `<p class="text-sm text-slate-500 mb-4">Dites qui a le droit de voir quoi, colonne par colonne — l'application a déjà rempli ce qu'elle a reconnu. Choisissez ensuite ce qu'il advient de chaque niveau à l'export, et vous obtenez un <strong>fichier partageable</strong> et son rapport. Un même nom devient <span title="Pseudonymisation : même valeur, même jeton, grâce à un sel de session jamais conservé">toujours le même code à l'intérieur d'un export</span>, et un code différent au suivant : on peut donc recouper les lignes entre elles sans jamais remonter aux personnes.</p>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 ${Object.entries(PV_LEVELS)
                     .map(

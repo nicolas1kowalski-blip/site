@@ -35,6 +35,52 @@ const out = await p.evaluate(async (seed)=>{
   ok('vocabulaire : « information » remplace « attribut » dans l\'écran', /Information/.test(gc().textContent) && !/\bAttributs de l'objet\b/.test(gc().textContent));
   ok('feux tricolores sur les objets : Contrat (responsable) vert ou orange, Salarié (sans responsable) rouge', gc().querySelector(`button[onclick^="govState.selectedBoId='bo2'"] .v13-light`) && /[go]/.test(gc().querySelector(`button[onclick^="govState.selectedBoId='bo2'"] .v13-light`).className) && gc().querySelector(`button[onclick^="govState.selectedBoId='bo4'"] .v13-light.r`));
   ok('bouton « Décrire depuis un fichier / modèle » sur l\'écran Objets', Array.from(gc().querySelectorAll('button')).some(x=>/Décrire depuis un fichier/.test(x.textContent)));
+  // ---- Q7 : les derniers écrans de gouvernance alignés sur la V13 ----
+  // La phrase d'aide se posait avant la barre de liste : sur le glossaire, cette barre vient APRÈS le
+  // titre, l'explication et le bouton — la phrase d'accueil tombait donc au milieu de l'écran.
+  ok('la phrase d\'aide est le PREMIER élément de l\'écran, partout', await (async ()=>{
+    for (const onglet of ['glossary','vlists','perimeters','privacy','history','srcwatch','catalog']) {
+      openGovTab(onglet); await wait(150);
+      const aide = gc().querySelector('.v13-help');
+      if (!aide) return false;
+      if (gc().firstElementChild !== aide) return false;
+    }
+    return true;
+  })());
+  openGovTab('srcwatch'); await wait(150);
+  ok('« Surveillance des sources » a enfin sa phrase d\'aide, qui n\'existait pas',
+    /sont-ils à jour/.test(gc().querySelector('.v13-help').textContent));
+  ok('et son explication ne parle plus de « dérive », de « delta » ni d\'« instantané »',
+    !/dérive|delta|instantané/i.test(gc().textContent) && /changent sans prévenir/.test(gc().textContent)
+    && /Prendre une photo/.test(gc().textContent) && /Ce qui a changé/.test(gc().textContent));
+  // Une liste de valeurs, sinon l'écran est vide et il n'y a aucune étiquette à relire.
+  state.governance.valueLists = [{ id:'vl1', name:'Statut du contrat', values:[{code:'A',label:'Actif'}],
+    table:'CONTRATS', column:'NUM' }];
+  openGovTab('vlists'); await wait(200);
+  ok('« Listes de valeurs » dit à quoi ça sert, sans parler de rareté ni de référentiel',
+    !/rareté|appartenance/.test(gc().textContent) && /A = Actif/.test(gc().textContent));
+  ok('et le vocabulaire y est celui de la V13 : une information, pas un attribut',
+    !/Rattacher un attribut/i.test(gc().textContent) && /RATTACHER UNE INFORMATION/i.test(gc().textContent));
+  openGovTab('perimeters'); await wait(150);
+  ok('« Périmètres » parle de fichiers, plus de tables techniques',
+    !/[Tt]ables techniques/.test(gc().textContent) && !/vos tables/.test(gc().textContent));
+  openGovTab('privacy'); await wait(150);
+  ok('« Confidentialité » dit ce que fait chaque règle, pas son nom savant',
+    !/pseudonymisation|jeton stable|sel de session/.test(gc().textContent)
+    && /remplacé par un code/.test(gc().textContent) && /laissé tel quel/.test(gc().textContent));
+  openGovTab('glossary'); await wait(150);
+  ok('le glossaire aussi : « informations désignées », et non « attributs désignés »',
+    !/[Aa]ttributs désignés/.test(gc().textContent) && /INFORMATIONS DÉSIGNÉES/i.test(gc().textContent));
+  ok('la traduction ne touche ni le code ni ce que l\'on tape', (()=>{
+    const boite = document.createElement('div');
+    boite.innerHTML = '<p>Tables techniques (2)</p><textarea>Tables techniques</textarea><script>var attributs=1;<\/script>';
+    document.body.appendChild(boite);
+    v13TournuresMetier(boite);
+    const vu = /Fichiers \(2\)/.test(boite.querySelector('p').textContent)
+      && boite.querySelector('textarea').textContent === 'Tables techniques';
+    boite.remove();
+    return vu; })());
+  openGovTab('objects'); await wait(150);
   gc().querySelector('.v13-help .x').click(); await wait(50); renderGovernance(); await wait(100);
   ok('✕ sur l\'aide : mémorisé, plus d\'aide sur cet écran', v13State.helpOff.objects===true && !gc().querySelector('.v13-help')); v13State.helpOff={};
   // ---- fiche en trois questions

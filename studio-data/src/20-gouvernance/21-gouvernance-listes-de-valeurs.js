@@ -221,7 +221,7 @@
             const readyTables = Object.values(state.tables).filter(t => t.status === 'ready');
             let html = `<div class="flex items-center justify-between mb-2">
                 <div><h3 class="text-base font-black text-slate-800">🎚️ Listes de valeurs</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Déclarez ce qu'un attribut a le droit de contenir. Un attribut rattaché à une liste n'est plus jugé sur la <strong>rareté</strong> de ses valeurs — un code peu fréquent reste normal — mais sur leur <strong>appartenance</strong> au référentiel.</p>
+                <p class="text-xs text-slate-500 mt-0.5">Dites quelles valeurs ont le droit d'apparaître, et ce qu'elles veulent dire — « A = Actif », « R = Résilié ». L'audit cesse alors de signaler <strong>les valeurs rares</strong> — un code peu fréquent reste un code valable — et signale à la place <strong>celles qui ne sont pas dans votre liste</strong>.</p>
                 </div>
                 <button onclick="vlAdd()" class="text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold whitespace-nowrap">+ Liste</button>
             </div>`;

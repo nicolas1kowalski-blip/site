@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.30.0';
+        const V13_VERSION = '13.31.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.31.0',
+                d: '2026-09-22',
+                t: 'Les derniers écrans de gouvernance parlent enfin la même langue',
+                items: [
+                    'La <b>phrase d’accueil</b> d’un écran se posait avant la barre de liste. Sur le <b>glossaire</b>, cette barre vient après le titre, l’explication et le bouton : la phrase tombait donc au milieu de l’écran, alors qu’elle est là pour accueillir. Elle est maintenant <b>toujours en tête</b>.',
+                    '<b>« Surveillance des sources » n’avait aucune phrase d’accueil</b> : c’était le seul écran de gouvernance sans. Elle est écrite.',
+                    'Trois explications étaient rédigées en jargon et sont réécrites en français : « fraîcheur, dérive, conformité au schéma attendu » devient <b>« sont-ils à jour, et ressemblent-ils à ceux d’hier ? »</b> ; « n’est plus jugé sur la rareté de ses valeurs mais sur leur appartenance au référentiel » devient <b>« l’audit signale ce qui n’est pas dans votre liste »</b> ; « pseudonymisation stable grâce à un sel de session » devient <b>« un même nom devient toujours le même code à l’intérieur d’un export »</b>, le terme savant restant au survol.',
+                    'Le <b>vocabulaire métier s’applique désormais au milieu des phrases</b>, et plus seulement aux mots isolés : « Attributs désignés » devient « Informations désignées », « Tables techniques (2) » devient « Fichiers (2) », « pseudonymisation (jeton stable salé) » devient « remplacé par un code », « Prendre un instantané » devient « Prendre une photo ». Les tournures sont écrites entières et déjà accordées — remplacer mot à mot donnerait « un information ».'
+                ]
+            },
             {
                 v: '13.30.0',
                 d: '2026-09-22',

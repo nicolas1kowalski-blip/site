@@ -163,7 +163,7 @@
             const acts = pvCfg().actions;
             const plan = pvPlan(tn);
             const nPerso = plan.filter(p2 => p2.level === 'personnel').length;
-            return `<p class="text-sm text-slate-500 mb-4">Classez chaque colonne (pré-rempli depuis la détection RGPD et le dictionnaire), choisissez l'action par niveau, puis exportez un <strong>jeu anonymisé partageable</strong> avec son rapport. La pseudonymisation est <strong>stable au sein d'un export</strong> (même valeur → même jeton) grâce à un sel de session jamais conservé.</p>
+            return `<p class="text-sm text-slate-500 mb-4">Dites qui a le droit de voir quoi, colonne par colonne — l'application a déjà rempli ce qu'elle a reconnu. Choisissez ensuite ce qu'il advient de chaque niveau à l'export, et vous obtenez un <strong>fichier partageable</strong> et son rapport. Un même nom devient <span title="Pseudonymisation : même valeur, même jeton, grâce à un sel de session jamais conservé">toujours le même code à l'intérieur d'un export</span>, et un code différent au suivant : on peut donc recouper les lignes entre elles sans jamais remonter aux personnes.</p>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 ${Object.entries(PV_LEVELS)
                     .map(

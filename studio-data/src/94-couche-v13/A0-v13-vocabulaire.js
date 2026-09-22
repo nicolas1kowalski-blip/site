@@ -117,8 +117,82 @@
                 'Ici, vous regroupez des fichiers par sujet ou par équipe.',
                 'Un périmètre sert de filtre ailleurs.'
             ],
-            history: ['🕓', 'Ici, vous retrouvez les audits de qualité passés et leur évolution.', '']
+            history: ['🕓', 'Ici, vous retrouvez les audits de qualité passés et leur évolution.', ''],
+            srcwatch: [
+                '📡',
+                'Ici, vous surveillez les fichiers que vous recevez : sont-ils à jour, et ressemblent-ils à ceux d’hier ?',
+                'Une livraison qui arrive en retard, qui perd une colonne ou qui change de volume se voit tout de suite.'
+            ]
         };
+        /*
+         * Le vocabulaire métier AU MILIEU des phrases.
+         *
+         * v11Wording ne remplace un texte que s'il est exactement égal à un terme : « Attribut » tout seul
+         * devient « Information », mais « Attributs désignés » ou « Tables techniques (2) » restaient tels
+         * quels — et l'on lisait les deux vocabulaires sur le même écran.
+         *
+         * On n'échange pas les mots un par un : « attribut » est masculin, « information » féminine, et
+         * « un attribut rattaché » deviendrait « un information rattaché ». On écrit donc les tournures
+         * entières, déjà accordées. La liste est courte à dessein : ce sont les étiquettes qui choquent.
+         */
+        const V13_TOURNURES = [
+            ['Tables techniques', 'Fichiers'],
+            ['Table technique', 'Fichier'],
+            ['Attributs désignés', 'Informations désignées'],
+            ['Attributs rattachés', 'Informations rattachées'],
+            ['Rattacher un attribut', 'Rattacher une information'],
+            ['Lier un terme à un attribut', 'Lier un terme à une information'],
+            ['Aucun attribut', 'Aucune information'],
+            ['aucun attribut', 'aucune information'],
+            ['attribut(s) rattaché(s)', 'information(s) rattachée(s)'],
+            ['Pas encore rattachée à un attribut', 'Pas encore rattachée à une information'],
+            ['Regroupez vos tables par domaine métier', 'Regroupez vos fichiers par domaine métier'],
+            ['Table de référence', 'Fichier de référence'],
+            ['— table —', '— fichier —'],
+            // Confidentialité : ce que fait la règle, pas le nom savant de la technique.
+            ['pseudonymisation (jeton stable salé)', 'remplacé par un code'],
+            ['masquage (1er caractère + •••)', 'masqué, sauf la 1re lettre'],
+            ['généralisation (tranches / année)', 'arrondi (tranche ou année)'],
+            ['suppression de la colonne', 'colonne retirée'],
+            ['aucune (en clair)', 'laissé tel quel'],
+            ['Exporter le jeu anonymisé + rapport', 'Exporter le fichier anonymisé et son rapport'],
+            // Surveillance des sources : un instantané est une photo, une dérive est un changement.
+            ['Moniteur & fraîcheur', 'Est-ce à jour ?'],
+            ['Contrat de données', 'Colonnes attendues'],
+            ['Changements (delta)', 'Ce qui a changé'],
+            ['Réconciliation', 'Deux fichiers face à face'],
+            ['Prendre un instantané', 'Prendre une photo'],
+            ['instantané(s)', 'photo(s)'],
+            [
+                'Prenez deux instantanés (à deux chargements) pour mesurer la dérive.',
+                'Prenez une photo à deux chargements différents pour voir ce qui a changé entre les deux.'
+            ],
+            ['⚠ dérive de schéma', '⚠ les colonnes ont changé'],
+            ['schéma stable', 'mêmes colonnes qu’avant'],
+            [
+                'Chargez au moins une source (onglet Sources) pour suivre sa fraîcheur, sa dérive, son contrat et ses changements.',
+                'Chargez au moins un fichier (onglet Sources) pour savoir s’il arrive à l’heure et ce qui y change.'
+            ]
+        ];
+        function v13TournuresMetier(root) {
+            if (!root) return;
+            const promeneur = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const aChanger = [];
+            while (promeneur.nextNode()) {
+                const noeud = promeneur.currentNode;
+                const parent = noeud.parentNode;
+                // Ni le code, ni les styles, ni ce que l'utilisateur est en train de taper.
+                if (parent && /^(SCRIPT|STYLE|TEXTAREA)$/.test(parent.nodeName)) continue;
+                let texte = noeud.nodeValue;
+                V13_TOURNURES.forEach(paire => {
+                    if (texte.indexOf(paire[0]) !== -1) texte = texte.split(paire[0]).join(paire[1]);
+                });
+                if (texte !== noeud.nodeValue) aChanger.push([noeud, texte]);
+            }
+            aChanger.forEach(paire => {
+                paire[0].nodeValue = paire[1];
+            });
+        }
         function v13HelpBand(tab) {
             const h = V13_HELP[tab];
             if (!h || v13State.helpOff[tab]) return '';
@@ -136,11 +210,15 @@
                         if (!govContentElement || govContentElement.querySelector('.v13-help')) return result;
                         const band = v13HelpBand(tab);
                         if (!band) return result;
-                        const element = govContentElement.querySelector('.v11-listbar');
-                        const first = govContentElement.firstElementChild;
-                        if (element) element.insertAdjacentHTML('beforebegin', band);
-                        else if (first) first.insertAdjacentHTML('beforebegin', band);
-                        else govContentElement.insertAdjacentHTML('afterbegin', band);
+                        /*
+                         * En TÊTE de l'écran, toujours.
+                         *
+                         * On la posait avant la barre de liste quand il y en avait une. Sur le glossaire,
+                         * cette barre vient après le titre, la phrase d'explication et le bouton : la phrase
+                         * d'aide tombait donc au milieu de l'écran, alors qu'elle est là pour accueillir.
+                         */
+                        govContentElement.insertAdjacentHTML('afterbegin', band);
+                        v13TournuresMetier(govContentElement);
                     } catch (e) {}
                     return result;
                 }

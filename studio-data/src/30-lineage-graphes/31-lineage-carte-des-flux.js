@@ -2717,7 +2717,7 @@
                 );
             const tabBtn = (k, lbl) =>
                 `<button data-ro="keep" onclick="swSet('tool','${k}')" class="px-3 py-1.5 text-xs font-bold rounded-lg border ${swState.tool === k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}">${lbl}</button>`;
-            let html = `<p class="text-sm text-slate-500 mb-3">Surveillez les sources reçues d'applications amont : fraîcheur, dérive, conformité au schéma attendu, changements entre chargements, cohérence entre sources.</p>
+            let html = `<p class="text-sm text-slate-500 mb-3">Les fichiers que vous recevez changent sans prévenir. On regarde ici s'ils arrivent à l'heure, s'ils gardent les mêmes colonnes que celles <span title="Conformité au schéma attendu">convenues</span>, ce qui a <span title="Delta entre deux chargements">bougé depuis la dernière livraison</span>, et si deux fichiers qui devraient dire la même chose la disent vraiment.</p>
                 <div class="flex gap-2 mb-4 flex-wrap">${tabBtn('monitor', '📡 Moniteur & fraîcheur')}${tabBtn('contract', '📜 Contrat de données')}${tabBtn('delta', '🔁 Changements (delta)')}${tabBtn('recon', '🔗 Réconciliation')}</div>`;
 
             if (swState.tool === 'monitor') {
