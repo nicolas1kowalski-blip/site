@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-22T16:35:49.912Z",
+ "generated": "2026-09-22T19:30:14.238Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50037,
-  "codeLines": 47337,
-  "commentLines": 2700,
-  "templateLines": 9897,
+  "lines": 50073,
+  "codeLines": 47363,
+  "commentLines": 2710,
+  "templateLines": 9902,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6589,
+  "locals": 6590,
   "shortLocals": 837,
-  "functions": 1648,
+  "functions": 1649,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12702989831537412
+  "shortLocalsRatio": 0.12701062215477996
  },
  "files": [
   {
@@ -245,15 +245,15 @@
   },
   {
    "file": "20-gouvernance/22-gouvernance-objets-metier.js",
-   "lines": 4386,
-   "codeLines": 4166,
-   "commentLines": 220,
+   "lines": 4403,
+   "codeLines": 4175,
+   "commentLines": 228,
    "templateLines": 939,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 619,
    "shortLocals": 53,
-   "functions": 170,
+   "functions": 171,
    "longestLogic": 150,
    "shortLocalsRatio": 0.08562197092084006
   },
@@ -402,17 +402,17 @@
   },
   {
    "file": "30-lineage-graphes/30-lineage-par-attribut.js",
-   "lines": 705,
-   "codeLines": 680,
-   "commentLines": 25,
+   "lines": 714,
+   "codeLines": 687,
+   "commentLines": 27,
    "templateLines": 59,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 99,
+   "locals": 100,
    "shortLocals": 10,
    "functions": 10,
    "longestLogic": 127,
-   "shortLocalsRatio": 0.10101010101010101
+   "shortLocalsRatio": 0.1
   },
   {
    "file": "30-lineage-graphes/31-lineage-carte-des-flux.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 364,
-   "codeLines": 362,
+   "lines": 374,
+   "codeLines": 372,
    "commentLines": 2,
-   "templateLines": 184,
+   "templateLines": 189,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.29.0';
+        const V13_VERSION = '13.30.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.30.0',
+                d: '2026-09-22',
+                t: 'Parcours : les traits répondent aussi dans l’écran « Lineage », et le plein écran laisse passer',
+                items: [
+                    'Dans l’écran <b>Lineage</b>, les traits ne répondaient pas : le clic n’y avait jamais été branché — il l’était dans le parcours d’un objet et dans celui du catalogue, pas là. C’est fait : <b>un clic sur un trait</b> ouvre le panneau de ce qui y passe.',
+                    'Sur cet écran, le clic simple sur une case sert déjà à <b>éclairer toute la chaîne</b> : on ne le lui prend pas. C’est le <b>double clic</b> qui ouvre la fiche. La légende sous le schéma le dit.',
+                    'En <b>plein écran</b>, ouvrir une fiche ou un panneau ne se voyait pas : le schéma occupe seul l’écran, et tout s’affichait derrière. On restait devant le même schéma en se demandant pourquoi rien ne se passait. L’application <b>quitte maintenant le plein écran</b> avant de vous emmener ailleurs.'
+                ]
+            },
             {
                 v: '13.29.0',
                 d: '2026-09-22',

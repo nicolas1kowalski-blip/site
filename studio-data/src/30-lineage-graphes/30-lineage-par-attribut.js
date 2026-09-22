@@ -637,6 +637,15 @@
                 const id = ev.item && ev.item.getID ? ev.item.getID() : null;
                 if (id) lineageChainFocus(id);
             });
+            // Ici le clic simple sert déjà à éclairer la chaîne : c'est le DOUBLE clic qui ouvre la fiche.
+            lineageGraph.on('node:dblclick', ev => {
+                const id = (ev && ev.id) || (ev.item && ev.item.getID ? ev.item.getID() : null);
+                if (id) lineageOuvrirLaFiche(id);
+            });
+            // Et le clic sur un trait dit ce qui y passe, comme dans les autres vues du parcours.
+            lineageGraph.on('edge:click', ev => {
+                if (ev && ev.id) lineageAfficherLeLien(wrap, { nodes, edges: shownEdges }, ev.id);
+            });
             const linGotoListElement = el('linGotoList');
             if (linGotoListElement)
                 linGotoListElement.innerHTML = nodes.map(n => `<option value="${escapeHTML(n.title)}">`).join('');

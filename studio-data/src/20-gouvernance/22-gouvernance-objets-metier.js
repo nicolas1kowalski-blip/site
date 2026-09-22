@@ -759,12 +759,27 @@
          * d'ouvrir l'objet qu'on y voyait, et il fallait ressortir, retrouver l'onglet, rechercher le nom.
          * Rend true quand une fiche a été ouverte, pour que l'appelant sache qu'il n'a plus rien à faire.
          */
+        /**
+         * Quitter le plein écran avant d'emmener ailleurs.
+         *
+         * En plein écran, le schéma occupe SEUL l'écran : la fiche que l'on vient d'ouvrir et le panneau
+         * d'un lien s'affichent derrière, invisibles. On restait donc devant le même schéma en se
+         * demandant pourquoi rien ne se passait.
+         */
+        function lineageQuitterLePleinEcran() {
+            if (!document.fullscreenElement) return;
+            try {
+                document.exitFullscreen().catch(() => {});
+            } catch (e) {}
+        }
         function lineageOuvrirLaFiche(id) {
             const nom = String(id || '');
             const fermerLeTiroir = () => {
+                lineageQuitterLePleinEcran();
                 if (typeof closeUxDrawer === 'function') closeUxDrawer();
             };
             if (nom === LINEAGE_SANS_APPLICATION) {
+                lineageQuitterLePleinEcran();
                 showError(
                     'Ces fichiers n’ont pas d’application déclarée : rattachez-les dans « Applications & processus » pour qu’ils prennent leur place dans le parcours.'
                 );
@@ -958,6 +973,8 @@
         function lineageAfficherLeLien(wrap, graph, edgeId) {
             const donnees = wrap && wrap.parentElement ? lineageDonneesDuLien(graph, edgeId) : null;
             if (!donnees) return false;
+            // Le panneau se pose au-dessus du schéma : en plein écran il serait derrière, donc invisible.
+            lineageQuitterLePleinEcran();
             lineageFermerLeLien();
             wrap.insertAdjacentHTML('beforebegin', `<div id="lineageLienBox">${lineageBoiteDuLien(donnees)}</div>`);
             return true;

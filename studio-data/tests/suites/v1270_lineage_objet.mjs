@@ -260,9 +260,81 @@ okFs('les étiquettes des liens suivent la planche : encre sombre sur halo blanc
   enSombre.encre === 'rgb(71, 85, 105)' && enSombre.halo === 'rgb(255, 255, 255)');
 await p.evaluate(()=>{ document.documentElement.removeAttribute('data-theme'); return document.exitFullscreen().catch(()=>{}); });
 await p.waitForTimeout(200);
+// ---- en plein écran, ouvrir quelque chose doit RAMENER à l'écran ----
+// Le schéma occupe seul l'écran : la fiche ouverte s'affichait derrière, invisible, et l'on restait
+// devant le même schéma en se demandant pourquoi rien ne se passait.
+await p.click('#zzFs'); await p.waitForTimeout(300);
+okFs('ouvrir une fiche depuis le plein écran en fait sortir, et emmène sur la fiche',
+  await p.evaluate(async ()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    if (!document.fullscreenElement) return false;
+    govState.tab='catalog'; govState.selectedBoId=null;
+    lineageOuvrirLaFiche('bo:bo1');
+    await wait(250);
+    return !document.fullscreenElement && govState.tab==='objects' && govState.selectedBoId==='bo1';
+  }));
+await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  govState.selectedBoId='bo2'; openGovTab('objects'); setBoTab('usage'); await wait(150);
+  openBoLineage('bo2'); await wait(300);
+});
+await p.click('#zzFs'); await p.waitForTimeout(300);
+okFs('et le panneau d\'un lien aussi : il se pose au-dessus du schéma, il faut donc en sortir',
+  await p.evaluate(async ()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    if (!document.fullscreenElement) return false;
+    const graphe = buildBoLineageGraph((state.governance.businessObjects||[]).find(b=>b.id==='bo2'));
+    const lien = graphe.edges.find(e=>e.source==='bo:bo1' && e.target==='bo:bo2');
+    lineageAfficherLeLien(el('attrLineageWrap'), graphe, lien.id);
+    await wait(250);
+    const vu = !document.fullscreenElement && !!el('lineageLienBox');
+    lineageFermerLeLien();
+    return vu;
+  }));
 okFs('en sortant du plein écran, le schéma redevient ce qu\'il était',
   await p.evaluate(()=>{ const s=getComputedStyle(el('attrLineageWrap'));
     return !document.fullscreenElement && s.padding === '0px' && s.backgroundImage === 'none'; }));
+
+// L'écran « Lineage » lui-même, pour de vrai : c'est là que les traits ne répondaient pas.
+const surLEcranLineage = await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  lineageFermerLeLien();
+  openGovTab('lineage'); govState.lineageView='graph';
+  try { renderLineageGraph(); } catch (e) { return { erreur: String(e.message) }; }
+  await wait(400);
+  const wrap = el('lineageGraphWrap');
+  const trait = wrap && wrap.querySelector('.usvge .usvge-cible');
+  return { legende: /double-cliquez-le/.test(el('govContent').textContent),
+    traits: wrap ? wrap.querySelectorAll('.usvge').length : 0, cible: !!trait };
+});
+okFs('l\'écran « Lineage » dessine bien des traits que l\'on peut viser à la souris',
+  surLEcranLineage.traits > 0 && surLEcranLineage.cible);
+okFs('et sa légende annonce le clic sur un trait et le double clic sur une case', surLEcranLineage.legende);
+okFs('un vrai clic sur un trait de cet écran dit ce qui y passe', await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const trait = el('lineageGraphWrap').querySelector('.usvge .usvge-cible');
+  trait.dispatchEvent(new MouseEvent('mousedown', { bubbles:true, clientX:10, clientY:10 }));
+  window.dispatchEvent(new MouseEvent('mouseup', { bubbles:true, clientX:10, clientY:10 }));
+  await wait(200);
+  const vu = !!el('lineageLienBox');
+  lineageFermerLeLien();
+  return vu;
+}));
+okFs('et un double clic sur une case y ouvre sa fiche', await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const caseObjet = el('lineageGraphWrap').querySelector('.usvgn[data-id^="bo:"]');
+  if (!caseObjet) return false;
+  const attendu = caseObjet.getAttribute('data-id').slice(3);
+  govState.tab='lineage'; govState.selectedBoId=null;
+  for (let coup=0; coup<2; coup++) {
+    caseObjet.dispatchEvent(new MouseEvent('mousedown', { bubbles:true, clientX:10, clientY:10 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles:true, clientX:10, clientY:10 }));
+  }
+  await wait(250);
+  return govState.tab==='objects' && govState.selectedBoId===attendu;
+}));
+await p.evaluate(()=>document.fullscreenElement && document.exitFullscreen().catch(()=>{}));
+await p.waitForTimeout(200);
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));

@@ -220,6 +220,7 @@
  "lineageFichiersAmont": "writable",
  "lineageApplicationDerriere": "writable",
  "lineageApplicationDuFichier": "writable",
+ "lineageQuitterLePleinEcran": "writable",
  "lineageOuvrirLaFiche": "writable",
  "lineageAmenerSousLesYeux": "writable",
  "lineageMappingsDeLAttribut": "writable",
