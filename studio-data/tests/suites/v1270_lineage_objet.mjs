@@ -147,13 +147,19 @@ const out = await p.evaluate(async (seed)=>{
     return d && d.lignes.length===0 && /Aucune information/.test(d.phrase); })());
   ok('et un lien qui n\'existe pas ne rend rien', lineageDonneesDuLien(gLien,'nexistepas')===null);
   ok('le panneau du lien s\'ouvre au-dessus du schéma, et se referme', (()=>{
-    if (!el('attrLineageWrap'))
-      document.body.insertAdjacentHTML('beforeend', '<div><div id="attrLineageWrap"></div></div>');
+    // Un conteneur de dépannage, retiré aussitôt : sans quoi il usurperait l'identifiant du vrai,
+    // et les contrôles de plein écran plus bas porteraient sur une boîte sans style.
+    let depannage = null;
+    if (!el('attrLineageWrap')) {
+      document.body.insertAdjacentHTML('beforeend', '<div id="zzDepannage"><div id="attrLineageWrap"></div></div>');
+      depannage = el('zzDepannage');
+    }
     const wrap=el('attrLineageWrap');
     const pose=lineageAfficherLeLien(wrap, gLien, lienDe('as:app3','bo:bo2'));
     const boite=el('lineageLienBox');
     const vu=pose && boite && /Score/.test(boite.textContent) && /Scoring/.test(boite.textContent);
     lineageFermerLeLien();
+    if (depannage) depannage.remove();
     return vu && !el('lineageLienBox'); })());
   ok('la vue « objets » branche ce clic sur les traits', /edge:click/.test(String(v12LinRender)));
   // Et pour de vrai dans le catalogue : on clique sur le trait « Personne → Contrat ».
@@ -216,6 +222,9 @@ const out = await p.evaluate(async (seed)=>{
 const okFs=(n,c)=>out.push([n,!!c]);
 const planche = await p.evaluate(async ()=>{
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  // On rouvre le parcours : c'est le VRAI conteneur, avec ses classes, qu'il faut mettre en plein écran.
+  govState.selectedBoId='bo2'; openGovTab('objects'); setBoTab('usage'); await wait(150);
+  openBoLineage('bo2'); await wait(300);
   document.body.insertAdjacentHTML('beforeend',
     '<button id="zzFs" style="position:fixed;left:2px;top:2px;z-index:99999">fs</button>');
   el('zzFs').addEventListener('click', ()=>{ el('attrLineageWrap').requestFullscreen(); });
@@ -240,10 +249,15 @@ const enSombre = await p.evaluate(async ()=>{
   document.documentElement.setAttribute('data-theme','dark');
   await wait(60);
   const style = getComputedStyle(el('attrLineageWrap'));
-  return { fond: style.backgroundColor, trame: style.backgroundImage };
+  const etiquette = el('attrLineageWrap').querySelector('.usvg-lbl');
+  const styleEtiquette = etiquette ? getComputedStyle(etiquette) : {};
+  return { fond: style.backgroundColor, trame: style.backgroundImage,
+    encre: styleEtiquette.fill, halo: styleEtiquette.stroke };
 });
-okFs('et en thème sombre, la planche est sombre au lieu de brûler les yeux',
-  enSombre.fond === 'rgb(11, 17, 32)' && /radial-gradient/.test(enSombre.trame));
+okFs('et elle reste CLAIRE même en thème sombre : un schéma se lit comme un document, pas comme un écran',
+  enSombre.fond === 'rgb(255, 255, 255)' && /radial-gradient/.test(enSombre.trame));
+okFs('les étiquettes des liens suivent la planche : encre sombre sur halo blanc, pas de pâté noir',
+  enSombre.encre === 'rgb(71, 85, 105)' && enSombre.halo === 'rgb(255, 255, 255)');
 await p.evaluate(()=>{ document.documentElement.removeAttribute('data-theme'); return document.exitFullscreen().catch(()=>{}); });
 await p.waitForTimeout(200);
 okFs('en sortant du plein écran, le schéma redevient ce qu\'il était',

@@ -8,7 +8,7 @@
         .table-active { opacity: 1; filter: grayscale(0%); transition: all 0.3s; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border-color: #818cf8 !important; }
         .table-bridge { opacity: 0.9; border-style: dashed; border-color: #60a5fa !important; }
         .sticky-header th { position: sticky; top: 0; background-color: #f8fafc; z-index: 10; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
-        #lineageFsWrap:fullscreen { background: var(--planche-fond, #fff); padding: 1rem; overflow: auto; }
+        #lineageFsWrap:fullscreen { background: var(--planche-fond, #fff) !important; padding: 1rem; overflow: auto; }
         #lineageFsWrap:fullscreen #lineageGraphWrap { height: calc(100vh - 90px) !important; }
 
         /* ===== Plein écran d'un graphe : une planche à dessin, pas un fond gris =====
@@ -16,9 +16,13 @@
            derrière eux un fond NOIR : le blanc à moitié transparent vire alors au gris terne, et les
            couleurs des cases s'y noient. On leur donne donc un fond plein, une trame de points fine
            qui aide l'œil à situer les cases, et de l'air tout autour. Le cadre et les coins arrondis
-           n'ont plus de sens quand on occupe l'écran entier : ils disparaissent. */
+           n'ont plus de sens quand on occupe l'écran entier : ils disparaissent.
+
+           La planche reste CLAIRE en toutes circonstances, thème sombre compris. Un schéma se lit
+           comme un document : il s'imprime, il se met dans une présentation, il se montre en réunion.
+           Et les cases sont peintes en teintes pâles — vert, bleu, ambre — qui s'éteignent sur un
+           fond sombre. Une planche sombre serait à la mode ; elle ne serait ni lisible ni sérieuse. */
         :root { --planche-fond: #ffffff; --planche-points: #dbe3ee; --planche-ombre: rgba(15, 23, 42, 0.06); }
-        html[data-theme='dark'] { --planche-fond: #0b1120; --planche-points: #1e293b; --planche-ombre: rgba(0, 0, 0, 0.5); }
         #catLineageWrap:fullscreen,
         #attrLineageWrap:fullscreen,
         #lineageGraphWrap:fullscreen,
@@ -30,14 +34,19 @@
             padding: 18px;
             border: 0;
             border-radius: 0;
-            background-color: var(--planche-fond);
-            background-image: radial-gradient(var(--planche-points) 1.2px, transparent 1.2px);
+            /* « !important » car le thème sombre repeint « .bg-slate-50/50 » de la même façon : en plein
+               écran c'est la planche qui doit gagner, pour que le schéma reste lisible et imprimable. */
+            background-color: var(--planche-fond) !important;
+            background-image: radial-gradient(var(--planche-points) 1.2px, transparent 1.2px) !important;
             background-size: 22px 22px;
             box-shadow: inset 0 0 180px var(--planche-ombre);
         }
+        /* Les étiquettes des liens sont peintes pour le thème en cours : en thème sombre, texte pâle sur
+           halo sombre. Sur la planche claire, elles formeraient des pâtés noirs — on les remet en clair. */
+        :fullscreen .usvg-lbl { fill: #475569 !important; stroke: #ffffff !important; }
         #lineageFsWrap:fullscreen #lineageGraphWrap {
-            background-color: var(--planche-fond);
-            background-image: radial-gradient(var(--planche-points) 1.2px, transparent 1.2px);
+            background-color: var(--planche-fond) !important;
+            background-image: radial-gradient(var(--planche-points) 1.2px, transparent 1.2px) !important;
             background-size: 22px 22px;
         }
 

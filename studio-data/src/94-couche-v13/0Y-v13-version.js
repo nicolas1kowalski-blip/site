@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.28.0';
+        const V13_VERSION = '13.29.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.29.0',
+                d: '2026-09-22',
+                t: 'La planche d’un schéma reste claire, thème sombre compris',
+                items: [
+                    'La 13.28 faisait basculer la planche en <b>sombre</b> quand l’application était en thème sombre. Mauvaise idée : un schéma se lit comme un <b>document</b> — il s’imprime, il se colle dans une présentation, il se montre en réunion — et les cases sont peintes en teintes pâles (vert, bleu, ambre) qui s’éteignent sur un fond sombre. La planche est donc <b>toujours claire</b>.',
+                    'Deux règles du thème sombre repeignaient le schéma par-dessus, avec priorité : le fond du cadre, et les <b>étiquettes des liens</b> — texte pâle sur halo sombre, qui formait des pâtés noirs sur la planche blanche. Les deux sont neutralisées en plein écran : fond blanc, encre ardoise, halo blanc.',
+                    'Un test s’exécutait sur un conteneur de dépannage, sans style, et passait donc à tort. Il porte désormais sur le vrai cadre du schéma, avec ses classes — c’est lui qui a révélé les deux règles ci-dessus.'
+                ]
+            },
             {
                 v: '13.28.0',
                 d: '2026-09-22',
@@ -9,7 +19,6 @@
                 items: [
                     'En plein écran, les schémas s’affichaient sur un <b>gris terne</b> où les couleurs des cases se noyaient. La cause : ces cadres sont <b>translucides</b> (un blanc à 50 %), et le navigateur pose du <b>noir</b> derrière un élément en plein écran — blanc à moitié transparent sur noir donne du gris.',
                     'Le schéma occupe maintenant l’écran sur un <b>fond plein</b>, avec une <b>trame de points fine</b> qui aide l’œil à situer les cases et à mesurer les distances, et de l’air tout autour. Le cadre et les coins arrondis, qui n’ont plus de sens quand on occupe l’écran entier, disparaissent.',
-                    'En <b>thème sombre</b>, la planche est sombre au lieu de brûler les yeux.',
                     'La règle vaut pour <b>tous les schémas</b> : parcours d’un objet, parcours du catalogue, carte des flux, modèle de données, graphe de l’extraction.'
                 ]
             },

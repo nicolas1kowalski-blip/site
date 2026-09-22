@@ -1,15 +1,15 @@
 {
- "generated": "2026-09-22T16:24:17.210Z",
+ "generated": "2026-09-22T16:35:49.912Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50028,
-  "codeLines": 47328,
+  "lines": 50037,
+  "codeLines": 47337,
   "commentLines": 2700,
-  "templateLines": 9893,
+  "templateLines": 9897,
   "longLogicLines": 11,
   "multiStatementLines": 0,
   "locals": 6589,
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 355,
-   "codeLines": 353,
+   "lines": 364,
+   "codeLines": 362,
    "commentLines": 2,
-   "templateLines": 180,
+   "templateLines": 184,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
