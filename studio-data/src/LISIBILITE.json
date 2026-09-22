@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-22T15:35:28.316Z",
+ "generated": "2026-09-22T16:12:58.234Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 49776,
-  "codeLines": 47114,
-  "commentLines": 2662,
-  "templateLines": 9858,
+  "lines": 50017,
+  "codeLines": 47317,
+  "commentLines": 2700,
+  "templateLines": 9887,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6554,
-  "shortLocals": 836,
-  "functions": 1642,
+  "locals": 6589,
+  "shortLocals": 837,
+  "functions": 1648,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.1275556911809582
+  "shortLocalsRatio": 0.12702989831537412
  },
  "files": [
   {
@@ -245,17 +245,17 @@
   },
   {
    "file": "20-gouvernance/22-gouvernance-objets-metier.js",
-   "lines": 4192,
-   "codeLines": 3997,
-   "commentLines": 195,
-   "templateLines": 918,
+   "lines": 4386,
+   "codeLines": 4166,
+   "commentLines": 220,
+   "templateLines": 939,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 588,
+   "locals": 619,
    "shortLocals": 53,
-   "functions": 164,
+   "functions": 170,
    "longestLogic": 150,
-   "shortLocalsRatio": 0.09013605442176871
+   "shortLocalsRatio": 0.08562197092084006
   },
   {
    "file": "20-gouvernance/23-gouvernance-perimetres.js",
@@ -371,8 +371,8 @@
   },
   {
    "file": "20-gouvernance/2B-gouvernance-catalogue.js",
-   "lines": 1302,
-   "codeLines": 1262,
+   "lines": 1305,
+   "codeLines": 1265,
    "commentLines": 40,
    "templateLines": 242,
    "longLogicLines": 1,
@@ -430,19 +430,19 @@
   },
   {
    "file": "30-lineage-graphes/32-graphes-moteur-svg.js",
-   "lines": 563,
-   "codeLines": 551,
-   "commentLines": 12,
-   "templateLines": 9,
+   "lines": 577,
+   "codeLines": 559,
+   "commentLines": 18,
+   "templateLines": 10,
    "longLogicLines": 1,
    "multiStatementLines": 0,
-   "locals": 118,
-   "shortLocals": 32,
+   "locals": 121,
+   "shortLocals": 33,
    "functions": 1,
-   "longestLogic": 168,
-   "shortLocalsRatio": 0.2711864406779661,
+   "longestLogic": 176,
+   "shortLocalsRatio": 0.2727272727272727,
    "longLinesSample": [
-    "`M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - number}, ${b.cx + 20} ${b.cy - b.h / 2 - n"
+    "const boucle = `M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - number}, ${b.cx + 20} ${b.c"
    ]
   },
   {
@@ -982,17 +982,17 @@
   },
   {
    "file": "92-couche-v12/9D-v12-restitutions.js",
-   "lines": 715,
-   "codeLines": 695,
-   "commentLines": 20,
+   "lines": 720,
+   "codeLines": 699,
+   "commentLines": 21,
    "templateLines": 116,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 88,
+   "locals": 89,
    "shortLocals": 12,
    "functions": 18,
    "longestLogic": 123,
-   "shortLocalsRatio": 0.13636363636363635
+   "shortLocalsRatio": 0.1348314606741573
   },
   {
    "file": "92-couche-v12/9E-v12-amont-complet.js",
@@ -1010,10 +1010,10 @@
   },
   {
    "file": "92-couche-v12/9F-v12-liens-lisibles.js",
-   "lines": 333,
-   "codeLines": 311,
-   "commentLines": 22,
-   "templateLines": 10,
+   "lines": 347,
+   "codeLines": 319,
+   "commentLines": 28,
+   "templateLines": 11,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 66,
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 333,
-   "codeLines": 331,
+   "lines": 344,
+   "codeLines": 342,
    "commentLines": 2,
-   "templateLines": 168,
+   "templateLines": 174,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

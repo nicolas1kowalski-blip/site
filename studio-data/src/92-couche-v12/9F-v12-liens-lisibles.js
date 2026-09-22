@@ -220,10 +220,20 @@
                 element.appendChild(top);
             }
             const raised = new Map(); // g -> { parent, next }
+            /*
+             * Un lien mis en avant passe AU-DESSUS des cases. Le trait invisible qui sert à le viser à la
+             * souris passerait donc devant la case survolée, et l'on ne pourrait plus ni la déplacer ni
+             * l'ouvrir. Tant qu'il est en avant, ce trait-là ne reçoit plus la souris.
+             */
+            const viserOuNon = (g, actif) =>
+                Array.from(g.querySelectorAll('.usvge-cible')).forEach(trait => {
+                    trait.style.pointerEvents = actif ? '' : 'none';
+                });
             const raise = g => {
                 if (raised.has(g)) return;
                 raised.set(g, { parent: g.parentNode, next: g.nextSibling });
                 g.classList.add('usvge-on');
+                viserOuNon(g, false);
                 top.appendChild(g);
             };
             const lower = g => {
@@ -231,6 +241,7 @@
                 if (!r) return;
                 raised.delete(g);
                 g.classList.remove('usvge-on');
+                viserOuNon(g, true);
                 if (r.next && r.next.parentNode === r.parent) r.parent.insertBefore(g, r.next);
                 else r.parent.appendChild(g);
             };
@@ -296,9 +307,12 @@
                 if (!e || !a || !b) return;
                 const ep = v12LnRoute(S, e, a, b);
                 if (!ep) return;
-                const path = g.querySelector('path'),
+                // Le tracé visible ET le trait invisible qui sert à viser le lien : les deux suivent.
+                const path = g.querySelector('path:not(.usvge-cible)'),
+                    cible = g.querySelector('.usvge-cible'),
                     text = g.querySelector('text');
                 if (path) path.setAttribute('d', ep.d);
+                if (cible) cible.setAttribute('d', ep.d);
                 if (text) {
                     text.setAttribute('x', ep.mx);
                     text.setAttribute('y', ep.my - 3);

@@ -761,16 +761,210 @@
          */
         function lineageOuvrirLaFiche(id) {
             const nom = String(id || '');
-            if (!nom.startsWith('bo:')) return false;
-            const bo = (state.governance.businessObjects || []).find(x => x.id === nom.slice(3));
-            if (!bo) return false;
-            if (typeof closeUxDrawer === 'function') closeUxDrawer();
-            openBoFiche(bo.id);
+            const fermerLeTiroir = () => {
+                if (typeof closeUxDrawer === 'function') closeUxDrawer();
+            };
+            if (nom === LINEAGE_SANS_APPLICATION) {
+                showError(
+                    'Ces fichiers n’ont pas d’application déclarée : rattachez-les dans « Applications & processus » pour qu’ils prennent leur place dans le parcours.'
+                );
+                return false;
+            }
+            // Un objet métier : sa fiche complète, onglet Objets.
+            if (nom.startsWith('bo:')) {
+                const bo = (state.governance.businessObjects || []).find(x => x.id === nom.slice(3));
+                if (!bo) return false;
+                fermerLeTiroir();
+                openBoFiche(bo.id);
+                return true;
+            }
+            // Un attribut : la fiche de l'objet qui le porte — c'est là qu'il se lit et se modifie.
+            if (nom.startsWith('attr:')) {
+                const cherche = nom.slice(5);
+                const bo = (state.governance.businessObjects || []).find(objet =>
+                    (boAllAttrRows(objet) || []).some(ligne => ligne.el.id === cherche)
+                );
+                if (!bo) return false;
+                fermerLeTiroir();
+                openBoFiche(bo.id);
+                return true;
+            }
+            // Une application ou un processus : sa carte, onglet Applications & processus.
+            if (nom.startsWith('as:')) {
+                const asset = assetById(nom.slice(3));
+                if (!asset) return false;
+                fermerLeTiroir();
+                govState.tab = 'assets';
+                renderGovernance();
+                lineageAmenerSousLesYeux('gov-asset-' + asset.id);
+                return true;
+            }
+            // Un fichier : sa fiche du catalogue, où l'on voit ses colonnes et ce qu'elles alimentent.
+            if (nom.startsWith('tbl:') && typeof catOpenByKey === 'function') {
+                const table = nom.slice(4);
+                if (!tableByName(table)) return false;
+                govState.tab = 'catalog';
+                renderGovernance();
+                catOpenByKey({ type: 'table', tbl: table });
+                return true;
+            }
+            return false;
+        }
+        /** Faire venir une carte sous les yeux, et la faire clignoter : sinon on ne la retrouve pas. */
+        function lineageAmenerSousLesYeux(identifiant) {
+            setTimeout(() => {
+                const cible = el(identifiant);
+                if (!cible) return;
+                cible.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                cible.classList.add('ring-2', 'ring-indigo-400');
+                setTimeout(() => cible.classList.remove('ring-2', 'ring-indigo-400'), 2000);
+            }, 60);
+        }
+        /*
+         * ---- Ce qui transite par un lien du parcours ----
+         *
+         * Le schéma disait « cette application alimente cet objet ». Il ne disait pas QUOI : quelles
+         * informations passent réellement par ce trait, et d'où elles sortent. On le déduit des
+         * rattachements déjà saisis — colonnes des attributs, application source, origines entre objets,
+         * usages déclarés — sans rien demander de plus.
+         */
+        /** Les colonnes auxquelles un attribut est rattaché, qu'il soit direct ou porté par un composant. */
+        function lineageMappingsDeLAttribut(bo, ligne) {
+            if (!ligne.stId) return (ligne.el.mappings || []).filter(m => m && m.table);
+            const composant = (getBoFacets(bo) || []).find(x => x.id === ligne.stId) || {};
+            return ligne.el.col && composant.table ? [{ table: composant.table, col: ligne.el.col }] : [];
+        }
+        /**
+         * La liste des informations qui passent par ce lien, chacune avec sa provenance.
+         * Rend null si le lien n'existe pas ; sinon toujours un objet, quitte à ce que la liste soit vide.
+         */
+        function lineageDonneesDuLien(graph, edgeId) {
+            const lien = ((graph || {}).edges || []).find(e => e.id === edgeId);
+            if (!lien) return null;
+            const titre = id => (((graph || {}).nodes || []).find(n => n.id === id) || {}).title || id;
+            const objets = ((state.governance || {}).businessObjects || []).slice();
+            const objetDe = id => (String(id).startsWith('bo:') ? objets.find(b => b.id === String(id).slice(3)) : null);
+            const depuis = String(lien.source || '');
+            const vers = String(lien.target || '');
+            const lignes = [];
+            const ajouter = (objet, ligne, detail) => lignes.push({ objet: objet.name, nom: ligne.el.name, detail: detail });
+            const objetAmont = objetDe(depuis);
+            const objetAval = objetDe(vers);
+            // 1. Un objet en reprend un autre : les attributs qui déclarent cette origine.
+            if (objetAmont && objetAval) {
+                (boAllAttrRows(objetAval) || []).forEach(ligne =>
+                    (ligne.el.origins || []).forEach(origine => {
+                        if (origine.boId === objetAmont.id) ajouter(objetAval, ligne, 'repris de ' + objetAmont.name);
+                    })
+                );
+            } else if (objetAval) {
+                // 2. Ce qui ENTRE dans un objet : par un fichier, ou par une application.
+                (boAllAttrRows(objetAval) || []).forEach(ligne => {
+                    const colonnes = lineageMappingsDeLAttribut(objetAval, ligne);
+                    if (depuis.startsWith('tbl:')) {
+                        const fichier = depuis.slice(4);
+                        colonnes.forEach(colonne => {
+                            if (colonne.table === fichier)
+                                ajouter(objetAval, ligne, fichier + (colonne.col ? ' · ' + colonne.col : ''));
+                        });
+                        return;
+                    }
+                    if (!depuis.startsWith('as:')) return;
+                    const application = depuis.slice(3);
+                    if (ligne.el.sourceApp === application) ajouter(objetAval, ligne, 'application source de cet attribut');
+                    colonnes.forEach(colonne => {
+                        const proprietaire = appOwnerOfSource(colonne.table);
+                        const declaree = proprietaire && proprietaire.id === application;
+                        const orpheline = depuis === LINEAGE_SANS_APPLICATION && !proprietaire;
+                        if (declaree || orpheline)
+                            ajouter(objetAval, ligne, 'via ' + colonne.table + (colonne.col ? ' · ' + colonne.col : ''));
+                    });
+                });
+            } else if (objetAmont) {
+                // 3. Ce qui SORT d'un objet : vers une application qui l'utilise, ou vers un fichier diffusé.
+                (boAllAttrRows(objetAmont) || []).forEach(ligne => {
+                    if (vers.startsWith('as:') && (ligne.el.usedBy || []).includes(vers.slice(3)))
+                        ajouter(objetAmont, ligne, 'utilisé par ' + titre(vers));
+                    if (vers.startsWith('tbl:'))
+                        lineageMappingsDeLAttribut(objetAmont, ligne).forEach(colonne => {
+                            if (colonne.table === vers.slice(4))
+                                ajouter(objetAmont, ligne, vers.slice(4) + (colonne.col ? ' · ' + colonne.col : ''));
+                        });
+                });
+            } else {
+                // 4. Entre deux éléments techniques : les attributs portés par le fichier concerné.
+                const fichier = vers.startsWith('tbl:') ? vers.slice(4) : depuis.startsWith('tbl:') ? depuis.slice(4) : '';
+                if (fichier)
+                    objets.forEach(objet =>
+                        (boAllAttrRows(objet) || []).forEach(ligne =>
+                            lineageMappingsDeLAttribut(objet, ligne).forEach(colonne => {
+                                if (colonne.table === fichier)
+                                    ajouter(objet, ligne, fichier + (colonne.col ? ' · ' + colonne.col : ''));
+                            })
+                        )
+                    );
+            }
+            // Un attribut rattaché deux fois à la même colonne ne doit pas se lire deux fois.
+            const vues = new Set();
+            const retenues = lignes
+                .filter(ligne => {
+                    const cle = ligne.objet + '|' + ligne.nom + '|' + ligne.detail;
+                    if (vues.has(cle)) return false;
+                    vues.add(cle);
+                    return true;
+                })
+                .sort((une, autre) => (une.objet + une.nom).localeCompare(autre.objet + autre.nom, 'fr'));
+            return {
+                id: lien.id,
+                depuis: titre(depuis),
+                vers: titre(vers),
+                role: String(lien.label || '').trim(),
+                lignes: retenues,
+                phrase: retenues.length
+                    ? `${retenues.length} information(s) passent par ce lien.`
+                    : "Aucune information n'est encore rattachée à ce lien : il est déduit des rattachements déclarés (application, fichier), mais aucun attribut n'y renvoie."
+            };
+        }
+        /** La phrase qui dit que tout est cliquable : sans elle, personne n'essaie. */
+        function lineageInviteAuClic() {
+            return '<span class="text-[10px] text-slate-400 font-normal">Cliquez sur une case pour ouvrir sa fiche, sur un trait pour voir ce qui y passe</span>';
+        }
+        /** Le panneau qui détaille un lien : d'où, vers où, à quel titre, et ce qui y passe. */
+        function lineageBoiteDuLien(donnees) {
+            const lignes = donnees.lignes
+                .map(
+                    ligne => `<tr><td class="p-1.5 font-bold text-slate-700">${escapeHTML(ligne.nom)}</td>
+                    <td class="p-1.5 text-emerald-700">${escapeHTML(ligne.objet)}</td>
+                    <td class="p-1.5 text-slate-500">${escapeHTML(ligne.detail)}</td></tr>`
+                )
+                .join('');
+            const tableau = donnees.lignes.length
+                ? `<table class="w-full text-left text-[11px] mt-1"><thead class="bg-white/60 text-slate-500 font-bold">
+                    <tr><th class="p-1.5">Information</th>
+                    <th class="p-1.5">Objet métier</th>
+                    <th class="p-1.5">D'où elle vient</th>
+                    </tr>
+                </thead>
+                    <tbody class="divide-y divide-indigo-100">${lignes}</tbody></table>`
+                : '';
+            return `<div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-2 text-[11px] text-indigo-900">
+                <div class="flex items-start justify-between gap-2">
+                    <div><b>${escapeHTML(donnees.depuis)}</b> → <b>${escapeHTML(donnees.vers)}</b>${donnees.role ? ' <span class="font-normal text-indigo-600">— ' + escapeHTML(donnees.role) + '</span>' : ''}
+                        <div class="mt-0.5">${escapeHTML(donnees.phrase)}</div></div>
+                    <button onclick="lineageFermerLeLien()" class="text-indigo-400 hover:text-red-500 font-bold">✕</button>
+                </div>${tableau}</div>`;
+        }
+        /** Pose ce panneau juste au-dessus du schéma, et rend true quand il y avait un lien à décrire. */
+        function lineageAfficherLeLien(wrap, graph, edgeId) {
+            const donnees = wrap && wrap.parentElement ? lineageDonneesDuLien(graph, edgeId) : null;
+            if (!donnees) return false;
+            lineageFermerLeLien();
+            wrap.insertAdjacentHTML('beforebegin', `<div id="lineageLienBox">${lineageBoiteDuLien(donnees)}</div>`);
             return true;
         }
-        /** La phrase qui dit que les cases sont cliquables : sans elle, personne n'essaie. */
-        function lineageInviteAuClic() {
-            return '<span class="text-[10px] text-slate-400 font-normal">Cliquez sur un objet 🏛️ pour ouvrir sa fiche</span>';
+        function lineageFermerLeLien() {
+            const boite = el('lineageLienBox');
+            if (boite) boite.remove();
         }
         let _lineageRedraw = null;
         function lineageFilesSet(on) {

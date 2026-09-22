@@ -2,6 +2,9 @@
         // Petit moteur maison exposant l'API dont les écrans ont besoin (data/render/changeData/
         // layout/fitView/findById/getNodes/getEdges/updateItem/addItem/on/zoom/downloadFullImage).
         // Disposition en couches (BFS gauche→droite), déplacement/pan/zoom gérés à la main.
+        // Largeur du trait invisible posé sur chaque lien pour qu'on puisse le viser à la souris :
+        // le trait dessiné fait un ou deux pixels, personne ne clique dessus.
+        const CIBLE_DU_LIEN = 14;
         function createSvgGraph(container) {
             const S = {
                 c: container,
@@ -205,14 +208,14 @@
                     if (e.source === e.target) {
                         const b = box(e.source);
                         const d = (e.loopCfg && e.loopCfg.dist) || 40;
-                        eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.source)}" data-loop="${d}"><path d="M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} marker-end="url(#uArrow)"/>${e.label ? `<text class="usvg-lbl" x="${b.cx}" y="${b.cy - b.h / 2 - d - 4}" text-anchor="middle" font-size="10">${esc(e.label)}</text>` : ''}</g>`;
+                        eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.source)}" data-loop="${d}" style="cursor:pointer"><path class="usvge-cible" d="M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2}" fill="none" stroke="transparent" stroke-width="${CIBLE_DU_LIEN}"/><path d="M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2 - d}, ${b.cx + 20} ${b.cy - b.h / 2}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} marker-end="url(#uArrow)"/>${e.label ? `<text class="usvg-lbl" x="${b.cx}" y="${b.cy - b.h / 2 - d - 4}" text-anchor="middle" font-size="10">${esc(e.label)}</text>` : ''}</g>`;
                         return;
                     }
                     const a = box(e.source),
                         b = box(e.target);
                     const ep = (createSvgGraph.router && createSvgGraph.router(S, e, a, b)) || edgePath(a, b);
                     const shown = lblFor(e);
-                    eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.target)}"><path d="${ep.d}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} opacity=".85" marker-end="url(#uArrow)"/>${shown ? `<text class="usvg-lbl" x="${ep.mx}" y="${ep.my - 3}" text-anchor="middle" font-size="10">${esc(shown)}</text>` : ''}</g>`;
+                    eSvg += `<g class="usvge" data-id="${esc(e.id)}" data-s="${esc(e.source)}" data-t="${esc(e.target)}" style="cursor:pointer"><path class="usvge-cible" d="${ep.d}" fill="none" stroke="transparent" stroke-width="${CIBLE_DU_LIEN}"/><path d="${ep.d}" fill="none" stroke="${col}" stroke-width="${lw}"${dash} opacity=".85" marker-end="url(#uArrow)"/>${shown ? `<text class="usvg-lbl" x="${ep.mx}" y="${ep.my - 3}" text-anchor="middle" font-size="10">${esc(shown)}</text>` : ''}</g>`;
                 });
                 let nSvg = '';
                 S.nodes.forEach(m => {
@@ -250,7 +253,7 @@
             const fire = (evt, id) => {
                 (S.h[evt] || []).forEach(f => {
                     try {
-                        f({ item: api.findById(id) });
+                        f({ item: api.findById(id), id });
                     } catch (e) {}
                 });
             };
@@ -271,11 +274,9 @@
                     if (rec.loop) {
                         const b = box(rec.s);
                         const number = parseFloat(rec.loop) || 40;
-                        if (rec.path)
-                            rec.path.setAttribute(
-                                'd',
-                                `M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - number}, ${b.cx + 20} ${b.cy - b.h / 2 - number}, ${b.cx + 20} ${b.cy - b.h / 2}`
-                            );
+                        const boucle = `M ${b.cx - 20} ${b.cy - b.h / 2} C ${b.cx - 20} ${b.cy - b.h / 2 - number}, ${b.cx + 20} ${b.cy - b.h / 2 - number}, ${b.cx + 20} ${b.cy - b.h / 2}`;
+                        if (rec.path) rec.path.setAttribute('d', boucle);
+                        if (rec.cible) rec.cible.setAttribute('d', boucle);
                         if (rec.text) {
                             rec.text.setAttribute('x', b.cx);
                             rec.text.setAttribute('y', b.cy - b.h / 2 - number - 4);
@@ -288,6 +289,7 @@
                     const ed = createSvgGraph.router ? S.edges.find(x => x.id === rec.id) : null;
                     const ep = (ed && createSvgGraph.router(S, ed, a, b)) || edgePath(a, b);
                     if (rec.path) rec.path.setAttribute('d', ep.d);
+                    if (rec.cible) rec.cible.setAttribute('d', ep.d);
                     if (rec.text) {
                         rec.text.setAttribute('x', ep.mx);
                         rec.text.setAttribute('y', ep.my - 3);
@@ -309,7 +311,8 @@
                         s: g.getAttribute('data-s'),
                         t: g.getAttribute('data-t'),
                         loop: g.getAttribute('data-loop'),
-                        path: g.querySelector('path'),
+                        path: g.querySelector('path:not(.usvge-cible)'),
+                        cible: g.querySelector('.usvge-cible'),
                         text: g.querySelector('text')
                     };
                     if (!rec.s) return;
@@ -326,17 +329,24 @@
                     dragId = null,
                     last = null,
                     moved = 0,
+                    lienVise = null,
                     sg = null;
                 const clicks = {};
                 svg.addEventListener('mousedown', ev => {
                     const ng = ev.target.closest('.usvgn');
+                    lienVise = null;
                     if (ng) {
                         mode = 'node';
                         dragId = ng.getAttribute('data-id');
                         sg = pt(ev);
                         moved = 0;
                     } else {
+                        // Un lien ne se déplace pas : on retient celui que l'on vise, et l'on continue de
+                        // permettre le déplacement de la vue. Le clic ne part qu'au relâchement, sans geste.
+                        const eg = ev.target.closest('.usvge');
+                        if (eg) lienVise = eg.getAttribute('data-id');
                         mode = 'pan';
+                        moved = 0;
                         last = { x: ev.clientX, y: ev.clientY };
                     }
                     ev.preventDefault();
@@ -348,6 +358,9 @@
                             S.tx += ev.clientX - last.x;
                             S.ty += ev.clientY - last.y;
                             last = { x: ev.clientX, y: ev.clientY };
+                            // On compte aussi le déplacement de la vue : déplacer le schéma en partant
+                            // d'un lien ne doit pas être pris pour un clic sur ce lien.
+                            moved++;
                             apply();
                         } else if (mode === 'node') {
                             const g = pt(ev);
@@ -368,6 +381,7 @@
                 window.addEventListener(
                     'mouseup',
                     (S._mu = () => {
+                        if (mode === 'pan' && lienVise && moved < 3) fire('edge:click', lienVise);
                         if (mode === 'node' && dragId && moved >= 3) moveNode(dragId);
                         if (mode === 'node' && moved < 3 && dragId) {
                             const now = Date.now();

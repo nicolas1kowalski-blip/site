@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.26.0';
+        const V13_VERSION = '13.27.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.27.0',
+                d: '2026-09-22',
+                t: 'Parcours de la donnée : tout s’ouvre au clic, y compris les traits',
+                items: [
+                    'Le clic sur une case ne marchait que pour les objets métier. Il vaut maintenant pour <b>tout ce qui est dessiné</b> : une <b>application</b> ou un <b>processus</b> ouvre sa carte dans « Applications & processus », amenée sous les yeux et surlignée ; un <b>attribut</b> ouvre la fiche de l’objet qui le porte ; un <b>fichier</b> ouvre sa fiche du catalogue, colonne par colonne. La case « Application non déclarée » dit quoi faire au lieu d’ouvrir le vide.',
+                    '<b>Un clic sur un trait dit ce qui y passe.</b> Le schéma disait « cette application alimente cet objet » ; il ne disait pas QUOI. Un panneau s’ouvre au-dessus du schéma et liste chaque information qui transite, avec l’objet métier auquel elle appartient et <b>d’où elle vient</b> — « SEGMENTS · CODE », « repris de Personne », « application source de cet attribut », « utilisé par Reporting ». Tout est déduit des rattachements déjà saisis : rien à ressaisir.',
+                    'Et quand un trait ne porte encore aucune information, il le dit franchement plutôt que de laisser croire à un panneau vide.',
+                    'Côté schéma, un <b>trait invisible de 14 pixels</b> est posé sur chaque lien : viser un trait d’un pixel à la souris était impossible. Déplacer le schéma en partant d’un trait n’ouvre pas le panneau — le clic ne compte que s’il n’y a pas eu de geste.'
+                ]
+            },
             {
                 v: '13.26.0',
                 d: '2026-09-22',

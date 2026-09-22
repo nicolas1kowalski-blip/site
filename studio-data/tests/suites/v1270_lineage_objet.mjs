@@ -79,10 +79,9 @@ const out = await p.evaluate(async (seed)=>{
     state.tables['tz2']={id:'tz2',name:'BOUCLE_B',type:'designed',status:'ready',headers:['ID'],config:{},
       columnsMeta:{},design:{sources:[{src:'BOUCLE_A'}],joins:[]}};
     return lineageApplicationDerriere('BOUCLE_A')===null; })());
-  ok('et cliquer sur autre chose ne fait rien du tout', (()=>{
+  ok('et cliquer sur un objet qui n\'existe pas ne fait rien du tout', (()=>{
     govState.selectedBoId='bo1';
-    return lineageOuvrirLaFiche('tbl:CLIENTS')===false && lineageOuvrirLaFiche('as:app1')===false
-      && lineageOuvrirLaFiche('bo:inconnu')===false && govState.selectedBoId==='bo1'; })());
+    return lineageOuvrirLaFiche('bo:inconnu')===false && govState.selectedBoId==='bo1'; })());
   ok('la vue « objets » branche ce clic sur le graphe', /lineageOuvrirLaFiche/.test(String(v12LinRender)));
   // Et le graphe du catalogue, pour de vrai : on clique sur la case « Personne » du parcours de Contrat.
   ok('un vrai clic sur la case d\'un objet, dans le catalogue, ouvre sa fiche', await (async ()=>{
@@ -99,7 +98,94 @@ const out = await p.evaluate(async (seed)=>{
     await wait(150);
     return govState.tab==='objects' && govState.selectedBoId==='bo1';
   })());
-  ok('et l\'invite le dit, sinon personne n\'essaie', /Cliquez sur un objet/.test(lineageInviteAuClic()));
+  ok('et l\'invite le dit, sinon personne n\'essaie',
+    /Cliquez sur une case/.test(lineageInviteAuClic()) && /sur un trait/.test(lineageInviteAuClic()));
+  // ---- cliquer sur les autres cases ----
+  switchTab(20); await wait(150);
+  ok('une application s\'ouvre sur sa carte, onglet Applications & processus', (()=>{
+    govState.tab='objects';
+    return lineageOuvrirLaFiche('as:app1')===true && govState.tab==='assets'
+      && !!el('gov-asset-app1'); })());
+  ok('un attribut ouvre la fiche de l\'objet qui le porte', (()=>{
+    govState.tab='assets'; govState.selectedBoId=null;
+    return lineageOuvrirLaFiche('attr:e5')===true && govState.tab==='objects' && govState.selectedBoId==='bo2'; })());
+  ok('un fichier ouvre sa fiche du catalogue', (()=>{
+    govState.tab='objects';
+    return lineageOuvrirLaFiche('tbl:CLIENTS')===true && govState.tab==='catalog'; })());
+  ok('et la case « Application non déclarée » dit quoi faire au lieu d\'ouvrir le vide',
+    lineageOuvrirLaFiche(LINEAGE_SANS_APPLICATION)===false);
+  ok('ce qui n\'existe pas ne s\'ouvre pas', lineageOuvrirLaFiche('tbl:INCONNUE')===false
+    && lineageOuvrirLaFiche('as:inconnue')===false && lineageOuvrirLaFiche('attr:inconnu')===false
+    && lineageOuvrirLaFiche('col:main')===false);
+  // ---- cliquer sur un trait : ce qui y passe ----
+  const gLien=buildBoLineageGraph(BO('bo2'));
+  const lienDe=(s,t2)=>(gLien.edges.find(e=>e.source===s && e.target===t2)||{}).id;
+  ok('un trait application → objet rend les attributs que cette application alimente', (()=>{
+    const d=lineageDonneesDuLien(gLien, lienDe('as:app3','bo:bo2'));
+    return d && d.lignes.length===1 && d.lignes[0].nom==='Score' && d.lignes[0].objet==='Contrat'
+      && /application source/.test(d.lignes[0].detail) && /1 information/.test(d.phrase); })());
+  ok('et il nomme les deux bouts et le rôle du trait', (()=>{
+    const d=lineageDonneesDuLien(gLien, lienDe('as:app3','bo:bo2'));
+    return /Scoring/.test(d.depuis) && /Contrat/.test(d.vers) && /produit 1 attribut/.test(d.role); })());
+  ok('un trait qui passe par un fichier dit DE QUELLE COLONNE vient chaque information', (()=>{
+    const d=lineageDonneesDuLien(gLien, lienDe('as:app4','bo:bo2'));
+    return d && d.lignes.some(l=>l.nom==='Segment' && /SEGMENTS · CODE/.test(l.detail)); })());
+  ok('un trait entre deux objets rend ce que l\'aval reprend de l\'amont', (()=>{
+    const d=lineageDonneesDuLien(gLien, lienDe('bo:bo1','bo:bo2'));
+    return d && d.lignes.length===1 && d.lignes[0].nom==='Adresse de risque'
+      && /repris de Personne/.test(d.lignes[0].detail); })());
+  ok('un trait vers un consommateur rend ce qu\'il utilise', (()=>{
+    const d=lineageDonneesDuLien(gLien, lienDe('bo:bo2','as:pr1'));
+    return d && d.lignes.some(l=>l.nom==='Adresse de risque' && /utilisé par/.test(l.detail)); })());
+  ok('avec les fichiers affichés, le trait fichier → objet marche aussi', (()=>{
+    const gf2=buildBoLineageGraph(BO('bo2'),{files:true});
+    const id=(gf2.edges.find(e=>e.source==='tbl:SEGMENTS' && e.target==='bo:bo2')||{}).id;
+    const d=lineageDonneesDuLien(gf2, id);
+    return d && d.lignes.some(l=>l.nom==='Segment' && /SEGMENTS · CODE/.test(l.detail)); })());
+  ok('un trait sans aucune information rattachée le dit franchement, sans mentir', (()=>{
+    const d=lineageDonneesDuLien(gLien, lienDe('bo:bo2','bo:bo4'));
+    return d && d.lignes.length===0 && /Aucune information/.test(d.phrase); })());
+  ok('et un lien qui n\'existe pas ne rend rien', lineageDonneesDuLien(gLien,'nexistepas')===null);
+  ok('le panneau du lien s\'ouvre au-dessus du schéma, et se referme', (()=>{
+    if (!el('attrLineageWrap'))
+      document.body.insertAdjacentHTML('beforeend', '<div><div id="attrLineageWrap"></div></div>');
+    const wrap=el('attrLineageWrap');
+    const pose=lineageAfficherLeLien(wrap, gLien, lienDe('as:app3','bo:bo2'));
+    const boite=el('lineageLienBox');
+    const vu=pose && boite && /Score/.test(boite.textContent) && /Scoring/.test(boite.textContent);
+    lineageFermerLeLien();
+    return vu && !el('lineageLienBox'); })());
+  ok('la vue « objets » branche ce clic sur les traits', /edge:click/.test(String(v12LinRender)));
+  // Et pour de vrai dans le catalogue : on clique sur le trait « Personne → Contrat ».
+  ok('un vrai clic sur un trait, dans le catalogue, dit ce qui y passe', await (async ()=>{
+    switchTab(20); openGovTab('catalog'); await wait(200);
+    if (!el('catLineageBox')) document.body.insertAdjacentHTML('beforeend', '<div id="catLineageBox" class="hidden"></div>');
+    lineageFermerLeLien();
+    catShowAttrLineage({ type:'bo', bo:'bo2', title:'Contrat' });
+    await wait(250);
+    const wrap=el('catLineageWrap');
+    const donnees=lineageDonneesDuLien(buildBoLineageGraph(BO('bo2')), lienDe('bo:bo1','bo:bo2'));
+    const trait=wrap && wrap.querySelector('.usvge[data-id="' + donnees.id + '"] .usvge-cible');
+    if (!trait) return false;
+    trait.dispatchEvent(new MouseEvent('mousedown', { bubbles:true, clientX:10, clientY:10 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles:true, clientX:10, clientY:10 }));
+    await wait(150);
+    const boite=el('lineageLienBox');
+    return !!boite && /Adresse de risque/.test(boite.textContent) && /repris de Personne/.test(boite.textContent);
+  })());
+  ok('et déplacer le schéma en partant d\'un trait n\'ouvre pas ce panneau', await (async ()=>{
+    lineageFermerLeLien();
+    const wrap=el('catLineageWrap');
+    const donnees=lineageDonneesDuLien(buildBoLineageGraph(BO('bo2')), lienDe('bo:bo1','bo:bo2'));
+    const trait=wrap && wrap.querySelector('.usvge[data-id="' + donnees.id + '"] .usvge-cible');
+    if (!trait) return false;
+    trait.dispatchEvent(new MouseEvent('mousedown', { bubbles:true, clientX:10, clientY:10 }));
+    for (let pas=1; pas<=6; pas++)
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles:true, clientX:10+pas*6, clientY:10 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles:true, clientX:46, clientY:10 }));
+    await wait(150);
+    return !el('lineageLienBox');
+  })());
 
   // mode fichiers
   const gf=buildBoLineageGraph(BO('bo2'),{files:true});

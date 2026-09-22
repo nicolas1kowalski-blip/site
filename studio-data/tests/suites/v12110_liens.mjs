@@ -25,7 +25,7 @@ const r1 = await p.evaluate(async ({seed,isV13})=>{
   for (let i=1;i<=5;i++){ nodes.push({id:'T'+i,type:'studio-rich-node',title:'Cible '+i,content:'objet'}); edges.push({id:'e'+i,source:'A',target:'T'+i,label:'alimente'}); }
   ['S1','S2','S3'].forEach((s,i)=>{ nodes.push({id:s,type:'studio-rich-node',title:'Amont '+s,content:'appli'}); edges.push({id:'f'+i,source:s,target:'A',label:'produit'}); });
   const g=createSvgGraph(host); g.data({nodes,edges}); g.render(); g.fitView();
-  const paths=[...host.querySelectorAll('.usvge')].map(x=>({id:x.getAttribute('data-id'),d:x.querySelector('path').getAttribute('d')}));
+  const paths=[...host.querySelectorAll('.usvge')].map(x=>({id:x.getAttribute('data-id'),d:x.querySelector('path:not(.usvge-cible)').getAttribute('d')}));
   const start=d=>d.match(/^M ([\d.-]+) ([\d.-]+)/).slice(1,3).map(Number); const end=d=>{ const m=[...d.matchAll(/L ([\d.-]+) ([\d.-]+)/g)]; return m.length? m[m.length-1].slice(1,3).map(Number):null; };
   const outs=paths.filter(x=>/^e/.test(x.id)); const ys=new Set(outs.map(x=>start(x.d)[1]));
   ok('5 liens partant de la même case : 5 points d\'attache distincts sur son côté droit', ys.size===5 && outs.every(x=>start(x.d)[0]===start(outs[0].d)[0]));
@@ -36,7 +36,7 @@ const r1 = await p.evaluate(async ({seed,isV13})=>{
   ok('aucun tracé identique, angles arrondis (Q), étiquettes avec halo', new Set(paths.map(x=>x.d)).size===paths.length && paths.some(x=>/Q /.test(x.d)) && getComputedStyle(host.querySelector('.usvg-lbl')).paintOrder.includes('stroke'));
   ok('calque de mise en avant présent', !!host.querySelector('.uvp > .utop'));
   // tracé d'origine
-  v12LinesSet(false); g.render(); const c=[...host.querySelectorAll('.usvge path')].map(x=>x.getAttribute('d'));
+  v12LinesSet(false); g.render(); const c=[...host.querySelectorAll('.usvge path:not(.usvge-cible)')].map(x=>x.getAttribute('d'));
   ok('interrupteur « liens courbes » : tracé d\'origine (courbes C, même point de départ)', c.every(d=>/ C /.test(d)) && v12State.linesOrtho===false);
   v12LinesSet(true); g.render();
   window.__g=g;
@@ -50,11 +50,11 @@ try {
   await p.mouse.move(box.x+box.width/2, box.y+box.height/2); await p.waitForTimeout(80);
   const hov = await p.evaluate(()=>{ const top=document.querySelector('#v12lnTest .utop'); return { n: top.querySelectorAll('.usvge').length, on: top.querySelectorAll('.usvge-on').length, t: [...top.querySelectorAll('.usvge')].map(x=>x.getAttribute('data-id')) }; });
   ok('survol d\'une case : ses liens passent au-dessus (calque du dessus), en gras', hov.n===1 && hov.on===1 && hov.t[0]==='e3');
-  const before = await p.evaluate(()=>[...document.querySelectorAll('#v12lnTest .usvge')].map(x=>x.getAttribute('data-id')+'|'+x.querySelector('path').getAttribute('d')));
+  const before = await p.evaluate(()=>[...document.querySelectorAll('#v12lnTest .usvge')].map(x=>x.getAttribute('data-id')+'|'+x.querySelector('path:not(.usvge-cible)').getAttribute('d')));
   await p.mouse.down(); await p.mouse.move(box.x+box.width/2+40, box.y+box.height/2+150, {steps:8}); await p.waitForTimeout(80);
   const during = await p.evaluate(()=>({ drag: document.querySelector('#v12lnTest svg').classList.contains('usvg-drag'), top: document.querySelector('#v12lnTest .utop').querySelectorAll('.usvge-on').length }));
   await p.mouse.up(); await p.waitForTimeout(80);
-  const after = await p.evaluate(()=>{ const all=[...document.querySelectorAll('#v12lnTest .usvge')].map(x=>x.getAttribute('data-id')+'|'+x.querySelector('path').getAttribute('d')); const ds=[...document.querySelectorAll('#v12lnTest .usvge path')].map(x=>x.getAttribute('d')); const outs=[...document.querySelectorAll('#v12lnTest .usvge')].filter(x=>x.getAttribute('data-s')==='A').map(x=>x.querySelector('path').getAttribute('d').match(/^M ([\d.-]+) ([\d.-]+)/)[2]); return { all, uniq: new Set(ds).size===ds.length, starts: new Set(outs).size, drag: document.querySelector('#v12lnTest svg').classList.contains('usvg-drag') }; });
+  const after = await p.evaluate(()=>{ const all=[...document.querySelectorAll('#v12lnTest .usvge')].map(x=>x.getAttribute('data-id')+'|'+x.querySelector('path:not(.usvge-cible)').getAttribute('d')); const ds=[...document.querySelectorAll('#v12lnTest .usvge path:not(.usvge-cible)')].map(x=>x.getAttribute('d')); const outs=[...document.querySelectorAll('#v12lnTest .usvge')].filter(x=>x.getAttribute('data-s')==='A').map(x=>x.querySelector('path:not(.usvge-cible)').getAttribute('d').match(/^M ([\d.-]+) ([\d.-]+)/)[2]); return { all, uniq: new Set(ds).size===ds.length, starts: new Set(outs).size, drag: document.querySelector('#v12lnTest svg').classList.contains('usvg-drag') }; });
   ok('pendant le déplacement : la case est en mode déplacement, ses liens en gras au-dessus', during.drag && during.top===1);
   ok('après déplacement de « Cible 3 » : son lien et les points d\'attache des autres sont recalculés, aucun tracé ne se superpose', before.find(x=>x.startsWith('e3|'))!==after.all.find(x=>x.startsWith('e3|')) && after.uniq && after.starts===5 && !after.drag);
   // chevauchement : on pose Cible 1 sur Source A → le lien contourne par le haut, visible
@@ -70,9 +70,9 @@ const r2 = await p.evaluate(async (seed)=>{
   try {
   document.getElementById('v12lnTest').remove(); eval(seed); govState.lineageFiles=false;
   govState.selectedBoId='bo2'; v11State.edit['bo:bo2']=true; openGovTab('objects'); setBoTab('usage'); await wait(100); openBoLineage('bo2'); await wait(250);
-  const w=el('attrLineageWrap'); const ds=[...w.querySelectorAll('.usvge path')].map(x=>x.getAttribute('d'));
+  const w=el('attrLineageWrap'); const ds=[...w.querySelectorAll('.usvge path:not(.usvge-cible)')].map(x=>x.getAttribute('d'));
   ok('lineage de l\'objet : ' + ds.length + ' liens, tous distincts, à angles droits', ds.length>=6 && new Set(ds).size===ds.length && ds.some(d=>/Q /.test(d)) && w.querySelector('.utop'));
-  const into=[...w.querySelectorAll('.usvge[data-t="bo:bo2"] path')].map(x=>{ const m=[...x.getAttribute('d').matchAll(/L ([\d.-]+) ([\d.-]+)/g)]; return m[m.length-1][2]; });
+  const into=[...w.querySelectorAll('.usvge[data-t="bo:bo2"] path:not(.usvge-cible)')].map(x=>{ const m=[...x.getAttribute('d').matchAll(/L ([\d.-]+) ([\d.-]+)/g)]; return m[m.length-1][2]; });
   ok('liens arrivant sur « Contrat » : points d\'entrée tous différents', new Set(into).size===into.length && into.length>=3);
   let threw=false; try { openGovTab('lineage'); govState.lineageView='graph'; renderLineageGraph(); } catch(e){ threw=true; } ok('carte des flux rendue avec le nouveau tracé, sans exception', !threw);
   ok('palette : action liens droits / courbes ; lexique', v11Index().some(it=>/liens/i.test(it.label) && /Graphes/.test(it.label)) && !!V11_LEXIQUE['liens lisibles']);

@@ -1229,6 +1229,9 @@
                     const nodeId = ev && ev.item && ev.item.getID ? ev.item.getID() : ev && ev.id;
                     if (nodeId) lineageOuvrirLaFiche(nodeId);
                 });
+                catAttrLineageGraph.on('edge:click', ev => {
+                    if (ev && ev.id) lineageAfficherLeLien(el('catLineageWrap'), data, ev.id);
+                });
                 catFitLineage(60);
                 catFitLineage(340); // re-cadrage après la transition d'élargissement du drawer
             } catch (e3) {

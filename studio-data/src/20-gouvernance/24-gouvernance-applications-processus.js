@@ -170,7 +170,7 @@
                             const _dom = String(a.domain || '').trim();
                             const _lock =
                                 typeof govLockAttr === 'function' ? govLockAttr(govCanEdit(_dom), govCanPropose(_dom)) : '';
-                            return `<div${_lock} class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">${_lock ? govLockBand(a.name, _dom) : ''}
+                            return `<div${_lock} id="gov-asset-${escapeHTML(a.id)}" class="border border-slate-200 rounded-xl p-3 mb-2 bg-slate-50/50">${_lock ? govLockBand(a.name, _dom) : ''}
                         <div class="flex items-center gap-2 mb-1.5">
                             <span>${ic}</span>
                             <input type="text" value="${escapeHTML(a.name)}" onchange="updateGovAsset('${a.id}','name',this.value)" class="font-bold text-sm border border-slate-300 p-1.5 rounded flex-grow bg-white">

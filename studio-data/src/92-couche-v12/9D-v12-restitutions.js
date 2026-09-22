@@ -448,8 +448,13 @@
                 attrLineageGraph.on('node:click', ev => {
                     const id = ev && ev.item && ev.item.getID ? ev.item.getID() : ev && ev.id;
                     if (id && String(id).startsWith('grp:')) return v12LinToggle(String(id).slice(4));
-                    // Un clic sur un objet métier ouvre sa fiche : c'est le geste que tout le monde tente.
+                    // Un clic sur une case ouvre sa fiche : c'est le geste que tout le monde tente.
                     if (id) lineageOuvrirLaFiche(id);
+                });
+                // Et un clic sur un trait dit ce qui y passe.
+                attrLineageGraph.on('edge:click', ev => {
+                    const id = ev && ev.id;
+                    if (id) lineageAfficherLeLien(wrap, folded, id);
                 });
             } catch (e) {}
             return folded;
