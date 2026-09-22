@@ -82,7 +82,7 @@
                         const tabs = v12BoLinTables(bo);
                         Object.entries(tabs).forEach(([t, info]) => {
                             if (srcTables.has(t)) return;
-                            const own = appOwnerOfSource(t);
+                            const own = lineageApplicationDuFichier(t, files);
                             const what = info.n ? info.n + ' attribut(s)' : 'composant « ' + info.facet + ' »';
                             if (!files && own) {
                                 const id = 'as:' + own.id;
@@ -102,12 +102,27 @@
                                 else if (node && !node.content.includes(t)) node.content += ', ' + t;
                                 return;
                             }
+                            if (!files) {
+                                // Fichier sans application déclarée : la case « non déclarée » le porte,
+                                // pour qu'aucun fichier ne s'affiche quand la case est décochée.
+                                add(lineageNoeudSansApplication());
+                                lineageViaSansApplication(graph.nodes, t);
+                                if (!edge(LINEAGE_SANS_APPLICATION, boId))
+                                    graph.edges.push({
+                                        id: 'v12tsa' + t,
+                                        source: LINEAGE_SANS_APPLICATION,
+                                        target: boId,
+                                        label: 'alimente ' + what,
+                                        style: LINEAGE_TRAIT_SANS_APPLICATION
+                                    });
+                                return;
+                            }
                             const tid = 'tbl:' + t;
                             add({
                                 id: tid,
                                 type: 'studio-rich-node',
                                 title: '▦ ' + t,
-                                content: 'alimente ' + what + (own ? '' : ' · sans application'),
+                                content: 'alimente ' + what,
                                 fill: '#dbeafe',
                                 stroke: '#2563eb'
                             });

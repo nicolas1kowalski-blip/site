@@ -36,6 +36,71 @@ const out = await p.evaluate(async (seed)=>{
   ok('consommateur d\'attribut conservé : Reporting « utilise 1 attribut(s) »', N('as:pr1') && E('bo:bo2','as:pr1'));
   ok('Gestion des contrats n\'est pas compté comme lecteur de sa propre table', !/lit CONTRATS/.test((E('bo:bo2','as:app2')||{}).label||''));
   ok('pas de doublon de nœud, pas de « aucune source / aucun usage »', new Set(g.nodes.map(n=>n.id)).size===g.nodes.length && !N('nosrc') && !N('nouse'));
+  // ---- « Afficher les fichiers » décoché : plus AUCUNE case de fichier ----
+  // La règle n'était appliquée que si une application était déclarée pour le fichier. SINISTRES n'a
+  // aucune application : la case bleue « ▦ SINISTRES » restait dessinée, case décochée.
+  const sansFichiers=buildBoLineageGraph(BO('bo3'));
+  ok('aucun fichier n\'est dessiné quand la case est décochée, même sans application déclarée',
+    !sansFichiers.nodes.some(n=>String(n.id).startsWith('tbl:')));
+  ok('le fichier est porté par une case « Application non déclarée », qui le cite', (()=>{
+    const sans=sansFichiers.nodes.find(n=>n.id===LINEAGE_SANS_APPLICATION);
+    return sans && /Application non déclarée/.test(sans.title) && /SINISTRES/.test(sans.content)
+      && sansFichiers.edges.some(e=>e.source===LINEAGE_SANS_APPLICATION && e.target==='bo:bo3'); })());
+  ok('et l\'objet n\'est donc pas déclaré « sans source »', !sansFichiers.nodes.some(n=>n.id==='nosrc'));
+  ok('avec la case cochée, le fichier revient : rien n\'est perdu', (()=>{
+    const avec=buildBoLineageGraph(BO('bo3'),{files:true});
+    return avec.nodes.some(n=>n.id==='tbl:SINISTRES')
+      && !avec.nodes.some(n=>n.id===LINEAGE_SANS_APPLICATION); })());
+  ok('une table destinataire sans application ne se dessine pas non plus', (()=>{
+    const aval={id:'boX',name:'Aval',definition:'',globalOwner:'',contributors:[],producedBy:[],
+      sources:[{table:'SINISTRES',role:'destinataire'}],structure:[],elements:[]};
+    const g2=buildBoLineageGraph(aval);
+    return !g2.nodes.some(n=>String(n.id).startsWith('tbl:'))
+      && g2.edges.some(e=>e.source==='bo:boX' && e.target===LINEAGE_SANS_APPLICATION); })());
+  // ---- cliquer sur une case d'objet ouvre sa fiche ----
+  ok('cliquer sur un objet métier ouvre sa fiche, onglet Objets', (()=>{
+    govState.tab='catalog'; govState.selectedBoId=null;
+    const fait=lineageOuvrirLaFiche('bo:bo1');
+    return fait===true && govState.tab==='objects' && govState.selectedBoId==='bo1'; })());
+  ok('effacer un fichier ne coupe pas la chaîne : on remonte à l\'application qui est derrière', (()=>{
+    // CONCUE est bâtie sur SEGMENTS, que produit Référentiel produits. Sans fichiers, c\'est cette
+    // application-là qui doit apparaître, pas une case « non déclarée » qui perdrait la piste.
+    state.tables['tc']={id:'tc',name:'CONCUE',type:'designed',status:'ready',headers:['CODE'],config:{},
+      columnsMeta:{},design:{sources:[{src:'SEGMENTS'}],joins:[]}};
+    const bo={id:'boY',name:'Conçu',definition:'',globalOwner:'',contributors:[],producedBy:[],
+      sources:[{table:'CONCUE',role:'maitre'}],structure:[],elements:[]};
+    const g2=buildBoLineageGraph(bo);
+    return lineageApplicationDerriere('CONCUE') && lineageApplicationDerriere('CONCUE').id==='app4'
+      && g2.nodes.some(n=>n.id==='as:app4') && /CONCUE/.test((g2.nodes.find(n=>n.id==='as:app4')||{}).content||'')
+      && !g2.nodes.some(n=>String(n.id).startsWith('tbl:')); })());
+  ok('et une remontée qui tourne en rond s\'arrête au lieu de boucler', (()=>{
+    state.tables['tz']={id:'tz',name:'BOUCLE_A',type:'designed',status:'ready',headers:['ID'],config:{},
+      columnsMeta:{},design:{sources:[{src:'BOUCLE_B'}],joins:[]}};
+    state.tables['tz2']={id:'tz2',name:'BOUCLE_B',type:'designed',status:'ready',headers:['ID'],config:{},
+      columnsMeta:{},design:{sources:[{src:'BOUCLE_A'}],joins:[]}};
+    return lineageApplicationDerriere('BOUCLE_A')===null; })());
+  ok('et cliquer sur autre chose ne fait rien du tout', (()=>{
+    govState.selectedBoId='bo1';
+    return lineageOuvrirLaFiche('tbl:CLIENTS')===false && lineageOuvrirLaFiche('as:app1')===false
+      && lineageOuvrirLaFiche('bo:inconnu')===false && govState.selectedBoId==='bo1'; })());
+  ok('la vue « objets » branche ce clic sur le graphe', /lineageOuvrirLaFiche/.test(String(v12LinRender)));
+  // Et le graphe du catalogue, pour de vrai : on clique sur la case « Personne » du parcours de Contrat.
+  ok('un vrai clic sur la case d\'un objet, dans le catalogue, ouvre sa fiche', await (async ()=>{
+    switchTab(20); openGovTab('catalog'); await wait(200);
+    // L'encart du parcours vit dans le tiroir d'une fiche : on le pose pour l'exercer seul.
+    if (!el('catLineageBox')) document.body.insertAdjacentHTML('beforeend', '<div id="catLineageBox" class="hidden"></div>');
+    govState.selectedBoId=null;
+    catShowAttrLineage({ type:'bo', bo:'bo2', title:'Contrat' });
+    await wait(250);
+    const caseObjet = el('catLineageWrap') && el('catLineageWrap').querySelector('.usvgn[data-id="bo:bo1"]');
+    if (!caseObjet) return false;
+    const coup = type => caseObjet.dispatchEvent(new MouseEvent(type, { bubbles:true, clientX:10, clientY:10 }));
+    coup('mousedown'); window.dispatchEvent(new MouseEvent('mouseup', { bubbles:true, clientX:10, clientY:10 }));
+    await wait(150);
+    return govState.tab==='objects' && govState.selectedBoId==='bo1';
+  })());
+  ok('et l\'invite le dit, sinon personne n\'essaie', /Cliquez sur un objet/.test(lineageInviteAuClic()));
+
   // mode fichiers
   const gf=buildBoLineageGraph(BO('bo2'),{files:true});
   ok('avec fichiers : SEGMENTS en table produite par Référentiel produits, alimente Contrat', gf.nodes.some(n=>n.id==='tbl:SEGMENTS') && gf.edges.some(e=>e.source==='as:app4' && e.target==='tbl:SEGMENTS') && gf.edges.some(e=>e.source==='tbl:SEGMENTS' && e.target==='bo:bo2'));

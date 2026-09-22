@@ -1208,6 +1208,7 @@
                 <span class="text-xs font-bold text-indigo-800">🕸 Lineage de « ${escapeHTML(e2.title)} »${isBo ? ' <span class="font-normal text-slate-500">— ' + (lineageFilesOn() ? 'applications → fichiers → objet → usages' : 'applications → objet → usages') + '</span>' : ''}</span>
                 <span class="flex items-center gap-2.5">
                     ${isBo || (e2.type === 'column' && buildColumnLineageGraph._viaAttr) ? lineageFilesToggleHtml() : ''}
+                    ${lineageInviteAuClic()}
                     ${isBo ? `<button data-ro="keep" onclick="catGoLineageTab()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Ouvrir la vue par attribut de l'onglet Lineage">↗ Par attribut</button>` : ''}
                     <button data-ro="keep" onclick="catLineageFullscreen()" class="text-[11px] bg-white border border-slate-300 px-2 py-0.5 rounded font-bold text-slate-600 hover:bg-slate-100" title="Afficher en plein écran">⛶ Agrandir</button>
                     <button data-ro="keep" onclick="catCloseLineage()" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
@@ -1223,6 +1224,11 @@
                 catAttrLineageGraph.data(data);
                 catAttrLineageGraph.render();
                 catAttrLineageGraph.fitView(20);
+                // Un clic sur un objet métier ouvre sa fiche, tiroir refermé : c'est le geste attendu.
+                catAttrLineageGraph.on('node:click', ev => {
+                    const nodeId = ev && ev.item && ev.item.getID ? ev.item.getID() : ev && ev.id;
+                    if (nodeId) lineageOuvrirLaFiche(nodeId);
+                });
                 catFitLineage(60);
                 catFitLineage(340); // re-cadrage après la transition d'élargissement du drawer
             } catch (e3) {

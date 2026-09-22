@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-21T15:41:17.938Z",
+ "generated": "2026-09-22T15:35:28.316Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 49613,
-  "codeLines": 46989,
-  "commentLines": 2624,
-  "templateLines": 9846,
+  "lines": 49776,
+  "codeLines": 47114,
+  "commentLines": 2662,
+  "templateLines": 9858,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6537,
+  "locals": 6554,
   "shortLocals": 836,
-  "functions": 1635,
+  "functions": 1642,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12788741012696955
+  "shortLocalsRatio": 0.1275556911809582
  },
  "files": [
   {
@@ -245,17 +245,17 @@
   },
   {
    "file": "20-gouvernance/22-gouvernance-objets-metier.js",
-   "lines": 4066,
-   "codeLines": 3904,
-   "commentLines": 162,
-   "templateLines": 912,
+   "lines": 4192,
+   "codeLines": 3997,
+   "commentLines": 195,
+   "templateLines": 918,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 573,
+   "locals": 588,
    "shortLocals": 53,
-   "functions": 157,
+   "functions": 164,
    "longestLogic": 150,
-   "shortLocalsRatio": 0.0924956369982548
+   "shortLocalsRatio": 0.09013605442176871
   },
   {
    "file": "20-gouvernance/23-gouvernance-perimetres.js",
@@ -371,17 +371,17 @@
   },
   {
    "file": "20-gouvernance/2B-gouvernance-catalogue.js",
-   "lines": 1296,
-   "codeLines": 1257,
-   "commentLines": 39,
-   "templateLines": 241,
+   "lines": 1302,
+   "codeLines": 1262,
+   "commentLines": 40,
+   "templateLines": 242,
    "longLogicLines": 1,
    "multiStatementLines": 0,
-   "locals": 146,
+   "locals": 147,
    "shortLocals": 36,
    "functions": 37,
    "longestLogic": 185,
-   "shortLocalsRatio": 0.2465753424657534,
+   "shortLocalsRatio": 0.24489795918367346,
    "longLinesSample": [
     "${srcs.map(s2 => row('▦', s2.table, 'source ' + (ROLE2[s2.role] || s2.role || '') + ' (donnée technique)', { t"
    ]
@@ -965,9 +965,9 @@
   },
   {
    "file": "92-couche-v12/9C-v12-lineage-objet.js",
-   "lines": 479,
-   "codeLines": 461,
-   "commentLines": 18,
+   "lines": 494,
+   "codeLines": 474,
+   "commentLines": 20,
    "templateLines": 35,
    "longLogicLines": 1,
    "multiStatementLines": 0,
@@ -982,9 +982,9 @@
   },
   {
    "file": "92-couche-v12/9D-v12-restitutions.js",
-   "lines": 713,
-   "codeLines": 694,
-   "commentLines": 19,
+   "lines": 715,
+   "codeLines": 695,
+   "commentLines": 20,
    "templateLines": 116,
    "longLogicLines": 0,
    "multiStatementLines": 0,
@@ -996,17 +996,17 @@
   },
   {
    "file": "92-couche-v12/9E-v12-amont-complet.js",
-   "lines": 631,
-   "codeLines": 592,
-   "commentLines": 39,
-   "templateLines": 42,
+   "lines": 634,
+   "codeLines": 594,
+   "commentLines": 40,
+   "templateLines": 41,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 97,
+   "locals": 98,
    "shortLocals": 20,
    "functions": 15,
    "longestLogic": 126,
-   "shortLocalsRatio": 0.20618556701030927
+   "shortLocalsRatio": 0.20408163265306123
   },
   {
    "file": "92-couche-v12/9F-v12-liens-lisibles.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 322,
-   "codeLines": 320,
+   "lines": 333,
+   "codeLines": 331,
    "commentLines": 2,
-   "templateLines": 162,
+   "templateLines": 168,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

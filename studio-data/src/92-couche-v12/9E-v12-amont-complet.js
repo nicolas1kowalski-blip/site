@@ -102,16 +102,19 @@
             };
             const tblOrOwner = (t, labelTbl, labelApp) => {
                 // sans fichiers : l'application propriétaire remplace le fichier ; sinon le fichier, puis son producteur
-                const own = typeof appOwnerOfSource === 'function' ? appOwnerOfSource(t) : null;
+                const own = lineageApplicationDuFichier(t, files);
                 if (!files && own) {
                     push(v12UpAppNode(own), (labelApp || 'alimente') + ' via ' + t, V12_UP_STYLE.GRAY);
                     return;
                 }
-                push(
-                    v12UpTblNode(t, own ? 'fichier' : 'fichier · sans application'),
-                    labelTbl || 'alimente',
-                    V12_UP_STYLE.BLUE
-                );
+                if (!files) {
+                    // Rien derrière ce fichier non plus : la case « Application non déclarée » le porte.
+                    const sans = lineageNoeudSansApplication();
+                    sans.content = 'via ' + t;
+                    push(sans, (labelApp || 'alimente') + ' via ' + t, LINEAGE_TRAIT_SANS_APPLICATION);
+                    return;
+                }
+                push(v12UpTblNode(t, 'fichier'), labelTbl || 'alimente', V12_UP_STYLE.BLUE);
             };
             if (base.startsWith('as:')) {
                 const asset = assetById(base.slice(3));

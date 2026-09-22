@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.25.0';
+        const V13_VERSION = '13.26.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.26.0',
+                d: '2026-09-22',
+                t: 'Parcours de la donnée : plus de fichiers quand on n’en veut pas, et un clic ouvre la fiche',
+                items: [
+                    '<b>« 📄 Afficher les fichiers » décochée, des fichiers apparaissaient quand même</b> — une case bleue « ▦ NOMFICHIER » au milieu d’un graphe censé n’en montrer aucune. La règle n’était appliquée que si une <i>application</i> était déclarée pour le fichier ; sans application, le fichier restait dessiné. C’est pourtant le cas le plus courant : un fichier reçu que personne n’a encore rattaché.',
+                    'Avant d’effacer un fichier du graphe, l’application <b>regarde ce qu’il y a derrière</b> : un fichier sans application est souvent construit à partir d’un autre, lui-même produit par une application — c’est elle qui s’affiche alors, « via LE_FICHIER ». Sans cette remontée, décocher la case aurait coupé la chaîne au lieu de la simplifier.',
+                    'Et quand il n’y a vraiment rien derrière, les fichiers sont portés par une case unique <b>« ❔ Application non déclarée »</b> qui les cite tous. La lecture reste application → objet, rien n’est perdu, et le trou de gouvernance se voit au lieu d’être caché derrière une case bleue de plus. Les <b>quatre</b> endroits qui fabriquaient ces cases partagent désormais la même règle : sources amont, tables destinataires, tables des attributs, et la remontée « tout l’amont ».',
+                    '<b>Cliquer sur un objet métier dans le schéma ouvre sa fiche</b>, dans l’onglet Objets, tiroir du catalogue refermé. Lire un parcours donnait envie d’ouvrir ce qu’on y voyait, et il fallait ressortir, retrouver l’onglet, rechercher le nom. Une invite le dit à côté du titre — sans elle, personne n’essaie.'
+                ]
+            },
             {
                 v: '13.25.0',
                 d: '2026-09-21',

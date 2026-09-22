@@ -375,7 +375,7 @@
             if (!box) return;
             box.classList.remove('hidden');
             _lineageRedraw = () => openAttrLineage(boId, stId, elId);
-            box.innerHTML = `<div class="flex items-center justify-between gap-2 flex-wrap mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'attribut « ${escapeHTML(e2.name)} »${facet ? ' <span class="text-emerald-600">◆ ' + escapeHTML(facet.name) + '</span>' : ''}</span><span class="flex items-center gap-3">${lineageFilesToggleHtml()}<button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
+            box.innerHTML = `<div class="flex items-center justify-between gap-2 flex-wrap mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'attribut « ${escapeHTML(e2.name)} »${facet ? ' <span class="text-emerald-600">◆ ' + escapeHTML(facet.name) + '</span>' : ''}</span><span class="flex items-center gap-3">${lineageInviteAuClic()}${lineageFilesToggleHtml()}<button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
                 <div id="attrLineageWrap" class="h-[300px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
             const { nodes, edges } = buildAttrLineageGraph(bo, facet, e2);
             if (attrLineageGraph) {
@@ -673,6 +673,105 @@
             }
             return !!govState.lineageFiles;
         }
+        /*
+         * « Afficher les fichiers » décoché : aucun fichier ne doit apparaître, jamais.
+         *
+         * La règle n'était appliquée que si une application était déclarée pour le fichier. Sans
+         * application, le fichier restait dessiné — une case bleue « ▦ NOMFICHIER » au milieu d'un graphe
+         * censé n'en montrer aucune. Or c'est le cas le plus fréquent : un fichier reçu que personne n'a
+         * encore rattaché à une application.
+         *
+         * On le remplace donc par une case unique « Application non déclarée » : la forme
+         * application → objet est conservée, les fichiers concernés sont cités dessus, et le trou de
+         * gouvernance se voit au lieu d'être caché derrière une case bleue de plus.
+         */
+        const LINEAGE_SANS_APPLICATION = 'as:__sans_application';
+        function lineageNoeudSansApplication() {
+            return {
+                id: LINEAGE_SANS_APPLICATION,
+                type: 'studio-rich-node',
+                title: '❔ Application non déclarée',
+                content: 'fichier(s) à rattacher',
+                fill: '#fef9c3',
+                stroke: '#ca8a04'
+            };
+        }
+        /** Le « via » se cumule sur cette case comme sur celle d'une vraie application. */
+        function lineageViaSansApplication(nodes, table) {
+            const node = (nodes || []).find(n => n.id === LINEAGE_SANS_APPLICATION);
+            if (!node) return;
+            const deja = /^via /.test(node.content || '') ? node.content.slice(4).split(', ') : [];
+            if (!deja.includes(table)) deja.push(table);
+            node.content = 'via ' + deja.join(', ');
+        }
+        const LINEAGE_TRAIT_SANS_APPLICATION = { stroke: '#ca8a04', endArrow: { path: '', fill: '#ca8a04' } };
+        /** Jusqu'où l'on remonte de fichier en fichier pour retrouver une application. */
+        const LINEAGE_PROFONDEUR_DERRIERE = 5;
+        /** Les fichiers dont celui-ci est issu : table conçue, ou origine tracée dans la gouvernance. */
+        function lineageFichiersAmont(table) {
+            const amont = new Set();
+            const connue = typeof tableByName === 'function' ? tableByName(table) : null;
+            if (connue && connue.design) {
+                (connue.design.sources || []).forEach(s => s && s.src && amont.add(s.src));
+                (connue.design.joins || []).forEach(j => {
+                    if (j && j.src) amont.add(j.src);
+                    if (j && j.viaSrc) amont.add(j.viaSrc);
+                });
+            }
+            (((state.governance || {}).lineage || {})[table] || {}).from &&
+                state.governance.lineage[table].from.forEach(src => {
+                    if (src && typeof tableByName === 'function' && tableByName(src)) amont.add(src);
+                });
+            return Array.from(amont);
+        }
+        /**
+         * L'application qui se trouve DERRIÈRE un fichier sans application déclarée.
+         *
+         * Effacer un tel fichier du graphe ne suffit pas : il est souvent construit à partir d'un autre,
+         * lui-même produit par une application. Sans cette remontée, décocher « Afficher les fichiers »
+         * couperait la chaîne au lieu de la simplifier. On remonte donc de proche en proche, sans jamais
+         * repasser deux fois par le même fichier.
+         */
+        function lineageApplicationDerriere(table) {
+            const vus = new Set([table]);
+            let file = lineageFichiersAmont(table);
+            for (let profondeur = 0; profondeur < LINEAGE_PROFONDEUR_DERRIERE && file.length; profondeur++) {
+                const suivants = [];
+                for (const amont of file) {
+                    if (vus.has(amont)) continue;
+                    vus.add(amont);
+                    const application = typeof appOwnerOfSource === 'function' ? appOwnerOfSource(amont) : null;
+                    if (application) return application;
+                    suivants.push.apply(suivants, lineageFichiersAmont(amont));
+                }
+                file = suivants;
+            }
+            return null;
+        }
+        /** L'application à faire figurer à la place d'un fichier, directe ou retrouvée derrière lui. */
+        function lineageApplicationDuFichier(table, files) {
+            const directe = typeof appOwnerOfSource === 'function' ? appOwnerOfSource(table) : null;
+            return directe || (files ? null : lineageApplicationDerriere(table));
+        }
+        /**
+         * Ouvrir la fiche de ce qu'une case du graphe représente. Les identifiants sont ceux que posent
+         * les constructeurs de graphe : « bo:… » est un objet métier. Lire un parcours donnait envie
+         * d'ouvrir l'objet qu'on y voyait, et il fallait ressortir, retrouver l'onglet, rechercher le nom.
+         * Rend true quand une fiche a été ouverte, pour que l'appelant sache qu'il n'a plus rien à faire.
+         */
+        function lineageOuvrirLaFiche(id) {
+            const nom = String(id || '');
+            if (!nom.startsWith('bo:')) return false;
+            const bo = (state.governance.businessObjects || []).find(x => x.id === nom.slice(3));
+            if (!bo) return false;
+            if (typeof closeUxDrawer === 'function') closeUxDrawer();
+            openBoFiche(bo.id);
+            return true;
+        }
+        /** La phrase qui dit que les cases sont cliquables : sans elle, personne n'essaie. */
+        function lineageInviteAuClic() {
+            return '<span class="text-[10px] text-slate-400 font-normal">Cliquez sur un objet 🏛️ pour ouvrir sa fiche</span>';
+        }
         let _lineageRedraw = null;
         function lineageFilesSet(on) {
             govState.lineageFiles = !!on;
@@ -725,7 +824,7 @@
             (bo.sources || [])
                 .filter(s2 => s2 && s2.table && s2.role !== 'destinataire')
                 .forEach((s2, i) => {
-                    const own = appOwnerOfSource(s2.table);
+                    const own = lineageApplicationDuFichier(s2.table, files);
                     if (!files && own) {
                         // Sans fichiers : l'application produit directement l'objet ; la table est citée sur le nœud.
                         add(appNode(own));
@@ -745,14 +844,29 @@
                             });
                         return;
                     }
+                    if (!files) {
+                        // Aucune application déclarée pour ce fichier : on ne le dessine pas pour autant.
+                        add(lineageNoeudSansApplication());
+                        lineageViaSansApplication(nodes, s2.table);
+                        if (!edges.some(e => e.source === LINEAGE_SANS_APPLICATION && e.target === boId))
+                            edges.push({
+                                id: 'epbsa',
+                                source: LINEAGE_SANS_APPLICATION,
+                                target: boId,
+                                label: s2.role === 'maitre' ? 'produit (maître)' : 'contribue',
+                                style: Object.assign(
+                                    { lineWidth: s2.role === 'maitre' ? 2 : 1 },
+                                    LINEAGE_TRAIT_SANS_APPLICATION
+                                )
+                            });
+                        return;
+                    }
                     const tid = 'tbl:' + s2.table;
                     add({
                         id: tid,
                         type: 'studio-rich-node',
                         title: '▦ ' + s2.table,
-                        content:
-                            (s2.role === 'maitre' ? 'source maître' : 'source contributrice') +
-                            (!files ? ' · sans application' : ''),
+                        content: s2.role === 'maitre' ? 'source maître' : 'source contributrice',
                         fill: '#dbeafe',
                         stroke: '#2563eb'
                     });
@@ -824,7 +938,7 @@
                 .forEach((s2, i) => {
                     if (!files) {
                         // Sans fichiers : la table destinataire est remplacée par l'application qui la lit.
-                        const own = appOwnerOfSource(s2.table);
+                        const own = lineageApplicationDuFichier(s2.table, files);
                         if (own) {
                             if (!cons.has(own.id) && !edges.some(e => e.source === boId && e.target === 'as:' + own.id)) {
                                 add(appNode(own));
@@ -840,6 +954,18 @@
                             if (node && !/via /.test(node.content || '')) node.content = 'via ' + s2.table;
                             return;
                         }
+                        // Là non plus, pas de case bleue : la table destinataire passe par la case « non déclarée ».
+                        add(lineageNoeudSansApplication());
+                        lineageViaSansApplication(nodes, s2.table);
+                        if (!edges.some(e => e.source === boId && e.target === LINEAGE_SANS_APPLICATION))
+                            edges.push({
+                                id: 'edsa',
+                                source: boId,
+                                target: LINEAGE_SANS_APPLICATION,
+                                label: ROLE.destinataire,
+                                style: LINEAGE_TRAIT_SANS_APPLICATION
+                            });
+                        return;
                     }
                     const tid = 'tbl:' + s2.table;
                     add({
@@ -902,7 +1028,7 @@
             if (!box) return;
             box.classList.remove('hidden');
             _lineageRedraw = () => openBoLineage(boId);
-            box.innerHTML = `<div class="flex items-center justify-between gap-2 flex-wrap mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'objet « ${escapeHTML(bo.name)} » <span class="font-normal text-slate-500">— ${lineageFilesOn() ? 'applications → fichiers → objet → usages' : 'applications → objet → usages'}</span></span><span class="flex items-center gap-3">${lineageFilesToggleHtml()}<button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
+            box.innerHTML = `<div class="flex items-center justify-between gap-2 flex-wrap mb-2"><span class="text-xs font-bold text-indigo-800">🕸 Lineage de l'objet « ${escapeHTML(bo.name)} » <span class="font-normal text-slate-500">— ${lineageFilesOn() ? 'applications → fichiers → objet → usages' : 'applications → objet → usages'}</span></span><span class="flex items-center gap-3">${lineageInviteAuClic()}${lineageFilesToggleHtml()}<button onclick="el('attrLineageBox').classList.add('hidden')" class="text-slate-400 hover:text-red-500 font-bold text-xs">✕ fermer</button></span></div>
                 <div id="attrLineageWrap" class="h-[340px] border border-slate-100 rounded-lg bg-slate-50/50"></div>`;
             if (attrLineageGraph) {
                 try {
