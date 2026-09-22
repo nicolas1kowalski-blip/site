@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.27.0';
+        const V13_VERSION = '13.28.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.28.0',
+                d: '2026-09-22',
+                t: 'Plein écran d’un schéma : une planche à dessin, plus un fond gris',
+                items: [
+                    'En plein écran, les schémas s’affichaient sur un <b>gris terne</b> où les couleurs des cases se noyaient. La cause : ces cadres sont <b>translucides</b> (un blanc à 50 %), et le navigateur pose du <b>noir</b> derrière un élément en plein écran — blanc à moitié transparent sur noir donne du gris.',
+                    'Le schéma occupe maintenant l’écran sur un <b>fond plein</b>, avec une <b>trame de points fine</b> qui aide l’œil à situer les cases et à mesurer les distances, et de l’air tout autour. Le cadre et les coins arrondis, qui n’ont plus de sens quand on occupe l’écran entier, disparaissent.',
+                    'En <b>thème sombre</b>, la planche est sombre au lieu de brûler les yeux.',
+                    'La règle vaut pour <b>tous les schémas</b> : parcours d’un objet, parcours du catalogue, carte des flux, modèle de données, graphe de l’extraction.'
+                ]
+            },
             {
                 v: '13.27.0',
                 d: '2026-09-22',

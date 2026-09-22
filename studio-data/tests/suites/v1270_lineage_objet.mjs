@@ -210,6 +210,46 @@ const out = await p.evaluate(async (seed)=>{
   } catch(e) { R.push(['ERREUR '+e.message+' @ '+String(e.stack).split('\n')[1], false]); }
   return R;
 }, seed);
+// ---- le plein écran d'un schéma : une planche à dessin, pas un fond gris ----
+// Ces conteneurs sont translucides ; en plein écran le navigateur pose du NOIR derrière, et le blanc
+// à moitié transparent vire au gris terne. On vérifie sur un vrai plein écran, pas sur le CSS écrit.
+const okFs=(n,c)=>out.push([n,!!c]);
+const planche = await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  document.body.insertAdjacentHTML('beforeend',
+    '<button id="zzFs" style="position:fixed;left:2px;top:2px;z-index:99999">fs</button>');
+  el('zzFs').addEventListener('click', ()=>{ el('attrLineageWrap').requestFullscreen(); });
+  await wait(20);
+  return true;
+});
+await p.click('#zzFs'); await p.waitForTimeout(400);
+const vuEnGrand = await p.evaluate(()=>{
+  const wrap = el('attrLineageWrap');
+  const style = getComputedStyle(wrap);
+  return { plein: wrap === document.fullscreenElement, fond: style.backgroundColor,
+    trame: style.backgroundImage, marge: style.padding, cadre: style.borderTopWidth,
+    haut: Math.round(wrap.getBoundingClientRect().height) };
+});
+okFs('en plein écran, le schéma a un fond PLEIN — plus de translucide qui vire au gris sur le noir',
+  vuEnGrand.plein && vuEnGrand.fond === 'rgb(255, 255, 255)');
+okFs('il porte une trame de points, qui aide l\'œil à situer les cases', /radial-gradient/.test(vuEnGrand.trame));
+okFs('il occupe l\'écran, avec de l\'air autour et sans cadre',
+  vuEnGrand.haut >= 600 && vuEnGrand.marge === '18px' && vuEnGrand.cadre === '0px');
+const enSombre = await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  document.documentElement.setAttribute('data-theme','dark');
+  await wait(60);
+  const style = getComputedStyle(el('attrLineageWrap'));
+  return { fond: style.backgroundColor, trame: style.backgroundImage };
+});
+okFs('et en thème sombre, la planche est sombre au lieu de brûler les yeux',
+  enSombre.fond === 'rgb(11, 17, 32)' && /radial-gradient/.test(enSombre.trame));
+await p.evaluate(()=>{ document.documentElement.removeAttribute('data-theme'); return document.exitFullscreen().catch(()=>{}); });
+await p.waitForTimeout(200);
+okFs('en sortant du plein écran, le schéma redevient ce qu\'il était',
+  await p.evaluate(()=>{ const s=getComputedStyle(el('attrLineageWrap'));
+    return !document.fullscreenElement && s.padding === '0px' && s.backgroundImage === 'none'; }));
+
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));
 for (const theme of ['light','dark']) {
