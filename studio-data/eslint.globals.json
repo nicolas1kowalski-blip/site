@@ -1704,6 +1704,7 @@
  "V13_CHANGELOG": "readonly",
  "v13Save": "writable",
  "v13TournuresMetier": "writable",
+ "v13MotsDeLaBulle": "writable",
  "v13HelpBand": "writable",
  "v13WordsHtml": "writable",
  "v13State": "readonly",

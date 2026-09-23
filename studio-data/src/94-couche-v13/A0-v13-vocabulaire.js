@@ -193,6 +193,25 @@
                 paire[0].nodeValue = paire[1];
             });
         }
+        // La bulle d'un trait du schéma est du texte pur : le promeneur ci-dessus,
+        // qui ne travaille que sur les écrans, ne la voit pas. On repasse donc la
+        // phrase dans les mots du métier au moment où elle est écrite.
+        function v13MotsDeLaBulle(phrase) {
+            return String(phrase || '')
+                .split('attribut(s)')
+                .join('information(s)')
+                .split('attributs')
+                .join('informations')
+                .split('attribut')
+                .join('information');
+        }
+        Studio.extend(
+            'lineagePhraseDuLien',
+            base =>
+                function (graphe, identifiantDuLien) {
+                    return v13MotsDeLaBulle(base(graphe, identifiantDuLien));
+                }
+        );
         function v13HelpBand(tab) {
             const h = V13_HELP[tab];
             if (!h || v13State.helpOff[tab]) return '';

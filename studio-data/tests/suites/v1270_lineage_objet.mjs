@@ -368,6 +368,15 @@ okFs('la phrase nomme les informations qui passent, et se borne quand il y en a 
   return /Personne/.test(phrase) && /→/.test(phrase) && /Contrat/.test(phrase)
     && /Adresse de risque/.test(phrase) && /1 information\(s\)/.test(phrase) && !!beaucoup;
 }));
+okFs('et la bulle parle le vocabulaire de l\'application : « informations » en V13, « attributs » avant', await p.evaluate(()=>{
+  const graphe = buildBoLineageGraph((state.governance.businessObjects||[]).find(b=>b.id==='bo2'));
+  const lien = graphe.edges.find(e=>e.source==='bo:bo2' && /pr1/.test(e.target));
+  if (!lien) return false;
+  const phrase = lineagePhraseDuLien(graphe, lien.id);
+  // Les mots du métier sont apportés par la couche V13 : ailleurs, « attribut » reste juste.
+  if (typeof V13_VERSION === 'undefined') return /attribut\(s\)/.test(phrase);
+  return /information\(s\)/.test(phrase) && !/attribut/.test(phrase);
+}));
 okFs('un lien sans rien qui y circule le dit, au lieu de laisser une bulle vide', await p.evaluate(()=>{
   const graphe = buildBoLineageGraph((state.governance.businessObjects||[]).find(b=>b.id==='bo2'));
   const vide = graphe.edges.find(e=>e.source==='bo:bo2' && e.target==='bo:bo4');

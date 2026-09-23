@@ -1,7 +1,15 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.32.0';
+        const V13_VERSION = '13.33.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.33.0',
+                d: '2026-09-23',
+                t: 'La bulle d’un trait parle, elle aussi, les mots du métier',
+                items: [
+                    'La bulle d’un trait est du texte pur : la traduction des écrans, qui travaille sur ce qui est affiché, ne la voyait pas. Elle disait donc encore « 3 attribut(s) ». Elle dit maintenant <b>« 3 information(s) »</b>, comme partout ailleurs en V13.'
+                ]
+            },
             {
                 v: '13.32.0',
                 d: '2026-09-23',
