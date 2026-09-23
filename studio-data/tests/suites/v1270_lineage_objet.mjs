@@ -200,11 +200,23 @@ const out = await p.evaluate(async (seed)=>{
   const rows=v12BoLinSynth(BO('bo2'), g);
   ok('synthèse : une ligne par élément relié, amont avant aval, rôles renseignés', rows.length===g.nodes.length-1 && rows[0].dir==='amont' && rows.every(r=>r.how) && rows.some(r=>r.title.includes('Scoring') && r.kind==='application' && r.dir==='amont') && rows.some(r=>r.title.includes('Sinistre') && r.dir==='aval' && r.kind==='objet'));
   // ouverture réelle
-  govState.selectedBoId='bo2'; v11State.edit['bo:bo2']=true; openGovTab('objects'); setBoTab('usage'); await wait(100); openBoLineage('bo2'); await wait(200);
+  // switchTab(20) : dessiné dans un écran caché, le schéma garde une taille nulle et rien n'y est visable.
+  switchTab(20); govState.selectedBoId='bo2'; v11State.edit['bo:bo2']=true; openGovTab('objects'); setBoTab('usage'); await wait(150); openBoLineage('bo2'); await wait(250);
   const box=el('attrLineageBox');
   ok('panneau Synthèse au-dessus du graphe : compteurs amont / aval', box && box.querySelector('.v12bl-synth') && /application\(s\) source/.test(box.textContent) && /objet\(s\) amont/.test(box.textContent) && /objet\(s\) aval/.test(box.textContent) && /processus/.test(box.textContent));
   ok('liste « Tout ce qui est relié » : ' + rows.length + ' lignes, Scoring et Produit présents', box.querySelectorAll('.v12bl-tbl tbody tr').length===rows.length && /Scoring/.test(box.textContent) && /Produit/.test(box.textContent));
   ok('graphe rendu avec une hauteur adaptée (> 300 px)', el('attrLineageWrap').querySelector('svg') && parseInt(el('attrLineageWrap').style.height)>=300);
+  // Le trait est-il ATTEIGNABLE à la souris ? Envoyer l'événement à l'élément prouve que le code
+  // s'exécute, pas qu'on peut le viser. Ce qui rend un trait visable, c'est la cible large posée
+  // par-dessus : assez épaisse pour être touchée, et qui ne refuse pas la souris.
+  ok('chaque trait porte une cible large, qui ne refuse pas la souris', (()=>{
+    const cibles = Array.from(el('attrLineageWrap').querySelectorAll('.usvge .usvge-cible'));
+    const traits = el('attrLineageWrap').querySelectorAll('.usvge[data-id]');
+    if (!cibles.length || cibles.length !== traits.length) return false;
+    return cibles.every(cible => {
+      const style = getComputedStyle(cible);
+      return parseFloat(style.strokeWidth) >= 10 && style.pointerEvents !== 'none';
+    }); })());
   openBoLineage('bo2'); await wait(100); ok('réouverture : un seul panneau Synthèse', box.querySelectorAll('.v12bl-synth').length===1);
   // objet vide
   const g4=buildBoLineageGraph(BO('bo4')); ok('objet sans rattachement propre : « référencé par Contrat » ; une référence n\'est ni une source ni un usage, les rappels « aucune source / aucun usage » restent', g4.nodes.some(n=>n.id==='bo:bo2') && g4.edges.some(e=>e.source==='bo:bo2' && e.target==='bo:bo4' && /référencé par/.test(e.label)) && g4.nodes.some(n=>n.id==='nosrc') && g4.nodes.some(n=>n.id==='nouse'));
@@ -320,9 +332,65 @@ okFs('un vrai clic sur un trait de cet écran dit ce qui y passe', await p.evalu
   lineageFermerLeLien();
   return vu;
 }));
+okFs('et chaque trait porte au survol la phrase de ce qui y circule', await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  switchTab(20); govState.selectedBoId='bo2'; openGovTab('objects'); setBoTab('usage'); await wait(150);
+  openBoLineage('bo2'); await wait(300);
+  const traits = Array.from((el('attrLineageWrap')||document.createElement('div')).querySelectorAll('.usvge[data-id]'));
+  if (!traits.length) return false;
+  return traits.every(trait => {
+    const bulle = trait.querySelector(':scope > title');
+    return bulle && /→/.test(bulle.textContent);
+  });
+}));
+okFs('la bulle reste du texte : le remplacement des émojis par des icônes n\'y sème pas de tracés', await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  switchTab(20); govState.selectedBoId='bo2'; openGovTab('objects'); setBoTab('usage'); await wait(150);
+  openBoLineage('bo2'); await wait(300);
+  try { v7Deemojify(document.body); } catch (e) { return false; }
+  const cadre = el('attrLineageWrap');
+  if (!cadre) return false;
+  const traits = Array.from(cadre.querySelectorAll('.usvge[data-id]'));
+  // Une infobulle qui ne contient que du texte, et un seul tracé visible par trait.
+  const bullesPropres = traits.every(trait => {
+    const bulle = trait.querySelector(':scope > title');
+    return bulle && bulle.children.length === 0;
+  });
+  const traces = cadre.querySelectorAll('.usvge path:not(.usvge-cible)').length;
+  return traits.length > 0 && bullesPropres && traces === traits.length;
+}));
+okFs('la phrase nomme les informations qui passent, et se borne quand il y en a beaucoup', await p.evaluate(()=>{
+  const graphe = buildBoLineageGraph((state.governance.businessObjects||[]).find(b=>b.id==='bo2'));
+  const lien = graphe.edges.find(e=>e.source==='bo:bo1' && e.target==='bo:bo2');
+  const phrase = lineagePhraseDuLien(graphe, lien.id);
+  const beaucoup = lineagePhraseDuLien({ nodes: graphe.nodes,
+    edges: [Object.assign({}, lien, { id: 'zz' })] }, 'zz');
+  return /Personne/.test(phrase) && /→/.test(phrase) && /Contrat/.test(phrase)
+    && /Adresse de risque/.test(phrase) && /1 information\(s\)/.test(phrase) && !!beaucoup;
+}));
+okFs('un lien sans rien qui y circule le dit, au lieu de laisser une bulle vide', await p.evaluate(()=>{
+  const graphe = buildBoLineageGraph((state.governance.businessObjects||[]).find(b=>b.id==='bo2'));
+  const vide = graphe.edges.find(e=>e.source==='bo:bo2' && e.target==='bo:bo4');
+  return /Aucune information rattachée/.test(lineagePhraseDuLien(graphe, vide.id)); }));
+okFs('la carte des flux, qui ne peut pas être cliquée, porte les mêmes infobulles', await p.evaluate(async ()=>{
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  openGovTab('flow'); await wait(400);
+  const toile = el('lfCanvas');
+  if (!toile) return false;
+  const liens = Array.from(toile.querySelectorAll('.lf-lien'));
+  if (!liens.length) return false;
+  const parlants = liens.filter(lien => lien.querySelector('title'));
+  const visables = liens.filter(lien => lien.querySelector('.lf-cible'));
+  return parlants.length > 0 && visables.length === liens.length;
+}));
+
 okFs('et un double clic sur une case y ouvre sa fiche', await p.evaluate(async ()=>{
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
-  const caseObjet = el('lineageGraphWrap').querySelector('.usvgn[data-id^="bo:"]');
+  // On revient sur l'écran Lineage : les contrôles de l'infobulle sont passés par la carte des flux.
+  openGovTab('lineage'); govState.lineageView='graph';
+  try { renderLineageGraph(); } catch (e) { return false; }
+  await wait(400);
+  const caseObjet = el('lineageGraphWrap') && el('lineageGraphWrap').querySelector('.usvgn[data-id^="bo:"]');
   if (!caseObjet) return false;
   const attendu = caseObjet.getAttribute('data-id').slice(3);
   govState.tab='lineage'; govState.selectedBoId=null;

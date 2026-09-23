@@ -259,8 +259,14 @@
             'CODE',
             'PRE',
             'TD',
-            'TH'
+            'TH',
+            // Une infobulle SVG (<title>) ne contient que du texte : y coller une
+            // icône casserait la bulle et sèmerait des tracés dans le schéma.
+            'TITLE'
         ]);
+        // Dans un schéma SVG, les noms de balise s'écrivent en minuscules :
+        // on compare toujours en majuscules pour que « svg » et « title » soient vus.
+        const nomDeBalise = element => String(element.tagName || '').toUpperCase();
         const V7_SKIP_IDS = new Set(['advGCanvas', 'lfCanvas', 'tdgCanvas', 'v7Nav']);
 
         function v7Deemojify(root) {
@@ -272,7 +278,7 @@
                     V7_ANY_RE.lastIndex = 0;
                     if (!V7_ANY_RE.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
                     for (let p = node.parentElement; p && p !== root; p = p.parentElement) {
-                        if (V7_SKIP_TAGS.has(p.tagName) || V7_SKIP_IDS.has(p.id) || p.isContentEditable)
+                        if (V7_SKIP_TAGS.has(nomDeBalise(p)) || V7_SKIP_IDS.has(p.id) || p.isContentEditable)
                             return NodeFilter.FILTER_REJECT;
                     }
                     return NodeFilter.FILTER_ACCEPT;

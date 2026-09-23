@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-22T19:46:03.257Z",
+ "generated": "2026-09-23T09:09:56.414Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50162,
-  "codeLines": 47431,
-  "commentLines": 2731,
-  "templateLines": 9941,
+  "lines": 50263,
+  "codeLines": 47500,
+  "commentLines": 2763,
+  "templateLines": 9951,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6594,
+  "locals": 6609,
   "shortLocals": 837,
-  "functions": 1650,
+  "functions": 1654,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12693357597816196
+  "shortLocalsRatio": 0.12664548343168408
  },
  "files": [
   {
@@ -119,17 +119,17 @@
   },
   {
    "file": "10-noyau/15-noyau-navigation-theme.js",
-   "lines": 480,
-   "codeLines": 449,
-   "commentLines": 31,
+   "lines": 486,
+   "codeLines": 451,
+   "commentLines": 35,
    "templateLines": 129,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 45,
+   "locals": 46,
    "shortLocals": 6,
    "functions": 11,
    "longestLogic": 116,
-   "shortLocalsRatio": 0.13333333333333333
+   "shortLocalsRatio": 0.13043478260869565
   },
   {
    "file": "10-noyau/16-noyau-ux-drawer-contexte.js",
@@ -245,17 +245,17 @@
   },
   {
    "file": "20-gouvernance/22-gouvernance-objets-metier.js",
-   "lines": 4403,
-   "codeLines": 4175,
-   "commentLines": 228,
-   "templateLines": 939,
+   "lines": 4440,
+   "codeLines": 4201,
+   "commentLines": 239,
+   "templateLines": 941,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 619,
+   "locals": 627,
    "shortLocals": 53,
-   "functions": 171,
+   "functions": 173,
    "longestLogic": 150,
-   "shortLocalsRatio": 0.08562197092084006
+   "shortLocalsRatio": 0.08452950558213716
   },
   {
    "file": "20-gouvernance/23-gouvernance-perimetres.js",
@@ -371,8 +371,8 @@
   },
   {
    "file": "20-gouvernance/2B-gouvernance-catalogue.js",
-   "lines": 1305,
-   "codeLines": 1265,
+   "lines": 1306,
+   "codeLines": 1266,
    "commentLines": 40,
    "templateLines": 242,
    "longLogicLines": 1,
@@ -402,8 +402,8 @@
   },
   {
    "file": "30-lineage-graphes/30-lineage-par-attribut.js",
-   "lines": 714,
-   "codeLines": 687,
+   "lines": 715,
+   "codeLines": 688,
    "commentLines": 27,
    "templateLines": 59,
    "longLogicLines": 0,
@@ -416,17 +416,17 @@
   },
   {
    "file": "30-lineage-graphes/31-lineage-carte-des-flux.js",
-   "lines": 2947,
-   "codeLines": 2795,
-   "commentLines": 152,
-   "templateLines": 595,
+   "lines": 2990,
+   "codeLines": 2822,
+   "commentLines": 168,
+   "templateLines": 597,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 461,
+   "locals": 467,
    "shortLocals": 51,
-   "functions": 83,
+   "functions": 85,
    "longestLogic": 143,
-   "shortLocalsRatio": 0.11062906724511931
+   "shortLocalsRatio": 0.10920770877944326
   },
   {
    "file": "30-lineage-graphes/32-graphes-moteur-svg.js",
@@ -982,9 +982,9 @@
   },
   {
    "file": "92-couche-v12/9D-v12-restitutions.js",
-   "lines": 720,
-   "codeLines": 699,
-   "commentLines": 21,
+   "lines": 722,
+   "codeLines": 700,
+   "commentLines": 22,
    "templateLines": 116,
    "longLogicLines": 0,
    "multiStatementLines": 0,
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 385,
-   "codeLines": 383,
+   "lines": 396,
+   "codeLines": 394,
    "commentLines": 2,
-   "templateLines": 195,
+   "templateLines": 201,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

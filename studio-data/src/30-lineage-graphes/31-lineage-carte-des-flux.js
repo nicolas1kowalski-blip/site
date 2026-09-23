@@ -270,6 +270,37 @@
         function lfNodeKind(n) {
             return (n && n.kind) || 'table';
         }
+        /**
+         * L'identifiant d'un nœud de la carte, traduit dans celui des parcours : « as: » une application,
+         * « bo: » un objet métier, « tbl: » un fichier. C'est ce qui permet de réutiliser, ici, le calcul
+         * de ce qui circule sur un lien — sans quoi il faudrait l'écrire une deuxième fois.
+         */
+        function lfIdentiteDeParcours(flowNode) {
+            if (!flowNode) return '';
+            if (flowNode.assetId) return 'as:' + flowNode.assetId;
+            if (flowNode.boId) return 'bo:' + flowNode.boId;
+            const fichier = flowNode.tableName || (lfNodeKind(flowNode) === 'table' ? flowNode.name : '');
+            return fichier ? 'tbl:' + fichier : '';
+        }
+        /** Ce qui circule sur un lien de la carte, en une phrase, pour l'infobulle du survol. */
+        function lfPhraseDuLien(e) {
+            if (typeof lineagePhraseDuLien !== 'function') return '';
+            const depuis = lfNode(e.source),
+                vers = lfNode(e.target);
+            const deId = lfIdentiteDeParcours(depuis),
+                versId = lfIdentiteDeParcours(vers);
+            if (!deId || !versId) return '';
+            const schema = {
+                nodes: [
+                    { id: deId, title: (depuis && depuis.name) || deId },
+                    { id: versId, title: (vers && vers.name) || versId }
+                ],
+                edges: [{ id: 'lf', source: deId, target: versId, label: LF_RELATIONS[lfEdgeRel(e)] || '' }]
+            };
+            return lineagePhraseDuLien(schema, 'lf');
+        }
+        /** Le rôle d'un lien, dit en français dans l'infobulle. */
+        const LF_RELATIONS = { feeds: 'alimente', writes: 'produit', reads: 'lit' };
         // Nature d'un lien : explicite (rel stocké, ex. issu de la synchro) sinon DÉDUITE des types de
         // nœuds — une application en source = « écrit », en cible = « lit », sinon table→table = « alimente ».
         function lfEdgeRel(e) {
@@ -472,6 +503,9 @@
             #lfCanvas{position:relative;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.06);overflow:hidden;min-height:360px}
             #lfCanvas .lf-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;text-align:center;padding:24px}
             .lf-edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+            /* Seuls les traits répondent à la souris : le reste du calque laisse passer vers les cases. */
+            .lf-edges .lf-lien{pointer-events:auto;cursor:help}
+            .lf-edges .lf-cible{pointer-events:stroke}
             .lf-node{position:absolute;width:208px;background:#fff;border:1.5px solid #d4dbe6;border-radius:12px;padding:10px 12px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.05);cursor:grab;transition:box-shadow .12s,border-color .12s;z-index:2;touch-action:none;user-select:none}
             .lf-node:hover{border-color:#059669;box-shadow:0 6px 18px rgba(5,150,105,.15)}
             .lf-node .lf-nh{display:flex;align-items:center;gap:9px}
@@ -930,7 +964,16 @@
                 const col = isUsage ? lfC('usage') : lfC(health);
                 const dash = isUsage || health !== 'ok' ? ' stroke-dasharray="7 5"' : '';
                 const mk = isUsage ? 'usage' : health;
-                paths += `<path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${mk})" opacity=".9"/>`;
+                /*
+                 * Le trait dit au survol ce qui circule dessus.
+                 *
+                 * Cette carte dessine ses liens elle-même, sous un calque transparent à la souris : on ne
+                 * peut pas les cliquer comme dans les autres schémas. Un « title » suffit pourtant à les
+                 * faire parler, et un trait invisible plus large les rend visables — le trait dessiné fait
+                 * deux pixels.
+                 */
+                const bulle = lfPhraseDuLien(e);
+                paths += `<g class="lf-lien" data-edge="${escapeHTML(e.id)}">${bulle ? `<title>${escapeHTML(bulle)}</title>` : ''}<path class="lf-cible" d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="transparent" stroke-width="14"/><path d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${health === 'bad' ? 3 : 2.3}"${dash} marker-end="url(#lfA_${mk})" opacity=".9"/></g>`;
                 const fr = isUsage ? lfFresh(lfNode(e.target)) : lfEdgeFresh(e);
                 const lr = e.lastRun;
                 const _pairs = lfEdgePairs(e);

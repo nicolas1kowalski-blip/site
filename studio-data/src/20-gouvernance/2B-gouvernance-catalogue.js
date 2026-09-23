@@ -1232,6 +1232,7 @@
                 catAttrLineageGraph.on('edge:click', ev => {
                     if (ev && ev.id) lineageAfficherLeLien(el('catLineageWrap'), data, ev.id);
                 });
+                lineageInfobullesDesLiens(el('catLineageWrap'), data);
                 catFitLineage(60);
                 catFitLineage(340); // re-cadrage après la transition d'élargissement du drawer
             } catch (e3) {

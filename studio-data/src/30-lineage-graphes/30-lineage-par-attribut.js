@@ -646,6 +646,7 @@
             lineageGraph.on('edge:click', ev => {
                 if (ev && ev.id) lineageAfficherLeLien(wrap, { nodes, edges: shownEdges }, ev.id);
             });
+            lineageInfobullesDesLiens(wrap, { nodes, edges: shownEdges });
             const linGotoListElement = el('linGotoList');
             if (linGotoListElement)
                 linGotoListElement.innerHTML = nodes.map(n => `<option value="${escapeHTML(n.title)}">`).join('');

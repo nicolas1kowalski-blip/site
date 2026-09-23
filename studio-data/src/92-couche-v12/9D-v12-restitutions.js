@@ -456,6 +456,8 @@
                     const id = ev && ev.id;
                     if (id) lineageAfficherLeLien(wrap, folded, id);
                 });
+                // Au survol, la même chose en une phrase, sans rien ouvrir.
+                lineageInfobullesDesLiens(wrap, folded);
             } catch (e) {}
             return folded;
         }

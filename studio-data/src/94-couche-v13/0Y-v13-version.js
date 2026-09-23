@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.31.0';
+        const V13_VERSION = '13.32.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.32.0',
+                d: '2026-09-23',
+                t: 'Au survol d’un trait, ce qui y circule — y compris là où l’on ne peut pas cliquer',
+                items: [
+                    'La <b>carte des flux</b> dessine ses liens elle-même, sous un calque rendu <b>transparent à la souris</b> : ses traits ne pouvaient pas être cliqués, et ne le pourront pas sans refaire le dessin de l’écran. C’est sans doute là que le clic vous échappait.',
+                    'Chaque trait <b>dit maintenant au survol ce qui y circule</b> : « GMAO Orion → Équipement · produit (maître) — 3 information(s) : Description, Famille, Repère ». La bulle est écrite dans le schéma lui-même, elle marche donc <b>sur tous les schémas</b>, carte des flux comprise, et survit au déplacement des cases.',
+                    'Sur la carte des flux, les traits reçoivent en plus un <b>trait invisible de 14 pixels</b> pour qu’on puisse les survoler : un trait dessiné en fait deux. Le reste du calque laisse toujours passer la souris vers les cases.',
+                    'Quand un trait ne porte aucune information, la bulle le dit plutôt que de s’afficher vide.',
+                    'Au passage : le remplacement des émojis par des icônes <b>n’entre plus dans les schémas</b>. Il croyait déjà les éviter, mais la comparaison des noms de balise ne tenait pas compte des minuscules ; il déposait donc des icônes dans les bulles, ce qui semait des tracés parasites dans le dessin.'
+                ]
+            },
             {
                 v: '13.31.0',
                 d: '2026-09-22',

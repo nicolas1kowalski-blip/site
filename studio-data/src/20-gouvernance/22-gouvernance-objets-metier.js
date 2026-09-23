@@ -969,6 +969,43 @@
                     <button onclick="lineageFermerLeLien()" class="text-indigo-400 hover:text-red-500 font-bold">✕</button>
                 </div>${tableau}</div>`;
         }
+        /** Combien d'informations on nomme dans une infobulle avant de dire « et d'autres ». */
+        const LINEAGE_NOMMEES_AU_SURVOL = 6;
+        /**
+         * Ce qui circule sur un lien, en une phrase courte — de quoi le lire au survol sans rien ouvrir.
+         *
+         * Tous les schémas ne permettent pas de cliquer un trait : la carte des flux dessine ses liens
+         * elle-même, sous une couche transparente à la souris. Le survol, lui, marche partout.
+         */
+        function lineagePhraseDuLien(graph, edgeId) {
+            const donnees = lineageDonneesDuLien(graph, edgeId);
+            if (!donnees) return '';
+            const entete = `${donnees.depuis} → ${donnees.vers}${donnees.role ? ' · ' + donnees.role : ''}`;
+            if (!donnees.lignes.length) return entete + '\nAucune information rattachée à ce lien.';
+            const noms = donnees.lignes.slice(0, LINEAGE_NOMMEES_AU_SURVOL).map(ligne => ligne.nom);
+            const reste = donnees.lignes.length - noms.length;
+            return `${entete}\n${donnees.lignes.length} information(s) : ${noms.join(', ')}${reste > 0 ? ', et ' + reste + ' autre(s)' : ''}`;
+        }
+        /**
+         * Pose l'infobulle sur chaque trait du schéma. En SVG, une balise « title » dans le groupe suffit :
+         * le navigateur l'affiche au survol, sans code ni écouteur, et elle survit au déplacement des cases.
+         */
+        function lineageInfobullesDesLiens(wrap, graph) {
+            if (!wrap) return 0;
+            let posees = 0;
+            wrap.querySelectorAll('.usvge[data-id]').forEach(trait => {
+                const phrase = lineagePhraseDuLien(graph, trait.getAttribute('data-id'));
+                if (!phrase) return;
+                let bulle = trait.querySelector(':scope > title');
+                if (!bulle) {
+                    bulle = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                    trait.insertBefore(bulle, trait.firstChild);
+                }
+                bulle.textContent = phrase;
+                posees++;
+            });
+            return posees;
+        }
         /** Pose ce panneau juste au-dessus du schéma, et rend true quand il y avait un lien à décrire. */
         function lineageAfficherLeLien(wrap, graph, edgeId) {
             const donnees = wrap && wrap.parentElement ? lineageDonneesDuLien(graph, edgeId) : null;
