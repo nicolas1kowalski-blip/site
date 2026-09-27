@@ -26,6 +26,7 @@ namespace MesPremiersJeux.Lib
         public bool PreferCursor;        // (hérité) pointer via le curseur TD Control
         public string GazeDriver = "";   // pilote du regard : auto | direct | pro | curseur
         public string QuickOffset = "";  // décalage du « réglage éclair » (x;y)
+        public string ChildName = "Laura"; // prénom de l'enfant (activité « Mon prénom »)
         public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
         public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
 
@@ -61,6 +62,7 @@ namespace MesPremiersJeux.Lib
                         case "PreferCursor": s.PreferCursor = val == "1" || val.ToLowerInvariant() == "true"; break;
                         case "GazeDriver": s.GazeDriver = val; break;
                         case "QuickOffset": s.QuickOffset = val; break;
+                        case "ChildName": if (val.Length > 0) s.ChildName = val; break;
                         case "SpotifyClientId": s.SpotifyClientId = val; break;
                         case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
                     }
@@ -96,6 +98,7 @@ namespace MesPremiersJeux.Lib
                     "PreferCursor=" + (PreferCursor ? "1" : "0"),
                     "GazeDriver=" + (GazeDriver ?? "auto"),
                     "QuickOffset=" + (QuickOffset ?? ""),
+                    "ChildName=" + (ChildName ?? "Laura"),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

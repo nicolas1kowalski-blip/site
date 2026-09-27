@@ -143,6 +143,7 @@ namespace MesPremiersJeux
             _dwell.SetBiasFromString(_settings.BiasMap);   // correction « étoile »
             _dwell.SetQuickOffsetFromString(_settings.QuickOffset); // réglage éclair
             SyncDriverCombo(); // reflète le pilote choisi dans la liste
+            ChildNameBox.Text = _settings.ChildName; // prénom (« Mon prénom »)
 
             // Bilan de session (carte de chaleur + compteurs).
             SessionLog.Init();
@@ -359,9 +360,20 @@ namespace MesPremiersJeux
             new SessionWindow { Owner = this }.ShowDialog();
         }
 
-        // « Réglage éclair » : une étoile, 3 secondes, recale tout le regard.
-        private void QuickFix_Click(object sender, RoutedEventArgs e)
+        // Prénom de l'enfant : utilisé par l'activité « Mon prénom » (Éducatif).
+        private void ChildName_Changed(object sender, RoutedEventArgs e)
         {
+            if (_settings == null) return;
+            var n = (ChildNameBox.Text ?? "").Trim();
+            if (n.Length == 0) { ChildNameBox.Text = _settings.ChildName; return; }
+            if (n == _settings.ChildName) return;
+            _settings.ChildName = n;
+            _settings.Save();
+            Lib.Log.Write("app", "Prénom de l'enfant : " + n);
+        }
+
+        // « Réglage éclair » : une étoile, 3 secondes, recale tout le regard.
+        private void QuickFix_Click(object sender, RoutedEventArgs e)        {
             SettingsPopup.IsOpen = false;
             var win = new QuickFixWindow { Owner = this };
             if (win.ShowDialog() == true && win.Measured)
