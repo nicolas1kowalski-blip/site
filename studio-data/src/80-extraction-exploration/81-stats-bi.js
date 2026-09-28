@@ -147,13 +147,7 @@
             }
         }
 
-        function statAfficherLeResultat() {
-            const resultat = statDernierResultat;
-            if (!resultat) return;
-            el('chartDisplayArea').classList.remove('hidden');
-            const montrees = resultat.lignes.slice(0, STAT_MAX_BARRES);
-            const reste = resultat.lignes.length - montrees.length;
-
+        function statDessinerLeGraphique(montrees, titre) {
             if (currentChart) currentChart.destroy();
             currentChart = new Chart(el('myChart').getContext('2d'), {
                 type: el('vizType').value,
@@ -161,7 +155,7 @@
                     labels: montrees.map(l => l.axe),
                     datasets: [
                         {
-                            label: resultat.titre,
+                            label: titre,
                             data: montrees.map(l => l.valeur),
                             backgroundColor: [
                                 '#4f46e5',
@@ -180,6 +174,23 @@
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
+        }
+
+        function statAfficherLeResultat() {
+            const resultat = statDernierResultat;
+            if (!resultat) return;
+            el('chartDisplayArea').classList.remove('hidden');
+            const montrees = resultat.lignes.slice(0, STAT_MAX_BARRES);
+            const reste = resultat.lignes.length - montrees.length;
+
+            // Sans la bibliothèque de graphiques (pas d'internet), on garde au moins
+            // les chiffres : le tableau plus bas suffit à répondre à la question.
+            if (typeof Chart === 'undefined') {
+                el('myChart').parentNode.classList.add('hidden');
+            } else {
+                el('myChart').parentNode.classList.remove('hidden');
+                statDessinerLeGraphique(montrees, resultat.titre);
+            }
 
             const nombre = v => (v === null ? '—' : Number.isInteger(v) ? v.toLocaleString('fr-FR') : v.toFixed(2));
             el('statResume').innerHTML =

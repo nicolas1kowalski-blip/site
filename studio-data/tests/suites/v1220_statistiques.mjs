@@ -47,6 +47,17 @@ const out = await p.evaluate(async ()=>{
     statTitreDuCalcul('count','','DATE_ENTREE','annee')==='Nombre de lignes par année de DATE_ENTREE'
     && statTitreDuCalcul('sum','MONTANT','SITE','')==='Somme de MONTANT par SITE');
 
+  // Sans la bibliothèque de graphiques (page de test, ou pas d'internet), les
+  // chiffres doivent quand même s'afficher.
+  statDernierResultat = { titre:'Nombre de lignes par année de DATE_ENTREE', tableau:'INTERVENTIONS',
+    lignes:[{axe:'2023',valeur:2,lignes:2},{axe:'2024',valeur:2,lignes:2}], total:4 };
+  statAfficherLeResultat();
+  ok('sans bibliothèque de graphiques, le tableau des chiffres s’affiche quand même',
+    typeof Chart === 'undefined'
+    && el('myChart').parentNode.classList.contains('hidden')
+    && /2023/.test(el('statTableau').textContent) && /2024/.test(el('statTableau').textContent)
+    && /4 ligne\(s\) analysée\(s\)/.test(el('statResume').textContent));
+
   // Le SQL est vérifié dehors, sur un vrai moteur.
   window.__sql = {
     annee: statSqlDeLAxe('DATE_ENTREE','annee'),

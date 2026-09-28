@@ -1330,6 +1330,7 @@
  "statSqlDeLaMesure": "writable",
  "statTitreDuCalcul": "writable",
  "generateChart": "writable",
+ "statDessinerLeGraphique": "writable",
  "statAfficherLeResultat": "writable",
  "statExporterCsv": "writable",
  "STAT_PERIODES": "readonly",
