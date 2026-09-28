@@ -142,66 +142,130 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(btn);
             }
 
-            var speaker = SpeakerButton(() => "Regarde chaque ballon pour entendre son nombre !");
+            var speaker = SpeakerButton(() => "Regarde chaque ballon pour le faire éclater ! Éclate-les tous !");
             Canvas.SetLeft(speaker, W - 150);
             Canvas.SetTop(speaker, 30);
             _canvas.Children.Add(speaker);
 
             SetBody(_canvas);
-            Schedule(450, () => Speak("La fête des nombres ! Regarde chaque ballon pour entendre son nombre !"));
+            Schedule(450, () => Speak("La fête des nombres ! Regarde chaque ballon pour le faire éclater !"));
         }
 
         private void DiscoverBalloon(Button btn, int n)
         {
-            if (_phase != 1 || Locked) return;
-            Bounce(btn);
+            if (_phase != 1 || Locked || _seen[n]) return;
+            _seen[n] = true;
             Speak(Cap(NWord[n - 1]) + " !");
 
-            // n étoiles éclatent autour du ballon — on VOIT la quantité.
             double cx = Canvas.GetLeft(btn) + btn.Width / 2;
             double cy = Canvas.GetTop(btn) + btn.Height / 2;
-            var rng = new Random();
-            for (int i = 0; i < n; i++)
+
+            // 1) Le ballon gonfle, gonfle…
+            var sc = new ScaleTransform(1, 1);
+            btn.RenderTransform = sc;
+            var inflate = new DoubleAnimation(1, 1.4, TimeSpan.FromMilliseconds(240))
+            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
+            inflate.Completed += (s, e) =>
             {
-                var star = new TextBlock { Text = "⭐", FontSize = 40, IsHitTestVisible = false };
-                star.SetValue(Panel.ZIndexProperty, 60);
-                Canvas.SetLeft(star, cx - 20);
-                Canvas.SetTop(star, cy - 20);
-                _canvas.Children.Add(star);
-                double ang = Math.PI * 2 * i / n - Math.PI / 2;
-                double dist = 130 + rng.Next(40);
+                // 2) … et il EXPLOSE ! POP !
+                btn.Visibility = Visibility.Hidden;
+                btn.IsEnabled = false;
+                GameKit.Success();
+                Burst(cx, cy, ColOf(n));
+
+                // n étoiles jaillissent — on VOIT la quantité.
+                var rng = new Random();
+                for (int i = 0; i < n; i++)
+                {
+                    var star = new TextBlock { Text = "⭐", FontSize = 40, IsHitTestVisible = false };
+                    star.SetValue(Panel.ZIndexProperty, 60);
+                    Canvas.SetLeft(star, cx - 20);
+                    Canvas.SetTop(star, cy - 20);
+                    _canvas.Children.Add(star);
+                    double ang = Math.PI * 2 * i / n - Math.PI / 2;
+                    double dist = 130 + rng.Next(40);
+                    var tt = new TranslateTransform();
+                    star.RenderTransform = tt;
+                    var dur = TimeSpan.FromMilliseconds(800 + rng.Next(300));
+                    tt.BeginAnimation(TranslateTransform.XProperty,
+                        new DoubleAnimation(0, Math.Cos(ang) * dist, dur) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+                    tt.BeginAnimation(TranslateTransform.YProperty,
+                        new DoubleAnimation(0, Math.Sin(ang) * dist, dur) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+                    var fade = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(600) };
+                    var captured = star;
+                    fade.Completed += (s2, e2) => _canvas.Children.Remove(captured);
+                    star.BeginAnimation(UIElement.OpacityProperty, fade);
+                }
+
+                // 3) Le chiffre reste à la place du ballon : on voit ceux qui sont
+                //    faits, et le jeu continue quand TOUS les ballons ont éclaté.
+                var digit = DigitVisual(n, 130);
+                digit.IsHitTestVisible = false;
+                digit.RenderTransformOrigin = new Point(0.5, 0.5);
+                var dsc = new ScaleTransform(0.2, 0.2);
+                digit.RenderTransform = dsc;
+                Canvas.SetLeft(digit, cx - 65);
+                Canvas.SetTop(digit, cy - 65);
+                _canvas.Children.Add(digit);
+                var dpop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(420))
+                { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+                dsc.BeginAnimation(ScaleTransform.ScaleXProperty, dpop);
+                dsc.BeginAnimation(ScaleTransform.ScaleYProperty, dpop);
+
+                if (Enumerable.Range(1, Max).All(k => _seen[k]))
+                {
+                    _phase = 0;
+                    Locked = true;
+                    Speak("Tous les ballons ont éclaté, bravo ! Et maintenant, retrouve les nombres !");
+                    Schedule(2800, () =>
+                    {
+                        _findOrder = GameKit.Shuffle(Enumerable.Range(1, Max));
+                        _findRound = 0;
+                        NextFind();
+                    });
+                }
+            };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, inflate);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, inflate);
+        }
+
+        // L'explosion du ballon : des éclats colorés qui giclent dans tous les sens.
+        private void Burst(double cx, double cy, Color col)
+        {
+            var rng = new Random();
+            for (int i = 0; i < 12; i++)
+            {
+                var shard = new Ellipse
+                {
+                    Width = 10 + rng.Next(16),
+                    Height = 14 + rng.Next(20),
+                    Fill = new SolidColorBrush(Color.FromArgb(0xE6, col.R, col.G, col.B)),
+                    IsHitTestVisible = false,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                };
+                shard.SetValue(Panel.ZIndexProperty, 65);
+                Canvas.SetLeft(shard, cx - 8);
+                Canvas.SetTop(shard, cy - 10);
+                _canvas.Children.Add(shard);
+                double ang = rng.NextDouble() * Math.PI * 2;
+                double dist = 120 + rng.Next(140);
                 var tt = new TranslateTransform();
-                star.RenderTransform = tt;
-                var dur = TimeSpan.FromMilliseconds(800 + rng.Next(300));
+                var rot = new RotateTransform(rng.Next(360));
+                var grp = new TransformGroup();
+                grp.Children.Add(rot);
+                grp.Children.Add(tt);
+                shard.RenderTransform = grp;
+                var dur = TimeSpan.FromMilliseconds(420 + rng.Next(320));
                 tt.BeginAnimation(TranslateTransform.XProperty,
                     new DoubleAnimation(0, Math.Cos(ang) * dist, dur) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
                 tt.BeginAnimation(TranslateTransform.YProperty,
                     new DoubleAnimation(0, Math.Sin(ang) * dist, dur) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
-                var fade = new DoubleAnimation(1, 0, dur) { BeginTime = TimeSpan.FromMilliseconds(600) };
-                var captured = star;
+                rot.BeginAnimation(RotateTransform.AngleProperty,
+                    new DoubleAnimation(rot.Angle, rot.Angle + 360, dur));
+                var fade = new DoubleAnimation(1, 0, dur);
+                var captured = shard;
                 fade.Completed += (s, e) => _canvas.Children.Remove(captured);
-                star.BeginAnimation(UIElement.OpacityProperty, fade);
-            }
-
-            if (!_seen[n])
-            {
-                _seen[n] = true;
-                var badge = new TextBlock { Text = "⭐", FontSize = 30, IsHitTestVisible = false };
-                Canvas.SetLeft(badge, Canvas.GetLeft(btn) + btn.Width - 26);
-                Canvas.SetTop(badge, Canvas.GetTop(btn) - 12);
-                _canvas.Children.Add(badge);
-            }
-            if (Enumerable.Range(1, Max).All(k => _seen[k]))
-            {
-                _phase = 0;
-                Locked = true;
-                Speak("Bravo ! Et maintenant, retrouve les nombres !");
-                Schedule(2600, () =>
-                {
-                    _findOrder = GameKit.Shuffle(Enumerable.Range(1, Max));
-                    _findRound = 0;
-                    NextFind();
-                });
+                shard.BeginAnimation(UIElement.OpacityProperty, fade);
             }
         }
 

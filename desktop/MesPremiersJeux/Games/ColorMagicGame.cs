@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
@@ -92,7 +93,93 @@ namespace MesPremiersJeux.Games
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(size * 0.22, size * 0.44, 0, 0),
             });
+            g.Children.Add(new Ellipse // deuxième goutte, de l'autre côté
+            {
+                Width = size * 0.08,
+                Height = size * 0.13,
+                Fill = new SolidColorBrush(CVal[ci]),
+                VerticalAlignment = VerticalAlignment.Top,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, size * 0.5, size * 0.24, 0),
+            });
+            g.Children.Add(new Border // étiquette colorée collée sur le pot
+            {
+                Width = size * 0.34,
+                Height = size * 0.18,
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(CVal[ci]),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(3),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, size * 0.12),
+            });
+            g.Children.Add(new TextBlock // le pinceau qui dépasse
+            {
+                Text = "🖌",
+                FontSize = size * 0.34,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new RotateTransform(38),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 0, size * 0.02, 0),
+            });
             return g;
+        }
+
+        // Grande tache de peinture (le pot « déjà découvert ») : celui-là est fait !
+        private Grid SplatVisual(int ci, double size)
+        {
+            var g = new Grid { Width = size, Height = size };
+            var col = CVal[ci];
+            void Blob(double w, double h, double x, double y) => g.Children.Add(new Ellipse
+            {
+                Width = w,
+                Height = h,
+                Fill = new SolidColorBrush(col),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(x, y, 0, 0),
+            });
+            Blob(size * 0.62, size * 0.46, size * 0.19, size * 0.27);
+            Blob(size * 0.2, size * 0.16, size * 0.06, size * 0.18);
+            Blob(size * 0.16, size * 0.13, size * 0.74, size * 0.2);
+            Blob(size * 0.15, size * 0.12, size * 0.14, size * 0.66);
+            Blob(size * 0.19, size * 0.15, size * 0.66, size * 0.62);
+            Blob(size * 0.1, size * 0.09, size * 0.46, size * 0.1);
+            g.Children.Add(new TextBlock
+            {
+                Text = "⭐",
+                FontSize = size * 0.24,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            return g;
+        }
+
+        // Silhouette grise d'un emoji (pour « colorier » l'objet une fois trouvé).
+        private static UIElement EmojiSilhouette(string emoji, double size)
+        {
+            var host = new Grid { Width = size, Height = size };
+            host.Children.Add(new TextBlock
+            {
+                Text = emoji,
+                FontSize = size * 0.72,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            host.Measure(new Size(size, size));
+            host.Arrange(new Rect(0, 0, size, size));
+            int px = Math.Max(1, (int)size);
+            var rtb = new RenderTargetBitmap(px, px, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(host);
+            return new Rectangle
+            {
+                Width = size,
+                Height = size,
+                Fill = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA8)),
+                OpacityMask = new ImageBrush(rtb) { Stretch = Stretch.Uniform },
+            };
         }
 
         // ==================================================================
@@ -126,35 +213,36 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(btn);
             }
 
-            var speaker = SpeakerButton(() => "Regarde chaque pot de peinture pour entendre sa couleur !");
+            var speaker = SpeakerButton(() => "Regarde chaque pot pour le renverser et entendre sa couleur ! Renverse-les tous !");
             Canvas.SetLeft(speaker, W - 150);
             Canvas.SetTop(speaker, 40);
             _canvas.Children.Add(speaker);
 
             SetBody(_canvas);
-            Schedule(450, () => Speak("La potion des couleurs ! Regarde chaque pot de peinture pour entendre sa couleur !"));
+            Schedule(450, () => Speak("La potion des couleurs ! Regarde chaque pot de peinture pour le renverser !"));
         }
 
         private void DiscoverPot(Button btn, int ci)
         {
-            if (_phase != 1 || Locked) return;
-            Wobble(btn);
-            Splash(Canvas.GetLeft(btn) + btn.Width / 2, Canvas.GetTop(btn) + btn.Height / 2, CVal[ci]);
+            if (_phase != 1 || Locked || _seen[ci]) return;
+            _seen[ci] = true;
             Speak(Cap(CName[ci]) + " !");
-            if (!_seen[ci])
-            {
-                _seen[ci] = true;
-                var star = new TextBlock { Text = "⭐", FontSize = 30, IsHitTestVisible = false };
-                Canvas.SetLeft(star, Canvas.GetLeft(btn) + btn.Width - 26);
-                Canvas.SetTop(star, Canvas.GetTop(btn) - 12);
-                _canvas.Children.Add(star);
-            }
+            double cx = Canvas.GetLeft(btn) + btn.Width / 2, cy = Canvas.GetTop(btn) + btn.Height / 2;
+            Splash(cx, cy, CVal[ci]);
+            Splash(cx - 30, cy + 20, CVal[ci]);
+            Wobble(btn);
+
+            // Le pot renversé devient une GRANDE tache de peinture ⭐ : on voit
+            // ceux qui sont faits, et le jeu se termine quand tout est renversé.
+            btn.IsEnabled = false;
+            Schedule(430, () => btn.Content = SplatVisual(ci, btn.Width * 0.94));
+
             if (_seen.All(v => v))
             {
                 _phase = 0;
                 Locked = true;
-                Speak("Bravo, tu connais tous les pots ! Et maintenant... le chaudron magique !");
-                Schedule(2800, () => { _mixRound = 0; StartMixRound(); });
+                Speak("Bravo, tu as renversé tous les pots ! Et maintenant... le chaudron magique !");
+                Schedule(3000, () => { _mixRound = 0; StartMixRound(); });
             }
         }
 
@@ -312,6 +400,12 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Remove(drop);
                 Splash(_cauldronCenter.X, _cauldronCenter.Y - 85, CVal[ci]);
                 if (_pouredA && _pouredB) { Locked = true; Schedule(700, RevealMix); }
+                else
+                {
+                    // Première couleur versée : la potion la prend tout de suite.
+                    _cauldronFill.Fill = new RadialGradientBrush(Lighten(CVal[ci]), CVal[ci]);
+                    Speak("La potion devient " + CName[ci] + " ! Verse l'autre pot !");
+                }
             };
             drop.BeginAnimation(Canvas.LeftProperty, ax);
             drop.BeginAnimation(Canvas.TopProperty, ay);
@@ -530,43 +624,70 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < picks.Count; i++)
             {
                 int ci = picks[i];
+                string emoji = GameKit.Rand(CObjs[ci].ToList());
+
+                // L'objet a « perdu sa couleur » : silhouette grise. Bien choisi,
+                // il sera COLORIÉ (la version en couleurs apparaît en dessous).
+                var colored = new TextBlock
+                {
+                    Text = emoji,
+                    FontSize = 132,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Opacity = 0,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                };
+                var silhouette = EmojiSilhouette(emoji, 190);
+                var layers = new Grid();
+                layers.Children.Add(colored);
+                layers.Children.Add(silhouette);
+
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["AnswerButton"],
                     Width = size,
                     Height = size,
-                    Content = new TextBlock
-                    {
-                        Text = GameKit.Rand(CObjs[ci].ToList()),
-                        FontSize = 130,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    },
+                    Content = layers,
                 };
                 int captured = ci;
                 var captBtn = btn;
-                btn.Click += (s, e) => PickObject(captBtn, captured, spoken);
+                var captSil = silhouette;
+                var captCol = colored;
+                btn.Click += (s, e) => PickObject(captBtn, captured, spoken, captSil, captCol);
                 Canvas.SetLeft(btn, x0 + i * (size + gap));
                 Canvas.SetTop(btn, y);
                 _canvas.Children.Add(btn);
             }
 
             SetBody(_canvas);
-            Schedule(400, () => Speak("Trouve ce qui est " + CName[target] + " !"));
+            Schedule(400, () => Speak("Oh, les objets ont perdu leurs couleurs ! Trouve celui qui est " + CName[target] + ", et colorie-le !"));
         }
 
-        private void PickObject(Button btn, int ci, int target)
+        private void PickObject(Button btn, int ci, int target, UIElement silhouette, TextBlock colored)
         {
             if (_phase != 3 || Locked) return;
+            double cx = Canvas.GetLeft(btn) + btn.Width / 2, cy = Canvas.GetTop(btn) + btn.Height / 2;
             if (ci == target)
             {
                 Locked = true;
                 GameKit.Success();
-                Speak("Oui, c'est " + CName[target] + " ! " + GameKit.Praise());
-                Wobble(btn);
-                Splash(Canvas.GetLeft(btn) + btn.Width / 2, Canvas.GetTop(btn) + btn.Height / 2, CVal[target]);
+
+                // On COLORIE l'objet : la silhouette grise s'efface, la version en
+                // couleurs surgit dans une gerbe de peinture.
+                silhouette.Visibility = Visibility.Collapsed;
+                colored.Opacity = 1;
+                var sc = new ScaleTransform(0.3, 0.3);
+                colored.RenderTransform = sc;
+                var pop = new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(480))
+                { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+                Splash(cx, cy, CVal[target]);
+                Splash(cx + 40, cy - 30, CVal[target]);
+
+                Speak("Et voilà, tout colorié en " + CName[target] + " ! " + GameKit.Praise());
                 _findRound++;
-                Schedule(1800, NextFind);
+                Schedule(2300, NextFind);
             }
             else
             {
