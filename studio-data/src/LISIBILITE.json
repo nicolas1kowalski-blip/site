@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-23T09:36:07.996Z",
+ "generated": "2026-09-28T10:01:15.088Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50291,
-  "codeLines": 47525,
-  "commentLines": 2766,
-  "templateLines": 9958,
+  "lines": 50432,
+  "codeLines": 47644,
+  "commentLines": 2788,
+  "templateLines": 9998,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6609,
+  "locals": 6623,
   "shortLocals": 837,
-  "functions": 1655,
+  "functions": 1662,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12664548343168408
+  "shortLocalsRatio": 0.12637777442246717
  },
  "files": [
   {
@@ -738,16 +738,16 @@
   },
   {
    "file": "80-extraction-exploration/81-stats-bi.js",
-   "lines": 79,
-   "codeLines": 76,
-   "commentLines": 3,
-   "templateLines": 4,
+   "lines": 208,
+   "codeLines": 183,
+   "commentLines": 25,
+   "templateLines": 37,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 14,
+   "locals": 28,
    "shortLocals": 0,
-   "functions": 4,
-   "longestLogic": 88,
+   "functions": 11,
+   "longestLogic": 110,
    "shortLocalsRatio": 0
   },
   {
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 405,
-   "codeLines": 403,
+   "lines": 417,
+   "codeLines": 415,
    "commentLines": 2,
-   "templateLines": 205,
+   "templateLines": 212,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

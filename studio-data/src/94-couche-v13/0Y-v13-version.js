@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.33.0';
+        const V13_VERSION = '13.34.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.34.0',
+                d: '2026-09-28',
+                t: 'Statistiques : « combien de lignes par année ? », enfin possible',
+                items: [
+                    'L’écran Statistiques comptait les valeurs <b>brutes</b> d’une colonne. Sur une colonne date, cela faisait une barre par jour : la question « combien de lignes par année ? » n’avait pas de réponse. On peut maintenant <b>regrouper l’axe par année, par trimestre ou par mois</b>, quel que soit le format de la date (12/03/2023, 2023-07-01, 15.11.2024, ou une date avec l’heure).',
+                    'Le calcul est fait par le moteur de données sur <b>toute la table</b>. Avant, il lisait un échantillon de 5 000 lignes et n’affichait que les 15 premières valeurs : les chiffres étaient faux sans le dire.',
+                    'La table choisie <b>commande l’écran</b> : on ne propose plus que ses colonnes. On pouvait auparavant prendre l’axe dans une table et la mesure dans une autre, sans avertissement.',
+                    'Les opérations sont écrites en français et complétées : <b>Nombre de lignes, Valeurs différentes, Somme, Moyenne, Minimum, Maximum</b>. Les nombres à virgule décimale et à espaces (1 234,50) sont compris.',
+                    'Sous le graphique, le <b>tableau complet des chiffres</b> et un <b>export CSV</b> : le graphique montre les 30 premières valeurs, le tableau et l’export les donnent toutes, et une phrase dit combien de lignes ont été analysées.'
+                ]
+            },
             {
                 v: '13.33.0',
                 d: '2026-09-23',
