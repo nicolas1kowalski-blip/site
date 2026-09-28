@@ -157,8 +157,9 @@ namespace MesPremiersJeux.Games
             return g;
         }
 
-        // Silhouette grise d'un emoji (pour « colorier » l'objet une fois trouvé).
-        private static UIElement EmojiSilhouette(string emoji, double size)
+        // Silhouette d'un emoji, remplie de la couleur voulue (grise = objet
+        // « décoloré » ; couleur vive = objet PEINT dans cette couleur).
+        private static UIElement EmojiSilhouette(string emoji, double size, Color fill)
         {
             var host = new Grid { Width = size, Height = size };
             host.Children.Add(new TextBlock
@@ -177,7 +178,7 @@ namespace MesPremiersJeux.Games
             {
                 Width = size,
                 Height = size,
-                Fill = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA8)),
+                Fill = new SolidColorBrush(fill),
                 OpacityMask = new ImageBrush(rtb) { Stretch = Stretch.Uniform },
             };
         }
@@ -627,19 +628,13 @@ namespace MesPremiersJeux.Games
                 string emoji = GameKit.Rand(CObjs[ci].ToList());
 
                 // L'objet a « perdu sa couleur » : silhouette grise. Bien choisi,
-                // il sera COLORIÉ (la version en couleurs apparaît en dessous).
-                var colored = new TextBlock
-                {
-                    Text = emoji,
-                    FontSize = 132,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Opacity = 0,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                };
-                var silhouette = EmojiSilhouette(emoji, 190);
+                // il sera PEINT dans la couleur (la version colorée est dessous,
+                // révélée par le pinceau du haut vers le bas).
+                var tinted = new Grid { Opacity = 0 };
+                tinted.Children.Add(EmojiSilhouette(emoji, 190, CVal[ci]));
+                var silhouette = EmojiSilhouette(emoji, 190, Color.FromRgb(0x9A, 0x9A, 0xA8));
                 var layers = new Grid();
-                layers.Children.Add(colored);
+                layers.Children.Add(tinted);
                 layers.Children.Add(silhouette);
 
                 var btn = new Button
@@ -652,8 +647,9 @@ namespace MesPremiersJeux.Games
                 int captured = ci;
                 var captBtn = btn;
                 var captSil = silhouette;
-                var captCol = colored;
-                btn.Click += (s, e) => PickObject(captBtn, captured, spoken, captSil, captCol);
+                var captTint = tinted;
+                string captEmoji = emoji;
+                btn.Click += (s, e) => PickObject(captBtn, captured, spoken, captSil, captTint, captEmoji);
                 Canvas.SetLeft(btn, x0 + i * (size + gap));
                 Canvas.SetTop(btn, y);
                 _canvas.Children.Add(btn);
@@ -663,7 +659,7 @@ namespace MesPremiersJeux.Games
             Schedule(400, () => Speak("Oh, les objets ont perdu leurs couleurs ! Trouve celui qui est " + CName[target] + ", et colorie-le !"));
         }
 
-        private void PickObject(Button btn, int ci, int target, UIElement silhouette, TextBlock colored)
+        private void PickObject(Button btn, int ci, int target, UIElement silhouette, Grid tinted, string emoji)
         {
             if (_phase != 3 || Locked) return;
             double cx = Canvas.GetLeft(btn) + btn.Width / 2, cy = Canvas.GetTop(btn) + btn.Height / 2;
@@ -672,21 +668,21 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 GameKit.Success();
                 Celebrate();
-                Speak("Oui ! On le colorie en " + CName[target] + " !");
+                Speak("Oui ! On le peint en " + CName[target] + " !");
 
-                // VRAI COLORIAGE : le pinceau balaie l'objet et la couleur le
-                // remplit du HAUT vers le BAS, sous les éclaboussures.
-                colored.Opacity = 1;
+                // VRAI COLORIAGE : le pinceau balaie l'objet gris, et l'objet est
+                // PEINT dans la couleur, du HAUT vers le BAS.
+                tinted.Opacity = 1;
                 var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-                var mFill = new GradientStop(Colors.Black, 0);         // partie déjà peinte
-                var mEdge = new GradientStop(Colors.Transparent, 0.06); // front de peinture
+                var mFill = new GradientStop(Colors.Black, -0.12);      // partie déjà peinte
+                var mEdge = new GradientStop(Colors.Transparent, -0.05); // front de peinture
                 mask.GradientStops.Add(mFill);
                 mask.GradientStops.Add(mEdge);
-                colored.OpacityMask = mask;
+                tinted.OpacityMask = mask;
                 mFill.BeginAnimation(GradientStop.OffsetProperty,
-                    new DoubleAnimation(0, 1.08, TimeSpan.FromMilliseconds(1350)));
+                    new DoubleAnimation(-0.12, 1.08, TimeSpan.FromMilliseconds(1350)));
                 mEdge.BeginAnimation(GradientStop.OffsetProperty,
-                    new DoubleAnimation(0.06, 1.18, TimeSpan.FromMilliseconds(1350)));
+                    new DoubleAnimation(-0.05, 1.18, TimeSpan.FromMilliseconds(1350)));
 
                 // Le pinceau qui descend le long de l'objet.
                 var brush = new TextBlock
@@ -710,9 +706,10 @@ namespace MesPremiersJeux.Games
                 Schedule(1450, () =>
                 {
                     silhouette.Visibility = Visibility.Collapsed;
-                    colored.OpacityMask = null;
+                    tinted.OpacityMask = null;
+                    tinted.RenderTransformOrigin = new Point(0.5, 0.5);
                     var sc = new ScaleTransform(1, 1);
-                    colored.RenderTransform = sc;
+                    tinted.RenderTransform = sc;
                     var pop = new DoubleAnimation(1, 1.22, TimeSpan.FromMilliseconds(300))
                     { AutoReverse = true, EasingFunction = new SineEase() };
                     sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
@@ -721,11 +718,11 @@ namespace MesPremiersJeux.Games
                     var captBrush = brush;
                     bfade.Completed += (s2, e2) => _canvas.Children.Remove(captBrush);
                     brush.BeginAnimation(UIElement.OpacityProperty, bfade);
-                    Speak("Et voilà, tout " + CName[target] + " ! Regarde : tout ça, c'est " + CName[target] + " !");
+                    Speak("Et voilà, tout peint en " + CName[target] + " ! Regarde : tout ça, c'est " + CName[target] + " !");
                 });
 
                 // Et d'AUTRES exemples de la couleur apparaissent autour, un à un.
-                var others = CObjs[target].Where(o => o != colored.Text).Take(2).ToList();
+                var others = CObjs[target].Where(o => o != emoji).Take(2).ToList();
                 for (int j = 0; j < others.Count; j++)
                 {
                     var ex = new TextBlock
