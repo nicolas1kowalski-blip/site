@@ -22,8 +22,9 @@ namespace MesPremiersJeux.Games
     ///   du surplus), puis monter l'escalier marche par marche avec le chiffre
     ///   EXACT : 1, puis 2, puis 3, 4, 5 et 6 — en haut, le cheval est arrivé ;
     /// - le premier joueur dont tous les chevaux sont arrivés gagne.
-    /// Le joueur 1 (Rouge) est l'enfant, au regard ; les autres jouent au toucher
-    /// (le regard se met en pause à leur tour).
+    /// Le joueur 1 (Rouge) est l'enfant, au regard ; chaque autre joueur peut
+    /// être un humain au toucher OU un ordinateur (niveau réglable : très
+    /// facile, facile, malin) — l'enfant peut donc jouer même toute seule.
     /// </summary>
     public sealed class HorseGame : GameControl
     {
@@ -51,6 +52,8 @@ namespace MesPremiersJeux.Games
 
         private int _nPlayers = 2;
         private int _nHorses = 4;
+        private readonly bool[] _isBot = new bool[4]; // joueurs automatiques 🤖
+        private int _botLevel;                        // 0 très facile · 1 facile · 2 malin
         private readonly int[,] _pos = new int[4, 4]; // -1 écurie · 0..55 piste · 100+k marche k · 106 arrivé
         private int _current;
         private int _roll;
@@ -75,7 +78,9 @@ namespace MesPremiersJeux.Games
 
         private void SetGazeForPlayer(int p)
         {
-            if (p == 0) ReleaseGaze();
+            // Regard actif pour l'enfant ET pendant les tours des ordinateurs
+            // (rien n'est cliquable, et l'enfant garde son point de regard).
+            if (p == 0 || _isBot[p]) ReleaseGaze();
             else if (!_gazePaused) { GazeGate.Push(); _gazePaused = true; }
         }
 
@@ -169,7 +174,7 @@ namespace MesPremiersJeux.Games
                     Content = sp,
                 };
                 int hc = count;
-                btn.Click += (s, e) => { _nHorses = hc; StartMatch(); };
+                btn.Click += (s, e) => { _nHorses = hc; ShowWhoPlays(); };
                 Canvas.SetLeft(btn, 240 + i * 560);
                 Canvas.SetTop(btn, 200);
                 _canvas.Children.Add(btn);
@@ -192,6 +197,124 @@ namespace MesPremiersJeux.Games
             var s = TrackPoint(StartIdx[player]);
             double f = 0.14 + step * 0.115; // marche 1..6, vers le centre
             return new Point(s.X + (Cx - s.X) * f, s.Y + (Cy - s.Y) * f);
+        }
+
+        // Écran 3 : qui joue ? Chaque joueur (sauf l'enfant) peut être un humain
+        // au toucher, ou un ORDINATEUR — avec un niveau commun à choisir.
+        private static readonly string[] BotLevelNames = { "🐣 Très facile", "🙂 Facile", "🦊 Malin" };
+
+        private void ShowWhoPlays()
+        {
+            Question.Text = "🐴 Qui joue ?";
+            _canvas = new Canvas { Width = W, Height = H };
+
+            // Le joueur 1, c'est l'enfant, toujours.
+            for (int p = 1; p < _nPlayers; p++) _isBot[p] = true; // défaut : ordinateurs
+
+            var rows = new Button[4];
+            for (int p = 0; p < _nPlayers; p++)
+            {
+                var text = new TextBlock
+                {
+                    FontSize = 28,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Brushes.White,
+                    TextAlignment = TextAlignment.Center,
+                };
+                var row = new Button
+                {
+                    Style = (Style)Application.Current.Resources["AnswerButton"],
+                    Width = 620,
+                    Height = 86,
+                    Content = new Border
+                    {
+                        Width = 590,
+                        Height = 66,
+                        CornerRadius = new CornerRadius(16),
+                        Background = new SolidColorBrush(PColor[p]),
+                        Child = text,
+                    },
+                    IsEnabled = p > 0, // l'enfant ne se change pas
+                };
+                int player = p;
+                row.Click += (s, e) =>
+                {
+                    _isBot[player] = !_isBot[player];
+                    RefreshWhoRow(rows[player], player);
+                };
+                Canvas.SetLeft(row, 120);
+                Canvas.SetTop(row, 90 + p * 100);
+                _canvas.Children.Add(row);
+                rows[p] = row;
+                RefreshWhoRow(row, p);
+            }
+
+            // Niveau commun des ordinateurs.
+            var lvlTitle = new TextBlock
+            {
+                Text = "Niveau des ordinateurs :",
+                FontSize = 24,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+            };
+            Canvas.SetLeft(lvlTitle, 830);
+            Canvas.SetTop(lvlTitle, 100);
+            _canvas.Children.Add(lvlTitle);
+
+            var lvlBtns = new Button[3];
+            for (int l = 0; l < 3; l++)
+            {
+                var btn = new Button
+                {
+                    Style = (Style)Application.Current.Resources["AnswerButton"],
+                    Width = 470,
+                    Height = 78,
+                    FontSize = 25,
+                };
+                int lvl = l;
+                btn.Click += (s, e) =>
+                {
+                    _botLevel = lvl;
+                    for (int j = 0; j < 3; j++) RefreshLevelBtn(lvlBtns[j], j);
+                };
+                Canvas.SetLeft(btn, 830);
+                Canvas.SetTop(btn, 150 + l * 92);
+                _canvas.Children.Add(btn);
+                lvlBtns[l] = btn;
+                RefreshLevelBtn(btn, l);
+            }
+
+            var go = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = 470,
+                Height = 110,
+                FontSize = 36,
+                FontWeight = FontWeights.Bold,
+                Content = "▶  C'est parti !",
+            };
+            go.Click += (s, e) => StartMatch();
+            Canvas.SetLeft(go, 830);
+            Canvas.SetTop(go, 470);
+            _canvas.Children.Add(go);
+
+            SetBody(_canvas);
+            Schedule(300, () => Speak("Qui joue ? Touche un joueur pour choisir humain ou ordinateur, puis c'est parti !"));
+        }
+
+        private void RefreshWhoRow(Button row, int p)
+        {
+            var border = (Border)row.Content;
+            var text = (TextBlock)border.Child;
+            text.Text = p == 0
+                ? "● " + PName[0] + " — toi, au regard 👁"
+                : "● " + PName[p] + " — " + (_isBot[p] ? "🤖 Ordinateur (touche pour changer)" : "👤 Humain (touche pour changer)");
+        }
+
+        private void RefreshLevelBtn(Button btn, int l)
+        {
+            btn.Content = (l == _botLevel ? "✔  " : "") + BotLevelNames[l];
+            btn.Opacity = l == _botLevel ? 1.0 : 0.55;
         }
 
         private void StartMatch()
@@ -415,9 +538,29 @@ namespace MesPremiersJeux.Games
         {
             if (_over) return;
             SetGazeForPlayer(_current);
+            _banner.Background = new SolidColorBrush(PColor[_current]);
+
+            if (_isBot[_current])
+            {
+                // Tour d'un ordinateur : il lance le dé tout seul.
+                Locked = true;
+                _dieBtn.IsEnabled = false;
+                _bannerText.Text = "🤖 " + PName[_current] + " (ordinateur)\njoue…";
+                Schedule(1100, () =>
+                {
+                    if (_over) return;
+                    _roll = 1 + GameKit.RandInt(6);
+                    _dice.RollTo(_roll, () =>
+                    {
+                        Speak(_roll == 6 ? "Six !" : _roll.ToString() + " !");
+                        Schedule(350, AfterRoll);
+                    });
+                });
+                return;
+            }
+
             Locked = false;
             _dieBtn.IsEnabled = true;
-            _banner.Background = new SolidColorBrush(PColor[_current]);
             string how = _current == 0 ? "Regarde le dé 🎲" : "Touche le dé ✋";
             _bannerText.Text = "Au tour du " + PName[_current] + (_current == 0 ? " (toi) !" : " !") + "\n" + how;
             var a = new DoubleAnimation(1, 1.07, TimeSpan.FromMilliseconds(620))
@@ -452,6 +595,15 @@ namespace MesPremiersJeux.Games
                 Schedule(1700, NextTurn);
                 return;
             }
+
+            // Ordinateur : il choisit son cheval selon son niveau.
+            if (_isBot[_current])
+            {
+                int pick = BotChoose(movable);
+                Schedule(650, () => DoMove(pick));
+                return;
+            }
+
             if (movable.Count == 1)
             {
                 Schedule(450, () => DoMove(movable[0]));
@@ -611,6 +763,64 @@ namespace MesPremiersJeux.Games
                 int n = Enumerable.Range(0, _nHorses).Count(j => _pos[p, j] == 106);
                 _homeTexts[p].Text = "● " + n + "/" + _nHorses;
             }
+        }
+
+        // ------------------------------------------------------------------
+        // La « cervelle » des joueurs automatiques.
+        //   0 Très facile : cheval au hasard.
+        //   1 Facile : préfère arriver, monter, manger, sortir.
+        //   2 Malin : en plus, vise la case pile, fuit le danger et évite de
+        //     se poser sous les sabots d'un adversaire.
+        // ------------------------------------------------------------------
+        private int BotChoose(List<int> movable)
+        {
+            if (_botLevel == 0 || movable.Count == 1) return GameKit.Rand(movable);
+
+            int best = movable[0], bestScore = int.MinValue;
+            foreach (var h in movable)
+            {
+                if (!TryTarget(_current, h, _roll, out var np, out var victim)) continue;
+                int sc = GameKit.RandInt(3); // petit hasard pour départager
+                if (np == 106) sc += 100;                    // un cheval arrive !
+                else if (np > 100) sc += 80;                 // monte une marche
+                if (victim >= 0) sc += 70;                   // mange un adversaire
+                if (np == 55) sc += 55;                      // pile au pied de l'escalier
+                if (_pos[_current, h] < 0) sc += 45;         // sort de l'écurie
+
+                if (_botLevel >= 2)
+                {
+                    int cur = _pos[_current, h];
+                    if (cur >= 0 && cur <= 55 && InDanger(_current, cur)) sc += 25; // fuit
+                    if (np <= 55 && InDanger(_current, np)) sc -= 30;               // ne s'expose pas
+                    if (np <= 55) sc += np / 4;              // pousse le cheval le plus avancé
+                }
+                else if (np <= 55) sc += np / 8;
+
+                if (sc > bestScore) { bestScore = sc; best = h; }
+            }
+            return best;
+        }
+
+        // La case t (relative au joueur p) est-elle à portée (1..6) d'un adversaire ?
+        private bool InDanger(int p, int t)
+        {
+            int abs = (StartIdx[p] + t) % Track;
+            for (int q = 0; q < _nPlayers; q++)
+            {
+                if (q == p) continue;
+                for (int j = 0; j < _nHorses; j++)
+                {
+                    int op = _pos[q, j];
+                    if (op >= 0 && op <= 55)
+                    {
+                        int b = (StartIdx[q] + op) % Track;
+                        int d = (abs - b + Track) % Track;
+                        if (d >= 1 && d <= 6) return true;
+                    }
+                    else if (op < 0 && abs == StartIdx[q]) return true; // sortie possible sur nous
+                }
+            }
+            return false;
         }
 
         private void NextTurn()
