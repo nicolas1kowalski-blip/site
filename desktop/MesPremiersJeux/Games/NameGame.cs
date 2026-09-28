@@ -299,10 +299,31 @@ namespace MesPremiersJeux.Games
             Question.Text = "🔎 Trouve le " + target + " !";
             _canvas = new Canvas { Width = W, Height = H };
 
-            double size = Math.Min(250, (W - 160) / choices.Count - 30);
+            // CONSIGNE SANS LECTURE : le modèle à trouver est montré EN GRAND,
+            // et le bouton 🔊 répète la consigne à voix haute.
+            var model = LetterVisual(target, ColorFor(target), 180);
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(30),
+                Background = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)),
+                BorderThickness = new Thickness(6),
+                Padding = new Thickness(16),
+                Child = model,
+            };
+            Canvas.SetLeft(card, W / 2 - 180);
+            Canvas.SetTop(card, 12);
+            _canvas.Children.Add(card);
+            char spoken = target;
+            var speaker = SpeakerButton(() => "Trouve le " + spoken + " ! Cherche la lettre pareille !");
+            Canvas.SetLeft(speaker, W / 2 + 80);
+            Canvas.SetTop(speaker, 62);
+            _canvas.Children.Add(speaker);
+
+            double size = Math.Min(240, (W - 160) / choices.Count - 30);
             double gap = 42;
             double total = choices.Count * size + (choices.Count - 1) * gap;
-            double x0 = (W - total) / 2, y = (H - size) / 2 - 30;
+            double x0 = (W - total) / 2, y = 388;
 
             for (int i = 0; i < choices.Count; i++)
             {
@@ -427,6 +448,7 @@ namespace MesPremiersJeux.Games
                 _trainLayer.Children.Add(g);
             }
             MarkNextWagon();
+            AddTrainSpeaker();
 
             // La réserve de lettres, mélangée, en bas (une par lettre du prénom).
             var order = GameKit.Shuffle(Enumerable.Range(0, n));
@@ -455,6 +477,17 @@ namespace MesPremiersJeux.Games
 
             SetBody(_canvas);
             Schedule(450, () => Speak("Mets les lettres dans les wagons, dans l'ordre, pour écrire " + Pretty + " !"));
+        }
+
+        // 🔊 du train : répète quelle lettre il faut mettre maintenant.
+        private void AddTrainSpeaker()
+        {
+            var speaker = SpeakerButton(() => _slot < _name.Length
+                ? "Mets le " + _name[_slot] + " dans le wagon qui brille !"
+                : "Bravo, le train est complet !");
+            Canvas.SetLeft(speaker, W - 150);
+            Canvas.SetTop(speaker, 120);
+            _canvas.Children.Add(speaker);
         }
 
         private void MarkNextWagon()

@@ -33,7 +33,16 @@ namespace MesPremiersJeux.Games
         private const double Cx = 470, Cy = 390;       // centre du plateau
         private const double Rx = 360, Ry = 280;       // rayons de la piste
         private const double CellD = 42;               // diamètre d'une case
-        private const double TokD = 36;                // diamètre d'un cheval
+        private const double TokD = 42;                // diamètre d'un cheval
+
+        // Ajoute un élément de décor (emoji) sur le canevas.
+        private static TextBlock Deco(string s, double x, double y, double size)
+        {
+            var t = new TextBlock { Text = s, FontSize = size, IsHitTestVisible = false, Opacity = 0.95 };
+            Canvas.SetLeft(t, x);
+            Canvas.SetTop(t, y);
+            return t;
+        }
 
         private static readonly int[] StartIdx = { 0, 14, 28, 42 };
         private static readonly Color[] PColor =
@@ -329,71 +338,207 @@ namespace MesPremiersJeux.Games
             Question.Text = "🐴 Les petits chevaux — un 6 pour sortir !";
             _canvas = new Canvas { Width = W, Height = H };
 
-            // Fond doux.
-            _canvas.Children.Add(new Rectangle
+            // Fond « prairie » : ciel → herbe, soleil et fleurs.
+            var bg = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            bg.GradientStops.Add(new GradientStop(Color.FromRgb(0xC3, 0xE8, 0xFF), 0.0));
+            bg.GradientStops.Add(new GradientStop(Color.FromRgb(0xDE, 0xF3, 0xD2), 0.45));
+            bg.GradientStops.Add(new GradientStop(Color.FromRgb(0xBE, 0xE8, 0x96), 1.0));
+            _canvas.Children.Add(new Rectangle { Width = W, Height = H, Fill = bg });
+            _canvas.Children.Add(Deco("☀️", 640, 0, 48));
+            _canvas.Children.Add(Deco("🌼", 330, 8, 30));
+            _canvas.Children.Add(Deco("🌷", 420, 4, 30));
+            _canvas.Children.Add(Deco("🌸", 520, 10, 30));
+            _canvas.Children.Add(Deco("🌻", 300, 700, 34));
+            _canvas.Children.Add(Deco("🦋", 400, 706, 30));
+            _canvas.Children.Add(Deco("🌷", 500, 698, 32));
+            _canvas.Children.Add(Deco("🐞", 590, 708, 26));
+
+            // La ROUTE : un anneau de terre battue qui relie les 56 cases.
+            var ring = new PointCollection();
+            for (int i = 0; i < Track; i++) ring.Add(TrackPoint(i));
+            _canvas.Children.Add(new Polygon
             {
-                Width = W,
-                Height = H,
-                Fill = new LinearGradientBrush(Color.FromRgb(0xEF, 0xF7, 0xE6), Color.FromRgb(0xDD, 0xEF, 0xCC), 90),
+                Points = ring,
+                Stroke = new SolidColorBrush(Color.FromRgb(0xB9, 0x7A, 0x46)),
+                StrokeThickness = 54,
+                StrokeLineJoin = PenLineJoin.Round,
+                IsHitTestVisible = false,
+            });
+            var ring2 = new PointCollection();
+            for (int i = 0; i < Track; i++) ring2.Add(TrackPoint(i));
+            _canvas.Children.Add(new Polygon
+            {
+                Points = ring2,
+                Stroke = new SolidColorBrush(Color.FromRgb(0xF6, 0xE6, 0xC3)),
+                StrokeThickness = 38,
+                StrokeLineJoin = PenLineJoin.Round,
+                IsHitTestVisible = false,
             });
 
-            // La piste : 56 cases rondes, colorées aux départs.
+            // Pelouse centrale (sous le trophée et le haut des escaliers).
+            var lawn = new Ellipse
+            {
+                Width = 120,
+                Height = 110,
+                Fill = new RadialGradientBrush(Color.FromRgb(0xD9, 0xF2, 0xB8), Color.FromRgb(0xA8, 0xD9, 0x7E)),
+                Stroke = new SolidColorBrush(Color.FromArgb(0x66, 0x6B, 0x8A, 0x3A)),
+                StrokeThickness = 3,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(lawn, Cx - 60);
+            Canvas.SetTop(lawn, Cy - 62);
+            _canvas.Children.Add(lawn);
+
+            // La piste : 56 pastilles rondes et brillantes ; les départs colorés
+            // portent une flèche qui montre le sens de la course.
             for (int i = 0; i < Track; i++)
             {
                 var c = TrackPoint(i);
                 int owner = Array.IndexOf(StartIdx, i);
+
+                if (owner >= 0) // halo lumineux sous la case départ
+                {
+                    var halo = new Ellipse
+                    {
+                        Width = CellD + 26,
+                        Height = CellD + 26,
+                        Fill = new RadialGradientBrush(
+                            Color.FromArgb(0x77, PColor[owner].R, PColor[owner].G, PColor[owner].B),
+                            Color.FromArgb(0x00, PColor[owner].R, PColor[owner].G, PColor[owner].B)),
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(halo, c.X - (CellD + 26) / 2);
+                    Canvas.SetTop(halo, c.Y - (CellD + 26) / 2);
+                    _canvas.Children.Add(halo);
+                }
+
+                var shadow = new Ellipse
+                {
+                    Width = CellD,
+                    Height = CellD,
+                    Fill = new SolidColorBrush(Color.FromArgb(0x2E, 0x2A, 0x1A, 0x00)),
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(shadow, c.X - CellD / 2);
+                Canvas.SetTop(shadow, c.Y - CellD / 2 + 3);
+                _canvas.Children.Add(shadow);
+
+                Color baseCol = owner >= 0 ? PColor[owner] : Color.FromRgb(0xFF, 0xFD, 0xF4);
                 var cell = new Ellipse
                 {
                     Width = CellD,
                     Height = CellD,
                     Fill = owner >= 0
-                        ? new SolidColorBrush(Lighten(PColor[owner]))
-                        : new SolidColorBrush(Colors.White),
-                    Stroke = new SolidColorBrush(owner >= 0 ? PColor[owner] : Color.FromRgb(0x9A, 0x8A, 0xB8)),
-                    StrokeThickness = owner >= 0 ? 4 : 2,
+                        ? (Brush)new RadialGradientBrush(Lighten(baseCol), baseCol)
+                        { GradientOrigin = new Point(0.35, 0.3), Center = new Point(0.35, 0.3) }
+                        : new RadialGradientBrush(Colors.White, Color.FromRgb(0xF0, 0xE7, 0xD2))
+                        { GradientOrigin = new Point(0.35, 0.3), Center = new Point(0.35, 0.3) },
+                    Stroke = owner >= 0 ? Brushes.White : new SolidColorBrush(Color.FromRgb(0xC9, 0xA8, 0x7A)),
+                    StrokeThickness = owner >= 0 ? 3.5 : 2,
                     IsHitTestVisible = false,
                 };
                 Canvas.SetLeft(cell, c.X - CellD / 2);
                 Canvas.SetTop(cell, c.Y - CellD / 2);
                 _canvas.Children.Add(cell);
+
+                if (owner >= 0) // flèche du sens de la course
+                {
+                    var n = TrackPoint((i + 1) % Track);
+                    double deg = Math.Atan2(n.Y - c.Y, n.X - c.X) * 180.0 / Math.PI;
+                    var arrow = new TextBlock
+                    {
+                        Text = "➤",
+                        FontSize = 19,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = Brushes.White,
+                        RenderTransformOrigin = new Point(0.5, 0.5),
+                        RenderTransform = new RotateTransform(deg),
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(arrow, c.X - 10);
+                    Canvas.SetTop(arrow, c.Y - 14);
+                    _canvas.Children.Add(arrow);
+                }
             }
 
-            // Écuries + escaliers des joueurs actifs.
+            // Écuries (petites fermes à toit coloré) + escaliers des joueurs actifs.
             for (int p = 0; p < _nPlayers; p++)
             {
+                double sx = StablePos[p].X, sy = StablePos[p].Y;
+
+                // Toit.
+                _canvas.Children.Add(new Polygon
+                {
+                    Points = new PointCollection { new Point(sx - 8, sy + 8), new Point(sx + 156, sy + 8), new Point(sx + 74, sy - 24) },
+                    Fill = new SolidColorBrush(PColor[p]),
+                    Stroke = Brushes.White,
+                    StrokeThickness = 3,
+                    StrokeLineJoin = PenLineJoin.Round,
+                    IsHitTestVisible = false,
+                });
+
+                // Corps de la ferme : bois clair teinté de la couleur du joueur.
+                var barn = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+                barn.GradientStops.Add(new GradientStop(Color.FromRgb(0xFA, 0xEF, 0xD8), 0));
+                barn.GradientStops.Add(new GradientStop(Color.FromArgb(0x66, PColor[p].R, PColor[p].G, PColor[p].B), 1));
                 var box = new Border
                 {
                     Width = 148,
                     Height = 118,
-                    CornerRadius = new CornerRadius(20),
-                    Background = new SolidColorBrush(Color.FromArgb(0x33, PColor[p].R, PColor[p].G, PColor[p].B)),
+                    CornerRadius = new CornerRadius(6, 6, 18, 18),
+                    Background = barn,
                     BorderBrush = new SolidColorBrush(PColor[p]),
                     BorderThickness = new Thickness(4),
                 };
-                Canvas.SetLeft(box, StablePos[p].X);
-                Canvas.SetTop(box, StablePos[p].Y);
+                Canvas.SetLeft(box, sx);
+                Canvas.SetTop(box, sy);
                 _canvas.Children.Add(box);
+
                 var lbl = new TextBlock
                 {
-                    Text = "🏠 " + PName[p] + (p == 0 ? " (toi)" : ""),
+                    Text = "🏇 " + PName[p] + (p == 0 ? " (toi)" : ""),
                     FontSize = 17,
                     FontWeight = FontWeights.Bold,
                     Foreground = new SolidColorBrush(PColor[p]),
                 };
-                Canvas.SetLeft(lbl, StablePos[p].X + 10);
-                Canvas.SetTop(lbl, StablePos[p].Y - 26);
+                Canvas.SetLeft(lbl, sx + 8);
+                Canvas.SetTop(lbl, sy + 122);
                 _canvas.Children.Add(lbl);
+
+                // Ruban de l'escalier : du départ vers le centre.
+                var s0 = TrackPoint(StartIdx[p]);
+                var s6 = LadderPoint(p, 6);
+                _canvas.Children.Add(new Line
+                {
+                    X1 = s0.X, Y1 = s0.Y, X2 = s6.X, Y2 = s6.Y,
+                    Stroke = new SolidColorBrush(Color.FromArgb(0x3C, PColor[p].R, PColor[p].G, PColor[p].B)),
+                    StrokeThickness = 26,
+                    StrokeStartLineCap = PenLineCap.Round,
+                    StrokeEndLineCap = PenLineCap.Round,
+                    IsHitTestVisible = false,
+                });
 
                 for (int k = 1; k <= 6; k++)
                 {
                     var lp = LadderPoint(p, k);
                     double d = 34;
+                    var stepShadow = new Ellipse
+                    {
+                        Width = d,
+                        Height = d,
+                        Fill = new SolidColorBrush(Color.FromArgb(0x2E, 0x2A, 0x1A, 0x00)),
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(stepShadow, lp.X - d / 2);
+                    Canvas.SetTop(stepShadow, lp.Y - d / 2 + 3);
+                    _canvas.Children.Add(stepShadow);
                     var step = new Ellipse
                     {
                         Width = d,
                         Height = d,
-                        Fill = new SolidColorBrush(Color.FromArgb(0x55, PColor[p].R, PColor[p].G, PColor[p].B)),
-                        Stroke = new SolidColorBrush(PColor[p]),
+                        Fill = new RadialGradientBrush(Lighten(PColor[p]), PColor[p])
+                        { GradientOrigin = new Point(0.35, 0.3), Center = new Point(0.35, 0.3) },
+                        Stroke = Brushes.White,
                         StrokeThickness = 2.5,
                         IsHitTestVisible = false,
                     };
@@ -405,7 +550,8 @@ namespace MesPremiersJeux.Games
                         Text = k.ToString(),
                         FontSize = 15,
                         FontWeight = FontWeights.Bold,
-                        Foreground = new SolidColorBrush(PColor[p]),
+                        Foreground = Brushes.White,
+                        IsHitTestVisible = false,
                     };
                     Canvas.SetLeft(num, lp.X - 5);
                     Canvas.SetTop(num, lp.Y - 11);
@@ -432,11 +578,16 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(_homeTexts[p]);
             }
 
-            // Les chevaux, à l'écurie.
+            // Les chevaux, à l'écurie : un vrai petit cheval sur un jeton brillant.
             for (int p = 0; p < _nPlayers; p++)
                 for (int h = 0; h < _nHorses; h++)
                 {
                     var g = new Grid { Width = TokD, Height = TokD };
+                    g.Children.Add(new Ellipse // ombre portée intégrée (suit le pion)
+                    {
+                        Fill = new SolidColorBrush(Color.FromArgb(0x38, 0x1A, 0x10, 0x00)),
+                        Margin = new Thickness(3, 6, -3, -6),
+                    });
                     g.Children.Add(new Ellipse
                     {
                         Fill = new RadialGradientBrush(Lighten(PColor[p]), PColor[p])
@@ -446,12 +597,21 @@ namespace MesPremiersJeux.Games
                     });
                     g.Children.Add(new TextBlock
                     {
-                        Text = (h + 1).ToString(),
-                        FontSize = 16,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = Brushes.White,
+                        Text = "🐴",
+                        FontSize = TokD * 0.5,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, -3, 0, 0),
+                    });
+                    g.Children.Add(new TextBlock
+                    {
+                        Text = (h + 1).ToString(),
+                        FontSize = 11,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = Brushes.White,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        VerticalAlignment = VerticalAlignment.Bottom,
+                        Margin = new Thickness(0, 0, 4, 1),
                     });
                     g.SetValue(Panel.ZIndexProperty, 30);
                     _tok[p, h] = g;

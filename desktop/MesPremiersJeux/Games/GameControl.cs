@@ -30,13 +30,13 @@ namespace MesPremiersJeux.Games
 
             Question = new TextBlock
             {
-                FontSize = 34,
+                FontSize = 40,
                 FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(16, 14, 16, 6),
+                Margin = new Thickness(16, 12, 16, 4),
             };
             Grid.SetRow(Question, 0);
             root.Children.Add(Question);
@@ -65,6 +65,31 @@ namespace MesPremiersJeux.Games
         protected abstract void NewRound();
 
         protected void Speak(string text) => Speech.Say(text);
+
+        /// <summary>
+        /// Gros bouton 🔊 qui RÉPÈTE la consigne à voix haute — pour un enfant qui
+        /// ne lit pas encore : la consigne s'entend et se voit (modèle en grand),
+        /// elle ne se lit pas. Le texte est relu à chaque appui (il peut changer
+        /// d'un tour à l'autre grâce à la fonction passée en paramètre).
+        /// </summary>
+        protected Button SpeakerButton(Func<string> text, double size = 108)
+        {
+            var b = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = size,
+                Height = size,
+                Content = new TextBlock
+                {
+                    Text = "🔊",
+                    FontSize = size * 0.46,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+            b.Click += (s, e) => { try { Speak(text()); } catch { } };
+            return b;
+        }
 
         protected void Celebrate()
         {

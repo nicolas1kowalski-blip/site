@@ -18,6 +18,8 @@ namespace MesPremiersJeux.Views
         private readonly (string Icon, string Label, string Level, Func<Action, UserControl> Make)[] _activities =
         {
             ("💖", "Mon prénom",     "PS · MS", c => new NameGame(c)),
+            ("🎨", "Couleurs magiques", "PS · MS", c => new ColorMagicGame(c)),
+            ("🎈", "Fête des nombres", "PS · MS", c => new NumberPartyGame(c)),
             ("🔤", "Les lettres",    "PS · MS", c => new LettersGame(c)),
             ("🔢", "Les nombres",    "PS · MS", c => new NumbersGame(c)),
             ("📏", "Grand ou petit", "PS",      c => new SizeGame(c)),

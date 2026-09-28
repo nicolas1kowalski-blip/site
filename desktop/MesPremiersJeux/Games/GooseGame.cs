@@ -244,6 +244,9 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(Emoji("🌳", Bx + Cols * Cs - 58, baseY - 26, 66));
             _canvas.Children.Add(Emoji("☁️", Bx + 150, -4, 48));
             _canvas.Children.Add(Emoji("☁️", Bx + 470, -10, 54));
+            _canvas.Children.Add(Emoji("☀️", Bx + 660, -6, 52));
+            _canvas.Children.Add(Emoji("🦋", Bx + 250, baseY + 4, 30));
+            _canvas.Children.Add(Emoji("🐞", Bx + 560, baseY + 12, 24));
         }
 
         private static TextBlock Emoji(string s, double x, double y, double size)
@@ -514,6 +517,11 @@ namespace MesPremiersJeux.Games
             for (int p = 0; p < 2; p++)
             {
                 var ring = new Grid { Width = Tok, Height = Tok };
+                ring.Children.Add(new Ellipse // ombre portée qui suit le pion
+                {
+                    Fill = new SolidColorBrush(Color.FromArgb(0x36, 0x1A, 0x10, 0x00)),
+                    Margin = new Thickness(3, 6, -3, -6),
+                });
                 ring.Children.Add(new Ellipse
                 {
                     Fill = new RadialGradientBrush(Lighten(PlayerColor[p]), PlayerColor[p]),
