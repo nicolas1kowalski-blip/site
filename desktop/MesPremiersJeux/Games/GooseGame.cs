@@ -85,11 +85,11 @@ namespace MesPremiersJeux.Games
             Unloaded += (s, e) => ReleaseGaze();
         }
 
-        // Regard actif pour l'enfant (0), en pause pour le parent (1) : au tour du
-        // parent, les dés se lancent à la souris / au toucher.
+        // Regard actif pour l'enfant (0) et pendant le tour de l'ordinateur ;
+        // en pause pour un parent humain (1), qui lance les dés au toucher.
         private void SetGazeForPlayer(int p)
         {
-            if (p == 0) ReleaseGaze();
+            if (p == 0 || _vsBot) ReleaseGaze();
             else if (!_gazePaused) { GazeGate.Push(); _gazePaused = true; }
         }
 
@@ -101,6 +101,60 @@ namespace MesPremiersJeux.Games
         protected override void NewRound()
         {
             ReleaseGaze();
+            ShowSetup();
+        }
+
+        // Écran de départ : le renard est-il joué par un proche (au toucher) ou
+        // par l'ordinateur ? Aux dés il n'y a pas de niveau — tout est au hasard.
+        private bool _vsBot;
+
+        private void ShowSetup()
+        {
+            Locked = false;
+            Question.Text = "🪿 Le jeu de l'oie — contre qui veux-tu jouer ?";
+            _canvas = new Canvas { Width = W, Height = H };
+
+            AddSetupChoice("👥", "À deux", "le renard est joué par un proche ✋", 250, false);
+            AddSetupChoice("🤖", "L'ordinateur", "le renard joue tout seul", 800, true);
+
+            SetBody(_canvas);
+            Schedule(400, () => Speak("Le jeu de l'oie ! Tu joues contre quelqu'un, ou contre l'ordinateur ?"));
+        }
+
+        private void AddSetupChoice(string icon, string title, string sub, double x, bool bot)
+        {
+            var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            sp.Children.Add(new TextBlock { Text = icon, FontSize = 92, HorizontalAlignment = HorizontalAlignment.Center });
+            sp.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 33,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            sp.Children.Add(new TextBlock
+            {
+                Text = sub,
+                FontSize = 20,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5A, 0x8A)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            var btn = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = 380,
+                Height = 290,
+                Content = sp,
+            };
+            btn.Click += (s, e) => { _vsBot = bot; StartMatch(); };
+            Canvas.SetLeft(btn, x);
+            Canvas.SetTop(btn, 200);
+            _canvas.Children.Add(btn);
+        }
+
+        private void StartMatch()
+        {
             _win = false;
             Locked = false;
             _current = 0;
@@ -442,7 +496,7 @@ namespace MesPremiersJeux.Games
                 });
                 row.Children.Add(new TextBlock
                 {
-                    Text = "  " + PlayerName[p],
+                    Text = "  " + PlayerName[p] + (p == 1 && _vsBot ? " 🤖" : ""),
                     FontSize = 23,
                     FontWeight = FontWeights.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -523,6 +577,28 @@ namespace MesPremiersJeux.Games
                 UpdateBanner(PlayerName[_current] + " dort à l'auberge…\nil passe un tour", _current);
                 Speak(PlayerName[_current] + " passe son tour.");
                 Schedule(1700, () => { _current = 1 - _current; StartTurn(); });
+                return;
+            }
+
+            // Tour de l'ordinateur : il lance les dés tout seul.
+            if (_current == 1 && _vsBot)
+            {
+                Locked = true;
+                _dieBtn.IsEnabled = false;
+                UpdateBanner("🤖 " + PlayerName[1] + " (ordinateur)\njoue…", 1);
+                Schedule(1100, () =>
+                {
+                    if (_win) return;
+                    _lastD1 = 1 + GameKit.RandInt(6);
+                    _lastD2 = 1 + GameKit.RandInt(6);
+                    _lastTotal = _lastD1 + _lastD2;
+                    _gchain = 0;
+                    RollBoth(_lastD1, _lastD2, () =>
+                    {
+                        Speak(_lastD1 + " et " + _lastD2 + ", ça fait " + _lastTotal + " !");
+                        Schedule(350, AfterRoll);
+                    });
+                });
                 return;
             }
 
