@@ -32,33 +32,60 @@
             vizBaseTableElement.innerHTML = tableOptionsHtml({ placeholder: 'Sélectionnez la table...' });
         }
 
-        // La table choisie commande tout l'écran : on ne propose que SES colonnes,
-        // pour que l'on ne puisse pas mélanger deux tables sans s'en rendre compte.
-        function handleVizBaseTableChange() {
-            const table = state.tables[el('vizBaseTable').value];
-            const boite = el('vizElementsContainer');
-            if (!table) {
-                boite.classList.add('hidden');
-                return;
-            }
-            boite.classList.remove('hidden');
-            const colonnes = (table.headers || [])
-                .map(h => `<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`)
+        // Une colonne est désignée par « identifiant de table | nom de colonne ».
+        // L'identifiant ne contient jamais de barre verticale : on coupe à la PREMIÈRE,
+        // ce qui laisse tranquilles les colonnes dont le nom en contient une.
+        function statColonneChoisie(valeur) {
+            const texte = String(valeur || ''),
+                barre = texte.indexOf('|');
+            if (barre < 0) return { tId: el('vizBaseTable').value, colonne: texte };
+            return { tId: texte.slice(0, barre), colonne: texte.slice(barre + 1) };
+        }
+        // Toutes les tables chargées sont proposées, celle de l'écran en tête :
+        // on garde la liberté de prendre une colonne ailleurs sans changer d'écran.
+        function statOptionsDesColonnes(tableEnTete) {
+            const tables = Object.values(state.tables).filter(t => (t.headers || []).length);
+            tables.sort((a, b) => (a.id === tableEnTete ? -1 : b.id === tableEnTete ? 1 : 0));
+            return tables
+                .map(
+                    t =>
+                        `<optgroup label="${escapeHTML(t.name)}">${(t.headers || [])
+                            .map(h => `<option value="${escapeHTML(t.id + '|' + h)}">${escapeHTML(h)}</option>`)
+                            .join('')}</optgroup>`
+                )
                 .join('');
-            el('vizDim').innerHTML = colonnes;
-            el('vizMeasure').innerHTML = colonnes;
+        }
+        function handleVizBaseTableChange() {
+            // Même sans table choisie en haut, la configuration reste accessible :
+            // les colonnes de toutes les tables chargées y sont proposées.
+            const table = state.tables[el('vizBaseTable').value];
+            el('vizElementsContainer').classList.remove('hidden');
+            el('vizDim').innerHTML = statOptionsDesColonnes(table ? table.id : '');
+            el('vizMeasure').innerHTML = statOptionsDesColonnes(table ? table.id : '');
             statProposerLaPeriode();
             toggleVizMeasure();
         }
 
-        // Si la colonne d'axe ressemble à une date, on met le regroupement par année
-        // en avant : c'est la statistique la plus souvent demandée.
+        // L'utilisateur change l'axe : si la colonne vient d'une autre table, c'est
+        // ELLE que l'on analyse, et on remet la « source de données » d'accord avec
+        // ce que l'on voit. (Appelé sur le choix de l'utilisateur seulement : quand
+        // c'est l'écran qui reconstruit la liste, la source ne doit pas bouger.)
+        function statAxeChange() {
+            const choix = statColonneChoisie(el('vizDim').value);
+            const source = el('vizBaseTable');
+            if (choix.tId && source.value !== choix.tId && state.tables[choix.tId]) {
+                source.value = choix.tId;
+                el('vizMeasure').innerHTML = statOptionsDesColonnes(choix.tId);
+            }
+            statProposerLaPeriode();
+        }
+        // Si la colonne d'axe ressemble à une date, on met le regroupement par
+        // période en avant : c'est la statistique la plus souvent demandée.
         function statProposerLaPeriode() {
             const aide = el('vizDimAide');
             if (!aide) return;
-            const tId = el('vizBaseTable').value,
-                colonne = el('vizDim').value;
-            const estUneDate = typeof covColIsDate === 'function' && covColIsDate(tId, colonne);
+            const choix = statColonneChoisie(el('vizDim').value);
+            const estUneDate = typeof covColIsDate === 'function' && covColIsDate(choix.tId, choix.colonne);
             aide.textContent = estUneDate ? 'Colonne de type date : regroupez par année, trimestre ou mois.' : '';
         }
 
@@ -106,15 +133,23 @@
         }
 
         async function generateChart(bouton) {
-            const table = state.tables[el('vizBaseTable').value];
+            const surLAxe = statColonneChoisie(el('vizDim').value);
+            if (!surLAxe.colonne) return showError("Sélectionnez la colonne de l'axe.");
+            // C'est la table de l'AXE que l'on analyse, même si la « source de
+            // données » affichée en haut n'a pas encore été changée.
+            const table = state.tables[surLAxe.tId];
             if (!table) return showError('Sélectionnez la table à analyser.');
-            const axe = el('vizDim').value;
-            if (!axe) return showError("Sélectionnez la colonne de l'axe.");
             const periode = el('vizPeriode') ? el('vizPeriode').value : '';
             const operation = el('vizAgg').value;
             const besoinDeColonne = (STAT_OPERATIONS[operation] || {}).colonne;
-            const mesure = besoinDeColonne ? el('vizMeasure').value : '';
-            if (besoinDeColonne && !mesure) return showError('Sélectionnez la colonne à mesurer.');
+            const aMesurer = besoinDeColonne ? statColonneChoisie(el('vizMeasure').value) : { tId: surLAxe.tId, colonne: '' };
+            if (besoinDeColonne && !aMesurer.colonne) return showError('Sélectionnez la colonne à mesurer.');
+            // L'ancien écran laissait choisir la mesure dans une AUTRE table, puis
+            // la cherchait dans celle de l'axe : le calcul était faux sans le dire.
+            if (besoinDeColonne && aMesurer.tId !== surLAxe.tId)
+                return showError('La colonne à mesurer doit venir de la même table que l’axe (' + table.name + ').');
+            const axe = surLAxe.colonne,
+                mesure = aMesurer.colonne;
             hideError();
             if (bouton) bouton.disabled = true;
             bgTaskStart('Calcul des statistiques');

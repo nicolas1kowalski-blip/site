@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.34.0';
+        const V13_VERSION = '13.35.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.35.0',
+                d: '2026-09-28',
+                t: 'Statistiques : ce que l’on savait faire avant se fait toujours',
+                items: [
+                    'La version précédente n’offrait plus que les colonnes de la table choisie en haut. <b>Toutes les tables chargées sont de nouveau proposées</b>, celle de l’écran en tête : on peut prendre l’axe ailleurs sans changer d’écran. La « source de données » se remet alors d’accord avec la colonne choisie, au lieu de laisser croire que l’on analyse autre chose.',
+                    'La configuration reste accessible <b>même sans table choisie</b> en haut, comme avant.',
+                    'Une seule chose ne se fait plus <b>en silence</b> : mesurer une colonne d’une autre table que celle de l’axe. L’ancien écran acceptait le choix, puis cherchait cette colonne dans la table de l’axe — et rendait des chiffres faux. Il le dit maintenant en une phrase.'
+                ]
+            },
             {
                 v: '13.34.0',
                 d: '2026-09-28',

@@ -23,17 +23,38 @@ const out = await p.evaluate(async ()=>{
   state.tables['s1']={id:'s1',name:'AUTRE',type:'csv',status:'ready',headers:['SANS_RAPPORT'],config:{},columnsMeta:{}};
   switchTab(4); updateVizBaseTableSelect(); el('vizBaseTable').value='s0'; handleVizBaseTableChange();
 
-  const colonnesDeLAxe = [...el('vizDim').options].map(o=>o.value);
-  ok('la table choisie commande l’écran : seules SES colonnes sont proposées',
-    colonnesDeLAxe.join('|')==='REPERE|DATE_ENTREE|MONTANT'
-    && [...el('vizMeasure').options].map(o=>o.value).join('|')==='REPERE|DATE_ENTREE|MONTANT');
+  // Comme avant : sans table choisie en haut, la configuration reste utilisable.
+  el('vizBaseTable').value=''; handleVizBaseTableChange();
+  ok('sans table choisie, la configuration reste accessible avec toutes les colonnes',
+    !el('vizElementsContainer').classList.contains('hidden')
+    && [...el('vizDim').options].length===4);
+  el('vizBaseTable').value='s0'; handleVizBaseTableChange();
+
+  const groupes = [...el('vizDim').querySelectorAll('optgroup')].map(g=>g.label);
+  ok('toutes les tables chargées restent proposées, celle de l’écran en tête',
+    groupes.join('|')==='INTERVENTIONS|AUTRE'
+    && [...el('vizDim').options].map(o=>o.value).join(' ')==='s0|REPERE s0|DATE_ENTREE s0|MONTANT s1|SANS_RAPPORT'
+    && [...el('vizMeasure').options].length===4);
+
+  // Un nom de colonne peut contenir une barre verticale : on coupe à la première.
+  ok('une colonne est bien reconnue, même si son nom contient une barre',
+    statColonneChoisie('s0|A|B').tId==='s0' && statColonneChoisie('s0|A|B').colonne==='A|B');
+
+  el('vizDim').value='s1|SANS_RAPPORT'; statAxeChange();
+  ok('prendre l’axe dans une autre table remet la source de données d’accord',
+    el('vizBaseTable').value==='s1');
+  // …mais reconstruire la liste ne doit PAS déplacer la table choisie ailleurs
+  // (c'est ainsi qu'on arrive ici depuis un jeu temporaire).
+  el('vizBaseTable').value='s1'; handleVizBaseTableChange();
+  ok('reconstruire la liste ne change pas la table choisie', el('vizBaseTable').value==='s1');
+  el('vizBaseTable').value='s0'; handleVizBaseTableChange();
 
   const periodes = [...el('vizPeriode').options].map(o=>o.value);
   ok('on peut regrouper par année, trimestre ou mois', periodes.join('|')==='|annee|trimestre|mois');
 
-  el('vizDim').value='DATE_ENTREE'; statProposerLaPeriode();
+  el('vizDim').value='s0|DATE_ENTREE'; statProposerLaPeriode();
   const aideDate = el('vizDimAide').textContent;
-  el('vizDim').value='REPERE'; statProposerLaPeriode();
+  el('vizDim').value='s0|REPERE'; statProposerLaPeriode();
   ok('une colonne date est signalée, une colonne ordinaire ne l’est pas',
     /année/.test(aideDate) && el('vizDimAide').textContent==='');
 
@@ -46,6 +67,13 @@ const out = await p.evaluate(async ()=>{
   ok('le titre du calcul se lit en français',
     statTitreDuCalcul('count','','DATE_ENTREE','annee')==='Nombre de lignes par année de DATE_ENTREE'
     && statTitreDuCalcul('sum','MONTANT','SITE','')==='Somme de MONTANT par SITE');
+
+  el('vizAgg').value='sum'; toggleVizMeasure();
+  el('vizDim').value='s0|DATE_ENTREE'; statProposerLaPeriode(); el('vizMeasure').value='s1|SANS_RAPPORT';
+  await generateChart(null);
+  ok('mesurer une colonne d’une AUTRE table est refusé, au lieu d’être calculé faux',
+    /même table que l’axe/.test(el('globalErrorText').textContent||''));
+  el('vizMeasure').value='s0|MONTANT';
 
   // Sans la bibliothèque de graphiques (page de test, ou pas d'internet), les
   // chiffres doivent quand même s'afficher.
