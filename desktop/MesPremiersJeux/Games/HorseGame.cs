@@ -31,7 +31,7 @@ namespace MesPremiersJeux.Games
         private const double W = 1440, H = 760;
         private const int Track = 56;                  // cases de la piste
         private const double Cx = 470, Cy = 390;       // centre du plateau
-        private const double Rx = 360, Ry = 280;       // rayons de la piste
+        private const double R = 310;                  // demi-côté du plateau CARRÉ
         private const double CellD = 42;               // diamètre d'une case
         private const double TokD = 42;                // diamètre d'un cheval
 
@@ -44,7 +44,7 @@ namespace MesPremiersJeux.Games
             return t;
         }
 
-        private static readonly int[] StartIdx = { 0, 14, 28, 42 };
+        private static readonly int[] StartIdx = { 7, 21, 35, 49 }; // milieux des côtés
         private static readonly Color[] PColor =
         {
             Color.FromRgb(0xE8, 0x43, 0x3A), // Rouge — l'enfant
@@ -53,10 +53,12 @@ namespace MesPremiersJeux.Games
             Color.FromRgb(0xE8, 0xB0, 0x0F), // Jaune
         };
         private static readonly string[] PName = { "Rouge", "Bleu", "Vert", "Jaune" };
-        // Écuries : quatre coins du plateau (x, y).
+        // Écuries : les quatre coins INTÉRIEURS du plateau carré (comme sur le
+        // vrai plateau de dada). P0 haut → coin NO, P1 droite → NE, P2 bas → SE,
+        // P3 gauche → SO.
         private static readonly Point[] StablePos =
         {
-            new Point(26, 22), new Point(756, 22), new Point(756, 610), new Point(26, 610),
+            new Point(194, 108), new Point(598, 108), new Point(598, 544), new Point(194, 544),
         };
 
         private int _nPlayers = 2;
@@ -195,10 +197,20 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         // Le plateau.
         // ------------------------------------------------------------------
+        // Plateau CARRÉ : 56 cases au bord (14 par côté), sens des aiguilles
+        // d'une montre. Les départs (7, 21, 35, 49) sont au milieu des côtés,
+        // et chaque escalier part du milieu de son côté, droit vers le centre.
         private Point TrackPoint(int abs)
         {
-            double a = (-90 + abs * (360.0 / Track)) * Math.PI / 180.0;
-            return new Point(Cx + Rx * Math.Cos(a), Cy + Ry * Math.Sin(a));
+            int side = abs / 14, k = abs % 14;
+            double step = 2 * R / 14.0;
+            switch (side)
+            {
+                case 0: return new Point(Cx - R + k * step, Cy - R);  // haut : gauche → droite
+                case 1: return new Point(Cx + R, Cy - R + k * step);  // droite : haut → bas
+                case 2: return new Point(Cx + R - k * step, Cy + R);  // bas : droite → gauche
+                default: return new Point(Cx - R, Cy + R - k * step); // gauche : bas → haut
+            }
         }
 
         private Point LadderPoint(int player, int step)
@@ -348,10 +360,10 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(Deco("🌼", 330, 8, 30));
             _canvas.Children.Add(Deco("🌷", 420, 4, 30));
             _canvas.Children.Add(Deco("🌸", 520, 10, 30));
-            _canvas.Children.Add(Deco("🌻", 300, 700, 34));
-            _canvas.Children.Add(Deco("🦋", 400, 706, 30));
-            _canvas.Children.Add(Deco("🌷", 500, 698, 32));
-            _canvas.Children.Add(Deco("🐞", 590, 708, 26));
+            _canvas.Children.Add(Deco("🌻", 360, 248, 30));
+            _canvas.Children.Add(Deco("🦋", 556, 252, 28));
+            _canvas.Children.Add(Deco("🌷", 360, 500, 30));
+            _canvas.Children.Add(Deco("🐞", 560, 505, 24));
 
             // La ROUTE : un anneau de terre battue qui relie les 56 cases.
             var ring = new PointCollection();
@@ -744,9 +756,21 @@ namespace MesPremiersJeux.Games
 
         private void AfterRoll()
         {
+            // Chevaux jouables. Les chevaux à l'ÉCURIE sont interchangeables : on
+            // n'en garde qu'un seul dans la liste (avant, les boutons de choix se
+            // superposaient dans l'écurie et le choix ne servait à rien).
             var movable = new List<int>();
+            bool stableTaken = false;
             for (int h = 0; h < _nHorses; h++)
-                if (TryTarget(_current, h, _roll, out _, out _)) movable.Add(h);
+            {
+                if (!TryTarget(_current, h, _roll, out _, out _)) continue;
+                if (_pos[_current, h] < 0)
+                {
+                    if (stableTaken) continue;
+                    stableTaken = true;
+                }
+                movable.Add(h);
+            }
 
             if (movable.Count == 0)
             {

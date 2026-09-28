@@ -45,6 +45,7 @@ namespace MesPremiersJeux.Games
         private bool[] _seen;
         private List<int> _findOrder;
         private int _findRound, _countRound;
+        private List<TextBlock> _countAnimals;
 
         public NumberPartyGame(Action celebrate) : base(celebrate) { }
 
@@ -319,15 +320,24 @@ namespace MesPremiersJeux.Games
             Question.Text = "🧮 Combien de " + animal.Name + " ?";
             _canvas = new Canvas { Width = W, Height = H };
 
-            // Les animaux à compter, en GRAND au centre.
+            // Les animaux à compter, en GRAND au centre (on garde chaque animal
+            // pour le comptage interactif : le chiffre s'affichera au-dessus).
+            _countAnimals = new List<TextBlock>();
             double aw = 130;
             double ax0 = (W - k * aw) / 2;
             for (int i = 0; i < k; i++)
             {
-                var a = new TextBlock { Text = animal.Emoji, FontSize = 104, IsHitTestVisible = false };
+                var a = new TextBlock
+                {
+                    Text = animal.Emoji,
+                    FontSize = 104,
+                    IsHitTestVisible = false,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                };
                 Canvas.SetLeft(a, ax0 + i * aw);
-                Canvas.SetTop(a, 60);
+                Canvas.SetTop(a, 150);
                 _canvas.Children.Add(a);
+                _countAnimals.Add(a);
             }
 
             int spokenK = k;
@@ -379,11 +389,9 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 GameKit.Success();
                 Bounce(btn);
-                // On compte à voix haute : « Un, deux, trois ! Trois papillons ! »
-                string counting = string.Join(", ", Enumerable.Range(1, k).Select(v => NWord[v - 1]));
-                Speak(Cap(counting) + " ! " + Cap(NWord[k - 1]) + " " + name + " ! " + GameKit.Praise());
-                _countRound++;
-                Schedule(2600, NextCount);
+                // COMPTAGE INTERACTIF : on compte à voix haute ET le chiffre
+                // s'affiche au-dessus de chaque animal, un par un : 1... 2... 3...
+                CountStep(0, k, name);
             }
             else
             {
@@ -391,6 +399,39 @@ namespace MesPremiersJeux.Games
                 Shake(btn);
                 Speak("Non, ça c'est le " + NWord[n - 1] + ". Compte encore !");
             }
+        }
+
+        // Compte un animal à la fois : le mot est DIT, l'animal saute, et le
+        // chiffre correspondant apparaît au-dessus de lui — 1, puis 2, puis 3…
+        private void CountStep(int i, int k, string name)
+        {
+            if (i >= k)
+            {
+                Speak(Cap(NWord[k - 1]) + " " + name + " ! " + GameKit.Praise());
+                _countRound++;
+                Schedule(2300, NextCount);
+                return;
+            }
+
+            var animal = _countAnimals[i];
+            Speak(NWord[i]);
+            Bounce(animal);
+
+            var badge = DigitVisual(i + 1, 74);
+            badge.IsHitTestVisible = false;
+            badge.RenderTransformOrigin = new Point(0.5, 0.5);
+            var sc = new ScaleTransform(0.2, 0.2);
+            badge.RenderTransform = sc;
+            Canvas.SetLeft(badge, Canvas.GetLeft(animal) + 15);
+            Canvas.SetTop(badge, 56);
+            badge.SetValue(Panel.ZIndexProperty, 70);
+            _canvas.Children.Add(badge);
+            var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(340))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+
+            Schedule(880, () => CountStep(i + 1, k, name));
         }
 
         // --- Petits effets. ---

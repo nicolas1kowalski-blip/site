@@ -45,6 +45,8 @@ namespace MesPremiersJeux.Games
         private bool _pouredA, _pouredB;
         private Ellipse _cauldronFill;
         private Point _cauldronCenter;
+        private Canvas _cauldronGroup;
+        private RotateTransform _cauldronWobble;
         private int[] _findTargets;
 
         public ColorMagicGame(Action celebrate) : base(celebrate) { }
@@ -180,31 +182,8 @@ namespace MesPremiersJeux.Games
             AddPotButton(a, 200, 60, true);
             AddPotButton(b, 940, 60, false);
 
-            // Le chaudron.
-            _cauldronCenter = new Point(W / 2, 430);
-            var pot = new Ellipse
-            {
-                Width = 300,
-                Height = 190,
-                Fill = new RadialGradientBrush(Color.FromRgb(0x5A, 0x5A, 0x6E), Color.FromRgb(0x2E, 0x2E, 0x3E)),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x28)),
-                StrokeThickness = 6,
-                IsHitTestVisible = false,
-            };
-            Canvas.SetLeft(pot, _cauldronCenter.X - 150);
-            Canvas.SetTop(pot, _cauldronCenter.Y - 95);
-            _canvas.Children.Add(pot);
-            _cauldronFill = new Ellipse
-            {
-                Width = 240,
-                Height = 92,
-                Fill = new SolidColorBrush(Color.FromRgb(0x6E, 0x6E, 0x84)),
-                IsHitTestVisible = false,
-            };
-            Canvas.SetLeft(_cauldronFill, _cauldronCenter.X - 120);
-            Canvas.SetTop(_cauldronFill, _cauldronCenter.Y - 82);
-            _canvas.Children.Add(_cauldronFill);
-            _canvas.Children.Add(MakeDeco("🔥", _cauldronCenter.X - 30, _cauldronCenter.Y + 92, 44));
+            // Le chaudron (construit pièce par pièce, avec son feu et sa cuillère).
+            BuildCauldron();
 
             var speaker = SpeakerButton(() => "Regarde les deux pots pour les verser dans le chaudron magique !");
             Canvas.SetLeft(speaker, W - 150);
@@ -213,6 +192,73 @@ namespace MesPremiersJeux.Games
 
             SetBody(_canvas);
             Schedule(400, () => Speak("Verse le " + CName[a] + " et le " + CName[b] + " dans le chaudron ! Regarde un pot pour le verser !"));
+        }
+
+        // Un VRAI chaudron de sorcière : pieds, ventre bombé avec reflet, anses,
+        // rebord, potion, cuillère en bois et feu qui crépite dessous.
+        private void BuildCauldron()
+        {
+            _cauldronCenter = new Point(W / 2, 430);
+            var cg = new Canvas { Width = 380, Height = 330, IsHitTestVisible = false };
+            _cauldronGroup = cg;
+            _cauldronWobble = new RotateTransform(0);
+            cg.RenderTransformOrigin = new Point(0.5, 0.6);
+            cg.RenderTransform = _cauldronWobble;
+            Canvas.SetLeft(cg, _cauldronCenter.X - 190);
+            Canvas.SetTop(cg, _cauldronCenter.Y - 165);
+            _canvas.Children.Add(cg);
+
+            void Put(UIElement el, double x, double y)
+            {
+                Canvas.SetLeft(el, x);
+                Canvas.SetTop(el, y);
+                cg.Children.Add(el);
+            }
+
+            var iron = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x1E));
+            // Pieds.
+            Put(new Border { Width = 30, Height = 46, CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x28)) }, 96, 250);
+            Put(new Border { Width = 30, Height = 46, CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x28)) }, 254, 250);
+            // Anses.
+            Put(new Ellipse { Width = 36, Height = 54, Stroke = iron, StrokeThickness = 7 }, 4, 116);
+            Put(new Ellipse { Width = 36, Height = 54, Stroke = iron, StrokeThickness = 7 }, 340, 116);
+            // Ventre bombé.
+            Put(new Ellipse
+            {
+                Width = 310,
+                Height = 200,
+                Fill = new RadialGradientBrush(Color.FromRgb(0x5A, 0x5A, 0x74), Color.FromRgb(0x20, 0x20, 0x2E))
+                { GradientOrigin = new Point(0.3, 0.25), Center = new Point(0.3, 0.25) },
+                Stroke = iron,
+                StrokeThickness = 5,
+            }, 35, 68);
+            // Reflet.
+            Put(new Ellipse { Width = 74, Height = 42, Fill = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)) }, 78, 98);
+            // Rebord.
+            Put(new Ellipse
+            {
+                Width = 300,
+                Height = 74,
+                Fill = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x3A)),
+                Stroke = iron,
+                StrokeThickness = 5,
+            }, 40, 40);
+            // La potion.
+            _cauldronFill = new Ellipse { Width = 258, Height = 54, Fill = new SolidColorBrush(Color.FromRgb(0x6E, 0x6E, 0x84)) };
+            Put(_cauldronFill, 61, 50);
+            // Cuillère en bois.
+            Put(new TextBlock
+            {
+                Text = "🥄",
+                FontSize = 48,
+                RenderTransformOrigin = new Point(0.5, 0.9),
+                RenderTransform = new RotateTransform(-35),
+            }, 258, 2);
+            // Le feu et des étincelles.
+            Put(new TextBlock { Text = "🔥", FontSize = 54 }, 118, 264);
+            Put(new TextBlock { Text = "🔥", FontSize = 40 }, 194, 278);
+            Put(new TextBlock { Text = "✨", FontSize = 24 }, 18, 28);
+            Put(new TextBlock { Text = "✨", FontSize = 20 }, 336, 44);
         }
 
         private void AddPotButton(int ci, double x, double y, bool isA)
@@ -259,12 +305,12 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(drop);
             var ax = new DoubleAnimation(sx, _cauldronCenter.X - 23, TimeSpan.FromMilliseconds(620))
             { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
-            var ay = new DoubleAnimation(sy, _cauldronCenter.Y - 60, TimeSpan.FromMilliseconds(620))
+            var ay = new DoubleAnimation(sy, _cauldronCenter.Y - 95, TimeSpan.FromMilliseconds(620))
             { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
             ay.Completed += (s, e) =>
             {
                 _canvas.Children.Remove(drop);
-                Splash(_cauldronCenter.X, _cauldronCenter.Y - 40, CVal[ci]);
+                Splash(_cauldronCenter.X, _cauldronCenter.Y - 85, CVal[ci]);
                 if (_pouredA && _pouredB) { Locked = true; Schedule(700, RevealMix); }
             };
             drop.BeginAnimation(Canvas.LeftProperty, ax);
@@ -274,38 +320,147 @@ namespace MesPremiersJeux.Games
         private void RevealMix()
         {
             var (a, b, r) = Mixes[_mixRound];
-            _cauldronFill.Fill = new RadialGradientBrush(Lighten(CVal[r]), CVal[r]);
-            Splash(_cauldronCenter.X, _cauldronCenter.Y - 50, CVal[r]);
-            Splash(_cauldronCenter.X - 60, _cauldronCenter.Y - 30, CVal[r]);
-            Splash(_cauldronCenter.X + 60, _cauldronCenter.Y - 30, CVal[r]);
 
-            // La nouvelle couleur monte du chaudron, en grand.
+            // 1) On MÉLANGE longuement : la potion devient bicolore, le chaudron
+            //    remue, des bulles des deux couleurs montent — l'enfant voit le
+            //    mélange se préparer.
+            _cauldronFill.Fill = new LinearGradientBrush(CVal[a], CVal[b], 0);
+            Speak("On mélange, on mélange ! Touille, touille, touille !");
+            var wob = new DoubleAnimationUsingKeyFrames
+            { Duration = TimeSpan.FromMilliseconds(620), RepeatBehavior = new RepeatBehavior(4) };
+            wob.KeyFrames.Add(new LinearDoubleKeyFrame(-5, KeyTime.FromPercent(0.25)));
+            wob.KeyFrames.Add(new LinearDoubleKeyFrame(5, KeyTime.FromPercent(0.75)));
+            wob.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+            _cauldronWobble.BeginAnimation(RotateTransform.AngleProperty, wob);
+            for (int i = 0; i < 10; i++)
+                Bubble(i % 2 == 0 ? CVal[a] : CVal[b], i * 240);
+
+            Schedule(3000, () =>
+            {
+                // 2) L'ÉCLAIR magique : flash blanc, et la potion prend la
+                //    nouvelle couleur dans une gerbe d'éclaboussures.
+                GameKit.Success();
+                var flash = new Ellipse
+                {
+                    Width = 380,
+                    Height = 260,
+                    Fill = new RadialGradientBrush(Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF)),
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(flash, _cauldronCenter.X - 190);
+                Canvas.SetTop(flash, _cauldronCenter.Y - 210);
+                flash.SetValue(Panel.ZIndexProperty, 80);
+                _canvas.Children.Add(flash);
+                var fout = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(700));
+                var captured = flash;
+                fout.Completed += (s2, e2) => _canvas.Children.Remove(captured);
+                flash.BeginAnimation(UIElement.OpacityProperty, fout);
+
+                _cauldronFill.Fill = new RadialGradientBrush(Lighten(CVal[r]), CVal[r]);
+                Splash(_cauldronCenter.X, _cauldronCenter.Y - 85, CVal[r]);
+                Splash(_cauldronCenter.X - 70, _cauldronCenter.Y - 60, CVal[r]);
+                Splash(_cauldronCenter.X + 70, _cauldronCenter.Y - 60, CVal[r]);
+
+                Schedule(700, () => BigReveal(a, b, r));
+            });
+        }
+
+        // 3) La GRANDE révélation : une énorme bulle de la couleur nouvelle qui
+        //    « respire », le nom dit lentement, et ses objets qui apparaissent
+        //    un à un — on a le temps de bien la voir.
+        private void BigReveal(int a, int b, int r)
+        {
             var blob = new Ellipse
             {
-                Width = 150,
-                Height = 150,
-                Fill = new RadialGradientBrush(Lighten(CVal[r]), CVal[r]),
+                Width = 250,
+                Height = 250,
+                Fill = new RadialGradientBrush(Lighten(CVal[r]), CVal[r])
+                { GradientOrigin = new Point(0.35, 0.3), Center = new Point(0.35, 0.3) },
                 Stroke = Brushes.White,
-                StrokeThickness = 6,
+                StrokeThickness = 7,
                 RenderTransformOrigin = new Point(0.5, 0.5),
                 IsHitTestVisible = false,
             };
-            var sc = new ScaleTransform(0.2, 0.2);
+            var sc = new ScaleTransform(0.15, 0.15);
             blob.RenderTransform = sc;
-            Canvas.SetLeft(blob, _cauldronCenter.X - 75);
-            Canvas.SetTop(blob, _cauldronCenter.Y - 300);
-            blob.SetValue(Panel.ZIndexProperty, 70);
+            double bx = _cauldronCenter.X, by = 190;
+            Canvas.SetLeft(blob, bx - 125);
+            Canvas.SetTop(blob, by - 125);
+            blob.SetValue(Panel.ZIndexProperty, 85);
             _canvas.Children.Add(blob);
-            var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(520))
-            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+            var pop = new DoubleAnimation(0.15, 1, TimeSpan.FromMilliseconds(900))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } };
+            pop.Completed += (s, e) =>
+            {
+                var breathe = new DoubleAnimation(1, 1.09, TimeSpan.FromMilliseconds(650))
+                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase() };
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, breathe);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, breathe);
+            };
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
 
-            GameKit.Success();
-            Speak("Abracadabra ! " + Cap(CName[a]) + " et " + CName[b] + "... ça fait... " + CName[r] + " !");
+            Speak("Abracadabra ! " + Cap(CName[a]) + "... et " + CName[b] + "... ça fait... " + CName[r] + " !");
             RewardStore.Add();
+
+            // Les objets de cette couleur apparaissent un à un autour de la bulle.
+            for (int i = 0; i < CObjs[r].Length; i++)
+            {
+                var obj = new TextBlock
+                {
+                    Text = CObjs[r][i],
+                    FontSize = 84,
+                    IsHitTestVisible = false,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                    Opacity = 0,
+                };
+                var osc = new ScaleTransform(0.2, 0.2);
+                obj.RenderTransform = osc;
+                double ang = -Math.PI / 2 + (i - 1) * 1.05;
+                Canvas.SetLeft(obj, bx + Math.Cos(ang) * 250 - 42);
+                Canvas.SetTop(obj, by + Math.Sin(ang) * 190 - 42 + 60);
+                obj.SetValue(Panel.ZIndexProperty, 85);
+                _canvas.Children.Add(obj);
+                var delay = TimeSpan.FromMilliseconds(1600 + i * 450);
+                obj.BeginAnimation(UIElement.OpacityProperty,
+                    new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)) { BeginTime = delay });
+                var opop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(430))
+                { BeginTime = delay, EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+                osc.BeginAnimation(ScaleTransform.ScaleXProperty, opop);
+                osc.BeginAnimation(ScaleTransform.ScaleYProperty, opop);
+            }
+
             _mixRound++;
-            Schedule(3400, StartMixRound);
+            Schedule(5400, StartMixRound);
+        }
+
+        // Une bulle colorée qui monte de la potion puis s'évanouit.
+        private void Bubble(Color col, int delayMs)
+        {
+            var bub = new Ellipse
+            {
+                Width = 16 + GameKit.RandInt(16),
+                Height = 16 + GameKit.RandInt(16),
+                Fill = new SolidColorBrush(Color.FromArgb(0xCC, col.R, col.G, col.B)),
+                Stroke = Brushes.White,
+                StrokeThickness = 2,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(bub, _cauldronCenter.X - 70 + GameKit.RandInt(140));
+            Canvas.SetTop(bub, _cauldronCenter.Y - 95);
+            bub.SetValue(Panel.ZIndexProperty, 75);
+            _canvas.Children.Add(bub);
+            var t0 = TimeSpan.FromMilliseconds(delayMs);
+            var tt = new TranslateTransform();
+            bub.RenderTransform = tt;
+            var dur = TimeSpan.FromMilliseconds(900 + GameKit.RandInt(400));
+            tt.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(0, -110 - GameKit.RandInt(70), dur)
+                { BeginTime = t0, EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+            var fade = new DoubleAnimation(1, 0, dur) { BeginTime = t0 };
+            var captured = bub;
+            fade.Completed += (s, e) => _canvas.Children.Remove(captured);
+            bub.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
         // ==================================================================
