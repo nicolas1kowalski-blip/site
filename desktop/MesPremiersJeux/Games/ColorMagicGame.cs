@@ -671,6 +671,7 @@ namespace MesPremiersJeux.Games
             {
                 Locked = true;
                 GameKit.Success();
+                Celebrate();
 
                 // On COLORIE l'objet : la silhouette grise s'efface, la version en
                 // couleurs surgit dans une gerbe de peinture.
@@ -685,9 +686,41 @@ namespace MesPremiersJeux.Games
                 Splash(cx, cy, CVal[target]);
                 Splash(cx + 40, cy - 30, CVal[target]);
 
-                Speak("Et voilà, tout colorié en " + CName[target] + " ! " + GameKit.Praise());
+                Speak("Et voilà, tout colorié en " + CName[target] + " ! Regarde : tout ça, c'est " + CName[target] + " !");
+
+                // Et d'AUTRES exemples de la couleur apparaissent autour, un à un.
+                var others = CObjs[target].Where(o => o != colored.Text).Take(2).ToList();
+                for (int j = 0; j < others.Count; j++)
+                {
+                    var ex = new TextBlock
+                    {
+                        Text = others[j],
+                        FontSize = 96,
+                        IsHitTestVisible = false,
+                        Opacity = 0,
+                        RenderTransformOrigin = new Point(0.5, 0.5),
+                    };
+                    var esc = new ScaleTransform(0.2, 0.2);
+                    ex.RenderTransform = esc;
+                    double exx = j == 0 ? cx - 300 : cx + 210;
+                    Canvas.SetLeft(ex, exx);
+                    Canvas.SetTop(ex, cy - 60);
+                    ex.SetValue(Panel.ZIndexProperty, 80);
+                    _canvas.Children.Add(ex);
+                    var t0 = TimeSpan.FromMilliseconds(900 + j * 450);
+                    ex.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240)) { BeginTime = t0 });
+                    var epop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(430))
+                    { BeginTime = t0, EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+                    esc.BeginAnimation(ScaleTransform.ScaleXProperty, epop);
+                    esc.BeginAnimation(ScaleTransform.ScaleYProperty, epop);
+                    double sx2 = exx + 48, sy2 = cy - 10;
+                    int captJ = j;
+                    Schedule(900 + captJ * 450, () => Splash(sx2, sy2, CVal[target]));
+                }
+
                 _findRound++;
-                Schedule(2300, NextFind);
+                Schedule(3200, NextFind);
             }
             else
             {

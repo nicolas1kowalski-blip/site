@@ -46,6 +46,7 @@ namespace MesPremiersJeux.Games
         private List<int> _findOrder;
         private int _findRound, _countRound;
         private List<TextBlock> _countAnimals;
+        private readonly List<UIElement> _demoBadges = new List<UIElement>();
 
         public NumberPartyGame(Action celebrate) : base(celebrate) { }
 
@@ -461,8 +462,30 @@ namespace MesPremiersJeux.Games
             {
                 GameKit.Wrong();
                 Shake(btn);
-                Speak("Non, ça c'est le " + NWord[n - 1] + ". Compte encore !");
+                // On compte ENSEMBLE pour montrer l'erreur, puis on réessaie.
+                Locked = true;
+                WrongCountStep(0, n, k, name);
             }
+        }
+
+        // Fait apparaître le chiffre au-dessus d'un animal (avec un pop).
+        private Grid AddCountBadge(int number, int animalIdx)
+        {
+            var animal = _countAnimals[animalIdx];
+            var badge = DigitVisual(number, 74);
+            badge.IsHitTestVisible = false;
+            badge.RenderTransformOrigin = new Point(0.5, 0.5);
+            var sc = new ScaleTransform(0.2, 0.2);
+            badge.RenderTransform = sc;
+            Canvas.SetLeft(badge, Canvas.GetLeft(animal) + 15);
+            Canvas.SetTop(badge, 56);
+            badge.SetValue(Panel.ZIndexProperty, 70);
+            _canvas.Children.Add(badge);
+            var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(340))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+            return badge;
         }
 
         // Compte un animal à la fois : le mot est DIT, l'animal saute, et le
@@ -477,25 +500,43 @@ namespace MesPremiersJeux.Games
                 return;
             }
 
-            var animal = _countAnimals[i];
             Speak(NWord[i]);
-            Bounce(animal);
-
-            var badge = DigitVisual(i + 1, 74);
-            badge.IsHitTestVisible = false;
-            badge.RenderTransformOrigin = new Point(0.5, 0.5);
-            var sc = new ScaleTransform(0.2, 0.2);
-            badge.RenderTransform = sc;
-            Canvas.SetLeft(badge, Canvas.GetLeft(animal) + 15);
-            Canvas.SetTop(badge, 56);
-            badge.SetValue(Panel.ZIndexProperty, 70);
-            _canvas.Children.Add(badge);
-            var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(340))
-            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
-            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
-            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
-
+            Bounce(_countAnimals[i]);
+            AddCountBadge(i + 1, i);
             Schedule(880, () => CountStep(i + 1, k, name));
+        }
+
+        // MAUVAISE réponse : on compte quand même ensemble, et on MONTRE pourquoi
+        // c'est faux — trop petit : on s'arrête avant la fin et les animaux
+        // restants sautent (« il en reste ! ») ; trop grand : on compte tout et…
+        // il n'y a plus d'animaux à compter !
+        private void WrongCountStep(int i, int chosen, int k, string name)
+        {
+            int upTo = Math.Min(chosen, k);
+            if (i < upTo)
+            {
+                Speak(NWord[i]);
+                Bounce(_countAnimals[i]);
+                _demoBadges.Add(AddCountBadge(i + 1, i));
+                Schedule(880, () => WrongCountStep(i + 1, chosen, k, name));
+                return;
+            }
+
+            if (chosen < k)
+            {
+                Speak("Mais il en reste encore ! " + Cap(NWord[chosen - 1]) + ", c'est trop petit. Compte encore !");
+                for (int j = chosen; j < k; j++) Bounce(_countAnimals[j]);
+            }
+            else
+            {
+                Speak("Et il n'y a plus de " + name + " à compter ! " + Cap(NWord[chosen - 1]) + ", c'est trop grand. Compte encore !");
+            }
+            Schedule(2800, () =>
+            {
+                foreach (var b in _demoBadges) _canvas.Children.Remove(b);
+                _demoBadges.Clear();
+                Locked = false; // on réessaie !
+            });
         }
 
         // --- Petits effets. ---

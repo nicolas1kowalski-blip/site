@@ -263,16 +263,61 @@ namespace MesPremiersJeux.Games
             {
                 Locked = true;
                 GameKit.Success();
+                Celebrate();
                 Bounce(btn);
                 Speak("Oui ! " + Alphabet[targetAi].L + ", comme " + Alphabet[targetAi].Word + " ! " + GameKit.Praise());
+                RainExamples(Alphabet[targetAi].Emoji); // des avions partout !
                 _findRound++;
-                Schedule(1900, NextFind);
+                Schedule(2700, NextFind);
             }
             else
             {
                 GameKit.Wrong();
                 Shake(btn);
                 Speak("Ça, c'est le " + Alphabet[ai].L + ". Cherche le " + Alphabet[targetAi].L + " !");
+            }
+        }
+
+        // Pluie d'exemples EN IMAGES : plusieurs dessins du mot surgissent et
+        // tournoient sur l'écran — la récompense montre ce que la lettre raconte.
+        private void RainExamples(string emoji)
+        {
+            var rng = new Random();
+            for (int i = 0; i < 6; i++)
+            {
+                var t = new TextBlock
+                {
+                    Text = emoji,
+                    FontSize = 66 + rng.Next(46),
+                    IsHitTestVisible = false,
+                    Opacity = 0,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                };
+                var sc = new ScaleTransform(0.2, 0.2);
+                var rot = new RotateTransform(rng.Next(-25, 25));
+                var grp = new TransformGroup();
+                grp.Children.Add(sc);
+                grp.Children.Add(rot);
+                t.RenderTransform = grp;
+                Canvas.SetLeft(t, 140 + rng.Next(1050));
+                Canvas.SetTop(t, 90 + rng.Next(420));
+                t.SetValue(Panel.ZIndexProperty, 80);
+                _canvas.Children.Add(t);
+
+                var t0 = TimeSpan.FromMilliseconds(i * 170);
+                t.BeginAnimation(UIElement.OpacityProperty,
+                    new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = t0 });
+                var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(420))
+                { BeginTime = t0, EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+                rot.BeginAnimation(RotateTransform.AngleProperty,
+                    new DoubleAnimation(rot.Angle, rot.Angle + rng.Next(-40, 40), TimeSpan.FromMilliseconds(2200)) { BeginTime = t0 });
+                var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(420))
+                { BeginTime = t0 + TimeSpan.FromMilliseconds(1700) };
+                var captured = t;
+                fade.Completed += (s, e) => _canvas.Children.Remove(captured);
+                t.BeginAnimation(UIElement.OpacityProperty, fade);
             }
         }
 
@@ -359,10 +404,12 @@ namespace MesPremiersJeux.Games
             {
                 Locked = true;
                 GameKit.Success();
+                Celebrate();
                 Bounce(btn);
                 Speak("Oui ! " + Cap(target.Word) + " commence par " + target.L + " ! " + GameKit.Praise());
+                RainExamples(target.Emoji);
                 _wordRound++;
-                Schedule(2100, NextWord);
+                Schedule(2700, NextWord);
             }
             else
             {

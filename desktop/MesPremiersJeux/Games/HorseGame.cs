@@ -956,6 +956,18 @@ namespace MesPremiersJeux.Games
             var from = _tokAt[p, h];
             _tokAt[p, h] = to;
             g.SetValue(Panel.ZIndexProperty, 50);
+
+            // Un petit nuage de poussière derrière le galop.
+            var puff = new TextBlock { Text = "💨", FontSize = 22, IsHitTestVisible = false, Opacity = 0.85 };
+            puff.SetValue(Panel.ZIndexProperty, 45);
+            Canvas.SetLeft(puff, from.X - 12);
+            Canvas.SetTop(puff, from.Y - 6);
+            _canvas.Children.Add(puff);
+            var pfade = new DoubleAnimation(0.85, 0, TimeSpan.FromMilliseconds(650));
+            var captPuff = puff;
+            pfade.Completed += (s, e) => _canvas.Children.Remove(captPuff);
+            puff.BeginAnimation(UIElement.OpacityProperty, pfade);
+
             var ax = new DoubleAnimation(from.X - TokD / 2, to.X - TokD / 2, TimeSpan.FromMilliseconds(ms))
             { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } };
             // GALOP : le cheval saute en arc au lieu de glisser à plat.

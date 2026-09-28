@@ -994,6 +994,19 @@ namespace MesPremiersJeux.Games
             var o0 = Off(fromIdx);
             var o1 = Off(toIdx);
 
+            // Une étincelle reste un instant là où le pion vient de sauter :
+            // on « voit » le chemin parcouru.
+            var fp = Center(fromIdx);
+            var trail = new TextBlock { Text = "✨", FontSize = 20, IsHitTestVisible = false, Opacity = 0.9 };
+            trail.SetValue(Panel.ZIndexProperty, 45);
+            Canvas.SetLeft(trail, fp.X - 10);
+            Canvas.SetTop(trail, fp.Y - 10);
+            _canvas.Children.Add(trail);
+            var tfade = new DoubleAnimation(0.9, 0, TimeSpan.FromMilliseconds(600));
+            var captTrail = trail;
+            tfade.Completed += (s, e) => _canvas.Children.Remove(captTrail);
+            trail.BeginAnimation(UIElement.OpacityProperty, tfade);
+
             var ax = new DoubleAnimation(o0.X, o1.X, TimeSpan.FromMilliseconds(ms))
             { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } };
 
