@@ -35,6 +35,8 @@ namespace MesPremiersJeux.Games
 
             var item = GameKit.Rand(CartoonArt.Items);
             Question.Text = "Compte ! Combien il y en a ?";
+            // Les objets à compter sont le modèle : on ajoute le 🔊.
+            SetConsigne(null, () => "Compte ! Combien il y en a ?");
 
             // Les objets à compter (sur une ligne, en quinconce léger).
             var visuals = new WrapPanel

@@ -21,6 +21,8 @@ namespace MesPremiersJeux.Games
             var target = GameKit.Rand(GameData.Shapes);
             var options = GameKit.PickN(GameData.Shapes, 3, target);
             Question.Text = $"Trouve : {target.Name}";
+            // Le modèle est déjà montré en grand au centre : on ajoute le 🔊.
+            SetConsigne(null, () => $"Trouve la même forme : {target.Name} !");
 
             var stage = ShapeVisual(target, target.Color, 320);
 

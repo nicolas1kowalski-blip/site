@@ -38,6 +38,14 @@ namespace MesPremiersJeux.Games
             var target = GameKit.Rand(Alphabet);
             var options = GameKit.PickN(Alphabet, 3, target);
             Question.Text = $"Trouve la lettre : {target.Letter}";
+            // Consigne sans lecture : la lettre modèle en GRAND + 🔊.
+            SetConsigne(new TextBlock
+            {
+                Text = target.Letter,
+                FontSize = 200,
+                FontWeight = FontWeights.ExtraBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
+            }, () => $"Trouve la lettre {target.Letter} ! Cherche la lettre pareille !");
 
             var grid = new UniformGrid { Columns = 3 };
             int ci = GameKit.RandInt(Panels.Length);

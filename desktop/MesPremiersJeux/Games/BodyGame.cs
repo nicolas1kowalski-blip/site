@@ -64,6 +64,7 @@ namespace MesPremiersJeux.Games
             _last = _target = t;
 
             Question.Text = Prompt(Fr(t));
+            SetConsigne(null, () => Prompt(Fr(_target)));
             Speak(Question.Text);
         }
 

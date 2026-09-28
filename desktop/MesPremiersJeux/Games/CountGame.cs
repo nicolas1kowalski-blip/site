@@ -30,6 +30,7 @@ namespace MesPremiersJeux.Games
             _lastN = n;
             var options = GameKit.Shuffle(new[] { 1, 2, 3 });
             Question.Text = "Combien ?";
+            SetConsigne(null, () => "Combien ? Un... Deux... ou Trois ?");
 
             var item = GameKit.Rand(CartoonArt.Items);
             var visuals = Row();

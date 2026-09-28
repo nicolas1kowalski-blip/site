@@ -68,6 +68,9 @@ namespace MesPremiersJeux.Games
             var target = GameKit.Rand(_pool);
             var options = GameKit.PickN(_pool, 3, target);
             Question.Text = $"Trouve : {target.Fr}";
+            // Ici, montrer le modèle donnerait la réponse (c'est l'image qu'on
+            // cherche !) : on met seulement le 🔊 qui répète le mot.
+            SetConsigne(null, () => $"Trouve {target.Fr} !");
 
             var grid = new UniformGrid { Columns = 3 };
             foreach (var it in options)

@@ -33,6 +33,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             Question.Text = "Qu'est-ce qui vient après ?";
+            SetConsigne(null, () => "Regarde bien la suite des couleurs. Qu'est-ce qui vient après ?");
 
             // Deux couleurs bien distinctes pour la suite A-B-A-B-?
             var a = GameKit.Rand(GameData.Colors);

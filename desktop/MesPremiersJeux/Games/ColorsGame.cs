@@ -19,6 +19,15 @@ namespace MesPremiersJeux.Games
             var target = GameKit.Rand(GameData.Colors);
             var options = GameKit.PickN(GameData.Colors, 3, target);
             Question.Text = $"Trouve la couleur : {target.Name}";
+            // Consigne sans lecture : le rond de couleur modèle en GRAND + 🔊.
+            SetConsigne(new System.Windows.Shapes.Ellipse
+            {
+                Width = 150,
+                Height = 150,
+                Fill = new SolidColorBrush(target.Value),
+                Stroke = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42)),
+                StrokeThickness = 5,
+            }, () => $"Trouve la couleur {target.Name} ! Cherche la même couleur !");
 
             // Trois grands panneaux pleins qui remplissent la page (cibles énormes,
             // presque collées : plus de zone morte entre les couleurs).

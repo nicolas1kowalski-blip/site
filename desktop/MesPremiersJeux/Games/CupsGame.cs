@@ -80,6 +80,9 @@ namespace MesPremiersJeux.Games
             Locked = false;
             _phase = Phase.Show;
             Question.Text = "Regarde bien la balle !";
+            SetConsigne(null, () => _phase == Phase.Guess
+                ? "Où est la balle ? Regarde le bon gobelet !"
+                : "Regarde bien où est la balle !");
 
             _canvas = new Canvas { Width = W, Height = H };
 

@@ -20,6 +20,7 @@ namespace MesPremiersJeux.Games
             bool wantBig = GameKit.RandInt(2) == 0;
             string sizeWord = wantBig ? "GRAND" : "petit";
             Question.Text = $"Trouve le {sizeWord} !";
+            SetConsigne(null, () => $"Trouve le {(wantBig ? "grand" : "petit")} {StripArticle(item.Fr)} !");
 
             var row = Row();
             bool bigFirst = GameKit.RandInt(2) == 0;

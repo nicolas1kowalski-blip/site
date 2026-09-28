@@ -23,6 +23,9 @@ namespace MesPremiersJeux.Games
             var items = GameKit.Shuffle(CartoonArt.Items).Take(6).ToList();
             var target = GameKit.Rand(items);
             Question.Text = $"Où est {target.Fr} ?";
+            // Consigne sans lecture : on MONTRE qui chercher, en grand + 🔊.
+            SetConsigne(new Viewbox { Child = target.Build(), Width = 140, Height = 140 },
+                () => $"Où est {target.Fr} ? Cherche le pareil !");
 
             var canvas = new Canvas { Width = SceneW, Height = SceneH };
 

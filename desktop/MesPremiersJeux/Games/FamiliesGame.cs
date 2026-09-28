@@ -36,6 +36,7 @@ namespace MesPremiersJeux.Games
                     .Concat(distractors.Select(it => (item: it, isTarget: false))));
 
             Question.Text = $"Regarde tous {targetCat} !";
+            SetConsigne(null, () => $"Regarde tous {targetCat} ! Il y en a plusieurs à trouver !");
 
             var grid = new UniformGrid { Columns = 3 }; // 2 lignes de 3, grandes cartes
             foreach (var entry in items)

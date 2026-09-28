@@ -70,6 +70,7 @@ namespace MesPremiersJeux.Games
                 rightNames[j] = j == chateauDest ? "chateau" : pool[di++];
 
             Question.Text = "Quelle ficelle mène la princesse à son château ? Suis A, B, C ou D !";
+            SetConsigne(null, () => "Suis les ficelles avec tes yeux ! Laquelle mène la princesse à son château ?");
 
             var canvas = new Canvas { Width = W, Height = H };
 

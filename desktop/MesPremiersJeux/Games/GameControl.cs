@@ -26,6 +26,7 @@ namespace MesPremiersJeux.Games
 
             var root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // consigne 🔊
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             Question = new TextBlock
@@ -41,8 +42,20 @@ namespace MesPremiersJeux.Games
             Grid.SetRow(Question, 0);
             root.Children.Add(Question);
 
+            // Barre de consigne SANS LECTURE : le modèle en grand + le bouton 🔊
+            // qui répète la consigne (remplie par chaque jeu via SetConsigne).
+            _consigne = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 2),
+                Visibility = Visibility.Collapsed,
+            };
+            Grid.SetRow(_consigne, 1);
+            root.Children.Add(_consigne);
+
             Body = new Grid { Margin = new Thickness(12) };
-            Grid.SetRow(Body, 1);
+            Grid.SetRow(Body, 2);
             root.Children.Add(Body);
 
             Content = root;
@@ -60,6 +73,45 @@ namespace MesPremiersJeux.Games
         }
 
         private bool _started;
+        private StackPanel _consigne;
+
+        /// <summary>
+        /// Remplit la barre de consigne accessible : un MODÈLE montré en grand
+        /// (facultatif — la lettre, la couleur, l'objet à trouver…) et un gros
+        /// bouton 🔊 qui redit la consigne à voix haute. Pensé pour un enfant qui
+        /// ne lit pas : la consigne se voit et s'entend, elle ne se lit pas.
+        /// À appeler à chaque tour ; (null, null) masque la barre.
+        /// </summary>
+        protected void SetConsigne(UIElement model, Func<string> speech, double modelHeight = 130)
+        {
+            _consigne.Children.Clear();
+            if (model == null && speech == null)
+            {
+                _consigne.Visibility = Visibility.Collapsed;
+                return;
+            }
+            if (model != null)
+            {
+                _consigne.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(24),
+                    Background = Brushes.White,
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)),
+                    BorderThickness = new Thickness(5),
+                    Padding = new Thickness(14, 8, 14, 8),
+                    Margin = new Thickness(0, 0, 18, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new Viewbox { Child = model, Height = modelHeight, Stretch = Stretch.Uniform },
+                });
+            }
+            if (speech != null)
+            {
+                var b = SpeakerButton(speech, 96);
+                b.VerticalAlignment = VerticalAlignment.Center;
+                _consigne.Children.Add(b);
+            }
+            _consigne.Visibility = Visibility.Visible;
+        }
 
         /// <summary>Démarre un nouveau tour (implémenté par chaque jeu).</summary>
         protected abstract void NewRound();
