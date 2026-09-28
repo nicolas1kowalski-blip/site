@@ -242,11 +242,38 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(Emoji(flowers[rng.Next(flowers.Length)], x, baseY + rng.Next(14), 36));
             _canvas.Children.Add(Emoji("🌳", Bx - 10, baseY - 26, 66));
             _canvas.Children.Add(Emoji("🌳", Bx + Cols * Cs - 58, baseY - 26, 66));
-            _canvas.Children.Add(Emoji("☁️", Bx + 150, -4, 48));
-            _canvas.Children.Add(Emoji("☁️", Bx + 470, -10, 54));
-            _canvas.Children.Add(Emoji("☀️", Bx + 660, -6, 52));
-            _canvas.Children.Add(Emoji("🦋", Bx + 250, baseY + 4, 30));
-            _canvas.Children.Add(Emoji("🐞", Bx + 560, baseY + 12, 24));
+            // Décors VIVANTS : nuages qui dérivent, soleil qui respire, papillon
+            // qui volette, coccinelle qui se promène.
+            var c1 = Emoji("☁️", Bx + 150, -4, 48);
+            _canvas.Children.Add(c1);
+            Drift(c1, 46, 0, 7800);
+            var c2 = Emoji("☁️", Bx + 470, -10, 54);
+            _canvas.Children.Add(c2);
+            Drift(c2, -38, 0, 9200);
+            var sun = Emoji("☀️", Bx + 660, -6, 52);
+            _canvas.Children.Add(sun);
+            Drift(sun, 0, 7, 3600);
+            var pap = Emoji("🦋", Bx + 250, baseY + 4, 30);
+            _canvas.Children.Add(pap);
+            Drift(pap, 40, 16, 2100);
+            var cocc = Emoji("🐞", Bx + 560, baseY + 12, 24);
+            _canvas.Children.Add(cocc);
+            Drift(cocc, 26, -8, 3000);
+        }
+
+        // Fait doucement « vivre » un décor : va-et-vient perpétuel et régulier.
+        private static void Drift(UIElement el, double dx, double dy, int ms)
+        {
+            var tt = new TranslateTransform();
+            el.RenderTransform = tt;
+            if (dx != 0)
+                tt.BeginAnimation(TranslateTransform.XProperty,
+                    new DoubleAnimation(0, dx, TimeSpan.FromMilliseconds(ms))
+                    { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+            if (dy != 0)
+                tt.BeginAnimation(TranslateTransform.YProperty,
+                    new DoubleAnimation(0, dy, TimeSpan.FromMilliseconds((int)(ms * 1.35)))
+                    { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
         }
 
         private static TextBlock Emoji(string s, double x, double y, double size)

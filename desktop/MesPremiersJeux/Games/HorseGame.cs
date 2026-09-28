@@ -44,6 +44,21 @@ namespace MesPremiersJeux.Games
             return t;
         }
 
+        // Fait doucement « vivre » un décor : va-et-vient perpétuel et régulier.
+        private static void Drift(UIElement el, double dx, double dy, int ms)
+        {
+            var tt = new TranslateTransform();
+            el.RenderTransform = tt;
+            if (dx != 0)
+                tt.BeginAnimation(TranslateTransform.XProperty,
+                    new DoubleAnimation(0, dx, TimeSpan.FromMilliseconds(ms))
+                    { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+            if (dy != 0)
+                tt.BeginAnimation(TranslateTransform.YProperty,
+                    new DoubleAnimation(0, dy, TimeSpan.FromMilliseconds((int)(ms * 1.35)))
+                    { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+        }
+
         private static readonly int[] StartIdx = { 7, 21, 35, 49 }; // milieux des côtés
         private static readonly Color[] PColor =
         {
@@ -356,14 +371,24 @@ namespace MesPremiersJeux.Games
             bg.GradientStops.Add(new GradientStop(Color.FromRgb(0xDE, 0xF3, 0xD2), 0.45));
             bg.GradientStops.Add(new GradientStop(Color.FromRgb(0xBE, 0xE8, 0x96), 1.0));
             _canvas.Children.Add(new Rectangle { Width = W, Height = H, Fill = bg });
-            _canvas.Children.Add(Deco("☀️", 640, 0, 48));
+            var sun = Deco("☀️", 640, 0, 48);
+            _canvas.Children.Add(sun);
+            Drift(sun, 0, 7, 3600);
             _canvas.Children.Add(Deco("🌼", 330, 8, 30));
             _canvas.Children.Add(Deco("🌷", 420, 4, 30));
             _canvas.Children.Add(Deco("🌸", 520, 10, 30));
-            _canvas.Children.Add(Deco("🌻", 360, 248, 30));
-            _canvas.Children.Add(Deco("🦋", 556, 252, 28));
-            _canvas.Children.Add(Deco("🌷", 360, 500, 30));
-            _canvas.Children.Add(Deco("🐞", 560, 505, 24));
+            var f1 = Deco("🌻", 360, 248, 30);
+            _canvas.Children.Add(f1);
+            Drift(f1, 6, 0, 2400);
+            var b1 = Deco("🦋", 556, 252, 28);
+            _canvas.Children.Add(b1);
+            Drift(b1, 34, 20, 2000);
+            var f2 = Deco("🌷", 360, 500, 30);
+            _canvas.Children.Add(f2);
+            Drift(f2, -6, 0, 2800);
+            var b2 = Deco("🐞", 560, 505, 24);
+            _canvas.Children.Add(b2);
+            Drift(b2, 22, -10, 3100);
 
             // La ROUTE : un anneau de terre battue qui relie les 56 cases.
             var ring = new PointCollection();
@@ -910,7 +935,7 @@ namespace MesPremiersJeux.Games
                 {
                     _pos[vp, vh] = -1;
                     Speak("Oh ! Le cheval " + PName[vp] + " est mangé : retour à l'écurie !");
-                    AnimateToken(vp, vh, SpotOf(vp, vh, -1), 700, null);
+                    AnimateToken(vp, vh, SpotOf(vp, vh, -1), 850, null, spin: true);
                 }
 
                 UpdateHomeCounts();
@@ -925,7 +950,7 @@ namespace MesPremiersJeux.Games
             });
         }
 
-        private void AnimateToken(int p, int h, Point to, int ms, Action done)
+        private void AnimateToken(int p, int h, Point to, int ms, Action done, bool spin = false)
         {
             var g = _tok[p, h];
             var from = _tokAt[p, h];
@@ -933,8 +958,20 @@ namespace MesPremiersJeux.Games
             g.SetValue(Panel.ZIndexProperty, 50);
             var ax = new DoubleAnimation(from.X - TokD / 2, to.X - TokD / 2, TimeSpan.FromMilliseconds(ms))
             { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } };
-            var ay = new DoubleAnimation(from.Y - TokD / 2, to.Y - TokD / 2, TimeSpan.FromMilliseconds(ms))
-            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut } };
+            // GALOP : le cheval saute en arc au lieu de glisser à plat.
+            var ay = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(ms) };
+            double mid = Math.Min(from.Y, to.Y) - TokD / 2 - 30;
+            ay.KeyFrames.Add(new SplineDoubleKeyFrame(mid, KeyTime.FromPercent(0.5), new KeySpline(0.2, 0.8, 0.3, 1)));
+            ay.KeyFrames.Add(new SplineDoubleKeyFrame(to.Y - TokD / 2, KeyTime.FromPercent(1), new KeySpline(0.4, 0, 0.7, 1)));
+            // Cheval mangé : il TOURNOIE en rentrant à l'écurie.
+            if (spin)
+            {
+                var rot = new RotateTransform(0);
+                g.RenderTransformOrigin = new Point(0.5, 0.5);
+                g.RenderTransform = rot;
+                rot.BeginAnimation(RotateTransform.AngleProperty,
+                    new DoubleAnimation(0, 720, TimeSpan.FromMilliseconds(ms)));
+            }
             if (done != null) ay.Completed += (s, e) => done();
             g.BeginAnimation(Canvas.LeftProperty, ax);
             g.BeginAnimation(Canvas.TopProperty, ay);
@@ -1024,6 +1061,15 @@ namespace MesPremiersJeux.Games
             _banner.Background = new SolidColorBrush(PColor[p]);
             _bannerText.Text = "🏆 Le " + PName[p] + " a gagné !\nTous ses chevaux sont arrivés ! 🎉";
             Speak("Le " + PName[p] + " a gagné ! Tous ses chevaux sont arrivés en haut de l'escalier ! Bravo !");
+            // Les chevaux du gagnant sautent de joie.
+            for (int h = 0; h < _nHorses; h++)
+            {
+                var jump = new TranslateTransform();
+                _tok[p, h].RenderTransform = jump;
+                jump.BeginAnimation(TranslateTransform.YProperty,
+                    new DoubleAnimation(0, -22, TimeSpan.FromMilliseconds(300))
+                    { AutoReverse = true, RepeatBehavior = new RepeatBehavior(6), EasingFunction = new SineEase() });
+            }
             Celebrate();
             ScheduleNext(6500);
         }

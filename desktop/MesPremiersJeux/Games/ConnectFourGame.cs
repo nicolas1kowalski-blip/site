@@ -273,7 +273,9 @@ namespace MesPremiersJeux.Games
                         if (_over || _childTurn) return;
                         int col = t.IsFaulted ? FirstFree() : t.Result;
                         if (col < 0 || _h[col] >= Rows) col = FirstFree();
-                        if (col >= 0) Drop(col, 2);
+                        // Petit temps de « réflexion » : le jeu respire, l'enfant
+                        // a le temps de voir ce qui se passe.
+                        if (col >= 0) Schedule(1000, () => { if (!_over && !_childTurn) Drop(col, 2); });
                     }));
             }
             else
@@ -321,7 +323,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(disc);
 
             var fall = new DoubleAnimation(By - 110, CellY(row) - (Cell - 22) / 2,
-                TimeSpan.FromMilliseconds(160 + (Rows - row) * 60))
+                TimeSpan.FromMilliseconds(300 + (Rows - row) * 95))
             { EasingFunction = new BounceEase { EasingMode = EasingMode.EaseOut, Bounces = 2, Bounciness = 5 } };
             fall.Completed += (s, e) => AfterDrop(col, row, who);
             disc.BeginAnimation(Canvas.TopProperty, fall);
@@ -333,7 +335,7 @@ namespace MesPremiersJeux.Games
             if (winCells != null) { End(who, winCells); return; }
             if (Enumerable.Range(0, Cols).All(c => _h[c] >= Rows)) { End(0, null); return; }
             _childTurn = !_childTurn;
-            BeginTurn();
+            Schedule(500, BeginTurn); // une petite respiration entre les tours
         }
 
         private void End(int winner, List<(int C, int R)> cells)
