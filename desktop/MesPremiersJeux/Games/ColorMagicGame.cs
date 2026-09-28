@@ -672,21 +672,57 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 GameKit.Success();
                 Celebrate();
+                Speak("Oui ! On le colorie en " + CName[target] + " !");
 
-                // On COLORIE l'objet : la silhouette grise s'efface, la version en
-                // couleurs surgit dans une gerbe de peinture.
-                silhouette.Visibility = Visibility.Collapsed;
+                // VRAI COLORIAGE : le pinceau balaie l'objet et la couleur le
+                // remplit du HAUT vers le BAS, sous les éclaboussures.
                 colored.Opacity = 1;
-                var sc = new ScaleTransform(0.3, 0.3);
-                colored.RenderTransform = sc;
-                var pop = new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(480))
-                { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
-                sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
-                sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
-                Splash(cx, cy, CVal[target]);
-                Splash(cx + 40, cy - 30, CVal[target]);
+                var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+                var mFill = new GradientStop(Colors.Black, 0);         // partie déjà peinte
+                var mEdge = new GradientStop(Colors.Transparent, 0.06); // front de peinture
+                mask.GradientStops.Add(mFill);
+                mask.GradientStops.Add(mEdge);
+                colored.OpacityMask = mask;
+                mFill.BeginAnimation(GradientStop.OffsetProperty,
+                    new DoubleAnimation(0, 1.08, TimeSpan.FromMilliseconds(1350)));
+                mEdge.BeginAnimation(GradientStop.OffsetProperty,
+                    new DoubleAnimation(0.06, 1.18, TimeSpan.FromMilliseconds(1350)));
 
-                Speak("Et voilà, tout colorié en " + CName[target] + " ! Regarde : tout ça, c'est " + CName[target] + " !");
+                // Le pinceau qui descend le long de l'objet.
+                var brush = new TextBlock
+                {
+                    Text = "🖌",
+                    FontSize = 92,
+                    IsHitTestVisible = false,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                    RenderTransform = new RotateTransform(-34),
+                };
+                Canvas.SetLeft(brush, cx + 34);
+                Canvas.SetTop(brush, cy - 175);
+                brush.SetValue(Panel.ZIndexProperty, 90);
+                _canvas.Children.Add(brush);
+                brush.BeginAnimation(Canvas.TopProperty,
+                    new DoubleAnimation(cy - 175, cy + 85, TimeSpan.FromMilliseconds(1350))
+                    { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+                Schedule(350, () => Splash(cx - 20, cy - 70, CVal[target]));
+                Schedule(750, () => Splash(cx + 30, cy - 10, CVal[target]));
+                Schedule(1150, () => Splash(cx - 10, cy + 55, CVal[target]));
+                Schedule(1450, () =>
+                {
+                    silhouette.Visibility = Visibility.Collapsed;
+                    colored.OpacityMask = null;
+                    var sc = new ScaleTransform(1, 1);
+                    colored.RenderTransform = sc;
+                    var pop = new DoubleAnimation(1, 1.22, TimeSpan.FromMilliseconds(300))
+                    { AutoReverse = true, EasingFunction = new SineEase() };
+                    sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+                    sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+                    var bfade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300));
+                    var captBrush = brush;
+                    bfade.Completed += (s2, e2) => _canvas.Children.Remove(captBrush);
+                    brush.BeginAnimation(UIElement.OpacityProperty, bfade);
+                    Speak("Et voilà, tout " + CName[target] + " ! Regarde : tout ça, c'est " + CName[target] + " !");
+                });
 
                 // Et d'AUTRES exemples de la couleur apparaissent autour, un à un.
                 var others = CObjs[target].Where(o => o != colored.Text).Take(2).ToList();
@@ -707,7 +743,7 @@ namespace MesPremiersJeux.Games
                     Canvas.SetTop(ex, cy - 60);
                     ex.SetValue(Panel.ZIndexProperty, 80);
                     _canvas.Children.Add(ex);
-                    var t0 = TimeSpan.FromMilliseconds(900 + j * 450);
+                    var t0 = TimeSpan.FromMilliseconds(1900 + j * 480);
                     ex.BeginAnimation(UIElement.OpacityProperty,
                         new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240)) { BeginTime = t0 });
                     var epop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(430))
@@ -716,11 +752,11 @@ namespace MesPremiersJeux.Games
                     esc.BeginAnimation(ScaleTransform.ScaleYProperty, epop);
                     double sx2 = exx + 48, sy2 = cy - 10;
                     int captJ = j;
-                    Schedule(900 + captJ * 450, () => Splash(sx2, sy2, CVal[target]));
+                    Schedule(1900 + captJ * 480, () => Splash(sx2, sy2, CVal[target]));
                 }
 
                 _findRound++;
-                Schedule(3200, NextFind);
+                Schedule(4200, NextFind);
             }
             else
             {
