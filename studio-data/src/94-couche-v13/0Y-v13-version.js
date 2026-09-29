@@ -9,7 +9,8 @@
                 items: [
                     'L’écran s’ouvrait sur l’<b>Analyse de couverture</b>, qui croise <b>trois tables reliées</b>. Avec une seule source, elle répondait « Choisissez la table des éléments liés » — une table que l’on n’a pas. La <b>statistique simple passe devant</b> : c’est elle que l’on rencontre en premier.',
                     'L’analyse de couverture devient un <b>bloc repliable</b>, replié et inactif tant qu’il n’y a pas au moins deux tables reliées dans le Modèle de données. Elle le dit alors en une phrase, et renvoie vers la statistique simple. Dès que deux tables sont reliées, elle redevient utilisable, entière.',
-                    'Si on la lance quand même sans table liée, le message ne se contente plus de réclamer : il indique où aller.'
+                    'Si on la lance quand même sans table liée, le message ne se contente plus de réclamer : il indique où aller.',
+                    'Le panneau d’accueil « Analyses » se comporte enfin comme tel : il s’efface dès qu’une source est choisie, au lieu d’occuper le milieu de l’écran en permanence.'
                 ]
             },
             {

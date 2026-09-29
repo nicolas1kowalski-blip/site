@@ -51,6 +51,12 @@ const out = await p.evaluate(async ()=>{
     && [...el('vizDim').options].length===4);
   el('vizBaseTable').value='s0'; handleVizBaseTableChange();
 
+  ok('le panneau d’accueil s’efface dès qu’une source est choisie, et revient sinon',
+    el('emptyStateViz').classList.contains('hidden')
+    && (el('vizBaseTable').value='', handleVizBaseTableChange(),
+        !el('emptyStateViz').classList.contains('hidden')));
+  el('vizBaseTable').value='s0'; handleVizBaseTableChange();
+
   const groupes = [...el('vizDim').querySelectorAll('optgroup')].map(g=>g.label);
   ok('toutes les tables chargées restent proposées, celle de l’écran en tête',
     groupes.join('|')==='INTERVENTIONS|AUTRE'

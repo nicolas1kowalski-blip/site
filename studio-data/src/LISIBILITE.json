@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-29T09:02:09.205Z",
+ "generated": "2026-09-29T09:10:24.920Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50523,
-  "codeLines": 47716,
-  "commentLines": 2807,
+  "lines": 50526,
+  "codeLines": 47718,
+  "commentLines": 2808,
   "templateLines": 10015,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6631,
+  "locals": 6632,
   "shortLocals": 837,
   "functions": 1668,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12622530538380336
+  "shortLocalsRatio": 0.12620627261761158
  },
  "files": [
   {
@@ -738,13 +738,13 @@
   },
   {
    "file": "80-extraction-exploration/81-stats-bi.js",
-   "lines": 253,
-   "codeLines": 213,
-   "commentLines": 40,
+   "lines": 256,
+   "codeLines": 215,
+   "commentLines": 41,
    "templateLines": 40,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 32,
+   "locals": 33,
    "shortLocals": 0,
    "functions": 15,
    "longestLogic": 116,

@@ -59,6 +59,9 @@
             // Même sans table choisie en haut, la configuration reste accessible :
             // les colonnes de toutes les tables chargées y sont proposées.
             const table = state.tables[el('vizBaseTable').value];
+            // Le panneau d'accueil ne sert que tant qu'aucune source n'est choisie.
+            const accueil = el('emptyStateViz');
+            if (accueil) accueil.classList.toggle('hidden', !!table);
             el('vizElementsContainer').classList.remove('hidden');
             el('vizDim').innerHTML = statOptionsDesColonnes(table ? table.id : '');
             el('vizMeasure').innerHTML = statOptionsDesColonnes(table ? table.id : '');
