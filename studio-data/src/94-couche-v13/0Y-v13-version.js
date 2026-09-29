@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.38.0';
+        const V13_VERSION = '13.39.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.39.0',
+                d: '2026-09-29',
+                t: 'Statistiques : choisir comment le 3<sup>e</sup> axe se dessine',
+                items: [
+                    'Le 3<sup>e</sup> axe ne se dessinait que d’une seule façon : un graphique par valeur. On choisit maintenant la <b>présentation</b> — <b>sous-barres empilées dans la barre</b> (par défaut), <b>barres côte à côte</b>, ou <b>un graphique par valeur</b> comme avant.',
+                    'En sous-barres : chaque barre du 1<sup>er</sup> axe porte une pile par valeur du 2<sup>e</sup>, et dans chaque pile les valeurs du 3<sup>e</sup> s’empilent. Les sous-barres d’une même pile sont des <b>nuances d’une seule teinte</b>, pour que l’œil suive la barre et non la mosaïque.',
+                    'Le choix vaut aussi avec deux axes seulement : les séries s’empilent dans une barre unique, ou se rangent côte à côte.',
+                    'Empiler n’a de sens que sur des barres : sur un camembert ou une courbe, le réglage est sans effet.',
+                    'Le tableau et l’export CSV ne bougent pas : une ligne par croisement, quelle que soit la présentation.'
+                ]
+            },
             {
                 v: '13.38.0',
                 d: '2026-09-29',

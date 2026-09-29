@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-29T10:07:58.841Z",
+ "generated": "2026-09-29T10:23:07.416Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50804,
-  "codeLines": 47972,
-  "commentLines": 2832,
-  "templateLines": 10060,
+  "lines": 50858,
+  "codeLines": 48011,
+  "commentLines": 2847,
+  "templateLines": 10068,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6673,
+  "locals": 6678,
   "shortLocals": 840,
-  "functions": 1682,
+  "functions": 1684,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12588041360707328
+  "shortLocalsRatio": 0.12578616352201258
  },
  "files": [
   {
@@ -738,17 +738,17 @@
   },
   {
    "file": "80-extraction-exploration/81-stats-bi.js",
-   "lines": 510,
-   "codeLines": 445,
-   "commentLines": 65,
-   "templateLines": 71,
+   "lines": 552,
+   "codeLines": 472,
+   "commentLines": 80,
+   "templateLines": 72,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 74,
+   "locals": 79,
    "shortLocals": 3,
-   "functions": 29,
+   "functions": 31,
    "longestLogic": 122,
-   "shortLocalsRatio": 0.04054054054054054
+   "shortLocalsRatio": 0.0379746835443038
   },
   {
    "file": "80-extraction-exploration/82-explorateur-360.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 462,
-   "codeLines": 460,
+   "lines": 474,
+   "codeLines": 472,
    "commentLines": 2,
-   "templateLines": 237,
+   "templateLines": 244,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

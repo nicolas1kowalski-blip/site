@@ -353,42 +353,82 @@
             return v === null ? '—' : Number.isInteger(v) ? v.toLocaleString('fr-FR') : v.toFixed(2);
         }
 
-        // Un graphique : l'axe principal en abscisse, une série par valeur du 2e axe.
-        function statDonneesDuGraphique(lignes, resultat, abscisses, series) {
-            const couleurs = ['#4f46e5', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f43f5e', '#14b8a6'];
+        // ---- Le dessin ----------------------------------------------------------
+        // Trois présentations possibles dès qu'il y a un 2e ou un 3e axe :
+        //   « empile »   : tout dans un seul graphique, les valeurs du dernier axe
+        //                  empilées les unes sur les autres à l'intérieur de la barre ;
+        //   « groupe »   : tout dans un seul graphique, les barres côte à côte ;
+        //   « facettes » : un graphique par valeur du 3e axe.
+        const STAT_COULEURS = ['#4f46e5', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f43f5e', '#14b8a6'];
+        // Une même couleur, de plus en plus transparente : les sous-barres d'une
+        // même barre se lisent comme des nuances d'une seule teinte.
+        const STAT_NUANCES = ['', 'DD', 'BB', '99', '77', '55'];
+        function statPresentation() {
+            const select = el('vizPresentation');
+            return select && select.value ? select.value : 'empile';
+        }
+        function statValeurDe(lignes, abscisse, serie, sousSerie) {
+            const trouvee = lignes.find(
+                l =>
+                    l.axes[0] === abscisse &&
+                    (serie === null || l.axes[1] === serie) &&
+                    (sousSerie === null || l.axes[2] === sousSerie)
+            );
+            return trouvee ? trouvee.valeur : null;
+        }
+        // Les séries dessinées, à plat : une par valeur du 2e axe, ou une par
+        // croisement 2e × 3e axe quand tout tient dans un seul graphique.
+        function statDonneesDuGraphique(lignes, resultat, abscisses, series, sousSeries) {
             if (!series)
                 return {
                     labels: abscisses,
                     datasets: [
                         {
                             label: resultat.titre,
-                            data: abscisses.map(a => {
-                                const trouvee = lignes.find(l => l.axes[0] === a);
-                                return trouvee ? trouvee.valeur : null;
-                            }),
-                            backgroundColor: abscisses.map((a, i) => couleurs[i % couleurs.length])
+                            data: abscisses.map(a => statValeurDe(lignes, a, null, null)),
+                            backgroundColor: abscisses.map((a, i) => STAT_COULEURS[i % STAT_COULEURS.length])
                         }
                     ]
                 };
-            return {
-                labels: abscisses,
-                datasets: series.map((serie, i) => ({
-                    label: serie,
-                    data: abscisses.map(a => {
-                        const trouvee = lignes.find(l => l.axes[0] === a && l.axes[1] === serie);
-                        return trouvee ? trouvee.valeur : null;
-                    }),
-                    backgroundColor: couleurs[i % couleurs.length]
-                }))
-            };
+            if (!sousSeries)
+                return {
+                    labels: abscisses,
+                    datasets: series.map((serie, i) => ({
+                        label: serie,
+                        data: abscisses.map(a => statValeurDe(lignes, a, serie, null)),
+                        backgroundColor: STAT_COULEURS[i % STAT_COULEURS.length],
+                        // Empiler : toutes les séries dans une seule barre par abscisse.
+                        stack: statPresentation() === 'empile' ? 'tout' : undefined
+                    }))
+                };
+            const empile = statPresentation() === 'empile';
+            const datasets = [];
+            series.forEach((serie, i) => {
+                const teinte = STAT_COULEURS[i % STAT_COULEURS.length];
+                sousSeries.forEach((sous, j) => {
+                    datasets.push({
+                        label: serie + ' · ' + sous,
+                        data: abscisses.map(a => statValeurDe(lignes, a, serie, sous)),
+                        backgroundColor: teinte + STAT_NUANCES[j % STAT_NUANCES.length],
+                        // Une pile par valeur du 2e axe : le 3e axe devient les
+                        // sous-barres empilées À L'INTÉRIEUR de cette barre.
+                        stack: empile ? serie : undefined
+                    });
+                });
+            });
+            return { labels: abscisses, datasets };
         }
         function statUnGraphique(canvas, donnees, titre) {
+            const type = el('vizType').value;
+            // Empiler n'a de sens que sur des barres : un camembert ne s'empile pas.
+            const empile = type === 'bar' && donnees.datasets.some(d => d.stack);
             return new Chart(canvas.getContext('2d'), {
-                type: el('vizType').value,
+                type: type,
                 data: donnees,
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    scales: empile ? { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } : undefined,
                     plugins: {
                         legend: { display: donnees.datasets.length > 1, labels: { boxWidth: 10, font: { size: 10 } } },
                         title: titre ? { display: true, text: titre, font: { size: 12, weight: 'bold' } } : undefined
@@ -410,11 +450,13 @@
             const facettes = el('statFacettes');
             facettes.innerHTML = '';
             const principal = el('myChart').parentNode;
-            if (!graphiques) {
+            // Un seul graphique : soit il n'y a pas de 3e axe, soit on a demandé à
+            // tout voir ensemble (sous-barres empilées ou barres côte à côte).
+            if (!graphiques || statPresentation() !== 'facettes') {
                 principal.classList.remove('hidden');
                 currentChart = statUnGraphique(
                     el('myChart'),
-                    statDonneesDuGraphique(resultat.lignes, resultat, abscisses, series),
+                    statDonneesDuGraphique(resultat.lignes, resultat, abscisses, series, graphiques),
                     null
                 );
                 return;
@@ -432,7 +474,7 @@
                 statGraphiquesEnPlus.push(
                     statUnGraphique(
                         canvas,
-                        statDonneesDuGraphique(sous, resultat, abscisses, series),
+                        statDonneesDuGraphique(sous, resultat, abscisses, series, null),
                         valeur + ' — ' + compte.toLocaleString('fr-FR') + ' ligne(s)'
                     )
                 );

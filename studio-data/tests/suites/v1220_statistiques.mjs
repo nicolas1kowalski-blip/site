@@ -122,6 +122,54 @@ const out = await p.evaluate(async ()=>{
     /même table que l’axe/.test(el('globalErrorText').textContent||''));
   el('vizMeasure').value='s0|MONTANT';
 
+  // ---- Présentation du graphique ----
+  // Un jeu à trois axes, pour vérifier les trois présentations.
+  const resultat3 = { titre:'Essai', tableau:'INTERVENTIONS', filtres:'',
+    axes:[{colonne:'ANNEE',periode:''},{colonne:'NATURE',periode:''},{colonne:'ORIGINE',periode:''}],
+    lignes:[
+      {axes:['2023','Panne','Interne'],valeur:4,lignes:4},{axes:['2023','Panne','Externe'],valeur:2,lignes:2},
+      {axes:['2023','Visite','Interne'],valeur:3,lignes:3},{axes:['2024','Panne','Interne'],valeur:5,lignes:5},
+      {axes:['2024','Visite','Externe'],valeur:1,lignes:1}],
+    total:15 };
+  ok('trois présentations sont proposées, la sous-barre empilée par défaut',
+    [...el('vizPresentation').options].map(o=>o.value).join('|')==='empile|groupe|facettes'
+    && statPresentation()==='empile');
+
+  const jeu = (presentation)=>{ el('vizPresentation').value=presentation;
+    return statDonneesDuGraphique(resultat3.lignes, resultat3, ['2023','2024'], ['Panne','Visite'], ['Interne','Externe']); };
+
+  const empilees = jeu('empile');
+  ok('empilé : une série par croisement 2e × 3e axe, et une pile par valeur du 2e axe',
+    empilees.datasets.length===4
+    && empilees.datasets.map(d=>d.label).join('|')==='Panne · Interne|Panne · Externe|Visite · Interne|Visite · Externe'
+    && empilees.datasets.map(d=>d.stack).join('|')==='Panne|Panne|Visite|Visite'
+    && JSON.stringify(empilees.datasets[0].data)==='[4,5]'
+    && JSON.stringify(empilees.datasets[1].data)==='[2,null]');
+  ok('les sous-barres d’une même barre sont des nuances d’une seule teinte',
+    empilees.datasets[0].backgroundColor.slice(0,7)===empilees.datasets[1].backgroundColor.slice(0,7)
+    && empilees.datasets[0].backgroundColor!==empilees.datasets[1].backgroundColor
+    && empilees.datasets[2].backgroundColor.slice(0,7)!==empilees.datasets[0].backgroundColor.slice(0,7));
+
+  const groupees = jeu('groupe');
+  ok('côte à côte : les mêmes séries, mais rien n’est empilé',
+    groupees.datasets.length===4 && groupees.datasets.every(d=>d.stack===undefined));
+
+  // En facettes, le graphique principal s'efface et chaque valeur du 3e axe a le sien.
+  // La page de test n'a pas Chart.js (il vient d'internet) : on pose un dessinateur
+  // muet, le temps de vérifier combien de graphiques sont créés.
+  window.Chart = function(){ this.destroy=function(){}; };
+  el('vizPresentation').value='facettes';
+  statDernierResultat = resultat3; statAfficherLeResultat();
+  const enFacettes = el('statFacettes').querySelectorAll('canvas').length;
+  el('vizPresentation').value='empile';
+  statAfficherLeResultat();
+  ok('changer de présentation redessine : deux graphiques séparés, puis un seul',
+    enFacettes===2 && el('statFacettes').querySelectorAll('canvas').length===0
+    && !el('myChart').parentNode.classList.contains('hidden'));
+  ok('le tableau, lui, ne change pas : les trois axes y sont toujours',
+    [...el('statTableau').querySelectorAll('th')].map(t=>t.textContent).join('|')==='ANNEE|NATURE|ORIGINE|Résultat|Lignes');
+  delete window.Chart;
+
   // ---- Filtrer avant de compter ----
   el('vizDim').value='s0|DATE_ENTREE'; el('vizPeriode').value='annee'; el('vizAgg').value='count'; toggleVizMeasure();
   ok('sans filtre, l’écran le dit', /Aucun filtre/.test(el('statFiltres').textContent));
