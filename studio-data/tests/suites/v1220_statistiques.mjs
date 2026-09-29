@@ -23,6 +23,27 @@ const out = await p.evaluate(async ()=>{
   state.tables['s1']={id:'s1',name:'AUTRE',type:'csv',status:'ready',headers:['SANS_RAPPORT'],config:{},columnsMeta:{}};
   switchTab(4); updateVizBaseTableSelect(); el('vizBaseTable').value='s0'; handleVizBaseTableChange();
 
+  // L'analyse de couverture croise TROIS tables reliees : avec une seule source,
+  // elle ne doit pas reclamer « la table des elements lies ».
+  covPopulate();
+  ok('avec une seule source, l’analyse de couverture se met de côté et le dit',
+    /au moins deux tables reliées/.test(el('covAide').textContent)
+    && el('btnCovRun').disabled && el('covBloc').open===false);
+  ok('la statistique simple, elle, est bien au-dessus du bloc de couverture',
+    el('vizElementsContainer').compareDocumentPosition(el('covBloc')) & Node.DOCUMENT_POSITION_FOLLOWING);
+  el('covBase').value='s0'; covBaseChanged(true);
+  el('covDimTable').value='s0'; covDimTableChanged(); el('covDimCol').value='REPERE'; el('covRel').value='';
+  await runCoverageAnalysis(null);
+  ok('et si on force l’analyse, le message renvoie vers la statistique simple',
+    /statistique simple/.test(el('globalErrorText').textContent||''));
+
+  // Deux tables reliees : le bloc redevient utilisable.
+  state.relations=[{sourceTable:'s0',sourceCol:'REPERE',targetTable:'s1',targetCol:'SANS_RAPPORT'}];
+  covPopulate();
+  ok('deux tables reliées : l’analyse de couverture redevient utilisable',
+    !el('btnCovRun').disabled && /population/.test(el('covAide').textContent));
+  state.relations=[];  covPopulate();
+
   // Comme avant : sans table choisie en haut, la configuration reste utilisable.
   el('vizBaseTable').value=''; handleVizBaseTableChange();
   ok('sans table choisie, la configuration reste accessible avec toutes les colonnes',

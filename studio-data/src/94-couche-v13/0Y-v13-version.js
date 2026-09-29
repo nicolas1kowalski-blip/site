@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.35.0';
+        const V13_VERSION = '13.36.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.36.0',
+                d: '2026-09-29',
+                t: 'Statistiques : l’écran ne réclame plus ce que l’on n’a pas',
+                items: [
+                    'L’écran s’ouvrait sur l’<b>Analyse de couverture</b>, qui croise <b>trois tables reliées</b>. Avec une seule source, elle répondait « Choisissez la table des éléments liés » — une table que l’on n’a pas. La <b>statistique simple passe devant</b> : c’est elle que l’on rencontre en premier.',
+                    'L’analyse de couverture devient un <b>bloc repliable</b>, replié et inactif tant qu’il n’y a pas au moins deux tables reliées dans le Modèle de données. Elle le dit alors en une phrase, et renvoie vers la statistique simple. Dès que deux tables sont reliées, elle redevient utilisable, entière.',
+                    'Si on la lance quand même sans table liée, le message ne se contente plus de réclamer : il indique où aller.'
+                ]
+            },
             {
                 v: '13.35.0',
                 d: '2026-09-28',

@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-28T10:38:22.074Z",
+ "generated": "2026-09-29T09:02:09.205Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50488,
-  "codeLines": 47685,
-  "commentLines": 2803,
-  "templateLines": 10007,
+  "lines": 50523,
+  "codeLines": 47716,
+  "commentLines": 2807,
+  "templateLines": 10015,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6627,
+  "locals": 6631,
   "shortLocals": 837,
-  "functions": 1666,
+  "functions": 1668,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.1263014938886374
+  "shortLocalsRatio": 0.12622530538380336
  },
  "files": [
   {
@@ -461,17 +461,17 @@
   },
   {
    "file": "40-modele-sources/41-analyse-couverture.js",
-   "lines": 544,
-   "codeLines": 523,
-   "commentLines": 21,
-   "templateLines": 79,
+   "lines": 569,
+   "codeLines": 544,
+   "commentLines": 25,
+   "templateLines": 82,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 95,
+   "locals": 99,
    "shortLocals": 11,
-   "functions": 17,
+   "functions": 19,
    "longestLogic": 122,
-   "shortLocalsRatio": 0.11578947368421053
+   "shortLocalsRatio": 0.1111111111111111
   },
   {
    "file": "40-modele-sources/42-sources-fusion-fichiers.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 428,
-   "codeLines": 426,
+   "lines": 438,
+   "codeLines": 436,
    "commentLines": 2,
-   "templateLines": 218,
+   "templateLines": 223,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

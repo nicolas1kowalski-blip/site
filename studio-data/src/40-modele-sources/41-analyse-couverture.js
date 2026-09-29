@@ -12,7 +12,31 @@
             });
             return [...ids].filter(id => state.tables[id].status === 'ready');
         }
+        // Cet outil croise TROIS tables reliées entre elles. Quand il n'y a qu'une
+        // source, il n'a rien à croiser : il le dit et se met de côté, au lieu de
+        // réclamer « la table des éléments liés » que l'on n'a pas.
+        function covEstUtilisable() {
+            const pretes = Object.values(state.tables).filter(t => t.status === 'ready');
+            const liens = (state.relations || []).filter(
+                r => r.sourceCol && r.targetCol && state.tables[r.sourceTable] && state.tables[r.targetTable]
+            );
+            return pretes.length >= 2 && liens.length > 0;
+        }
+        function covAfficherLaDisponibilite() {
+            const aide = el('covAide'),
+                bloc = el('covBloc'),
+                bouton = el('btnCovRun');
+            if (!aide) return;
+            const utilisable = covEstUtilisable();
+            aide.innerHTML = utilisable
+                ? 'Une <strong>population</strong> (table 1, filtrée), une <strong>dimension</strong> (l’axe), et des <strong>éléments liés</strong> (table N, filtrée) : pour chaque valeur de l’axe, combien en <strong>ont</strong> et combien n’en <strong>ont pas</strong>.'
+                : 'Rien à croiser pour l’instant : il faut <strong>au moins deux tables reliées</strong> dans le Modèle de données. Avec une seule source, la <strong>statistique simple</strong> ci-dessus répond à la question.';
+            if (bouton) bouton.disabled = !utilisable;
+            // On ne déplie jamais de force : on referme seulement ce qui ne sert à rien.
+            if (bloc && !utilisable) bloc.open = false;
+        }
         function covPopulate() {
+            covAfficherLaDisponibilite();
             const covBaseElement = el('covBase');
             if (!covBaseElement) return;
             const ready = Object.values(state.tables).filter(t => t.status === 'ready');
@@ -232,7 +256,8 @@
             if (!dT || !dC) return showError("Choisissez la dimension d'analyse.");
             if (!rId)
                 return showError(
-                    'Choisissez la table des éléments liés (elle doit être reliée à la base dans le Modèle de données).'
+                    'Choisissez la table des éléments liés — elle doit être reliée à la table de base dans le Modèle de données. ' +
+                        'Si vous n’avez qu’une seule table à analyser, utilisez la statistique simple, plus haut sur cet écran.'
                 );
             const relation = covRelBetween(bId, rId);
             if (!relation)
