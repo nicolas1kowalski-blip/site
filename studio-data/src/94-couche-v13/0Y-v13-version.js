@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.39.0';
+        const V13_VERSION = '13.40.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.40.0',
+                d: '2026-09-29',
+                t: 'Statistiques : des sous-barres que l’on distingue vraiment',
+                items: [
+                    'Les sous-barres d’une même barre étaient teintées par <b>transparence</b> : deux segments voisins semblaient de la même couleur, et l’empilement ne se lisait pas. Chaque sous-barre garde maintenant la teinte de sa barre mais va du <b>foncé au très clair</b> — du bas vers le haut, l’écart se voit au premier coup d’œil.',
+                    'Un <b>liseré blanc</b> sépare en plus deux segments voisins : même avec six sous-barres, la frontière reste nette.',
+                    'Les teintes des barres, elles, ne changent pas : on reconnaît toujours « Panne » au bleu et « Visite » au vert, quelle que soit la sous-barre.'
+                ]
+            },
             {
                 v: '13.39.0',
                 d: '2026-09-29',

@@ -360,9 +360,29 @@
         //   « groupe »   : tout dans un seul graphique, les barres côte à côte ;
         //   « facettes » : un graphique par valeur du 3e axe.
         const STAT_COULEURS = ['#4f46e5', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f43f5e', '#14b8a6'];
-        // Une même couleur, de plus en plus transparente : les sous-barres d'une
-        // même barre se lisent comme des nuances d'une seule teinte.
-        const STAT_NUANCES = ['', 'DD', 'BB', '99', '77', '55'];
+        // Les sous-barres d'une même barre gardent la teinte de leur barre, mais
+        // vont du foncé au très clair. La transparence, essayée d'abord, ne se
+        // voyait pas : deux segments voisins semblaient de la même couleur.
+        const STAT_NUANCE_LA_PLUS_SOMBRE = -0.3; // vers le noir
+        const STAT_NUANCE_LA_PLUS_CLAIRE = 0.7; // vers le blanc
+        // Mélange deux couleurs « #rrggbb », part = 0 (la première) … 1 (la seconde).
+        function statMelange(couleur, versQuoi, part) {
+            const lire = (hex, i) => parseInt(hex.substr(1 + i * 2, 2), 16);
+            const deuxChiffres = n =>
+                Math.max(0, Math.min(255, Math.round(n)))
+                    .toString(16)
+                    .padStart(2, '0');
+            return (
+                '#' +
+                [0, 1, 2].map(i => deuxChiffres(lire(couleur, i) + (lire(versQuoi, i) - lire(couleur, i)) * part)).join('')
+            );
+        }
+        function statNuanceDe(teinte, rang, combien) {
+            if (combien <= 1) return teinte;
+            const position = rang / (combien - 1);
+            const force = STAT_NUANCE_LA_PLUS_SOMBRE + position * (STAT_NUANCE_LA_PLUS_CLAIRE - STAT_NUANCE_LA_PLUS_SOMBRE);
+            return force < 0 ? statMelange(teinte, '#000000', -force) : statMelange(teinte, '#ffffff', force);
+        }
         function statPresentation() {
             const select = el('vizPresentation');
             return select && select.value ? select.value : 'empile';
@@ -409,7 +429,10 @@
                     datasets.push({
                         label: serie + ' · ' + sous,
                         data: abscisses.map(a => statValeurDe(lignes, a, serie, sous)),
-                        backgroundColor: teinte + STAT_NUANCES[j % STAT_NUANCES.length],
+                        backgroundColor: statNuanceDe(teinte, j, sousSeries.length),
+                        // Un liseré blanc sépare nettement deux segments voisins.
+                        borderColor: '#ffffff',
+                        borderWidth: 1,
                         // Une pile par valeur du 2e axe : le 3e axe devient les
                         // sous-barres empilées À L'INTÉRIEUR de cette barre.
                         stack: empile ? serie : undefined

@@ -145,10 +145,19 @@ const out = await p.evaluate(async ()=>{
     && empilees.datasets.map(d=>d.stack).join('|')==='Panne|Panne|Visite|Visite'
     && JSON.stringify(empilees.datasets[0].data)==='[4,5]'
     && JSON.stringify(empilees.datasets[1].data)==='[2,null]');
-  ok('les sous-barres d’une même barre sont des nuances d’une seule teinte',
-    empilees.datasets[0].backgroundColor.slice(0,7)===empilees.datasets[1].backgroundColor.slice(0,7)
-    && empilees.datasets[0].backgroundColor!==empilees.datasets[1].backgroundColor
-    && empilees.datasets[2].backgroundColor.slice(0,7)!==empilees.datasets[0].backgroundColor.slice(0,7));
+  // Deux sous-barres voisines doivent se distinguer au premier coup d'oeil :
+  // on mesure l'ecart de clarte entre elles.
+  const clarte = c => { const v=i=>parseInt(c.substr(1+i*2,2),16); return 0.299*v(0)+0.587*v(1)+0.114*v(2); };
+  ok('les sous-barres d’une même barre se distinguent nettement (écart de clarté marqué)',
+    Math.abs(clarte(empilees.datasets[0].backgroundColor) - clarte(empilees.datasets[1].backgroundColor)) > 60
+    && empilees.datasets.every(d=>d.borderColor==='#ffffff' && d.borderWidth===1));
+  ok('la nuance la plus sombre puis la plus claire, dans l’ordre, pour six sous-barres',
+    (()=>{ const six=['a','b','c','d','e','f'].map((_,j)=>statNuanceDe('#4f46e5', j, 6));
+      const cs=six.map(clarte);
+      return cs.every((v,i)=>i===0 || v>cs[i-1]) && cs[5]-cs[0] > 100; })());
+  ok('chaque barre garde SA teinte : deux piles voisines ne se confondent pas',
+    clarte(empilees.datasets[0].backgroundColor)!==clarte(empilees.datasets[2].backgroundColor)
+    || empilees.datasets[0].backgroundColor!==empilees.datasets[2].backgroundColor);
 
   const groupees = jeu('groupe');
   ok('côte à côte : les mêmes séries, mais rien n’est empilé',
