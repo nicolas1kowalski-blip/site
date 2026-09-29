@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.36.0';
+        const V13_VERSION = '13.37.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.37.0',
+                d: '2026-09-29',
+                t: 'Statistiques : croiser trois axes sur un seul fichier',
+                items: [
+                    'On peut désormais analyser un fichier selon <b>trois axes à la fois</b> — par exemple l’<b>année de la date de création</b>, la <b>nature</b> et l’<b>origine</b> — sans avoir besoin d’une deuxième table ni d’un lien dans le modèle. Le croisement à trois axes n’existait que dans l’analyse de couverture, qui exige trois tables reliées.',
+                    'Le 1<sup>er</sup> axe donne les barres, le 2<sup>e</sup> une <b>couleur par valeur dans chaque barre</b>, le 3<sup>e</sup> <b>un graphique par valeur</b>. Chacun a son propre regroupement par année, trimestre ou mois.',
+                    'Le <b>tableau</b> sous le graphique porte une colonne par axe, et l’<b>export CSV</b> aussi : le dessin se limite aux premières valeurs pour rester lisible, les chiffres, eux, sont tous là. Une phrase dit exactement combien de valeurs ne sont pas dessinées.',
+                    'Les axes doivent venir de la <b>même table</b> : sans lien dans le modèle, croiser deux fichiers n’aurait pas de sens. L’écran le dit et nomme la colonne fautive.'
+                ]
+            },
             {
                 v: '13.36.0',
                 d: '2026-09-29',

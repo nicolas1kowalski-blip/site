@@ -19,7 +19,7 @@ const out = await p.evaluate(async ()=>{
   const R=[]; const ok=(n,c)=>R.push([n,!!c]); window.lucide={createIcons:()=>{}};
   try{ v11TourEnd(true); wizClose(); }catch(e){} restoreCompleted=true;
   try {
-  state.tables['s0']={id:'s0',name:'INTERVENTIONS',type:'csv',status:'ready',headers:['REPERE','DATE_ENTREE','MONTANT'],config:{},columnsMeta:{}};
+  state.tables['s0']={id:'s0',name:'INTERVENTIONS',type:'csv',status:'ready',headers:['REPERE','DATE_ENTREE','MONTANT','NATURE','ORIGINE'],config:{},columnsMeta:{}};
   state.tables['s1']={id:'s1',name:'AUTRE',type:'csv',status:'ready',headers:['SANS_RAPPORT'],config:{},columnsMeta:{}};
   switchTab(4); updateVizBaseTableSelect(); el('vizBaseTable').value='s0'; handleVizBaseTableChange();
 
@@ -48,7 +48,7 @@ const out = await p.evaluate(async ()=>{
   el('vizBaseTable').value=''; handleVizBaseTableChange();
   ok('sans table choisie, la configuration reste accessible avec toutes les colonnes',
     !el('vizElementsContainer').classList.contains('hidden')
-    && [...el('vizDim').options].length===4);
+    && [...el('vizDim').options].length===6);
   el('vizBaseTable').value='s0'; handleVizBaseTableChange();
 
   ok('le panneau d’accueil s’efface dès qu’une source est choisie, et revient sinon',
@@ -60,8 +60,8 @@ const out = await p.evaluate(async ()=>{
   const groupes = [...el('vizDim').querySelectorAll('optgroup')].map(g=>g.label);
   ok('toutes les tables chargées restent proposées, celle de l’écran en tête',
     groupes.join('|')==='INTERVENTIONS|AUTRE'
-    && [...el('vizDim').options].map(o=>o.value).join(' ')==='s0|REPERE s0|DATE_ENTREE s0|MONTANT s1|SANS_RAPPORT'
-    && [...el('vizMeasure').options].length===4);
+    && [...el('vizDim').options].map(o=>o.value).join(' ')==='s0|REPERE s0|DATE_ENTREE s0|MONTANT s0|NATURE s0|ORIGINE s1|SANS_RAPPORT'
+    && [...el('vizMeasure').options].length===6);
 
   // Un nom de colonne peut contenir une barre verticale : on coupe à la première.
   ok('une colonne est bien reconnue, même si son nom contient une barre',
@@ -91,9 +91,29 @@ const out = await p.evaluate(async ()=>{
   ok('« Nombre de lignes » ne demande pas de colonne, « Somme » en demande une',
     sansColonne && !el('vizMeasure').disabled);
 
-  ok('le titre du calcul se lit en français',
-    statTitreDuCalcul('count','','DATE_ENTREE','annee')==='Nombre de lignes par année de DATE_ENTREE'
-    && statTitreDuCalcul('sum','MONTANT','SITE','')==='Somme de MONTANT par SITE');
+  ok('le titre du calcul se lit en français, et nomme les axes croisés',
+    statTitreDuCalcul('count','',[{colonne:'DATE_ENTREE',periode:'annee'}])==='Nombre de lignes par année de DATE_ENTREE'
+    && statTitreDuCalcul('sum','MONTANT',[{colonne:'SITE',periode:''}])==='Somme de MONTANT par SITE'
+    && statTitreDuCalcul('count','',[{colonne:'DATE_ENTREE',periode:'annee'},{colonne:'NATURE',periode:''},{colonne:'ORIGINE',periode:''}])
+       ==='Nombre de lignes par année de DATE_ENTREE × NATURE × ORIGINE');
+
+  // Trois axes sur la MÊME table : c'est le cas « date de création, nature, origine ».
+  el('vizDim').value='s0|DATE_ENTREE'; el('vizPeriode').value='annee';
+  el('vizDim2').value='s0|NATURE'; el('vizDim3').value='s0|ORIGINE';
+  el('vizAgg').value='count'; toggleVizMeasure();
+  const troisAxes = statAxesDemandes();
+  ok('on peut demander trois axes sur une seule table',
+    troisAxes.length===3 && troisAxes[0].periode==='annee'
+    && troisAxes.map(a=>a.colonne).join('|')==='DATE_ENTREE|NATURE|ORIGINE'
+    && troisAxes.every(a=>a.tId==='s0'));
+  window.__sqlAxes = troisAxes.map(a=>statSqlDeLAxe(a.colonne, a.periode));
+
+  // Un axe pris dans une autre table est refusé : sans jointure, le croisement n'a pas de sens.
+  el('vizDim3').value='s1|SANS_RAPPORT';
+  await generateChart(null);
+  ok('croiser avec une colonne d’une AUTRE table est refusé, et la phrase nomme la colonne',
+    /même table/.test(el('globalErrorText').textContent||'') && /SANS_RAPPORT/.test(el('globalErrorText').textContent||''));
+  el('vizDim2').value=''; el('vizDim3').value=''; el('vizPeriode').value='';
 
   el('vizAgg').value='sum'; toggleVizMeasure();
   el('vizDim').value='s0|DATE_ENTREE'; statProposerLaPeriode(); el('vizMeasure').value='s1|SANS_RAPPORT';
@@ -105,13 +125,24 @@ const out = await p.evaluate(async ()=>{
   // Sans la bibliothèque de graphiques (page de test, ou pas d'internet), les
   // chiffres doivent quand même s'afficher.
   statDernierResultat = { titre:'Nombre de lignes par année de DATE_ENTREE', tableau:'INTERVENTIONS',
-    lignes:[{axe:'2023',valeur:2,lignes:2},{axe:'2024',valeur:2,lignes:2}], total:4 };
+    axes:[{colonne:'DATE_ENTREE',periode:'annee'}],
+    lignes:[{axes:['2023'],valeur:2,lignes:2},{axes:['2024'],valeur:2,lignes:2}], total:4 };
   statAfficherLeResultat();
   ok('sans bibliothèque de graphiques, le tableau des chiffres s’affiche quand même',
     typeof Chart === 'undefined'
     && el('myChart').parentNode.classList.contains('hidden')
     && /2023/.test(el('statTableau').textContent) && /2024/.test(el('statTableau').textContent)
     && /4 ligne\(s\) analysée\(s\)/.test(el('statResume').textContent));
+
+  // Le tableau et l'export gardent TOUTES les colonnes d'axe.
+  statDernierResultat = { titre:'Nombre de lignes', tableau:'INTERVENTIONS',
+    axes:[{colonne:'DATE_ENTREE',periode:'annee'},{colonne:'NATURE',periode:''},{colonne:'ORIGINE',periode:''}],
+    lignes:[{axes:['2023','Panne','Interne'],valeur:7,lignes:7},{axes:['2024','Visite','Externe'],valeur:3,lignes:3}], total:10 };
+  statAfficherLeResultat();
+  ok('avec trois axes, le tableau porte une colonne par axe',
+    [...el('statTableau').querySelectorAll('th')].map(t=>t.textContent).join('|')==='année de DATE_ENTREE|NATURE|ORIGINE|Résultat|Lignes'
+    && /Panne/.test(el('statTableau').textContent) && /Externe/.test(el('statTableau').textContent)
+    && /2 croisement\(s\)/.test(el('statResume').textContent));
 
   // Le SQL est vérifié dehors, sur un vrai moteur.
   window.__sql = {
@@ -134,6 +165,7 @@ const out = await p.evaluate(async ()=>{
   return R;
 });
 const SQL = await p.evaluate(()=>window.__sql);
+const SQL_AXES = await p.evaluate(()=>window.__sqlAxes);
 await b.close();
 
 // ---- le SQL produit, exécuté sur un vrai DuckDB ----
@@ -142,10 +174,11 @@ const conn = await (await DuckDBInstance.create(':memory:')).connect();
 const requete = async sql => (await (await conn.run(sql)).getRowObjects());
 // Des dates comme on les trouve vraiment : deux formats français, l'ISO, un horodatage,
 // une case vide et un « n/a ». Et des montants avec virgule, espace insécable et texte.
-await requete(`CREATE TABLE "t_s0" ("REPERE" VARCHAR, "DATE_ENTREE" VARCHAR, "MONTANT" VARCHAR)`);
+await requete(`CREATE TABLE "t_s0" ("REPERE" VARCHAR, "DATE_ENTREE" VARCHAR, "MONTANT" VARCHAR, "NATURE" VARCHAR, "ORIGINE" VARCHAR)`);
 await requete(`INSERT INTO "t_s0" VALUES
-  ('R1','12/03/2023','1 234,50'), ('R2','2023-07-01','10'), ('R3','15.11.2024',''),
-  ('R4','2024-02-09 08:30:00','5,5'), ('R5','','abc'), ('R1','n/a','100')`);
+  ('R1','12/03/2023','1 234,50','Panne','Interne'), ('R2','2023-07-01','10','Panne','Externe'),
+  ('R3','15.11.2024','','Visite','Interne'), ('R4','2024-02-09 08:30:00','5,5','Visite','Externe'),
+  ('R5','','abc','Panne','Interne'), ('R1','n/a','100','Visite','Interne')`);
 const grouper = async (axe, mesure, tri) =>
   requete(`SELECT ${axe} AS axe, ${mesure} AS valeur FROM "t_s0" GROUP BY 1 ORDER BY ${tri}`);
 const ok=(n,c)=>out.push([n,!!c]);
@@ -172,6 +205,14 @@ ok('SQL réel : « valeurs différentes » compte les repères distincts', Numbe
 const bruts = await grouper(SQL.brut, SQL.lignes, 'valeur DESC, axe ASC');
 ok('SQL réel : sans regroupement, la valeur la plus fréquente vient en tête',
   bruts[0].axe==='R1' && Number(bruts[0].valeur)===2 && bruts.length===5);
+
+// Le croisement des trois axes, tel que l'ecran le demande au moteur.
+const croises = await requete(`SELECT ${SQL_AXES[0]} AS a0, ${SQL_AXES[1]} AS a1, ${SQL_AXES[2]} AS a2,
+  COUNT(*)::BIGINT AS lignes FROM "t_s0" GROUP BY 1,2,3 ORDER BY 1,2,3`);
+ok('SQL réel : trois axes croisés sur une seule table (année × nature × origine)',
+  croises.map(r=>[r.a0,r.a1,r.a2,r.lignes].join('/')).join(' ')
+    === '(vide)/Panne/Interne/1 (vide)/Visite/Interne/1 2023/Panne/Externe/1 2023/Panne/Interne/1 2024/Visite/Externe/1 2024/Visite/Interne/1'
+  && croises.reduce((somme,r)=>somme+Number(r.lignes),0)===6);
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));

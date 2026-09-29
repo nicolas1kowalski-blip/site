@@ -274,7 +274,7 @@
             <div id="vizElementsContainer" class="hidden">
                 <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
                     <h2 class="text-lg font-bold text-indigo-800 mb-1">2. Statistique simple sur cette table</h2>
-                    <p class="text-xs text-slate-500 mb-4">Une colonne pour l'axe, un regroupement si c'est une date, une opération. Le calcul porte sur <strong>toute la table</strong>. Ex. : « nombre de lignes par <em>année</em> de DATE_ENTREE ».</p>
+                    <p class="text-xs text-slate-500 mb-4">Une colonne pour l'axe, un regroupement si c'est une date, une opération. Le calcul porte sur <strong>toute la table</strong>. On peut croiser jusqu'à <strong>trois axes</strong>. Ex. : « nombre de lignes par <em>année</em> de DATE_CREATION, réparties par <em>nature</em>, un graphique par <em>origine</em> ».</p>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
                         <div><label class="block text-xs font-bold text-slate-500 mb-2">Axe X (colonne)</label><select id="vizDim" onchange="statAxeChange()" class="w-full border p-2.5 rounded-lg bg-slate-50"></select><p id="vizDimAide" class="text-[11px] text-teal-700 mt-1"></p></div>
                         <div><label class="block text-xs font-bold text-slate-500 mb-2">Regrouper par</label><select id="vizPeriode" class="w-full border p-2.5 rounded-lg bg-slate-50"><option value="">Valeur telle quelle</option><option value="annee">📅 Année</option><option value="trimestre">📅 Trimestre</option><option value="mois">📅 Mois</option></select></div>
@@ -284,6 +284,22 @@
                         </div>
                         <div><label class="block text-xs font-bold text-slate-500 mb-2">Type</label><select id="vizType" class="w-full border p-2.5 rounded-lg bg-slate-50"><option value="bar">Barres</option><option value="pie">Secteurs</option><option value="doughnut">Anneau</option><option value="line">Courbe</option></select></div>
                     </div>
+                    <div class="mt-5 pt-5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">2<sup>e</sup> axe — une couleur par valeur dans chaque barre <span class="font-normal text-slate-400">(facultatif)</span></label>
+                            <div class="flex gap-2">
+                                <select id="vizDim2" class="w-2/3 border p-2.5 rounded-lg bg-slate-50"></select>
+                                <select id="vizPeriode2" class="w-1/3 border p-2.5 rounded-lg bg-slate-50"><option value="">Valeur telle quelle</option><option value="annee">📅 Année</option><option value="trimestre">📅 Trimestre</option><option value="mois">📅 Mois</option></select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-2">3<sup>e</sup> axe — un graphique par valeur <span class="font-normal text-slate-400">(facultatif)</span></label>
+                            <div class="flex gap-2">
+                                <select id="vizDim3" class="w-2/3 border p-2.5 rounded-lg bg-slate-50"></select>
+                                <select id="vizPeriode3" class="w-1/3 border p-2.5 rounded-lg bg-slate-50"><option value="">Valeur telle quelle</option><option value="annee">📅 Année</option><option value="trimestre">📅 Trimestre</option><option value="mois">📅 Mois</option></select>
+                            </div>
+                        </div>
+                    </div>
                     <div class="mt-6 flex justify-end"><button onclick="generateChart(this)" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg">Calculer</button></div>
                 </div>
                 <div id="chartDisplayArea" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -292,6 +308,7 @@
                         <button onclick="statExporterCsv()" class="shrink-0 text-xs bg-white border border-slate-300 rounded px-3 py-1.5 font-bold text-slate-600 hover:bg-slate-100">⬇️ Tableau (CSV)</button>
                     </div>
                     <div class="w-full h-[400px] relative"><canvas id="myChart"></canvas></div>
+                    <div id="statFacettes" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
                     <div id="statTableau" class="mt-5"></div>
                 </div>
             </div>
