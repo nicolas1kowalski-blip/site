@@ -21,6 +21,8 @@ namespace MesPremiersJeux.Views
             ("🎨", "Couleurs magiques", "PS · MS", c => new ColorMagicGame(c)),
             ("🎈", "Fête des nombres", "PS · MS", c => new NumberPartyGame(c)),
             ("🔤", "Les lettres",    "PS · MS", c => new LettersGame(c)),
+            ("📖", "L'abécédaire",   "PS · MS", c => new AlphabetBookGame(c)),
+            ("✍️", "J'écris !",      "MS",      c => new EyeWriteGame(c)),
             ("🔢", "Les nombres",    "PS · MS", c => new NumbersGame(c)),
             ("📏", "Grand ou petit", "PS",      c => new SizeGame(c)),
             ("🟡", "Les suites",     "MS",      c => new PatternGame(c)),
