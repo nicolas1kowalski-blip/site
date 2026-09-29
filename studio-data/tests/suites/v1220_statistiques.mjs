@@ -122,6 +122,40 @@ const out = await p.evaluate(async ()=>{
     /même table que l’axe/.test(el('globalErrorText').textContent||''));
   el('vizMeasure').value='s0|MONTANT';
 
+  // ---- Filtrer avant de compter ----
+  el('vizDim').value='s0|DATE_ENTREE'; el('vizPeriode').value='annee'; el('vizAgg').value='count'; toggleVizMeasure();
+  ok('sans filtre, l’écran le dit', /Aucun filtre/.test(el('statFiltres').textContent));
+  statAjouterFiltre();
+  ok('un filtre ajouté propose les colonnes de la table et tous les opérateurs',
+    el('statFiltres').querySelectorAll('select').length>=2
+    && [...el('statFiltres').querySelectorAll('option')].some(o=>o.value==='NATURE')
+    && statSqlDesFiltres()==='');
+  statDefinirFiltre(0,'col','NATURE'); statDefinirFiltre(0,'op','eq'); statDefinirFiltre(0,'val','Panne');
+  statAjouterFiltre();
+  statDefinirFiltre(1,'conn','AND'); statDefinirFiltre(1,'col','ORIGINE'); statDefinirFiltre(1,'op','eq'); statDefinirFiltre(1,'val','Interne');
+  ok('deux filtres se lisent en une phrase, et se traduisent en SQL',
+    statPhraseDesFiltres()==='NATURE = Panne et ORIGINE = Interne'
+    && /NATURE/.test(statSqlDesFiltres()) && /AND/.test(statSqlDesFiltres()));
+  window.__sqlFiltres = statSqlDesFiltres();
+  statAjouterFiltre();
+  ok('un filtre en cours de saisie n’écarte aucune ligne',
+    statFiltresComplets().length===2 && statSqlDesFiltres()===window.__sqlFiltres);
+  statSupprimerFiltre(2);
+  // Changer de table remet les filtres à zéro : ils viseraient des colonnes absentes.
+  el('vizBaseTable').value='s1'; handleVizBaseTableChange();
+  ok('changer de table remet les filtres à zéro', statFiltres.length===0 && /Aucun filtre/.test(el('statFiltres').textContent));
+  el('vizBaseTable').value='s0'; handleVizBaseTableChange();
+
+  // ---- Plein écran du graphique ----
+  statDernierResultat = { titre:'Essai', tableau:'INTERVENTIONS', filtres:'',
+    axes:[{colonne:'NATURE',periode:''}], lignes:[{axes:['Panne'],valeur:1,lignes:1}], total:1 };
+  statPleinEcran();
+  ok('le graphique s’agrandit en plein écran, et en revient',
+    !!el('v11Fs') && el('v11Fs').contains(el('statGraphes')) && /Essai/.test(el('v11Fs').textContent));
+  v11FsClose();
+  ok('après retour, le graphique est remis à sa place dans l’écran',
+    !el('v11Fs') && el('chartDisplayArea').contains(el('statGraphes')));
+
   // Sans la bibliothèque de graphiques (page de test, ou pas d'internet), les
   // chiffres doivent quand même s'afficher.
   statDernierResultat = { titre:'Nombre de lignes par année de DATE_ENTREE', tableau:'INTERVENTIONS',
@@ -139,6 +173,11 @@ const out = await p.evaluate(async ()=>{
     axes:[{colonne:'DATE_ENTREE',periode:'annee'},{colonne:'NATURE',periode:''},{colonne:'ORIGINE',periode:''}],
     lignes:[{axes:['2023','Panne','Interne'],valeur:7,lignes:7},{axes:['2024','Visite','Externe'],valeur:3,lignes:3}], total:10 };
   statAfficherLeResultat();
+  statDernierResultat.filtres='NATURE = Panne';
+  statAfficherLeResultat();
+  ok('le résumé rappelle le filtre appliqué, au lieu de laisser croire à la table entière',
+    /où NATURE = Panne/.test(el('statResume').textContent) && !/table entière/.test(el('statResume').textContent));
+  statDernierResultat.filtres=''; statAfficherLeResultat();
   ok('avec trois axes, le tableau porte une colonne par axe',
     [...el('statTableau').querySelectorAll('th')].map(t=>t.textContent).join('|')==='année de DATE_ENTREE|NATURE|ORIGINE|Résultat|Lignes'
     && /Panne/.test(el('statTableau').textContent) && /Externe/.test(el('statTableau').textContent)
@@ -166,6 +205,7 @@ const out = await p.evaluate(async ()=>{
 });
 const SQL = await p.evaluate(()=>window.__sql);
 const SQL_AXES = await p.evaluate(()=>window.__sqlAxes);
+const SQL_FILTRES = await p.evaluate(()=>window.__sqlFiltres);
 await b.close();
 
 // ---- le SQL produit, exécuté sur un vrai DuckDB ----
@@ -213,6 +253,13 @@ ok('SQL réel : trois axes croisés sur une seule table (année × nature × ori
   croises.map(r=>[r.a0,r.a1,r.a2,r.lignes].join('/')).join(' ')
     === '(vide)/Panne/Interne/1 (vide)/Visite/Interne/1 2023/Panne/Externe/1 2023/Panne/Interne/1 2024/Visite/Externe/1 2024/Visite/Interne/1'
   && croises.reduce((somme,r)=>somme+Number(r.lignes),0)===6);
+
+// Les filtres, poses avant le comptage, tels que l'ecran les ecrit.
+const filtrees = await requete(`SELECT ${SQL_AXES[0]} AS a0, COUNT(*)::BIGINT AS lignes
+  FROM "t_s0" WHERE ${SQL_FILTRES} GROUP BY 1 ORDER BY 1`);
+ok('SQL réel : le filtre écarte bien les lignes avant le comptage (Panne ET Interne)',
+  filtrees.map(r=>r.a0+':'+r.lignes).join(' ')==='(vide):1 2023:1'
+  && filtrees.reduce((somme,r)=>somme+Number(r.lignes),0)===2);
 
 let fail=0; for(const [n,c] of out){ console.log((c?'✅ ':'❌ ')+n); if(!c) fail++; }
 console.log(`\n${out.length-fail}/${out.length} OK · erreurs page: ${perr.length}`); perr.slice(0,5).forEach(e=>console.log('  ',e));

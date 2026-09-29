@@ -71,6 +71,10 @@
                 const select = el(nom);
                 if (select) select.innerHTML = '<option value="">— aucun —</option>' + colonnes;
             });
+            // Les filtres portent sur les colonnes de la table : ils repartent à zéro
+            // quand on change de table, sinon ils viseraient des colonnes absentes.
+            statFiltres = [];
+            statDessinerLesFiltres();
             statProposerLaPeriode();
             toggleVizMeasure();
         }
@@ -134,6 +138,107 @@
             if (operation === 'max') return `MAX(${nombre})`;
             return 'COUNT(*)::BIGINT';
         }
+        // ---- Filtrer avant de compter ------------------------------------------
+        // On peut restreindre les lignes AVANT le calcul : « seulement le site A »,
+        // « seulement à partir de 2023 ». Mêmes opérateurs que partout ailleurs dans
+        // l'application (QUAL_FILTER_OPS) et même traduction en SQL (qualCondSql).
+        let statFiltres = [];
+        function statAjouterFiltre() {
+            statFiltres.push({ col: '', op: 'eq', val: '', conn: 'AND' });
+            statDessinerLesFiltres();
+        }
+        function statDefinirFiltre(rang, champ, valeur) {
+            if (!statFiltres[rang]) return;
+            statFiltres[rang][champ] = valeur;
+            // Changer de colonne ou d'opérateur change le champ de saisie proposé.
+            if (champ === 'col' || champ === 'op') statDessinerLesFiltres();
+        }
+        function statSupprimerFiltre(rang) {
+            statFiltres.splice(rang, 1);
+            statDessinerLesFiltres();
+        }
+        function statDessinerLesFiltres() {
+            const boite = el('statFiltres');
+            if (!boite) return;
+            const tId = el('vizBaseTable').value,
+                table = state.tables[tId];
+            const colonnes = table ? table.headers || [] : [];
+            if (!statFiltres.length) {
+                boite.innerHTML =
+                    '<p class="text-xs text-slate-400 italic">Aucun filtre : toutes les lignes sont comptées.</p>';
+                return;
+            }
+            boite.innerHTML = statFiltres
+                .map((f, i) => {
+                    const liaison =
+                        i === 0
+                            ? '<span class="text-xs font-bold text-slate-400 w-10 text-center shrink-0">Où</span>'
+                            : `<select onchange="statDefinirFiltre(${i},'conn',this.value)" class="w-10 shrink-0 border rounded text-xs font-bold px-0.5 py-1 bg-white"><option value="AND" ${f.conn !== 'OR' ? 'selected' : ''}>ET</option><option value="OR" ${f.conn === 'OR' ? 'selected' : ''}>OU</option></select>`;
+                    const attendUneValeur = !['empty', 'nempty'].includes(f.op);
+                    const estUneDate = typeof covColIsDate === 'function' && covColIsDate(tId, f.col);
+                    const saisie = estUneDate
+                        ? `<input type="date" value="${escapeHTML(f.val || '')}" onchange="statDefinirFiltre(${i},'val',this.value)" class="w-36 shrink-0 border border-slate-300 rounded px-1 py-1 text-xs ${attendUneValeur ? '' : 'invisible'}">`
+                        : `<input type="text" list="statfval-${i}" value="${escapeHTML(f.val || '')}" oninput="statDefinirFiltre(${i},'val',this.value)" placeholder="valeur" class="w-32 shrink-0 border border-slate-300 rounded px-1 py-1 text-xs ${attendUneValeur ? '' : 'invisible'}"><datalist id="statfval-${i}"></datalist>`;
+                    return `<div class="flex items-center gap-1.5 mb-1.5">${liaison}
+                        <select onchange="statDefinirFiltre(${i},'col',this.value)" class="flex-1 min-w-0 border border-slate-300 rounded px-1 py-1 text-xs bg-white"><option value="">— colonne —</option>${colonnes
+                            .map(
+                                h =>
+                                    `<option value="${escapeHTML(h)}" ${f.col === h ? 'selected' : ''}>${escapeHTML(h)}</option>`
+                            )
+                            .join('')}</select>
+                        <select onchange="statDefinirFiltre(${i},'op',this.value)" class="shrink-0 border border-slate-300 rounded px-0.5 py-1 text-xs bg-white">${QUAL_FILTER_OPS.map(
+                            o => `<option value="${o.v}" ${o.v === f.op ? 'selected' : ''}>${o.t}</option>`
+                        ).join('')}</select>
+                        ${saisie}
+                        <button onclick="statSupprimerFiltre(${i})" class="shrink-0 text-slate-300 hover:text-red-500 text-sm font-bold" title="Retirer ce filtre">✕</button>
+                    </div>`;
+                })
+                .join('');
+            // Les valeurs présentes dans la table sont proposées, comme ailleurs.
+            if (table)
+                statFiltres.forEach((f, i) => {
+                    if (f.col && !(typeof covColIsDate === 'function' && covColIsDate(tId, f.col)))
+                        tdFillDatalist('statfval-' + i, table.name, f.col);
+                });
+        }
+        // Les filtres complets seulement : un filtre en cours de saisie ne doit pas
+        // écarter des lignes par accident.
+        function statFiltresComplets() {
+            return statFiltres.filter(f => f.col && f.op && (['empty', 'nempty'].includes(f.op) || String(f.val || '').length));
+        }
+        function statSqlDesFiltres() {
+            let sql = '';
+            statFiltresComplets().forEach(f => {
+                const condition = qualCondSql(f);
+                if (!condition) return;
+                sql = sql ? `(${sql}) ${f.conn === 'OR' ? 'OR' : 'AND'} ${condition}` : condition;
+            });
+            return sql;
+        }
+        function statPhraseDesFiltres() {
+            const mots = {
+                eq: '=',
+                neq: '≠',
+                contains: 'contient',
+                ncontains: 'ne contient pas',
+                starts: 'commence par',
+                ends: 'finit par',
+                empty: 'est vide',
+                nempty: 'n’est pas vide',
+                gt: '>',
+                gte: '≥',
+                lt: '<',
+                lte: '≤'
+            };
+            return statFiltresComplets()
+                .map(
+                    (f, i) =>
+                        (i ? (f.conn === 'OR' ? 'ou ' : 'et ') : '') + f.col + ' ' + (mots[f.op] || f.op) + ' ' + (f.val || '')
+                )
+                .join(' ')
+                .trim();
+        }
+
         // ---- Les axes de l'analyse ---------------------------------------------
         // On peut croiser jusqu'à TROIS axes sur la même table : l'axe principal
         // (les barres), un deuxième (les séries dans chaque barre) et un troisième
@@ -206,10 +311,12 @@
             try {
                 const { conn } = await getDB();
                 const colonnesSql = axes.map((axe, rang) => `${statSqlDeLAxe(axe.colonne, axe.periode)} AS axe${rang}`);
+                const ou = statSqlDesFiltres();
                 const groupes = axes.map((axe, rang) => rang + 1).join(', ');
                 const res = await conn.query(`SELECT ${colonnesSql.join(', ')},
                         ${statSqlDeLaMesure(operation, aMesurer.colonne)} AS valeur, COUNT(*)::BIGINT AS lignes
-                    FROM ${sqlIdent(duckTableName(table.id))} GROUP BY ${groupes} ORDER BY ${groupes}`);
+                    FROM ${sqlIdent(duckTableName(table.id))}${ou ? ' WHERE ' + ou : ''}
+                    GROUP BY ${groupes} ORDER BY ${groupes}`);
                 const lignes = arrowResultToObjects(res).map(r => ({
                     axes: axes.map((axe, rang) => String(r['axe' + rang])),
                     valeur: r.valeur === null || r.valeur === undefined ? null : Number(r.valeur),
@@ -218,6 +325,7 @@
                 statDernierResultat = {
                     titre: statTitreDuCalcul(operation, aMesurer.colonne, axes),
                     tableau: table.name,
+                    filtres: statPhraseDesFiltres(),
                     axes: axes,
                     lignes: lignes,
                     total: lignes.reduce((somme, l) => somme + l.lignes, 0)
@@ -365,7 +473,8 @@
             el('statResume').innerHTML =
                 `<b>${escapeHTML(resultat.titre)}</b> — ${escapeHTML(resultat.tableau)} · ` +
                 `${resultat.lignes.length.toLocaleString('fr-FR')} croisement(s), ` +
-                `${resultat.total.toLocaleString('fr-FR')} ligne(s) analysée(s) (table entière).` +
+                `${resultat.total.toLocaleString('fr-FR')} ligne(s) analysée(s)` +
+                (resultat.filtres ? ` <b>où ${escapeHTML(resultat.filtres)}</b>.` : ' (table entière).') +
                 (nonDessinees.length
                     ? ' <span class="text-amber-700">Le dessin se limite à ' +
                       nonDessinees
@@ -392,6 +501,19 @@
                                 `<td class="p-2 text-right text-slate-500">${l.lignes.toLocaleString('fr-FR')}</td></tr>`
                         )
                         .join('')}</tbody></table></div>`;
+        }
+
+        // Agrandir le graphique : on confie le travail au plein écran de l'application
+        // quand il est là (V11 et au-delà), sinon on demande celui du navigateur.
+        function statPleinEcran() {
+            const cadre = el('statGraphes');
+            if (!cadre) return;
+            if (typeof v11Fs === 'function') {
+                v11Fs('#statGraphes', (statDernierResultat && statDernierResultat.titre) || 'Statistiques');
+                return;
+            }
+            if (cadre.requestFullscreen)
+                cadre.requestFullscreen().catch(e => showError('Plein écran refusé : ' + ((e && e.message) || '')));
         }
 
         // Le tableau complet, pas seulement ce que les graphiques montrent.

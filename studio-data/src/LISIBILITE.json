@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-29T09:45:01.342Z",
+ "generated": "2026-09-29T10:07:58.841Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50672,
-  "codeLines": 47852,
-  "commentLines": 2820,
-  "templateLines": 10032,
+  "lines": 50804,
+  "codeLines": 47972,
+  "commentLines": 2832,
+  "templateLines": 10060,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6660,
-  "shortLocals": 839,
-  "functions": 1674,
+  "locals": 6673,
+  "shortLocals": 840,
+  "functions": 1682,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12597597597597598
+  "shortLocalsRatio": 0.12588041360707328
  },
  "files": [
   {
@@ -738,17 +738,17 @@
   },
   {
    "file": "80-extraction-exploration/81-stats-bi.js",
-   "lines": 390,
-   "codeLines": 337,
-   "commentLines": 53,
-   "templateLines": 50,
+   "lines": 510,
+   "codeLines": 445,
+   "commentLines": 65,
+   "templateLines": 71,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 61,
-   "shortLocals": 2,
-   "functions": 21,
+   "locals": 74,
+   "shortLocals": 3,
+   "functions": 29,
    "longestLogic": 122,
-   "shortLocalsRatio": 0.03278688524590164
+   "shortLocalsRatio": 0.04054054054054054
   },
   {
    "file": "80-extraction-exploration/82-explorateur-360.js",
@@ -1041,10 +1041,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 450,
-   "codeLines": 448,
+   "lines": 462,
+   "codeLines": 460,
    "commentLines": 2,
-   "templateLines": 230,
+   "templateLines": 237,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

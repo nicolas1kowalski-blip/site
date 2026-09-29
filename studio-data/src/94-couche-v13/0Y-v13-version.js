@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.37.0';
+        const V13_VERSION = '13.38.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.38.0',
+                d: '2026-09-29',
+                t: 'Statistiques : filtrer avant de compter, et agrandir le graphique',
+                items: [
+                    '<b>Filtrer les lignes avant de compter</b> : « seulement l’origine interne », « seulement à partir de 2023 ». Mêmes opérateurs que partout ailleurs (égal, contient, commence par, est vide, supérieur à…), reliés par ET ou OU, avec les valeurs présentes dans le fichier proposées à la saisie et un calendrier sur les colonnes date.',
+                    'Le filtre est posé <b>dans la requête</b>, avant le regroupement : ce n’est pas le dessin que l’on réduit, ce sont les lignes que l’on compte.',
+                    'La phrase au-dessus du graphique <b>rappelle le filtre appliqué</b> — « 62 548 ligne(s) analysée(s) où ORIGINE = Interne » — au lieu de laisser croire que l’on a compté toute la table.',
+                    'Changer de table <b>remet les filtres à zéro</b> : ils viseraient des colonnes qui n’existent pas.',
+                    'Un bouton <b>⛶ Plein écran</b> agrandit le graphique (Échap pour revenir). Avec trois axes, les graphiques par valeur s’agrandissent ensemble.'
+                ]
+            },
             {
                 v: '13.37.0',
                 d: '2026-09-29',

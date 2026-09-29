@@ -300,15 +300,27 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mt-5 pt-5 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-xs font-bold text-slate-500">Filtrer les lignes avant de compter <span class="font-normal text-slate-400">(facultatif)</span></label>
+                            <button onclick="statAjouterFiltre()" class="text-xs bg-white border border-slate-300 rounded px-2.5 py-1 font-bold text-slate-600 hover:bg-slate-100">+ Filtre</button>
+                        </div>
+                        <div id="statFiltres"></div>
+                    </div>
                     <div class="mt-6 flex justify-end"><button onclick="generateChart(this)" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg">Calculer</button></div>
                 </div>
                 <div id="chartDisplayArea" class="hidden bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <div class="flex items-start justify-between gap-4 mb-3">
                         <p id="statResume" class="text-xs text-slate-600"></p>
-                        <button onclick="statExporterCsv()" class="shrink-0 text-xs bg-white border border-slate-300 rounded px-3 py-1.5 font-bold text-slate-600 hover:bg-slate-100">⬇️ Tableau (CSV)</button>
+                        <span class="shrink-0 flex gap-2">
+                            <button onclick="statPleinEcran()" class="text-xs bg-white border border-slate-300 rounded px-3 py-1.5 font-bold text-slate-600 hover:bg-slate-100" title="Agrandir le graphique (Échap pour revenir)">⛶ Plein écran</button>
+                            <button onclick="statExporterCsv()" class="text-xs bg-white border border-slate-300 rounded px-3 py-1.5 font-bold text-slate-600 hover:bg-slate-100">⬇️ Tableau (CSV)</button>
+                        </span>
                     </div>
-                    <div class="w-full h-[400px] relative"><canvas id="myChart"></canvas></div>
-                    <div id="statFacettes" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    <div id="statGraphes" class="bg-white">
+                        <div class="w-full h-[400px] relative"><canvas id="myChart"></canvas></div>
+                        <div id="statFacettes" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    </div>
                     <div id="statTableau" class="mt-5"></div>
                 </div>
             </div>
