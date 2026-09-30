@@ -25,9 +25,9 @@
                 <Button x:Name="BackBtn" DockPanel.Dock="Top" Style="{StaticResource BackButton}"
                         Content="🎨  Dessins" HorizontalAlignment="Left" Margin="0,0,0,10"
                         Click="Back_Click" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
-                </ScrollViewer>
+                <!-- Toute la palette VISIBLE d'un coup (pas d'ascenseur) : les
+                     pastilles se partagent la hauteur disponible. -->
+                <UniformGrid x:Name="PaletteHost" Columns="4" Width="536" />
             </DockPanel>
 
             <!-- Centre : le dessin (plein hauteur) -->

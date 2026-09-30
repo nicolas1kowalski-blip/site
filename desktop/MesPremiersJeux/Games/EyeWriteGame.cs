@@ -25,6 +25,20 @@ namespace MesPremiersJeux.Games
         private const double BoxX = 140, BoxY = 40, Box = 560; // zone d'écriture
         private const double Spacing = 0.24;                   // écart entre points (0..1)
 
+        // Échantillonne un arc d'ellipse (angles en degrés, y vers le bas) : les
+        // lettres rondes suivent ainsi de VRAIES courbes, pas des segments.
+        private static double[] Arc(double cx, double cy, double rx, double ry, double a0, double a1, int steps)
+        {
+            var res = new double[(steps + 1) * 2];
+            for (int i = 0; i <= steps; i++)
+            {
+                double a = (a0 + (a1 - a0) * i / steps) * Math.PI / 180.0;
+                res[i * 2] = cx + rx * Math.Cos(a);
+                res[i * 2 + 1] = cy + ry * Math.Sin(a);
+            }
+            return res;
+        }
+
         // Chaque lettre = une liste de TRAITS ; un trait = une polyligne x,y (0..1).
         private static readonly Dictionary<char, double[][]> Letters = new Dictionary<char, double[][]>
         {
@@ -34,8 +48,8 @@ namespace MesPremiersJeux.Games
             ['E'] = new[] { new[] { 0.75, 0.1, 0.28, 0.1, 0.28, 0.9, 0.75, 0.9 }, new[] { 0.28, 0.5, 0.68, 0.5 } },
             ['F'] = new[] { new[] { 0.75, 0.1, 0.3, 0.1, 0.3, 0.9 }, new[] { 0.3, 0.5, 0.7, 0.5 } },
             ['H'] = new[] { new[] { 0.25, 0.08, 0.25, 0.92 }, new[] { 0.75, 0.08, 0.75, 0.92 }, new[] { 0.25, 0.5, 0.75, 0.5 } },
-            ['O'] = new[] { new[] { 0.5, 0.1, 0.8, 0.28, 0.8, 0.72, 0.5, 0.9, 0.2, 0.72, 0.2, 0.28, 0.5, 0.1 } },
-            ['C'] = new[] { new[] { 0.78, 0.22, 0.5, 0.1, 0.2, 0.3, 0.2, 0.7, 0.5, 0.9, 0.78, 0.78 } },
+            ['O'] = new[] { Arc(0.5, 0.5, 0.31, 0.4, -90, 270, 10) },
+            ['C'] = new[] { Arc(0.5, 0.5, 0.31, 0.4, -50, -310, 8) },
             ['U'] = new[] { new[] { 0.25, 0.08, 0.25, 0.62, 0.5, 0.9, 0.75, 0.62, 0.75, 0.08 } },
             ['V'] = new[] { new[] { 0.2, 0.08, 0.5, 0.9, 0.8, 0.08 } },
             ['A'] = new[] { new[] { 0.18, 0.9, 0.5, 0.08, 0.82, 0.9 }, new[] { 0.32, 0.58, 0.68, 0.58 } },
@@ -54,7 +68,7 @@ namespace MesPremiersJeux.Games
         {
             ("le trait couché", "—", new[] { new[] { 0.12, 0.5, 0.88, 0.5 } }),
             ("le trait debout", "|", new[] { new[] { 0.5, 0.1, 0.5, 0.9 } }),
-            ("le rond", "○", new[] { new[] { 0.5, 0.1, 0.8, 0.28, 0.8, 0.72, 0.5, 0.9, 0.2, 0.72, 0.2, 0.28, 0.5, 0.1 } }),
+            ("le rond", "○", new[] { Arc(0.5, 0.5, 0.33, 0.4, -90, 270, 10) }),
         };
 
         private static readonly Color[] InkColors =
@@ -69,7 +83,8 @@ namespace MesPremiersJeux.Games
         private int _item;
         private List<List<Point>> _waypoints; // par trait, en pixels
         private int _stroke, _wp;
-        private Polyline _ink;
+        private Path _inkPath;                // l'encre du trait en cours
+        private List<Point> _inkPts;          // ses points déjà atteints
         private Button _bug;
         private TextBlock _pencil;
         private TextBlock _bigLabel;
@@ -259,8 +274,11 @@ namespace MesPremiersJeux.Games
         private void StartStroke()
         {
             _wp = 0;
-            // Nouveau trait : une nouvelle encre.
-            _ink = new Polyline
+            // Nouveau trait : une nouvelle encre, DESSINÉE EN COURBES DOUCES
+            // (les points atteints sont reliés par des courbes de Bézier, pas par
+            // des segments raides — décisif pour les lettres rondes).
+            _inkPts = new List<Point>();
+            _inkPath = new Path
             {
                 Stroke = new SolidColorBrush(Ink),
                 StrokeThickness = 18,
@@ -269,9 +287,35 @@ namespace MesPremiersJeux.Games
                 StrokeEndLineCap = PenLineCap.Round,
                 IsHitTestVisible = false,
             };
-            _ink.SetValue(Panel.ZIndexProperty, 60);
-            _canvas.Children.Add(_ink);
+            _inkPath.SetValue(Panel.ZIndexProperty, 60);
+            _canvas.Children.Add(_inkPath);
             MoveBugTo(_waypoints[_stroke][0]);
+        }
+
+        // Courbe douce passant par tous les points (lissage Catmull-Rom → Bézier).
+        private static Geometry BuildSmooth(List<Point> p)
+        {
+            var fig = new PathFigure { StartPoint = p[0], IsClosed = false };
+            if (p.Count == 2)
+            {
+                fig.Segments.Add(new LineSegment(p[1], true));
+            }
+            else
+            {
+                for (int i = 1; i < p.Count; i++)
+                {
+                    var p0 = p[Math.Max(0, i - 2)];
+                    var p1 = p[i - 1];
+                    var p2 = p[i];
+                    var p3 = p[Math.Min(p.Count - 1, i + 1)];
+                    var c1 = new Point(p1.X + (p2.X - p0.X) / 6.0, p1.Y + (p2.Y - p0.Y) / 6.0);
+                    var c2 = new Point(p2.X - (p3.X - p1.X) / 6.0, p2.Y - (p3.Y - p1.Y) / 6.0);
+                    fig.Segments.Add(new BezierSegment(c1, c2, p2, true));
+                }
+            }
+            var g = new PathGeometry();
+            g.Figures.Add(fig);
+            return g;
         }
 
         private void MoveBugTo(Point p)
@@ -286,8 +330,9 @@ namespace MesPremiersJeux.Games
             var wps = _waypoints[_stroke];
             var p = wps[_wp];
 
-            // Le trait s'allonge jusqu'ici, le crayon suit.
-            _ink.Points.Add(p);
+            // Le trait s'allonge jusqu'ici (en courbe douce), le crayon suit.
+            _inkPts.Add(p);
+            if (_inkPts.Count >= 2) _inkPath.Data = BuildSmooth(_inkPts);
             Canvas.SetLeft(_pencil, p.X + 4);
             Canvas.SetTop(_pencil, p.Y - 44);
             _pencil.Visibility = Visibility.Visible;

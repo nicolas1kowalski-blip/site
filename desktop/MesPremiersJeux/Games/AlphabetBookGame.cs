@@ -157,9 +157,12 @@ namespace MesPremiersJeux.Games
                 if (Locked) return;
                 Pop(captSound);
                 Pop(captLetter);
-                Speak(page.L == "H"
-                    ? "Le H ne fait pas de bruit : il est muet ! Chut !"
-                    : "Le " + page.L + " fait le son... " + page.Phon + " ! " + page.Phon + " !");
+                // Le son est dit LENTEMENT, isolé et répété trois fois : c'est
+                // lui que l'enfant doit entendre distinctement.
+                if (page.L == "H")
+                    Speech.SaySlow("Écoute bien ! Le H ne fait pas de bruit : il est muet ! Chut !");
+                else
+                    Speech.SaySlow("Écoute bien le " + page.L + "... " + page.Phon + ". ... " + page.Phon + ". ... " + page.Phon + " !");
                 _gotSound = true;
                 CheckPageDone();
             };

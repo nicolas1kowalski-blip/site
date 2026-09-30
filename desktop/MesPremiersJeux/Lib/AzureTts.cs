@@ -58,7 +58,21 @@ namespace MesPremiersJeux.Lib
         {
             try
             {
-                var file = await GetAudio(text, pitch);
+                var file = await GetAudio(text, pitch, 0);
+                StopPlayback();
+                _player = new SoundPlayer(file);
+                _player.Play();
+            }
+            catch { onFail?.Invoke(); }
+        }
+
+        /// <summary>Comme <see cref="Speak"/>, mais avec une vitesse ajustée
+        /// (ratePercent négatif = plus lent — pour les sons des lettres).</summary>
+        public static async void SpeakRate(string text, double pitch, int ratePercent, Action onFail)
+        {
+            try
+            {
+                var file = await GetAudio(text, pitch, ratePercent);
                 StopPlayback();
                 _player = new SoundPlayer(file);
                 _player.Play();
@@ -74,7 +88,7 @@ namespace MesPremiersJeux.Lib
         {
             try
             {
-                var file = await GetAudio(text, pitch);
+                var file = await GetAudio(text, pitch, 0);
                 double duration = WavDurationSeconds(file);
 
                 var words = text.Split(' ').Where(t => t.Any(char.IsLetterOrDigit)).ToList();
@@ -118,10 +132,10 @@ namespace MesPremiersJeux.Lib
         // ------------------------------------------------------------------
         // Récupération de l'audio (cache disque, sinon API REST Azure)
         // ------------------------------------------------------------------
-        private static async Task<string> GetAudio(string text, double pitch)
+        private static async Task<string> GetAudio(string text, double pitch, int ratePercent)
         {
             Directory.CreateDirectory(CacheDir);
-            var keyText = Voice + "|" + (int)pitch + "|" + text;
+            var keyText = Voice + "|" + (int)pitch + "|" + ratePercent + "|" + text;
             string hash;
             using (var sha = SHA1.Create())
                 hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(keyText))).Replace("-", "");
@@ -129,10 +143,11 @@ namespace MesPremiersJeux.Lib
             if (File.Exists(path)) return path;
 
             var sign = pitch >= 0 ? "+" : "";
+            var rsign = ratePercent >= 0 ? "+" : "";
             var ssml =
                 "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='fr-FR'>" +
                 $"<voice name='{Voice}'>" +
-                $"<prosody pitch='{sign}{(int)pitch}%'>" +
+                $"<prosody pitch='{sign}{(int)pitch}%' rate='{rsign}{ratePercent}%'>" +
                 SecurityElement.Escape(text) +
                 "</prosody></voice></speak>";
 

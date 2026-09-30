@@ -100,6 +100,42 @@ namespace MesPremiersJeux.Lib
             LocalSay(text);
         }
 
+        /// <summary>
+        /// Parle LENTEMENT et distinctement — pour les sons des lettres, que
+        /// l'enfant doit bien entendre (débit réduit d'environ un tiers).
+        /// </summary>
+        public static void SaySlow(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            if (AzureTts.Enabled)
+            {
+                LocalStop();
+                AzureTts.SpeakRate(text, Pitch, -35, () => LocalSaySlow(text));
+                return;
+            }
+            LocalSaySlow(text);
+        }
+
+        private static void LocalSaySlow(string text)
+        {
+            Ensure();
+            if (_tts == null) return;
+            try
+            {
+                _pageMode = false;
+                _tts.SpeakAsyncCancelAll();
+                ApplyVoice();
+                _tts.Rate = -4; // nettement plus lent (LocalSay remet 0)
+                if (Math.Abs(Pitch) < 1) _tts.SpeakAsync(text);
+                else
+                {
+                    try { _tts.SpeakSsmlAsync(Ssml(text)); }
+                    catch { _tts.SpeakAsync(text); }
+                }
+            }
+            catch { }
+        }
+
         private static void LocalStop()
         {
             try { _pageMode = false; _tts?.SpeakAsyncCancelAll(); } catch { }
@@ -114,6 +150,7 @@ namespace MesPremiersJeux.Lib
                 _pageMode = false;
                 _tts.SpeakAsyncCancelAll();
                 ApplyVoice();
+                _tts.Rate = 0; // débit normal (SaySlow l'a peut-être ralenti)
                 if (Math.Abs(Pitch) < 1)
                 {
                     _tts.SpeakAsync(text);

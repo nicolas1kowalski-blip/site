@@ -276,22 +276,33 @@ namespace MesPremiersJeux.Views
         private void BuildPalette()
         {
             bool first = true;
+            int i = 0;
             foreach (var swatch in Palette.All)
             {
                 var btn = new Button
                 {
                     Style = (Style)Application.Current.Resources["SwatchButton"],
-                    Width = 120,
-                    Height = 120,
+                    // Pas de taille fixe : chaque pastille remplit sa case, la
+                    // palette occupe TOUTE la hauteur — plus d'ascenseur.
+                    Width = double.NaN,
+                    Height = double.NaN,
+                    Margin = new Thickness(6),
                     Background = ColoringEngine.PreviewBrush(swatch),
                     BorderBrush = new SolidColorBrush(Color.FromRgb(0xB8, 0xB0, 0xC8)),
                     BorderThickness = new Thickness(1.5),
                     Tag = swatch,
                     ToolTip = swatch.Name,
+                    // Posées comme des autocollants, légèrement de travers.
+                    RenderTransformOrigin = new Point(0.5, 0.5),
                 };
+                var tg = new TransformGroup();
+                tg.Children.Add(new ScaleTransform(1, 1));
+                tg.Children.Add(new RotateTransform(i % 2 == 0 ? -2.5 : 2.5));
+                btn.RenderTransform = tg;
                 btn.Click += (s, e) => SelectSwatch(swatch, btn);
                 PaletteHost.Children.Add(btn);
-                if (first) { btn.BorderBrush = Dark; btn.BorderThickness = new Thickness(4); _spec = swatch; first = false; }
+                if (first) { btn.BorderBrush = Dark; btn.BorderThickness = new Thickness(5); _spec = swatch; first = false; }
+                i++;
             }
         }
 
@@ -304,8 +315,18 @@ namespace MesPremiersJeux.Views
                 {
                     bool sel = ReferenceEquals(b, btn);
                     b.BorderBrush = sel ? Dark : idle;
-                    b.BorderThickness = new Thickness(sel ? 4 : 1.5);
+                    b.BorderThickness = new Thickness(sel ? 5 : 1.5);
                 }
+            // La pastille choisie fait un petit bond de joie (le groupe de
+            // transformations — échelle + inclinaison — est créé dans BuildPalette).
+            if (btn.RenderTransform is TransformGroup grp && grp.Children.Count > 0 &&
+                grp.Children[0] is ScaleTransform sc)
+            {
+                var pop = new System.Windows.Media.Animation.DoubleAnimation(1, 1.18, TimeSpan.FromMilliseconds(220))
+                { AutoReverse = true, EasingFunction = new System.Windows.Media.Animation.SineEase() };
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+            }
             if (_current != null) _current.Background = ColoringEngine.PreviewBrush(_spec);
             Speech.Say(s.Name);
         }
