@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-29T13:41:37.380Z",
+ "generated": "2026-09-30T08:32:37.822Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 50881,
-  "codeLines": 48031,
-  "commentLines": 2850,
-  "templateLines": 10068,
+  "lines": 51326,
+  "codeLines": 48440,
+  "commentLines": 2886,
+  "templateLines": 10161,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6683,
-  "shortLocals": 840,
-  "functions": 1686,
+  "locals": 6742,
+  "shortLocals": 842,
+  "functions": 1702,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12569205446655693
+  "shortLocalsRatio": 0.12488875704538713
  },
  "files": [
   {
@@ -245,17 +245,17 @@
   },
   {
    "file": "20-gouvernance/22-gouvernance-objets-metier.js",
-   "lines": 4440,
-   "codeLines": 4201,
-   "commentLines": 239,
-   "templateLines": 941,
+   "lines": 4453,
+   "codeLines": 4209,
+   "commentLines": 244,
+   "templateLines": 944,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 627,
+   "locals": 629,
    "shortLocals": 53,
-   "functions": 173,
+   "functions": 174,
    "longestLogic": 150,
-   "shortLocalsRatio": 0.08452950558213716
+   "shortLocalsRatio": 0.08426073131955485
   },
   {
    "file": "20-gouvernance/23-gouvernance-perimetres.js",
@@ -718,6 +718,20 @@
    "shortLocalsRatio": 0.06338028169014084
   },
   {
+   "file": "70-qualite/74-qualite-fiche-objet.js",
+   "lines": 408,
+   "codeLines": 377,
+   "commentLines": 31,
+   "templateLines": 76,
+   "longLogicLines": 0,
+   "multiStatementLines": 0,
+   "locals": 57,
+   "shortLocals": 2,
+   "functions": 15,
+   "longestLogic": 124,
+   "shortLocalsRatio": 0.03508771929824561
+  },
+  {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
    "lines": 2664,
    "codeLines": 2548,
@@ -1041,10 +1055,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 474,
-   "codeLines": 472,
+   "lines": 498,
+   "codeLines": 496,
    "commentLines": 2,
-   "templateLines": 244,
+   "templateLines": 258,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

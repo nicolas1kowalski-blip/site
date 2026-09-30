@@ -2704,6 +2704,11 @@
             else if (cur === 'usage') html += renderBoUsageMatrix(bo);
             else if (cur === 'audit') {
                 const _qr = boQualityRules(bo);
+                // La fiche de qualité d'abord : quelques taux qui répondent en un coup
+                // d'œil. L'audit détaillé, plus long, reste juste en dessous.
+                html += `<div class="text-center mb-3"><button onclick="fqCalculer('${bo.id}', this)" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-bold shadow-sm">⭐ Fiche de qualité de l'objet</button><p class="text-[11px] text-slate-400 mt-1.5">Complétude, conformité aux règles, doublons techniques et fonctionnels, définitions — et ce qu'il faut corriger en premier.</p>
+                    </div>
+                    <div id="bo-fiche-qualite-${bo.id}" class="mb-4"></div>`;
                 html += `<div class="text-center mb-3"><button onclick="auditBusinessObject('${bo.id}')" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold shadow-sm">🔎 Lancer l'audit global de l'objet</button><p class="text-[11px] text-slate-400 mt-1.5">Gouvernance (score), règles métier, <b>règles de qualité 📏</b>, hiérarchies et facettes 1–1.</p>
                     </div>`;
                 html += `<div class="mb-3 border border-slate-200 rounded-lg p-2.5 bg-slate-50/60">
@@ -3308,19 +3313,16 @@
         }
 
         // ---- Audit GLOBAL d'un objet métier : gouvernance + hiérarchies + règles métier ----
-        async function auditBusinessObject(boId) {
-            const bo = state.governance.businessObjects.find(x => x.id === boId);
-            if (!bo) return;
-            const out = el('bo-global-audit-' + boId);
-            if (!out) return;
-            out.innerHTML = '<p class="text-xs text-indigo-700">Audit global en cours...</p>';
+        // La check-list de gouvernance d'un objet : huit contrôles, chacun « fait / pas fait ».
+        // Partagée entre l'audit global et la fiche de qualité, pour qu'une seule liste
+        // fasse foi — deux listes auraient fini par diverger.
+        function boControlesDeGouvernance(bo) {
             const table = boMasterTable(bo);
             const governance = state.governance;
-            // 1. Check-list de gouvernance
             const hasCtxRules = ((bo.contextRules || {}).rules || []).length > 0;
             const masters = (bo.sources || []).filter(s2 => s2.role === 'maitre');
             const dictEntry = table ? governance.dictionary[table.name] || {} : {};
-            const checks = [
+            return [
                 ['Propriétaire global nommé', !!bo.globalOwner],
                 ['Définition renseignée', !!(bo.definition || '').trim()],
                 ['Source maître désignée (ou maîtrise contextuelle)', masters.length === 1 || hasCtxRules],
@@ -3346,6 +3348,17 @@
                         (bo.elements || []).some(e2 => (e2.usedBy || []).length > 0)
                 ]
             ];
+        }
+        async function auditBusinessObject(boId) {
+            const bo = state.governance.businessObjects.find(x => x.id === boId);
+            if (!bo) return;
+            const out = el('bo-global-audit-' + boId);
+            if (!out) return;
+            out.innerHTML = '<p class="text-xs text-indigo-700">Audit global en cours...</p>';
+            const table = boMasterTable(bo);
+            const governance = state.governance;
+            // 1. Check-list de gouvernance
+            const checks = boControlesDeGouvernance(bo);
             const passed = checks.filter(c => c[1]).length;
             const score = Math.round((passed / checks.length) * 100);
             // Périmètre de l'objet (maître + composants/facettes + sources) — sert à la volumétrie et aux règles.

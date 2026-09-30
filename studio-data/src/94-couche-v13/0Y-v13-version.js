@@ -1,7 +1,21 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.40.0';
+        const V13_VERSION = '13.41.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.41.0',
+                d: '2026-09-30',
+                t: 'Objets métier : la fiche de qualité de l’objet',
+                items: [
+                    'Un bouton <b>⭐ Fiche de qualité de l’objet</b>, en tête de l’onglet 🔎 Audit : une synthèse courte, au lieu de lire tout l’audit détaillé. Elle donne une <b>note sur 100</b> et sept taux.',
+                    '<b>Complétude des informations</b> : sur chaque information rattachée à une colonne, la part des lignes remplies — une case vide ET une case qui ne contient que des espaces comptent comme non remplies.',
+                    '<b>Conformité aux règles</b> : les règles métier du périmètre et les règles de qualité rattachées, réunies en un seul taux — combien de cas contrôlés, combien en défaut, combien de règles concernées.',
+                    '<b>Lignes en double (techniques)</b> : deux lignes rigoureusement identiques, colonne par colonne. <b>Doublons fonctionnels</b> : deux lignes différentes qui désignent la même chose, d’après la clé fonctionnelle déclarée. Sans clé déclarée, la fiche le dit et renvoie à l’écran Doublons plutôt que d’afficher un zéro trompeur.',
+                    'Trois indicateurs de plus, que la question appelait : <b>informations définies</b>, <b>informations alimentées</b>, et le <b>score de gouvernance</b> de la fiche.',
+                    'Sous les taux, <b>🎯 à corriger en premier</b> : les points faibles rangés du plus faible au moins faible, chacun disant où aller. Et <b>🕳️ les informations les moins remplies</b>, nommées avec leur colonne. La fiche <b>s’exporte en CSV</b>.',
+                    'La note ne compte que les indicateurs <b>mesurables</b> : un taux que l’on ne peut pas calculer est dit, il ne tire pas la note vers le bas. Les doublons comptent à l’envers — moins il y en a, meilleure est la note.'
+                ]
+            },
             {
                 v: '13.40.0',
                 d: '2026-09-29',

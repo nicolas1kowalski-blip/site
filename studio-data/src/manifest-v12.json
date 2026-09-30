@@ -238,6 +238,10 @@
    "role": "Qualité : audit par lots, profilage d'un objet, filtres, inspecteur d'anomalies"
   },
   {
+   "file": "70-qualite/74-qualite-fiche-objet.js",
+   "role": "Qualité : fiche de qualité d'un objet métier (complétude, règles, doublons, note)"
+  },
+  {
    "file": "70-qualite/73-qualite-profilage-doublons.js",
    "role": "Qualité : clé fonctionnelle, doublons approchés, profilage, rapport, export"
   },
