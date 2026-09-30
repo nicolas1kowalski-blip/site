@@ -332,5 +332,37 @@
         .legend-ux{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:8px}
         .legend-ux span{display:inline-flex;align-items:center;gap:5px}
         .ld{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+        /* ---- Tableau de bord de la qualité d'un objet métier ---- */
+        /* Le vert / ambre / rouge de l'application passent la validation sur fond
+           clair. Sur fond sombre ils sortaient de la bande de clarté : le thème
+           sombre a donc SES pas à lui, choisis et validés, pas un simple reflet. */
+        .fq-carte[data-etat="bon"]{--fq-teinte:#10b981;--fq-piste:#d1fae5}
+        .fq-carte[data-etat="surveiller"]{--fq-teinte:#f59e0b;--fq-piste:#fef3c7}
+        .fq-carte[data-etat="corriger"]{--fq-teinte:#ef4444;--fq-piste:#fee2e2}
+        .fq-carte[data-etat="inconnu"]{--fq-teinte:#94a3b8;--fq-piste:#e2e8f0}
+        html[data-theme="dark"] .fq-carte[data-etat="bon"]{--fq-teinte:#16a34a;--fq-piste:#0d2b1c}
+        html[data-theme="dark"] .fq-carte[data-etat="surveiller"]{--fq-teinte:#d97706;--fq-piste:#3a2408}
+        html[data-theme="dark"] .fq-carte[data-etat="corriger"]{--fq-teinte:#e11d48;--fq-piste:#3b0d1a}
+        html[data-theme="dark"] .fq-carte[data-etat="inconnu"]{--fq-teinte:#64748b;--fq-piste:#1e293b}
+        .fq-tab{display:flex;flex-direction:column;gap:14px}
+        .fq-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+        /* Le seul grand nombre de la vue : la note d'ensemble. */
+        .fq-note{font-size:52px;line-height:1;font-weight:800;letter-spacing:-.02em;color:var(--fq-teinte)}
+        .fq-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
+            border-radius:999px;padding:3px 10px;background:var(--fq-piste);color:var(--fq-teinte);
+            border:1px solid var(--fq-teinte)}
+        .fq-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px}
+        .fq-carte{border:1px solid var(--border);border-radius:12px;padding:12px 13px;background:var(--panel)}
+        .fq-carte .fq-lbl{font-size:11px;font-weight:700;color:var(--muted);line-height:1.35;min-height:30px}
+        .fq-carte .fq-val{font-size:26px;font-weight:800;line-height:1.1;color:var(--fq-teinte)}
+        .fq-carte .fq-det{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:6px}
+        /* La jauge : piste dans la même teinte que la barre, repère du seuil « bon ». */
+        .fq-jauge{position:relative;margin-top:8px;height:8px}
+        .fq-piste{height:8px;border-radius:999px;background:var(--fq-piste);overflow:hidden}
+        .fq-piste > i{display:block;height:100%;border-radius:999px;background:var(--fq-teinte)}
+        .fq-cible{position:absolute;top:-3px;height:14px;width:2px;background:var(--ink);opacity:.35;border-radius:1px}
+        .fq-liste{display:flex;flex-direction:column;gap:7px}
+        .fq-liste .fq-ligne{display:grid;grid-template-columns:minmax(90px,1.1fr) 2fr auto;align-items:center;gap:10px;font-size:11.5px}
     
     </style>

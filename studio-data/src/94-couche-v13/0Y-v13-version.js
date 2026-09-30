@@ -1,7 +1,20 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.41.0';
+        const V13_VERSION = '13.42.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.42.0',
+                d: '2026-09-30',
+                t: 'La fiche de qualité devient un vrai tableau de bord',
+                items: [
+                    'La liste de barres laisse place à un <b>tableau de bord</b> : la note en <b>grand chiffre</b> (un seul par vue), puis une <b>tuile par indicateur</b> — libellé, valeur, état, jauge.',
+                    'Chaque tuile écrit son état <b>en toutes lettres</b> : « Bon », « À surveiller », « À corriger », « Non mesuré ». La couleur ne porte jamais seule le message — un lecteur daltonien lit la même chose que les autres.',
+                    'Chaque jauge porte le <b>repère du seuil</b> à 90 % : on voit d’un coup d’œil ce qui manque pour être au vert, au lieu de comparer des longueurs dans le vide. La piste de la jauge est une <b>nuance de la teinte de l’état</b>, si bien que l’état se lit sur toute la longueur de la barre.',
+                    'Au survol d’une tuile, une bulle dit le détail <b>et</b> où aller le corriger.',
+                    'Le <b>thème sombre a ses propres teintes</b>, choisies et vérifiées, au lieu de reprendre celles du thème clair : sur fond sombre, le vert et l’ambre clairs sortaient de la bande de clarté lisible.',
+                    'Les informations les moins remplies deviennent des barres comparables, rangées de la plus vide à la moins vide.'
+                ]
+            },
             {
                 v: '13.41.0',
                 d: '2026-09-30',

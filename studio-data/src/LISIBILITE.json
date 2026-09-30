@@ -1,22 +1,22 @@
 {
- "generated": "2026-09-30T08:32:37.822Z",
+ "generated": "2026-09-30T08:50:35.922Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 51326,
-  "codeLines": 48440,
-  "commentLines": 2886,
-  "templateLines": 10161,
+  "lines": 51361,
+  "codeLines": 48473,
+  "commentLines": 2888,
+  "templateLines": 10177,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6742,
+  "locals": 6743,
   "shortLocals": 842,
-  "functions": 1702,
+  "functions": 1706,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12488875704538713
+  "shortLocalsRatio": 0.12487023580008898
  },
  "files": [
   {
@@ -719,17 +719,17 @@
   },
   {
    "file": "70-qualite/74-qualite-fiche-objet.js",
-   "lines": 408,
-   "codeLines": 377,
-   "commentLines": 31,
-   "templateLines": 76,
+   "lines": 430,
+   "codeLines": 397,
+   "commentLines": 33,
+   "templateLines": 84,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 57,
+   "locals": 58,
    "shortLocals": 2,
-   "functions": 15,
-   "longestLogic": 124,
-   "shortLocalsRatio": 0.03508771929824561
+   "functions": 19,
+   "longestLogic": 117,
+   "shortLocalsRatio": 0.034482758620689655
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
@@ -1055,10 +1055,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 498,
-   "codeLines": 496,
+   "lines": 511,
+   "codeLines": 509,
    "commentLines": 2,
-   "templateLines": 258,
+   "templateLines": 266,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

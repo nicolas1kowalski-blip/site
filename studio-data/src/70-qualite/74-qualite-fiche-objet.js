@@ -338,48 +338,66 @@
             }
         }
 
+        // ---- Le tableau de bord ---------------------------------------------
+        // Un seul grand nombre (la note), puis une tuile par indicateur : libellé,
+        // valeur, état écrit en toutes lettres, et une jauge avec le repère du seuil.
+        // La couleur ne porte jamais seule le message — l'état est aussi un mot.
+        const FQ_ETATS = {
+            bon: { mot: 'Bon', signe: '✓' },
+            surveiller: { mot: 'À surveiller', signe: '▲' },
+            corriger: { mot: 'À corriger', signe: '✕' },
+            inconnu: { mot: 'Non mesuré', signe: '–' }
+        };
+        function fqEtat(note) {
+            if (note === null || note === undefined) return 'inconnu';
+            return note >= FQ_SEUIL_BON ? 'bon' : note >= FQ_SEUIL_MOYEN ? 'surveiller' : 'corriger';
+        }
+        // La note d'un indicateur : celle des doublons se lit à l'envers.
+        function fqNoteDe(indicateur) {
+            if (indicateur.taux === null || indicateur.taux === undefined) return null;
+            return indicateur.inverse ? 100 - indicateur.taux : indicateur.taux;
+        }
+        function fqJauge(note) {
+            const largeur = note === null ? 0 : Math.max(2, Math.min(100, note));
+            return `<div class="fq-jauge"><div class="fq-piste"><i style="width:${largeur}%"></i></div>
+                <span class="fq-cible" style="left:${FQ_SEUIL_BON}%" title="Seuil « bon » : ${FQ_SEUIL_BON} %"></span></div>`;
+        }
+        function fqTuile(indicateur) {
+            const note = fqNoteDe(indicateur),
+                etat = fqEtat(note),
+                mots = FQ_ETATS[etat];
+            const bulle = indicateur.phrase + ' — ' + indicateur.ou;
+            return `<div class="fq-carte" data-etat="${etat}" data-cle="${escapeHTML(indicateur.cle)}" title="${escapeHTML(bulle)}">
+                <div class="fq-lbl">${escapeHTML(indicateur.nom)}</div>
+                <div class="flex items-end gap-2">
+                    <span class="fq-val">${fqAffiche(indicateur.taux)}</span>
+                    <span class="fq-chip ml-auto">${mots.signe} ${escapeHTML(mots.mot)}</span>
+                </div>
+                ${fqJauge(note)}
+                <p class="fq-det">${escapeHTML(indicateur.phrase)}</p>
+            </div>`;
+        }
         function fqRendre(fiche) {
-            const barre = indicateur => {
-                const note = indicateur.taux === null ? null : indicateur.inverse ? 100 - indicateur.taux : indicateur.taux;
-                const largeur = note === null ? 0 : Math.max(2, note);
-                // Couleur écrite en clair dans le style : une classe de couleur peut
-                // disparaître de la feuille construite quand elle n'est utilisée nulle part
-                // ailleurs, et la barre serait alors invisible — c'est arrivé au rouge.
-                const teinte =
-                    note === null
-                        ? '#e2e8f0'
-                        : note >= FQ_SEUIL_BON
-                          ? '#10b981'
-                          : note >= FQ_SEUIL_MOYEN
-                            ? '#f59e0b'
-                            : '#ef4444';
-                return `<div class="py-2 border-t border-slate-100">
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-sm font-bold text-slate-700">${escapeHTML(indicateur.nom)}</span>
-                        <span class="ml-auto text-base font-black ${fqCouleur(note)}">${fqAffiche(indicateur.taux)}</span>
-                    </div>
-                    <div class="h-1.5 rounded mt-1.5 overflow-hidden" style="background:#f1f5f9"><div class="h-full" style="width:${largeur}%;background:${teinte}"></div>
-                        </div>
-                    <p class="text-[11px] text-slate-500 mt-1">${escapeHTML(indicateur.phrase)}</p>
-                </div>`;
-            };
+            const etatGlobal = fqEtat(fiche.note),
+                motsGlobal = FQ_ETATS[etatGlobal];
             const pires = (fiche.mesures.completude.details || [])
                 .filter(d => d.taux !== null && d.taux < FQ_SEUIL_BON)
                 .sort((a, b) => a.taux - b.taux)
                 .slice(0, FQ_POINTS_MONTRES);
-            return `<div class="border-2 border-indigo-200 rounded-xl p-4 bg-white mt-2" id="fqFiche">
-                <div class="flex items-center gap-3 mb-1">
-                    <div class="text-3xl font-black ${fqCouleur(fiche.note)}">${fiche.note === null ? '—' : fiche.note + '/100'}</div>
+            return `<div class="border-2 border-indigo-200 rounded-xl p-4 bg-white fq-tab" id="fqFiche">
+                <div class="fq-hero fq-carte" data-etat="${etatGlobal}" style="border:0;padding:0;background:transparent">
+                    <div class="fq-note">${fiche.note === null ? '—' : fiche.note}</div>
                     <div>
-                        <div class="text-sm font-bold text-slate-700">Qualité de « ${escapeHTML(fiche.objet)} »</div>
-                        <div class="text-[11px] text-slate-400">Moyenne des indicateurs mesurables. Les doublons comptent à l’envers : moins il y en a, meilleure est la note.</div>
+                        <div class="text-sm font-bold text-slate-700">Qualité de « ${escapeHTML(fiche.objet)} » <span class="text-slate-400 font-medium">sur 100</span></div>
+                        <div class="mt-1"><span class="fq-chip">${motsGlobal.signe} ${escapeHTML(motsGlobal.mot)}</span></div>
+                        <div class="text-[11px] text-slate-400 mt-1.5">Moyenne des indicateurs mesurables. Les doublons comptent à l’envers : moins il y en a, meilleure est la note.</div>
                     </div>
                     <button onclick="fqExporterCsv()" class="ml-auto shrink-0 text-xs bg-white border border-slate-300 rounded px-3 py-1.5 font-bold text-slate-600 hover:bg-slate-100">⬇️ Fiche (CSV)</button>
                 </div>
-                ${fiche.indicateurs.map(barre).join('')}
+                <div class="fq-grille">${fiche.indicateurs.map(fqTuile).join('')}</div>
                 ${
                     fiche.aFaire.length
-                        ? `<div class="mt-3 pt-3 border-t border-slate-200">
+                        ? `<div>
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5">🎯 À corriger en premier</div>
                         <ol class="text-xs text-slate-600 space-y-1 list-decimal list-inside">${fiche.aFaire
                             .map(
@@ -387,18 +405,22 @@
                                     `<li><b>${escapeHTML(x.nom)}</b> (${Math.round(x.note)}/100) — <span class="text-slate-500">${escapeHTML(x.ou)}</span></li>`
                             )
                             .join('')}</ol></div>`
-                        : '<p class="mt-3 pt-3 border-t border-slate-200 text-xs text-emerald-700">✅ Aucun point faible : tous les indicateurs mesurés sont au vert.</p>'
+                        : '<p class="text-xs text-emerald-700">✅ Aucun point faible : tous les indicateurs mesurés sont au vert.</p>'
                 }
                 ${
                     pires.length
-                        ? `<div class="mt-3 pt-3 border-t border-slate-200">
+                        ? `<div>
                         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5">🕳️ Les informations les moins remplies</div>
-                        ${pires
+                        <div class="fq-liste">${pires
                             .map(
                                 d =>
-                                    `<div class="text-xs flex items-center gap-2"><span class="font-bold text-slate-700">${escapeHTML(d.nom)}</span><span class="text-[10px] text-slate-400">${escapeHTML(d.table)}.${escapeHTML(d.col)}</span><span class="ml-auto font-bold ${fqCouleur(d.taux)}">${fqAffiche(d.taux)}</span></div>`
+                                    `<div class="fq-ligne fq-carte" data-etat="${fqEtat(d.taux)}" style="border:0;padding:0;background:transparent">
+                                        <span><b class="text-slate-700">${escapeHTML(d.nom)}</b><br><span class="text-[10px] text-slate-400">${escapeHTML(d.table)}.${escapeHTML(d.col)}</span></span>
+                                        ${fqJauge(d.taux)}
+                                        <span class="fq-val" style="font-size:13px">${fqAffiche(d.taux)}</span>
+                                    </div>`
                             )
-                            .join('')}</div>`
+                            .join('')}</div></div>`
                         : ''
                 }
             </div>`;

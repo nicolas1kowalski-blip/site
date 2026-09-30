@@ -70,16 +70,42 @@ const out = await p.evaluate(async ()=>{
   const fiche = { objet:'Équipement', date:'', indicateurs, note: fqNote(indicateurs),
     aFaire, mesures };
   const boite = document.createElement('div'); boite.innerHTML = fqRendre(fiche); document.body.appendChild(boite);
-  ok('la fiche montre la note, les sept indicateurs et les choses à faire',
-    /69\/100/.test(boite.textContent) && boite.querySelectorAll('.h-1\\.5').length===7
+  ok('un seul grand nombre mène la vue : la note, puis une tuile par indicateur',
+    boite.querySelectorAll('.fq-note').length===1 && /69/.test(boite.querySelector('.fq-note').textContent)
+    && boite.querySelectorAll('.fq-grille > .fq-carte').length===7
     && /À corriger en premier/.test(boite.textContent));
-  // Un taux bas doit se VOIR : la couleur est écrite dans le style, pas dans une
-  // classe qui peut disparaître de la feuille construite (le rouge avait disparu).
-  const barres = [...boite.querySelectorAll('.h-1\\.5 > div')].map(d=>d.getAttribute('style'));
-  ok('chaque barre porte sa largeur ET sa couleur en clair, y compris la rouge',
-    barres.length===7 && barres.every(st=>/width:/.test(st) && /background:#/.test(st))
-    && barres.some(st=>/#ef4444/.test(st)) && barres.some(st=>/#10b981/.test(st))
-    && /width:0%/.test(barres[3]));
+  // La couleur ne porte jamais seule le message : chaque tuile écrit son état.
+  const tuiles = [...boite.querySelectorAll('.fq-grille > .fq-carte')];
+  ok('chaque tuile porte son état en toutes lettres, pas seulement en couleur',
+    tuiles.every(t=>/Bon|À surveiller|À corriger|Non mesuré/.test(t.querySelector('.fq-chip').textContent))
+    && tuiles.map(t=>t.getAttribute('data-etat')).join('|')==='surveiller|bon|bon|inconnu|corriger|corriger|corriger');
+  ok('un indicateur non mesurable est marqué « non mesuré », pas zéro',
+    boite.querySelector('[data-cle="dbFonc"]').getAttribute('data-etat')==='inconnu'
+    && /Non mesuré/.test(boite.querySelector('[data-cle="dbFonc"]').textContent));
+  // La jauge : largeur de la barre, et le repère du seuil « bon ».
+  const jauges = tuiles.map(t=>t.querySelector('.fq-piste > i').getAttribute('style'));
+  ok('chaque jauge porte sa largeur, et le repère du seuil « bon » est posé à 90 %',
+    jauges.length===7 && jauges.every(st=>/width:/.test(st))
+    && /width:0%/.test(boite.querySelector('[data-cle="dbFonc"] .fq-piste > i').getAttribute('style'))
+    && tuiles.every(t=>/left:90%/.test(t.querySelector('.fq-cible').getAttribute('style'))));
+  ok('la bulle de survol dit le détail ET où agir',
+    /cases remplies/.test(tuiles[0].getAttribute('title')) && /Onglet/.test(tuiles[0].getAttribute('title')));
+  // Les quatre états sont peints par la feuille de style, et le thème sombre a SES
+  // pas à lui : sur fond sombre, le vert et l'ambre clairs sortent de la bande de
+  // clarté validée. Une couleur posée dans une classe Tailwind non utilisée
+  // ailleurs disparaît de la feuille construite — d'où des règles à nous.
+  const feuille = [...document.querySelectorAll('style')].map(t=>t.textContent).join('');
+  ok('les quatre états sont peints par la feuille, en clair ET en sombre',
+    ['bon','surveiller','corriger','inconnu'].every(e =>
+      new RegExp('\\.fq-carte\\[data-etat="'+e+'"\\]\\{--fq-teinte:#').test(feuille)
+      && new RegExp('html\\[data-theme="dark"\\] \\.fq-carte\\[data-etat="'+e+'"\\]').test(feuille)));
+  ok('le thème sombre ne recopie pas les teintes du thème clair',
+    /\.fq-carte\[data-etat="bon"\]\{--fq-teinte:#10b981/.test(feuille)
+    && /html\[data-theme="dark"\] \.fq-carte\[data-etat="bon"\]\{--fq-teinte:#16a34a/.test(feuille));
+  // La piste de la jauge est une nuance de la MÊME teinte, pas un gris neutre :
+  // l'état se lit sur toute la longueur de la barre.
+  ok('la piste de la jauge reste dans la teinte de l’état',
+    /\.fq-carte\[data-etat="corriger"\]\{--fq-teinte:#ef4444;--fq-piste:#fee2e2\}/.test(feuille));
 
   ok('les informations les moins remplies sont nommées, avec leur colonne',
     /Les informations les moins remplies/.test(boite.textContent)
