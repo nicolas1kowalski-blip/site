@@ -286,6 +286,14 @@ namespace MesPremiersJeux.Gaze
                 Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xC1, 0x07)),
                 Visibility = Visibility.Collapsed,
                 IsHitTestVisible = false,
+                // Lueur dorée diffuse : la cible visée « s'allume » vraiment.
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = Color.FromRgb(0xFF, 0xC1, 0x07),
+                    BlurRadius = 30,
+                    ShadowDepth = 0,
+                    Opacity = 0.85,
+                },
             };
             _layer?.Children.Insert(0, _highlight);
 

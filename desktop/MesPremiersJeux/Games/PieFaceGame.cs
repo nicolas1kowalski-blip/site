@@ -65,19 +65,15 @@ namespace MesPremiersJeux.Games
 
         private void SpawnFace(int slot, bool pop)
         {
+            int fi = _rng.Next(Faces.Length);
             var face = new Button
             {
                 Style = (Style)Application.Current.Resources["AnswerButton"],
                 Width = 290,
                 Height = 290,
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                Content = new TextBlock
-                {
-                    Text = Faces[_rng.Next(Faces.Length)],
-                    FontSize = 190,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
+                // Image personnalisée (Contenu\Images\visage-N.png) sinon emoji.
+                Content = new ContentControl { Content = Art.Visual("visage-" + (fi + 1), Faces[fi], 245) },
             };
             int s = slot;
             var captured = face;
@@ -102,17 +98,13 @@ namespace MesPremiersJeux.Games
 
             // La tarte part du plat (en bas au centre) et file vers le visage
             // en tournant sur elle-même.
-            var pie = new TextBlock
-            {
-                Text = "🥧",
-                FontSize = 110,
-                IsHitTestVisible = false,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-            };
+            var pie = Art.Visual("tarte", "🥧", 140);
+            pie.IsHitTestVisible = false;
+            pie.RenderTransformOrigin = new Point(0.5, 0.5);
             var rot = new RotateTransform(0);
             pie.RenderTransform = rot;
-            double px0 = W / 2 - 55, py0 = H - 100;
-            double px1 = _faceX[slot] + 85, py1 = FaceY + 70;
+            double px0 = W / 2 - 70, py0 = H - 110;
+            double px1 = _faceX[slot] + 75, py1 = FaceY + 65;
             Canvas.SetLeft(pie, px0);
             Canvas.SetTop(pie, py0);
             pie.SetValue(Panel.ZIndexProperty, 70);
@@ -134,7 +126,8 @@ namespace MesPremiersJeux.Games
         private void Splat(int slot, Button face)
         {
             SoundFx.Splat();
-            ((TextBlock)face.Content).Text = Hit[_rng.Next(Hit.Length)];
+            int hi = _rng.Next(Hit.Length);
+            ((ContentControl)face.Content).Content = Art.Visual("visage-touche-" + (hi + 1), Hit[hi], 245);
 
             // Le visage tremble sous le choc.
             Shake(face);

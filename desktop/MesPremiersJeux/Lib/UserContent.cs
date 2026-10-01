@@ -271,6 +271,7 @@ namespace MesPremiersJeux.Lib
                 Directory.CreateDirectory(ColoringsDir);
                 Directory.CreateDirectory(StoriesDir);
                 Directory.CreateDirectory(FamilyDir);
+                Art.EnsureFolder(); // Contenu\Images + son LISEZ-MOI
 
                 var readme = Path.Combine(RootDir, "LISEZ-MOI.txt");
                 if (!File.Exists(readme))

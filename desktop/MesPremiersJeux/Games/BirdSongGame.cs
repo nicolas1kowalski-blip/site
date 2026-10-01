@@ -60,7 +60,8 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < Perch.Length; i++)
             {
                 var (emoji, x, y) = Perch[i];
-                var body = new TextBlock { Text = emoji, FontSize = 120, HorizontalAlignment = HorizontalAlignment.Center };
+                // Image personnalisée (Contenu\Images\oiseau-N.png) sinon emoji.
+                var body = Art.Visual("oiseau-" + (i + 1), emoji, 150);
                 var note = new TextBlock
                 {
                     Text = "🎵",

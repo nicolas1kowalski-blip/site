@@ -50,6 +50,9 @@ namespace MesPremiersJeux.Views
             InitializeComponent();
             UserContent.EnsureFolders();
 
+            // Décor de fond avec profondeur, derrière la galerie et le coloriage.
+            if (Content is Grid rootGrid) rootGrid.Children.Insert(0, DecorBackground.ForColoring());
+
             _gallery = new PagedMenu(4, 2);
             MenuRoot.Children.Add(_gallery);
 

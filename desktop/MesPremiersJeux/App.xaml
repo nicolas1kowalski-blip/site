@@ -94,7 +94,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="22" Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd" CornerRadius="22" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}" Padding="8">
                             <Border.Effect>
@@ -102,6 +102,18 @@
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- Halo lumineux quand le pointeur (souris ou regard-
+                                 curseur) est sur le bouton. -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="28" ShadowDepth="0"
+                                                          Color="#FFB388FF" Opacity="0.9" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -134,7 +146,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="26" Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd" CornerRadius="26" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}">
                             <Border.Effect>
@@ -142,6 +154,16 @@
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="30" ShadowDepth="0"
+                                                          Color="#FFFFC107" Opacity="0.85" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>

@@ -19,6 +19,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Police enfantine « Fredoka One » embarquée (licence OFL, voir Fonts/OFL.txt). -->
+    <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Tobii.Interaction" Version="0.7.3" />
     <!-- Tobii Pro SDK : accès direct au tracker (regard brut + position des yeux),
          sans passer par le curseur. Gratuit ; ne se connecte qu'aux trackers

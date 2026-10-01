@@ -66,6 +66,11 @@ namespace MesPremiersJeux.Views
             for (int i = 0; i < 4; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star); // tuiles
 
+            // Décor de fond avec profondeur, derrière toutes les rangées.
+            var decor = DecorBackground.ForMusic();
+            Grid.SetRowSpan(decor, 4);
+            root.Children.Add(decor);
+
             // --- Panneau parent (admin) ---
             _clientIdBox = new TextBox { Width = 360, FontSize = 16, Margin = new Thickness(6, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, Text = Settings.Load().SpotifyClientId ?? "" };
             _clientIdBox.TextChanged += (s, e) =>

@@ -33,14 +33,15 @@ namespace MesPremiersJeux.Games
         private Button[,] _panes;
         private int _remaining;
         private (string Emoji, string Name) _hidden;
-        private TextBlock _picture;
+        private FrameworkElement _picture;
 
         public MagicWindowGame(Action celebrate) : base(celebrate) { }
 
         protected override void NewRound()
         {
             Locked = false;
-            _hidden = Surprises[_rng.Next(Surprises.Length)];
+            int si = _rng.Next(Surprises.Length);
+            _hidden = Surprises[si];
             Question.Text = "🧽 La fenêtre magique";
             SetConsigne(new TextBlock { Text = "👀🧽" },
                 () => "Quelque chose se cache derrière la buée ! Essuie la fenêtre avec tes yeux !");
@@ -58,16 +59,13 @@ namespace MesPremiersJeux.Games
                 Stroke = new SolidColorBrush(Color.FromRgb(0xB8, 0x8A, 0x5A)),
                 StrokeThickness = 10,
             });
-            _picture = new TextBlock
-            {
-                Text = _hidden.Emoji,
-                FontSize = 360,
-                IsHitTestVisible = false,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-            };
+            // Image personnalisée (Contenu\Images\surprise-N.png) sinon emoji.
+            _picture = Art.Visual("surprise-" + (si + 1), _hidden.Emoji, 460);
+            _picture.IsHitTestVisible = false;
+            _picture.RenderTransformOrigin = new Point(0.5, 0.5);
             _picture.RenderTransform = new ScaleTransform(1, 1);
             Canvas.SetLeft(_picture, W / 2 - 230);
-            Canvas.SetTop(_picture, H / 2 - 250);
+            Canvas.SetTop(_picture, H / 2 - 240);
             _canvas.Children.Add(_picture);
             AddDecor("✨", 150, 90, 54);
             AddDecor("✨", W - 200, H - 160, 54);

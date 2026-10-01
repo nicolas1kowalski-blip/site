@@ -94,6 +94,8 @@ namespace MesPremiersJeux.Views
             var root = new Grid();
             root.Background = new LinearGradientBrush(
                 Color.FromRgb(0xFF, 0xF3, 0xFB), Color.FromRgb(0xE9, 0xF2, 0xFF), 90);
+            // Décor de fond avec profondeur, derrière la bibliothèque et le lecteur.
+            root.Children.Add(DecorBackground.ForStories());
 
             // --- Bibliothèque (choix du livre) ---
             _menuRoot = new Grid { Margin = new Thickness(12) };

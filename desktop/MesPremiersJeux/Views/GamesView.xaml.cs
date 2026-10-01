@@ -83,6 +83,9 @@ namespace MesPremiersJeux.Views
         {
             InitializeComponent();
 
+            // Décor de fond avec profondeur (ciel, nuages, collines), derrière tout.
+            if (Content is Grid rootGrid) rootGrid.Children.Insert(0, DecorBackground.ForGames());
+
             foreach (var t in _themes)
             {
                 var theme = t;
