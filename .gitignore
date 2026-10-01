@@ -4,3 +4,5 @@ dist/
 
 # Version hors ligne : 14 Mo, reconstruite par studio-data/tools/hors-ligne.mjs
 studio-data/StudioDataV13-hors-ligne.html
+studio-data-entreprise/api/dist/
+studio-data-entreprise/api/donnees/
