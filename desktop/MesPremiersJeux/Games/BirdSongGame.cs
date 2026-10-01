@@ -54,14 +54,32 @@ namespace MesPremiersJeux.Games
             AddDecor("☁️", 900, 55, 52);
 
             // Branches sous chaque rangée d'oiseaux.
-            AddBranch(60, 350, 1380);
-            AddBranch(120, 648, 1300);
+            // Branches juste sous les pattes de chaque rangée d'oiseaux.
+            AddBranch(60, 400, 1380);
+            AddBranch(120, 700, 1300);
 
             for (int i = 0; i < Perch.Length; i++)
             {
                 var (emoji, x, y) = Perch[i];
-                // Image personnalisée (Contenu\Images\oiseau-N.png) sinon emoji.
-                var body = Art.Visual("oiseau-" + (i + 1), emoji, 150);
+                // Visuel de l'oiseau, par priorité : image du parent
+                // (Contenu\Images\oiseau-N.png, + oiseau-N-vole.png pour les
+                // ailes ouvertes) → sinon le DESSIN vectoriel intégré (BirdArt,
+                // deux poses) ; l'emoji ne sert plus que d'ultime secours.
+                FrameworkElement closed, openWings;
+                var imgC = Art.Find("oiseau-" + (i + 1));
+                if (imgC != null)
+                {
+                    closed = new Image { Source = imgC, Width = 150, Height = 150, Stretch = Stretch.Uniform };
+                    var imgO = Art.Find("oiseau-" + (i + 1) + "-vole");
+                    openWings = imgO == null ? null
+                        : new Image { Source = imgO, Width = 150, Height = 150, Stretch = Stretch.Uniform };
+                }
+                else
+                {
+                    closed = BirdArt.Make(i, open: false, 150);
+                    openWings = BirdArt.Make(i, open: true, 150);
+                }
+                var body = new ContentControl { Content = closed, HorizontalAlignment = HorizontalAlignment.Center };
                 var note = new TextBlock
                 {
                     Text = "🎵",
@@ -108,7 +126,7 @@ namespace MesPremiersJeux.Games
                 sway.BeginAnimation(RotateTransform.AngleProperty, rock);
 
                 int idx = i;
-                bird.Click += (s, e) => Sing(idx, bird, body, sc, tt, note, x, y);
+                bird.Click += (s, e) => Sing(idx, bird, body, closed, openWings, sc, tt, note, x, y);
                 Canvas.SetLeft(bird, x);
                 Canvas.SetTop(bird, y);
                 _canvas.Children.Add(bird);
@@ -118,25 +136,21 @@ namespace MesPremiersJeux.Games
             Speak("Les oiseaux chanteurs ! Regarde un oiseau pour l'entendre chanter !");
         }
 
-        private void Sing(int idx, Button bird, FrameworkElement body, ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
+        private void Sing(int idx, Button bird, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+                          ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
             SoundFx.BirdChirp(idx);
 
-            // Battement d'ailes : si une 2e image « oiseau-N-vole.png » existe
-            // (ailes ouvertes), on alterne les deux pendant le chant.
-            if (body is System.Windows.Controls.Image img)
+            // Battement d'ailes pendant le chant : alternance des deux poses
+            // (dessin vectoriel intégré, ou les deux images du parent).
+            if (openWings != null)
             {
-                var open = Art.Find("oiseau-" + (idx + 1) + "-vole");
-                if (open != null)
+                for (int f = 0; f < 8; f++)
                 {
-                    var closed = img.Source;
-                    for (int f = 0; f < 8; f++)
-                    {
-                        int ff = f;
-                        Schedule(ff * 130, () => img.Source = ff % 2 == 0 ? open : closed);
-                    }
-                    Schedule(8 * 130, () => img.Source = closed);
+                    int ff = f;
+                    Schedule(ff * 130, () => body.Content = ff % 2 == 0 ? openWings : closed);
                 }
+                Schedule(8 * 130, () => body.Content = closed);
             }
 
             // L'oiseau sautille (deux petits bonds) et se gonfle.
@@ -220,10 +234,10 @@ namespace MesPremiersJeux.Games
                 Fill = new SolidColorBrush(Color.FromRgb(0x9A, 0x6B, 0x3F)),
             };
             Canvas.SetLeft(b, x);
-            Canvas.SetTop(b, y + 218);
+            Canvas.SetTop(b, y);
             _canvas.Children.Add(b);
-            AddDecor("🍃", x + width - 60, y + 190, 40);
-            AddDecor("🍃", x + 10, y + 192, 36);
+            AddDecor("🍃", x + width - 60, y - 28, 40);
+            AddDecor("🍃", x + 10, y - 26, 36);
         }
 
         private void AddDecor(string emoji, double x, double y, double size)
