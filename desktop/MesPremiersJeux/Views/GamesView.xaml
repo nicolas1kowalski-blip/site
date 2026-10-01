@@ -3,11 +3,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="#FFF3E9FF">
 
-        <!-- Menu plein écran : la grille occupe TOUT l'écran et se partage la
-             place — les tuiles ne peuvent jamais se chevaucher ni déborder,
-             quelle que soit la taille de la fenêtre. -->
+        <!-- Niveau 1 : les THÈMES (grandes tuiles, pas de défilement). -->
         <Grid x:Name="MenuRoot">
-            <UniformGrid x:Name="Menu" Columns="4" Margin="16" />
+            <UniformGrid x:Name="Cats" Columns="2" Margin="16" />
+        </Grid>
+
+        <!-- Niveau 2 : les jeux du thème choisi. La grille occupe tout l'écran
+             et se partage la place — jamais de chevauchement ni d'ascenseur. -->
+        <Grid x:Name="ListRoot" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid>
+                <Button x:Name="ThemesBtn" Style="{StaticResource BackButton}" Click="Themes_Click"
+                        HorizontalAlignment="Left" VerticalAlignment="Center" Margin="16,10,0,2"
+                        Content="⬅  Thèmes" />
+                <TextBlock x:Name="CatTitle" FontSize="36" FontWeight="Bold" Foreground="#FF3B2A5A"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,12,0,2" />
+            </Grid>
+            <UniformGrid x:Name="Menu" Grid.Row="1" Columns="3" Margin="16,4,16,16" />
         </Grid>
 
         <!-- Jeu en cours : plein écran + bouton retour -->

@@ -3,12 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="#FFFBF3FF">
 
-        <!-- Galerie de dessins (comme la bibliothèque de livres) -->
-        <Grid x:Name="MenuRoot">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <WrapPanel x:Name="Gallery" HorizontalAlignment="Center" Margin="20" />
-            </ScrollViewer>
-        </Grid>
+        <!-- Galerie de dessins : pages tournées avec de grandes flèches,
+             jamais d'ascenseur (PagedMenu, rempli par le code). -->
+        <Grid x:Name="MenuRoot" Margin="12" />
+
 
         <!-- Écran de coloriage : palette + retour (gauche), dessin en grand (centre),
              outils (droite). Les deux bandes latérales servent aux commandes, le

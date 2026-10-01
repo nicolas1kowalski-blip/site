@@ -62,7 +62,7 @@ namespace MesPremiersJeux.Views
 
         // --- Interface ---
         private readonly Grid _menuRoot;
-        private readonly UniformGrid _menu;
+        private readonly PagedMenu _menu; // bibliothèque paginée (pas d'ascenseur)
         private readonly Grid _readerRoot;
         private readonly TextBlock _title;
         private readonly ContentControl _illus;
@@ -96,13 +96,8 @@ namespace MesPremiersJeux.Views
                 Color.FromRgb(0xFF, 0xF3, 0xFB), Color.FromRgb(0xE9, 0xF2, 0xFF), 90);
 
             // --- Bibliothèque (choix du livre) ---
-            _menuRoot = new Grid();
-            _menu = new UniformGrid
-            {
-                Columns = 3,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            _menuRoot = new Grid { Margin = new Thickness(12) };
+            _menu = new PagedMenu(4, 2);
             _menuRoot.Children.Add(_menu);
             root.Children.Add(_menuRoot);
 
@@ -326,7 +321,7 @@ namespace MesPremiersJeux.Views
 
         private void BuildMenu()
         {
-            _menu.Children.Clear();
+            var tiles = new List<(UIElement Content, Action OnClick)>();
             foreach (var b in _books)
             {
                 var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
@@ -369,14 +364,16 @@ namespace MesPremiersJeux.Views
                     content.Children.Add(admin);
                 }
 
-                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
                 var book = b;
-                tile.Click += (s, e) => OpenBook(book);
-                _menu.Children.Add(tile);
+                tiles.Add((content, () => OpenBook(book)));
             }
 
             // Tuile « nouveau livre » (mode admin uniquement).
-            if (!AdminMode.IsActive) return;
+            if (!AdminMode.IsActive)
+            {
+                _menu.SetTiles(tiles);
+                return;
+            }
             var addContent = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
             addContent.Children.Add(new TextBlock { Text = "➕", FontSize = 74, HorizontalAlignment = HorizontalAlignment.Center });
             addContent.Children.Add(new TextBlock
@@ -388,9 +385,8 @@ namespace MesPremiersJeux.Views
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 8, 0, 0),
             });
-            var addTile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = addContent };
-            addTile.Click += (s, e) => AddBook();
-            _menu.Children.Add(addTile);
+            tiles.Add((addContent, AddBook));
+            _menu.SetTiles(tiles);
         }
 
         private void AddBook()

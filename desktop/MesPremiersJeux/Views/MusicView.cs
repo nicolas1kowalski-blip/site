@@ -47,7 +47,7 @@ namespace MesPremiersJeux.Views
         private readonly List<Favorite> _favs;
 
         // UI
-        private readonly WrapPanel _tiles;
+        private readonly PagedMenu _tiles; // chansons paginées (pas d'ascenseur)
         private readonly TextBlock _emptyMsg;
         private readonly TextBlock _nowPlaying;
         private readonly TextBlock _toggleGlyph;
@@ -99,8 +99,7 @@ namespace MesPremiersJeux.Views
             root.Children.Add(_adminPanel);
 
             // --- Tuiles (choix des musiques) ---
-            _tiles = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = _tiles };
+            _tiles = new PagedMenu(4, 2) { Margin = new Thickness(10) };
             var tilesArea = new Grid();
             _emptyMsg = new TextBlock
             {
@@ -109,7 +108,7 @@ namespace MesPremiersJeux.Views
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             };
             tilesArea.Children.Add(_emptyMsg);
-            tilesArea.Children.Add(scroll);
+            tilesArea.Children.Add(_tiles);
             tilesArea.Children.Add(_web); // WebView2 invisible (lecteur)
             Grid.SetRow(tilesArea, 1);
             root.Children.Add(tilesArea);
@@ -239,8 +238,9 @@ namespace MesPremiersJeux.Views
 
         private void RebuildTiles()
         {
-            _tiles.Children.Clear();
-            foreach (var fav in _favs) _tiles.Children.Add(BuildTile(fav));
+            var els = new List<UIElement>();
+            foreach (var fav in _favs) els.Add(BuildTile(fav));
+            _tiles.SetElements(els);
             _emptyMsg.Visibility = _favs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 

@@ -15,19 +15,49 @@ namespace MesPremiersJeux.Views
     /// </summary>
     public partial class EducationView : UserControl
     {
-        private readonly (string Icon, string Label, string Level, Func<Action, UserControl> Make)[] _activities =
+        private sealed class Theme
         {
-            ("💖", "Mon prénom",     "PS · MS", c => new NameGame(c)),
-            ("🎨", "Couleurs magiques", "PS · MS", c => new ColorMagicGame(c)),
-            ("🎈", "Fête des nombres", "PS · MS", c => new NumberPartyGame(c)),
-            ("🔤", "Les lettres",    "PS · MS", c => new LettersGame(c)),
-            ("📖", "L'abécédaire",   "PS · MS", c => new AlphabetBookGame(c)),
-            ("✍️", "J'écris !",      "MS",      c => new EyeWriteGame(c)),
-            ("🔢", "Les nombres",    "PS · MS", c => new NumbersGame(c)),
-            ("📏", "Grand ou petit", "PS",      c => new SizeGame(c)),
-            ("🟡", "Les suites",     "MS",      c => new PatternGame(c)),
-            ("🖼️", "L'imagier",      "PS · MS", c => new VocabGame(c)),
-            ("🧒", "Le corps",       "PS · MS", c => new BodyGame(c)),
+            public string Icon, Name;
+            public Color Tint;
+            public (string Icon, string Label, string Level, Func<Action, UserControl> Make)[] Activities;
+        }
+
+        // Les activités sont rangées par THÈMES (comme le menu Jeux) : jamais
+        // plus d'une poignée de tuiles par écran, donc jamais de défilement.
+        private readonly Theme[] _themes =
+        {
+            new Theme
+            {
+                Icon = "✍️", Name = "Lettres et écriture", Tint = Color.FromRgb(0xFF, 0xE9, 0xF2),
+                Activities = new (string, string, string, Func<Action, UserControl>)[]
+                {
+                    ("💖", "Mon prénom", "PS · MS", c => new NameGame(c)),
+                    ("🔤", "Les lettres", "PS · MS", c => new LettersGame(c)),
+                    ("📖", "L'abécédaire", "PS · MS", c => new AlphabetBookGame(c)),
+                    ("✍️", "J'écris !", "MS", c => new EyeWriteGame(c)),
+                },
+            },
+            new Theme
+            {
+                Icon = "🔢", Name = "Les nombres", Tint = Color.FromRgb(0xE8, 0xF0, 0xFF),
+                Activities = new (string, string, string, Func<Action, UserControl>)[]
+                {
+                    ("🎈", "Fête des nombres", "PS · MS", c => new NumberPartyGame(c)),
+                    ("🔢", "Les nombres", "PS · MS", c => new NumbersGame(c)),
+                },
+            },
+            new Theme
+            {
+                Icon = "🌍", Name = "Découvrir", Tint = Color.FromRgb(0xEA, 0xF8, 0xEE),
+                Activities = new (string, string, string, Func<Action, UserControl>)[]
+                {
+                    ("🎨", "Couleurs magiques", "PS · MS", c => new ColorMagicGame(c)),
+                    ("📏", "Grand ou petit", "PS", c => new SizeGame(c)),
+                    ("🟡", "Les suites", "MS", c => new PatternGame(c)),
+                    ("🖼️", "L'imagier", "PS · MS", c => new VocabGame(c)),
+                    ("🧒", "Le corps", "PS · MS", c => new BodyGame(c)),
+                },
+            },
         };
 
         private readonly Random _rng = new Random();
@@ -36,50 +66,37 @@ namespace MesPremiersJeux.Views
         {
             InitializeComponent();
 
-            // Même principe que le menu Jeux : la grille se partage l'écran et le
-            // contenu de chaque tuile se réduit (Viewbox) si la place manque —
-            // aucun chevauchement possible, libellés toujours lisibles.
-            Menu.Columns = (int)Math.Ceiling(Math.Sqrt(_activities.Length));
-
-            foreach (var a in _activities)
+            foreach (var t in _themes)
             {
-                var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                content.Children.Add(new TextBlock { Text = a.Icon, FontSize = 76, HorizontalAlignment = HorizontalAlignment.Center });
-                content.Children.Add(new TextBlock
-                {
-                    Text = a.Label,
-                    FontSize = 26,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x3A, 0x5A)),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 6, 0, 0),
-                });
-                content.Children.Add(new TextBlock
-                {
-                    Text = a.Level,
-                    FontSize = 17,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0x7A, 0x9A)),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 3, 0, 0),
-                });
+                var theme = t;
+                var tile = MenuKit.ThemeTile(t.Icon, t.Name, t.Tint,
+                    string.Join("  ", Array.ConvertAll(t.Activities, a => a.Icon)));
+                tile.Click += (s, e) => OpenTheme(theme);
+                Cats.Children.Add(tile);
+            }
+        }
 
-                var tile = new Button
-                {
-                    Style = (Style)Application.Current.Resources["MenuTile"],
-                    Content = new Viewbox
-                    {
-                        Stretch = Stretch.Uniform,
-                        StretchDirection = StretchDirection.DownOnly,
-                        Margin = new Thickness(14, 10, 14, 10),
-                        Child = content,
-                    },
-                    Width = double.NaN,
-                    Height = double.NaN,
-                };
+        private void OpenTheme(Theme t)
+        {
+            CatTitle.Text = t.Icon + "  " + t.Name;
+            Menu.Columns = t.Activities.Length <= 4 ? 2 : 3;
+            Menu.Children.Clear();
+            foreach (var a in t.Activities)
+            {
+                var tile = MenuKit.GameTile(a.Icon, a.Label, a.Level);
                 var make = a.Make;
                 tile.Click += (s, e) => Play(make);
                 Menu.Children.Add(tile);
             }
+            MenuRoot.Visibility = Visibility.Collapsed;
+            ListRoot.Visibility = Visibility.Visible;
+            MesPremiersJeux.Lib.Speech.Say(t.Name + " !");
+        }
+
+        private void Themes_Click(object sender, RoutedEventArgs e)
+        {
+            ListRoot.Visibility = Visibility.Collapsed;
+            MenuRoot.Visibility = Visibility.Visible;
         }
 
         private void Play(Func<Action, UserControl> make)
@@ -89,6 +106,7 @@ namespace MesPremiersJeux.Views
                 GameHost.Children.Clear();
                 GameHost.Children.Add(make(ShowConfetti));
                 MenuRoot.Visibility = Visibility.Collapsed;
+                ListRoot.Visibility = Visibility.Collapsed;
                 PlayRoot.Visibility = Visibility.Visible;
                 MesPremiersJeux.Lib.Chrome.Immersive = true; // plein écran pour l'activité
             }
@@ -102,7 +120,7 @@ namespace MesPremiersJeux.Views
         {
             GameHost.Children.Clear();
             PlayRoot.Visibility = Visibility.Collapsed;
-            MenuRoot.Visibility = Visibility.Visible;
+            ListRoot.Visibility = Visibility.Visible; // retour aux activités du thème
             MesPremiersJeux.Lib.Chrome.Immersive = false;
         }
 

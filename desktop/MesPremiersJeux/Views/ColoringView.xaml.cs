@@ -43,10 +43,15 @@ namespace MesPremiersJeux.Views
         /// <summary>Demande de bascule plein écran, gérée par la fenêtre principale.</summary>
         public event EventHandler ToggleFullscreenRequested;
 
+        private PagedMenu _gallery; // galerie paginée (grandes flèches, pas d'ascenseur)
+
         public ColoringView()
         {
             InitializeComponent();
             UserContent.EnsureFolders();
+
+            _gallery = new PagedMenu(4, 2);
+            MenuRoot.Children.Add(_gallery);
 
             LoadPages();
             BuildPalette();
@@ -70,7 +75,7 @@ namespace MesPremiersJeux.Views
         // ------------------------------------------------------------------ galerie
         private void BuildGallery()
         {
-            Gallery.Children.Clear();
+            var tiles = new List<(UIElement Content, Action OnClick)>();
             for (int i = 0; i < _pages.Count; i++)
             {
                 int idx = i;
@@ -91,9 +96,7 @@ namespace MesPremiersJeux.Views
                     Margin = new Thickness(0, 8, 0, 0),
                 });
 
-                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
-                tile.Click += (s, e) => OpenColoring(idx);
-                Gallery.Children.Add(tile);
+                tiles.Add((content, () => OpenColoring(idx)));
             }
 
             // Tuile « ajouter des dessins » (mode admin uniquement).
@@ -110,10 +113,10 @@ namespace MesPremiersJeux.Views
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(0, 8, 0, 0),
                 });
-                var addTile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = add };
-                addTile.Click += (s, e) => AddColorings();
-                Gallery.Children.Add(addTile);
+                tiles.Add((add, AddColorings));
             }
+
+            _gallery.SetTiles(tiles);
         }
 
         private void OpenColoring(int idx)
