@@ -78,14 +78,37 @@ namespace MesPremiersJeux.Games
                     Content = new StackPanel { Children = { body, note } },
                 };
                 var sc = new ScaleTransform(1, 1);
-                var tt = new TranslateTransform();
+                var sway = new RotateTransform(0);   // balancement permanent
+                var tt = new TranslateTransform();   // le bond quand il chante
+                var idle = new TranslateTransform(); // la respiration permanente
                 var grp = new TransformGroup();
                 grp.Children.Add(sc);
+                grp.Children.Add(sway);
                 grp.Children.Add(tt);
+                grp.Children.Add(idle);
                 bird.RenderTransform = grp;
 
+                // Les oiseaux VIVENT en permanence : chacun se balance et
+                // sautille doucement à son propre rythme (phases décalées).
+                var bob = new DoubleAnimation(0, -8, TimeSpan.FromSeconds(1.5 + i * 0.27))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    BeginTime = TimeSpan.FromMilliseconds(i * 340),
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                };
+                idle.BeginAnimation(TranslateTransform.YProperty, bob);
+                var rock = new DoubleAnimation(-2.6, 2.6, TimeSpan.FromSeconds(2.0 + i * 0.33))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    BeginTime = TimeSpan.FromMilliseconds(i * 520),
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                };
+                sway.BeginAnimation(RotateTransform.AngleProperty, rock);
+
                 int idx = i;
-                bird.Click += (s, e) => Sing(idx, bird, sc, tt, note, x, y);
+                bird.Click += (s, e) => Sing(idx, bird, body, sc, tt, note, x, y);
                 Canvas.SetLeft(bird, x);
                 Canvas.SetTop(bird, y);
                 _canvas.Children.Add(bird);
@@ -95,9 +118,26 @@ namespace MesPremiersJeux.Games
             Speak("Les oiseaux chanteurs ! Regarde un oiseau pour l'entendre chanter !");
         }
 
-        private void Sing(int idx, Button bird, ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
+        private void Sing(int idx, Button bird, FrameworkElement body, ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
             SoundFx.BirdChirp(idx);
+
+            // Battement d'ailes : si une 2e image « oiseau-N-vole.png » existe
+            // (ailes ouvertes), on alterne les deux pendant le chant.
+            if (body is System.Windows.Controls.Image img)
+            {
+                var open = Art.Find("oiseau-" + (idx + 1) + "-vole");
+                if (open != null)
+                {
+                    var closed = img.Source;
+                    for (int f = 0; f < 8; f++)
+                    {
+                        int ff = f;
+                        Schedule(ff * 130, () => img.Source = ff % 2 == 0 ? open : closed);
+                    }
+                    Schedule(8 * 130, () => img.Source = closed);
+                }
+            }
 
             // L'oiseau sautille (deux petits bonds) et se gonfle.
             var hop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(700) };
