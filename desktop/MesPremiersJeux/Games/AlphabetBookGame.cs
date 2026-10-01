@@ -23,38 +23,41 @@ namespace MesPremiersJeux.Games
         private sealed class Page
         {
             public string L;                       // « A »
-            public string Phon;                    // le son (« aaa », « beuh »…)
+            public string Phon;                    // le son écrit (« beuh »…) — repli voix Windows
+            public string Ipa;                     // le son EXACT en phonétique (voix Azure)
             public (string Word, string Emoji)[] Words;
         }
 
+        // L'IPA (alphabet phonétique) donne à la voix Azure le son EXACT de la
+        // lettre, tenu longtemps (« ː ») — bien plus net que du texte inventé.
         private static readonly Page[] Book =
         {
-            new Page { L = "A", Phon = "aaa", Words = new[] { ("avion", "✈️"), ("abeille", "🐝"), ("ananas", "🍍") } },
-            new Page { L = "B", Phon = "beuh", Words = new[] { ("ballon", "🎈"), ("banane", "🍌"), ("bateau", "⛵") } },
-            new Page { L = "C", Phon = "keuh", Words = new[] { ("canard", "🦆"), ("carotte", "🥕"), ("cadeau", "🎁") } },
-            new Page { L = "D", Phon = "deuh", Words = new[] { ("dauphin", "🐬"), ("dinosaure", "🦖"), ("dé", "🎲") } },
-            new Page { L = "E", Phon = "euh", Words = new[] { ("éléphant", "🐘"), ("escargot", "🐌"), ("étoile", "⭐") } },
-            new Page { L = "F", Phon = "ffff", Words = new[] { ("fleur", "🌸"), ("fraise", "🍓"), ("fusée", "🚀") } },
-            new Page { L = "G", Phon = "gueuh", Words = new[] { ("gâteau", "🎂"), ("gorille", "🦍"), ("gants", "🧤") } },
-            new Page { L = "H", Phon = "", Words = new[] { ("hibou", "🦉"), ("hérisson", "🦔"), ("hélicoptère", "🚁") } },
-            new Page { L = "I", Phon = "iii", Words = new[] { ("île", "🏝️"), ("iguane", "🦎") } },
-            new Page { L = "J", Phon = "jeuh", Words = new[] { ("jouet", "🧸"), ("jardin", "🌷"), ("jus", "🧃") } },
-            new Page { L = "K", Phon = "keuh", Words = new[] { ("koala", "🐨"), ("kiwi", "🥝"), ("kangourou", "🦘") } },
-            new Page { L = "L", Phon = "llll", Words = new[] { ("lion", "🦁"), ("lune", "🌙"), ("lapin", "🐰") } },
-            new Page { L = "M", Phon = "mmmm", Words = new[] { ("maison", "🏠"), ("mouton", "🐑"), ("moto", "🏍️") } },
-            new Page { L = "N", Phon = "nnnn", Words = new[] { ("nuage", "☁️"), ("nid", "🪺"), ("noix", "🌰") } },
-            new Page { L = "O", Phon = "ooo", Words = new[] { ("orange", "🍊"), ("oiseau", "🐦"), ("ours", "🐻") } },
-            new Page { L = "P", Phon = "peuh", Words = new[] { ("papillon", "🦋"), ("pomme", "🍎"), ("poisson", "🐟") } },
-            new Page { L = "Q", Phon = "keuh", Words = new[] { ("quatre", "4️⃣"), ("quille", "🎳") } },
-            new Page { L = "R", Phon = "rrre", Words = new[] { ("robot", "🤖"), ("renard", "🦊"), ("raisin", "🍇") } },
-            new Page { L = "S", Phon = "ssss", Words = new[] { ("soleil", "☀️"), ("serpent", "🐍"), ("sirène", "🧜") } },
-            new Page { L = "T", Phon = "teuh", Words = new[] { ("tortue", "🐢"), ("train", "🚂"), ("tomate", "🍅") } },
-            new Page { L = "U", Phon = "uuu", Words = new[] { ("un", "1️⃣"), ("univers", "🌌") } },
-            new Page { L = "V", Phon = "vvve", Words = new[] { ("vélo", "🚲"), ("vache", "🐮"), ("voiture", "🚗") } },
-            new Page { L = "W", Phon = "oua", Words = new[] { ("wagon", "🚃"), ("wapiti", "🦌") } },
-            new Page { L = "X", Phon = "ksss", Words = new[] { ("xylophone", "🎵") } },
-            new Page { L = "Y", Phon = "iii", Words = new[] { ("yoyo", "🪀"), ("yaourt", "🥣") } },
-            new Page { L = "Z", Phon = "zzzz", Words = new[] { ("zèbre", "🦓"), ("zéro", "0️⃣") } },
+            new Page { L = "A", Phon = "aaa", Ipa = "aːː", Words = new[] { ("avion", "✈️"), ("abeille", "🐝"), ("ananas", "🍍") } },
+            new Page { L = "B", Phon = "beuh", Ipa = "bəː", Words = new[] { ("ballon", "🎈"), ("banane", "🍌"), ("bateau", "⛵") } },
+            new Page { L = "C", Phon = "keuh", Ipa = "kəː", Words = new[] { ("canard", "🦆"), ("carotte", "🥕"), ("cadeau", "🎁") } },
+            new Page { L = "D", Phon = "deuh", Ipa = "dəː", Words = new[] { ("dauphin", "🐬"), ("dinosaure", "🦖"), ("dé", "🎲") } },
+            new Page { L = "E", Phon = "euh", Ipa = "øːː", Words = new[] { ("éléphant", "🐘"), ("escargot", "🐌"), ("étoile", "⭐") } },
+            new Page { L = "F", Phon = "ffff", Ipa = "fːː", Words = new[] { ("fleur", "🌸"), ("fraise", "🍓"), ("fusée", "🚀") } },
+            new Page { L = "G", Phon = "gueuh", Ipa = "ɡəː", Words = new[] { ("gâteau", "🎂"), ("gorille", "🦍"), ("gants", "🧤") } },
+            new Page { L = "H", Phon = "", Ipa = "", Words = new[] { ("hibou", "🦉"), ("hérisson", "🦔"), ("hélicoptère", "🚁") } },
+            new Page { L = "I", Phon = "iii", Ipa = "iːː", Words = new[] { ("île", "🏝️"), ("iguane", "🦎") } },
+            new Page { L = "J", Phon = "jeuh", Ipa = "ʒəː", Words = new[] { ("jouet", "🧸"), ("jardin", "🌷"), ("jus", "🧃") } },
+            new Page { L = "K", Phon = "keuh", Ipa = "kəː", Words = new[] { ("koala", "🐨"), ("kiwi", "🥝"), ("kangourou", "🦘") } },
+            new Page { L = "L", Phon = "llll", Ipa = "ləː", Words = new[] { ("lion", "🦁"), ("lune", "🌙"), ("lapin", "🐰") } },
+            new Page { L = "M", Phon = "mmmm", Ipa = "mːː", Words = new[] { ("maison", "🏠"), ("mouton", "🐑"), ("moto", "🏍️") } },
+            new Page { L = "N", Phon = "nnnn", Ipa = "nːː", Words = new[] { ("nuage", "☁️"), ("nid", "🪺"), ("noix", "🌰") } },
+            new Page { L = "O", Phon = "ooo", Ipa = "oːː", Words = new[] { ("orange", "🍊"), ("oiseau", "🐦"), ("ours", "🐻") } },
+            new Page { L = "P", Phon = "peuh", Ipa = "pəː", Words = new[] { ("papillon", "🦋"), ("pomme", "🍎"), ("poisson", "🐟") } },
+            new Page { L = "Q", Phon = "keuh", Ipa = "kəː", Words = new[] { ("quatre", "4️⃣"), ("quille", "🎳") } },
+            new Page { L = "R", Phon = "rrre", Ipa = "ʁəː", Words = new[] { ("robot", "🤖"), ("renard", "🦊"), ("raisin", "🍇") } },
+            new Page { L = "S", Phon = "ssss", Ipa = "sːː", Words = new[] { ("soleil", "☀️"), ("serpent", "🐍"), ("sirène", "🧜") } },
+            new Page { L = "T", Phon = "teuh", Ipa = "təː", Words = new[] { ("tortue", "🐢"), ("train", "🚂"), ("tomate", "🍅") } },
+            new Page { L = "U", Phon = "uuu", Ipa = "yːː", Words = new[] { ("un", "1️⃣"), ("univers", "🌌") } },
+            new Page { L = "V", Phon = "vvve", Ipa = "vəː", Words = new[] { ("vélo", "🚲"), ("vache", "🐮"), ("voiture", "🚗") } },
+            new Page { L = "W", Phon = "oua", Ipa = "waː", Words = new[] { ("wagon", "🚃"), ("wapiti", "🦌") } },
+            new Page { L = "X", Phon = "ksss", Ipa = "ksːː", Words = new[] { ("xylophone", "🎵") } },
+            new Page { L = "Y", Phon = "iii", Ipa = "iːː", Words = new[] { ("yoyo", "🪀"), ("yaourt", "🥣") } },
+            new Page { L = "Z", Phon = "zzzz", Ipa = "zəː", Words = new[] { ("zèbre", "🦓"), ("zéro", "0️⃣") } },
         };
 
         private static readonly Color[] Rainbow =
@@ -157,12 +160,7 @@ namespace MesPremiersJeux.Games
                 if (Locked) return;
                 Pop(captSound);
                 Pop(captLetter);
-                // Le son est dit LENTEMENT, isolé et répété trois fois : c'est
-                // lui que l'enfant doit entendre distinctement.
-                if (page.L == "H")
-                    Speech.SaySlow("Écoute bien ! Le H ne fait pas de bruit : il est muet ! Chut !");
-                else
-                    Speech.SaySlow("Écoute bien le " + page.L + "... " + page.Phon + ". ... " + page.Phon + ". ... " + page.Phon + " !");
+                SpeakSound(page);
                 _gotSound = true;
                 CheckPageDone();
             };
@@ -285,6 +283,46 @@ namespace MesPremiersJeux.Games
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         }
+
+        // ------------------------------------------------------------------
+        // Le SON de la lettre : la version Azure prononce le VRAI phonème
+        // (IPA), tenu longtemps, très lentement, très fort, répété trois fois
+        // avec de longues pauses, puis relié à un mot (« beuh… comme ballon ! »).
+        // Sans Azure, repli sur la voix Windows ralentie.
+        // ------------------------------------------------------------------
+        private static void SpeakSound(Page page)
+        {
+            if (page.L == "H")
+            {
+                Speech.SaySlow("Écoute bien ! Le H ne fait pas de bruit : il est muet ! Chut !");
+                return;
+            }
+            if (AzureTts.Enabled)
+            {
+                Speech.Stop();
+                AzureTts.SpeakSsml(SoundSsml(page), Speech.Pitch, () => FallbackSound(page));
+                return;
+            }
+            FallbackSound(page);
+        }
+
+        private static string SoundSsml(Page p)
+        {
+            var ph = "<prosody rate='-40%' volume='x-loud'>" +
+                     "<phoneme alphabet='ipa' ph='" + p.Ipa + "'>" +
+                     System.Security.SecurityElement.Escape(p.Phon) +
+                     "</phoneme></prosody>";
+            return System.Security.SecurityElement.Escape("Écoute bien ! Le " + p.L + " fait...") +
+                   "<break time='600ms'/>" + ph +
+                   "<break time='900ms'/>" + ph +
+                   "<break time='900ms'/>" + ph +
+                   "<break time='700ms'/>" +
+                   System.Security.SecurityElement.Escape(p.Phon + "... comme " + p.Words[0].Word + " !");
+        }
+
+        private static void FallbackSound(Page p)
+            => Speech.SaySlow("Écoute bien le " + p.L + "... " + p.Phon + ". ... " +
+                              p.Phon + ". ... " + p.Phon + "... comme " + p.Words[0].Word + " !");
 
         private static void Pop(FrameworkElement el)
         {

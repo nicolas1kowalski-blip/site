@@ -80,6 +80,40 @@ namespace MesPremiersJeux.Lib
             catch { onFail?.Invoke(); }
         }
 
+        /// <summary>
+        /// Parle à partir d'un FRAGMENT SSML brut (déjà échappé par l'appelant) :
+        /// pauses <c>&lt;break&gt;</c>, phonèmes IPA <c>&lt;phoneme&gt;</c>,
+        /// prosodie locale… C'est ce qui permet les sons de lettres parfaits de
+        /// l'abécédaire. La hauteur globale de l'application est appliquée autour.
+        /// </summary>
+        public static async void SpeakSsml(string innerSsml, double pitch, Action onFail)
+        {
+            try
+            {
+                Directory.CreateDirectory(CacheDir);
+                var keyText = Voice + "|" + (int)pitch + "|ssml|" + innerSsml;
+                string hash;
+                using (var sha = SHA1.Create())
+                    hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(keyText))).Replace("-", "");
+                var path = Path.Combine(CacheDir, hash + ".wav");
+                if (!File.Exists(path))
+                {
+                    var sign = pitch >= 0 ? "+" : "";
+                    var ssml =
+                        "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='fr-FR'>" +
+                        $"<voice name='{Voice}'>" +
+                        $"<prosody pitch='{sign}{(int)pitch}%'>" +
+                        innerSsml +
+                        "</prosody></voice></speak>";
+                    await Fetch(ssml, path);
+                }
+                StopPlayback();
+                _player = new SoundPlayer(path);
+                _player.Play();
+            }
+            catch { onFail?.Invoke(); }
+        }
+
         // ------------------------------------------------------------------
         // Lecture d'une page avec suivi des mots (temps estimés sur la durée
         // réelle de l'audio, pondérés par la longueur des mots).
@@ -151,6 +185,12 @@ namespace MesPremiersJeux.Lib
                 SecurityElement.Escape(text) +
                 "</prosody></voice></speak>";
 
+            await Fetch(ssml, path);
+            return path;
+        }
+
+        private static async Task Fetch(string ssml, string path)
+        {
             using (var req = new HttpRequestMessage(HttpMethod.Post,
                        $"https://{Region}.tts.speech.microsoft.com/cognitiveservices/v1"))
             {
@@ -164,7 +204,6 @@ namespace MesPremiersJeux.Lib
                 var bytes = await resp.Content.ReadAsByteArrayAsync();
                 File.WriteAllBytes(path, bytes);
             }
-            return path;
         }
 
         // Durée d'un WAV 24 kHz 16 bits mono (48 000 octets par seconde).

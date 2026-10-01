@@ -36,6 +36,11 @@ namespace MesPremiersJeux.Views
         {
             InitializeComponent();
 
+            // Même principe que le menu Jeux : la grille se partage l'écran et le
+            // contenu de chaque tuile se réduit (Viewbox) si la place manque —
+            // aucun chevauchement possible, libellés toujours lisibles.
+            Menu.Columns = (int)Math.Ceiling(Math.Sqrt(_activities.Length));
+
             foreach (var a in _activities)
             {
                 var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
@@ -58,7 +63,19 @@ namespace MesPremiersJeux.Views
                     Margin = new Thickness(0, 3, 0, 0),
                 });
 
-                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
+                var tile = new Button
+                {
+                    Style = (Style)Application.Current.Resources["MenuTile"],
+                    Content = new Viewbox
+                    {
+                        Stretch = Stretch.Uniform,
+                        StretchDirection = StretchDirection.DownOnly,
+                        Margin = new Thickness(14, 10, 14, 10),
+                        Child = content,
+                    },
+                    Width = double.NaN,
+                    Height = double.NaN,
+                };
                 var make = a.Make;
                 tile.Click += (s, e) => Play(make);
                 Menu.Children.Add(tile);

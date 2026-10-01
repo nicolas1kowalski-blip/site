@@ -74,6 +74,24 @@ namespace MesPremiersJeux
         {
             _settings = Settings.Load();
 
+            // L'application démarre TOUJOURS en plein écran « kiosque » : en
+            // fenêtré elle est inopérable au regard. Le bouton ⛶ reste
+            // disponible pour en sortir volontairement (maintenance).
+            if (!_isFullscreen) ToggleFullscreen();
+
+            // Et elle Y RESTE : si la fenêtre revient d'une réduction (ou si
+            // Windows change son état), le mode kiosque est réaffirmé.
+            StateChanged += (s2, e2) =>
+            {
+                if (!_isFullscreen || WindowState == WindowState.Minimized) return;
+                WindowState = WindowState.Normal;
+                Topmost = true;
+                Left = 0;
+                Top = 0;
+                Width = SystemParameters.PrimaryScreenWidth;
+                Height = SystemParameters.PrimaryScreenHeight;
+            };
+
             _dwell = new DwellController(RootGrid, GazeIndicator, GazeProgress, GazeDot);
 
             // Sources du regard : démarrées selon le PILOTE choisi (réglages).

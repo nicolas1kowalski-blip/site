@@ -41,33 +41,39 @@ namespace MesPremiersJeux.Views
         {
             InitializeComponent();
 
-            // Au-delà de 12 jeux, les tuiles pleines ne tiennent plus à l'écran :
-            // on passe en 6 colonnes avec des tuiles compactes (sinon elles se
-            // chevauchent / débordent).
-            bool compact = _games.Length > 12;
-            Menu.Columns = compact ? 6 : 4;
+            // Les tuiles SE PARTAGENT l'écran : la grille est étirée sur toute la
+            // fenêtre, chaque tuile remplit sa case, et son contenu (icône +
+            // libellé) est dans un Viewbox qui le réduit si la place manque.
+            // Résultat : jamais de chevauchement, libellés toujours visibles.
+            Menu.Columns = (int)Math.Ceiling(Math.Sqrt(_games.Length));
 
             foreach (var g in _games)
             {
                 var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                content.Children.Add(new TextBlock { Text = g.Icon, FontSize = compact ? 60 : 82, HorizontalAlignment = HorizontalAlignment.Center });
+                content.Children.Add(new TextBlock { Text = g.Icon, FontSize = 82, HorizontalAlignment = HorizontalAlignment.Center });
                 content.Children.Add(new TextBlock
                 {
                     Text = g.Label,
-                    FontSize = compact ? 21 : 27,
+                    FontSize = 27,
                     FontWeight = FontWeights.Bold,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, compact ? 4 : 8, 0, 0),
+                    Margin = new Thickness(0, 8, 0, 0),
                 });
 
-                var tile = new Button { Style = (Style)Application.Current.Resources["MenuTile"], Content = content };
-                if (compact)
+                var tile = new Button
                 {
-                    tile.Width = 212;
-                    tile.Height = 178;
-                    tile.Margin = new Thickness(6);
-                }
+                    Style = (Style)Application.Current.Resources["MenuTile"],
+                    Content = new Viewbox
+                    {
+                        Stretch = Stretch.Uniform,
+                        StretchDirection = StretchDirection.DownOnly,
+                        Margin = new Thickness(14, 10, 14, 10),
+                        Child = content,
+                    },
+                    Width = double.NaN,
+                    Height = double.NaN,
+                };
                 var make = g.Make;
                 tile.Click += (s, e) => Play(make);
                 Menu.Children.Add(tile);

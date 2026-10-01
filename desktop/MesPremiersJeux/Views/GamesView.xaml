@@ -3,11 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="#FFF3E9FF">
 
-        <!-- Menu plein écran : grandes tuiles centrées (sans Viewbox, pour un
-             ciblage au regard direct et fiable). -->
+        <!-- Menu plein écran : la grille occupe TOUT l'écran et se partage la
+             place — les tuiles ne peuvent jamais se chevaucher ni déborder,
+             quelle que soit la taille de la fenêtre. -->
         <Grid x:Name="MenuRoot">
-            <UniformGrid x:Name="Menu" Columns="4"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <UniformGrid x:Name="Menu" Columns="4" Margin="16" />
         </Grid>
 
         <!-- Jeu en cours : plein écran + bouton retour -->
