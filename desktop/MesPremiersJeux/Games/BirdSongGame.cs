@@ -4,16 +4,19 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
 {
     /// <summary>
     /// « Les oiseaux chanteurs » (inspiré de Look to Learn) : six oiseaux posés
-    /// sur des branches ; en regarder un le fait sautiller, ouvrir grand les
-    /// ailes et CHANTER sa petite mélodie à lui (gazouillis synthétisés, chaque
-    /// oiseau a sa voix). Pur cause-à-effet, aucun échec possible. Quand tous
-    /// les oiseaux ont chanté : le grand concert et les confettis.
+    /// sur des branches. Regarder un oiseau le fait chanter EN BOUCLE (il ne
+    /// s'arrête pas tout seul) ; le regarder à nouveau l'arrête. Chaque oiseau
+    /// a son lecteur audio indépendant : plusieurs oiseaux chantent réellement
+    /// en même temps, et comme tous chantent la même phrase transposée, leurs
+    /// entrées décalées forment un CANON toujours harmonieux. Tous les six
+    /// ensemble : le grand orchestre et les confettis.
     /// </summary>
     public sealed class BirdSongGame : GameControl
     {
@@ -26,22 +29,25 @@ namespace MesPremiersJeux.Games
         };
 
         private Canvas _canvas;
-        private bool[] _sung;
-        // La « danse » de chaque oiseau (bond + ailes + notes), rejouable pour
-        // le grand concert final, en rythme avec le chœur.
-        private readonly System.Collections.Generic.List<Action> _dances =
-            new System.Collections.Generic.List<Action>();
+        private readonly MediaPlayer[] _players = new MediaPlayer[6];
+        private readonly DispatcherTimer[] _anim = new DispatcherTimer[6];
+        private readonly bool[] _on = new bool[6];
+        private bool _celebrated;
 
-        public BirdSongGame(Action celebrate) : base(celebrate) { }
+        public BirdSongGame(Action celebrate) : base(celebrate)
+        {
+            Unloaded += (s, e) => StopAll(); // quitter le jeu coupe les chants
+        }
 
         protected override void NewRound()
         {
+            StopAll();
             Locked = false;
-            _sung = new bool[Perch.Length];
-            _dances.Clear();
+            _celebrated = false;
             Question.Text = "🐦 Les oiseaux chanteurs";
             SetConsigne(new TextBlock { Text = "🐦🎵" },
-                () => "Regarde un oiseau... et il chante pour toi ! Écoute-les tous !");
+                () => "Regarde un oiseau : il chante sans s'arrêter ! Regarde-le encore pour l'arrêter. " +
+                      "Fais-les chanter tous ensemble !");
 
             _canvas = new Canvas { Width = W, Height = H };
 
@@ -58,7 +64,6 @@ namespace MesPremiersJeux.Games
             AddDecor("☁️", 220, 30, 64);
             AddDecor("☁️", 900, 55, 52);
 
-            // Branches sous chaque rangée d'oiseaux.
             // Branches juste sous les pattes de chaque rangée d'oiseaux.
             AddBranch(60, 400, 1380);
             AddBranch(120, 700, 1300);
@@ -66,10 +71,9 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < Perch.Length; i++)
             {
                 var (emoji, x, y) = Perch[i];
-                // Visuel de l'oiseau, par priorité : image du parent
-                // (Contenu\Images\oiseau-N.png, + oiseau-N-vole.png pour les
-                // ailes ouvertes) → sinon le DESSIN vectoriel intégré (BirdArt,
-                // deux poses) ; l'emoji ne sert plus que d'ultime secours.
+
+                // Visuel : image du parent (oiseau-N.png + oiseau-N-vole.png)
+                // → sinon le dessin vectoriel intégré, deux poses.
                 FrameworkElement closed, openWings;
                 var imgC = Art.Find("oiseau-" + (i + 1));
                 if (imgC != null)
@@ -85,11 +89,12 @@ namespace MesPremiersJeux.Games
                     openWings = BirdArt.Make(i, open: true, 150);
                 }
                 var body = new ContentControl { Content = closed, HorizontalAlignment = HorizontalAlignment.Center };
+
                 var note = new TextBlock
                 {
                     Text = "🎵",
                     FontSize = 34,
-                    Opacity = 0.25,        // devient net quand l'oiseau a chanté
+                    Opacity = 0.25,        // s'allume quand l'oiseau chante
                     HorizontalAlignment = HorizontalAlignment.Center,
                 };
                 var bird = new Button
@@ -101,9 +106,9 @@ namespace MesPremiersJeux.Games
                     Content = new StackPanel { Children = { body, note } },
                 };
                 var sc = new ScaleTransform(1, 1);
-                var sway = new RotateTransform(0);   // balancement permanent
-                var tt = new TranslateTransform();   // le bond quand il chante
-                var idle = new TranslateTransform(); // la respiration permanente
+                var sway = new RotateTransform(0);
+                var tt = new TranslateTransform();
+                var idle = new TranslateTransform();
                 var grp = new TransformGroup();
                 grp.Children.Add(sc);
                 grp.Children.Add(sway);
@@ -111,8 +116,7 @@ namespace MesPremiersJeux.Games
                 grp.Children.Add(idle);
                 bird.RenderTransform = grp;
 
-                // Les oiseaux VIVENT en permanence : chacun se balance et
-                // sautille doucement à son propre rythme (phases décalées).
+                // Vie permanente : respiration + balancement, phases décalées.
                 var bob = new DoubleAnimation(0, -8, TimeSpan.FromSeconds(1.5 + i * 0.27))
                 {
                     AutoReverse = true,
@@ -131,112 +135,135 @@ namespace MesPremiersJeux.Games
                 sway.BeginAnimation(RotateTransform.AngleProperty, rock);
 
                 int idx = i;
-                _dances.Add(() => Dance(body, closed, openWings, sc, tt, x, y));
-                bird.Click += (s, e) => Sing(idx, body, closed, openWings, sc, tt, note, x, y);
+                bird.Click += (s, e) => Toggle(idx, body, closed, openWings, sc, tt, note, x, y);
                 Canvas.SetLeft(bird, x);
                 Canvas.SetTop(bird, y);
                 _canvas.Children.Add(bird);
             }
 
             SetBody(_canvas);
-            Speak("Les oiseaux chanteurs ! Regarde un oiseau pour l'entendre chanter !");
+            Speak("Les oiseaux chanteurs ! Regarde un oiseau pour qu'il chante. " +
+                  "Regarde-le encore pour l'arrêter !");
         }
 
-        private void Sing(int idx, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
-                          ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
+        // ------------------------------------------------------------------
+        //  Marche / arrêt du chant (comme Look to Learn)
+        // ------------------------------------------------------------------
+        private void Toggle(int idx, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+                            ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
-            SoundFx.BirdChirp(idx);
-            Dance(body, closed, openWings, sc, tt, x, y);
-
-            if (_sung[idx]) return;
-            _sung[idx] = true;
-            note.Opacity = 1; // souvenir : cet oiseau a chanté
-
-            int heard = 0;
-            foreach (var v in _sung) if (v) heard++;
-            if (heard < _sung.Length) return;
-
-            // Tous ont chanté : le GRAND CONCERT — les six chants mixés en un
-            // seul chœur harmonieux (gamme commune), et chaque oiseau danse au
-            // moment où sa voix entre dans le canon (décalage de 420 ms).
-            Locked = true;
-            Schedule(900, () =>
-            {
-                SoundFx.BirdChorus();
-                for (int i = 0; i < _dances.Count; i++)
-                {
-                    var d = _dances[i];
-                    Schedule(i * 420, d);
-                    Schedule(i * 420 + 1400, d); // deuxième tour de danse
-                }
-                Speak("Bravo ! Tous les oiseaux chantent ensemble ! Quel joli concert !");
-                GameKit.Success();
-                Celebrate();
-                Schedule(5200, NewRound);
-            });
+            if (_on[idx]) StopBird(idx, body, closed, note);
+            else StartBird(idx, body, closed, openWings, sc, tt, note, x, y);
         }
 
-        // La danse d'un oiseau : battement d'ailes, bond, gonflement, notes.
-        private void Dance(ContentControl body, FrameworkElement closed, FrameworkElement openWings,
-                           ScaleTransform sc, TranslateTransform tt, double x, double y)
+        private void StartBird(int idx, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+                               ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
-            // Battement d'ailes : alternance des deux poses (dessin vectoriel
-            // intégré, ou les deux images du parent).
-            if (openWings != null)
+            _on[idx] = true;
+            note.Opacity = 1;
+
+            // Le lecteur de CET oiseau (indépendant → vraie polyphonie), qui
+            // reboucle sans fin jusqu'à ce qu'on l'arrête.
+            try
             {
-                for (int f = 0; f < 8; f++)
+                var p = _players[idx];
+                if (p == null)
                 {
-                    int ff = f;
-                    Schedule(ff * 130, () => body.Content = ff % 2 == 0 ? openWings : closed);
+                    p = new MediaPlayer { Volume = 0.6 };
+                    p.MediaEnded += (s, e) => { p.Position = TimeSpan.Zero; p.Play(); };
+                    _players[idx] = p;
                 }
-                Schedule(8 * 130, () => body.Content = closed);
+                p.Open(new Uri(SoundFx.BirdLoopFile(idx)));
+                p.Play();
             }
+            catch { }
 
-            // L'oiseau sautille (deux petits bonds) et se gonfle.
-            var hop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(700) };
-            hop.KeyFrames.Add(new SplineDoubleKeyFrame(-34, KeyTime.FromPercent(0.2), new KeySpline(0.2, 0.8, 0.4, 1)));
-            hop.KeyFrames.Add(new SplineDoubleKeyFrame(0, KeyTime.FromPercent(0.45), new KeySpline(0.5, 0, 0.8, 1)));
-            hop.KeyFrames.Add(new SplineDoubleKeyFrame(-20, KeyTime.FromPercent(0.65), new KeySpline(0.2, 0.8, 0.4, 1)));
+            // Petit bond de départ.
+            var hop = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(600) };
+            hop.KeyFrames.Add(new SplineDoubleKeyFrame(-30, KeyTime.FromPercent(0.3), new KeySpline(0.2, 0.8, 0.4, 1)));
             hop.KeyFrames.Add(new SplineDoubleKeyFrame(0, KeyTime.FromPercent(1), new KeySpline(0.5, 0, 0.8, 1)));
             tt.BeginAnimation(TranslateTransform.YProperty, hop);
-            var puff = new DoubleAnimation(1, 1.18, TimeSpan.FromMilliseconds(350))
+            var puff = new DoubleAnimation(1, 1.15, TimeSpan.FromMilliseconds(320))
             { AutoReverse = true, EasingFunction = new SineEase() };
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, puff);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, puff);
 
-            // Des notes de musique s'envolent au-dessus de lui.
-            for (int k = 0; k < 4; k++)
+            // Tant qu'il chante : battement d'ailes continu + notes régulières.
+            int tick = 0;
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
+            timer.Tick += (s, e) =>
             {
-                var n = new TextBlock
-                {
-                    Text = k % 2 == 0 ? "🎵" : "🎶",
-                    FontSize = 34 + k * 5,
-                    IsHitTestVisible = false,
-                    Opacity = 0,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                };
-                var ntt = new TranslateTransform();
-                n.RenderTransform = ntt;
-                Canvas.SetLeft(n, x + 90 + (k % 2 == 0 ? -30 : 40));
-                Canvas.SetTop(n, y - 10);
-                n.SetValue(Panel.ZIndexProperty, 60);
-                _canvas.Children.Add(n);
+                tick++;
+                if (openWings != null)
+                    body.Content = tick % 2 == 0 ? openWings : closed;
+                if (tick % 5 == 0) SpawnNote(x, y, tick / 5);
+            };
+            timer.Start();
+            _anim[idx] = timer;
 
-                int begin = k * 180;
-                var up = new DoubleAnimation(0, -140 - k * 30, TimeSpan.FromMilliseconds(1300))
-                { BeginTime = TimeSpan.FromMilliseconds(begin), EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } };
-                var sway = new DoubleAnimation(0, k % 2 == 0 ? -36 : 36, TimeSpan.FromMilliseconds(1300))
-                { BeginTime = TimeSpan.FromMilliseconds(begin), EasingFunction = new SineEase() };
-                var fade = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(1300), BeginTime = TimeSpan.FromMilliseconds(begin) };
-                fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.15)));
-                fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.6)));
-                fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-                var captured = n;
-                fade.Completed += (s, e) => _canvas.Children.Remove(captured);
-                ntt.BeginAnimation(TranslateTransform.YProperty, up);
-                ntt.BeginAnimation(TranslateTransform.XProperty, sway);
-                n.BeginAnimation(OpacityProperty, fade);
+            // Tous les six chantent EN MÊME TEMPS : le grand orchestre !
+            if (_celebrated) return;
+            foreach (var v in _on) if (!v) return;
+            _celebrated = true;
+            Speak("Tous les oiseaux chantent ensemble ! Quel orchestre ! Bravo !");
+            GameKit.Success();
+            Celebrate();
+        }
+
+        private void StopBird(int idx, ContentControl body, FrameworkElement closed, TextBlock note)
+        {
+            _on[idx] = false;
+            note.Opacity = 0.25;
+            try { _anim[idx]?.Stop(); } catch { }
+            _anim[idx] = null;
+            body.Content = closed;
+            try { _players[idx]?.Stop(); } catch { }
+        }
+
+        private void StopAll()
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                _on[i] = false;
+                try { _anim[i]?.Stop(); } catch { }
+                _anim[i] = null;
+                try { _players[i]?.Stop(); } catch { }
+                try { _players[i]?.Close(); } catch { }
+                _players[i] = null;
             }
+        }
+
+        // Une note de musique qui s'envole au-dessus de l'oiseau.
+        private void SpawnNote(double x, double y, int k)
+        {
+            var n = new TextBlock
+            {
+                Text = k % 2 == 0 ? "🎵" : "🎶",
+                FontSize = 34 + (k % 3) * 6,
+                IsHitTestVisible = false,
+                Opacity = 0,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+            };
+            var ntt = new TranslateTransform();
+            n.RenderTransform = ntt;
+            Canvas.SetLeft(n, x + 90 + (k % 2 == 0 ? -30 : 40));
+            Canvas.SetTop(n, y - 10);
+            n.SetValue(Panel.ZIndexProperty, 60);
+            _canvas.Children.Add(n);
+
+            var up = new DoubleAnimation(0, -150, TimeSpan.FromMilliseconds(1400))
+            { EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } };
+            var swing = new DoubleAnimation(0, k % 2 == 0 ? -38 : 38, TimeSpan.FromMilliseconds(1400))
+            { EasingFunction = new SineEase() };
+            var fade = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(1400) };
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.15)));
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.6)));
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+            var captured = n;
+            fade.Completed += (s, e) => _canvas.Children.Remove(captured);
+            ntt.BeginAnimation(TranslateTransform.YProperty, up);
+            ntt.BeginAnimation(TranslateTransform.XProperty, swing);
+            n.BeginAnimation(OpacityProperty, fade);
         }
 
         private void AddBranch(double x, double y, double width)

@@ -9,14 +9,16 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// « Tartes à la crème » (inspiré de Look to Learn) : trois visages rigolos ;
-    /// regarder un visage lance une tarte qui s'écrase dessus — SPLAT ! — le
-    /// visage fait une grimace, la crème dégouline puis glisse, et un nouveau
-    /// visage revient. Le jeu le plus drôle : pur cause-à-effet, zéro échec.
+    /// « Tartes à la crème » (inspiré de Look to Learn) : UN visage rigolo
+    /// surgit À UN ENDROIT AU HASARD de l'écran — l'enfant doit le chercher
+    /// des yeux (ça fait travailler le balayage du regard), puis le regarder
+    /// pour lancer la tarte : SPLAT, grimace, crème qui dégouline… et un
+    /// nouveau visage surgit ailleurs. Zéro échec, que du rire.
     /// </summary>
     public sealed class PieFaceGame : GameControl
     {
         private const double W = 1500, H = 720;
+        private const double FaceSize = 290;
 
         private static readonly string[] Faces = { "😀", "🤠", "🤓", "😮", "🥸", "😊", "🧐", "😁" };
         private static readonly string[] Hit = { "😵", "🤪", "😝", "😜" };
@@ -24,8 +26,7 @@ namespace MesPremiersJeux.Games
         private readonly Random _rng = new Random();
         private Canvas _canvas;
         private int _splats;
-        private readonly double[] _faceX = { 180, 635, 1090 };
-        private const double FaceY = 170;
+        private double _lastX = -999, _lastY = -999;
 
         public PieFaceGame(Action celebrate) : base(celebrate) { }
 
@@ -34,8 +35,8 @@ namespace MesPremiersJeux.Games
             Locked = false;
             _splats = 0;
             Question.Text = "🥧 Tartes à la crème";
-            SetConsigne(new TextBlock { Text = "🥧😜" },
-                () => "Regarde un visage... et SPLAT ! La tarte à la crème ! Hi hi !");
+            SetConsigne(new TextBlock { Text = "🔍🥧" },
+                () => "Cherche le visage rigolo... et regarde-le pour lancer la tarte ! SPLAT !");
 
             _canvas = new Canvas { Width = W, Height = H };
             _canvas.Children.Add(new Rectangle
@@ -57,17 +58,36 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(pies, H - 86);
             _canvas.Children.Add(pies);
 
-            for (int i = 0; i < _faceX.Length; i++) SpawnFace(i, false);
+            SpawnFace();
 
             SetBody(_canvas);
-            Speak("Les tartes à la crème ! Regarde un visage... et splat ! Hi hi hi !");
+            Speak("Les tartes à la crème ! Cherche le visage... et regarde-le bien pour lancer la tarte !");
         }
 
-        private void SpawnFace(int slot, bool pop)
+        // Un endroit au hasard, loin du bord, du plat de tartes… et du visage
+        // précédent (pour obliger le regard à VOYAGER).
+        private (double X, double Y) RandomSpot()
         {
+            for (int tries = 0; tries < 40; tries++)
+            {
+                double x = 30 + _rng.NextDouble() * (W - FaceSize - 60);
+                double y = 60 + _rng.NextDouble() * (H - FaceSize - 90);
+                bool nearPlate = y > H - FaceSize - 130 && x > W / 2 - 320 && x < W / 2 + 180;
+                double dx = x - _lastX, dy = y - _lastY;
+                if (!nearPlate && Math.Sqrt(dx * dx + dy * dy) > 420) return (x, y);
+            }
+            return (60, 80);
+        }
+
+        private void SpawnFace()
+        {
+            var (fx, fy) = RandomSpot();
+            _lastX = fx;
+            _lastY = fy;
+
             int fi = _rng.Next(Faces.Length);
-            // Le visage, par priorité : image du parent (visage-N.png) → dessin
-            // vectoriel intégré (FaceArt) ; l'emoji n'est plus qu'un secours.
+            // Le visage : image du parent (visage-N.png) → dessin vectoriel
+            // intégré (FaceArt) ; l'emoji n'est plus qu'un secours.
             var imgF = Art.Find("visage-" + (fi + 1));
             var visual = imgF != null
                 ? (FrameworkElement)new Image { Source = imgF, Width = 245, Height = 245, Stretch = Stretch.Uniform }
@@ -75,28 +95,28 @@ namespace MesPremiersJeux.Games
             var face = new Button
             {
                 Style = (Style)Application.Current.Resources["AnswerButton"],
-                Width = 290,
-                Height = 290,
+                Width = FaceSize,
+                Height = FaceSize,
                 RenderTransformOrigin = new Point(0.5, 0.5),
                 Content = new ContentControl { Content = visual },
             };
-            int s = slot;
             var captured = face;
-            face.Click += (snd, e) => ThrowPie(s, captured);
-            Canvas.SetLeft(face, _faceX[slot]);
-            Canvas.SetTop(face, FaceY);
+            face.Click += (s, e) => ThrowPie(captured, fx, fy);
+            Canvas.SetLeft(face, fx);
+            Canvas.SetTop(face, fy);
             _canvas.Children.Add(face);
 
-            if (!pop) return;
-            var sc = new ScaleTransform(0.2, 0.2);
+            // Il SURGIT (pop) avec un petit bruit, pour attirer l'œil.
+            SoundFx.PopSound();
+            var sc = new ScaleTransform(0.15, 0.15);
             face.RenderTransform = sc;
-            var grow = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(420))
-            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.7 } };
+            var grow = new DoubleAnimation(0.15, 1, TimeSpan.FromMilliseconds(450))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
         }
 
-        private void ThrowPie(int slot, Button face)
+        private void ThrowPie(Button face, double fx, double fy)
         {
             if (Locked) return;
             face.IsHitTestVisible = false;
@@ -113,7 +133,7 @@ namespace MesPremiersJeux.Games
             var rot = new RotateTransform(0);
             pie.RenderTransform = rot;
             double px0 = W / 2 - 70, py0 = H - 110;
-            double px1 = _faceX[slot] + 75, py1 = FaceY + 65;
+            double px1 = fx + 75, py1 = fy + 65;
             Canvas.SetLeft(pie, px0);
             Canvas.SetTop(pie, py0);
             pie.SetValue(Panel.ZIndexProperty, 70);
@@ -126,13 +146,13 @@ namespace MesPremiersJeux.Games
             ay.Completed += (s, e) =>
             {
                 _canvas.Children.Remove(pie);
-                Splat(slot, face);
+                Splat(face, fx, fy);
             };
             pie.BeginAnimation(Canvas.LeftProperty, ax);
             pie.BeginAnimation(Canvas.TopProperty, ay);
         }
 
-        private void Splat(int slot, Button face)
+        private void Splat(Button face, double fx, double fy)
         {
             SoundFx.Splat();
             int hi = _rng.Next(Hit.Length);
@@ -145,7 +165,7 @@ namespace MesPremiersJeux.Games
             Shake(face);
 
             // La crème : un gros nuage blanc qui s'écrase sur le visage…
-            double cx = _faceX[slot] + 145, cy = FaceY + 130;
+            double cx = fx + 145, cy = fy + 130;
             var cream = new Canvas { IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
             var csc = new ScaleTransform(0.25, 0.25);
             cream.RenderTransform = csc;
@@ -191,7 +211,8 @@ namespace MesPremiersJeux.Games
             _splats++;
             if (_splats % 3 == 0) Speak("Splat ! En pleine figure ! Hi hi hi !");
 
-            // … puis la crème glisse et le visage repart (un nouveau arrive).
+            // … puis la crème glisse, le visage s'en va, et un autre surgit
+            // AILLEURS sur l'écran.
             Schedule(1500, () =>
             {
                 var slide = new DoubleAnimation(cy, cy + 260, TimeSpan.FromMilliseconds(700))
@@ -214,8 +235,7 @@ namespace MesPremiersJeux.Games
                     Schedule(2600, NewRound);
                     return;
                 }
-                SpawnFace(slot, pop: true);
-                SoundFx.PopSound();
+                SpawnFace();
             });
         }
     }

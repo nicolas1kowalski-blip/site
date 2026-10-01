@@ -36,6 +36,50 @@ namespace MesPremiersJeux.Lib
         public static void BirdChirp(int voice)
             => Play("bird3-" + voice, () => Motif(voice));
 
+        // ------------------------------------------------------------------
+        //  Chants EN BOUCLE (fichiers WAV joués par des lecteurs indépendants :
+        //  plusieurs oiseaux chantent réellement EN MÊME TEMPS). Tous chantent
+        //  la MÊME phrase musicale, transposée dans leur tessiture : démarrés
+        //  à des moments différents, c'est un CANON — ça s'accorde toujours.
+        // ------------------------------------------------------------------
+        private static readonly (int Note, double Dur, double Gap, bool Trill)[] Phrase =
+        {
+            (0, 0.20, 0.07, false), (2, 0.20, 0.07, false), (4, 0.30, 0.09, false),
+            (3, 0.00, 0.08, true),  (2, 0.18, 0.06, false), (1, 0.18, 0.06, false),
+            (0, 0.34, 0.10, false),
+        };
+
+        private static string FileCacheDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MesPremiersJeux", "sons-cache");
+
+        /// <summary>Le fichier WAV (généré une fois) du chant en boucle de
+        /// l'oiseau n° voice, à jouer avec un MediaPlayer.</summary>
+        public static string BirdLoopFile(int voice)
+        {
+            Directory.CreateDirectory(FileCacheDir);
+            var path = Path.Combine(FileCacheDir, "oiseau-" + voice + "-v1.wav");
+            if (!File.Exists(path)) File.WriteAllBytes(path, ToWav(CanonPhrase(voice)));
+            return path;
+        }
+
+        private static float[] CanonPhrase(int voice)
+        {
+            double reg = Registers[voice % Registers.Length];
+            var buf = new List<float>();
+            foreach (var step in Phrase)
+            {
+                if (step.Trill)
+                    for (int r = 0; r < 8; r++)
+                        AddNote(buf, Scale[r % 2 == 0 ? step.Note : step.Note + 1] * reg, 0.05, 0.30);
+                else
+                    AddNote(buf, Scale[step.Note] * reg, step.Dur, 0.30);
+                AddGap(buf, step.Gap);
+            }
+            AddGap(buf, 0.55); // la respiration avant la reprise de la boucle
+            return buf.ToArray();
+        }
+
         /// <summary>Le GRAND CONCERT : les six chants mélangés (mixés dans un
         /// même tampon), décalés en canon — une vraie harmonie.</summary>
         public static void BirdChorus()
@@ -109,9 +153,11 @@ namespace MesPremiersJeux.Lib
                 double t = i / (double)n;
                 double vib = 1 + 0.012 * Math.Sin(2 * Math.PI * 6.0 * i / Rate);
                 phase += 2 * Math.PI * f * vib / Rate;
-                double w = Math.Sin(phase) + 0.35 * Math.Sin(2 * phase) + 0.1 * Math.Sin(3 * phase);
-                double env = Math.Pow(Math.Sin(Math.PI * t), 0.85);
-                buf.Add((float)(w * env * vol / 1.45));
+                // Timbre flûté DOUX : harmoniques discrètes (les aigus criards
+                // sont la première cause de « sons pas top »).
+                double w = Math.Sin(phase) + 0.22 * Math.Sin(2 * phase) + 0.05 * Math.Sin(3 * phase);
+                double env = Math.Pow(Math.Sin(Math.PI * t), 0.95);
+                buf.Add((float)(w * env * vol / 1.3));
             }
         }
 
