@@ -1,25 +1,28 @@
 {
-  "name": "studio-data-entreprise-api",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Studio Data entreprise — couche back : API, base interne PostgreSQL, sécurité.",
-  "type": "module",
-  "engines": { "node": ">=22" },
-  "scripts": {
-    "construire": "tsc -p tsconfig.json",
-    "demarrer": "node dist/serveur.js",
-    "tester": "npm run construire && node --test dist/tests/*.test.js",
-    "verifier": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@electric-sql/pglite": "^0.5.8",
-    "fastify": "^5.0.0",
-    "pg": "^8.13.0",
-    "zod": "^3.24.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/pg": "^8.11.0",
-    "typescript": "~5.9.0"
-  }
+    "name": "studio-data-entreprise-api",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Studio Data entreprise — couche back : API, base interne PostgreSQL, sécurité.",
+    "type": "module",
+    "engines": {
+        "node": ">=22"
+    },
+    "scripts": {
+        "construire": "tsc -p tsconfig.json",
+        "demarrer": "node dist/src/serveur.js",
+        "tester": "npm run construire && node --test dist/tests/*.test.js",
+        "verifier": "tsc -p tsconfig.json --noEmit",
+        "essayer-redshift": "npm run construire && node dist/src/sources/essayer-la-connexion.js"
+    },
+    "dependencies": {
+        "@electric-sql/pglite": "^0.5.8",
+        "fastify": "^5.0.0",
+        "pg": "^8.13.0",
+        "zod": "^3.24.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "@types/pg": "^8.11.0",
+        "typescript": "~5.9.0"
+    }
 }
