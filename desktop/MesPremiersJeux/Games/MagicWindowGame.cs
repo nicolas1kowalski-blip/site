@@ -59,8 +59,12 @@ namespace MesPremiersJeux.Games
                 Stroke = new SolidColorBrush(Color.FromRgb(0xB8, 0x8A, 0x5A)),
                 StrokeThickness = 10,
             });
-            // Image personnalisée (Contenu\Images\surprise-N.png) sinon emoji.
-            _picture = Art.Visual("surprise-" + (si + 1), _hidden.Emoji, 460);
+            // La surprise, par priorité : image du parent (surprise-N.png) →
+            // dessin vectoriel intégré (SurpriseArt).
+            var img = Art.Find("surprise-" + (si + 1));
+            _picture = img != null
+                ? new System.Windows.Controls.Image { Source = img, Width = 460, Height = 460, Stretch = Stretch.Uniform }
+                : SurpriseArt.Make(si, 460);
             _picture.IsHitTestVisible = false;
             _picture.RenderTransformOrigin = new Point(0.5, 0.5);
             _picture.RenderTransform = new ScaleTransform(1, 1);

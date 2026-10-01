@@ -66,14 +66,19 @@ namespace MesPremiersJeux.Games
         private void SpawnFace(int slot, bool pop)
         {
             int fi = _rng.Next(Faces.Length);
+            // Le visage, par priorité : image du parent (visage-N.png) → dessin
+            // vectoriel intégré (FaceArt) ; l'emoji n'est plus qu'un secours.
+            var imgF = Art.Find("visage-" + (fi + 1));
+            var visual = imgF != null
+                ? (FrameworkElement)new Image { Source = imgF, Width = 245, Height = 245, Stretch = Stretch.Uniform }
+                : FaceArt.Make(fi, 245);
             var face = new Button
             {
                 Style = (Style)Application.Current.Resources["AnswerButton"],
                 Width = 290,
                 Height = 290,
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                // Image personnalisée (Contenu\Images\visage-N.png) sinon emoji.
-                Content = new ContentControl { Content = Art.Visual("visage-" + (fi + 1), Faces[fi], 245) },
+                Content = new ContentControl { Content = visual },
             };
             int s = slot;
             var captured = face;
@@ -97,8 +102,12 @@ namespace MesPremiersJeux.Games
             face.IsHitTestVisible = false;
 
             // La tarte part du plat (en bas au centre) et file vers le visage
-            // en tournant sur elle-même.
-            var pie = Art.Visual("tarte", "🥧", 140);
+            // en tournant sur elle-même. Image du parent (tarte.png) sinon le
+            // dessin vectoriel intégré.
+            var imgP = Art.Find("tarte");
+            FrameworkElement pie = imgP != null
+                ? new Image { Source = imgP, Width = 140, Height = 140, Stretch = Stretch.Uniform }
+                : FaceArt.Pie(140);
             pie.IsHitTestVisible = false;
             pie.RenderTransformOrigin = new Point(0.5, 0.5);
             var rot = new RotateTransform(0);
@@ -127,7 +136,10 @@ namespace MesPremiersJeux.Games
         {
             SoundFx.Splat();
             int hi = _rng.Next(Hit.Length);
-            ((ContentControl)face.Content).Content = Art.Visual("visage-touche-" + (hi + 1), Hit[hi], 245);
+            var imgH = Art.Find("visage-touche-" + (hi + 1));
+            ((ContentControl)face.Content).Content = imgH != null
+                ? (FrameworkElement)new Image { Source = imgH, Width = 245, Height = 245, Stretch = Stretch.Uniform }
+                : FaceArt.Hit(hi, 245);
 
             // Le visage tremble sous le choc.
             Shake(face);

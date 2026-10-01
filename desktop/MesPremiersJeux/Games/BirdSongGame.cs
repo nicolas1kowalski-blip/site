@@ -27,6 +27,10 @@ namespace MesPremiersJeux.Games
 
         private Canvas _canvas;
         private bool[] _sung;
+        // La « danse » de chaque oiseau (bond + ailes + notes), rejouable pour
+        // le grand concert final, en rythme avec le chœur.
+        private readonly System.Collections.Generic.List<Action> _dances =
+            new System.Collections.Generic.List<Action>();
 
         public BirdSongGame(Action celebrate) : base(celebrate) { }
 
@@ -34,6 +38,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             _sung = new bool[Perch.Length];
+            _dances.Clear();
             Question.Text = "🐦 Les oiseaux chanteurs";
             SetConsigne(new TextBlock { Text = "🐦🎵" },
                 () => "Regarde un oiseau... et il chante pour toi ! Écoute-les tous !");
@@ -126,7 +131,8 @@ namespace MesPremiersJeux.Games
                 sway.BeginAnimation(RotateTransform.AngleProperty, rock);
 
                 int idx = i;
-                bird.Click += (s, e) => Sing(idx, bird, body, closed, openWings, sc, tt, note, x, y);
+                _dances.Add(() => Dance(body, closed, openWings, sc, tt, x, y));
+                bird.Click += (s, e) => Sing(idx, body, closed, openWings, sc, tt, note, x, y);
                 Canvas.SetLeft(bird, x);
                 Canvas.SetTop(bird, y);
                 _canvas.Children.Add(bird);
@@ -136,13 +142,46 @@ namespace MesPremiersJeux.Games
             Speak("Les oiseaux chanteurs ! Regarde un oiseau pour l'entendre chanter !");
         }
 
-        private void Sing(int idx, Button bird, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+        private void Sing(int idx, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
                           ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
             SoundFx.BirdChirp(idx);
+            Dance(body, closed, openWings, sc, tt, x, y);
 
-            // Battement d'ailes pendant le chant : alternance des deux poses
-            // (dessin vectoriel intégré, ou les deux images du parent).
+            if (_sung[idx]) return;
+            _sung[idx] = true;
+            note.Opacity = 1; // souvenir : cet oiseau a chanté
+
+            int heard = 0;
+            foreach (var v in _sung) if (v) heard++;
+            if (heard < _sung.Length) return;
+
+            // Tous ont chanté : le GRAND CONCERT — les six chants mixés en un
+            // seul chœur harmonieux (gamme commune), et chaque oiseau danse au
+            // moment où sa voix entre dans le canon (décalage de 420 ms).
+            Locked = true;
+            Schedule(900, () =>
+            {
+                SoundFx.BirdChorus();
+                for (int i = 0; i < _dances.Count; i++)
+                {
+                    var d = _dances[i];
+                    Schedule(i * 420, d);
+                    Schedule(i * 420 + 1400, d); // deuxième tour de danse
+                }
+                Speak("Bravo ! Tous les oiseaux chantent ensemble ! Quel joli concert !");
+                GameKit.Success();
+                Celebrate();
+                Schedule(5200, NewRound);
+            });
+        }
+
+        // La danse d'un oiseau : battement d'ailes, bond, gonflement, notes.
+        private void Dance(ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+                           ScaleTransform sc, TranslateTransform tt, double x, double y)
+        {
+            // Battement d'ailes : alternance des deux poses (dessin vectoriel
+            // intégré, ou les deux images du parent).
             if (openWings != null)
             {
                 for (int f = 0; f < 8; f++)
@@ -198,29 +237,6 @@ namespace MesPremiersJeux.Games
                 ntt.BeginAnimation(TranslateTransform.XProperty, sway);
                 n.BeginAnimation(OpacityProperty, fade);
             }
-
-            if (_sung[idx]) return;
-            _sung[idx] = true;
-            note.Opacity = 1; // souvenir : cet oiseau a chanté
-
-            int heard = 0;
-            foreach (var v in _sung) if (v) heard++;
-            if (heard < _sung.Length) return;
-
-            // Tous ont chanté : le grand concert !
-            Locked = true;
-            Schedule(900, () =>
-            {
-                for (int i = 0; i < Perch.Length; i++)
-                {
-                    int vi = i;
-                    Schedule(i * 350, () => SoundFx.BirdChirp(vi));
-                }
-                Speak("Bravo ! Tous les oiseaux ont chanté ! Quel joli concert !");
-                GameKit.Success();
-                Celebrate();
-                Schedule(4200, NewRound);
-            });
         }
 
         private void AddBranch(double x, double y, double width)

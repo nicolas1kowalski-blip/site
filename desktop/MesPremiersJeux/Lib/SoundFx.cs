@@ -22,25 +22,118 @@ namespace MesPremiersJeux.Lib
         //  Les sons publics
         // ------------------------------------------------------------------
 
-        /// <summary>Chant d'oiseau : chaque « voix » (0, 1, 2…) a sa tessiture et
-        /// sa petite mélodie propre, toujours la même (l'enfant la reconnaît).</summary>
+        // ------------------------------------------------------------------
+        //  Chants d'oiseaux « qui s'accordent » (comme Look to Learn) : toutes
+        //  les mélodies sont tirées de la MÊME gamme pentatonique — deux chants
+        //  joués l'un après l'autre (ou ensemble) sonnent donc toujours en
+        //  harmonie. Chaque oiseau garde sa tessiture (le hibou grave, le
+        //  poussin aigu) et sa mélodie à lui, toujours la même.
+        // ------------------------------------------------------------------
+        private static readonly double[] Scale = { 523.25, 587.33, 659.25, 783.99, 880.0, 1046.5 };
+        private static readonly double[] Registers = { 1.0, 1.5, 1.25, 0.5, 0.67, 0.8 };
+
+        /// <summary>Le chant de l'oiseau n° voice (0..5).</summary>
         public static void BirdChirp(int voice)
+            => Play("bird3-" + voice, () => Motif(voice));
+
+        /// <summary>Le GRAND CONCERT : les six chants mélangés (mixés dans un
+        /// même tampon), décalés en canon — une vraie harmonie.</summary>
+        public static void BirdChorus()
         {
-            Play("bird" + voice, () =>
+            Play("chorus3", () =>
             {
-                var rng = new Random(voice * 7919 + 13);
-                double baseF = 1400 + (voice % 6) * 320;
-                int notes = 5 + rng.Next(4);
-                var parts = new List<float[]>();
-                for (int n = 0; n < notes; n++)
+                var parts = new float[6][];
+                var offs = new int[6];
+                int total = 0;
+                for (int v = 0; v < 6; v++)
                 {
-                    double f0 = baseF * (0.8 + rng.NextDouble() * 0.7);
-                    double f1 = f0 * (rng.Next(2) == 0 ? 1.4 : 0.72);
-                    parts.Add(Glide(f0, f1, 0.06 + rng.NextDouble() * 0.09, 0.42));
-                    parts.Add(Silence(0.03 + rng.NextDouble() * 0.06));
+                    parts[v] = Motif(v);
+                    offs[v] = (int)(Rate * 0.42 * v);
+                    total = Math.Max(total, offs[v] + parts[v].Length);
                 }
-                return Concat(parts);
+                var mix = new float[total];
+                for (int v = 0; v < 6; v++)
+                    for (int i = 0; i < parts[v].Length; i++)
+                        mix[offs[v] + i] += parts[v][i];
+                float peak = 0.001f;
+                foreach (var s in mix) peak = Math.Max(peak, Math.Abs(s));
+                float gain = 0.85f / peak;
+                for (int i = 0; i < mix.Length; i++) mix[i] *= gain;
+                return mix;
             });
+        }
+
+        // La mélodie d'un oiseau : notes tenues (avec vibrato), trilles rapides
+        // et glissandos, le tout sur la gamme commune, dans sa tessiture.
+        private static float[] Motif(int voice)
+        {
+            var rng = new Random(voice * 101 + 7);
+            double reg = Registers[voice % Registers.Length];
+            var buf = new List<float>();
+            int events = 6 + rng.Next(3);
+            int prev = rng.Next(Scale.Length);
+            for (int e = 0; e < events; e++)
+            {
+                int ni = Math.Max(0, Math.Min(Scale.Length - 1, prev + rng.Next(-2, 3)));
+                double f = Scale[ni] * reg;
+                switch (rng.Next(3))
+                {
+                    case 0: // note tenue, vibrato
+                        AddNote(buf, f, 0.1 + rng.NextDouble() * 0.08, 0.4);
+                        break;
+                    case 1: // trille (alternance très rapide de deux notes voisines)
+                        double f2 = Scale[Math.Min(Scale.Length - 1, ni + 1)] * reg;
+                        int reps = 6 + rng.Next(4);
+                        for (int r = 0; r < reps; r++)
+                            AddNote(buf, r % 2 == 0 ? f : f2, 0.045, 0.36);
+                        break;
+                    default: // glissando vers la note suivante
+                        double f3 = Scale[Math.Max(0, ni - 1)] * reg;
+                        AddGlide(buf, rng.Next(2) == 0 ? f : f3, rng.Next(2) == 0 ? f3 : f, 0.12, 0.38);
+                        break;
+                }
+                AddGap(buf, 0.03 + rng.NextDouble() * 0.09);
+                prev = ni;
+            }
+            return buf.ToArray();
+        }
+
+        // Note flûtée : fondamentale + harmoniques légères + vibrato — un timbre
+        // de sifflet d'oiseau, bien plus naturel qu'une sinusoïde nue.
+        private static void AddNote(List<float> buf, double f, double dur, double vol)
+        {
+            int n = (int)(Rate * dur);
+            double phase = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double t = i / (double)n;
+                double vib = 1 + 0.012 * Math.Sin(2 * Math.PI * 6.0 * i / Rate);
+                phase += 2 * Math.PI * f * vib / Rate;
+                double w = Math.Sin(phase) + 0.35 * Math.Sin(2 * phase) + 0.1 * Math.Sin(3 * phase);
+                double env = Math.Pow(Math.Sin(Math.PI * t), 0.85);
+                buf.Add((float)(w * env * vol / 1.45));
+            }
+        }
+
+        private static void AddGlide(List<float> buf, double f0, double f1, double dur, double vol)
+        {
+            int n = (int)(Rate * dur);
+            double phase = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double t = i / (double)n;
+                double f = f0 + (f1 - f0) * t;
+                phase += 2 * Math.PI * f / Rate;
+                double w = Math.Sin(phase) + 0.3 * Math.Sin(2 * phase);
+                double env = Math.Pow(Math.Sin(Math.PI * t), 0.8);
+                buf.Add((float)(w * env * vol / 1.3));
+            }
+        }
+
+        private static void AddGap(List<float> buf, double dur)
+        {
+            int n = (int)(Rate * dur);
+            for (int i = 0; i < n; i++) buf.Add(0f);
         }
 
         /// <summary>Sifflement montant de la fusée (avant l'explosion).</summary>
