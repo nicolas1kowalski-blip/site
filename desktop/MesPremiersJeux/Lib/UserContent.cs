@@ -180,6 +180,32 @@ namespace MesPremiersJeux.Lib
 
         private static string ResolveRoot()
         {
+            // 0) Dossier choisi par le parent (ex. un dossier OneDrive partagé) :
+            //    le contenu se SYNCHRONISE alors tout seul entre les tablettes.
+            //    Le contenu local existant y est recopié une fois (migration).
+            try
+            {
+                var chosen = Settings.Load().ContentDir;
+                if (!string.IsNullOrWhiteSpace(chosen))
+                {
+                    Directory.CreateDirectory(chosen);
+                    var probe2 = Path.Combine(chosen, ".test-ecriture");
+                    File.WriteAllText(probe2, "ok");
+                    File.Delete(probe2);
+
+                    var marker2 = Path.Combine(chosen, ".migration-" + Environment.MachineName);
+                    if (!File.Exists(marker2))
+                    {
+                        var old = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Contenu");
+                        if (Directory.Exists(old)) CopyDirectory(old, chosen);
+                        else if (Directory.Exists(DocsRoot)) CopyDirectory(DocsRoot, chosen);
+                        File.WriteAllText(marker2, DateTime.Now.ToString("s"));
+                    }
+                    return chosen;
+                }
+            }
+            catch { /* dossier choisi indisponible : repli sur le mode normal */ }
+
             try
             {
                 var portable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Contenu");

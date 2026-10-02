@@ -74,6 +74,10 @@ namespace MesPremiersJeux
         {
             _settings = Settings.Load();
 
+            // Réglages partagés entre tablettes (clé de la voix, prénom…) :
+            // appliqués depuis le dossier synchronisé, puis gardés en local.
+            if (SharedSettings.Apply(_settings)) _settings.Save();
+
             // L'application démarre TOUJOURS en plein écran « kiosque » : en
             // fenêtré elle est inopérable au regard. Le bouton ⛶ reste
             // disponible pour en sortir volontairement (maintenance).
@@ -153,6 +157,16 @@ namespace MesPremiersJeux
             CloudSync.Key = _settings.SupabaseKey;
             SupabaseUrlBox.Text = _settings.SupabaseUrl;
             SupabaseKeyBox.Text = _settings.SupabaseKey;
+
+            // Synchronisation entre tablettes (dossier partagé type OneDrive).
+            ContentDirBox.Text = _settings.ContentDir;
+
+            // Une mise à jour de l'application attend-elle dans le dossier
+            // partagé ? (vérifié un peu après le démarrage, sans bloquer.)
+            var updTimer = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromSeconds(3) };
+            updTimer.Tick += (s3, e3) => { updTimer.Stop(); OfferUpdate(); };
+            updTimer.Start();
 
             // Applique les réglages sauvegardés au contrôleur.
             _dwell.DwellTime = _settings.DwellTime;
@@ -534,6 +548,72 @@ namespace MesPremiersJeux
         private void VoiceTest_Click(object sender, RoutedEventArgs e)
         {
             Speech.Say("Bonjour ! On joue ensemble ?");
+        }
+
+        // ------------------------------------------------------------------
+        //  Synchronisation entre tablettes (dossier partagé type OneDrive)
+        // ------------------------------------------------------------------
+        private void ContentDir_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null || ContentDirBox == null) return;
+            var dir = ContentDirBox.Text.Trim().Trim('"');
+            if (dir == (_settings.ContentDir ?? "")) return;
+            if (dir.Length > 0)
+            {
+                try { System.IO.Directory.CreateDirectory(dir); }
+                catch
+                {
+                    MessageBox.Show(this, "Ce dossier n'est pas accessible :\n" + dir, "Synchronisation");
+                    return;
+                }
+            }
+            _settings.ContentDir = dir;
+            _settings.Save();
+            MessageBox.Show(this,
+                dir.Length == 0
+                    ? "Dossier partagé retiré. Redémarre l'application pour revenir au contenu local."
+                    : "Dossier partagé enregistré !\n\nRedémarre l'application : le contenu local y sera recopié, " +
+                      "puis tout se synchronisera tout seul (fais pareil sur l'autre tablette, avec le même dossier).",
+                "Synchronisation");
+        }
+
+        private void ShareSettings_Click(object sender, RoutedEventArgs e)
+        {
+            var err = SharedSettings.Publish(_settings);
+            MessageBox.Show(this, err == null
+                ? "Réglages envoyés ! Les autres tablettes les appliqueront à leur prochain démarrage\n" +
+                  "(clé et voix Azure, voix Windows, hauteur, prénom)."
+                : "Impossible d'envoyer les réglages : " + err, "Synchronisation");
+        }
+
+        private void PublishApp_Click(object sender, RoutedEventArgs e)
+        {
+            var err = AppUpdate.Publish();
+            MessageBox.Show(this, err == null
+                ? "Application publiée dans le dossier partagé !\n\nDès que OneDrive aura fini de l'envoyer, " +
+                  "l'autre tablette proposera la mise à jour à son prochain démarrage."
+                : "Impossible de publier : " + err, "Mise à jour");
+        }
+
+        private void OfferUpdate()
+        {
+            if (!AppUpdate.UpdateAvailable()) return;
+            GazeGate.Push();
+            try
+            {
+                var info = AppUpdate.UpdateInfo();
+                var res = MessageBox.Show(this,
+                    "Une nouvelle version de l'application est prête !\n" +
+                    (info.Length > 0 ? info + "\n" : "") +
+                    "\nL'installer maintenant ? (l'application redémarre toute seule)",
+                    "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (res == MessageBoxResult.Yes)
+                {
+                    StopGazeSources();
+                    AppUpdate.ApplyAndRestart();
+                }
+            }
+            finally { GazeGate.Pop(); }
         }
 
         private void Supabase_Changed(object sender, RoutedEventArgs e)

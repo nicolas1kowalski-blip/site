@@ -27,6 +27,7 @@ namespace MesPremiersJeux.Lib
         public string GazeDriver = "";   // pilote du regard : auto | direct | pro | curseur
         public string QuickOffset = "";  // décalage du « réglage éclair » (x;y)
         public string ChildName = "Laura"; // prénom de l'enfant (activité « Mon prénom »)
+        public string ContentDir = "";   // dossier du contenu (ex. OneDrive partagé entre tablettes)
         public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
         public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
 
@@ -63,6 +64,7 @@ namespace MesPremiersJeux.Lib
                         case "GazeDriver": s.GazeDriver = val; break;
                         case "QuickOffset": s.QuickOffset = val; break;
                         case "ChildName": if (val.Length > 0) s.ChildName = val; break;
+                        case "ContentDir": s.ContentDir = val; break;
                         case "SpotifyClientId": s.SpotifyClientId = val; break;
                         case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
                     }
@@ -99,6 +101,7 @@ namespace MesPremiersJeux.Lib
                     "GazeDriver=" + (GazeDriver ?? "auto"),
                     "QuickOffset=" + (QuickOffset ?? ""),
                     "ChildName=" + (ChildName ?? "Laura"),
+                    "ContentDir=" + (ContentDir ?? ""),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

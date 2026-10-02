@@ -119,6 +119,16 @@
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
                                Text="Le contenu vit dans le dossier « Contenu » à côté de l'application : copier le dossier de l'appli transporte tout sur un autre PC." />
 
+                    <TextBlock Text="🔄 Synchronisation entre tablettes" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
+                    <TextBlock Text="Dossier partagé (colle ici le chemin d'un dossier OneDrive) :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,4,0,2" />
+                    <TextBox x:Name="ContentDirBox" FontSize="13" Padding="6,4" LostFocus="ContentDir_Changed" />
+                    <UniformGrid Columns="2" Margin="0,8,0,0">
+                        <Button Content="📤 Envoyer les réglages" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="ShareSettings_Click" />
+                        <Button Content="📦 Publier l'appli" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="PublishApp_Click" />
+                    </UniformGrid>
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
+                               Text="Mets le même dossier OneDrive sur les deux tablettes : images, coloriages, histoires et réglages (clé de la voix…) se synchronisent tout seuls. « Publier l'appli » y dépose aussi la nouvelle version : l'autre tablette la propose au démarrage." />
+
                     <TextBlock Text="☁️ Sauvegarde en ligne (Supabase)" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
                     <TextBlock Text="URL du projet :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,4,0,2" />
                     <TextBox x:Name="SupabaseUrlBox" FontSize="13" Padding="6,4" LostFocus="Supabase_Changed" />
