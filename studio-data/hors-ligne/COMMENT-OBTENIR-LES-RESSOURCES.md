@@ -121,6 +121,17 @@ toute adresse http(s). Il vérifie que la page s'ouvre, que les bibliothèques e
 de style sont là, que le moteur démarre, qu'une requête employant les tournures propres à
 la V13 s'exécute, et qu'un fichier déposé est bien lu et chargé. Huit contrôles.
 
+C'est nécessaire, ce n'est pas suffisant : cela ne dit rien des 28 écrans. Pour vérifier
+que la version hors ligne fait **tout** ce que fait la V13 ordinaire :
+
+```
+node tests/parite-hors-ligne.mjs
+```
+
+Ce lanceur fait passer à la version hors ligne toutes les suites écrites pour la V13 :
+**628 contrôles, 15 suites**. Si un seul écran s'était abîmé en rangeant les ressources
+dans le fichier, il le dirait.
+
 ## Si quelque chose ne va pas
 
 | Ce qui s'affiche | Ce qu'il faut faire |
