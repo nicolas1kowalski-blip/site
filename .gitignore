@@ -2,8 +2,9 @@ node_modules/
 dist/
 .DS_Store
 
-# Version hors ligne : 14 Mo, reconstruite par studio-data/tools/hors-ligne.mjs
-studio-data/StudioDataV13-hors-ligne.html
+# La version hors ligne (14 Mo) est VOLONTAIREMENT suivie par git : elle doit pouvoir
+# etre telechargee depuis GitHub par quelqu'un qui n'est pas administrateur de son poste
+# et ne peut donc rien installer pour la construire. Voir studio-data/hors-ligne/.
 studio-data-entreprise/api/dist/
 studio-data-entreprise/api/donnees/
 

@@ -1,5 +1,14 @@
 # Construire la version hors ligne
 
+> **Vous n'avez pas besoin de ce document pour simplement UTILISER la version hors ligne.**
+>
+> Le fichier est déjà construit et rangé dans le dépôt :
+> **`studio-data/StudioDataV13-hors-ligne.html`** (14 Mo). Téléchargez-le depuis GitHub
+> (bouton « Download raw file ») et ouvrez-le par un double-clic. Rien à installer, aucun
+> droit administrateur nécessaire.
+>
+> Ce document explique comment le **reconstruire** après une évolution de la V13.
+
 La V13 ordinaire va chercher sept choses sur internet au premier chargement : la feuille
 de style, trois bibliothèques (tableur, graphiques, icônes) et le moteur de données. La
 version hors ligne les range **dans** le fichier.
@@ -26,6 +35,28 @@ node --version
 
 Il doit répondre quelque chose comme `v22.11.0`. S'il ne répond rien, Node.js n'est pas
 installé ou la fenêtre est trop ancienne.
+
+### Si vous n'êtes pas administrateur de votre poste
+
+L'installateur demande des droits que vous n'avez pas. Il existe une version de Node.js
+**sans installation**, qui tient dans un dossier et ne touche à rien :
+
+1. sur <https://nodejs.org/en/download>, choisissez **Windows · x64 · Binary (.zip)** —
+   pas le `.msi`, qui est l'installateur ;
+2. décompressez l'archive dans **votre** dossier, par exemple `C:\Users\<vous>\node` ;
+3. dans l'invite de commandes, désignez-le au début de chaque séance :
+
+```
+set PATH=C:\Users\<vous>\node;%PATH%
+node --version
+```
+
+Cette ligne ne vaut que pour la fenêtre en cours — elle ne modifie rien sur le poste, et
+c'est précisément pour cela qu'elle ne demande aucun droit. À retaper à chaque nouvelle
+fenêtre, ou à mettre dans un petit fichier `.bat` à côté.
+
+Si même le téléchargement de l'archive est bloqué par l'entreprise, il reste la solution
+du haut de cette page : prendre le fichier déjà construit dans le dépôt.
 
 ## Les trois commandes
 
