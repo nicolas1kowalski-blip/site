@@ -6,3 +6,8 @@ dist/
 studio-data/StudioDataV13-hors-ligne.html
 studio-data-entreprise/api/dist/
 studio-data-entreprise/api/donnees/
+
+# Les sept ressources de la version hors ligne : 35 Mo, reconstruites par
+# studio-data/tools/hors-ligne-preparer.mjs, et son dossier de travail.
+studio-data/hors-ligne/ressources/
+studio-data/hors-ligne/travail/
