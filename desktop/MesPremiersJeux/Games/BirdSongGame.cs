@@ -22,10 +22,14 @@ namespace MesPremiersJeux.Games
     {
         private const double W = 1500, H = 740;
 
+        // Branches à y = 400 et 700 ; les oiseaux sont posés DESSUS : le bas
+        // du bouton (230 px) affleure la branche, les pattes la touchent.
+        private const double Branch1 = 400, Branch2 = 700;
+
         private static readonly (string Emoji, double X, double Y)[] Perch =
         {
-            ("🐦", 150, 180), ("🐤", 620, 120), ("🦜", 1120, 170),
-            ("🦉", 320, 470), ("🐧", 780, 430), ("🦆", 1210, 480),
+            ("🐦", 150, Branch1 - 218), ("🐤", 620, Branch1 - 218), ("🦜", 1120, Branch1 - 218),
+            ("🦉", 320, Branch2 - 218), ("🐧", 780, Branch2 - 218), ("🦆", 1210, Branch2 - 218),
         };
 
         private Canvas _canvas;
@@ -73,8 +77,8 @@ namespace MesPremiersJeux.Games
                 AddDecor("☁️", 900, 55, 52);
 
                 // Branches juste sous les pattes de chaque rangée d'oiseaux.
-                AddBranch(60, 400, 1380);
-                AddBranch(120, 700, 1300);
+                AddBranch(60, Branch1, 1380);
+                AddBranch(120, Branch2, 1300);
             }
 
             for (int i = 0; i < Perch.Length; i++)
@@ -118,7 +122,14 @@ namespace MesPremiersJeux.Games
                 };
                 // Bouton INVISIBLE : l'oiseau vit directement dans la scène,
                 // sans carte blanche — le halo doré du regard montre la cible.
-                var bird = SceneButton(new StackPanel { Children = { body, note } }, 230, 230);
+                // La note 🎵 est AU-DESSUS de la tête : les pattes restent
+                // collées à la branche. Le contenu est calé en bas du bouton.
+                var stack = new StackPanel
+                {
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Children = { note, body },
+                };
+                var bird = SceneButton(stack, 230, 230);
                 bird.RenderTransformOrigin = new Point(0.5, 0.5);
                 var sc = new ScaleTransform(1, 1);
                 var sway = new RotateTransform(0);
@@ -291,7 +302,7 @@ namespace MesPremiersJeux.Games
             border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
             var cp = new FrameworkElementFactory(typeof(ContentPresenter));
             cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Stretch);
             border.AppendChild(cp);
             tpl.VisualTree = border;
             return new Button { Template = tpl, Width = w, Height = h, Focusable = false, Content = content, Cursor = System.Windows.Input.Cursors.Hand };
