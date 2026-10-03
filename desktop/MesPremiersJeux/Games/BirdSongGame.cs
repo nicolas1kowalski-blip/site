@@ -72,23 +72,30 @@ namespace MesPremiersJeux.Games
             {
                 var (emoji, x, y) = Perch[i];
 
-                // Visuel : image du parent (oiseau-N.png + oiseau-N-vole.png)
-                // → sinon le dessin vectoriel intégré, deux poses.
-                FrameworkElement closed, openWings;
+                // Visuel : images du parent (oiseau-N.png, + -vole.png ailes
+                // ouvertes, + -vole2.png pose intermédiaire pour un battement
+                // FLUIDE) → sinon le dessin vectoriel intégré, deux poses.
+                // « cycle » = la suite des poses jouées en boucle pendant le chant.
+                FrameworkElement[] cycle;
                 var imgC = Art.Find("oiseau-" + (i + 1));
                 if (imgC != null)
                 {
-                    closed = new Image { Source = imgC, Width = 150, Height = 150, Stretch = Stretch.Uniform };
+                    FrameworkElement F(ImageSource src) =>
+                        new Image { Source = src, Width = 150, Height = 150, Stretch = Stretch.Uniform };
                     var imgO = Art.Find("oiseau-" + (i + 1) + "-vole");
-                    openWings = imgO == null ? null
-                        : new Image { Source = imgO, Width = 150, Height = 150, Stretch = Stretch.Uniform };
+                    var imgM = Art.Find("oiseau-" + (i + 1) + "-vole2");
+                    if (imgO != null && imgM != null)
+                        cycle = new[] { F(imgC), F(imgM), F(imgO), F(imgM) };
+                    else if (imgO != null)
+                        cycle = new[] { F(imgC), F(imgO) };
+                    else
+                        cycle = new[] { F(imgC) };
                 }
                 else
                 {
-                    closed = BirdArt.Make(i, open: false, 150);
-                    openWings = BirdArt.Make(i, open: true, 150);
+                    cycle = new[] { BirdArt.Make(i, open: false, 150), BirdArt.Make(i, open: true, 150) };
                 }
-                var body = new ContentControl { Content = closed, HorizontalAlignment = HorizontalAlignment.Center };
+                var body = new ContentControl { Content = cycle[0], HorizontalAlignment = HorizontalAlignment.Center };
 
                 var note = new TextBlock
                 {
@@ -135,7 +142,7 @@ namespace MesPremiersJeux.Games
                 sway.BeginAnimation(RotateTransform.AngleProperty, rock);
 
                 int idx = i;
-                bird.Click += (s, e) => Toggle(idx, body, closed, openWings, sc, tt, note, x, y);
+                bird.Click += (s, e) => Toggle(idx, body, cycle, sc, tt, note, x, y);
                 Canvas.SetLeft(bird, x);
                 Canvas.SetTop(bird, y);
                 _canvas.Children.Add(bird);
@@ -149,14 +156,14 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         //  Marche / arrêt du chant (comme Look to Learn)
         // ------------------------------------------------------------------
-        private void Toggle(int idx, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+        private void Toggle(int idx, ContentControl body, FrameworkElement[] cycle,
                             ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
-            if (_on[idx]) StopBird(idx, body, closed, note);
-            else StartBird(idx, body, closed, openWings, sc, tt, note, x, y);
+            if (_on[idx]) StopBird(idx, body, cycle[0], note);
+            else StartBird(idx, body, cycle, sc, tt, note, x, y);
         }
 
-        private void StartBird(int idx, ContentControl body, FrameworkElement closed, FrameworkElement openWings,
+        private void StartBird(int idx, ContentControl body, FrameworkElement[] cycle,
                                ScaleTransform sc, TranslateTransform tt, TextBlock note, double x, double y)
         {
             _on[idx] = true;
@@ -188,15 +195,16 @@ namespace MesPremiersJeux.Games
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, puff);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, puff);
 
-            // Tant qu'il chante : battement d'ailes continu + notes régulières.
+            // Tant qu'il chante : battement d'ailes continu (toutes les poses
+            // du cycle, dans l'ordre) + notes régulières.
             int tick = 0;
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(cycle.Length > 2 ? 150 : 240) };
             timer.Tick += (s, e) =>
             {
                 tick++;
-                if (openWings != null)
-                    body.Content = tick % 2 == 0 ? openWings : closed;
-                if (tick % 5 == 0) SpawnNote(x, y, tick / 5);
+                if (cycle.Length > 1)
+                    body.Content = cycle[tick % cycle.Length];
+                if (tick % (cycle.Length > 2 ? 8 : 5) == 0) SpawnNote(x, y, tick / 5);
             };
             timer.Start();
             _anim[idx] = timer;

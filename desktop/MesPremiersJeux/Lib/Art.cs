@@ -108,7 +108,9 @@ namespace MesPremiersJeux.Lib
                     "Les oiseaux chanteurs :\r\n" +
                     "  oiseau-1.png ... oiseau-6.png   (6 oiseaux différents)\r\n" +
                     "  oiseau-1-vole.png ... (FACULTATIF : le même oiseau les AILES\r\n" +
-                    "  OUVERTES — l'oiseau bat alors des ailes pendant qu'il chante !)\r\n\r\n" +
+                    "  OUVERTES — l'oiseau bat alors des ailes pendant qu'il chante !)\r\n" +
+                    "  oiseau-1-vole2.png ... (FACULTATIF : pose INTERMÉDIAIRE, ailes\r\n" +
+                    "  à moitié ouvertes — le battement devient tout fluide.)\r\n\r\n" +
                     "Tartes à la crème :\r\n" +
                     "  visage-1.png ... visage-8.png   (visages rigolos)\r\n" +
                     "  visage-touche-1.png ... visage-touche-4.png   (grimaces « touché ! »)\r\n" +
