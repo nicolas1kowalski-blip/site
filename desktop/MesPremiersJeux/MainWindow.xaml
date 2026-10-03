@@ -128,6 +128,9 @@
                     </UniformGrid>
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
                                Text="Mets le même dossier OneDrive sur les deux tablettes : images, coloriages, histoires et réglages (clé de la voix…) se synchronisent tout seuls. « Publier l'appli » y dépose aussi la nouvelle version : l'autre tablette la propose au démarrage." />
+                    <!-- Diagnostic : OÙ l'application lit le contenu, en ce moment. -->
+                    <TextBlock x:Name="ContentDirInfo" TextWrapping="Wrap" FontSize="12" FontWeight="Bold"
+                               Foreground="#FF6B5B8A" Margin="0,6,0,0" />
 
                     <TextBlock Text="☁️ Sauvegarde en ligne (Supabase)" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
                     <TextBlock Text="URL du projet :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,4,0,2" />

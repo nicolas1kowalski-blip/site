@@ -160,6 +160,7 @@ namespace MesPremiersJeux
 
             // Synchronisation entre tablettes (dossier partagé type OneDrive).
             ContentDirBox.Text = _settings.ContentDir;
+            RefreshContentDirInfo();
 
             // Une mise à jour de l'application attend-elle dans le dossier
             // partagé ? (vérifié un peu après le démarrage, sans bloquer.)
@@ -575,6 +576,23 @@ namespace MesPremiersJeux
                     : "Dossier partagé enregistré !\n\nRedémarre l'application : le contenu local y sera recopié, " +
                       "puis tout se synchronisera tout seul (fais pareil sur l'autre tablette, avec le même dossier).",
                 "Synchronisation");
+        }
+
+        // Montre OÙ le contenu est lu en ce moment, et combien d'images
+        // personnalisées y sont trouvées — fini les devinettes d'emplacement.
+        private void RefreshContentDirInfo()
+        {
+            try
+            {
+                var dir = Lib.Art.Dir;
+                int n = System.IO.Directory.Exists(dir)
+                    ? System.IO.Directory.GetFiles(dir, "*.png").Length +
+                      System.IO.Directory.GetFiles(dir, "*.jpg").Length
+                    : 0;
+                ContentDirInfo.Text = "📂 Contenu lu ici : " + UserContent.RootDir +
+                                      "\n🖼 Images personnalisées trouvées : " + n;
+            }
+            catch { ContentDirInfo.Text = ""; }
         }
 
         private void ShareSettings_Click(object sender, RoutedEventArgs e)
