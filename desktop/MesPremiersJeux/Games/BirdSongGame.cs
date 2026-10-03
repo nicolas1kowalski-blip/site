@@ -22,14 +22,17 @@ namespace MesPremiersJeux.Games
     {
         private const double W = 1500, H = 740;
 
-        // Branches à y = 400 et 700 ; les oiseaux sont posés DESSUS : le bas
-        // du bouton (230 px) affleure la branche, les pattes la touchent.
+        // Branches à y = 400 et 700. Les images des oiseaux sont normalisées :
+        // les PATTES sont à 74 % de la hauteur (soit 48 px au-dessus du bas du
+        // visuel de 185 px, calé en bas du bouton de 230 px). On place donc le
+        // bouton pour que les pattes touchent le dessus de la branche.
         private const double Branch1 = 400, Branch2 = 700;
+        private const double PerchY = 230 - 48 - 4; // pattes à 4 px DANS la branche
 
         private static readonly (string Emoji, double X, double Y)[] Perch =
         {
-            ("🐦", 150, Branch1 - 218), ("🐤", 620, Branch1 - 218), ("🦜", 1120, Branch1 - 218),
-            ("🦉", 320, Branch2 - 218), ("🐧", 780, Branch2 - 218), ("🦆", 1210, Branch2 - 218),
+            ("🐦", 150, Branch1 - PerchY), ("🐤", 620, Branch1 - PerchY), ("🦜", 1120, Branch1 - PerchY),
+            ("🦉", 320, Branch2 - PerchY), ("🐧", 780, Branch2 - PerchY), ("🦆", 1210, Branch2 - PerchY),
         };
 
         private Canvas _canvas;
