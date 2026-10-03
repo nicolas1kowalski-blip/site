@@ -135,6 +135,12 @@ namespace MesPremiersJeux.Lib
                     "  surprise-7.png  (arc-en-ciel) surprise-8.png  (dinosaure)\r\n" +
                     "  surprise-9.png  (gâteau)      surprise-10.png (éléphant)\r\n" +
                     "  surprise-11.png (bateau)      surprise-12.png (manège)\r\n\r\n" +
+                    "Décors de scène (toute l'image de fond d'un jeu) :\r\n" +
+                    "  decor-oiseaux.png   (les oiseaux chanteurs — ex. « grand arbre\r\n" +
+                    "  feuillu avec deux branches horizontales dégagées, ciel doux,\r\n" +
+                    "  style cartoon, sans oiseaux », format paysage 16:9)\r\n" +
+                    "  decor-tartes.png    (les tartes à la crème — ex. « chapiteau de\r\n" +
+                    "  cirque vu de l'intérieur, gai et coloré », format paysage 16:9)\r\n\r\n" +
                     "D'autres noms seront ajoutés au fil des jeux (ce fichier est recréé\r\n" +
                     "s'il est supprimé, avec la liste à jour).\r\n");
             }

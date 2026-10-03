@@ -39,14 +39,20 @@ namespace MesPremiersJeux.Games
                 () => "Cherche le visage rigolo... et regarde-le pour lancer la tarte ! SPLAT !");
 
             _canvas = new Canvas { Width = W, Height = H };
-            _canvas.Children.Add(new Rectangle
-            {
-                Width = W,
-                Height = H,
-                RadiusX = 24,
-                RadiusY = 24,
-                Fill = new LinearGradientBrush(Color.FromRgb(0xFF, 0xE9, 0xF2), Color.FromRgb(0xFF, 0xF6, 0xDE), 90),
-            });
+            // Décor : une IMAGE de scène du parent (decor-tartes.png) si elle
+            // existe — sinon le fond dessiné.
+            var decor = Art.Find("decor-tartes");
+            if (decor != null)
+                _canvas.Children.Add(new Image { Source = decor, Width = W, Height = H, Stretch = Stretch.UniformToFill });
+            else
+                _canvas.Children.Add(new Rectangle
+                {
+                    Width = W,
+                    Height = H,
+                    RadiusX = 24,
+                    RadiusY = 24,
+                    Fill = new LinearGradientBrush(Color.FromRgb(0xFF, 0xE9, 0xF2), Color.FromRgb(0xFF, 0xF6, 0xDE), 90),
+                });
             // Le rideau de cirque en haut.
             var curtain = new TextBlock { Text = "🎪🎈🎪🎈🎪", FontSize = 46, IsHitTestVisible = false, Opacity = 0.8 };
             Canvas.SetLeft(curtain, W / 2 - 180);
@@ -90,16 +96,12 @@ namespace MesPremiersJeux.Games
             // intégré (FaceArt) ; l'emoji n'est plus qu'un secours.
             var imgF = Art.Find("visage-" + (fi + 1));
             var visual = imgF != null
-                ? (FrameworkElement)new Image { Source = imgF, Width = 245, Height = 245, Stretch = Stretch.Uniform }
-                : FaceArt.Make(fi, 245);
-            var face = new Button
-            {
-                Style = (Style)Application.Current.Resources["AnswerButton"],
-                Width = FaceSize,
-                Height = FaceSize,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                Content = new ContentControl { Content = visual },
-            };
+                ? (FrameworkElement)new Image { Source = imgF, Width = 265, Height = 265, Stretch = Stretch.Uniform }
+                : FaceArt.Make(fi, 265);
+            // Bouton INVISIBLE : le visage vit directement dans la scène, sans
+            // carte blanche — le halo doré du regard montre la cible.
+            var face = SceneButton(new ContentControl { Content = visual }, FaceSize, FaceSize);
+            face.RenderTransformOrigin = new Point(0.5, 0.5);
             var captured = face;
             face.Click += (s, e) => ThrowPie(captured, fx, fy);
             Canvas.SetLeft(face, fx);
@@ -114,6 +116,20 @@ namespace MesPremiersJeux.Games
             { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        }
+
+        // Bouton transparent (cible de regard sans habillage).
+        private static Button SceneButton(UIElement content, double w, double h)
+        {
+            var tpl = new ControlTemplate(typeof(Button));
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(cp);
+            tpl.VisualTree = border;
+            return new Button { Template = tpl, Width = w, Height = h, Focusable = false, Content = content, Cursor = System.Windows.Input.Cursors.Hand };
         }
 
         private void ThrowPie(Button face, double fx, double fy)
@@ -158,8 +174,8 @@ namespace MesPremiersJeux.Games
             int hi = _rng.Next(Hit.Length);
             var imgH = Art.Find("visage-touche-" + (hi + 1));
             ((ContentControl)face.Content).Content = imgH != null
-                ? (FrameworkElement)new Image { Source = imgH, Width = 245, Height = 245, Stretch = Stretch.Uniform }
-                : FaceArt.Hit(hi, 245);
+                ? (FrameworkElement)new Image { Source = imgH, Width = 265, Height = 265, Stretch = Stretch.Uniform }
+                : FaceArt.Hit(hi, 265);
 
             // Le visage tremble sous le choc.
             Shake(face);

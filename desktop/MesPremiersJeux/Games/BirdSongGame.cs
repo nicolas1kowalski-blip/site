@@ -51,22 +51,31 @@ namespace MesPremiersJeux.Games
 
             _canvas = new Canvas { Width = W, Height = H };
 
-            // Ciel, soleil, nuages.
-            _canvas.Children.Add(new Rectangle
+            // Décor : une IMAGE de scène du parent (decor-oiseaux.png) si elle
+            // existe — sinon le décor dessiné (ciel, soleil, branches).
+            var decor = Art.Find("decor-oiseaux");
+            if (decor != null)
             {
-                Width = W,
-                Height = H,
-                RadiusX = 24,
-                RadiusY = 24,
-                Fill = new LinearGradientBrush(Color.FromRgb(0xBF, 0xE3, 0xFF), Color.FromRgb(0xEA, 0xF8, 0xE8), 90),
-            });
-            AddDecor("☀️", W - 150, 20, 80);
-            AddDecor("☁️", 220, 30, 64);
-            AddDecor("☁️", 900, 55, 52);
+                _canvas.Children.Add(new Image { Source = decor, Width = W, Height = H, Stretch = Stretch.UniformToFill });
+            }
+            else
+            {
+                _canvas.Children.Add(new Rectangle
+                {
+                    Width = W,
+                    Height = H,
+                    RadiusX = 24,
+                    RadiusY = 24,
+                    Fill = new LinearGradientBrush(Color.FromRgb(0xBF, 0xE3, 0xFF), Color.FromRgb(0xEA, 0xF8, 0xE8), 90),
+                });
+                AddDecor("☀️", W - 150, 20, 80);
+                AddDecor("☁️", 220, 30, 64);
+                AddDecor("☁️", 900, 55, 52);
 
-            // Branches juste sous les pattes de chaque rangée d'oiseaux.
-            AddBranch(60, 400, 1380);
-            AddBranch(120, 700, 1300);
+                // Branches juste sous les pattes de chaque rangée d'oiseaux.
+                AddBranch(60, 400, 1380);
+                AddBranch(120, 700, 1300);
+            }
 
             for (int i = 0; i < Perch.Length; i++)
             {
@@ -81,7 +90,7 @@ namespace MesPremiersJeux.Games
                 if (imgC != null)
                 {
                     FrameworkElement F(ImageSource src) =>
-                        new Image { Source = src, Width = 150, Height = 150, Stretch = Stretch.Uniform };
+                        new Image { Source = src, Width = 185, Height = 185, Stretch = Stretch.Uniform };
                     var imgO = Art.Find("oiseau-" + (i + 1) + "-vole");
                     var imgM = Art.Find("oiseau-" + (i + 1) + "-vole2");
                     var imgM2 = Art.Find("oiseau-" + (i + 1) + "-vole3");
@@ -107,14 +116,10 @@ namespace MesPremiersJeux.Games
                     Opacity = 0.25,        // s'allume quand l'oiseau chante
                     HorizontalAlignment = HorizontalAlignment.Center,
                 };
-                var bird = new Button
-                {
-                    Style = (Style)Application.Current.Resources["AnswerButton"],
-                    Width = 230,
-                    Height = 230,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                    Content = new StackPanel { Children = { body, note } },
-                };
+                // Bouton INVISIBLE : l'oiseau vit directement dans la scène,
+                // sans carte blanche — le halo doré du regard montre la cible.
+                var bird = SceneButton(new StackPanel { Children = { body, note } }, 230, 230);
+                bird.RenderTransformOrigin = new Point(0.5, 0.5);
                 var sc = new ScaleTransform(1, 1);
                 var sway = new RotateTransform(0);
                 var tt = new TranslateTransform();
@@ -275,6 +280,21 @@ namespace MesPremiersJeux.Games
             ntt.BeginAnimation(TranslateTransform.YProperty, up);
             ntt.BeginAnimation(TranslateTransform.XProperty, swing);
             n.BeginAnimation(OpacityProperty, fade);
+        }
+
+        // Bouton transparent (cible de regard sans habillage) : le contenu est
+        // le seul visuel, la scène reste intacte autour.
+        private static Button SceneButton(UIElement content, double w, double h)
+        {
+            var tpl = new ControlTemplate(typeof(Button));
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(cp);
+            tpl.VisualTree = border;
+            return new Button { Template = tpl, Width = w, Height = h, Focusable = false, Content = content, Cursor = System.Windows.Input.Cursors.Hand };
         }
 
         private void AddBranch(double x, double y, double width)
