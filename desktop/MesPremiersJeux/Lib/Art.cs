@@ -25,7 +25,14 @@ namespace MesPremiersJeux.Lib
 
         public static string Dir => Path.Combine(UserContent.RootDir, "Images");
 
-        /// <summary>L'image nommée (sans extension), ou null si absente.</summary>
+        /// <summary>Images EMBARQUÉES avec l'application (copiées à côté de
+        /// l'exécutable à la compilation) : toujours là, sur toutes les
+        /// tablettes, sans rien installer.</summary>
+        private static string BuiltInDir =>
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
+
+        /// <summary>L'image nommée (sans extension), ou null si absente.
+        /// Priorité : image du parent (Contenu\Images) → image embarquée.</summary>
         public static ImageSource Find(string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
@@ -35,18 +42,22 @@ namespace MesPremiersJeux.Lib
             ImageSource src = null;
             try
             {
-                foreach (var ext in Exts)
+                foreach (var folder in new[] { Dir, BuiltInDir })
                 {
-                    var path = Path.Combine(Dir, name + ext);
-                    if (!File.Exists(path)) continue;
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.CacheOption = BitmapCacheOption.OnLoad; // fichier libéré aussitôt
-                    bmp.UriSource = new Uri(path, UriKind.Absolute);
-                    bmp.EndInit();
-                    bmp.Freeze();
-                    src = bmp;
-                    break;
+                    foreach (var ext in Exts)
+                    {
+                        var path = Path.Combine(folder, name + ext);
+                        if (!File.Exists(path)) continue;
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad; // fichier libéré aussitôt
+                        bmp.UriSource = new Uri(path, UriKind.Absolute);
+                        bmp.EndInit();
+                        bmp.Freeze();
+                        src = bmp;
+                        break;
+                    }
+                    if (src != null) break;
                 }
             }
             catch { src = null; }

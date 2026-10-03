@@ -21,6 +21,10 @@
   <ItemGroup>
     <!-- Police enfantine « Fredoka One » embarquée (licence OFL, voir Fonts/OFL.txt). -->
     <Resource Include="Fonts\*.ttf" />
+    <!-- Images embarquées (oiseaux…) : copiées à côté de l'exécutable à la
+         compilation. Les jeux les trouvent tout seuls ; une image du parent
+         dans Contenu\Images garde la priorité. -->
+    <None Update="Images\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

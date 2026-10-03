@@ -589,8 +589,13 @@ namespace MesPremiersJeux
                     ? System.IO.Directory.GetFiles(dir, "*.png").Length +
                       System.IO.Directory.GetFiles(dir, "*.jpg").Length
                     : 0;
+                var builtIn = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
+                int nb = System.IO.Directory.Exists(builtIn)
+                    ? System.IO.Directory.GetFiles(builtIn, "*.png").Length
+                    : 0;
                 ContentDirInfo.Text = "📂 Contenu lu ici : " + UserContent.RootDir +
-                                      "\n🖼 Images personnalisées trouvées : " + n;
+                                      "\n🖼 Images du parent : " + n +
+                                      " · embarquées avec l'appli : " + nb;
             }
             catch { ContentDirInfo.Text = ""; }
         }
