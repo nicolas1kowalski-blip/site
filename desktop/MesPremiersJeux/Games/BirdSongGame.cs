@@ -84,7 +84,10 @@ namespace MesPremiersJeux.Games
                         new Image { Source = src, Width = 150, Height = 150, Stretch = Stretch.Uniform };
                     var imgO = Art.Find("oiseau-" + (i + 1) + "-vole");
                     var imgM = Art.Find("oiseau-" + (i + 1) + "-vole2");
-                    if (imgO != null && imgM != null)
+                    var imgM2 = Art.Find("oiseau-" + (i + 1) + "-vole3");
+                    if (imgO != null && imgM != null && imgM2 != null)
+                        cycle = new[] { F(imgC), F(imgM2), F(imgM), F(imgO), F(imgM), F(imgM2) };
+                    else if (imgO != null && imgM != null)
                         cycle = new[] { F(imgC), F(imgM), F(imgO), F(imgM) };
                     else if (imgO != null)
                         cycle = new[] { F(imgC), F(imgO) };
