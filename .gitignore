@@ -12,3 +12,7 @@ studio-data-entreprise/api/donnees/
 # studio-data/tools/hors-ligne-preparer.mjs, et son dossier de travail.
 studio-data/hors-ligne/ressources/
 studio-data/hors-ligne/travail/
+
+# Un lien vers les modules installes a cote sert a lancer les tests ; il ne doit jamais
+# entrer dans le depot. Le motif « node_modules/ » ne suffit pas : il ne couvre pas un lien.
+studio-data/node_modules
