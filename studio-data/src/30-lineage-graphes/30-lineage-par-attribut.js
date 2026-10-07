@@ -699,16 +699,43 @@
             lineageGraph.centerOn(node.id);
             lineageChainFocus(node.id);
         }
+        /**
+         * Agrandir le schéma.
+         *
+         * On demande d'abord le vrai plein écran du navigateur : il fait disparaître les
+         * barres d'outils, et c'est ce qui donne le plus de place au schéma.
+         *
+         * Mais ce plein écran-là peut être REFUSÉ, et pas seulement par accident : une
+         * entreprise peut l'interdire par stratégie de navigateur, et certains navigateurs
+         * le refusent à une page ouverte depuis le disque. Jusqu'ici on se contentait alors
+         * d'afficher « Plein écran refusé » — le besoin, lui, restait entier.
+         *
+         * On se rabat donc sur le plein écran de l'application, qui n'est qu'une mise en
+         * page : il remplit la fenêtre, personne ne peut l'interdire, et il marche partout.
+         */
         function lineageFullscreen() {
             const w = el('lineageFsWrap');
             if (!w) return;
             if (document.fullscreenElement) {
                 document.exitFullscreen().catch(() => {});
-            } else {
-                w.requestFullscreen()
-                    .then(() => setTimeout(() => reflowGraph('lineage'), 200))
-                    .catch(e => showError('Plein écran refusé : ' + e.message));
+                return;
             }
+            const agrandirDansLaPage = () => {
+                if (typeof v11Fs === 'function') {
+                    v11Fs('#lineageFsWrap', 'Parcours de la donnée');
+                    return true;
+                }
+                return false;
+            };
+            if (!w.requestFullscreen) {
+                if (!agrandirDansLaPage()) showError('Ce navigateur ne sait pas agrandir ce schéma.');
+                return;
+            }
+            w.requestFullscreen()
+                .then(() => setTimeout(() => reflowGraph('lineage'), 200))
+                .catch(e => {
+                    if (!agrandirDansLaPage()) showError('Plein écran refusé : ' + ((e && e.message) || ''));
+                });
         }
         document.addEventListener('fullscreenchange', () => {
             if (el('lineageFsWrap')) setTimeout(() => reflowGraph('lineage'), 150);

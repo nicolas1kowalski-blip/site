@@ -1258,16 +1258,32 @@
             if (box) box.classList.add('hidden');
             el('uxDrawer').classList.remove('wide');
         }
+        // Même règle que pour le parcours de la donnée : si le navigateur refuse le vrai
+        // plein écran — stratégie d'entreprise, page ouverte depuis le disque — on agrandit
+        // dans la page plutôt que de laisser l'utilisateur devant un message d'erreur.
         function catLineageFullscreen() {
             const w = el('catLineageWrap');
             if (!w) return;
             if (document.fullscreenElement) {
                 document.exitFullscreen().catch(() => {});
-            } else {
-                w.requestFullscreen()
-                    .then(() => catFitLineage(200))
-                    .catch(er => showError('Plein écran refusé : ' + ((er && er.message) || '')));
+                return;
             }
+            const agrandirDansLaPage = () => {
+                if (typeof v11Fs === 'function') {
+                    v11Fs('#catLineageBox', 'Lineage');
+                    return true;
+                }
+                return false;
+            };
+            if (!w.requestFullscreen) {
+                if (!agrandirDansLaPage()) showError('Ce navigateur ne sait pas agrandir ce schéma.');
+                return;
+            }
+            w.requestFullscreen()
+                .then(() => catFitLineage(200))
+                .catch(er => {
+                    if (!agrandirDansLaPage()) showError('Plein écran refusé : ' + ((er && er.message) || ''));
+                });
         }
         document.addEventListener('fullscreenchange', () => {
             if (el('catLineageWrap') && catAttrLineageGraph) catFitLineage(160);
