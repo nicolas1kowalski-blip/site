@@ -285,6 +285,57 @@
                 phrase: `${fautives.length} table(s) liée(s) multiplient les lignes : ${depart} au départ, ${total} en sortie. Complétez la clé de ces liens dans le Modèle de données.`
             };
         }
+        // ---- 4. L'autre accident : le fichier produit a MOINS de lignes que la table de départ ----
+        //
+        // Le contrôle ci-dessus ne regarde que la multiplication. Or on perd des lignes au moins
+        // aussi souvent, et de façon bien plus discrète : rien ne le dit, le fichier sort, il est
+        // simplement incomplet. La cause n'est presque jamais celle qu'on croit — ce n'est pas le
+        // lien qui filtre, c'est ce qu'on a posé dessus.
+
+        /** Ce qui, dans la configuration en cours, peut retirer des lignes au fichier produit. */
+        function v13CausesDeLaPerte(spec) {
+            const nomDe = identifiant => (state.tables[identifiant] || {}).name || identifiant;
+            const causes = [];
+            if (spec.joinType === 'inner')
+                causes.push(
+                    'l’option « intersection » : elle ne garde que les lignes qui ont une correspondance dans chaque table liée. « Conserver tout » les garde toutes.'
+                );
+            const filtresLies = (spec.filters || []).filter(f => f.tableId && f.tableId !== spec.baseId);
+            if (filtresLies.length) {
+                const tables = [...new Set(filtresLies.map(f => nomDe(f.tableId)))].map(n => '« ' + n + ' »');
+                causes.push(
+                    `le filtre posé sur ${tables.join(', ')} : une ligne de départ SANS correspondance dans cette table ne peut pas satisfaire le filtre, elle disparaît donc elle aussi — même avec « conserver tout ». Pour la garder, remplacez le filtre par une synthèse de table liée.`
+                );
+            }
+            const filtresDeDepart = (spec.filters || []).filter(f => f.tableId === spec.baseId);
+            if (filtresDeDepart.length)
+                causes.push(
+                    `${filtresDeDepart.length} filtre(s) sur la table de départ elle-même — c’est leur rôle, rien d’anormal.`
+                );
+            if (spec.group && spec.group.on) causes.push('le regroupement : une ligne par combinaison de dimensions.');
+            if (spec.dedup && spec.dedup.on) causes.push('le dédoublonnage : une seule ligne par clé.');
+            if (spec.limit500) causes.push('l’aperçu limité à 500 lignes.');
+            return causes;
+        }
+
+        /** Le verdict sur la perte : combien de lignes manquent, et à cause de quoi. */
+        function v13VerdictDeLaPerte(spec, lignesDeDepart, lignesFinales) {
+            if (!lignesDeDepart || lignesFinales == null || lignesFinales >= lignesDeDepart) return null;
+            const manquantes = lignesDeDepart - lignesFinales;
+            const causes = v13CausesDeLaPerte(spec);
+            return {
+                lignesDeDepart,
+                lignesFinales,
+                manquantes,
+                causes,
+                phrase:
+                    `Le fichier produit n’aura que ${Number(lignesFinales).toLocaleString('fr-FR')} ligne(s) ` +
+                    `sur les ${Number(lignesDeDepart).toLocaleString('fr-FR')} de la table de départ : ` +
+                    `${Number(manquantes).toLocaleString('fr-FR')} manquent.` +
+                    (causes.length ? '' : ' Aucune cause évidente dans la configuration — vérifiez les liens du modèle.')
+            };
+        }
+
         /** Mesure sur les données ce que chaque table liée fait au nombre de lignes. */
         async function v13MesurerLesJointures() {
             const spec = state.advExtract;
@@ -297,13 +348,27 @@
                 Number(arrowResultToObjects(await conn.query(v13SqlDeComptage(plan.baseId, plan.joins, combien)))[0].n);
             const etapes = [];
             let lignesAvant = await compter(0);
+            const lignesDeDepart = lignesAvant;
             for (let rang = 0; rang < plan.joins.length; rang++) {
                 const lignesApres = await compter(rang + 1);
                 const table = state.tables[plan.joins[rang].id];
                 etapes.push({ nomTable: (table || {}).name || plan.joins[rang].id, lignesAvant, lignesApres });
                 lignesAvant = lignesApres;
             }
-            return v13BilanDesJointures(etapes);
+            const bilan = v13BilanDesJointures(etapes);
+            // Et le fichier tel qu'il sortira vraiment, filtres et options compris.
+            try {
+                const requete = advCurrentSql();
+                if (requete && requete.sql && !requete.err) {
+                    const lignesFinales = Number(
+                        arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM (${requete.sql}) z`))[0].n
+                    );
+                    bilan.perte = v13VerdictDeLaPerte(spec, lignesDeDepart, lignesFinales);
+                }
+            } catch (e) {
+                bilan.perte = null;
+            }
+            return bilan;
         }
         /** Le rendu du bilan dans l'encadré prévu sous les actions de l'extraction. */
         function v13AfficherLeBilan(bilan) {
@@ -319,8 +384,13 @@
             const conseil = bilan.multiplie
                 ? `<p class="v13-jd">Une clé incomplète fait revenir la même ligne plusieurs fois : les totaux deviennent faux sans rien signaler. Ouvrez le Modèle de données, ligne « Clé du lien », et ajoutez la colonne qui manque — le groupe, la date, la version…</p>`
                 : '';
-            boite.innerHTML = `<div class="v13-jointures ${bilan.multiplie ? 'multiplie' : ''}">
-                <p class="v13-jv">${bilan.multiplie ? '⚠️' : '✅'} ${escapeHTML(bilan.phrase)}</p>${details}${conseil}
+            // La perte de lignes : on la nomme, et on dit ce qui l'a causée.
+            const perte = bilan.perte
+                ? `<p class="v13-jv">⚠️ ${escapeHTML(bilan.perte.phrase)}</p>` +
+                  bilan.perte.causes.map(c => `<p class="v13-jd fautive">Cause : ${escapeHTML(c)}</p>`).join('')
+                : '';
+            boite.innerHTML = `<div class="v13-jointures ${bilan.multiplie || bilan.perte ? 'multiplie' : ''}">
+                <p class="v13-jv">${bilan.multiplie ? '⚠️' : '✅'} ${escapeHTML(bilan.phrase)}</p>${details}${conseil}${perte}
             </div>`;
         }
         /** Le contrôle demandé explicitement : il rend son verdict même quand tout va bien, pour rassurer. */
@@ -343,7 +413,7 @@
                     const resultat = await base();
                     try {
                         const bilan = await v13MesurerLesJointures();
-                        v13AfficherLeBilan(bilan && bilan.multiplie ? bilan : null);
+                        v13AfficherLeBilan(bilan && (bilan.multiplie || bilan.perte) ? bilan : null);
                     } catch (e) {
                         v13AfficherLeBilan(null);
                     }

@@ -295,6 +295,119 @@
                 parentCol: rel.sourceTable === tableId ? rel.targetCol : rel.sourceCol
             };
         }
+        /**
+         * Le chemin complet entre la table de départ et une table liée, saut par saut.
+         *
+         * `advLinkAnchor` ne rend que le DERNIER saut. Cela suffit quand les deux tables sont
+         * reliées directement, pas quand il y a une table de liaison au milieu : il faut alors
+         * savoir traverser, et c'est ce que rend cette fonction.
+         *
+         * Chaque étape dit d'où l'on part, où l'on arrive, et par quel lien.
+         * Renvoie null si la table n'est pas reliée à la table de départ.
+         */
+        function advCheminDuLien(baseId, tableId, via) {
+            if (tableId === baseId) return null;
+            const etape = (relation, de, vers) => ({ relation, de, vers });
+            // Un chemin explicite (« via ») : la suite des liens est donnée, on la suit.
+            if (via) {
+                const identifiants = String(via).split('>').filter(Boolean);
+                const liens = identifiants.map(id => (state.relations || []).find(r => r.id === id)).filter(advRelValid);
+                if (liens.length === identifiants.length && liens.length) {
+                    const chemin = [];
+                    let courant = baseId;
+                    for (const relation of liens) {
+                        const suivant =
+                            relation.sourceTable === courant
+                                ? relation.targetTable
+                                : relation.targetTable === courant
+                                  ? relation.sourceTable
+                                  : null;
+                        if (suivant == null) return null;
+                        chemin.push(etape(relation, courant, suivant));
+                        courant = suivant;
+                    }
+                    return courant === tableId ? chemin : null;
+                }
+                // Chemin invalide : on retombe sur le chemin par défaut plutôt que de tout casser.
+            }
+            // Le chemin par défaut : le plus court, avec un seul lien par paire de tables —
+            // exactement celui que `advPlanJoins` emprunterait, pour que les deux concordent.
+            const liens = Object.keys(advRelsByPair())
+                .map(k => advChosenRel(k))
+                .filter(Boolean);
+            const voisins = {};
+            liens.forEach(r => {
+                (voisins[r.sourceTable] = voisins[r.sourceTable] || []).push({ relation: r, autre: r.targetTable });
+                (voisins[r.targetTable] = voisins[r.targetTable] || []).push({ relation: r, autre: r.sourceTable });
+            });
+            const venantDe = {};
+            const vus = new Set([baseId]);
+            const file = [baseId];
+            while (file.length && !venantDe[tableId]) {
+                const courant = file.shift();
+                for (const v of voisins[courant] || []) {
+                    if (!vus.has(v.autre)) {
+                        vus.add(v.autre);
+                        venantDe[v.autre] = { de: courant, relation: v.relation };
+                        file.push(v.autre);
+                    }
+                }
+            }
+            if (!venantDe[tableId]) return null;
+            const chemin = [];
+            let courant = tableId;
+            while (courant !== baseId) {
+                const pas = venantDe[courant];
+                chemin.unshift(etape(pas.relation, pas.de, courant));
+                courant = pas.de;
+            }
+            return chemin;
+        }
+        /** Les deux colonnes d'un lien, vues depuis la table d'arrivée de l'étape. */
+        function advColonnesDUnPas(pas) {
+            const versEstSource = pas.relation.sourceTable === pas.vers;
+            return {
+                colonneArrivee: versEstSource ? pas.relation.sourceCol : pas.relation.targetCol,
+                colonneDepart: versEstSource ? pas.relation.targetCol : pas.relation.sourceCol
+            };
+        }
+        /**
+         * La partie « FROM … » d'une synthèse de table liée, et la condition qui la raccroche à la
+         * ligne en cours.
+         *
+         * Quand la table résumée est reliée DIRECTEMENT à la table de départ, c'est immédiat.
+         * Quand il y a une table de liaison au milieu, cette table est traversée À L'INTÉRIEUR de la
+         * sous-requête — surtout pas jointe au résultat. C'est tout l'objet du correctif : une table
+         * de liaison porte plusieurs lignes pour une même ligne de départ ; la joindre multipliait
+         * les lignes du fichier produit, alors que l'écran promet « 1 ligne par ligne de la table de
+         * départ — jamais de multiplication de lignes ».
+         */
+        function advSourceDeLaSynthese(map, chemin) {
+            const dernier = chemin[chemin.length - 1];
+            const sources = [sqlIdent(duckTableName(dernier.vers)) + ' s'];
+            const aliasDe = {};
+            aliasDe[dernier.vers] = 's';
+            // On remonte le chemin à l'envers : chaque table intermédiaire est jointe dans la
+            // sous-requête, jamais dehors.
+            for (let i = chemin.length - 1; i >= 1; i--) {
+                const pas = chemin[i];
+                const aliasAmont = 'lk' + i;
+                aliasDe[pas.de] = aliasAmont;
+                const { colonneArrivee, colonneDepart } = advColonnesDUnPas(pas);
+                sources.push(
+                    `JOIN ${sqlIdent(duckTableName(pas.de))} ${aliasAmont} ON ` +
+                        `${advNk(aliasAmont + '.' + sqlIdent(colonneDepart))} = ${advNk(aliasDe[pas.vers] + '.' + sqlIdent(colonneArrivee))}`
+                );
+            }
+            // Le premier pas raccroche la sous-requête à la ligne en cours du résultat.
+            const premier = chemin[0];
+            const { colonneArrivee, colonneDepart } = advColonnesDUnPas(premier);
+            const aliasDeLaBase = advAlias(map, { tableId: premier.de, via: '' });
+            return {
+                source: sources.join(' '),
+                condition: `${advNk(aliasDe[premier.vers] + '.' + sqlIdent(colonneArrivee))} = ${advNk(aliasDeLaBase + '.' + sqlIdent(colonneDepart))}`
+            };
+        }
         const advNk = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
         // Planifie les jointures (LEFT) reliant chaque table nécessaire à la base via les relations du
         // MCD. Les liens INDIRECTS sont gérés : si une table n'est pas reliée directement, on cherche
@@ -518,29 +631,40 @@
         // (synthèse de table liée) et « hier » (hiérarchie aplatie) produisent du SQL corrélé/CTE.
         function advExpandCol(map, c, hierRef) {
             if (c.kind === 'link') {
+                // La table résumée est atteinte DANS la sous-requête, en traversant s'il le faut les
+                // tables de liaison du chemin. Rien n'est joint au résultat : une ligne de départ
+                // reste une ligne, quel que soit le nombre de lignes trouvées au bout du lien.
                 const anchor = c._anchor;
-                const S = sqlIdent(duckTableName(c.tableId));
-                const key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anchor.parentVia }) + '.' + sqlIdent(anchor.parentCol))}`;
+                const chemin = c._chemin;
+                let S, key;
+                if (chemin && chemin.length > 1) {
+                    const traversee = advSourceDeLaSynthese(map, chemin);
+                    S = traversee.source;
+                    key = traversee.condition;
+                } else {
+                    S = sqlIdent(duckTableName(c.tableId)) + ' s';
+                    key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anchor.parentVia }) + '.' + sqlIdent(anchor.parentCol))}`;
+                }
                 const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : null;
                 const al = c.alias || c.col || 'synthese';
-                if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} s WHERE ${key})`, alias: al }];
+                if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} WHERE ${key})`, alias: al }];
                 if (c.mode === 'countd')
                     return [
                         {
-                            expr: `(SELECT COUNT(DISTINCT ${advNk('s.' + sqlIdent(c.col))}) FROM ${S} s WHERE ${key})`,
+                            expr: `(SELECT COUNT(DISTINCT ${advNk('s.' + sqlIdent(c.col))}) FROM ${S} WHERE ${key})`,
                             alias: al
                         }
                     ];
                 if (c.mode === 'values')
                     return [
                         {
-                            expr: `(SELECT STRING_AGG(DISTINCT NULLIF(${colRaw}, ''), ' | ') FROM ${S} s WHERE ${key})`,
+                            expr: `(SELECT STRING_AGG(DISTINCT NULLIF(${colRaw}, ''), ' | ') FROM ${S} WHERE ${key})`,
                             alias: al
                         }
                     ];
                 const maximum = Math.max(1, Math.min(12, parseInt(c.n) || 3));
                 return Array.from({ length: maximum }, (_, k) => ({
-                    expr: `(SELECT ${colRaw} FROM ${S} s WHERE ${key} ORDER BY s.${sqlIdent('__rn')} LIMIT 1 OFFSET ${k})`,
+                    expr: `(SELECT ${colRaw} FROM ${S} WHERE ${key} ORDER BY s.${sqlIdent('__rn')} LIMIT 1 OFFSET ${k})`,
                     alias: al + '_' + (k + 1)
                 }));
             }
@@ -593,7 +717,14 @@
                         err: `« ${(state.tables[c.tableId] || {}).name || '?'} » n'est pas reliée à la table de départ dans le modèle de données (étape 2).`
                     };
                 c._anchor = anchor;
-                needs.push({ tableId: anchor.parentId, via: anchor.parentVia || '' });
+                // Le chemin complet, pour que la synthèse sache traverser une table de liaison.
+                c._chemin = c.kind === 'link' ? advCheminDuLien(spec.baseId, c.tableId, c.via) : null;
+                // On ne joint la table d'ancrage QUE si elle n'est pas un simple relais : une table
+                // de liaison traversée dans la sous-requête ne doit surtout pas être jointe ici,
+                // sinon elle multiplie les lignes du résultat — le défaut que ce chemin corrige.
+                if (!(c._chemin && c._chemin.length > 1)) {
+                    needs.push({ tableId: anchor.parentId, via: anchor.parentVia || '' });
+                }
             }
             const { map, joins, unreachable } = advPlanJoins(spec.baseId, needs);
             if (unreachable.length)
@@ -1556,7 +1687,10 @@
                         <tbody class="divide-y divide-slate-100">`;
                 html += extractSpec.columns
                     .map(
-                        (c, rang) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
+                        (
+                            c,
+                            rang
+                        ) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
                     <td class="p-2 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'advcol',${rang})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-indigo-600 select-none text-sm leading-none" title="Glisser pour changer l'ordre des colonnes en sortie">⠿</span><br><span class="inline-flex leading-none">${advFlechesDOrdreHtml(rang, extractSpec.columns.length)}</span></td>
                     <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}</td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"></td>

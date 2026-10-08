@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-01T15:33:14.481Z",
+ "generated": "2026-10-08T19:38:37.233Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 51361,
-  "codeLines": 48473,
-  "commentLines": 2888,
-  "templateLines": 10177,
+  "lines": 51656,
+  "codeLines": 48691,
+  "commentLines": 2965,
+  "templateLines": 10199,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6743,
-  "shortLocals": 842,
-  "functions": 1706,
+  "locals": 6788,
+  "shortLocals": 843,
+  "functions": 1715,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12487023580008898
+  "shortLocalsRatio": 0.12418974661166765
  },
  "files": [
   {
@@ -371,17 +371,17 @@
   },
   {
    "file": "20-gouvernance/2B-gouvernance-catalogue.js",
-   "lines": 1306,
-   "codeLines": 1266,
-   "commentLines": 40,
-   "templateLines": 242,
+   "lines": 1322,
+   "codeLines": 1279,
+   "commentLines": 43,
+   "templateLines": 244,
    "longLogicLines": 1,
    "multiStatementLines": 0,
-   "locals": 147,
+   "locals": 148,
    "shortLocals": 36,
    "functions": 37,
    "longestLogic": 185,
-   "shortLocalsRatio": 0.24489795918367346,
+   "shortLocalsRatio": 0.24324324324324326,
    "longLinesSample": [
     "${srcs.map(s2 => row('▦', s2.table, 'source ' + (ROLE2[s2.role] || s2.role || '') + ' (donnée technique)', { t"
    ]
@@ -402,17 +402,17 @@
   },
   {
    "file": "30-lineage-graphes/30-lineage-par-attribut.js",
-   "lines": 715,
-   "codeLines": 688,
-   "commentLines": 27,
-   "templateLines": 59,
+   "lines": 742,
+   "codeLines": 701,
+   "commentLines": 41,
+   "templateLines": 61,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 100,
+   "locals": 101,
    "shortLocals": 10,
    "functions": 10,
    "longestLogic": 127,
-   "shortLocalsRatio": 0.1
+   "shortLocalsRatio": 0.09900990099009901
   },
   {
    "file": "30-lineage-graphes/31-lineage-carte-des-flux.js",
@@ -733,19 +733,19 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 2664,
-   "codeLines": 2548,
-   "commentLines": 116,
-   "templateLines": 530,
+   "lines": 2849,
+   "codeLines": 2683,
+   "commentLines": 166,
+   "templateLines": 536,
    "longLogicLines": 4,
    "multiStatementLines": 0,
-   "locals": 417,
-   "shortLocals": 54,
-   "functions": 121,
+   "locals": 448,
+   "shortLocals": 55,
+   "functions": 128,
    "longestLogic": 210,
-   "shortLocalsRatio": 0.12949640287769784,
+   "shortLocalsRatio": 0.12276785714285714,
    "longLinesSample": [
-    "const key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, vi",
+    "key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anc",
     "`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(anchor.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ",
     "return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${table ? table.name : '?'}${c.col ? '.' + c.col : ''}${c.mode"
    ]
@@ -1139,15 +1139,15 @@
   },
   {
    "file": "94-couche-v13/A5-v13-cle-composite.js",
-   "lines": 365,
-   "codeLines": 298,
-   "commentLines": 67,
-   "templateLines": 38,
+   "lines": 432,
+   "codeLines": 355,
+   "commentLines": 77,
+   "templateLines": 50,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 56,
+   "locals": 68,
    "shortLocals": 0,
-   "functions": 16,
+   "functions": 18,
    "longestLogic": 126,
    "shortLocalsRatio": 0
   },
