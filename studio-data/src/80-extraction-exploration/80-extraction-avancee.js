@@ -841,16 +841,34 @@
                 }
             }
             const JT = spec.joinType === 'inner' ? 'JOIN' : 'LEFT JOIN';
+            // Chaque filtre va d'un côté ou de l'autre selon sa portée : dans le ON de sa
+            // jointure quand il porte sur le lien, dans le WHERE quand il porte sur la ligne.
+            // C'est tout ce qui sépare « ne ramener que les sinistres ouverts » de « ne garder
+            // que les contrats qui ont un sinistre ouvert ».
+            const conditionsDeJointure = {};
+            const filtresDeLigne = [];
+            spec.filters.forEach(filtre => {
+                const alias = advAlias(map, filtre);
+                const surLeLien = advPorteeDuFiltre(filtre, spec.baseId) === 'lien' && joins.some(j => j.alias === alias);
+                if (surLeLien)
+                    (conditionsDeJointure[alias] = conditionsDeJointure[alias] || []).push(advCondSql(alias, filtre));
+                else filtresDeLigne.push(advCondSql(alias, filtre));
+            });
             const fromSql =
                 `${sqlIdent(duckTableName(spec.baseId))} x0` +
                 (joins.length
-                    ? '\n  ' + joins.map(j => `${JT} ${sqlIdent(duckTableName(j.id))} ${j.alias} ON ${j.on}`).join('\n  ')
+                    ? '\n  ' +
+                      joins
+                          .map(j => {
+                              const posees = conditionsDeJointure[j.alias] || [];
+                              const condition = [j.on].concat(posees).join('\n    AND ');
+                              return `${JT} ${sqlIdent(duckTableName(j.id))} ${j.alias} ON ${condition}`;
+                          })
+                          .join('\n  ')
                     : '') +
                 (hierJoins.length ? '\n  ' + hierJoins.join('\n  ') : '');
             const withSql = ctes.length ? 'WITH RECURSIVE ' + ctes.join(',\n') + '\n' : '';
-            const whereSql = spec.filters.length
-                ? '\nWHERE ' + spec.filters.map(f => advCondSql(advAlias(map, f), f)).join('\n  AND ')
-                : '';
+            const whereSql = filtresDeLigne.length ? '\nWHERE ' + filtresDeLigne.join('\n  AND ') : '';
             const outCols = [];
             let selectSql,
                 tail = '';
@@ -1245,6 +1263,44 @@
             });
             renderAdvExtract();
         }
+        // ---- La portée d'un filtre posé sur une table liée ---------------------------
+        //
+        // Un filtre sur une table liée peut vouloir dire deux choses très différentes, et
+        // l'écran n'en proposait qu'une :
+        //
+        //   « sur le lien »  — ne ramener par ce lien que ce qui satisfait le filtre. Une ligne
+        //                      de départ SANS lien, ou dont le lien ne satisfait pas le filtre,
+        //                      sort quand même, avec les colonnes du lien vides.
+        //   « sur la ligne » — ne garder que les lignes qui satisfont le filtre. Une ligne sans
+        //                      lien ne peut pas le satisfaire : elle disparaît du fichier.
+        //
+        // La seconde était la seule possible, et elle se faisait en silence : on posait un filtre
+        // sur « SINISTRES » et l'on perdait, sans rien demander, tous les contrats sans sinistre.
+        //
+        // En SQL, la différence tient à l'endroit où la condition est écrite : dans le ON de la
+        // jointure (sur le lien) ou dans le WHERE (sur la ligne).
+        const ADV_PORTEES_DE_FILTRE = {
+            lien: 'sur le lien — garder la ligne même sans lien',
+            ligne: 'sur la ligne — ne garder que les lignes qui satisfont'
+        };
+        /**
+         * La portée effective d'un filtre.
+         *
+         * Sur la table de départ, la question ne se pose pas : il n'y a pas de lien, le filtre
+         * porte toujours sur la ligne. Et un filtre enregistré avant que ce choix existe n'a pas
+         * de portée : il garde celle qu'il avait, pour qu'un paramétrage rejoué rende le même
+         * fichier qu'avant.
+         */
+        function advPorteeDuFiltre(filtre, baseId) {
+            if (!filtre || filtre.tableId === baseId) return 'ligne';
+            return filtre.portee === 'lien' ? 'lien' : 'ligne';
+        }
+        function advChangerLaPorteeDuFiltre(identifiant, portee) {
+            const filtre = state.advExtract.filters.find(f => f.id === identifiant);
+            if (!filtre) return;
+            filtre.portee = portee;
+            renderAdvExtract();
+        }
         function advAddFilter() {
             const element = el('adv-flt-tbl').value,
                 col = el('adv-flt-col').value,
@@ -1258,7 +1314,11 @@
                 col,
                 op,
                 val,
-                via: advViaVal('adv-flt-via')
+                via: advViaVal('adv-flt-via'),
+                // Sur une table liée, un filtre neuf porte sur le LIEN : il ne fait perdre
+                // aucune ligne. Se tromper dans ce sens se voit tout de suite (il reste trop de
+                // lignes) ; dans l'autre, des lignes manquent sans que rien ne le dise.
+                portee: element === state.advExtract.baseId ? 'ligne' : 'lien'
             });
             renderAdvExtract();
         }
@@ -1902,7 +1962,25 @@
             html += `<div class="mb-4">
                 <div class="text-[11px] font-bold text-slate-600 uppercase mb-2">2. Filtres</div>`;
             if (extractSpec.filters.length)
-                html += `<div class="flex flex-wrap gap-1.5 mb-2">${extractSpec.filters.map(f => `<span class="text-[11px] bg-blue-50 border border-blue-200 text-blue-800 rounded-full px-2.5 py-1 flex items-center gap-1"><strong>${escapeHTML((state.tables[f.tableId] || {}).name || '')}.${escapeHTML(f.col)}</strong>${f.via ? `<em class="not-italic text-[10px] text-amber-700 font-bold">${escapeHTML(advViaTxt(f.via))}</em>` : ''} ${ADV_OPS[f.op] || SCOPE_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` "${escapeHTML(f.val)}"`} <button onclick="advRemoveFilter('${f.id}')" class="text-blue-400 hover:text-red-500">✕</button></span>`).join('')}</div>`;
+                html += `<div class="flex flex-wrap gap-1.5 mb-2">${extractSpec.filters
+                    .map(f => {
+                        const surUneTableLiee = f.tableId !== extractSpec.baseId;
+                        const portee = advPorteeDuFiltre(f, extractSpec.baseId);
+                        // Sur une table liée, la portée se lit et se change sur le filtre lui-même :
+                        // c'est elle qui décide si des lignes disparaissent du fichier.
+                        const choixDeLaPortee = surUneTableLiee
+                            ? `<select onchange="advChangerLaPorteeDuFiltre('${f.id}', this.value)" title="Sur le lien : la ligne de départ reste, même sans lien. Sur la ligne : elle disparaît si elle ne satisfait pas le filtre — y compris quand le lien n'existe pas." class="text-[10px] bg-white border rounded px-1 py-0.5 ${portee === 'lien' ? 'border-blue-300 text-blue-700' : 'border-amber-400 text-amber-800 font-bold'}">${Object.entries(
+                                  ADV_PORTEES_DE_FILTRE
+                              )
+                                  .map(
+                                      ([v, l]) =>
+                                          `<option value="${v}" ${v === portee ? 'selected' : ''}>${escapeHTML(l)}</option>`
+                                  )
+                                  .join('')}</select>`
+                            : '';
+                        return `<span class="text-[11px] bg-blue-50 border border-blue-200 text-blue-800 rounded-full px-2.5 py-1 flex items-center gap-1"><strong>${escapeHTML((state.tables[f.tableId] || {}).name || '')}.${escapeHTML(f.col)}</strong>${f.via ? `<em class="not-italic text-[10px] text-amber-700 font-bold">${escapeHTML(advViaTxt(f.via))}</em>` : ''} ${ADV_OPS[f.op] || SCOPE_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` "${escapeHTML(f.val)}"`} ${choixDeLaPortee}<button onclick="advRemoveFilter('${f.id}')" class="text-blue-400 hover:text-red-500">✕</button></span>`;
+                    })
+                    .join('')}</div>`;
             html += `<div class="flex items-end gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
                 <select id="adv-flt-tbl" onchange="advFltTblChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${[
                     state.tables[extractSpec.baseId],

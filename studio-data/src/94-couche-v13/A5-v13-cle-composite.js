@@ -300,11 +300,18 @@
                 causes.push(
                     'l’option « intersection » : elle ne garde que les lignes qui ont une correspondance dans chaque table liée. « Conserver tout » les garde toutes.'
                 );
-            const filtresLies = (spec.filters || []).filter(f => f.tableId && f.tableId !== spec.baseId);
+            // Seuls les filtres qui portent « sur la ligne » peuvent faire perdre des lignes ;
+            // ceux qui portent « sur le lien » sont écrits dans la jointure et n'en perdent aucune.
+            const filtresLies = (spec.filters || []).filter(
+                f =>
+                    f.tableId &&
+                    f.tableId !== spec.baseId &&
+                    (typeof advPorteeDuFiltre === 'function' ? advPorteeDuFiltre(f, spec.baseId) === 'ligne' : true)
+            );
             if (filtresLies.length) {
                 const tables = [...new Set(filtresLies.map(f => nomDe(f.tableId)))].map(n => '« ' + n + ' »');
                 causes.push(
-                    `le filtre posé sur ${tables.join(', ')} : une ligne de départ SANS correspondance dans cette table ne peut pas satisfaire le filtre, elle disparaît donc elle aussi — même avec « conserver tout ». Pour la garder, remplacez le filtre par une synthèse de table liée.`
+                    `le filtre posé sur ${tables.join(', ')}, réglé « sur la ligne » : une ligne de départ SANS correspondance dans cette table ne peut pas satisfaire le filtre, elle disparaît donc elle aussi — même avec « conserver tout ». Passez ce filtre « sur le lien » pour garder toutes les lignes.`
                 );
             }
             const filtresDeDepart = (spec.filters || []).filter(f => f.tableId === spec.baseId);

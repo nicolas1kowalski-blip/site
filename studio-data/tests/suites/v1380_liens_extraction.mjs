@@ -100,12 +100,35 @@ const prepare = await p.evaluate(() => {
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
     sorties.memeChoseEnFiltre = sqlDe(spec);
 
+    // ---- La portée d'un filtre posé sur une table liée ----
+    // « Ne ramener que les sinistres ouverts » n'est pas « ne garder que les contrats qui en
+    // ont un ». Le même filtre fait l'un ou l'autre selon sa portée.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'lien' });
+    sorties.filtreSurLeLien = sqlDe(spec);
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'ligne' });
+    sorties.filtreSurLaLigne = sqlDe(spec);
+    // Un filtre enregistré avant que ce choix existe garde l'ancien comportement.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    sorties.filtreSansPortee = sqlDe(spec);
+    // Sur la table de départ, la portée ne change rien : il n'y a pas de lien.
+    spec = neuf();
+    spec.filters.push({ id: 'f1', tableId: 'c', col: 'NOM', op: '=', val: 'Dupont', portee: 'lien' });
+    sorties.filtreSurLaBaseMemePortee = sqlDe(spec);
+
     // ---- Le diagnostic de la perte de lignes (fonctions pures, pas besoin du moteur) ----
     // Perdre des lignes est plus discret que les multiplier : rien ne le dit, le fichier sort
     // simplement incomplet. L'écran doit nommer la cause, sans quoi on la cherche des heures.
     const diag = {};
-    spec = neuf(); spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    spec = neuf(); spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'ligne' });
     diag.filtreSurTableLiee = v13VerdictDeLaPerte(spec, 20000, 1500);
+    spec = neuf(); spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'lien' });
+    diag.filtreSurLeLienNestPasEnCause = v13VerdictDeLaPerte(spec, 20000, 19000);
     spec = neuf(); spec.joinType = 'inner';
     diag.intersection = v13VerdictDeLaPerte(spec, 20000, 3000);
     spec = neuf(); spec.filters.push({ id: 'f1', tableId: 'c', col: 'NOM', op: '=', val: 'Dupont' });
@@ -198,6 +221,30 @@ ok('un critère s’applique aussi aux autres modes : seuls les sinistres clos d
 ok('témoin : le MÊME critère posé en filtre ordinaire, lui, retire bien des lignes',
     (await combien(prepare.memeChoseEnFiltre)) < 5);
 
+// ---- Un filtre « sur le lien » restreint ce qu'on ramène, pas les lignes du fichier ----
+// La colonne MONTANT vient d'une jointure : C1 ayant deux liens, il occupe deux lignes.
+// Ce n'est pas le filtre qui le dédouble — c'est la jointure, et elle le faisait déjà.
+// Ce que le filtre ne doit PAS faire, c'est en retirer.
+const lignesSurLeLien = await requete(prepare.filtreSurLeLien);
+const lignesSansFiltre = await requete(prepare.colonneJointe);
+ok('un filtre « sur le lien » ne retire aucune ligne : exactement autant qu’avant de le poser',
+    lignesSurLeLien.length === lignesSansFiltre.length);
+ok('les cinq contrats sont tous présents, filtre posé',
+    new Set(lignesSurLeLien.map(l => String(l.NUM))).size === 5);
+ok('il restreint ce qui est RAMENÉ : seuls les montants des sinistres ouverts remontent',
+    [...new Set(lignesSurLeLien.map(l => l.MONTANT).filter(v => v !== null).map(String))].sort().join(',') === '100,300');
+ok('une ligne sans lien, ou dont le lien ne satisfait pas le filtre, sort avec la colonne vide',
+    lignesSurLeLien.filter(l => ['C3', 'C4', 'C5'].includes(String(l.NUM))).every(l => l.MONTANT === null) &&
+        lignesSurLeLien.some(l => String(l.NUM) === 'C1' && l.MONTANT === null));
+ok('le même filtre « sur la ligne » retire bien les lignes — l’ancien comportement reste accessible',
+    (await combien(prepare.filtreSurLaLigne)) === 2);
+ok('un filtre enregistré avant ce choix garde l’ancien comportement, pour qu’un paramétrage rejoué rende le même fichier',
+    prepare.filtreSansPortee === prepare.filtreSurLaLigne);
+ok('sur la table de départ, la portée ne change rien : la condition reste dans le WHERE',
+    /WHERE/.test(prepare.filtreSurLaBaseMemePortee) && (await combien(prepare.filtreSurLaBaseMemePortee)) === 1);
+ok('un filtre « sur le lien » s’écrit dans la jointure, pas dans le WHERE',
+    /ON .*\n?\s*AND/.test(prepare.filtreSurLeLien) && !/WHERE/.test(prepare.filtreSurLeLien));
+
 // ---- Quand des lignes manquent quand même, l'écran doit le dire et nommer la cause ----
 const diag = prepare.diag;
 ok('une perte de lignes est annoncée avec les deux nombres, pas seulement signalée',
@@ -205,13 +252,15 @@ ok('une perte de lignes est annoncée avec les deux nombres, pas seulement signa
         diag.filtreSurTableLiee.manquantes === 18500);
 ok('un filtre sur une table liée est nommé comme la cause, avec la sortie à prendre',
     /SINISTRES/.test(diag.filtreSurTableLiee.causes.join(' ')) &&
-        /synthèse de table liée/.test(diag.filtreSurTableLiee.causes.join(' ')));
+        /sur le lien/.test(diag.filtreSurTableLiee.causes.join(' ')));
 ok('« intersection » est nommée comme cause quand elle est choisie',
     !!diag.intersection && /intersection/.test(diag.intersection.causes.join(' ')));
 ok('un filtre sur la table de départ est dit normal, pas présenté comme une anomalie',
     !!diag.filtreSurLaBase && /c’est leur rôle/.test(diag.filtreSurLaBase.causes.join(' ')));
 ok('rien n’est signalé quand aucune ligne ne manque', diag.riennePerd === null);
 ok('une multiplication n’est pas prise pour une perte', diag.pasDeFauxPositifSiMultiplication === null);
+ok('un filtre « sur le lien » n’est pas accusé d’une perte : il n’en cause aucune',
+    !/SINISTRES/.test(diag.filtreSurLeLienNestPasEnCause.causes.join(' ')));
 
 let fail = 0;
 for (const [n, c] of out) { console.log((c ? '✅ ' : '❌ ') + n); if (!c) fail++; }
