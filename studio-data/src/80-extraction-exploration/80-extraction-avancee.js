@@ -1000,6 +1000,59 @@
             extractSpec.dedup.keys = extractSpec.dedup.keys.filter(k => k !== id);
             renderAdvExtract();
         }
+        // ---- L'ordre des colonnes en sortie ------------------------------------------
+        //
+        // L'ordre de cette liste EST l'ordre des colonnes du fichier produit. Jusqu'ici il
+        // ne pouvait être changé qu'en supprimant une colonne pour la rajouter à la fin :
+        // pour remonter la première, il fallait toutes les refaire. On peut désormais la
+        // déplacer — en la glissant, ou avec les quatre flèches pour les longues listes,
+        // où viser au vol n'est pas commode.
+        //
+        // Rien d'autre ne bouge : le dédoublonnage et les regroupements désignent les
+        // colonnes par leur identifiant, jamais par leur rang.
+
+        /** Monter (pas = -1) ou descendre (pas = +1) la colonne de rang `rang`. */
+        function advDeplacerColonne(rang, pas) {
+            const colonnes = state.advExtract.columns;
+            const arrivee = rang + pas;
+            if (arrivee < 0 || arrivee >= colonnes.length) return;
+            arrMove(colonnes, rang, arrivee);
+            renderAdvExtract();
+        }
+
+        /** Envoyer la colonne tout en haut ou tout en bas de la liste. */
+        function advDeplacerColonneAuBord(rang, ou) {
+            const colonnes = state.advExtract.columns;
+            if (rang < 0 || rang >= colonnes.length) return;
+            arrMove(colonnes, rang, ou === 'top' ? 0 : colonnes.length - 1);
+            renderAdvExtract();
+        }
+
+        /** Fin d'un glisser-déposer : la colonne `depuis` prend la place `vers`. */
+        function advDeposerColonne(depuis, vers) {
+            arrMove(state.advExtract.columns, depuis, vers);
+            renderAdvExtract();
+        }
+
+        /** Les quatre flèches d'une ligne : tout en haut, monter, descendre, tout en bas. */
+        function advFlechesDOrdreHtml(rang, combien) {
+            return [
+                ['top', '⤒', 'Tout en haut', rang === 0],
+                ['up', '▲', 'Monter', rang === 0],
+                ['down', '▼', 'Descendre', rang === combien - 1],
+                ['bottom', '⤓', 'Tout en bas', rang === combien - 1]
+            ]
+                .map(([action, icone, infobulle, inactive]) => {
+                    const appel =
+                        action === 'up'
+                            ? `advDeplacerColonne(${rang},-1)`
+                            : action === 'down'
+                              ? `advDeplacerColonne(${rang},1)`
+                              : `advDeplacerColonneAuBord(${rang},'${action}')`;
+                    return `<button onclick="${appel}" ${inactive ? 'disabled' : ''} class="text-slate-300 hover:text-indigo-600 disabled:opacity-20 text-[10px] font-black px-0.5" title="${infobulle}">${icone}</button>`;
+                })
+                .join('');
+        }
         function advAddAllColumns() {
             const element = el('adv-col-tbl').value;
             const tbl = state.tables[element];
@@ -1494,7 +1547,8 @@
             html += `<div class="mb-4">
                 <div class="text-[11px] font-bold text-slate-600 uppercase mb-2">1. Colonnes en sortie ${extractSpec.group.on ? '<span class="text-indigo-500 normal-case">(dimensions du regroupement)</span>' : ''}</div>`;
             if (extractSpec.columns.length) {
-                html += `<div class="border border-slate-200 rounded-lg overflow-x-auto mb-2"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2">Source</th>
+                html += `<div class="border border-slate-200 rounded-lg overflow-x-auto mb-2"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-16" title="Glissez une ligne, ou servez-vous des flèches : c'est l'ordre des colonnes du fichier produit.">Ordre</th>
+                    <th class="p-2">Source</th>
                     <th class="p-2">Nom en sortie (alias métier)</th>
                     <th class="p-2">Transformation</th>${!extractSpec.group.on && extractSpec.dedup.on ? '<th class="p-2 text-center">Clé</th>' : ''}<th class="p-2 w-8"></th>
                     </tr>
@@ -1502,7 +1556,8 @@
                         <tbody class="divide-y divide-slate-100">`;
                 html += extractSpec.columns
                     .map(
-                        c => `<tr class="hover:bg-slate-50">
+                        (c, rang) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
+                    <td class="p-2 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'advcol',${rang})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-indigo-600 select-none text-sm leading-none" title="Glisser pour changer l'ordre des colonnes en sortie">⠿</span><br><span class="inline-flex leading-none">${advFlechesDOrdreHtml(rang, extractSpec.columns.length)}</span></td>
                     <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}</td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"></td>
                     <td class="p-2"><select onchange="advUpdateColumn('${c.id}','transform',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${Object.entries(
