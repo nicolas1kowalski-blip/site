@@ -405,8 +405,48 @@
             const aliasDeLaBase = advAlias(map, { tableId: premier.de, via: '' });
             return {
                 source: sources.join(' '),
-                condition: `${advNk(aliasDe[premier.vers] + '.' + sqlIdent(colonneArrivee))} = ${advNk(aliasDeLaBase + '.' + sqlIdent(colonneDepart))}`
+                condition: `${advNk(aliasDe[premier.vers] + '.' + sqlIdent(colonneArrivee))} = ${advNk(aliasDeLaBase + '.' + sqlIdent(colonneDepart))}`,
+                aliasDe
             };
+        }
+        /**
+         * Les tables sur lesquelles un critère de synthèse peut porter : celles que la
+         * sous-requête traverse. La table de départ n'en fait pas partie — un critère posé
+         * sur elle filtrerait l'extraction entière, ce qui est justement ce qu'on veut éviter.
+         */
+        function advTablesDUneSynthese(baseId, tableId, via) {
+            const chemin = advCheminDuLien(baseId, tableId, via);
+            if (!chemin) return [];
+            return [...new Set(chemin.map(pas => pas.vers))];
+        }
+        /**
+         * Les critères d'une synthèse, traduits en SQL.
+         *
+         * Ils s'ajoutent À L'INTÉRIEUR de la sous-requête : ils restreignent ce qui est COMPTÉ,
+         * jamais les lignes du fichier. Un contrat sans aucun sinistre ouvert sort donc avec 0,
+         * au lieu de disparaître comme le ferait un filtre ordinaire posé sur « SINISTRES ».
+         */
+        function advCriteresDeLaSyntheseSql(colonne, aliasDe) {
+            return (colonne.conds || [])
+                .map(critere => advCondSql(aliasDe[critere.tableId] || 's', critere))
+                .filter(Boolean)
+                .map(sql => ' AND ' + sql)
+                .join('');
+        }
+        /** Les critères d'une synthèse, en une phrase lisible : « si ÉTAT = OUVERT ». */
+        function advCriteresDeLaSyntheseTexte(colonne) {
+            const criteres = colonne.conds || [];
+            if (!criteres.length) return '';
+            return (
+                ' si ' +
+                criteres
+                    .map(critere => {
+                        const nomTable = (state.tables[critere.tableId] || {}).name || '?';
+                        const valeur = critere.op === 'empty' || critere.op === 'notempty' ? '' : ` "${critere.val}"`;
+                        return `${nomTable}.${critere.col} ${ADV_OPS[critere.op] || critere.op}${valeur}`;
+                    })
+                    .join(' et ')
+            );
         }
         const advNk = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
         // Planifie les jointures (LEFT) reliant chaque table nécessaire à la base via les relations du
@@ -636,15 +676,20 @@
                 // reste une ligne, quel que soit le nombre de lignes trouvées au bout du lien.
                 const anchor = c._anchor;
                 const chemin = c._chemin;
-                let S, key;
+                let S, key, aliasDe;
                 if (chemin && chemin.length > 1) {
                     const traversee = advSourceDeLaSynthese(map, chemin);
                     S = traversee.source;
                     key = traversee.condition;
+                    aliasDe = traversee.aliasDe;
                 } else {
                     S = sqlIdent(duckTableName(c.tableId)) + ' s';
                     key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anchor.parentVia }) + '.' + sqlIdent(anchor.parentCol))}`;
+                    aliasDe = {};
+                    aliasDe[c.tableId] = 's';
                 }
+                // Les critères restreignent ce qui est résumé, pas les lignes du fichier.
+                key += advCriteresDeLaSyntheseSql(c, aliasDe);
                 const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : null;
                 const al = c.alias || c.col || 'synthese';
                 if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} WHERE ${key})`, alias: al }];
@@ -1440,6 +1485,23 @@
             renderAdvExtract();
         }
 
+        /** Les critères d'une synthèse déjà créée, retirables un par un. */
+        function advCriteresDUneColonneHtml(colonne) {
+            const criteres = (colonne && colonne.conds) || [];
+            if (!criteres.length) return '';
+            return (
+                '<div class="flex flex-wrap gap-1 mt-1">' +
+                criteres
+                    .map((critere, rang) => {
+                        const nomTable = (state.tables[critere.tableId] || {}).name || '?';
+                        const valeur = critere.op === 'empty' || critere.op === 'notempty' ? '' : ` "${critere.val}"`;
+                        const texte = `${nomTable}.${critere.col} ${ADV_OPS[critere.op] || critere.op}${valeur}`;
+                        return `<span class="text-[10px] font-sans bg-sky-100 border border-sky-200 text-sky-800 rounded-full px-2 py-0.5">⛉ ${escapeHTML(texte)} <button onclick="advRetirerUnCritereDeSynthese('${colonne.id}', ${rang})" title="Retirer ce critère" class="text-sky-500 hover:text-red-600 font-bold">✕</button></span>`;
+                    })
+                    .join('') +
+                '</div>'
+            );
+        }
         function advColLabel(c) {
             if (c.kind === 'calc') {
                 // V6.16 : chaque référence affiche son chemin quand il n'est pas celui par défaut.
@@ -1459,7 +1521,7 @@
             }
             if (c.kind === 'link') {
                 const table = state.tables[c.tableId];
-                return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${table ? table.name : '?'}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}${advViaTxt(c.via)}`;
+                return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${table ? table.name : '?'}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}${advViaTxt(c.via)}${advCriteresDeLaSyntheseTexte(c)}`;
             }
             if (c.kind === 'hier') {
                 const table = state.tables[c.tableId];
@@ -1692,7 +1754,7 @@
                             rang
                         ) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
                     <td class="p-2 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'advcol',${rang})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-indigo-600 select-none text-sm leading-none" title="Glisser pour changer l'ordre des colonnes en sortie">⠿</span><br><span class="inline-flex leading-none">${advFlechesDOrdreHtml(rang, extractSpec.columns.length)}</span></td>
-                    <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}</td>
+                    <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}${advCriteresDUneColonneHtml(c)}</td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"></td>
                     <td class="p-2"><select onchange="advUpdateColumn('${c.id}','transform',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${Object.entries(
                         ADV_TRANSFORMS
@@ -1742,8 +1804,9 @@
                     <input type="number" id="adv-link-n" value="3" min="1" max="12" class="border border-slate-300 p-1.5 rounded text-[11px] w-14"></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom en sortie</label>
                     <input type="text" id="adv-link-alias" placeholder="auto" class="border border-slate-300 p-1.5 rounded text-[11px] w-28"></div>
-                    <button onclick="advAddLinkColumn()" class="text-[11px] bg-sky-600 text-white px-3 py-1.5 rounded font-bold">+ Synthèse</button>
+                    <button onclick="advAddLinkColumn()" class="text-[11px] bg-sky-600 text-white px-3 py-1.5 rounded font-bold">+ Synthèse${advCriteresDeSyntheseEnAttente.length ? ' (avec ' + advCriteresDeSyntheseEnAttente.length + ' critère(s))' : ''}</button>
                     <span class="text-[10px] text-slate-400">1 ligne par ligne de la table de départ — jamais de multiplication de lignes.</span>
+                    ${advLigneDeCritereHtml()}
                 </div>
             </details>
             <details class="mt-2 bg-purple-50/50 border border-purple-100 rounded-lg">
@@ -2539,11 +2602,109 @@
             if (table && advLinkColElement)
                 advLinkColElement.innerHTML = table.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('');
             advViaSync('adv-link-via', id);
+            // Changer de table liée change le chemin : un critère préparé pour l'ancien chemin
+            // n'a plus de sens, et le garder en silence donnerait un comptage faux.
+            const permises = new Set(advTablesDUneSynthese(state.advExtract.baseId, id, advViaVal('adv-link-via')));
+            const avant = advCriteresDeSyntheseEnAttente.length;
+            advCriteresDeSyntheseEnAttente = advCriteresDeSyntheseEnAttente.filter(c => permises.has(c.tableId));
+            if (advCriteresDeSyntheseEnAttente.length !== avant)
+                showError('Les critères préparés ne portaient pas sur ce chemin : ils ont été retirés.');
+            renderAdvExtract();
         }
         function advLinkModeChanged() {
             const element = el('adv-link-mode').value;
             el('adv-link-col-wrap').classList.toggle('hidden', element === 'count');
             el('adv-link-n-wrap').classList.toggle('hidden', element !== 'indexed');
+        }
+        // ---- Les critères d'une synthèse de table liée -------------------------------
+        //
+        // « Compter les sinistres OUVERTS d'un contrat » n'est pas « ne garder que les contrats
+        // qui ont un sinistre ouvert ». Un filtre ordinaire fait le second et retire des lignes ;
+        // un critère de synthèse fait le premier et n'en retire aucune : un contrat sans sinistre
+        // ouvert sort avec 0.
+        //
+        // Même façon de faire que les critères d'agrégat : on les prépare, puis on crée la
+        // synthèse avec eux.
+        let advCriteresDeSyntheseEnAttente = [];
+
+        /** Les tables proposées pour un critère : celles que la synthèse traverse. */
+        function advTablesPourUnCritere() {
+            const choisie = el('adv-link-tbl');
+            if (!choisie) return [];
+            return advTablesDUneSynthese(state.advExtract.baseId, choisie.value, advViaVal('adv-link-via'))
+                .map(identifiant => state.tables[identifiant])
+                .filter(Boolean);
+        }
+        /** Les colonnes proposées suivent la table choisie pour le critère. */
+        function advCritereTableChangee() {
+            const table = state.tables[(el('adv-linkc-tbl') || {}).value];
+            const colonnes = el('adv-linkc-col');
+            if (table && colonnes)
+                colonnes.innerHTML = (table.headers || []).map(h => `<option>${escapeHTML(h)}</option>`).join('');
+        }
+        function advAjouterUnCritereDeSynthese() {
+            const identifiantTable = (el('adv-linkc-tbl') || {}).value;
+            const colonne = (el('adv-linkc-col') || {}).value;
+            const operateur = (el('adv-linkc-op') || {}).value;
+            if (!identifiantTable || !colonne) return;
+            const sansValeur = operateur === 'empty' || operateur === 'notempty';
+            const valeur = sansValeur ? '' : (el('adv-linkc-val').value || '').trim();
+            if (!sansValeur && !valeur) return showError('Indiquez la valeur du critère.');
+            advCriteresDeSyntheseEnAttente.push({ tableId: identifiantTable, col: colonne, op: operateur, val: valeur });
+            renderAdvExtract();
+        }
+        function advRetirerUnCritereEnAttente(rang) {
+            advCriteresDeSyntheseEnAttente.splice(rang, 1);
+            renderAdvExtract();
+        }
+        /** Retirer un critère d'une synthèse DÉJÀ créée, sans avoir à la refaire. */
+        function advRetirerUnCritereDeSynthese(identifiantColonne, rang) {
+            const colonne = state.advExtract.columns.find(c => c.id === identifiantColonne);
+            if (!colonne || !colonne.conds) return;
+            colonne.conds.splice(rang, 1);
+            renderAdvExtract();
+        }
+        /** Les chips des critères en attente, sous la ligne de création. */
+        function advCriteresEnAttenteHtml() {
+            if (!advCriteresDeSyntheseEnAttente.length) return '';
+            return (
+                '<div class="basis-full flex flex-wrap gap-1 mb-1">' +
+                advCriteresDeSyntheseEnAttente
+                    .map((critere, rang) => {
+                        const nomTable = (state.tables[critere.tableId] || {}).name || '?';
+                        const valeur = critere.op === 'empty' || critere.op === 'notempty' ? '' : ` "${critere.val}"`;
+                        const texte = `${nomTable}.${critere.col} ${ADV_OPS[critere.op] || critere.op}${valeur}`;
+                        return `<span class="text-[10px] bg-sky-100 border border-sky-200 text-sky-800 rounded-full px-2 py-0.5">critère : ${escapeHTML(texte)} <button onclick="advRetirerUnCritereEnAttente(${rang})" class="text-sky-500 hover:text-red-600 font-bold">✕</button></span>`;
+                    })
+                    .join('') +
+                '</div>'
+            );
+        }
+        /** La ligne de saisie d'un critère, dans le bloc de la synthèse. */
+        function advLigneDeCritereHtml() {
+            const tables = advTablesPourUnCritere();
+            if (!tables.length) return '';
+            const premiere = tables[0];
+            return `${advCriteresEnAttenteHtml()}
+                <div class="basis-full flex items-end gap-1.5 flex-wrap border-t border-sky-100 pt-2 mt-1">
+                    <span class="text-[10px] font-bold text-sky-700" title="Le critère restreint ce qui est compté, pas les lignes du fichier : une ligne sans correspondance sort avec 0 au lieu de disparaître.">⛉ Ne compter que…</span>
+                    <select id="adv-linkc-tbl" onchange="advCritereTableChangee()" class="border border-sky-300 p-1.5 rounded text-[11px] bg-white">${tables
+                        .map(table => `<option value="${table.id}">${escapeHTML(table.name)}</option>`)
+                        .join('')}</select>
+                    <select id="adv-linkc-col" class="border border-sky-300 p-1.5 rounded text-[11px] bg-white">${(
+                        premiere.headers || []
+                    )
+                        .map(h => `<option>${escapeHTML(h)}</option>`)
+                        .join('')}</select>
+                    <select id="adv-linkc-op" class="border border-sky-300 p-1.5 rounded text-[11px] bg-white">${Object.entries(
+                        ADV_OPS
+                    )
+                        .map(([v, l]) => `<option value="${v}">${escapeHTML(l)}</option>`)
+                        .join('')}</select>
+                    <input type="text" id="adv-linkc-val" placeholder="valeur" class="border border-sky-300 p-1.5 rounded text-[11px] w-28">
+                    <button onclick="advAjouterUnCritereDeSynthese()" class="text-[11px] bg-white border border-sky-300 text-sky-700 px-2 py-1 rounded font-bold">+ Critère</button>
+                    <span class="text-[10px] text-slate-400">le critère ne retire aucune ligne du fichier — il change seulement ce qui est compté.</span>
+                </div>`;
         }
         function advAddLinkColumn() {
             const element = el('adv-link-tbl').value,
@@ -2553,7 +2714,12 @@
             if (mode !== 'count' && !col) return showError('Choisissez la colonne à résumer.');
             if (element === state.advExtract.baseId) return showError('Choisissez une table LIÉE (pas la table de départ).');
             const tn = (state.tables[element] || {}).name || '';
-            const def = mode === 'count' ? 'nb_' + tn : mode === 'countd' ? 'nbu_' + col : col;
+            // Les critères préparés partent avec la synthèse, et le nom en sortie les rappelle :
+            // « nb_SINISTRES » et « nb_SINISTRES_si_OUVERT » ne doivent pas se confondre.
+            const criteres = advCriteresDeSyntheseEnAttente.slice();
+            advCriteresDeSyntheseEnAttente = [];
+            const suffixe = criteres.length ? '_si_' + criteres.map(c => c.val || c.op).join('_') : '';
+            const def = ((mode === 'count' ? 'nb_' + tn : mode === 'countd' ? 'nbu_' + col : col) + suffixe).slice(0, 60);
             state.advExtract.columns.push({
                 id: 'ac_' + generateId(),
                 kind: 'link',
@@ -2562,6 +2728,7 @@
                 col,
                 n: parseInt(el('adv-link-n').value) || 3,
                 via: advViaVal('adv-link-via'),
+                conds: criteres,
                 alias: (el('adv-link-alias').value || '').trim() || def,
                 transform: 'none'
             });

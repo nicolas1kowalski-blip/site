@@ -70,6 +70,36 @@ const prepare = await p.evaluate(() => {
     // Témoin : une vraie colonne jointe, elle, multiplie — c'est une jointure, pas une synthèse.
     spec = neuf(); spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'R', transform: 'none' }); sorties.colonneJointe = sqlDe(spec);
 
+    // ---- Un critère sur la synthèse : il change ce qui est compté, pas les lignes ----
+    // « Compter les sinistres OUVERTS » n'est pas « ne garder que les contrats qui en ont un ».
+    spec = neuf();
+    spec.columns.push(synthese('count', '', { conds: [{ tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' }] }));
+    sorties.compteAvecCritere = sqlDe(spec);
+    // Le critère peut aussi porter sur la table de liaison elle-même.
+    spec = neuf();
+    spec.columns.push(synthese('count', '', { conds: [{ tableId: 'l', col: 'ID_SIN', op: '=', val: 'S1' }] }));
+    sorties.compteCritereSurLaLiaison = sqlDe(spec);
+    // Deux critères se cumulent.
+    spec = neuf();
+    spec.columns.push(
+        synthese('count', '', {
+            conds: [
+                { tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' },
+                { tableId: 's', col: 'MONTANT', op: '=', val: '300' }
+            ]
+        })
+    );
+    sorties.compteDeuxCriteres = sqlDe(spec);
+    // Et sur les autres modes de synthèse.
+    spec = neuf();
+    spec.columns.push(synthese('values', 'MONTANT', { conds: [{ tableId: 's', col: 'ETAT', op: '=', val: 'CLOS' }] }));
+    sorties.valeursAvecCritere = sqlDe(spec);
+    // Le même critère posé en FILTRE ordinaire, lui, retire des lignes : c'est le témoin.
+    spec = neuf();
+    spec.columns.push(synthese('count'));
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    sorties.memeChoseEnFiltre = sqlDe(spec);
+
     // ---- Le diagnostic de la perte de lignes (fonctions pures, pas besoin du moteur) ----
     // Perdre des lignes est plus discret que les multiplier : rien ne le dit, le fichier sort
     // simplement incomplet. L'écran doit nommer la cause, sans quoi on la cherche des heures.
@@ -142,6 +172,31 @@ ok('témoin : une vraie colonne jointe multiplie bien les lignes — c’est une
 
 ok('aucune table de liaison n’est jointe au résultat d’une synthèse',
     !/LEFT JOIN "t_l"/.test(prepare.compte) && /FROM "t_s" s JOIN "t_l"/.test(prepare.compte));
+
+// ---- Un critère de synthèse : il restreint ce qui est compté, jamais les lignes ----
+const avecCritere = await parContrat(prepare.compteAvecCritere);
+ok('un critère sur la synthèse ne retire aucune ligne : les 5 contrats sortent toujours',
+    (await combien(prepare.compteAvecCritere)) === 5);
+ok('le compte ne retient que ce qui satisfait le critère : C1 a 1 sinistre ouvert sur 2',
+    Number(avecCritere.C1.R) === 1 && Number(avecCritere.C2.R) === 1);
+ok('un contrat dont AUCUN sinistre ne satisfait le critère sort avec 0, il ne disparaît pas',
+    Number(avecCritere.C3.R) === 0 && Number(avecCritere.C5.R) === 0);
+
+const surLaLiaison = await parContrat(prepare.compteCritereSurLaLiaison);
+ok('le critère peut porter sur la table de liaison elle-même',
+    (await combien(prepare.compteCritereSurLaLiaison)) === 5 &&
+        Number(surLaLiaison.C1.R) === 1 && Number(surLaLiaison.C2.R) === 0);
+
+const deuxCriteres = await parContrat(prepare.compteDeuxCriteres);
+ok('deux critères se cumulent : seul C2 a un sinistre ouvert à 300',
+    Number(deuxCriteres.C2.R) === 1 && Number(deuxCriteres.C1.R) === 0);
+
+const valeursCritere = await parContrat(prepare.valeursAvecCritere);
+ok('un critère s’applique aussi aux autres modes : seuls les sinistres clos de C1 sont listés',
+    String(valeursCritere.C1.R) === '200' && (valeursCritere.C2.R === null || valeursCritere.C2.R === ''));
+
+ok('témoin : le MÊME critère posé en filtre ordinaire, lui, retire bien des lignes',
+    (await combien(prepare.memeChoseEnFiltre)) < 5);
 
 // ---- Quand des lignes manquent quand même, l'écran doit le dire et nommer la cause ----
 const diag = prepare.diag;

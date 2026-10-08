@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-08T19:38:37.233Z",
+ "generated": "2026-10-08T20:16:05.916Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 51656,
-  "codeLines": 48691,
-  "commentLines": 2965,
-  "templateLines": 10199,
+  "lines": 51822,
+  "codeLines": 48824,
+  "commentLines": 2998,
+  "templateLines": 10224,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6788,
+  "locals": 6815,
   "shortLocals": 843,
-  "functions": 1715,
+  "functions": 1726,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12418974661166765
+  "shortLocalsRatio": 0.12369772560528247
  },
  "files": [
   {
@@ -733,17 +733,17 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 2849,
-   "codeLines": 2683,
-   "commentLines": 166,
-   "templateLines": 536,
+   "lines": 3015,
+   "codeLines": 2816,
+   "commentLines": 199,
+   "templateLines": 561,
    "longLogicLines": 4,
    "multiStatementLines": 0,
-   "locals": 448,
+   "locals": 475,
    "shortLocals": 55,
-   "functions": 128,
+   "functions": 139,
    "longestLogic": 210,
-   "shortLocalsRatio": 0.12276785714285714,
+   "shortLocalsRatio": 0.11578947368421053,
    "longLinesSample": [
     "key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anc",
     "`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(anchor.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ",
