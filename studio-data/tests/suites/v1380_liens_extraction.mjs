@@ -97,8 +97,13 @@ const prepare = await p.evaluate(() => {
     // Le même critère posé en FILTRE ordinaire, lui, retire des lignes : c'est le témoin.
     spec = neuf();
     spec.columns.push(synthese('count'));
-    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'ligne' });
     sorties.memeChoseEnFiltre = sqlDe(spec);
+    // Et le même filtre laissé au réglage par défaut : il ne retire rien.
+    spec = neuf();
+    spec.columns.push(synthese('count'));
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    sorties.memeChoseEnFiltreParDefaut = sqlDe(spec);
 
     // ---- La portée d'un filtre posé sur une table liée ----
     // « Ne ramener que les sinistres ouverts » n'est pas « ne garder que les contrats qui en
@@ -111,7 +116,7 @@ const prepare = await p.evaluate(() => {
     spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'ligne' });
     sorties.filtreSurLaLigne = sqlDe(spec);
-    // Un filtre enregistré avant que ce choix existe garde l'ancien comportement.
+    // Un filtre sans portée indiquée suit la règle de l'extraction : il porte sur le lien.
     spec = neuf();
     spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
@@ -120,6 +125,11 @@ const prepare = await p.evaluate(() => {
     spec = neuf();
     spec.filters.push({ id: 'f1', tableId: 'c', col: 'NOM', op: '=', val: 'Dupont', portee: 'lien' });
     sorties.filtreSurLaBaseMemePortee = sqlDe(spec);
+    // « L'un ou l'autre chemin » compare plusieurs liens : la condition reste sur la ligne.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', via: 'any', portee: 'lien' });
+    sorties.filtreCheminsMultiples = sqlDe(spec);
 
     // ---- Le diagnostic de la perte de lignes (fonctions pures, pas besoin du moteur) ----
     // Perdre des lignes est plus discret que les multiplier : rien ne le dit, le fichier sort
@@ -137,6 +147,14 @@ const prepare = await p.evaluate(() => {
     diag.riennePerd = v13VerdictDeLaPerte(spec, 20000, 20000);
     diag.pasDeFauxPositifSiMultiplication = v13VerdictDeLaPerte(spec, 20000, 22000);
     sorties.diag = diag;
+
+    // ---- Le compte des lignes, la phrase que l'on lit en recevant le fichier ----
+    const phrasesDuCompte = {};
+    phrasesDuCompte.rienPerdu = v13PhraseDuCompte({ compte: { nomDeLaTable: 'CONTRATS', depart: 20000, sortie: 20000 } });
+    phrasesDuCompte.lignesManquantes = v13PhraseDuCompte({ compte: { nomDeLaTable: 'CONTRATS', depart: 20000, sortie: 3000 } });
+    phrasesDuCompte.lignesEnTrop = v13PhraseDuCompte({ compte: { nomDeLaTable: 'CONTRATS', depart: 20000, sortie: 22000 } });
+    phrasesDuCompte.nonMesure = v13PhraseDuCompte({});
+    sorties.phrasesDuCompte = phrasesDuCompte;
     return sorties;
 });
 await b.close();
@@ -218,8 +236,10 @@ const valeursCritere = await parContrat(prepare.valeursAvecCritere);
 ok('un critère s’applique aussi aux autres modes : seuls les sinistres clos de C1 sont listés',
     String(valeursCritere.C1.R) === '200' && (valeursCritere.C2.R === null || valeursCritere.C2.R === ''));
 
-ok('témoin : le MÊME critère posé en filtre ordinaire, lui, retire bien des lignes',
+ok('témoin : le MÊME critère posé en filtre « sur la ligne », lui, retire bien des lignes',
     (await combien(prepare.memeChoseEnFiltre)) < 5);
+ok('mais au réglage par défaut, ce filtre ne retire aucune ligne : les 5 contrats sortent',
+    (await combien(prepare.memeChoseEnFiltreParDefaut)) === 5);
 
 // ---- Un filtre « sur le lien » restreint ce qu'on ramène, pas les lignes du fichier ----
 // La colonne MONTANT vient d'une jointure : C1 ayant deux liens, il occupe deux lignes.
@@ -238,10 +258,14 @@ ok('une ligne sans lien, ou dont le lien ne satisfait pas le filtre, sort avec l
         lignesSurLeLien.some(l => String(l.NUM) === 'C1' && l.MONTANT === null));
 ok('le même filtre « sur la ligne » retire bien les lignes — l’ancien comportement reste accessible',
     (await combien(prepare.filtreSurLaLigne)) === 2);
-ok('un filtre enregistré avant ce choix garde l’ancien comportement, pour qu’un paramétrage rejoué rende le même fichier',
-    prepare.filtreSansPortee === prepare.filtreSurLaLigne);
+ok('sans réglage explicite, un filtre sur une table liée porte sur le LIEN : la règle de l’extraction l’emporte',
+    prepare.filtreSansPortee === prepare.filtreSurLeLien);
+ok('seul « sur la ligne », demandé explicitement, fait disparaître des lignes',
+    prepare.filtreSansPortee !== prepare.filtreSurLaLigne);
 ok('sur la table de départ, la portée ne change rien : la condition reste dans le WHERE',
     /WHERE/.test(prepare.filtreSurLaBaseMemePortee) && (await combien(prepare.filtreSurLaBaseMemePortee)) === 1);
+ok('un filtre « l’un ou l’autre chemin » reste sur la ligne : la condition porte sur plusieurs liens à la fois',
+    /WHERE/.test(prepare.filtreCheminsMultiples));
 ok('un filtre « sur le lien » s’écrit dans la jointure, pas dans le WHERE',
     /ON .*\n?\s*AND/.test(prepare.filtreSurLeLien) && !/WHERE/.test(prepare.filtreSurLeLien));
 
@@ -261,6 +285,19 @@ ok('rien n’est signalé quand aucune ligne ne manque', diag.riennePerd === nul
 ok('une multiplication n’est pas prise pour une perte', diag.pasDeFauxPositifSiMultiplication === null);
 ok('un filtre « sur le lien » n’est pas accusé d’une perte : il n’en cause aucune',
     !/SINISTRES/.test(diag.filtreSurLeLienNestPasEnCause.causes.join(' ')));
+
+// ---- Le compte des lignes est dit en clair, perte ou pas ----
+const phrases = prepare.phrasesDuCompte;
+ok('quand rien n’est perdu, l’écran le dit quand même : on ne reste pas dans le doute',
+    /^✅/.test(phrases.rienPerdu) && /20\s000/.test(phrases.rienPerdu) && /Aucune ligne perdue/.test(phrases.rienPerdu));
+ok('la phrase nomme la table de départ et donne les deux nombres',
+    /CONTRATS/.test(phrases.rienPerdu) && /au départ/.test(phrases.rienPerdu) && /dans le fichier/.test(phrases.rienPerdu));
+ok('quand des lignes manquent, le nombre manquant est calculé et annoncé',
+    /^⚠️/.test(phrases.lignesManquantes) && /17\s000 ligne\(s\) manquent/.test(phrases.lignesManquantes));
+ok('un fichier PLUS gros que la table de départ est signalé lui aussi, et expliqué',
+    /^⚠️/.test(phrases.lignesEnTrop) && /PLUS de lignes/.test(phrases.lignesEnTrop) && /table liée/.test(phrases.lignesEnTrop));
+ok('quand la mesure est impossible, on le dit au lieu d’afficher un chiffre faux',
+    /n’a pas pu être mesuré/.test(phrases.nonMesure));
 
 let fail = 0;
 for (const [n, c] of out) { console.log((c ? '✅ ' : '❌ ') + n); if (!c) fail++; }

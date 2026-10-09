@@ -363,19 +363,43 @@
                 lignesAvant = lignesApres;
             }
             const bilan = v13BilanDesJointures(etapes);
-            // Et le fichier tel qu'il sortira vraiment, filtres et options compris.
+            // Et le fichier tel qu'il sortira vraiment, filtres et options compris. C'est le seul
+            // chiffre qui compte pour qui reçoit le fichier : combien de lignes il contient.
             try {
                 const requete = advCurrentSql();
                 if (requete && requete.sql && !requete.err) {
                     const lignesFinales = Number(
                         arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM (${requete.sql}) z`))[0].n
                     );
+                    bilan.compte = {
+                        nomDeLaTable: (state.tables[spec.baseId] || {}).name || '?',
+                        depart: lignesDeDepart,
+                        sortie: lignesFinales
+                    };
                     bilan.perte = v13VerdictDeLaPerte(spec, lignesDeDepart, lignesFinales);
                 }
             } catch (e) {
                 bilan.perte = null;
             }
             return bilan;
+        }
+        /**
+         * Le compte des lignes, en une phrase : combien au départ, combien en sortie.
+         *
+         * La règle de l'extraction tient en une ligne — le fichier produit porte TOUTES les
+         * lignes de la table de départ, sauf si l'on a filtré cette table-là. Cette phrase dit
+         * si la règle a été tenue, sans qu'on ait à le vérifier soi-même après coup.
+         */
+        function v13PhraseDuCompte(bilan) {
+            const compte = bilan && bilan.compte;
+            if (!compte) return 'Le nombre de lignes du fichier n’a pas pu être mesuré.';
+            const depart = Number(compte.depart).toLocaleString('fr-FR');
+            const sortie = Number(compte.sortie).toLocaleString('fr-FR');
+            const entete = `« ${compte.nomDeLaTable} » : ${depart} ligne(s) au départ → ${sortie} ligne(s) dans le fichier.`;
+            if (compte.sortie === compte.depart) return '✅ ' + entete + ' Aucune ligne perdue.';
+            if (compte.sortie > compte.depart)
+                return '⚠️ ' + entete + ' Le fichier a PLUS de lignes que la table de départ : une table liée en ajoute.';
+            return '⚠️ ' + entete + ` ${Number(compte.depart - compte.sortie).toLocaleString('fr-FR')} ligne(s) manquent.`;
         }
         /** Le rendu du bilan dans l'encadré prévu sous les actions de l'extraction. */
         function v13AfficherLeBilan(bilan) {
@@ -393,11 +417,14 @@
                 : '';
             // La perte de lignes : on la nomme, et on dit ce qui l'a causée.
             const perte = bilan.perte
-                ? `<p class="v13-jv">⚠️ ${escapeHTML(bilan.perte.phrase)}</p>` +
-                  bilan.perte.causes.map(c => `<p class="v13-jd fautive">Cause : ${escapeHTML(c)}</p>`).join('')
+                ? bilan.perte.causes.map(c => `<p class="v13-jd fautive">Cause : ${escapeHTML(c)}</p>`).join('')
                 : '';
+            // Le compte des lignes vient EN PREMIER, et il s'affiche même quand tout va bien :
+            // « combien de lignes dans le fichier, sur combien au départ » est la question que
+            // l'on se pose en recevant le fichier, pas une alerte à ne montrer qu'en cas de souci.
             boite.innerHTML = `<div class="v13-jointures ${bilan.multiplie || bilan.perte ? 'multiplie' : ''}">
-                <p class="v13-jv">${bilan.multiplie ? '⚠️' : '✅'} ${escapeHTML(bilan.phrase)}</p>${details}${conseil}${perte}
+                <p class="v13-jv">${escapeHTML(v13PhraseDuCompte(bilan))}</p>${perte}
+                <p class="v13-jv">${bilan.multiplie ? '⚠️' : '✅'} ${escapeHTML(bilan.phrase)}</p>${details}${conseil}
             </div>`;
         }
         /** Le contrôle demandé explicitement : il rend son verdict même quand tout va bien, pour rassurer. */
@@ -419,13 +446,47 @@
                 async function () {
                     const resultat = await base();
                     try {
-                        const bilan = await v13MesurerLesJointures();
-                        v13AfficherLeBilan(bilan && (bilan.multiplie || bilan.perte) ? bilan : null);
+                        // Toujours affiché, même quand tout va bien : savoir que les 20 000 lignes
+                        // sont bien là vaut autant que d'apprendre qu'il en manque.
+                        v13AfficherLeBilan(await v13MesurerLesJointures());
                     } catch (e) {
                         v13AfficherLeBilan(null);
                     }
                     return resultat;
                 }
+        );
+        // Après la génération du fichier : le compte des lignes, sans qu'on ait à le demander.
+        //
+        // C'est le moment où l'on tient le fichier et où l'on se demande « pourquoi 3 000 lignes
+        // et pas 20 000 ? ». La réponse doit être là, à cet instant, pas dans un contrôle qu'il
+        // faut penser à lancer après coup.
+        Studio.extend(
+            'advGenerate',
+            base =>
+                async function () {
+                    const resultat = await base.apply(this, arguments);
+                    try {
+                        const bilan = await v13MesurerLesJointures();
+                        v13AfficherLeBilan(bilan);
+                        // Et dans le compte rendu vert, celui qu'on lit vraiment.
+                        const compteRendu = el('finalReport');
+                        if (compteRendu && bilan && bilan.compte) {
+                            const phrase = v13PhraseDuCompte(bilan);
+                            const causes = bilan.perte ? bilan.perte.causes : [];
+                            compteRendu.insertAdjacentHTML(
+                                'beforeend',
+                                `<div class="v13-compte ${bilan.perte || bilan.multiplie ? 'alerte' : ''}">
+                                    <p>${escapeHTML(phrase)}</p>
+                                    ${causes.map(c => `<p class="pourquoi">Pourquoi : ${escapeHTML(c)}</p>`).join('')}
+                                </div>`
+                            );
+                        }
+                    } catch (e) {
+                        /* un contrôle qui échoue ne gâche jamais une extraction réussie */
+                    }
+                    return resultat;
+                },
+            { motif: 'dire combien de lignes le fichier contient, et pourquoi, au moment où on le reçoit' }
         );
         // Le bouton, à côté du bilan qualité, et l'encadré qui reçoit le verdict.
         Studio.extend(

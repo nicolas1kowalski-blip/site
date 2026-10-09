@@ -1849,6 +1849,7 @@
  "v13CausesDeLaPerte": "writable",
  "v13VerdictDeLaPerte": "writable",
  "v13MesurerLesJointures": "writable",
+ "v13PhraseDuCompte": "writable",
  "v13AfficherLeBilan": "writable",
  "v13ControlerJointures": "writable",
  "V13_CONDITIONS_MAXIMUM": "readonly",
