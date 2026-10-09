@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-09T13:30:21.694Z",
+ "generated": "2026-10-09T14:12:28.492Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 52404,
-  "codeLines": 49223,
-  "commentLines": 3181,
-  "templateLines": 10304,
+  "lines": 52473,
+  "codeLines": 49260,
+  "commentLines": 3213,
+  "templateLines": 10307,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6868,
+  "locals": 6875,
   "shortLocals": 844,
-  "functions": 1747,
+  "functions": 1748,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12288875946418171
+  "shortLocalsRatio": 0.12276363636363637
  },
  "files": [
   {
@@ -733,17 +733,17 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 3367,
-   "codeLines": 3054,
-   "commentLines": 313,
+   "lines": 3419,
+   "codeLines": 3079,
+   "commentLines": 340,
    "templateLines": 590,
    "longLogicLines": 4,
    "multiStatementLines": 0,
-   "locals": 512,
+   "locals": 518,
    "shortLocals": 56,
-   "functions": 153,
+   "functions": 154,
    "longestLogic": 210,
-   "shortLocalsRatio": 0.109375,
+   "shortLocalsRatio": 0.10810810810810811,
    "longLinesSample": [
     "key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anc",
     "`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(anchor.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ",
@@ -920,17 +920,17 @@
   },
   {
    "file": "92-couche-v12/98-v12-liste-entree.js",
-   "lines": 595,
-   "codeLines": 576,
-   "commentLines": 19,
-   "templateLines": 75,
+   "lines": 612,
+   "codeLines": 588,
+   "commentLines": 24,
+   "templateLines": 78,
    "longLogicLines": 1,
    "multiStatementLines": 0,
-   "locals": 102,
+   "locals": 103,
    "shortLocals": 23,
    "functions": 20,
    "longestLogic": 209,
-   "shortLocalsRatio": 0.22549019607843138,
+   "shortLocalsRatio": 0.22330097087378642,
    "longLinesSample": [
     "`${v12ListNorm((map[advRouteKey(k.tableId, k.via || '')] ? advAlias(map, k) : alias) + '.' + sqlIdent(k.col), "
    ]

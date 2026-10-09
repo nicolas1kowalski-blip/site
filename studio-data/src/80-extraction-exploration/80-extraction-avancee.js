@@ -128,6 +128,26 @@
             if (colonne.via === 'any') return 'lignes';
             return ADV_PLUSIEURS_VALEURS[colonne.plusieurs] ? colonne.plusieurs : 'regroupees';
         }
+        /**
+         * Ce filtre peut-il être posé en TRAVERSANT le chemin, au lieu de joindre sa table ?
+         *
+         * C'est la règle qui empêche un filtre de multiplier les lignes : interrogé par EXISTS,
+         * le chemin ne joint rien. Elle ne s'applique pas quand le filtre compare plusieurs liens
+         * à la fois (« l'un ou l'autre chemin »), ni quand il porte sur la table de départ —
+         * il n'y a alors rien à traverser.
+         */
+        function advFiltreTraversable(baseId, filtre) {
+            if (!filtre || filtre.tableId === baseId || filtre.via === 'any') return false;
+            if (advPorteeDuFiltre(filtre, baseId) !== 'ligne') return false;
+            // Un filtre « liste » à plusieurs clés compare des colonnes de TABLES différentes :
+            // une seule traversée ne saurait pas les atteindre toutes.
+            if (filtre.op === 'list' && filtre.list) {
+                const cles = filtre.list.keys || [];
+                if (cles.length !== 1 || cles[0].tableId !== filtre.tableId) return false;
+            }
+            const chemin = advCheminDuLien(baseId, filtre.tableId, filtre.via);
+            return !!(chemin && chemin.length);
+        }
         /** Cette colonne est-elle ramenée par une sous-requête plutôt que par une jointure ? */
         function advColonneSansJointure(colonne, baseId) {
             return advPlusieursValeurs(colonne, baseId) !== 'lignes';
@@ -837,7 +857,12 @@
             // aucune colonne à ramener de cette table, il n'a rien à restreindre, et imposer la
             // jointure pour lui ne ferait que multiplier les lignes sans rien changer d'autre.
             spec.filters.forEach(f => {
-                if (advPorteeDuFiltre(f, spec.baseId) !== 'lien') needs.push({ tableId: f.tableId, via: f.via || '' });
+                if (advPorteeDuFiltre(f, spec.baseId) === 'lien') return;
+                // Interrogé par EXISTS, le chemin n'a pas besoin d'être joint — et c'est ce qui
+                // empêche le filtre de multiplier les lignes du fichier.
+                const traverse = f.tableId !== spec.baseId && f.via !== 'any' && advCheminDuLien(spec.baseId, f.tableId, f.via);
+                if (traverse && traverse.length) return;
+                needs.push({ tableId: f.tableId, via: f.via || '' });
             });
             if (spec.group.on)
                 spec.group.aggs.forEach(a => {
@@ -953,6 +978,28 @@
             const filtresSansEffet = [];
             spec.filters.forEach(filtre => {
                 if (advPorteeDuFiltre(filtre, spec.baseId) !== 'lien') {
+                    /*
+                     * « Sur la ligne », sur une table LIÉE : on garde la ligne de départ dès
+                     * qu'UNE ligne liée satisfait la condition. C'est ce que l'on veut dire —
+                     * « mes 1 399 affaires » — et cela ne multiplie rien.
+                     *
+                     * Écrite sur la table jointe, la même condition faisait sortir la ligne de
+                     * départ AUTANT DE FOIS qu'elle avait de lignes liées : une liste de 1 399
+                     * affaires rendait 3 235 lignes. On interroge donc le chemin au lieu de le
+                     * joindre. « L'un ou l'autre chemin » reste joint : il compare plusieurs
+                     * liens à la fois, ce qu'une traversée unique ne sait pas faire.
+                     */
+                    const cheminDuFiltre = advFiltreTraversable(spec.baseId, filtre)
+                        ? advCheminDuLien(spec.baseId, filtre.tableId, filtre.via)
+                        : null;
+                    if (cheminDuFiltre && cheminDuFiltre.length) {
+                        const traversee = advSourceDeLaSynthese(map, cheminDuFiltre);
+                        const condition = advCondSql(traversee.aliasDe[filtre.tableId] || 's', filtre);
+                        filtresDeLigne.push(
+                            `EXISTS (SELECT 1 FROM ${traversee.source} WHERE ${traversee.condition} AND ${condition})`
+                        );
+                        return;
+                    }
                     filtresDeLigne.push(advCondSql(advAlias(map, filtre), filtre));
                     return;
                 }
@@ -1518,6 +1565,11 @@
             // condition porte sur leur combinaison, elle ne peut donc pas être écrite dans le
             // lien d'une seule jointure. Elle reste sur la ligne, et l'écran le dit.
             if (filtre.via === 'any') return 'ligne';
+            // Un filtre « sur un fichier » est une LISTE de ce qu'on veut extraire : « voici mes
+            // 1 399 affaires ». C'est une sélection de lignes, pas une restriction de lien. Mis
+            // « sur le lien » par défaut, il ne sélectionnait plus rien et se contentait de vider
+            // les colonnes ramenées — on sortait toutes les affaires, avec des comptages à zéro.
+            if (filtre.op === 'list' && !filtre.portee) return 'ligne';
             return filtre.portee === 'ligne' ? 'ligne' : 'lien';
         }
         function advChangerLaPorteeDuFiltre(identifiant, portee) {

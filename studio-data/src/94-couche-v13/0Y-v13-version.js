@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.46.0';
+        const V13_VERSION = '13.47.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.47.0',
+                d: '2026-10-10',
+                t: 'Extraction : un filtre « sur un fichier » sélectionne de nouveau, et ne multiplie plus',
+                items: [
+                    'Un filtre <b>« 📄 Filtrer sur un fichier »</b> est une LISTE de ce que l’on veut extraire — « voici mes 1 399 affaires ». La V13.45 l’avait mis « sur le lien » comme les autres : il ne sélectionnait plus rien, sortait toutes les affaires, et <b>mettait à zéro les comptages</b> de celles qui n’étaient pas dans la liste. Il porte de nouveau <b>sur la ligne</b>.',
+                    'Sa <b>portée est désormais visible et modifiable</b> sur le filtre lui-même, comme pour tous les autres : elle était la seule à ne pas l’être.',
+                    'Plus profond : un filtre « sur la ligne » posé sur une table liée <b>joignait</b> cette table, et la ligne de départ sortait alors autant de fois qu’elle avait de lignes liées — une liste de <b>1 399 affaires rendait 3 235 lignes</b>. Le chemin est maintenant <b>interrogé</b> au lieu d’être joint : la ligne sort une fois, et une seule.',
+                    'La règle vaut pour tous les filtres : « sur la ligne » choisit <b>quelles</b> lignes sortent, « sur le lien » choisit <b>ce que le lien ramène</b>. Ni l’un ni l’autre ne change le nombre d’exemplaires d’une ligne. Seul le réglage « une ligne par valeur » d’une colonne le fait, et il se demande.'
+                ]
+            },
             {
                 v: '13.46.0',
                 d: '2026-10-10',

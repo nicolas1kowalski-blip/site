@@ -44,9 +44,13 @@
             base =>
                 function (baseId, needs) {
                     needs = Array.isArray(needs) ? needs.slice() : [];
-                    v12ListFilters().forEach(f =>
-                        f.list.keys.forEach(k => needs.push({ tableId: k.tableId, via: k.via || '' }))
-                    );
+                    // Une liste qui peut être posée en TRAVERSANT le chemin ne doit pas faire
+                    // joindre sa table : la jointure sortirait la ligne de départ autant de fois
+                    // qu'elle a de lignes liées — 1 399 affaires rendaient 3 235 lignes.
+                    v12ListFilters().forEach(f => {
+                        if (typeof advFiltreTraversable === 'function' && advFiltreTraversable(baseId, f)) return;
+                        f.list.keys.forEach(k => needs.push({ tableId: k.tableId, via: k.via || '' }));
+                    });
                     const r = base(baseId, needs);
                     v12State.listMap = r && r.map;
                     return r;
@@ -532,7 +536,20 @@
                         `<b>${escapeHTML((state.tables[k.tableId] || {}).name || '?')}.${escapeHTML(k.col)}</b> ← ${escapeHTML(k.lc)}`
                 )
                 .join(', ');
-            return `<span class="v12l-ic">📄</span><span class="v12l-title">${escapeHTML(l.name)}</span><span class="v12l-n">${l.rows.length.toLocaleString('fr-FR')} ligne(s)</span><span class="v12l-keys">${l.mode === 'out' ? '<em>exclure</em> ' : ''}${keys}${l.attach ? ' · <em>ordre du fichier + colonnes jointes</em>' : ''}</span><span class="v12l-acts" data-ro="keep"><button onclick="v12ListOpen('${f.id}')" title="Modifier la liste ou les correspondances">Modifier</button><button onclick="v12ListCheck('${f.id}')" title="Quelles valeurs du fichier ne sont pas dans la table ?">Vérifier</button><button onclick="advRemoveFilter('${f.id}')" title="Retirer ce filtre">✕</button></span>`;
+            // La portée se lit et se change ici comme sur n'importe quel filtre : c'est elle qui
+            // décide si la liste SÉLECTIONNE des lignes ou se contente de restreindre un lien.
+            const portee =
+                typeof advPorteeDuFiltre === 'function' && f.tableId !== state.advExtract.baseId
+                    ? `<select onchange="advChangerLaPorteeDuFiltre('${f.id}', this.value)" title="Sur la ligne : ne garder que les lignes dont la valeur figure dans le fichier — c'est l'usage d'une liste. Sur le lien : garder toutes les lignes et ne restreindre que ce que le lien ramène." class="v12l-portee text-[10px] bg-white border rounded px-1 py-0.5 ${advPorteeDuFiltre(f, state.advExtract.baseId) === 'ligne' ? 'border-slate-300 text-slate-600' : 'border-amber-400 text-amber-800 font-bold'}">${Object.entries(
+                          ADV_PORTEES_DE_FILTRE
+                      )
+                          .map(
+                              ([v, lab]) =>
+                                  `<option value="${v}" ${v === advPorteeDuFiltre(f, state.advExtract.baseId) ? 'selected' : ''}>${escapeHTML(lab)}</option>`
+                          )
+                          .join('')}</select>`
+                    : '';
+            return `<span class="v12l-ic">📄</span><span class="v12l-title">${escapeHTML(l.name)}</span><span class="v12l-n">${l.rows.length.toLocaleString('fr-FR')} ligne(s)</span>${portee}<span class="v12l-keys">${l.mode === 'out' ? '<em>exclure</em> ' : ''}${keys}${l.attach ? ' · <em>ordre du fichier + colonnes jointes</em>' : ''}</span><span class="v12l-acts" data-ro="keep"><button onclick="v12ListOpen('${f.id}')" title="Modifier la liste ou les correspondances">Modifier</button><button onclick="v12ListCheck('${f.id}')" title="Quelles valeurs du fichier ne sont pas dans la table ?">Vérifier</button><button onclick="advRemoveFilter('${f.id}')" title="Retirer ce filtre">✕</button></span>`;
         }
         function v12ListAfterLayout() {
             const root = el('v12x');

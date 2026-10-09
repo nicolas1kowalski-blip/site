@@ -1204,6 +1204,7 @@
  "advColExpr": "writable",
  "advCalcExpr": "writable",
  "advPlusieursValeurs": "writable",
+ "advFiltreTraversable": "writable",
  "advColonneSansJointure": "writable",
  "advChangerPlusieursValeurs": "writable",
  "advColNeeds": "writable",

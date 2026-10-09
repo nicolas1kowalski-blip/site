@@ -218,6 +218,19 @@ const prepare = await p.evaluate(() => {
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'INTROUVABLE' });
     sorties.restrictionQuiNeLaisseRien = sqlDe(spec);
 
+    // ---- Un filtre « sur la ligne » ne doit pas multiplier non plus ----
+    // Une liste de 1 399 affaires rendait 3 235 lignes : la condition etait posee sur la table
+    // JOINTE, donc la ligne de depart sortait autant de fois qu'elle avait de lignes liees.
+    spec = neuf();
+    spec.columns.push(synthese('count', '', { id: 'c3', alias: 'NB' }));
+    spec.filters.push({ id: 'f1', tableId: 'l', col: 'ID_SIN', op: 'notempty', val: '', portee: 'ligne' });
+    sorties.filtreLigneSurLiaison = sqlDe(spec);
+    sorties.filtreLigneTraversable = advFiltreTraversable('c', spec.filters[0]);
+    // Sur la table de depart, rien a traverser.
+    sorties.filtreBaseTraversable = advFiltreTraversable('c', { tableId: 'c', col: 'NUM', op: '=', val: 'C1' });
+    // « L'un ou l'autre chemin » compare plusieurs liens : on ne traverse pas.
+    sorties.filtreAnyTraversable = advFiltreTraversable('c', { tableId: 's', col: 'ETAT', op: '=', val: 'X', via: 'any' });
+
     // ---- Modifier une colonne deja ajoutee ----
     // Une colonne ne se corrigeait qu'en la supprimant pour la refaire : on perdait son rang,
     // son nom metier et sa case « cle ». On verifie qu'elle garde tout cela.
@@ -346,8 +359,9 @@ const valeursCritere = await parContrat(prepare.valeursAvecCritere);
 ok('un critère s’applique aussi aux autres modes : seuls les sinistres clos de C1 sont listés',
     String(valeursCritere.C1.R) === '200' && (valeursCritere.C2.R === null || valeursCritere.C2.R === ''));
 
-ok('témoin : le MÊME critère posé en filtre « sur la ligne », lui, retire bien des lignes',
-    (await combien(prepare.memeChoseEnFiltre)) < 5);
+const combienFiltreLigne = await combien(prepare.memeChoseEnFiltre);
+ok('témoin : le MÊME critère posé en filtre « sur la ligne », lui, retire bien des lignes — ' + combienFiltreLigne,
+    combienFiltreLigne < 5);
 ok('mais au réglage par défaut, ce filtre ne retire aucune ligne : les 5 contrats sortent',
     (await combien(prepare.memeChoseEnFiltreParDefaut)) === 5);
 
@@ -366,8 +380,10 @@ ok('il restreint ce qui est RAMENÉ : seuls les montants des sinistres ouverts r
 ok('une ligne sans lien, ou dont le lien ne satisfait pas le filtre, sort avec la colonne vide',
     lignesSurLeLien.filter(l => ['C3', 'C4', 'C5'].includes(String(l.NUM))).every(l => l.MONTANT === null) &&
         lignesSurLeLien.some(l => String(l.NUM) === 'C1' && l.MONTANT === null));
-ok('le même filtre « sur la ligne » retire bien les lignes — l’ancien comportement reste accessible',
-    (await combien(prepare.filtreSurLaLigne)) === 2);
+// Le filtre ne garde que C1 et C2. C1 ressort deux fois, mais c'est la COLONNE qui l'éclate —
+// « une ligne par valeur » a été demandé explicitement sur elle. Le filtre, lui, ne multiplie rien.
+ok('le même filtre « sur la ligne » retire bien les lignes : seuls C1 et C2 restent',
+    (await combien(prepare.filtreSurLaLigne)) === 3);
 ok('sans réglage explicite, un filtre sur une table liée porte sur le LIEN : la règle de l’extraction l’emporte',
     prepare.filtreSansPortee === prepare.filtreSurLeLien);
 ok('seul « sur la ligne », demandé explicitement, fait disparaître des lignes',
@@ -455,6 +471,20 @@ ok('la colonne ramenée est VIDE quand la jointure restreinte ne laisse rien',
     Object.values(rien).every(l => l.MONTANTS === null));
 ok('et un comptage vaut 0, jamais vide — un nombre manquant ne se confond pas avec zéro',
     Object.values(rien).every(l => Number(l.NB) === 0 && l.NB !== null));
+
+// ---- Un filtre « sur la ligne » sélectionne sans multiplier ----
+ok('un filtre « sur la ligne » posé sur une table liée est traversé, pas joint',
+    prepare.filtreLigneTraversable === true && /EXISTS \(SELECT 1 FROM/.test(prepare.filtreLigneSurLiaison));
+ok('il ne joint plus sa table : aucune multiplication des lignes de départ',
+    !/LEFT JOIN "t_l"/.test(prepare.filtreLigneSurLiaison));
+const selection = await parContrat(prepare.filtreLigneSurLiaison);
+ok('il sélectionne bien : seuls les contrats ayant un lien sortent, une fois chacun',
+    (await combien(prepare.filtreLigneSurLiaison)) === 2 && !!selection.C1 && !!selection.C2);
+ok('C1, relié DEUX fois, n’apparaît qu’UNE fois — et compte toujours 2',
+    Number(selection.C1.NB) === 2);
+ok('sur la table de départ, il n’y a rien à traverser', prepare.filtreBaseTraversable === false);
+ok('« l’un ou l’autre chemin » n’est pas traversé : il compare plusieurs liens à la fois',
+    prepare.filtreAnyTraversable === false);
 
 // ---- Modifier une colonne plutôt que la refaire ----
 const modif = prepare.modif;
