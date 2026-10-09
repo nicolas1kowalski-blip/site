@@ -208,6 +208,16 @@ const prepare = await p.evaluate(() => {
     sorties.reglageSurLaBase = advPlusieursValeurs({ tableId: 'c', col: 'NUM' }, 'c');
     sorties.reglageParDefaut = advPlusieursValeurs({ tableId: 's', col: 'MONTANT' }, 'c');
 
+    // ---- Restreindre la jointure SANS toucher au fichier ----
+    // La regle, dite par l'utilisateur : « si pas de valeur de jointure on garde la ligne et on
+    // affiche vide, ou si c'est un nombre, 0 ». C'est le cas le plus important de tous.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANTS', transform: 'none' });
+    spec.columns.push(synthese('count', '', { id: 'c3', alias: 'NB' }));
+    // Un critere que RIEN ne satisfait : ni les contrats sans lien, ni ceux qui en ont un.
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'INTROUVABLE' });
+    sorties.restrictionQuiNeLaisseRien = sqlDe(spec);
+
     // ---- Modifier une colonne deja ajoutee ----
     // Une colonne ne se corrigeait qu'en la supprimant pour la refaire : on perdait son rang,
     // son nom metier et sa case « cle ». On verifie qu'elle garde tout cela.
@@ -436,6 +446,15 @@ ok('un filtre « sur le lien » restreint ce qu’elle ramène, sans retirer de 
         filtree.C3.MONTANTS === null);
 ok('aucun réglage sur une colonne de la table de départ : il n’y a qu’une valeur par ligne',
     prepare.reglageSurLaBase === 'lignes' && prepare.reglageParDefaut === 'regroupees');
+
+// ---- Restreindre la jointure ne touche jamais au fichier ----
+const rien = await parContrat(prepare.restrictionQuiNeLaisseRien);
+ok('une restriction que RIEN ne satisfait laisse le fichier intact : les 5 contrats sortent',
+    (await combien(prepare.restrictionQuiNeLaisseRien)) === 5);
+ok('la colonne ramenée est VIDE quand la jointure restreinte ne laisse rien',
+    Object.values(rien).every(l => l.MONTANTS === null));
+ok('et un comptage vaut 0, jamais vide — un nombre manquant ne se confond pas avec zéro',
+    Object.values(rien).every(l => Number(l.NB) === 0 && l.NB !== null));
 
 // ---- Modifier une colonne plutôt que la refaire ----
 const modif = prepare.modif;
