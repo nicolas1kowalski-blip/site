@@ -1,7 +1,20 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.43.0';
+        const V13_VERSION = '13.44.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.44.0',
+                d: '2026-10-09',
+                t: 'Codification : le même calcul rend deux fois le même résultat',
+                items: [
+                    'La codification ne rendait <b>pas toujours la même chose</b> sur les mêmes données. Mesuré : « Chaudiere 2 » recevait « Chaudiere+br.fod EC » une exécution sur deux, « Vanne 2 voies motorisee » l’autre — les deux à 0,25, à égalité de score.',
+                    'La cause : à égalité, la fonction qui retient les meilleurs candidats en gardait un <b>au hasard</b>. Le moteur répartit le calcul sur plusieurs fils d’exécution, et l’ordre d’arrivée des lignes décidait à la place de la règle.',
+                    'Les candidats sont maintenant triés sur une clé qui <b>ne peut pas être ex æquo</b> : le score d’abord, puis le rang du type dans la nomenclature. À score égal, c’est le type <b>déclaré en premier</b> qui l’emporte — une règle que l’on peut expliquer, et rejouer.',
+                    'Un <b>seul</b> classement par besoin, rendant une structure : deux classements séparés sur une clé à égalité pouvaient retenir deux lignes différentes et accoler le code de l’une au score de l’autre.',
+                    'Même correction sur la <b>liste des cas à revoir</b> : les propositions montrées et leur ordre ne changent plus d’une exécution à l’autre.',
+                    'Une codification que l’on ne peut pas rejouer ne peut être ni relue, ni comparée, ni validée : <b>huit exécutions du même calcul</b> sont désormais contrôlées à chaque test.'
+                ]
+            },
             {
                 v: '13.43.0',
                 d: '2026-10-09',

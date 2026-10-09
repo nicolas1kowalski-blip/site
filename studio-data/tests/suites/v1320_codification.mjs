@@ -103,9 +103,11 @@ const out = await p.evaluate(async ()=>{
   // ---- la préparation : canoniser et découper une fois par ligne, jamais par couple
   ok('les deux côtés sont préparés avant d’être comparés : un texte canonisé, puis ses mots', /string_split\(pretes\.__texte_liste_0, ' '\) AS __mots_liste_0/.test(v13ListePreparee(C(),'reconnues r')) && /string_split\(pretes\.__texte_type_0, ' '\) AS __mots_type_0/.test(v13TypesPrepares(C(),'"t_nm"')));
   ok('le score ne recanonise ni ne redécoupe rien : il lit les colonnes préparées', !/strip_accents|string_split/.test(v13ScoreDeRessemblance(C())) && /__mots_liste_0/.test(v13ScoreDeRessemblance(C())));
-  ok('les deux meilleurs voisins sont retenus par regroupement, sans trier tous les couples', /max_by\(__code_voisin, CASE WHEN __meme_branche.*, 2\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
+  ok('les deux meilleurs voisins sont retenus par regroupement, sans trier tous les couples', /max_by\(\{'code': __code_voisin, 'score': __score_voisin\}, .*, 2\)/.test(v13SqlDeCodification(C())) && !/PARTITION BY __rn ORDER BY __score_voisin/.test(v13SqlDeCodification(C())));
   ok('le meilleur voisin hors branche est gardé lui aussi, pour pouvoir le dire', /__score_hors/.test(v13SqlDeCodification(C())) && /__code_autre_branche/.test(v13SqlDeCodification(C())));
-  ok('deux types au même score ne sont pas tranchés d\'office', /__scores_voisins\[2\] = candidats\.__scores_voisins\[1\]/.test(v13SqlDeCodification(C())));
+  ok('deux types au même score ne sont pas tranchés d\'office', /__voisins\[2\]\.score = candidats\.__voisins\[1\]\.score/.test(v13SqlDeCodification(C())));
+  ok('les candidats sont triés sur une clé sans ex æquo possible : le score, puis le rang dans la nomenclature', /'rang': -__ligne_type/.test(v13SqlDeCodification(C())));
+  ok('un seul max_by par besoin : le code et son score viennent de la MÊME ligne', (v13SqlDeCodification(C()).match(/max_by\(/g)||[]).length===2);
   ok('le bilan compte à part les lignes trouvées dans une autre branche', (()=>{ const b=v13BilanDeCodification([{statut:'office',lignes:5},{statut:'branche',lignes:2},{statut:'absent',lignes:1}]);
     return b.branche===2 && b.total===8 && /2 trouvée\(s\) dans une autre branche/.test(b.phrase); })());
   ok('et l\'écran dit quoi faire de ces lignes-là en priorité', /AUTRE branche que leur famille/.test(v13ProchaineAction({total:8,office:5,branche:2,revoir:0,absent:1})));
@@ -260,8 +262,10 @@ const out = await p.evaluate(async ()=>{
     return /GROUP BY rang, memeBranche/.test(sql) && /CASE WHEN memeBranche\s+THEN 8 ELSE 3 END/.test(sql); })());
   ok('les meilleures sont retenues au passage, sans trier tout ce qui a été noté', (()=>{
     const sql=v13SqlDesCasARevoir(C(), 0, 'v13_codee');
-    return /max_by\(\{'code': code, 'libelleRef': libelleRef, 'chemin': chemin, 'score': score\},\s+score, 8\)/.test(sql)
+    return /max_by\(\{'code': code, 'libelleRef': libelleRef, 'chemin': chemin, 'score': score\},\s+\{'score': score, 'rang': -ligneType\},\s+8\)/.test(sql)
       && !/PARTITION BY rang, memeBranche/.test(sql); })());
+  ok('la liste des propositions est rangée sans ex æquo possible : le code tranche en dernier',
+    /ORDER BY rang, memeBranche DESC, score DESC, code/.test(v13SqlDesCasARevoir(C(), 0, 'v13_codee')));
   ok('le réglage est offert à l\'écran, à côté des seuils', !!el('v13-codif-propositions'));
   ok('et le récapitulatif le dit', /8 dans la famille de la ligne, puis 3 prises ailleurs/.test(
     (v13RecapDeLaCodification(C()).find(l=>l.intitule==='Propositions montrées')||{}).valeur||''));
@@ -515,6 +519,21 @@ const resultatFamille = await cherche('SELECT * FROM "v13_codee" WHERE REPERE = 
 const ligneE1 = resultatFamille[0];
 ok('SQL réel : le résultat imprime la proposition faite dans la famille de la ligne',
   ['22390503.A','22390504.A','22390505.A'].includes(String(ligneE1.__code_propose)));
+// ---- et surtout : le MÊME calcul doit rendre DEUX FOIS la même chose ----
+// Les deux chaudières de la famille sont à 0,25, la vanne aussi. « max_by » en retenait une au
+// hasard : sur les mêmes données, une exécution proposait « Chaudiere+br.fod EC », la suivante
+// « Vanne 2 voies motorisee ». Une codification que l'on ne peut pas rejouer ne peut être ni
+// relue, ni comparée, ni validée — c'est plus grave qu'une mauvaise proposition.
+const rejouees = new Set();
+for (let essai = 0; essai < 8; essai++) {
+  const l = (await cherche(`SELECT * FROM (\n${sqlFamilleDabord.code}\n) z WHERE REPERE = 'E1'`))[0] || {};
+  rejouees.add([l.__code_propose, l.__libelle_propose, String(l.__score_propose), l.__code, l.__statut].join(' | '));
+}
+ok('SQL réel : huit exécutions du même calcul sur les mêmes données rendent le MÊME résultat'
+  + (rejouees.size === 1 ? '' : ' — ' + [...rejouees].join('  /  ')), rejouees.size === 1);
+ok('SQL réel : à égalité de score, c’est le type déclaré en PREMIER dans la nomenclature qui est proposé',
+  String(ligneE1.__code_propose) === '22390503.A');
+
 ok('SQL réel : avec son libellé et sa confiance, pour qu\'elle soit lisible sans rouvrir la nomenclature',
   /Chaudiere/.test(String(ligneE1.__libelle_propose)) && Number(ligneE1.__score_propose) > 0);
 ok('SQL réel : le code trouvé hors famille reste imprimé à côté, il ne la remplace plus',

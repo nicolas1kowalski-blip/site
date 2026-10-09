@@ -538,13 +538,13 @@
         /** Le code final, son origine, son score, son statut, et le chemin déplié dans l'arbre. */
         function v13SelectFinal(codification) {
             // Le meilleur voisin de la bonne branche, s’il y en a un.
-            const meilleur = 'CASE WHEN candidats.__score_dans IS NOT NULL THEN candidats.__codes_voisins[1] END';
+            const meilleur = 'CASE WHEN candidats.__score_dans IS NOT NULL THEN candidats.__voisins[1].code END';
             // Deux types différents au même score : la machine ne peut pas choisir. Elle ne choisit donc pas.
-            const exaequo = `(candidats.__score_dans IS NOT NULL AND len(candidats.__scores_voisins) > 1
-                AND candidats.__scores_voisins[2] = candidats.__scores_voisins[1]
-                AND candidats.__codes_voisins[2] IS DISTINCT FROM candidats.__codes_voisins[1])`;
+            const exaequo = `(candidats.__score_dans IS NOT NULL AND len(candidats.__voisins) > 1
+                AND candidats.__voisins[2].score = candidats.__voisins[1].score
+                AND candidats.__voisins[2].code IS DISTINCT FROM candidats.__voisins[1].code)`;
             // Le meilleur voisin trouvé AILLEURS dans l’arbre, quand la branche l’a écarté.
-            const hors = 'CASE WHEN candidats.__score_hors IS NOT NULL THEN candidats.__code_hors END';
+            const hors = 'CASE WHEN candidats.__score_hors IS NOT NULL THEN candidats.__hors.code END';
             const code = `COALESCE(reconnues.__code_regle,
                 CASE WHEN candidats.__score_dans >= ${Number(codification.seuilAuto)} AND NOT ${exaequo} THEN ${meilleur} END)`;
             /*
@@ -623,7 +623,7 @@
             CASE WHEN ${codeAutre} IS NOT NULL
                 THEN COALESCE(horsFamille.__chemin_type, arbre.__chemin_type) END AS __chemin_autre_branche,
             CASE WHEN ${code} IS NOT NULL AND ${desaccord} THEN arbre.__familles
-                WHEN ${hors} IS NOT NULL THEN candidats.__branche_hors END AS __branche_trouvee
+                WHEN ${hors} IS NOT NULL THEN candidats.__hors.branche END AS __branche_trouvee
         FROM reconnues
         LEFT JOIN candidats ON candidats.__rn = reconnues.__rn
         LEFT JOIN ${arbre} ON arbre.__cle = ${v13TexteCompare(code)}
@@ -632,7 +632,7 @@
         LEFT JOIN ${proposeeDansLaFamille} ON proposee.__cle = ${v13TexteCompare(meilleur)}
             AND proposee.__branche IS NOT DISTINCT FROM ${brancheConnue ? brancheDeLaLigne : 'NULL'}
         LEFT JOIN ${trouveeHorsFamille} ON horsFamille.__cle = ${v13TexteCompare(hors)}
-            AND horsFamille.__branche IS NOT DISTINCT FROM candidats.__branche_hors`;
+            AND horsFamille.__branche IS NOT DISTINCT FROM candidats.__hors.branche`;
         }
 
         /**
@@ -664,6 +664,7 @@
              */
             const notes = `SELECT liste.__rn AS __rn, types.__code_type AS __code_voisin,
                 types.__branche_type AS __branche_type,
+                types.__ligne AS __ligne_type,
                 (${v13ConditionDeBranche(codification)}) AS __meme_branche,
                 (${v13ScoreDeRessemblance(codification)}) AS __score_voisin
             FROM rapprochables p
@@ -684,12 +685,29 @@
              * « Disconnecteur BA zpr-ctr. » vaut 25 % — trop peu pour décider, bien assez pour être montré.
              * Le seuil ne décide plus de ce que l'on garde, seulement du statut que l'on donne.
              */
+            /*
+             * Deux types au même score : lequel « max_by » retient-il ?
+             *
+             * Il en retenait un AU HASARD. Sur les mêmes données, deux exécutions pouvaient donc
+             * proposer deux types différents — mesuré : « Chaudiere+br.fod EC » une fois sur deux,
+             * « Vanne 2 voies motorisee » l'autre, toutes deux à 0,25. Le moteur répartit le calcul
+             * sur plusieurs fils d'exécution, et l'ordre d'arrivée des lignes décidait à la place
+             * de la règle. Une codification qui ne rend pas deux fois la même chose n'est pas
+             * contrôlable : on ne peut ni la relire, ni la comparer, ni la valider.
+             *
+             * On trie donc sur une clé qui ne peut PAS être ex æquo : le score d'abord, puis le
+             * rang du type dans la nomenclature. À score égal, c'est le type déclaré le PREMIER
+             * qui l'emporte — une règle que l'on peut expliquer, et que l'on peut rejouer.
+             *
+             * Et un SEUL max_by par besoin, rendant une structure : deux appels séparés sur une
+             * clé à égalité pouvaient retenir deux lignes différentes et accoler le code de l'une
+             * au score de l'autre.
+             */
+            const parScorePuisRang = ordre => `{'score': ${ordre}, 'rang': -__ligne_type}`;
             const candidats = `SELECT __rn,
-                max_by(__code_voisin, ${dansLaBranche}, 2) AS __codes_voisins,
-                max_by(__score_voisin, ${dansLaBranche}, 2) AS __scores_voisins,
+                max_by({'code': __code_voisin, 'score': __score_voisin}, ${parScorePuisRang(dansLaBranche)}, 2) AS __voisins,
                 ${scoreDans} AS __score_dans,
-                max_by(__code_voisin, ${horsBranche}) AS __code_hors,
-                max_by(__branche_type, ${horsBranche}) AS __branche_hors,
+                max_by({'code': __code_voisin, 'branche': __branche_type}, ${parScorePuisRang(horsBranche)}) AS __hors,
                 ${scoreHors} AS __score_hors
             FROM (\n${notes}\n        ) notes
             GROUP BY __rn`;
@@ -790,6 +808,7 @@
             SELECT liste.__rn AS rang, aCoder.__texte AS libelle, aCoder.__combien AS combien,
                 ${codification.restreindreSource ? v13TexteCompare(`aCoder.${sqlIdent(codification.restreindreSource)}`) : "''"} AS famille, CAST(types.__code_type AS VARCHAR) AS code,
                 types.__libelle_type AS libelleRef, types.__chemin_type AS chemin,
+                types.__ligne AS ligneType,
                 (${v13ConditionDeBranche(codification)}) AS memeBranche,
                 ROUND((${v13ScoreDeRessemblance(codification)}), 3) AS score
             FROM rapprochables p
@@ -810,11 +829,17 @@
              * Les quatre valeurs d'une proposition voyagent dans une seule structure : séparées, quatre
              * « max_by » pourraient départager deux ex æquo différemment et mélanger un code avec le libellé
              * d'un autre.
+             *
+             * Et le tri ne porte pas sur le seul score : plusieurs types au même score sont fréquents, et
+             * « max_by » en retenait alors un au hasard — la liste des propositions changeait d'une
+             * exécution à l'autre. On ajoute le rang du type dans la nomenclature : la clé devient unique,
+             * et à score égal c'est le type déclaré le PREMIER qui passe devant.
              */
             SELECT rang, memeBranche, any_value(libelle) AS libelle, any_value(combien) AS combien,
                 any_value(famille) AS famille,
                 max_by({'code': code, 'libelleRef': libelleRef, 'chemin': chemin, 'score': score},
-                    score, ${Math.max(v13CombienDePropositions(codification), V13_CANDIDATS_ELARGIS)}) AS tetes
+                    {'score': score, 'rang': -ligneType},
+                    ${Math.max(v13CombienDePropositions(codification), V13_CANDIDATS_ELARGIS)}) AS tetes
             FROM notes WHERE score > 0 GROUP BY rang, memeBranche
         ), retenues AS (
             SELECT rang, libelle, combien, famille, memeBranche,
@@ -825,7 +850,7 @@
         SELECT rang, libelle, combien, famille, tete.code AS code, tete.libelleRef AS libelleRef,
             tete.chemin AS chemin, memeBranche, tete.score AS score
         FROM retenues
-        ORDER BY rang, memeBranche DESC, score DESC`;
+        ORDER BY rang, memeBranche DESC, score DESC, code`;
         }
 
         /**
