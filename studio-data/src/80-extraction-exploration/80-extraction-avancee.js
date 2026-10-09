@@ -522,7 +522,7 @@
                     .join(' et ')
             );
         }
-        const advNk = x => `NULLIF(UPPER(TRIM(CAST(${x} AS VARCHAR))), '')`;
+        const advNk = x => sqlCleDeLien(x);
         // Planifie les jointures (LEFT) reliant chaque table nécessaire à la base via les relations du
         // MCD. Les liens INDIRECTS sont gérés : si une table n'est pas reliée directement, on cherche
         // le plus court chemin (BFS) à travers les tables intermédiaires (tables de lien, plusieurs

@@ -290,7 +290,7 @@
             bgTaskStart('Analyse de couverture en cours');
             try {
                 const { conn } = await getDB();
-                const norm = e => `NULLIF(UPPER(TRIM(CAST(${e} AS VARCHAR))), '')`;
+                const norm = e => sqlCleDeLien(e);
                 const Tb = sqlIdent(duckTableName(bId)),
                     Tr = sqlIdent(duckTableName(rId));
                 const bKey = relation.sourceTable === bId ? relation.sourceCol : relation.targetCol;

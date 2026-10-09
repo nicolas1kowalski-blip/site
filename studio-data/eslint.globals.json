@@ -69,6 +69,8 @@
  "duckStreamRows": "writable",
  "__dbQueue": "writable",
  "sqlIdent": "readonly",
+ "SQL_CARACTERES_INVISIBLES": "readonly",
+ "sqlCleDeLien": "readonly",
  "sqlLiteral": "readonly",
  "duckTableName": "readonly",
  "ENC_SNIFF_BYTES": "readonly",

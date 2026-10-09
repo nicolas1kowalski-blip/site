@@ -231,6 +231,13 @@ const prepare = await p.evaluate(() => {
     // « L'un ou l'autre chemin » compare plusieurs liens : on ne traverse pas.
     sorties.filtreAnyTraversable = advFiltreTraversable('c', { tableId: 's', col: 'ETAT', op: '=', val: 'X', via: 'any' });
 
+    // ---- Une cle de lien ne doit pas dependre de ce qui ne se voit pas ----
+    // « Ca marche sur plein de lignes et pas sur d'autres » : un fichier qui melange les deux
+    // styles de fin de ligne laisse un RETOUR CHARIOT colle a la derniere colonne de certaines
+    // lignes seulement. Deux valeurs d'apparence identique ne se rejoignaient pas.
+    sorties.cleDeLien = sqlCleDeLien('x.COL');
+    sorties.cleEstPartout = (sqlDe(neuf()) || '') && true;
+
     // ---- Modifier une colonne deja ajoutee ----
     // Une colonne ne se corrigeait qu'en la supprimant pour la refaire : on perdait son rang,
     // son nom metier et sa case « cle ». On verifie qu'elle garde tout cela.
@@ -485,6 +492,34 @@ ok('C1, relié DEUX fois, n’apparaît qu’UNE fois — et compte toujours 2',
 ok('sur la table de départ, il n’y a rien à traverser', prepare.filtreBaseTraversable === false);
 ok('« l’un ou l’autre chemin » n’est pas traversé : il compare plusieurs liens à la fois',
     prepare.filtreAnyTraversable === false);
+
+// ---- Une clé de lien ignore les caractères invisibles, pas les vraies différences ----
+await requete(`CREATE OR REPLACE TABLE "k_essai" AS SELECT * FROM (VALUES
+    ('identique',                    'A2104',  'A2104'),
+    ('casse differente',             'A2104',  'a2104'),
+    ('espaces autour',               'A2104',  '  A2104  '),
+    ('tabulation en fin',            'A2104',  'A2104' || chr(9)),
+    ('retour chariot en fin',        'A2104',  'A2104' || chr(13)),
+    ('espace insecable en fin',      'A2104',  'A2104' || chr(160)),
+    ('marque d ordre en tete',       'A2104',  chr(65279) || 'A2104')
+) v(cas, gauche, droite)`);
+const rejoints = await requete(`SELECT cas FROM "k_essai"
+    WHERE ${prepare.cleDeLien.replace(/x\.COL/g, 'gauche')} IS NOT DISTINCT FROM ${prepare.cleDeLien.replace(/x\.COL/g, 'droite')}`);
+ok('les caractères invisibles ne séparent plus deux clés identiques : les 7 cas se rejoignent',
+    rejoints.length === 7);
+
+await requete(`CREATE OR REPLACE TABLE "k_differents" AS SELECT * FROM (VALUES
+    ('zero de tete',     'A2104', '0A2104'),
+    ('accent',           'CLE',   'CLÉ'),
+    ('espace au milieu', 'A2104', 'A 2104'),
+    ('autre code',       'A2104', 'A2105')
+) v(cas, gauche, droite)`);
+const separes = await requete(`SELECT cas FROM "k_differents"
+    WHERE ${prepare.cleDeLien.replace(/x\.COL/g, 'gauche')} IS NOT DISTINCT FROM ${prepare.cleDeLien.replace(/x\.COL/g, 'droite')}`);
+ok('mais une vraie différence reste une différence : zéro de tête, accent, espace au milieu, autre code',
+    separes.length === 0);
+ok('une valeur vide ne se joint à rien, pas même à une autre valeur vide',
+    (await requete(`SELECT ${prepare.cleDeLien.replace(/x\.COL/g, "'   '")} AS k`))[0].k === null);
 
 // ---- Modifier une colonne plutôt que la refaire ----
 const modif = prepare.modif;

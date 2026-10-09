@@ -62,7 +62,7 @@
             const { conn } = await getDB();
             const cands = relCandidatePairs();
             const proposals = [];
-            const nrm = (al, col) => `NULLIF(UPPER(TRIM(CAST(${al}.${sqlIdent(col)} AS VARCHAR))), '')`;
+            const nrm = (al, col) => sqlCleDeLien(`${al}.${sqlIdent(col)}`);
             let done = 0;
             for (const c of cands) {
                 done++;
@@ -222,7 +222,7 @@
             }
             try {
                 const { conn } = await getDB();
-                const nrm = (al, col) => `NULLIF(UPPER(TRIM(CAST(${al}.${sqlIdent(col)} AS VARCHAR))), '')`;
+                const nrm = (al, col) => sqlCleDeLien(`${al}.${sqlIdent(col)}`);
                 const targets = Object.values(state.tables).filter(t => t.status === 'ready' && t.id !== relation.sourceTable);
                 const best = [];
                 for (const T of targets) {

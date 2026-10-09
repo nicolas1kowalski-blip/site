@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.47.0';
+        const V13_VERSION = '13.48.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.48.0',
+                d: '2026-10-10',
+                t: 'Les liens ne dépendent plus de caractères que l’on ne voit pas',
+                items: [
+                    '« Ça marche sur plein de lignes et pas sur d’autres » : deux valeurs d’apparence identique ne se rejoignaient pas. Un fichier qui <b>mélange les deux styles de fin de ligne</b> laisse un retour chariot collé à la dernière colonne de certaines lignes seulement — invisible à l’œil, fatal pour une jointure.',
+                    'Une clé de lien est maintenant nettoyée des caractères qui ne se voient pas, aux deux bouts : <b>espace, tabulation, saut de ligne, retour chariot, espace insécable, espace insécable étroit, marque d’ordre des octets</b> (le BOM, en tête de la première valeur d’un fichier).',
+                    'Et rien d’autre : un <b>zéro de tête</b>, un <b>accent</b>, un <b>espace au milieu</b> restent des différences réelles, qu’il ne faut pas effacer en douce. La casse continue d’être ignorée.',
+                    'La règle est écrite <b>une seule fois</b> et vaut partout où l’application rapproche deux clés : l’extraction, la mesure d’un lien sur les données, l’analyse de couverture, la déduction de liens.',
+                    'Mesure : 100 affaires avec un contrat chacune, une ligne de relation sur deux terminée par un retour chariot — <b>50 comptages à zéro avant, aucun après</b>.'
+                ]
+            },
             {
                 v: '13.47.0',
                 d: '2026-10-10',

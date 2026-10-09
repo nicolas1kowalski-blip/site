@@ -38,6 +38,22 @@
         }
 
         const sqlIdent = name => '"' + String(name).replace(/"/g, '""') + '"';
+        /*
+         * La clé d'un lien, nettoyée de ce qui ne se voit pas.
+         *
+         * Deux valeurs d'apparence identique ne se rejoignaient pas, et rien ne le montrait : un
+         * fichier qui mélange les deux styles de fin de ligne laisse un RETOUR CHARIOT collé à la
+         * dernière colonne de certaines lignes seulement. D'où « ça marche sur plein de lignes et
+         * pas sur d'autres ». Même chose pour une tabulation de fin, un espace insécable, ou la
+         * marque d'ordre des octets en tête de la première valeur du fichier.
+         *
+         * On retire donc TOUS ces caractères aux deux bouts, et rien d'autre : un zéro de tête, un
+         * accent ou un espace au milieu restent des différences réelles, qu'il ne faut pas effacer
+         * en douce. La casse, elle, est ignorée comme avant.
+         */
+        const SQL_CARACTERES_INVISIBLES = 'chr(32)||chr(9)||chr(10)||chr(13)||chr(160)||chr(8239)||chr(65279)';
+        const sqlCleDeLien = expression =>
+            `NULLIF(UPPER(TRIM(CAST(${expression} AS VARCHAR), ${SQL_CARACTERES_INVISIBLES})), '')`;
         const sqlLiteral = val => "'" + String(val).replace(/'/g, "''") + "'";
         const duckTableName = tId => 't_' + tId;
         // Détecte un échec d'écriture du répertoire temporaire (spill disque) — fréquent sur les gros

@@ -817,8 +817,7 @@
         // côté et lignes sans correspondance (orphelines) — puis suggère la cardinalité observée.
         async function measureRelation(r) {
             const { conn } = await getDB();
-            const keys = (tid, col) =>
-                `SELECT NULLIF(UPPER(TRIM(CAST(${sqlIdent(col)} AS VARCHAR))), '') AS k FROM ${sqlIdent(duckTableName(tid))}`;
+            const keys = (tid, col) => `SELECT ${sqlCleDeLien(sqlIdent(col))} AS k FROM ${sqlIdent(duckTableName(tid))}`;
             const res = await conn.query(`
                 WITH sk AS (${keys(r.sourceTable, r.sourceCol)}), tk AS (${keys(r.targetTable, r.targetCol)}),
                 sc AS (SELECT k, COUNT(*) AS c FROM sk WHERE k IS NOT NULL GROUP BY 1),
