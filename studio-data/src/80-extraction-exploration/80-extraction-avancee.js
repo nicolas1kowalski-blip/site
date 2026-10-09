@@ -1170,6 +1170,100 @@
             if (baseTableSelectElement && baseTableSelectElement.value !== v) baseTableSelectElement.value = v;
             renderAdvExtract();
         }
+        // ---- Modifier une colonne déjà ajoutée ---------------------------------------
+        //
+        // Jusqu'ici, une colonne ne se corrigeait qu'en la supprimant pour la refaire : on
+        // perdait son rang dans l'ordre de sortie, son nom métier, et sa case « clé » de
+        // dédoublonnage. Pour une synthèse avec trois critères, cela voulait dire tout ressaisir.
+        //
+        // On réemploie le formulaire de création plutôt que d'en écrire un second : « modifier »
+        // le remplit avec les réglages de la colonne, et la validation REMPLACE la colonne au
+        // lieu d'en ajouter une. Il n'y a donc qu'un seul écran à apprendre, et un seul à tenir.
+        let advColonneModifiee = null;
+        // Remplir le formulaire se fait dans le DOM déjà dessiné : le moindre redessin pendant
+        // ce temps-là effacerait ce que l'on vient d'y poser. Ce drapeau le met en attente.
+        let advRemplissageDuFormulaire = false;
+
+        /** La colonne en cours de modification, s'il y en a une. */
+        function advLaColonneModifiee() {
+            return advColonneModifiee ? state.advExtract.columns.find(c => c.id === advColonneModifiee) || null : null;
+        }
+        /** Les genres de colonnes que le formulaire sait reprendre. */
+        function advColonneModifiable(colonne) {
+            return !!colonne && (!colonne.kind || colonne.kind === 'link');
+        }
+        /**
+         * Poser la colonne construite par le formulaire : à la place de celle qu'on modifie, ou
+         * à la fin. En modification, la colonne garde son IDENTIFIANT — donc sa case « clé » de
+         * dédoublonnage — son RANG dans l'ordre de sortie, et son nom métier si l'on n'en a pas
+         * saisi un autre.
+         */
+        function advPoserLaColonne(nouvelle) {
+            const colonnes = state.advExtract.columns;
+            const rang = advColonneModifiee ? colonnes.findIndex(c => c.id === advColonneModifiee) : -1;
+            if (rang >= 0) {
+                const ancienne = colonnes[rang];
+                nouvelle.id = ancienne.id;
+                if (!nouvelle._aliasSaisi) nouvelle.alias = ancienne.alias;
+                delete nouvelle._aliasSaisi;
+                colonnes[rang] = nouvelle;
+                advColonneModifiee = null;
+            } else {
+                delete nouvelle._aliasSaisi;
+                colonnes.push(nouvelle);
+            }
+            renderAdvExtract();
+        }
+        function advAnnulerLaModification() {
+            advColonneModifiee = null;
+            advCriteresDeSyntheseEnAttente = [];
+            renderAdvExtract();
+        }
+        /** Remplir le formulaire avec les réglages d'une colonne, puis le montrer. */
+        function advModifierLaColonne(identifiant) {
+            const colonne = state.advExtract.columns.find(c => c.id === identifiant);
+            if (!advColonneModifiable(colonne)) return;
+            advColonneModifiee = identifiant;
+            advCriteresDeSyntheseEnAttente = colonne.kind === 'link' ? (colonne.conds || []).map(c => ({ ...c })) : [];
+            // UN SEUL redessin : il fait apparaître le bandeau et les critères repris. Tout ce qui
+            // suit pose des valeurs dans ce formulaire-là, sans jamais le redessiner.
+            renderAdvExtract();
+            const onglet = colonne.kind === 'link' ? 'link' : 'col';
+            if (typeof v12xAddMode === 'function') v12xAddMode(onglet);
+            const poser = (identifiantDuChamp, valeur) => {
+                const champ = el(identifiantDuChamp);
+                if (champ && valeur != null && valeur !== '') champ.value = valeur;
+            };
+            advRemplissageDuFormulaire = true;
+            try {
+                if (colonne.kind === 'link') {
+                    poser('adv-link-tbl', colonne.tableId);
+                    advLinkTblChanged();
+                    poser('adv-link-via', colonne.via);
+                    poser('adv-link-mode', colonne.mode);
+                    advLinkModeChanged();
+                    poser('adv-link-col', colonne.col);
+                    poser('adv-link-n', colonne.n);
+                    poser('adv-link-alias', colonne.alias);
+                } else {
+                    poser('adv-col-tbl', colonne.tableId);
+                    advColColChanged();
+                    poser('adv-col-via', colonne.via);
+                    poser('adv-col-col', colonne.col);
+                }
+            } finally {
+                advRemplissageDuFormulaire = false;
+            }
+        }
+        /** Le bandeau qui rappelle qu'on modifie une colonne au lieu d'en ajouter une. */
+        function advBandeauDeModificationHtml() {
+            const colonne = advLaColonneModifiee();
+            if (!colonne) return '';
+            return `<div class="basis-full flex items-center gap-2 mb-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                ✎ Modification de « ${escapeHTML(colonne.alias || colonne.col || '')} » — la colonne garde sa place et son nom en sortie.
+                <button onclick="advAnnulerLaModification()" class="ml-auto text-amber-600 hover:text-red-600 font-bold">✕ annuler</button>
+            </div>`;
+        }
         function advAddColumn() {
             const element = el('adv-col-tbl').value,
                 col = el('adv-col-col').value;
@@ -1191,9 +1285,16 @@
                     ((relation && (relation.sourceTable === element ? relation.targetCol : relation.sourceCol)) ||
                         cols.filter(c => c.col === col).length + 1);
             }
-            while (cols.some(c => c.alias === alias)) alias += '_2';
-            cols.push({ id: 'ac_' + generateId(), tableId: element, col, via, alias, transform: 'none' });
-            renderAdvExtract();
+            const enModification = advLaColonneModifiee();
+            while (cols.some(c => c.alias === alias && (!enModification || c.id !== enModification.id))) alias += '_2';
+            advPoserLaColonne({
+                id: 'ac_' + generateId(),
+                tableId: element,
+                col,
+                via,
+                alias,
+                transform: enModification ? enModification.transform : 'none'
+            });
         }
         function advUpdateColumn(id, f, v) {
             const column = state.advExtract.columns.find(x => x.id === id);
@@ -1844,13 +1945,14 @@
                         .map(([v, l]) => `<option value="${v}" ${v === c.transform ? 'selected' : ''}>${l}</option>`)
                         .join('')}</select></td>
                     ${!extractSpec.group.on && extractSpec.dedup.on ? `<td class="p-2 text-center"><input type="checkbox" ${extractSpec.dedup.keys.includes(c.id) ? 'checked' : ''} onchange="advToggleDedupKey('${c.id}',this.checked)"></td>` : ''}
-                    <td class="p-2 text-right"><button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>
+                    <td class="p-2 text-right whitespace-nowrap">${advColonneModifiable(c) ? `<button onclick="advModifierLaColonne('${c.id}')" title="Modifier cette colonne : sa source, son chemin, et pour une synthèse son mode et ses critères" class="text-slate-400 hover:text-indigo-600 font-bold mr-1">✎</button>` : ''}<button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>
                 </tr>`
                     )
                     .join('');
                 html += `</tbody></table></div>`;
             } else html += '<p class="text-xs text-slate-400 italic mb-2">Aucune colonne. Ajoutez-en ci-dessous.</p>';
             html += `<div class="flex items-end gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
+                ${advLaColonneModifiee() && !advLaColonneModifiee().kind ? advBandeauDeModificationHtml() : ''}
                 <select id="adv-col-tbl" onchange="advColColChanged()" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${[
                     state.tables[extractSpec.baseId],
                     ...reach.filter(t => t.id !== extractSpec.baseId)
@@ -1861,13 +1963,14 @@
                 <select id="adv-col-col" class="border border-slate-300 p-1.5 rounded text-xs bg-white">${(state.tables[extractSpec.baseId] ? state.tables[extractSpec.baseId].headers : []).map(h => `<option>${escapeHTML(h)}</option>`).join('')}</select>
                 <span id="adv-col-via-wrap" class="hidden items-center gap-1"><span class="text-[10px] font-bold text-amber-700">via</span>
                 <select id="adv-col-via" class="border border-amber-300 p-1.5 rounded text-xs bg-white"></select></span>
-                <button onclick="advAddColumn()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">+ Colonne</button>
+                <button onclick="advAddColumn()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold">${advLaColonneModifiee() && !advLaColonneModifiee().kind ? '✔ Modifier' : '+ Colonne'}</button>
                 <button onclick="advAddAllColumns()" class="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded font-medium">+ Toutes</button>
                 <button onclick="advBulkOpen()" class="text-xs bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded font-bold">➕ Plusieurs colonnes…</button>
             </div>
             <details class="mt-2 bg-sky-50/50 border border-sky-100 rounded-lg">
                 <summary class="cursor-pointer px-2 py-1.5 text-[11px] font-bold text-sky-700">Σ Synthèse d'une table liée — compter les lignes, compter les valeurs uniques, transposer en texte ou en colonnes</summary>
                 <div class="p-2 flex items-end gap-1.5 flex-wrap">
+                    ${advLaColonneModifiee() && advLaColonneModifiee().kind === 'link' ? advBandeauDeModificationHtml() : ''}
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Table liée</label>
                     <select id="adv-link-tbl" onchange="advLinkTblChanged()" class="border border-slate-300 p-1.5 rounded text-[11px] bg-white">${reach
                         .filter(t => t.id !== extractSpec.baseId)
@@ -1886,7 +1989,14 @@
                     <input type="number" id="adv-link-n" value="3" min="1" max="12" class="border border-slate-300 p-1.5 rounded text-[11px] w-14"></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom en sortie</label>
                     <input type="text" id="adv-link-alias" placeholder="auto" class="border border-slate-300 p-1.5 rounded text-[11px] w-28"></div>
-                    <button onclick="advAddLinkColumn()" class="text-[11px] bg-sky-600 text-white px-3 py-1.5 rounded font-bold">+ Synthèse${advCriteresDeSyntheseEnAttente.length ? ' (avec ' + advCriteresDeSyntheseEnAttente.length + ' critère(s))' : ''}</button>
+                    <button onclick="advAddLinkColumn()" class="text-[11px] bg-sky-600 text-white px-3 py-1.5 rounded font-bold">${
+                        advLaColonneModifiee() && advLaColonneModifiee().kind === 'link'
+                            ? '✔ Modifier'
+                            : '+ Synthèse' +
+                              (advCriteresDeSyntheseEnAttente.length
+                                  ? ' (avec ' + advCriteresDeSyntheseEnAttente.length + ' critère(s))'
+                                  : '')
+                    }</button>
                     <span class="text-[10px] text-slate-400">1 ligne par ligne de la table de départ — jamais de multiplication de lignes.</span>
                     ${advLigneDeCritereHtml()}
                 </div>
@@ -2715,6 +2825,7 @@
             const permises = new Set(advTablesDUneSynthese(state.advExtract.baseId, id, advViaVal('adv-link-via')));
             const avant = advCriteresDeSyntheseEnAttente.length;
             advCriteresDeSyntheseEnAttente = advCriteresDeSyntheseEnAttente.filter(c => permises.has(c.tableId));
+            if (advRemplissageDuFormulaire) return;
             if (advCriteresDeSyntheseEnAttente.length !== avant)
                 showError('Les critères préparés ne portaient pas sur ce chemin : ils ont été retirés.');
             renderAdvExtract();
@@ -2828,7 +2939,9 @@
             advCriteresDeSyntheseEnAttente = [];
             const suffixe = criteres.length ? '_si_' + criteres.map(c => c.val || c.op).join('_') : '';
             const def = ((mode === 'count' ? 'nb_' + tn : mode === 'countd' ? 'nbu_' + col : col) + suffixe).slice(0, 60);
-            state.advExtract.columns.push({
+            const aliasSaisi = (el('adv-link-alias').value || '').trim();
+            const enModification = advLaColonneModifiee();
+            advPoserLaColonne({
                 id: 'ac_' + generateId(),
                 kind: 'link',
                 tableId: element,
@@ -2837,10 +2950,10 @@
                 n: parseInt(el('adv-link-n').value) || 3,
                 via: advViaVal('adv-link-via'),
                 conds: criteres,
-                alias: (el('adv-link-alias').value || '').trim() || def,
-                transform: 'none'
+                alias: aliasSaisi || def,
+                transform: enModification ? enModification.transform : 'none',
+                _aliasSaisi: !!aliasSaisi
             });
-            renderAdvExtract();
         }
         // -- Hiérarchie aplatie (ex-mode « Aplatir Hiérarchie ») --
         function advHierTblChanged() {

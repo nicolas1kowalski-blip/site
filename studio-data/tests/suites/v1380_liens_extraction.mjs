@@ -155,6 +155,54 @@ const prepare = await p.evaluate(() => {
     phrasesDuCompte.lignesEnTrop = v13PhraseDuCompte({ compte: { nomDeLaTable: 'CONTRATS', depart: 20000, sortie: 22000 } });
     phrasesDuCompte.nonMesure = v13PhraseDuCompte({});
     sorties.phrasesDuCompte = phrasesDuCompte;
+
+    // ---- Modifier une colonne deja ajoutee ----
+    // Une colonne ne se corrigeait qu'en la supprimant pour la refaire : on perdait son rang,
+    // son nom metier et sa case « cle ». On verifie qu'elle garde tout cela.
+    const modif = {};
+    spec = neuf();
+    spec.columns = [];
+    spec.columns.push({ id: 'cA', tableId: 'c', col: 'NOM', alias: 'Nom du client', transform: 'none' });
+    spec.columns.push(synthese('count', '', { id: 'cB', alias: 'nb', conds: [{ tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' }] }));
+    spec.dedup = { on: true, keys: ['cA'], keep: 'first' };
+    state.advExtract = spec;
+    renderAdvExtract();
+
+    // 1. Une colonne simple : on change la colonne source, le reste ne bouge pas.
+    advModifierLaColonne('cA');
+    modif.formulaireRempli = { table: el('adv-col-tbl').value, colonne: el('adv-col-col').value };
+    modif.bandeau = /Modification de/.test(document.querySelector('#step-3').textContent);
+    el('adv-col-col').value = 'NUM';
+    advAddColumn();
+    modif.apresColonneSimple = spec.columns.map(c => c.id + ':' + c.col + ':' + c.alias).join(' | ');
+    modif.cleConservee = spec.dedup.keys.join(',');
+    modif.combien = spec.columns.length;
+
+    // 2. Une synthese : ses criteres reviennent dans le formulaire, et on peut en changer.
+    advModifierLaColonne('cB');
+    modif.criteresRepris = advCriteresDeSyntheseEnAttente.map(c => c.col + c.op + c.val).join(',');
+    modif.modeRepris = el('adv-link-mode').value;
+    el('adv-link-mode').value = 'countd';
+    el('adv-link-col').value = 'ETAT';
+    advAddLinkColumn();
+    const refaite = spec.columns.find(c => c.id === 'cB');
+    modif.syntheseApres = refaite ? refaite.mode + '/' + refaite.col + '/' + (refaite.conds || []).length + '/' + refaite.alias : 'perdue';
+    modif.rangConserve = spec.columns.findIndex(c => c.id === 'cB');
+    modif.toutesLesColonnes = spec.columns.map(c => c.id).join(',');
+
+    // 3. Annuler une modification ne touche a rien.
+    advModifierLaColonne('cA');
+    advAnnulerLaModification();
+    modif.apresAnnulation = spec.columns.map(c => c.id).join(',');
+    modif.plusDeCriteresEnAttente = advCriteresDeSyntheseEnAttente.length;
+
+    // 4. Une colonne calculee ou une hierarchie n'est pas reprise par ce formulaire.
+    modif.modifiableSimple = advColonneModifiable({ tableId: 'c', col: 'NUM' });
+    modif.modifiableSynthese = advColonneModifiable({ kind: 'link', tableId: 's' });
+    modif.modifiableCalculee = advColonneModifiable({ kind: 'calc' });
+    modif.modifiableHierarchie = advColonneModifiable({ kind: 'hier' });
+    modif.optionsColonne = [...(el('adv-col-col') ? el('adv-col-col').options : [])].map(o => o.value).join(',');
+    sorties.modif = modif;
     return sorties;
 });
 await b.close();
@@ -298,6 +346,24 @@ ok('un fichier PLUS gros que la table de départ est signalé lui aussi, et expl
     /^⚠️/.test(phrases.lignesEnTrop) && /PLUS de lignes/.test(phrases.lignesEnTrop) && /table liée/.test(phrases.lignesEnTrop));
 ok('quand la mesure est impossible, on le dit au lieu d’afficher un chiffre faux',
     /n’a pas pu être mesuré/.test(phrases.nonMesure));
+
+// ---- Modifier une colonne plutôt que la refaire ----
+const modif = prepare.modif;
+ok('« modifier » remplit le formulaire avec les réglages de la colonne',
+    modif.formulaireRempli.table === 'c' && modif.formulaireRempli.colonne === 'NOM' && modif.bandeau);
+ok('valider REMPLACE la colonne au lieu d’en ajouter une', modif.combien === 2);
+ok('la colonne modifiée garde son rang, son identifiant et son nom en sortie',
+    modif.apresColonneSimple === 'cA:NUM:Nom du client | cB::nb');
+ok('et sa case « clé » de dédoublonnage, qui la désigne par son identifiant', modif.cleConservee === 'cA');
+ok('les critères d’une synthèse reviennent dans le formulaire au lieu d’être à ressaisir',
+    modif.criteresRepris === 'ETAT=OUVERT' && modif.modeRepris === 'count');
+ok('on peut changer le mode et la colonne d’une synthèse, critères conservés',
+    modif.syntheseApres === 'countd/ETAT/1/nb');
+ok('la synthèse modifiée reste à sa place dans l’ordre de sortie',
+    modif.rangConserve === 1 && modif.toutesLesColonnes === 'cA,cB');
+ok('annuler une modification ne touche à aucune colonne', modif.apresAnnulation === 'cA,cB' && modif.plusDeCriteresEnAttente === 0);
+ok('le formulaire reprend une colonne simple et une synthèse, pas une calculée ni une hiérarchie',
+    modif.modifiableSimple && modif.modifiableSynthese && !modif.modifiableCalculee && !modif.modifiableHierarchie);
 
 let fail = 0;
 for (const [n, c] of out) { console.log((c ? '✅ ' : '❌ ') + n); if (!c) fail++; }
