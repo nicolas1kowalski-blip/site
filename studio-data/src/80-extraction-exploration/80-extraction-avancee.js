@@ -40,6 +40,21 @@
             const raw = conf.labelCols && conf.labelCols.length ? conf.labelCols : [conf.labelCol || ''];
             return raw.map(c => c || conf.idCol).filter(Boolean);
         }
+        /** La transformation demandée, appliquée à n'importe quelle expression. */
+        function advTransformee(expression, transformation) {
+            switch (transformation) {
+                case 'trim':
+                    return `TRIM(CAST(${expression} AS VARCHAR))`;
+                case 'upper':
+                    return `UPPER(TRIM(CAST(${expression} AS VARCHAR)))`;
+                case 'lower':
+                    return `LOWER(TRIM(CAST(${expression} AS VARCHAR)))`;
+                case 'noaccent':
+                    return `strip_accents(TRIM(CAST(${expression} AS VARCHAR)))`;
+                default:
+                    return expression;
+            }
+        }
         function advColExpr(map, c) {
             if (c.kind === 'calc') return advCalcExpr(map, c.calc);
             const q = `${advAlias(map, c)}.${sqlIdent(c.col)}`;
@@ -91,8 +106,47 @@
             }
         }
         // Besoins de jointure d'une colonne, avec le LIEN emprunté (via) — cf. advPlanJoins.
-        function advColNeeds(c) {
+        // ---- Une colonne d'une table liée qui a PLUSIEURS valeurs -----------------------
+        //
+        // Une affaire, 20 094 lignes. On ajoute une colonne de la table ÉTABLISSEMENT, reliée par
+        // deux tables intermédiaires : le fichier passe à 1 031 862 lignes. Rien n'est faux —
+        // c'est ce que fait une jointure quand il y a plusieurs correspondances — mais ce n'est
+        // pas ce qu'on demandait : on voulait ses 20 094 affaires, avec l'établissement en face.
+        //
+        // Chaque colonne venant d'une table liée porte donc son réglage. Par défaut, elle rend
+        // UNE SEULE ligne par ligne de départ. L'éclatement reste possible, mais il se demande.
+        const ADV_PLUSIEURS_VALEURS = {
+            regroupees: 'une seule ligne, valeurs regroupées',
+            premiere: 'une seule ligne, la première valeur',
+            lignes: 'une ligne par valeur (le fichier grossit)'
+        };
+        /** Le réglage effectif : sur la table de départ, la question ne se pose pas. */
+        function advPlusieursValeurs(colonne, baseId) {
+            if (!colonne || colonne.kind || colonne.tableId === baseId) return 'lignes';
+            // « L'un ou l'autre chemin » réunit la valeur de PLUSIEURS liens en une seule colonne :
+            // cela se fait en joignant les deux routes, pas en allant chercher par un chemin unique.
+            if (colonne.via === 'any') return 'lignes';
+            return ADV_PLUSIEURS_VALEURS[colonne.plusieurs] ? colonne.plusieurs : 'regroupees';
+        }
+        /** Cette colonne est-elle ramenée par une sous-requête plutôt que par une jointure ? */
+        function advColonneSansJointure(colonne, baseId) {
+            return advPlusieursValeurs(colonne, baseId) !== 'lignes';
+        }
+        function advChangerPlusieursValeurs(identifiant, reglage) {
+            const colonne = state.advExtract.columns.find(c => c.id === identifiant);
+            if (!colonne) return;
+            colonne.plusieurs = reglage;
+            renderAdvExtract();
+        }
+        function advColNeeds(c, baseId) {
             if (c.kind === 'link' || c.kind === 'hier') return [];
+            // Ramenée par une sous-requête : elle ne demande aucune jointure, et c'est bien là
+            // tout l'intérêt — une jointure multiplierait les lignes du fichier.
+            //
+            // Sans table de départ, on rend le besoin quand même : l'appelant cherche alors les
+            // TABLES en jeu, pour savoir par quel lien les atteindre. La question du chemin se
+            // pose de la même façon, que la valeur vienne d'une jointure ou d'une sous-requête.
+            if (!c.kind && baseId && advColonneSansJointure(c, baseId)) return [];
             if (c.kind !== 'calc') return [{ tableId: c.tableId, via: c.via || '' }];
             const out = [];
             (c.calc.parts || []).forEach(p => {
@@ -752,6 +806,21 @@
                 }
                 return out;
             }
+            // Une colonne d'une table liée qui doit tenir sur UNE SEULE ligne : on la va chercher
+            // par une sous-requête, exactement comme une synthèse, au lieu de joindre sa table.
+            if (!c.kind && spec && advColonneSansJointure(c, spec.baseId) && c._chemin && c._chemin.length) {
+                const traversee = advSourceDeLaSynthese(map, c._chemin);
+                const condition =
+                    traversee.condition +
+                    advCriteresDeLaSyntheseSql({ conds: advFiltresDuCheminDeLaSynthese(spec, c) }, traversee.aliasDe);
+                const valeur = advTransformee(`s.${sqlIdent(c.col)}`, c.transform);
+                const texte = `NULLIF(TRIM(CAST(${valeur} AS VARCHAR)), '')`;
+                const expr =
+                    advPlusieursValeurs(c, spec.baseId) === 'premiere'
+                        ? `(SELECT ${valeur} FROM ${traversee.source} WHERE ${condition} ORDER BY s.${sqlIdent('__rn')} LIMIT 1)`
+                        : `(SELECT STRING_AGG(DISTINCT ${texte}, ' | ') FROM ${traversee.source} WHERE ${condition})`;
+                return [{ expr, alias: c.alias || c.col }];
+            }
             return [{ expr: advColExpr(map, c), alias: c.alias || c.col }];
         }
         function buildAdvSql(spec) {
@@ -762,7 +831,7 @@
             if (!cols.length && !globalAggMode) return { err: 'Ajoutez au moins une colonne.' };
             // Besoins de jointure, chacun avec le LIEN emprunté ('' = lien par défaut de la paire).
             const needs = [{ tableId: spec.baseId, via: '' }];
-            cols.forEach(c => advColNeeds(c).forEach(x => needs.push(x)));
+            cols.forEach(c => advColNeeds(c, spec.baseId).forEach(x => needs.push(x)));
             // Un filtre « sur la ligne » décide quelles lignes sortent : sa table doit être jointe.
             // Un filtre « sur le lien » ne fait que restreindre ce que le lien RAMÈNE : s'il n'y a
             // aucune colonne à ramener de cette table, il n'a rien à restreindre, et imposer la
@@ -777,6 +846,14 @@
                 });
             // ancrages des colonnes « synthèse » / « hiérarchie » : on joint la table PARENTE du lien,
             // jamais la table résumée elle-même (pas de multiplication de lignes).
+            // Le chemin d'une colonne ramenée par sous-requête : même besoin que pour une synthèse.
+            for (const c of cols.filter(c2 => !c2.kind && advColonneSansJointure(c2, spec.baseId))) {
+                c._chemin = advCheminDuLien(spec.baseId, c.tableId, c.via);
+                if (!c._chemin)
+                    return {
+                        err: `« ${(state.tables[c.tableId] || {}).name || '?'} » n'est pas reliée à la table de départ dans le modèle de données (étape 2).`
+                    };
+            }
             for (const c of cols.filter(c2 => c2.kind === 'link' || c2.kind === 'hier')) {
                 if (c.tableId === spec.baseId && c.kind === 'hier') {
                     c._anchor = null;
@@ -1692,6 +1769,24 @@
             renderAdvExtract();
         }
 
+        /**
+         * Le réglage « plusieurs valeurs » d'une colonne, sur sa propre ligne.
+         *
+         * Il n'apparaît que là où la question se pose : une colonne venant d'une table liée.
+         * Sur la table de départ, il n'y a qu'une valeur par ligne, et rien à régler.
+         */
+        function advChoixPlusieursValeursHtml(colonne, baseId) {
+            if (colonne.kind || colonne.tableId === baseId) return '';
+            if (colonne.via === 'any')
+                return `<span class="mt-1 block text-[10px] text-slate-400" title="« L'un ou l'autre chemin » réunit la valeur de plusieurs liens : cela demande de joindre les deux routes. Choisissez un chemin précis pour tenir sur une seule ligne.">une ligne par valeur (chemins multiples)</span>`;
+            const reglage = advPlusieursValeurs(colonne, baseId);
+            const eclate = reglage === 'lignes';
+            return `<select onchange="advChangerPlusieursValeurs('${colonne.id}', this.value)" title="Quand cette table a PLUSIEURS correspondances pour une même ligne de départ : les regrouper sur une ligne, n'en garder qu'une, ou faire une ligne par valeur — ce dernier choix est le seul qui change le nombre de lignes du fichier." class="mt-1 block w-full border p-1 rounded text-[10px] ${eclate ? 'border-amber-400 bg-amber-50 text-amber-800 font-bold' : 'border-slate-200 bg-white text-slate-500'}">${Object.entries(
+                ADV_PLUSIEURS_VALEURS
+            )
+                .map(([v, l]) => `<option value="${v}" ${v === reglage ? 'selected' : ''}>${escapeHTML(l)}</option>`)
+                .join('')}</select>`;
+        }
         /** Les critères d'une synthèse déjà créée, retirables un par un. */
         function advCriteresDUneColonneHtml(colonne) {
             const criteres = (colonne && colonne.conds) || [];
@@ -1967,7 +2062,7 @@
                         ADV_TRANSFORMS
                     )
                         .map(([v, l]) => `<option value="${v}" ${v === c.transform ? 'selected' : ''}>${l}</option>`)
-                        .join('')}</select></td>
+                        .join('')}</select>${advChoixPlusieursValeursHtml(c, extractSpec.baseId)}</td>
                     ${!extractSpec.group.on && extractSpec.dedup.on ? `<td class="p-2 text-center"><input type="checkbox" ${extractSpec.dedup.keys.includes(c.id) ? 'checked' : ''} onchange="advToggleDedupKey('${c.id}',this.checked)"></td>` : ''}
                     <td class="p-2 text-right whitespace-nowrap">${advColonneModifiable(c) ? `<button onclick="advModifierLaColonne('${c.id}')" title="Modifier cette colonne : sa source, son chemin, et pour une synthèse son mode et ses critères" class="text-slate-400 hover:text-indigo-600 font-bold mr-1">✎</button>` : ''}<button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>
                 </tr>`

@@ -68,7 +68,9 @@ const prepare = await p.evaluate(() => {
     // Non-régression : une table reliée DIRECTEMENT à la table de départ.
     spec = neuf(); spec.columns.push(Object.assign(synthese('count'), { tableId: 'l', alias: 'R' })); sorties.compteDirect = sqlDe(spec);
     // Témoin : une vraie colonne jointe, elle, multiplie — c'est une jointure, pas une synthèse.
-    spec = neuf(); spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'R', transform: 'none' }); sorties.colonneJointe = sqlDe(spec);
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'R', transform: 'none', plusieurs: 'lignes' });
+    sorties.colonneJointe = sqlDe(spec);
 
     // ---- Un critère sur la synthèse : il change ce qui est compté, pas les lignes ----
     // « Compter les sinistres OUVERTS » n'est pas « ne garder que les contrats qui en ont un ».
@@ -109,16 +111,16 @@ const prepare = await p.evaluate(() => {
     // « Ne ramener que les sinistres ouverts » n'est pas « ne garder que les contrats qui en
     // ont un ». Le même filtre fait l'un ou l'autre selon sa portée.
     spec = neuf();
-    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none', plusieurs: 'lignes' });
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'lien' });
     sorties.filtreSurLeLien = sqlDe(spec);
     spec = neuf();
-    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none', plusieurs: 'lignes' });
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', portee: 'ligne' });
     sorties.filtreSurLaLigne = sqlDe(spec);
     // Un filtre sans portée indiquée suit la règle de l'extraction : il porte sur le lien.
     spec = neuf();
-    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none', plusieurs: 'lignes' });
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
     sorties.filtreSansPortee = sqlDe(spec);
     // Sur la table de départ, la portée ne change rien : il n'y a pas de lien.
@@ -127,7 +129,7 @@ const prepare = await p.evaluate(() => {
     sorties.filtreSurLaBaseMemePortee = sqlDe(spec);
     // « L'un ou l'autre chemin » compare plusieurs liens : la condition reste sur la ligne.
     spec = neuf();
-    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none' });
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none', plusieurs: 'lignes' });
     spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT', via: 'any', portee: 'lien' });
     sorties.filtreCheminsMultiples = sqlDe(spec);
 
@@ -180,6 +182,31 @@ const prepare = await p.evaluate(() => {
     state.advExtract = spec;
     sqlDe(spec);
     sorties.pasSansEffetSiLaSyntheseLEmprunte = (spec._filtresSansEffet || []).slice();
+
+    // ---- Une colonne d'une table liee ne multiplie plus les lignes ----
+    // Le cas reel : 20 094 affaires, on ajoute une colonne d'ETABLISSEMENT reliee par deux
+    // tables, et le fichier passe a 1 031 862 lignes. On veut ses affaires, pas leur produit.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANTS', transform: 'none' });
+    sorties.colonneLieeParDefaut = sqlDe(spec);
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none', plusieurs: 'premiere' });
+    sorties.colonneLieePremiere = sqlDe(spec);
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANT', transform: 'none', plusieurs: 'lignes' });
+    sorties.colonneLieeEclatee = sqlDe(spec);
+    // La transformation demandee s'applique a la valeur ramenee.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'ETAT', alias: 'ETATS', transform: 'lower' });
+    sorties.colonneLieeTransformee = sqlDe(spec);
+    // Et un filtre « sur le lien » restreint ce qu'elle ramene, sans retirer de ligne.
+    spec = neuf();
+    spec.columns.push({ id: 'c2', tableId: 's', col: 'MONTANT', alias: 'MONTANTS', transform: 'none' });
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    sorties.colonneLieeFiltree = sqlDe(spec);
+    // Sur la table de depart, la question ne se pose pas : pas de reglage, pas de sous-requete.
+    sorties.reglageSurLaBase = advPlusieursValeurs({ tableId: 'c', col: 'NUM' }, 'c');
+    sorties.reglageParDefaut = advPlusieursValeurs({ tableId: 's', col: 'MONTANT' }, 'c');
 
     // ---- Modifier une colonne deja ajoutee ----
     // Une colonne ne se corrigeait qu'en la supprimant pour la refaire : on perdait son rang,
@@ -386,6 +413,29 @@ ok('un filtre « sur le lien » qu’aucune synthèse ni aucune colonne n’empr
     prepare.sansEffetQuandRienNeLEmprunte.length === 0);
 ok('et il ne l’est PAS dès qu’une synthèse emprunte cette table',
     prepare.pasSansEffetSiLaSyntheseLEmprunte.length === 0);
+
+// ---- Une colonne d'une table liée tient sur une seule ligne ----
+const regroupees = await parContrat(prepare.colonneLieeParDefaut);
+ok('par défaut, une colonne d’une table liée ne multiplie plus : 5 contrats, 5 lignes',
+    (await combien(prepare.colonneLieeParDefaut)) === 5);
+ok('les plusieurs valeurs sont regroupées sur la ligne, séparées lisiblement',
+    String(regroupees.C1.MONTANTS).split(' | ').sort().join(',') === '100,200');
+ok('un contrat sans correspondance a la cellule vide, il ne disparaît pas',
+    regroupees.C3.MONTANTS === null && regroupees.C4.MONTANTS === null);
+const premiere = await parContrat(prepare.colonneLieePremiere);
+ok('« la première valeur » rend une seule valeur, et toujours 5 lignes',
+    (await combien(prepare.colonneLieePremiere)) === 5 && String(premiere.C1.MONTANT) === '100');
+ok('« une ligne par valeur », demandé explicitement, éclate comme avant',
+    (await combien(prepare.colonneLieeEclatee)) === 6);
+const transformee = await parContrat(prepare.colonneLieeTransformee);
+ok('la transformation demandée s’applique bien à la valeur ramenée',
+    String(transformee.C1.ETATS).split(' | ').sort().join(',') === 'clos,ouvert');
+const filtree = await parContrat(prepare.colonneLieeFiltree);
+ok('un filtre « sur le lien » restreint ce qu’elle ramène, sans retirer de ligne',
+    (await combien(prepare.colonneLieeFiltree)) === 5 && String(filtree.C1.MONTANTS) === '100' &&
+        filtree.C3.MONTANTS === null);
+ok('aucun réglage sur une colonne de la table de départ : il n’y a qu’une valeur par ligne',
+    prepare.reglageSurLaBase === 'lignes' && prepare.reglageParDefaut === 'regroupees');
 
 // ---- Modifier une colonne plutôt que la refaire ----
 const modif = prepare.modif;

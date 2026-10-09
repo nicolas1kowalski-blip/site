@@ -38,7 +38,14 @@ const out = await p.evaluate(async (seed)=>{
   // via explicite toujours possible
   el('adv-col-tbl').value='t3'; advColColChanged(); el('adv-col-via').value=el('adv-col-via').options[2].value; el('adv-col-col').value='CP'; advAddColumn();
   const c2=state.advExtract.columns[1]; r=buildAdvSql(state.advExtract);
-  ok('chemin explicite choisi : colonne CP sur un seul alias, sans COALESCE', c2.via && c2.via!=='any' && /x\d+\."CP" AS "CP"/.test(r.sql) && !/COALESCE\(x\d+\."CP"/.test(r.sql));
+  // Un chemin précis : la colonne ne vient QUE de ce chemin, jamais de la réunion des deux.
+  // Elle tient en outre sur une seule ligne (V13.45) : elle est donc ramenée par une sous-requête
+  // sur ce chemin, et non par la jointure des deux routes.
+  ok('chemin explicite choisi : colonne CP sur un seul chemin, sans COALESCE des deux routes',
+    c2.via && c2.via!=='any' && !/COALESCE\(x\d+\."CP"/.test(r.sql) && /AS "CP"/.test(r.sql) && /FROM "t_t3" s/.test(r.sql));
+  const avecJointure = { ...state.advExtract, columns: state.advExtract.columns.map((c,i)=> i===1 ? { ...c, plusieurs:'lignes' } : c) };
+  ok('et si l\'on demande une ligne par valeur, c\'est bien une jointure sur ce seul chemin',
+    /x\d+\."CP" AS "CP"/.test(buildAdvSql(avecJointure).sql));
   // filtre
   el('adv-flt-tbl').value='t3'; advFltTblChanged();
   ok('filtre : via « l\'un ou l\'autre » présélectionné', el('adv-flt-via').value==='any' && !el('adv-flt-via-wrap').classList.contains('hidden'));

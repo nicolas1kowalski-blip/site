@@ -50,7 +50,11 @@ const out = await p.evaluate(async () => {
         renderTables(); switchTab(3); advSetBase('t0'); await wait(100);
         el('adv-col-tbl').value = 't1'; advColColChanged(); el('adv-col-col').value = 'NOM'; advAddColumn(); await wait(60);
         const sql = buildAdvSql(state.advExtract);
-        ok('extraction : le SQL se construit toujours (jointure CONTRAT → PERSONNE, colonne NOM)', !sql.err && /LEFT JOIN "t_t1"/.test(sql.sql) && /"NOM"/.test(sql.sql));
+        // Depuis la V13.45, une colonne d'une table liée est ramenée par une sous-requête : elle
+        // tient sur une seule ligne au lieu de multiplier le fichier. Le contrôle vérifie donc
+        // qu'elle est bien allée la chercher dans PERSONNE, par l'un ou l'autre moyen.
+        ok('extraction : le SQL se construit toujours (CONTRAT → PERSONNE, colonne NOM)',
+            !sql.err && /"t_t1"/.test(sql.sql) && /"NOM"/.test(sql.sql));
         state.governance.businessObjects.push({ id: 'bo1', name: 'Contrat', definition: 'x', globalOwner: 'Paul', contributors: [], producedBy: [], sources: [{ table: 'CONTRAT', role: 'maitre' }], structure: [], elements: [{ id: 'e1', name: 'Numéro', mappings: [{ table: 'CONTRAT', col: 'NUM' }], usedBy: [] }] });
         const graph = buildBoLineageGraph(state.governance.businessObjects.find(b => b.id === 'bo1'));
         ok('lineage : le graphe d\'un objet se construit toujours', graph.nodes.some(n => n.id === 'bo:bo1') && graph.edges.length >= 1);

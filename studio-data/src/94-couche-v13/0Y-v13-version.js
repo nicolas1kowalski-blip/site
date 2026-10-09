@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.44.0';
+        const V13_VERSION = '13.45.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.45.0',
+                d: '2026-10-10',
+                t: 'Extraction : une colonne d’une table liée ne multiplie plus les lignes',
+                items: [
+                    '20 094 affaires. On ajoute <b>une</b> colonne d’ÉTABLISSEMENT, reliée par deux tables : le fichier passait à <b>1 031 862 lignes</b>. Rien n’était faux — c’est ce que fait une jointure quand il y a plusieurs correspondances — mais ce n’est pas ce qu’on demandait : on voulait ses 20 094 affaires, avec l’établissement en face.',
+                    'Une colonne venant d’une table liée rend désormais <b>une seule ligne par ligne de départ</b>. Plusieurs valeurs ? Elles sont <b>regroupées sur la ligne</b>, séparées par « | ». Aucune correspondance ? La cellule est <b>vide</b>, et la ligne reste.',
+                    'Chaque colonne porte son réglage, à côté de sa transformation : <b>valeurs regroupées</b> (par défaut), <b>la première valeur</b>, ou <b>une ligne par valeur</b> — ce dernier choix est l’ancien comportement, et le seul qui change le nombre de lignes du fichier. Il reste disponible, mais il se demande.',
+                    'Ces colonnes ne joignent plus leur table : elles vont chercher la valeur par une sous-requête. Un <b>filtre « sur le lien »</b> posé sur une table du chemin restreint ce qu’elles ramènent, toujours sans retirer la moindre ligne.',
+                    'La règle de l’extraction est donc tenue de bout en bout : <b>le fichier porte toutes les lignes de la table de départ</b>, sauf si l’on a filtré cette table-là ou demandé explicitement l’éclatement.'
+                ]
+            },
             {
                 v: '13.44.0',
                 d: '2026-10-09',
