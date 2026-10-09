@@ -156,6 +156,31 @@ const prepare = await p.evaluate(() => {
     phrasesDuCompte.nonMesure = v13PhraseDuCompte({});
     sorties.phrasesDuCompte = phrasesDuCompte;
 
+    // ---- Un filtre pose sur la TABLE DE LIAISON restreint ce que la synthese compte ----
+    // Le cas reel : « compter les CONTRAT d'une affaire, mais seulement par le lien SIGN ».
+    // Le filtre ne joint rien et ne retire aucune ligne : il doit quand meme restreindre le compte.
+    spec = neuf();
+    spec.columns.push(synthese('count'));
+    spec.filters.push({ id: 'f1', tableId: 'l', col: 'ID_SIN', op: '=', val: 'S1' });
+    sorties.filtreSurLaLiaisonCompte = sqlDe(spec);
+    // Le meme, pose sur la table RESUMEE plutot que sur la liaison.
+    spec = neuf();
+    spec.columns.push(synthese('count'));
+    spec.filters.push({ id: 'f1', tableId: 's', col: 'ETAT', op: '=', val: 'OUVERT' });
+    sorties.filtreSurLaTableResumee = sqlDe(spec);
+    // Un filtre « sur le lien » sur une table que rien n'emprunte reste sans effet, et c'est dit.
+    spec = neuf();
+    spec.columns.push(synthese('count'));
+    state.advExtract = spec;
+    sqlDe(spec);
+    sorties.sansEffetQuandRienNeLEmprunte = (spec._filtresSansEffet || []).slice();
+    spec = neuf();
+    spec.columns.push(synthese('count'));
+    spec.filters.push({ id: 'f1', tableId: 'l', col: 'ID_SIN', op: '=', val: 'S1' });
+    state.advExtract = spec;
+    sqlDe(spec);
+    sorties.pasSansEffetSiLaSyntheseLEmprunte = (spec._filtresSansEffet || []).slice();
+
     // ---- Modifier une colonne deja ajoutee ----
     // Une colonne ne se corrigeait qu'en la supprimant pour la refaire : on perdait son rang,
     // son nom metier et sa case « cle ». On verifie qu'elle garde tout cela.
@@ -346,6 +371,21 @@ ok('un fichier PLUS gros que la table de départ est signalé lui aussi, et expl
     /^⚠️/.test(phrases.lignesEnTrop) && /PLUS de lignes/.test(phrases.lignesEnTrop) && /table liée/.test(phrases.lignesEnTrop));
 ok('quand la mesure est impossible, on le dit au lieu d’afficher un chiffre faux',
     /n’a pas pu être mesuré/.test(phrases.nonMesure));
+
+// ---- Un filtre sur la table de liaison restreint ce que la synthèse compte ----
+const parLaLiaison = await parContrat(prepare.filtreSurLaLiaisonCompte);
+ok('un filtre sur la table de liaison ne retire aucune ligne : les 5 contrats sortent',
+    (await combien(prepare.filtreSurLaLiaisonCompte)) === 5);
+ok('mais il restreint ce que la synthèse compte : C1 ne compte plus que son lien S1',
+    Number(parLaLiaison.C1.R) === 1 && Number(parLaLiaison.C2.R) === 0);
+const parLaResumee = await parContrat(prepare.filtreSurLaTableResumee);
+ok('un filtre sur la table résumée restreint le compte de la même façon',
+    (await combien(prepare.filtreSurLaTableResumee)) === 5 &&
+        Number(parLaResumee.C1.R) === 1 && Number(parLaResumee.C2.R) === 1 && Number(parLaResumee.C3.R) === 0);
+ok('un filtre « sur le lien » qu’aucune synthèse ni aucune colonne n’emprunte est signalé « sans effet »',
+    prepare.sansEffetQuandRienNeLEmprunte.length === 0);
+ok('et il ne l’est PAS dès qu’une synthèse emprunte cette table',
+    prepare.pasSansEffetSiLaSyntheseLEmprunte.length === 0);
 
 // ---- Modifier une colonne plutôt que la refaire ----
 const modif = prepare.modif;

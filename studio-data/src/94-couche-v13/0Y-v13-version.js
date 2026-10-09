@@ -1,7 +1,23 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.42.0';
+        const V13_VERSION = '13.43.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.43.0',
+                d: '2026-10-09',
+                t: 'Extraction : le fichier garde toutes ses lignes, et le dit',
+                items: [
+                    '<b>La règle de l’extraction</b> : le fichier produit porte TOUTES les lignes de la table de départ, sauf si l’on a filtré cette table-là. Tout ce qui suit la fait tenir.',
+                    'Une <b>synthèse d’une table liée</b> traversait la table de liaison en la JOIGNANT au résultat. Comme une table de liaison porte plusieurs lignes pour une même ligne de départ, elle multipliait les lignes du fichier — et, en « intersection », les supprimait. Elle est désormais traversée <b>à l’intérieur du calcul</b> : une ligne de départ reste une ligne.',
+                    'Un <b>filtre posé sur une table liée</b> porte maintenant <b>sur le lien</b> : il restreint ce que le lien ramène, la cellule est vide quand rien ne correspond, et <b>la ligne reste</b>. « Sur la ligne » reste disponible sur chaque filtre, mais il faut le demander : c’est le seul réglage qui fait disparaître des lignes.',
+                    'Un filtre sur le lien vaut <b>partout où ce lien est emprunté</b> : posé sur la table de liaison, il restreint aussi ce que les synthèses comptent. « Compter les contrats, mais seulement par le lien SIGN » se dit donc avec un filtre ordinaire.',
+                    'Une synthèse accepte en plus ses <b>propres critères</b> (« ⛉ Ne compter que… ») : « compter les sinistres OUVERTS » n’est pas « ne garder que les contrats qui en ont un ». Un contrat sans sinistre ouvert sort avec <b>0</b>.',
+                    'Le <b>compte des lignes</b> s’affiche systématiquement après la génération : « 20 000 ligne(s) au départ → 20 000 ligne(s) dans le fichier. Aucune ligne perdue. » Et s’il en manque, le nombre manquant <b>et la cause</b> — filtre réglé sur la ligne, intersection, regroupement, dédoublonnage, aperçu limité.',
+                    'L’<b>ordre des colonnes en sortie</b> se change sur place : une poignée à glisser et quatre flèches par ligne. C’est l’ordre des colonnes du fichier.',
+                    'Une colonne déjà ajoutée se <b>modifie</b> (✎) au lieu d’être refaite : le formulaire se remplit avec ses réglages, et la colonne garde son rang, son nom en sortie et sa case « clé ».',
+                    'Le <b>plein écran</b> d’un schéma ne peut plus être refusé : si le navigateur l’interdit — stratégie d’entreprise, page ouverte depuis le disque —, le schéma s’agrandit dans la page.'
+                ]
+            },
             {
                 v: '13.42.0',
                 d: '2026-09-30',

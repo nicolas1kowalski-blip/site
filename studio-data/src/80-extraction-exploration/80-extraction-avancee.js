@@ -669,7 +669,24 @@
         }
         // Développe une colonne de la spec en 1..N items { expr, alias } — les types « link »
         // (synthèse de table liée) et « hier » (hiérarchie aplatie) produisent du SQL corrélé/CTE.
-        function advExpandCol(map, c, hierRef) {
+        /**
+         * Les filtres « sur le lien » qui portent sur une table traversée par cette synthèse.
+         *
+         * Un filtre posé sur la table de liaison — « ne compter que les liens dont le rôle est
+         * SIGN » — doit restreindre ce qui est compté. Jusqu'ici il ne restreignait que les
+         * jointures du résultat : comme une synthèse ne joint rien, le filtre ne faisait RIEN,
+         * et le compte ignorait le rôle. « Sur le lien » veut dire la même chose partout où le
+         * lien est emprunté.
+         */
+        function advFiltresDuCheminDeLaSynthese(spec, colonne) {
+            const tablesDuChemin = new Set(
+                colonne._chemin && colonne._chemin.length ? colonne._chemin.map(pas => pas.vers) : [colonne.tableId]
+            );
+            return (spec.filters || []).filter(
+                f => advPorteeDuFiltre(f, spec.baseId) === 'lien' && tablesDuChemin.has(f.tableId)
+            );
+        }
+        function advExpandCol(map, c, hierRef, spec) {
             if (c.kind === 'link') {
                 // La table résumée est atteinte DANS la sous-requête, en traversant s'il le faut les
                 // tables de liaison du chemin. Rien n'est joint au résultat : une ligne de départ
@@ -688,8 +705,11 @@
                     aliasDe = {};
                     aliasDe[c.tableId] = 's';
                 }
-                // Les critères restreignent ce qui est résumé, pas les lignes du fichier.
+                // Les critères de la synthèse, puis les filtres « sur le lien » qui portent sur
+                // une table de son chemin : les uns comme les autres restreignent ce qui est
+                // résumé, jamais les lignes du fichier.
                 key += advCriteresDeLaSyntheseSql(c, aliasDe);
+                if (spec) key += advCriteresDeLaSyntheseSql({ conds: advFiltresDuCheminDeLaSynthese(spec, c) }, aliasDe);
                 const colRaw = c.col ? `TRIM(CAST(s.${sqlIdent(c.col)} AS VARCHAR))` : null;
                 const al = c.alias || c.col || 'synthese';
                 if (c.mode === 'count') return [{ expr: `(SELECT COUNT(*) FROM ${S} WHERE ${key})`, alias: al }];
@@ -861,8 +881,12 @@
                 }
                 const alias = advAlias(map, filtre);
                 if (!joins.some(j => j.alias === alias)) {
-                    // Aucune colonne n'est ramenée de cette table : il n'y a rien à restreindre.
-                    filtresSansEffet.push(filtre.id);
+                    // Pas de jointure à restreindre. Reste à savoir s'il sert à une synthèse :
+                    // un filtre sur une table de liaison restreint ce que la synthèse compte.
+                    const sertAUneSynthese = cols.some(
+                        colonne => colonne.kind === 'link' && advFiltresDuCheminDeLaSynthese(spec, colonne).includes(filtre)
+                    );
+                    if (!sertAUneSynthese) filtresSansEffet.push(filtre.id);
                     return;
                 }
                 (conditionsDeJointure[alias] = conditionsDeJointure[alias] || []).push(advCondSql(alias, filtre));
@@ -887,7 +911,7 @@
             let selectSql,
                 tail = '';
             if (spec.group.on) {
-                const dims = cols.flatMap(c => advExpandCol(map, c, hierRef));
+                const dims = cols.flatMap(c => advExpandCol(map, c, hierRef, spec));
                 const aggs = spec.group.aggs.map(a => {
                     const q = a.col && a.col !== '*' ? `${advAlias(map, a)}.${sqlIdent(a.col)}` : null;
                     let e;
@@ -908,14 +932,14 @@
                 selectSql = all.map(x => `${x.expr} AS ${sqlIdent(x.alias)}`).join(',\n  ');
                 tail = dims.length ? '\nGROUP BY ' + dims.map((_, i) => i + 1).join(', ') : '';
             } else {
-                const items = cols.flatMap(c => advExpandCol(map, c, hierRef));
+                const items = cols.flatMap(c => advExpandCol(map, c, hierRef, spec));
                 items.forEach(x => outCols.push({ alias: x.alias }));
                 selectSql = items.map(x => `${x.expr} AS ${sqlIdent(x.alias)}`).join(',\n  ');
                 if (spec.dedup.on && spec.dedup.keys.length) {
                     const keyExprs = spec.dedup.keys
                         .map(cid => {
                             const column = cols.find(x => x.id === cid);
-                            return column ? (advExpandCol(map, column, hierRef)[0] || {}).expr : null;
+                            return column ? (advExpandCol(map, column, hierRef, spec)[0] || {}).expr : null;
                         })
                         .filter(Boolean);
                     if (keyExprs.length) {
@@ -2826,9 +2850,22 @@
             const avant = advCriteresDeSyntheseEnAttente.length;
             advCriteresDeSyntheseEnAttente = advCriteresDeSyntheseEnAttente.filter(c => permises.has(c.tableId));
             if (advRemplissageDuFormulaire) return;
-            if (advCriteresDeSyntheseEnAttente.length !== avant)
-                showError('Les critères préparés ne portaient pas sur ce chemin : ils ont été retirés.');
+            // On ne redessine QUE si des critères ont été retirés : redessiner à chaque changement
+            // de table reconstruirait le formulaire et effacerait la table qu'on vient d'y choisir.
+            if (advCriteresDeSyntheseEnAttente.length === avant) return;
+            showError('Les critères préparés ne portaient pas sur ce chemin : ils ont été retirés.');
             renderAdvExtract();
+            // Le formulaire est neuf : on y remet la table choisie, sans relancer de redessin.
+            advRemplissageDuFormulaire = true;
+            try {
+                const choix = el('adv-link-tbl');
+                if (choix) {
+                    choix.value = id;
+                    advLinkTblChanged();
+                }
+            } finally {
+                advRemplissageDuFormulaire = false;
+            }
         }
         function advLinkModeChanged() {
             const element = el('adv-link-mode').value;
