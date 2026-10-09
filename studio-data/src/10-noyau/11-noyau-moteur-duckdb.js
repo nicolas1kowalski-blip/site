@@ -593,7 +593,76 @@
 
         // Ingestion unifiée : lit le fichier (csv/txt/xlsx) ou reçoit des lignes déjà en mémoire (api/extraction)
         // et alimente la table DuckDB correspondante. Retourne la liste des colonnes.
+        /**
+         * Combien de lignes une source a-t-elle vraiment chargées, et combien le fichier en
+         * contient-il ?
+         *
+         * Sans ces deux nombres, une ligne qui manque ne se voit jamais : on cherche un
+         * enregistrement, on ne le trouve pas, et rien ne dit s'il n'a pas été chargé ou si l'on
+         * cherche mal. La carte de la source affichait « — » tant que le cockpit n'était pas passé.
+         *
+         * « Lignes du fichier » compte les lignes PHYSIQUES, sans interpréter les guillemets :
+         * c'est volontairement la mesure la plus brute, celle qu'on obtient en ouvrant le fichier.
+         * Un champ contenant un retour à la ligne compte donc pour plusieurs — c'est dit à l'écran.
+         */
+        async function compterLesLignesChargees(tId) {
+            const { conn } = await getDB();
+            const res = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tId))}`);
+            return Number(arrowResultToObjects(res)[0].n);
+        }
+        async function compterLesLignesDuFichier(nomVirtuel) {
+            const { conn } = await getDB();
+            // Un séparateur qui ne peut pas figurer dans un texte, aucun guillemet, aucun entête :
+            // chaque ligne du fichier devient une ligne, quoi qu'elle contienne.
+            const res = await conn.query(
+                `SELECT COUNT(*)::BIGINT AS n FROM read_csv(${sqlLiteral(nomVirtuel)},
+                    columns={'ligne': 'VARCHAR'}, delim='\x1F', quote='', escape='',
+                    header=false, all_varchar=true, ignore_errors=true)`
+            );
+            return Number(arrowResultToObjects(res)[0].n);
+        }
+        /** Mesure et range les deux nombres sur la source. Un échec ici n'empêche jamais un chargement. */
+        async function mesurerLesLignesDeLaSource(tId) {
+            const table = state.tables[tId];
+            if (!table) return;
+            try {
+                table.lastRows = await compterLesLignesChargees(tId);
+            } catch (e) {
+                table.lastRows = null;
+            }
+            table.lignesDuFichier = null;
+            const unSeulFichierTexte =
+                !Array.isArray(table.files) && table.file && (table.type === 'csv' || table.type === 'txt');
+            if (!unSeulFichierTexte) return;
+            try {
+                const brutes = await compterLesLignesDuFichier('src_' + tId);
+                // La première ligne est l'entête : elle n'est pas une donnée.
+                table.lignesDuFichier = Math.max(0, brutes - 1);
+            } catch (e) {
+                table.lignesDuFichier = null;
+            }
+        }
+        /** Vrai quand le fichier contient plus de lignes que la source n'en a chargées. */
+        function sourceALigneManquante(table) {
+            return !!table && table.lastRows != null && table.lignesDuFichier != null && table.lignesDuFichier > table.lastRows;
+        }
         async function ingestFileTable(tId) {
+            const entetes = await ingestFileTableSansMesure(tId);
+            await mesurerLesLignesDeLaSource(tId);
+            const table = state.tables[tId];
+            if (sourceALigneManquante(table)) {
+                const manquantes = table.lignesDuFichier - table.lastRows;
+                showError(
+                    `« ${escapeHTML(table.name)} » : ${Number(table.lastRows).toLocaleString('fr-FR')} ligne(s) chargée(s) ` +
+                        `sur ${Number(table.lignesDuFichier).toLocaleString('fr-FR')} ligne(s) dans le fichier — ` +
+                        `${Number(manquantes).toLocaleString('fr-FR')} de moins. ` +
+                        `Si des champs contiennent un retour à la ligne, l'écart est normal ; sinon, ouvrez les ` +
+                        `paramètres de lecture de la source (séparateur, guillemets, encodage).`
+                );
+            }
+            return entetes;
+        }
+        async function ingestFileTableSansMesure(tId) {
             const table = state.tables[tId];
             // Source fusionnée (plusieurs fichiers = une même source)
             if (Array.isArray(table.files) && table.files.length) {

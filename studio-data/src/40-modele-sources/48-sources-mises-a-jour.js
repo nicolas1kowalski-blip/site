@@ -433,6 +433,22 @@
             clearTimeout(_srcSearchT);
             _srcSearchT = setTimeout(renderTables, 120);
         }
+        /**
+         * Ce que la carte dit du nombre de lignes.
+         *
+         * Le nombre chargé seul ne prouve rien : c'est sa comparaison avec le fichier qui révèle
+         * une ligne manquante. Quand les deux concordent, on le dit aussi — savoir que tout est là
+         * vaut autant que d'apprendre qu'il manque quelque chose.
+         */
+        function sourceLignesManquantesHtml(table) {
+            if (!table || table.lignesDuFichier == null || table.lastRows == null) return '';
+            const dansLeFichier = Number(table.lignesDuFichier);
+            const chargees = Number(table.lastRows);
+            if (dansLeFichier === chargees)
+                return `<span class="text-[10px] text-emerald-600 font-bold" title="Le fichier contient exactement ce nombre de lignes : aucune n'a été écartée.">= fichier ✓</span>`;
+            if (dansLeFichier < chargees) return '';
+            return `<span class="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-0.5" title="Le fichier contient ${dansLeFichier.toLocaleString('fr-FR')} ligne(s). Si des champs contiennent un retour à la ligne, l'écart est normal ; sinon, vérifiez le séparateur, les guillemets et l'encodage dans les paramètres de lecture.">⚠ ${(dansLeFichier - chargees).toLocaleString('fr-FR')} de moins que le fichier (${dansLeFichier.toLocaleString('fr-FR')})</span>`;
+        }
         function renderTables() {
             const grid = el('tablesGrid');
             if (!grid) return;
@@ -513,7 +529,7 @@
                     // V3 UX : faits lisibles d'un regard — format, volumétrie, complétude du dernier audit.
                     const lq = lastAuditFor(t.name);
                     html += `<div class="flex items-center gap-2 mb-2 text-[11px] text-slate-500 flex-wrap">${fmtBadgeUx(t)}
-                        <span><strong class="text-slate-700">${t.lastRows != null ? Number(t.lastRows).toLocaleString('fr-FR') : '—'}</strong> lignes</span><span aria-hidden="true">·</span>
+                        <span><strong class="text-slate-700">${t.lastRows != null ? Number(t.lastRows).toLocaleString('fr-FR') : '—'}</strong> lignes</span>${sourceLignesManquantesHtml(t)}<span aria-hidden="true">·</span>
                         <span><strong class="text-slate-700">${(t.headers || []).length}</strong> colonnes</span>
                         ${lq && lq.avgCompleteness != null ? `<span class="flex-grow"></span><span class="meter" style="min-width:110px" title="Complétude moyenne au dernier audit (${new Date(lq.ts).toLocaleDateString('fr-FR')})"><span class="bar"><i style="width:${Math.min(100, lq.avgCompleteness)}%;background:${meterColor(lq.avgCompleteness)}"></i></span><span class="pct" style="color:${meterColor(lq.avgCompleteness)}">${Math.round(lq.avgCompleteness)}%</span></span>` : ''}</div>`;
                     html += `<div class="max-h-28 overflow-auto text-xs bg-slate-50 p-2 rounded border border-slate-100">${mergedBadge}${storageBadge}${t.headers.map(h => `<span class="inline-block bg-white border px-1 rounded mr-1 mb-1">${escapeHTML(h)}</span>`).join('')}</div>`;

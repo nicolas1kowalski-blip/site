@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.45.0';
+        const V13_VERSION = '13.46.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.46.0',
+                d: '2026-10-10',
+                t: 'Sources : combien de lignes ont vraiment été chargées',
+                items: [
+                    'Chaque source affiche désormais son <b>nombre de lignes dès le chargement</b>. La carte montrait « — » tant que le cockpit n’était pas passé : on ne pouvait donc pas vérifier qu’un fichier avait été lu en entier.',
+                    'À côté, le <b>nombre de lignes du fichier lui-même</b>, compté sans rien interpréter — exactement ce qu’on obtient en ouvrant le fichier. Quand les deux concordent : <b>« = fichier ✓ »</b>. Quand ils diffèrent : un bandeau rouge donne <b>l’écart et le nombre du fichier</b>.',
+                    'Un écart est annoncé <b>au chargement</b>, avec les deux nombres, et il dit d’abord l’explication la plus fréquente — un champ contenant un retour à la ligne — avant de faire soupçonner une perte. Sinon : séparateur, guillemets, encodage.',
+                    'Une ligne qui manque ne peut plus passer inaperçue : on cherchait un enregistrement, on ne le trouvait pas, et rien ne disait s’il n’avait pas été chargé ou si l’on cherchait mal.'
+                ]
+            },
             {
                 v: '13.45.0',
                 d: '2026-10-10',

@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-09T11:25:35.722Z",
+ "generated": "2026-10-09T13:30:21.694Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 52308,
-  "codeLines": 49151,
-  "commentLines": 3157,
-  "templateLines": 10289,
+  "lines": 52404,
+  "codeLines": 49223,
+  "commentLines": 3181,
+  "templateLines": 10304,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6859,
+  "locals": 6868,
   "shortLocals": 844,
-  "functions": 1741,
+  "functions": 1747,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12305000728969237
+  "shortLocalsRatio": 0.12288875946418171
  },
  "files": [
   {
@@ -63,17 +63,17 @@
   },
   {
    "file": "10-noyau/11-noyau-moteur-duckdb.js",
-   "lines": 851,
-   "codeLines": 708,
-   "commentLines": 143,
-   "templateLines": 53,
+   "lines": 920,
+   "codeLines": 760,
+   "commentLines": 160,
+   "templateLines": 60,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 152,
+   "locals": 159,
    "shortLocals": 16,
-   "functions": 33,
+   "functions": 38,
    "longestLogic": 133,
-   "shortLocalsRatio": 0.10526315789473684
+   "shortLocalsRatio": 0.10062893081761007
   },
   {
    "file": "10-noyau/12-modele-donnees-graphe.js",
@@ -559,17 +559,17 @@
   },
   {
    "file": "40-modele-sources/48-sources-mises-a-jour.js",
-   "lines": 872,
-   "codeLines": 829,
-   "commentLines": 43,
-   "templateLines": 150,
+   "lines": 888,
+   "codeLines": 838,
+   "commentLines": 50,
+   "templateLines": 152,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 100,
+   "locals": 102,
    "shortLocals": 11,
-   "functions": 40,
+   "functions": 41,
    "longestLogic": 127,
-   "shortLocalsRatio": 0.11
+   "shortLocalsRatio": 0.10784313725490197
   },
   {
    "file": "40-modele-sources/49-modele-rendu-svg.js",
@@ -1055,10 +1055,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 552,
-   "codeLines": 550,
+   "lines": 563,
+   "codeLines": 561,
    "commentLines": 2,
-   "templateLines": 292,
+   "templateLines": 298,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
