@@ -1936,8 +1936,13 @@
                 existing.config = cfg;
                 existing.at = Date.now();
                 existing.baseName = baseName;
+                extractSpec._paramId = existing.id;
             } else {
-                epList().push({ id: 'ep_' + generateId(), name, at: Date.now(), baseName, config: cfg });
+                const nouveau = { id: 'ep_' + generateId(), name, at: Date.now(), baseName, config: cfg };
+                epList().push(nouveau);
+                // La mémoire des exécutions se rattache au paramétrage : c'est lui qui donne son
+                // sens à « la fois précédente ».
+                extractSpec._paramId = nouveau.id;
             }
             persistAppState();
             renderAdvExtract();
@@ -1983,6 +1988,7 @@
             cfg.dedup.keys = (cfg.dedup.keys || []).filter(k => cfg.columns.some(c => c.id === k));
             cfg.group = cfg.group || { on: false, aggs: [] };
             cfg.joinType = cfg.joinType || 'left';
+            cfg._paramId = presets.id;
             state.advExtract = cfg;
             const baseTableSelectElement = el('baseTableSelect');
             if (baseTableSelectElement && cfg.baseId) baseTableSelectElement.value = cfg.baseId;
@@ -2397,6 +2403,8 @@
                 </div>
                 <div class="flex items-center gap-3 flex-wrap bg-indigo-50/40 border border-indigo-100 rounded-lg p-3">
                     <button id="adv-generate" onclick="advGenerate()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg">⬇️ Générer le CSV</button>
+                    <button onclick="advControlerLesClesMaintenant()" title="Avant de produire quoi que ce soit : combien de lignes, combien de clés différentes, et quelles valeurs de la liste manquent" class="text-sm bg-white border border-slate-300 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-50">🔑 Contrôler les clés</button>
+                    <div id="adv-controle-cles" class="basis-full"></div>
                     <button id="adv-excel" onclick="advGenererExcel()" title="Un classeur en deux onglets : les données, et une synthèse de ce qui a été paramétré et contrôlé" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-lg">📗 Générer l’Excel</button>
                     <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="adv-add-source" class="w-4 h-4"> Ajouter aussi comme nouvelle source</label>
                     <input type="text" id="adv-source-name" placeholder="Nom de la source (optionnel)" class="border border-slate-300 p-1.5 rounded text-xs flex-grow min-w-[160px]">

@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-10T14:41:13.116Z",
+ "generated": "2026-10-10T15:07:21.129Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 52831,
-  "codeLines": 49559,
-  "commentLines": 3272,
-  "templateLines": 10361,
+  "lines": 53062,
+  "codeLines": 49756,
+  "commentLines": 3306,
+  "templateLines": 10394,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6932,
-  "shortLocals": 845,
-  "functions": 1759,
+  "locals": 6960,
+  "shortLocals": 847,
+  "functions": 1769,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12189844200807848
+  "shortLocalsRatio": 0.12169540229885058
  },
  "files": [
   {
@@ -733,17 +733,17 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 3421,
-   "codeLines": 3081,
-   "commentLines": 340,
-   "templateLines": 591,
+   "lines": 3429,
+   "codeLines": 3087,
+   "commentLines": 342,
+   "templateLines": 593,
    "longLogicLines": 4,
    "multiStatementLines": 0,
-   "locals": 519,
+   "locals": 520,
    "shortLocals": 56,
    "functions": 154,
    "longestLogic": 210,
-   "shortLocalsRatio": 0.10789980732177264,
+   "shortLocalsRatio": 0.1076923076923077,
    "longLinesSample": [
     "key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anc",
     "`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(anchor.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ",
@@ -808,17 +808,17 @@
   },
   {
    "file": "80-extraction-exploration/85-extraction-excel.js",
-   "lines": 306,
-   "codeLines": 260,
-   "commentLines": 46,
-   "templateLines": 35,
+   "lines": 517,
+   "codeLines": 439,
+   "commentLines": 78,
+   "templateLines": 59,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 52,
-   "shortLocals": 1,
-   "functions": 11,
+   "locals": 79,
+   "shortLocals": 3,
+   "functions": 21,
    "longestLogic": 128,
-   "shortLocalsRatio": 0.019230769230769232
+   "shortLocalsRatio": 0.0379746835443038
   },
   {
    "file": "90-couche-v11/0V-v11-version.js",
@@ -1069,10 +1069,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 598,
-   "codeLines": 596,
+   "lines": 610,
+   "codeLines": 608,
    "commentLines": 2,
-   "templateLines": 318,
+   "templateLines": 325,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,

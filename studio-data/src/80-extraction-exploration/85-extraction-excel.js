@@ -15,6 +15,9 @@
 
         // Au-delà, Excel ne sait plus ouvrir le fichier : mieux vaut le dire avant de produire 40 Mo.
         const EXCEL_LIGNES_MAX = 1000000;
+        // Au-delà, la mémoire d'un paramétrage pèserait plus que l'application : on ne compare alors
+        // que les NOMBRES, et on le dit, au lieu de garder une liste que l'on ne saurait plus porter.
+        const CLES_MEMORISEES_MAX = 20000;
         // Dans la synthèse, on nomme quelques clés manquantes plutôt que de dire « il en manque 812 ».
         const CLES_MANQUANTES_MONTREES = 20;
 
@@ -43,6 +46,11 @@
          * On ne refait pas l'extraction : on interroge la table qui vient d'être produite. Les nombres
          * décrivent donc exactement le fichier que l'on tient.
          */
+        /** L'expression SQL de la clé de contrôle, à partir des colonnes cochées. */
+        function advExpressionDeLaCle(colonnes) {
+            const morceaux = colonnes.map(c => `COALESCE(${sqlCleDeLien(sqlIdent(advNomEnSortie(c)))}, '')`);
+            return morceaux.length > 1 ? `concat_ws('§', ${morceaux.join(', ')})` : morceaux[0];
+        }
         async function advControlerLesCles(identifiantDeLaTable, spec) {
             const { conn } = await getDB();
             const nom = sqlIdent(duckTableName(identifiantDeLaTable));
@@ -50,8 +58,7 @@
             const lignes = Number(arrowResultToObjects(await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${nom}`))[0].n);
             if (!colonnes.length) return { lignes, cleDeclaree: false };
 
-            const morceaux = colonnes.map(c => `COALESCE(${sqlCleDeLien(sqlIdent(advNomEnSortie(c)))}, '')`);
-            const cle = morceaux.length > 1 ? `concat_ws('§', ${morceaux.join(', ')})` : morceaux[0];
+            const cle = advExpressionDeLaCle(colonnes);
             const vide = colonnes.map(c => `${sqlCleDeLien(sqlIdent(advNomEnSortie(c)))} IS NULL`).join(' AND ');
             const mesure = arrowResultToObjects(
                 await conn.query(`SELECT COUNT(DISTINCT ${cle})::BIGINT AS distinctes,
@@ -103,25 +110,105 @@
             )[0];
             const demandees = Number(resultat.demandees);
             const retrouvees = Number(resultat.retrouvees);
-            let exemples = [];
+            let toutesLesManquantes = [];
             if (retrouvees < demandees) {
-                exemples = arrowResultToObjects(
+                // La liste COMPLÈTE : c'est elle qui sert, un onglet du classeur la porte. La
+                // synthèse, elle, n'en nomme que quelques-unes pour rester lisible.
+                toutesLesManquantes = arrowResultToObjects(
                     await conn.query(`WITH attendues AS (SELECT DISTINCT ${valeur} AS k FROM ${table} l WHERE ${valeur} IS NOT NULL),
                 trouvees AS (${presentes})
                 SELECT a.k AS k FROM attendues a WHERE NOT EXISTS (SELECT 1 FROM trouvees t WHERE t.k = a.k)
-                ORDER BY 1 LIMIT ${CLES_MANQUANTES_MONTREES}`)
+                ORDER BY 1`)
                 ).map(l => String(l.k));
             }
+            const exemples = toutesLesManquantes.slice(0, CLES_MANQUANTES_MONTREES);
             return {
                 nomDeLaListe: filtre.list.name,
                 compare: `${cles[0].lc} (fichier de liste) ↔ ${advNomEnSortie(colonneDeSortie)} (en sortie)`,
                 demandees,
                 retrouvees,
                 manquantes: demandees - retrouvees,
-                exemples
+                exemples,
+                toutesLesManquantes
             };
         }
 
+        // ---- La mémoire d'un paramétrage : comparer une extraction à la précédente -------
+        //
+        // La même extraction, rejouée la semaine suivante, doit pouvoir répondre : combien de
+        // lignes en plus, combien de clés apparues, et surtout lesquelles ont DISPARU. Sans cela,
+        // on compare deux fichiers à la main, et l'on ne voit que ce qu'on cherchait déjà.
+        //
+        // On ne garde que ce qu'un paramétrage peut raisonnablement porter : les nombres toujours,
+        // et les clés tant qu'elles tiennent. Au-delà, on compare les nombres et on le dit.
+        function advMemoireDesExtractions() {
+            return (state.controlesDExtraction = state.controlesDExtraction || {});
+        }
+        /** Le paramétrage auquel rattacher la mémoire : celui qui a été chargé ou enregistré. */
+        function advParametrageCourant() {
+            const identifiant = state.advExtract && state.advExtract._paramId;
+            if (!identifiant) return null;
+            return (typeof epList === 'function' ? epList() : []).find(x => x.id === identifiant) || null;
+        }
+        /** Les clés présentes dans le résultat, pour les comparer à la prochaine exécution. */
+        async function advClesDuResultat(nomDeLaTable, expressionDeLaCle) {
+            const { conn } = await getDB();
+            const lignes = arrowResultToObjects(
+                await conn.query(`SELECT DISTINCT ${expressionDeLaCle} AS k FROM ${nomDeLaTable}
+                    WHERE ${expressionDeLaCle} IS NOT NULL ORDER BY 1 LIMIT ${CLES_MEMORISEES_MAX + 1}`)
+            ).map(l => String(l.k));
+            return lignes.length > CLES_MEMORISEES_MAX
+                ? { cles: null, tropNombreuses: true }
+                : { cles: lignes, tropNombreuses: false };
+        }
+        /** Ce que l'on retient d'une exécution, pour la comparer à la suivante. */
+        function advRetenirLExecution(controle, clesDuResultat) {
+            const parametrage = advParametrageCourant();
+            if (!parametrage) return;
+            advMemoireDesExtractions()[parametrage.id] = {
+                date: Date.now(),
+                lignes: controle.lignes,
+                distinctes: controle.cleDeclaree ? controle.distinctes : null,
+                nomDeLaCle: controle.cleDeclaree ? controle.nomDeLaCle : null,
+                cles: (clesDuResultat && clesDuResultat.cles) || null,
+                tropNombreuses: !!(clesDuResultat && clesDuResultat.tropNombreuses)
+            };
+            try {
+                persistAppState();
+            } catch (e) {}
+        }
+        /**
+         * La comparaison avec la fois précédente. Rien à comparer n'est pas un échec : c'est
+         * simplement la première exécution de ce paramétrage, et on le dit.
+         */
+        function advComparerALaFoisPrecedente(controle, clesDuResultat) {
+            const parametrage = advParametrageCourant();
+            if (!parametrage) return { sansParametrage: true };
+            const avant = advMemoireDesExtractions()[parametrage.id];
+            if (!avant) return { premiereFois: true, nomDuParametrage: parametrage.name };
+            const resultat = {
+                nomDuParametrage: parametrage.name,
+                datePrecedente: new Date(avant.date).toLocaleString('fr-FR'),
+                lignesAvant: avant.lignes,
+                lignesApres: controle.lignes,
+                distinctesAvant: avant.distinctes,
+                distinctesApres: controle.cleDeclaree ? controle.distinctes : null
+            };
+            const maintenant = (clesDuResultat && clesDuResultat.cles) || null;
+            if (!avant.cles || !maintenant) {
+                resultat.valeursIncomparables = true;
+                resultat.pourquoi =
+                    avant.tropNombreuses || (clesDuResultat && clesDuResultat.tropNombreuses)
+                        ? `plus de ${CLES_MEMORISEES_MAX.toLocaleString('fr-FR')} clés : seuls les nombres sont comparés`
+                        : 'aucune clé de contrôle n’était déclarée lors de l’une des deux exécutions';
+                return resultat;
+            }
+            const anciennes = new Set(avant.cles);
+            const nouvelles = new Set(maintenant);
+            resultat.apparues = maintenant.filter(k => !anciennes.has(k));
+            resultat.disparues = avant.cles.filter(k => !nouvelles.has(k));
+            return resultat;
+        }
         /** Le paramétrage de l'extraction, mis à plat pour l'onglet de synthèse. */
         function advSyntheseDuParametrage(spec) {
             const nom = identifiant => (state.tables[identifiant] || {}).name || identifiant;
@@ -257,6 +344,117 @@
             return bloc;
         }
 
+        /** L'onglet « Valeurs absentes » : la liste complète, pas cinq exemples. */
+        function advFeuilleDesValeursAbsentes(controle) {
+            const a = controle && controle.attendues;
+            if (!a || a.impossible || !a.manquantes) return null;
+            const bloc = [
+                [`Valeurs demandées par la liste « ${a.nomDeLaListe} » et ABSENTES du fichier`],
+                ['Comparaison', a.compare],
+                ['Demandées', a.demandees],
+                ['Retrouvées', a.retrouvees],
+                ['Absentes', a.manquantes],
+                [],
+                ['Valeur absente']
+            ];
+            (a.toutesLesManquantes || []).forEach(v => bloc.push([v]));
+            return bloc;
+        }
+        /** L'onglet « Comparaison » : ce qui a changé depuis la fois précédente. */
+        function advFeuilleDeComparaison(comparaison) {
+            if (!comparaison || comparaison.sansParametrage) return null;
+            const bloc = [['COMPARAISON AVEC L’EXÉCUTION PRÉCÉDENTE']];
+            if (comparaison.premiereFois) {
+                bloc.push([`Paramétrage « ${comparaison.nomDuParametrage} »`]);
+                bloc.push(['Première exécution enregistrée : rien à comparer pour l’instant.']);
+                bloc.push(['La prochaine fois, cet onglet dira ce qui a changé.']);
+                return bloc;
+            }
+            bloc.push(['Paramétrage', comparaison.nomDuParametrage]);
+            bloc.push(['Exécution précédente', comparaison.datePrecedente]);
+            bloc.push([]);
+            bloc.push(['', 'Avant', 'Après', 'Écart']);
+            const ecart = (a, b) => (a == null || b == null ? '' : b - a);
+            bloc.push([
+                'Lignes',
+                comparaison.lignesAvant,
+                comparaison.lignesApres,
+                ecart(comparaison.lignesAvant, comparaison.lignesApres)
+            ]);
+            bloc.push([
+                'Clés différentes',
+                comparaison.distinctesAvant == null ? '—' : comparaison.distinctesAvant,
+                comparaison.distinctesApres == null ? '—' : comparaison.distinctesApres,
+                ecart(comparaison.distinctesAvant, comparaison.distinctesApres)
+            ]);
+            bloc.push([]);
+            if (comparaison.valeursIncomparables) {
+                bloc.push(['Clés apparues / disparues : non comparées — ' + comparaison.pourquoi]);
+                return bloc;
+            }
+            bloc.push(['Clés APPARUES depuis la fois précédente', comparaison.apparues.length]);
+            bloc.push(['Clés DISPARUES depuis la fois précédente', comparaison.disparues.length]);
+            const colonne = (titre, valeurs) => {
+                bloc.push([]);
+                bloc.push([titre]);
+                valeurs.forEach(v => bloc.push([v]));
+            };
+            if (comparaison.apparues.length) colonne('Apparues', comparaison.apparues);
+            if (comparaison.disparues.length) colonne('Disparues', comparaison.disparues);
+            return bloc;
+        }
+        /**
+         * Le contrôle des clés AVANT de produire quoi que ce soit.
+         *
+         * Apprendre qu'il manque dix valeurs une fois le fichier envoyé ne sert à rien. On le
+         * demande donc depuis le panneau Résultat, on mesure sur une table temporaire, et on
+         * l'efface : rien n'est produit, rien n'est retenu.
+         */
+        async function advControlerLesClesMaintenant() {
+            const boite = el('adv-controle-cles');
+            const requete = advCurrentSql();
+            if (requete.err) return showError(requete.err);
+            if (boite) boite.innerHTML = '<p class="text-xs text-slate-400">Mesure des clés…</p>';
+            const identifiant = 'ck_' + generateId();
+            try {
+                const { conn } = await getDB();
+                await conn.query(
+                    `CREATE OR REPLACE TABLE ${sqlIdent(duckTableName(identifiant))} AS SELECT * FROM (${requete.sql}) q`
+                );
+                const controle = await advControlerLesCles(identifiant, state.advExtract);
+                if (boite) boite.innerHTML = advControleDesClesHtml(controle);
+            } catch (e) {
+                if (boite)
+                    boite.innerHTML = `<p class="text-xs text-red-600">Contrôle impossible : ${escapeHTML(e.message)}</p>`;
+            } finally {
+                try {
+                    await duckDropTable(identifiant);
+                } catch (e2) {}
+            }
+        }
+        /** Le verdict du contrôle, tel qu'il s'affiche sous les actions. */
+        function advControleDesClesHtml(controle) {
+            const nombre = n => Number(n).toLocaleString('fr-FR');
+            if (!controle.cleDeclaree)
+                return `<div class="v13-jointures"><p class="v13-jv">${nombre(controle.lignes)} ligne(s).</p>
+                    <p class="v13-jd">Cochez 🔑 sur une colonne pour connaître le nombre de clés différentes — et, si un filtre « sur un fichier » est posé, les valeurs demandées qui manquent.</p>
+                    </div>`;
+            const a = controle.attendues;
+            const alerte = !!(a && !a.impossible && a.manquantes);
+            const lignes = [
+                `<p class="v13-jv">${alerte ? '⚠️' : '✅'} ${nombre(controle.lignes)} ligne(s), ${nombre(controle.distinctes)} clé(s) différente(s) sur « ${escapeHTML(controle.nomDeLaCle)} ».</p>`,
+                `<p class="v13-jd">${nombre(controle.sansCle)} ligne(s) sans clé · ${nombre(controle.enDouble)} ligne(s) en double sur la clé.</p>`
+            ];
+            if (a && a.impossible)
+                lignes.push(
+                    `<p class="v13-jd">Liste « ${escapeHTML(a.nomDeLaListe)} » : déclarez la clé sur UNE SEULE colonne pour comparer la liste au fichier.</p>`
+                );
+            else if (a)
+                lignes.push(
+                    `<p class="v13-jd ${a.manquantes ? 'fautive' : ''}">Liste « ${escapeHTML(a.nomDeLaListe)} » : ${nombre(a.demandees)} valeur(s) demandée(s), ${nombre(a.retrouvees)} retrouvée(s), <b>${nombre(a.manquantes)} absente(s)</b>${a.exemples.length ? ' — ' + escapeHTML(a.exemples.slice(0, 8).join(', ')) : ''}.</p>`
+                );
+            return `<div class="v13-jointures ${alerte ? 'multiplie' : ''}">${lignes.join('')}</div>`;
+        }
         /**
          * Produit le classeur Excel : les données dans un onglet, la synthèse dans l'autre.
          *
@@ -290,6 +488,14 @@
                 }
                 const donnees = [entetes];
                 await duckStreamRows(identifiant, 0, ligne => donnees.push(entetes.map(h => ligne[h])));
+                // Les clés du résultat servent deux fois : à comparer avec la fois précédente,
+                // et à être retenues pour la prochaine.
+                const colonnesDeLaCle = advColonnesDeLaCle(spec);
+                const clesDuResultat = colonnesDeLaCle.length
+                    ? await advClesDuResultat(sqlIdent(duckTableName(identifiant)), advExpressionDeLaCle(colonnesDeLaCle))
+                    : null;
+                const comparaison = advComparerALaFoisPrecedente(controle, clesDuResultat);
+
                 const classeur = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(classeur, XLSX.utils.aoa_to_sheet(donnees), 'Extraction');
                 XLSX.utils.book_append_sheet(
@@ -297,7 +503,13 @@
                     XLSX.utils.aoa_to_sheet(advFeuilleDeSynthese(spec, controle, controle.lignes)),
                     'Synthèse'
                 );
+                const absentes = advFeuilleDesValeursAbsentes(controle);
+                if (absentes) XLSX.utils.book_append_sheet(classeur, XLSX.utils.aoa_to_sheet(absentes), 'Valeurs absentes');
+                const feuilleComparaison = advFeuilleDeComparaison(comparaison);
+                if (feuilleComparaison)
+                    XLSX.utils.book_append_sheet(classeur, XLSX.utils.aoa_to_sheet(feuilleComparaison), 'Comparaison');
                 XLSX.writeFile(classeur, `Extraction_${Date.now()}.xlsx`);
+                advRetenirLExecution(controle, clesDuResultat);
                 const manquantes = controle.attendues && !controle.attendues.impossible ? controle.attendues.manquantes : 0;
                 showSuccess(
                     `📗 Excel produit : ${controle.lignes.toLocaleString('fr-FR')} ligne(s), deux onglets.` +

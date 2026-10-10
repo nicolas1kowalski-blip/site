@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.49.0';
+        const V13_VERSION = '13.50.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.50.0',
+                d: '2026-10-10',
+                t: 'Contrôler avant de produire, lister les absentes, comparer à la fois précédente',
+                items: [
+                    'Un bouton <b>🔑 Contrôler les clés</b> dans le panneau Résultat : lignes, clés différentes, lignes sans clé, lignes en double, et les valeurs de la liste qui manquent — <b>avant</b> de produire quoi que ce soit. Apprendre qu’il manque dix valeurs une fois le fichier envoyé ne sert à rien. Rien n’est fabriqué, rien n’est retenu.',
+                    'Le classeur gagne un onglet <b>« Valeurs absentes »</b> : la liste <b>complète</b> des valeurs demandées qui ne sont pas dans le fichier, et non plus quelques exemples.',
+                    'Et un onglet <b>« Comparaison »</b> : la même extraction rejouée plus tard dit ce qui a changé depuis la dernière fois — lignes et clés avant / après avec l’écart, puis les clés <b>apparues</b> et surtout les clés <b>DISPARUES</b>, nommées une par une.',
+                    'La mémoire se rattache au <b>paramétrage enregistré</b> : c’est lui qui donne son sens à « la fois précédente ». La première exécution le dit, au lieu de comparer avec rien.',
+                    'Au-delà de 20 000 clés, elles ne sont plus retenues : la comparaison porte alors sur les nombres seuls, et l’onglet l’écrit plutôt que de laisser croire à une vérification complète.'
+                ]
+            },
             {
                 v: '13.49.0',
                 d: '2026-10-10',

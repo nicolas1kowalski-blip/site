@@ -110,6 +110,59 @@ const out = await p.evaluate(async () => {
         contient(/Clés différentes \| 100/) && contient(/Valeurs ABSENTES du fichier \| 10/));
     ok('une colonne de la table de départ n’affiche aucun réglage « plusieurs valeurs »',
         feuille.some(l => /^dk_code_aff \| Affaire\.txt\.dk_code_aff \| — brut — \|  \|/.test(l)));
+    // 6. Le contrôle AVANT de produire : il doit dire la même chose, sans rien fabriquer.
+    spec.cleDeSortie = ['c1'];
+    const avant = advControleDesClesHtml(avecCle);
+    ok('le contrôle avant génération annonce lignes, clés différentes et valeurs absentes',
+        /100 ligne\(s\), 100 clé\(s\) différente\(s\)/.test(avant) && /10 absente\(s\)/.test(avant));
+    ok('et il en nomme quelques-unes plutôt que d’annoncer un nombre sec', /A9001/.test(avant));
+    ok('sans clé déclarée, il invite à en cocher une au lieu de rester muet',
+        /Cochez 🔑/.test(advControleDesClesHtml(sansCle)));
+
+    // 7. L'onglet « Valeurs absentes » porte la liste COMPLÈTE, pas les exemples.
+    const feuilleAbsentes = advFeuilleDesValeursAbsentes(avecCle);
+    ok('un onglet « Valeurs absentes » est produit quand il en manque', !!feuilleAbsentes);
+    ok('il porte les DIX valeurs absentes, pas cinq exemples',
+        feuilleAbsentes.filter(l => /^A90\d\d$/.test(String(l[0]))).length === 10);
+    ok('il rappelle ce qui a été comparé et les trois nombres',
+        feuilleAbsentes.some(l => /Comparaison/.test(String(l[0]))) &&
+            feuilleAbsentes.some(l => String(l[0]) === 'Absentes' && l[1] === 10));
+    const sansManquantes = { ...avecCle, attendues: { ...avecCle.attendues, manquantes: 0 } };
+    ok('et il n’est pas produit quand rien ne manque', advFeuilleDesValeursAbsentes(sansManquantes) === null);
+
+    // 8. La comparaison avec la fois précédente.
+    state.controlesDExtraction = {};
+    state.extractPresets = [{ id: 'ep1', name: 'Mon extraction', at: Date.now(), baseName: 'Affaire.txt', config: {} }];
+    spec._paramId = 'ep1';
+    const clesMaintenant = await advClesDuResultat(sqlIdent(duckTableName('essai')), advExpressionDeLaCle(advColonnesDeLaCle(spec)));
+    ok('les clés du résultat sont relevées pour la prochaine fois', clesMaintenant.cles.length === 100);
+    const premiere = advComparerALaFoisPrecedente(avecCle, clesMaintenant);
+    ok('la première exécution le dit, au lieu de comparer avec rien',
+        premiere.premiereFois === true && premiere.nomDuParametrage === 'Mon extraction');
+    advRetenirLExecution(avecCle, clesMaintenant);
+    ok('l’exécution est retenue, rattachée au paramétrage', !!state.controlesDExtraction.ep1);
+
+    // Une deuxième exécution : deux clés disparaissent, une apparaît.
+    const ensuite = { cles: clesMaintenant.cles.filter(k => k !== 'A1' && k !== 'A2').concat(['A777']), tropNombreuses: false };
+    const comparaison = advComparerALaFoisPrecedente({ ...avecCle, lignes: 99, distinctes: 99 }, ensuite);
+    ok('la comparaison donne les lignes et les clés, avant et après',
+        comparaison.lignesAvant === 100 && comparaison.lignesApres === 99 &&
+            comparaison.distinctesAvant === 100 && comparaison.distinctesApres === 99);
+    ok('elle nomme les clés DISPARUES — c’est la question que l’on se pose',
+        comparaison.disparues.join(',') === 'A1,A2');
+    ok('et les clés apparues', comparaison.apparues.join(',') === 'A777');
+    const feuilleComparaison = advFeuilleDeComparaison(comparaison);
+    ok('l’onglet « Comparaison » porte l’écart et les deux listes',
+        feuilleComparaison.some(l => String(l[0]) === 'Lignes' && l[3] === -1) &&
+            feuilleComparaison.some(l => String(l[0]) === 'Disparues') &&
+            feuilleComparaison.some(l => String(l[0]) === 'Apparues'));
+    ok('sans paramétrage chargé, aucun onglet de comparaison n’est produit',
+        advFeuilleDeComparaison(advComparerALaFoisPrecedente(avecCle, { ...clesMaintenant, cles: (spec._paramId = null) || clesMaintenant.cles })) === null);
+    spec._paramId = 'ep1';
+    // Trop de clés pour être retenues : on compare les nombres, et on le dit.
+    const tropNombreuses = advComparerALaFoisPrecedente(avecCle, { cles: null, tropNombreuses: true });
+    ok('au-delà de la mémoire possible, seuls les nombres sont comparés, et c’est écrit',
+        tropNombreuses.valeursIncomparables === true && /seuls les nombres/.test(tropNombreuses.pourquoi));
     return R;
 });
 
