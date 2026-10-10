@@ -2109,7 +2109,8 @@
                         ) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
                     <td class="p-2 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'advcol',${rang})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-indigo-600 select-none text-sm leading-none" title="Glisser pour changer l'ordre des colonnes en sortie">⠿</span><br><span class="inline-flex leading-none">${advFlechesDOrdreHtml(rang, extractSpec.columns.length)}</span></td>
                     <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}${advCriteresDUneColonneHtml(c)}</td>
-                    <td class="p-2"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"></td>
+                    <td class="p-2"><div class="flex items-center gap-1"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"><button onclick="advBasculerLaCleDeSortie('${c.id}')" title="Clé de contrôle : l’export Excel dira combien de lignes, combien de clés différentes, et — si un filtre sur fichier est posé — quelles valeurs demandées manquent." class="text-sm leading-none ${(extractSpec.cleDeSortie || []).includes(c.id) ? '' : 'opacity-20 grayscale hover:opacity-60'}">🔑</button></div>
+                        </td>
                     <td class="p-2"><select onchange="advUpdateColumn('${c.id}','transform',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${Object.entries(
                         ADV_TRANSFORMS
                     )
@@ -2396,6 +2397,7 @@
                 </div>
                 <div class="flex items-center gap-3 flex-wrap bg-indigo-50/40 border border-indigo-100 rounded-lg p-3">
                     <button id="adv-generate" onclick="advGenerate()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg">⬇️ Générer le CSV</button>
+                    <button id="adv-excel" onclick="advGenererExcel()" title="Un classeur en deux onglets : les données, et une synthèse de ce qui a été paramétré et contrôlé" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-lg">📗 Générer l’Excel</button>
                     <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="adv-add-source" class="w-4 h-4"> Ajouter aussi comme nouvelle source</label>
                     <input type="text" id="adv-source-name" placeholder="Nom de la source (optionnel)" class="border border-slate-300 p-1.5 rounded text-xs flex-grow min-w-[160px]">
                 </div>

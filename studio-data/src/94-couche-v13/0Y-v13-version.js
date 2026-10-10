@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.48.0';
+        const V13_VERSION = '13.49.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.49.0',
+                d: '2026-10-10',
+                t: 'Extraction en Excel, avec une synthèse et un contrôle des clés',
+                items: [
+                    'Un bouton <b>📗 Générer l’Excel</b> à côté du CSV. Le classeur a <b>deux onglets</b> : « Extraction », les données ; « Synthèse », de quoi relire le fichier trois jours plus tard.',
+                    'La <b>synthèse</b> porte la date, le nombre de lignes, la table de départ et son volume, les colonnes en sortie et leur provenance, les <b>liens empruntés saut par saut</b>, et les <b>filtres avec leur portée</b> — c’est elle qui explique le nombre de lignes.',
+                    'Une <b>🔑 clé de contrôle</b> se déclare sur une ou plusieurs colonnes en sortie. La synthèse donne alors : lignes, <b>clés différentes</b>, lignes sans clé, et lignes en double sur la clé.',
+                    'Et surtout, quand un <b>filtre « sur un fichier »</b> est posé : la liste disait ce que l’on attendait, donc on le vérifie. <b>Combien de valeurs demandées, combien retrouvées dans le fichier, combien ABSENTES</b> — et quelques-unes sont nommées, au lieu d’un nombre sec. La synthèse dit aussi ce qu’elle a comparé, pour que l’on puisse juger du rapprochement.',
+                    'Au-delà d’un million de lignes, le classeur n’est pas produit : Excel ne saurait pas l’ouvrir, et c’est dit avant de fabriquer quarante mégaoctets pour rien.'
+                ]
+            },
             {
                 v: '13.48.0',
                 d: '2026-10-10',

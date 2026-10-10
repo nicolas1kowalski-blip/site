@@ -218,6 +218,10 @@
    "role": "Comparateur de tables"
   },
   {
+   "file": "80-extraction-exploration/85-extraction-excel.js",
+   "role": "Extraction : export Excel en deux onglets (données + synthèse) et contrôle des clés"
+  },
+  {
    "file": "70-qualite/72-qualite-audit.js",
    "role": "Qualité : audit par lots, profilage d'un objet, filtres, inspecteur d'anomalies"
   },

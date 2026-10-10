@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-09T14:49:28.890Z",
+ "generated": "2026-10-10T14:41:13.116Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 52499,
-  "codeLines": 49273,
-  "commentLines": 3226,
-  "templateLines": 10310,
+  "lines": 52831,
+  "codeLines": 49559,
+  "commentLines": 3272,
+  "templateLines": 10361,
   "longLogicLines": 11,
   "multiStatementLines": 0,
-  "locals": 6880,
-  "shortLocals": 844,
-  "functions": 1748,
+  "locals": 6932,
+  "shortLocals": 845,
+  "functions": 1759,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12267441860465116
+  "shortLocalsRatio": 0.12189844200807848
  },
  "files": [
   {
@@ -733,10 +733,10 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 3419,
-   "codeLines": 3079,
+   "lines": 3421,
+   "codeLines": 3081,
    "commentLines": 340,
-   "templateLines": 589,
+   "templateLines": 591,
    "longLogicLines": 4,
    "multiStatementLines": 0,
    "locals": 519,
@@ -805,6 +805,20 @@
    "functions": 12,
    "longestLogic": 108,
    "shortLocalsRatio": 0
+  },
+  {
+   "file": "80-extraction-exploration/85-extraction-excel.js",
+   "lines": 306,
+   "codeLines": 260,
+   "commentLines": 46,
+   "templateLines": 35,
+   "longLogicLines": 0,
+   "multiStatementLines": 0,
+   "locals": 52,
+   "shortLocals": 1,
+   "functions": 11,
+   "longestLogic": 128,
+   "shortLocalsRatio": 0.019230769230769232
   },
   {
    "file": "90-couche-v11/0V-v11-version.js",
@@ -1055,10 +1069,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 574,
-   "codeLines": 572,
+   "lines": 598,
+   "codeLines": 596,
    "commentLines": 2,
-   "templateLines": 304,
+   "templateLines": 318,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
