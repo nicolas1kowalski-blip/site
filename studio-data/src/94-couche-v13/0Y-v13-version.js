@@ -1,7 +1,17 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.50.0';
+        const V13_VERSION = '13.50.1';
         const V13_CHANGELOG = [
+            {
+                v: '13.50.1',
+                d: '2026-10-10',
+                t: 'Correction : « Contrôler les clés » et « Générer l’Excel » avec un filtre sur fichier',
+                items: [
+                    'Les deux actions s’arrêtaient sur <b>« Catalog Error : Table … does not exist »</b> dès qu’un filtre « 📄 Filtrer sur un fichier » était posé : la liste n’était pas chargée dans le moteur avant d’exécuter la requête. Elle l’est maintenant, comme pour l’aperçu, le comptage et la génération du CSV.',
+                    'Même oubli corrigé sur <b>« Contrôler les tables liées »</b>, qui exécute aussi la requête.',
+                    'Un contrôle vérifie désormais ce cas précis : la table de la liste est effacée, et les actions doivent la recharger au lieu d’échouer.'
+                ]
+            },
             {
                 v: '13.50.0',
                 d: '2026-10-10',

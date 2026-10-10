@@ -148,16 +148,20 @@
                 return false;
             }
         }
-        ['advCount', 'advPreview', 'advQuality', 'advGenerate'].forEach(nm =>
-            Studio.extend(
-                nm,
-                o =>
-                    async function () {
-                        if (!(await v12ListEnsure())) return;
-                        return o.apply(this, arguments);
-                    },
-                { motif: "charger les listes d'entrée dans le moteur avant la requête" }
-            )
+        // Toute action qui EXÉCUTE la requête doit d'abord charger les listes dans le moteur :
+        // sans cela, la table de la liste n'existe pas et le moteur s'arrête sur
+        // « Catalog Error: Table … does not exist ». Un oubli ici ne se voit qu'à l'usage.
+        ['advCount', 'advPreview', 'advQuality', 'advGenerate', 'advGenererExcel', 'advControlerLesClesMaintenant'].forEach(
+            nm =>
+                Studio.extend(
+                    nm,
+                    o =>
+                        async function () {
+                            if (!(await v12ListEnsure())) return;
+                            return o.apply(this, arguments);
+                        },
+                    { motif: "charger les listes d'entrée dans le moteur avant la requête" }
+                )
         );
         Studio.extend(
             'advRemoveFilter',

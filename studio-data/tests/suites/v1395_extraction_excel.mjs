@@ -163,6 +163,23 @@ const out = await p.evaluate(async () => {
     const tropNombreuses = advComparerALaFoisPrecedente(avecCle, { cles: null, tropNombreuses: true });
     ok('au-delà de la mémoire possible, seuls les nombres sont comparés, et c’est écrit',
         tropNombreuses.valeursIncomparables === true && /seuls les nombres/.test(tropNombreuses.pourquoi));
+    // 9. La table de la liste doit être chargée dans le moteur AVANT toute action qui
+    //    exécute la requête. Sans cela : « Catalog Error: Table … does not exist ».
+    await conn.query(`DROP TABLE IF EXISTS liste_ma_liste_f1`);
+    if (typeof v12State === 'object' && v12State) v12State.listReady = {};
+    spec._paramId = null;
+    let erreurs = [];
+    const ancienErr = window.showError;
+    window.showError = m => erreurs.push(String(m));
+    await advControlerLesClesMaintenant();
+    const boite = el('adv-controle-cles');
+    ok('« Contrôler les clés » charge la liste dans le moteur au lieu d’échouer',
+        !erreurs.some(m => /Catalog Error/.test(m)) && !!boite && /clé\(s\) différente\(s\)/.test(boite.textContent));
+    ok('et il confronte bien la liste au fichier', /absente\(s\)/.test(boite.textContent));
+    erreurs = [];
+    ok('la table de la liste a été recréée par le chargement',
+        (await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM liste_ma_liste_f1`)) && true);
+    window.showError = ancienErr;
     return R;
 });
 

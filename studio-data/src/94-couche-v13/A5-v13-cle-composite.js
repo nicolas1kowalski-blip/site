@@ -431,6 +431,9 @@
         async function v13ControlerJointures() {
             const boite = el('v13-jointures');
             if (boite) boite.innerHTML = '<p class="text-xs text-slate-400">Mesure des tables liées…</p>';
+            // Ce contrôle exécute la requête : les listes d'entrée doivent d'abord être chargées
+            // dans le moteur, sinon leur table n'existe pas et la mesure s'arrête.
+            if (typeof v12ListEnsure === 'function' && !(await v12ListEnsure())) return;
             try {
                 v13AfficherLeBilan(await v13MesurerLesJointures());
             } catch (e) {
