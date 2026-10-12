@@ -366,6 +366,10 @@
    "role": "V13 : codification — l'écran (dix-septième onglet créé par la couche), réglages, synonymes, règles, résultat justifié et revue des cas douteux"
   },
   {
+   "file": "94-couche-v13/A8-v13-colonnes-multi-chemins.js",
+   "role": "V13 : une colonne qui emprunte « l'un ou l'autre lien » réunit ses chemins dans une sous-requête au lieu de les joindre (elle ne multiplie plus les lignes), et les colonnes réglées sur « une ligne par valeur » sont annoncées avant de produire le fichier"
+  },
+  {
    "file": "96-couche-v14/B0-v14-architecture.js",
    "role": "V14 : panneau « Architecture du code » — modules par domaine et par couche, chaîne d'extensions de chaque fonction, auto-contrôle Studio.selfCheck, export de l'index de l'API ; accès par l'aide « ? » et la palette"
   },

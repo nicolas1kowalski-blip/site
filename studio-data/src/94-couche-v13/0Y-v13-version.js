@@ -1,7 +1,23 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.51.0';
+        const V13_VERSION = '13.52.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.52.0',
+                d: '2026-10-12',
+                t: 'Plus rien ne multiplie les lignes sans le dire, la clé de contrôle se voit, la synthèse compte fichier par fichier',
+                items: [
+                    'Le fichier produit porte <b>une ligne par ligne de la table de départ</b>. Un seul réglage a le droit de rompre cette règle : « une ligne par valeur », choisi colonne par colonne. Une colonne y échappait encore — celle qui emprunte <b>« l’un ou l’autre lien »</b> (le souscripteur ET le bénéficiaire, par exemple) : sa valeur venant de plusieurs chemins, elle les <b>joignait tous</b>, et l’écran se contentait de l’écrire en petit et en gris. Mesuré sur un cas ordinaire — 140 000 affaires, 220 000 liens, deux adresses par objet — le fichier sortait à <b>440 000 lignes</b> sans que rien n’ait été demandé. Les chemins sont désormais réunis <b>dans une sous-requête</b> : 140 000 lignes. <b>La valeur ne change pas</b> — c’était celle du premier chemin renseigné, cela le reste — mais la table n’étant plus jointe, elle ne peut plus multiplier les lignes.',
+                    'Le choix lui est ouvert comme aux autres colonnes, ce qui n’existait pas : la première valeur (par défaut, l’ancien comportement), <b>les valeurs des deux chemins regroupées dans la même cellule</b>, ou une ligne par valeur. « Une ligne par valeur » garde exactement l’ancien fonctionnement par jointure, pour qui le veut.',
+                    'Et <b>ce qui multiplie se voit avant de produire le fichier</b> : un bandeau au-dessus des colonnes nomme celles qui sont réglées sur « une ligne par valeur », dit que le fichier aura plus de lignes que la table de départ, et rappelle quoi faire pour revenir à une ligne par ligne de départ.',
+                    'La <b>clé de contrôle</b> ne pouvait pas se déclarer : c’était une 🔑 à vingt pour cent d’opacité, en niveaux de gris, collée contre le nom de sortie — une tache de dix-sept pixels que personne ne voyait. Elle a maintenant <b>sa colonne, son intitulé et deux états lisibles</b> (« déclarer » / « 🔑 clé »), et tant qu’aucune n’est déclarée, une phrase dit à quoi elle sert. Quand plusieurs colonnes forment la clé, leur rang est écrit.',
+                    'La <b>synthèse de l’Excel</b> gagne un bloc <b>« Fichiers utilisés »</b> : chaque fichier, son rôle (départ ou lié), ses lignes chargées, ses lignes de fichier, le nombre de colonnes et de filtres qui portent sur lui. C’est la comparaison des volumes qui explique un résultat.',
+                    'Chaque colonne en sortie dit maintenant <b>combien de valeurs différentes</b> elle contient et <b>combien de cellules vides</b> — mesuré sur le fichier produit, en une seule requête.',
+                    'Les <b>filtres</b> sont détaillés : fichier filtré, colonne, <b>nombre de valeurs</b> (une liste de 1 399 affaires et une liste de 3 ne produisent pas le même fichier) et portée.',
+                    'Enfin la synthèse porte le <b>compte des lignes expliqué</b> : autant qu’au départ, ou combien de plus ou de moins — et, quand il y en a plus, le nom des colonnes responsables.',
+                    'Trente-sept contrôles ajoutés sur ces trois points, dont la preuve que la valeur d’une colonne « l’un ou l’autre lien » est bien restée la même.'
+                ]
+            },
             {
                 v: '13.51.0',
                 d: '2026-10-12',

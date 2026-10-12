@@ -2103,7 +2103,8 @@
                 html += `<div class="border border-slate-200 rounded-lg overflow-x-auto mb-2"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500"><tr><th class="p-2 w-16" title="Glissez une ligne, ou servez-vous des flèches : c'est l'ordre des colonnes du fichier produit.">Ordre</th>
                     <th class="p-2">Source</th>
                     <th class="p-2">Nom en sortie (alias métier)</th>
-                    <th class="p-2">Transformation</th>${!extractSpec.group.on && extractSpec.dedup.on ? '<th class="p-2 text-center">Clé</th>' : ''}<th class="p-2 w-8"></th>
+                    <th class="p-2">Transformation</th>
+                    <th class="p-2 text-center w-20" title="La clé de contrôle : l'export Excel et le bouton « Contrôler les clés » diront combien de lignes, combien de clés différentes, combien de lignes en double — et, si un filtre « sur un fichier » est posé, quelles valeurs demandées manquent.">Clé de contrôle</th>${!extractSpec.group.on && extractSpec.dedup.on ? '<th class="p-2 text-center">Dédoublonnage</th>' : ''}<th class="p-2 w-8"></th>
                     </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">`;
@@ -2115,19 +2116,20 @@
                         ) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
                     <td class="p-2 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'advcol',${rang})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-indigo-600 select-none text-sm leading-none" title="Glisser pour changer l'ordre des colonnes en sortie">⠿</span><br><span class="inline-flex leading-none">${advFlechesDOrdreHtml(rang, extractSpec.columns.length)}</span></td>
                     <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}${advCriteresDUneColonneHtml(c)}</td>
-                    <td class="p-2"><div class="flex items-center gap-1"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"><button onclick="advBasculerLaCleDeSortie('${c.id}')" title="Clé de contrôle : l’export Excel dira combien de lignes, combien de clés différentes, et — si un filtre sur fichier est posé — quelles valeurs demandées manquent." class="text-sm leading-none ${(extractSpec.cleDeSortie || []).includes(c.id) ? '' : 'opacity-20 grayscale hover:opacity-60'}">🔑</button></div>
-                        </td>
+                    <td class="p-2"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"></td>
                     <td class="p-2"><select onchange="advUpdateColumn('${c.id}','transform',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${Object.entries(
                         ADV_TRANSFORMS
                     )
                         .map(([v, l]) => `<option value="${v}" ${v === c.transform ? 'selected' : ''}>${l}</option>`)
                         .join('')}</select>${advChoixPlusieursValeursHtml(c, extractSpec.baseId)}</td>
+                    <td class="p-2 text-center">${advBoutonDeLaCleHtml(c, extractSpec)}</td>
                     ${!extractSpec.group.on && extractSpec.dedup.on ? `<td class="p-2 text-center"><input type="checkbox" ${extractSpec.dedup.keys.includes(c.id) ? 'checked' : ''} onchange="advToggleDedupKey('${c.id}',this.checked)"></td>` : ''}
                     <td class="p-2 text-right whitespace-nowrap">${advColonneModifiable(c) ? `<button onclick="advModifierLaColonne('${c.id}')" title="Modifier cette colonne : sa source, son chemin, et pour une synthèse son mode et ses critères" class="text-slate-400 hover:text-indigo-600 font-bold mr-1">✎</button>` : ''}<button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>
                 </tr>`
                     )
                     .join('');
                 html += `</tbody></table></div>`;
+                html += advRappelDeLaCleHtml(extractSpec);
             } else html += '<p class="text-xs text-slate-400 italic mb-2">Aucune colonne. Ajoutez-en ci-dessous.</p>';
             html += `<div class="flex items-end gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
                 ${advLaColonneModifiee() && !advLaColonneModifiee().kind ? advBandeauDeModificationHtml() : ''}

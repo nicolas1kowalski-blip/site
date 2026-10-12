@@ -35,6 +35,40 @@
             renderAdvExtract();
         }
 
+        /**
+         * Le bouton qui déclare une colonne comme clé de contrôle.
+         *
+         * Il était une emoji 🔑 à vingt pour cent d'opacité, en niveaux de gris, collée contre le
+         * nom de sortie : une tache grise de dix-sept pixels que personne ne voyait, et donc une
+         * clé que personne ne pouvait déclarer. Il a maintenant sa colonne, son intitulé, et deux
+         * états que l'on distingue d'un coup d'œil. Quand plusieurs colonnes forment la clé, leur
+         * rang est écrit : c'est l'ordre dans lequel elles sont assemblées.
+         */
+        function advBoutonDeLaCleHtml(colonne, spec) {
+            const choisies = (spec && spec.cleDeSortie) || [];
+            const rang = choisies.indexOf(colonne.id);
+            const commun =
+                'text-[10px] font-bold rounded-full px-2 py-1 border whitespace-nowrap transition-colors cursor-pointer';
+            if (rang >= 0)
+                return `<button onclick="advBasculerLaCleDeSortie('${colonne.id}')" title="Cette colonne fait partie de la clé de contrôle. Cliquez pour la retirer." class="${commun} bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700">🔑 clé${choisies.length > 1 ? ' ' + (rang + 1) : ''}</button>`;
+            return `<button onclick="advBasculerLaCleDeSortie('${colonne.id}')" title="Déclarer cette colonne comme clé de contrôle : on saura combien de lignes, combien de clés différentes, combien de doublons — et quelles valeurs demandées manquent." class="${commun} bg-white border-slate-300 text-slate-500 hover:border-indigo-400 hover:text-indigo-700">déclarer</button>`;
+        }
+
+        /**
+         * La phrase qui dit à quoi sert la clé, tant qu'aucune n'est déclarée.
+         *
+         * Une fonction que l'on ne découvre qu'en cliquant au hasard n'existe pas.
+         */
+        function advRappelDeLaCleHtml(spec) {
+            if (((spec && spec.cleDeSortie) || []).length) return '';
+            if (!((spec && spec.columns) || []).length) return '';
+            return `<div class="mb-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                🔑 <b>Aucune clé de contrôle déclarée.</b> Choisissez la ou les colonnes qui identifient une ligne
+                (le numéro d’affaire, par exemple) avec le bouton « déclarer » : « Contrôler les clés » et la synthèse
+                de l’Excel diront alors combien de clés différentes, combien de doublons, et quelles valeurs demandées manquent.
+            </div>`;
+        }
+
         /** Le nom d'une colonne tel qu'il apparaît dans le fichier produit. */
         function advNomEnSortie(colonne) {
             return colonne.alias || colonne.col || '';
@@ -225,19 +259,93 @@
             return lignes;
         }
 
-        /** Les colonnes en sortie, une ligne chacune, avec d'où elles viennent. */
-        function advSyntheseDesColonnes(spec) {
-            const lignes = [['Nom en sortie', 'Provient de', 'Transformation', 'Plusieurs valeurs', 'Clé de contrôle']];
+        /**
+         * Les fichiers qui ont servi, un par ligne.
+         *
+         * « Je ne vois pas le fichier par fichier » : la synthèse disait le nombre de lignes de la
+         * table de départ, et rien des autres. Or c'est la comparaison des volumes qui explique un
+         * résultat — 140 000 affaires, 220 000 liens, et un fichier à 440 000 lignes se lisent
+         * ensemble, pas séparément.
+         */
+        function advSyntheseDesSources(spec) {
+            const nom = identifiant => (state.tables[identifiant] || {}).name || identifiant;
+            const usage = new Map();
+            const noter = (identifiant, quoi) => {
+                if (!identifiant) return;
+                if (!usage.has(identifiant)) usage.set(identifiant, { colonnes: 0, filtres: 0 });
+                usage.get(identifiant)[quoi]++;
+            };
+            noter(spec.baseId, 'colonnes');
+            usage.get(spec.baseId).colonnes = 0;
+            (spec.columns || []).forEach(c => {
+                noter(c.tableId, 'colonnes');
+                ((c.calc && c.calc.parts) || []).forEach(p => noter(p.tableId, 'colonnes'));
+                ((c.conds && c.conds) || []).forEach(k => noter(k.tableId, 'filtres'));
+            });
+            (spec.filters || []).forEach(f => noter(f.tableId, 'filtres'));
+            const lignes = [
+                ['Fichier', 'Rôle', 'Lignes chargées', 'Lignes du fichier', 'Colonnes utilisées', 'Filtres ou critères']
+            ];
+            usage.forEach((compte, identifiant) => {
+                const table = state.tables[identifiant] || {};
+                lignes.push([
+                    nom(identifiant),
+                    identifiant === spec.baseId ? 'table de départ' : 'table liée',
+                    table.lastRows == null ? '' : Number(table.lastRows),
+                    table.lignesDuFichier == null ? '' : Number(table.lignesDuFichier),
+                    compte.colonnes,
+                    compte.filtres
+                ]);
+            });
+            return lignes;
+        }
+
+        /**
+         * Ce que chaque colonne du fichier contient vraiment : combien de valeurs différentes,
+         * combien de cellules vides. Mesuré sur le résultat déjà matérialisé, en une seule requête.
+         */
+        const COLONNES_MESUREES_MAX = 80;
+        async function advMesureDesColonnes(nomDeLaTable, entetes) {
+            const colonnes = (entetes || []).filter(h => h !== '__rn');
+            if (!colonnes.length || colonnes.length > COLONNES_MESUREES_MAX) return null;
+            const { conn } = await getDB();
+            const morceaux = colonnes.map(
+                (h, rang) =>
+                    `COUNT(DISTINCT ${sqlIdent(h)})::BIGINT AS d${rang}, ` +
+                    `SUM(CASE WHEN ${sqlIdent(h)} IS NULL OR TRIM(CAST(${sqlIdent(h)} AS VARCHAR)) = '' THEN 1 ELSE 0 END)::BIGINT AS v${rang}`
+            );
+            try {
+                const res = arrowResultToObjects(await conn.query(`SELECT ${morceaux.join(', ')} FROM ${nomDeLaTable}`))[0];
+                const mesure = {};
+                colonnes.forEach((h, rang) => {
+                    mesure[h] = { distinctes: Number(res['d' + rang]), vides: Number(res['v' + rang]) };
+                });
+                return mesure;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        /** Les colonnes en sortie, une ligne chacune, avec d'où elles viennent et ce qu'elles contiennent. */
+        function advSyntheseDesColonnes(spec, mesure) {
+            const entete = ['Nom en sortie', 'Provient de', 'Transformation', 'Plusieurs valeurs', 'Clé de contrôle'];
+            if (mesure) entete.push('Valeurs différentes', 'Cellules vides');
+            const lignes = [entete];
             (spec.columns || []).forEach(c => {
                 const reglage =
                     c.kind || c.tableId === spec.baseId ? '' : ADV_PLUSIEURS_VALEURS[advPlusieursValeurs(c, spec.baseId)] || '';
-                lignes.push([
+                const ligne = [
                     advNomEnSortie(c),
                     advColLabel(c),
                     ADV_TRANSFORMS[c.transform] || '',
                     reglage,
                     (spec.cleDeSortie || []).includes(c.id) ? 'oui' : ''
-                ]);
+                ];
+                if (mesure) {
+                    const m = mesure[advNomEnSortie(c)];
+                    ligne.push(m ? m.distinctes : '', m ? m.vides : '');
+                }
+                lignes.push(ligne);
             });
             return lignes;
         }
@@ -270,23 +378,81 @@
             return lignes.length > 1 ? lignes : null;
         }
 
+        /**
+         * Combien de valeurs ce filtre porte-t-il ?
+         *
+         * Une liste de 1 399 affaires et une liste de 3 ne produisent pas le même fichier ; le
+         * nombre doit se lire dans la synthèse, sans rouvrir le paramétrage.
+         */
+        function advNombreDeValeursDUnFiltre(filtre) {
+            if (!filtre) return '';
+            if (filtre.op === 'empty' || filtre.op === 'notempty') return '';
+            if (filtre.op === 'list') return ((filtre.list && filtre.list.rows) || []).length;
+            if (filtre.op === 'in')
+                return String(filtre.val || '')
+                    .split(';')
+                    .map(v => v.trim())
+                    .filter(Boolean).length;
+            return 1;
+        }
+
         /** Les filtres, avec leur portée : c'est elle qui explique le nombre de lignes. */
         function advSyntheseDesFiltres(spec) {
             if (!(spec.filters || []).length) return null;
             const nom = identifiant => (state.tables[identifiant] || {}).name || identifiant;
-            const lignes = [['Filtre', 'Portée']];
+            const lignes = [['Filtre', 'Fichier filtré', 'Colonne', 'Valeurs', 'Portée']];
             spec.filters.forEach(f => {
                 const libelle =
                     f.op === 'list' && f.list
-                        ? `${nom(f.tableId)}.${f.col} dans la liste « ${f.list.name} » (${(f.list.rows || []).length} valeur(s))`
-                        : `${nom(f.tableId)}.${f.col} ${ADV_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` « ${f.val} »`}`;
-                lignes.push([libelle, ADV_PORTEES_DE_FILTRE[advPorteeDuFiltre(f, spec.baseId)] || '']);
+                        ? `dans la liste « ${f.list.name} »`
+                        : `${ADV_OPS[f.op] || f.op}${f.op === 'empty' || f.op === 'notempty' ? '' : ` « ${f.val} »`}`;
+                lignes.push([
+                    libelle,
+                    nom(f.tableId),
+                    f.col || '',
+                    advNombreDeValeursDUnFiltre(f),
+                    ADV_PORTEES_DE_FILTRE[advPorteeDuFiltre(f, spec.baseId)] || ''
+                ]);
             });
             return lignes;
         }
 
+        /**
+         * Le compte des lignes, et ce qui l'explique.
+         *
+         * La règle de l'extraction tient en une phrase : le fichier porte UNE ligne par ligne de
+         * la table de départ. Quand ce n'est pas le cas, la synthèse doit dire pourquoi — sinon
+         * c'est au lecteur du fichier de le deviner.
+         */
+        function advVerdictDuNombreDeLignes(spec, combienDeLignes) {
+            const source = state.tables[spec.baseId] || {};
+            const depart = source.lastRows == null ? null : Number(source.lastRows);
+            if (depart == null || combienDeLignes == null) return null;
+            const nombre = n => Number(n).toLocaleString('fr-FR');
+            if (combienDeLignes === depart)
+                return `✅ Autant de lignes que la table de départ (${nombre(depart)}) : aucune perdue, aucune ajoutée.`;
+            if (combienDeLignes > depart) {
+                const fautives = (spec.columns || []).filter(
+                    c => !c.kind && c.tableId && c.tableId !== spec.baseId && advPlusieursValeurs(c, spec.baseId) === 'lignes'
+                );
+                return (
+                    `⚠️ ${nombre(combienDeLignes - depart)} ligne(s) de PLUS que la table de départ (${nombre(depart)}). ` +
+                    (fautives.length
+                        ? `Cause : ${fautives.length} colonne(s) réglée(s) sur « une ligne par valeur » — ${fautives
+                              .map(advNomEnSortie)
+                              .join(', ')}. Réglez-les sur « valeurs regroupées » pour garder une ligne par ligne de départ.`
+                        : 'Une table liée ajoute des lignes : vérifiez « Contrôler les tables liées ».')
+                );
+            }
+            const causes = typeof v13CausesDeLaPerte === 'function' ? v13CausesDeLaPerte(spec) : [];
+            return (
+                `⚠️ ${nombre(depart - combienDeLignes)} ligne(s) de MOINS que la table de départ (${nombre(depart)}). ` +
+                (causes.length ? 'Causes possibles : ' + causes.join(' ') : 'Aucune cause évidente dans le paramétrage.')
+            );
+        }
+
         /** L'onglet de synthèse, assemblé. */
-        function advFeuilleDeSynthese(spec, controle, combienDeLignes) {
+        function advFeuilleDeSynthese(spec, controle, combienDeLignes, mesure) {
             const bloc = [];
             const titre = texte => {
                 bloc.push([]);
@@ -295,12 +461,17 @@
             bloc.push(['SYNTHÈSE DE L’EXTRACTION']);
             bloc.push(['Produite le', new Date().toLocaleString('fr-FR')]);
             bloc.push(['Lignes dans le fichier', combienDeLignes]);
+            const verdict = advVerdictDuNombreDeLignes(spec, combienDeLignes);
+            if (verdict) bloc.push(['Compte des lignes', verdict]);
 
             titre('Paramétrage');
             advSyntheseDuParametrage(spec).forEach(l => bloc.push(l));
 
+            titre('Fichiers utilisés');
+            advSyntheseDesSources(spec).forEach(l => bloc.push(l));
+
             titre('Colonnes en sortie');
-            advSyntheseDesColonnes(spec).forEach(l => bloc.push(l));
+            advSyntheseDesColonnes(spec, mesure).forEach(l => bloc.push(l));
 
             const liens = advSyntheseDesLiens(spec);
             if (liens) {
@@ -316,7 +487,9 @@
             titre('Contrôle des clés');
             if (!controle || !controle.cleDeclaree) {
                 bloc.push(['Aucune clé de contrôle déclarée.']);
-                bloc.push(['Cochez 🔑 sur une ou plusieurs colonnes pour obtenir le nombre de clés différentes.']);
+                bloc.push([
+                    'Déclarez-en une avec le bouton « déclarer » de la colonne « Clé de contrôle », dans les colonnes en sortie : on saura alors combien de clés différentes, combien de doublons, et quelles valeurs demandées manquent.'
+                ]);
             } else {
                 bloc.push(['Clé de contrôle', controle.nomDeLaCle]);
                 bloc.push(['Lignes', controle.lignes]);
@@ -495,12 +668,14 @@
                     ? await advClesDuResultat(sqlIdent(duckTableName(identifiant)), advExpressionDeLaCle(colonnesDeLaCle))
                     : null;
                 const comparaison = advComparerALaFoisPrecedente(controle, clesDuResultat);
+                // Ce que chaque colonne contient : une seule requête sur le résultat déjà matérialisé.
+                const mesure = await advMesureDesColonnes(sqlIdent(duckTableName(identifiant)), entetes);
 
                 const classeur = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(classeur, XLSX.utils.aoa_to_sheet(donnees), 'Extraction');
                 XLSX.utils.book_append_sheet(
                     classeur,
-                    XLSX.utils.aoa_to_sheet(advFeuilleDeSynthese(spec, controle, controle.lignes)),
+                    XLSX.utils.aoa_to_sheet(advFeuilleDeSynthese(spec, controle, controle.lignes, mesure)),
                     'Synthèse'
                 );
                 const absentes = advFeuilleDesValeursAbsentes(controle);

@@ -30,11 +30,22 @@ const out = await p.evaluate(async (seed)=>{
   const c1=state.advExtract.columns[0];
   ok('colonne ajoutée sans choisir de via : via = any, libellé « via l\'un ou l\'autre lien »', c1 && c1.via==='any' && /l'un ou l'autre lien/.test(X().querySelector('.v12x-sec[data-sec="cols"]').textContent));
   let r=buildAdvSql(state.advExtract);
-  const joins=(r.sql.match(/LEFT JOIN "[^"]*" x\d+ ON/g)||[]).length;
-  ok('SQL : les deux routes sont jointes (PP, PM et deux fois ADRESSE = 4 jointures)', !r.err && joins===4);
-  ok('SQL : VILLE = COALESCE des deux alias ADRESSE', /COALESCE\(x\d+\."VILLE", x\d+\."VILLE"\) AS "VILLE"/.test(r.sql));
+  // « L'un ou l'autre lien » s'écrit de DEUX façons selon la couche, pour la MÊME valeur :
+  //  - jusqu'en V12, les deux routes sont jointes et la valeur est le COALESCE des deux alias ;
+  //  - à partir de la V13, les deux routes sont réunies dans une sous-requête ordonnée par chemin,
+  //    qui prend la première valeur renseignée. Même résultat, mais la table n'est plus jointe :
+  //    elle ne peut donc plus multiplier les lignes du fichier (V13.52).
+  const deuxRoutesVersAdresse = sql => /"t_t1"/.test(sql) && /"t_t2"/.test(sql) && (sql.match(/"t_t3"/g)||[]).length===2;
+  // La transformation enveloppe la valeur : on cherche donc la réunion des routes, puis
+  // séparément le nom de sortie, au lieu d'exiger que les deux se suivent.
+  const reunionDesRoutes = (sql,col) =>
+    (new RegExp('COALESCE\\(x\\d+\\."'+col+'", x\\d+\\."'+col+'"\\)').test(sql)
+      || /ORDER BY u\.rp, u\.rn LIMIT 1\)/.test(sql))
+    && new RegExp('AS "'+col+'"').test(sql);
+  ok('SQL : les deux routes mènent à ADRESSE (par la personne physique ET par la morale)', !r.err && deuxRoutesVersAdresse(r.sql));
+  ok('SQL : VILLE est la valeur du premier chemin renseigné, quel qu\'il soit', reunionDesRoutes(r.sql,'VILLE'));
   // transformation conservée
-  c1.transform='upper'; r=buildAdvSql(state.advExtract); ok('transformation MAJUSCULES appliquée sur le COALESCE', /UPPER\(TRIM\(CAST\(COALESCE\(x\d+\."VILLE", x\d+\."VILLE"\) AS VARCHAR\)\)\) AS "VILLE"/.test(r.sql)); c1.transform='none';
+  c1.transform='upper'; r=buildAdvSql(state.advExtract); ok('transformation MAJUSCULES appliquée à la valeur des deux routes', /UPPER\(TRIM\(CAST\(/.test(r.sql) && reunionDesRoutes(r.sql,'VILLE') && deuxRoutesVersAdresse(r.sql)); c1.transform='none';
   // via explicite toujours possible
   el('adv-col-tbl').value='t3'; advColColChanged(); el('adv-col-via').value=el('adv-col-via').options[2].value; el('adv-col-col').value='CP'; advAddColumn();
   const c2=state.advExtract.columns[1]; r=buildAdvSql(state.advExtract);
@@ -60,7 +71,7 @@ const out = await p.evaluate(async (seed)=>{
   state.tables['t4']={id:'t4',name:'AGENCE',type:'csv',status:'ready',headers:['ID','LIBELLE'],config:{},columnsMeta:{}}; state.relations.push({id:'r5',sourceTable:'t0',targetTable:'t4',sourceCol:'NUM',targetCol:'ID',type:'N-1'}); renderAdvExtract(); el('adv-col-tbl').value='t4'; advColColChanged(); ok('table à un seul chemin : sélecteur via masqué', el('adv-col-via-wrap').classList.contains('hidden') && advViaVal('adv-col-via')==='');
   // paramétrage
   window.prompt=()=>'Adresses'; epSaveCurrent(); const ep=state.extractPresets.find(x=>x.name==='Adresses'); state.advExtract.columns=[]; renderAdvExtract(); epLoad(ep.id);
-  ok('paramétrage rechargé : via « any » conservé et SQL identique', state.advExtract.columns[0].via==='any' && /COALESCE\(x\d+\."VILLE", x\d+\."VILLE"\) AS "VILLE"/.test(buildAdvSql(state.advExtract).sql));
+  ok('paramétrage rechargé : via « any » conservé et SQL identique', state.advExtract.columns[0].via==='any' && reunionDesRoutes(buildAdvSql(state.advExtract).sql,'VILLE'));
   // vue graphique
   let threw=false; try { advGToggleMode(true); advGToggleMode(false); } catch(e){ threw=true; } ok('vue graphique avec une colonne « any » : pas d\'exception', !threw);
   ok('lexique', !!V11_LEXIQUE['l\'un ou l\'autre lien']);

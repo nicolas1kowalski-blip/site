@@ -104,8 +104,13 @@ const out = await p.evaluate(async () => {
     ok('elle rappelle la table de départ et son volume', contient(/Table de départ \| Affaire\.txt/) && contient(/Lignes de la table de départ \| 1000/));
     ok('elle liste les colonnes en sortie et leur provenance', contient(/dk_code_aff \| Affaire\.txt\.dk_code_aff/) && contient(/nb_CONTRAT \| Σ Compter/));
     ok('elle écrit les LIENS empruntés, saut par saut', contient(/Affaire\.txt\.dk_code_aff = REL_CONTRAT_AFF\.csv\.AFF_ID.*puis.*CONTRAT\.csv\.DK_CODE_CTT/));
+    // Depuis la V13.52, le filtre est détaillé : le libellé, le fichier filtré, la colonne, le
+    // NOMBRE DE VALEURS qu'il porte, puis la portée. Une liste de 110 valeurs et une liste de 3
+    // ne produisent pas le même fichier : le nombre doit se lire ici.
     ok('elle écrit les filtres AVEC leur portée — c’est elle qui explique le nombre de lignes',
-        contient(/dans la liste « ma liste » \(110 valeur\(s\)\) \| sur la ligne/));
+        contient(/dans la liste « ma liste » \| .* \| 110 \| sur la ligne/));
+    ok('et elle dit sur quel fichier et quelle colonne chaque filtre porte',
+        contient(/Filtre \| Fichier filtré \| Colonne \| Valeurs \| Portée/));
     ok('et elle porte le contrôle des clés, valeurs absentes comprises',
         contient(/Clés différentes \| 100/) && contient(/Valeurs ABSENTES du fichier \| 10/));
     ok('une colonne de la table de départ n’affiche aucun réglage « plusieurs valeurs »',
