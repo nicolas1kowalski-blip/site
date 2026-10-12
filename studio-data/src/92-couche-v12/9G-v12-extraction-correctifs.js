@@ -247,19 +247,32 @@
                     return result;
                 }
         );
-        ['advCount', 'advPreview', 'advQuality', 'advGenerate', 'advColumnsOf', 'v12TmpFromSql', 'v12TmpFromTable'].forEach(
-            nm =>
-                Studio.extend(
-                    nm,
-                    o =>
-                        async function () {
-                            v12State.noSpill++;
-                            try {
-                                return await o.apply(this, arguments);
-                            } finally {
-                                v12State.noSpill--;
-                            }
-                        },
-                    { motif: 'requêtes relancées en mémoire pure en cas de débordement disque' }
-                )
+        // Les deux actions d'Excel (contrôler les clés, produire le classeur) matérialisent le
+        // résultat dans une table temporaire, exactement comme « générer » : sans ce repli, elles
+        // s'arrêtaient sur le message technique « HTML FileReaders do not support writing » au lieu
+        // d'être relancées en mémoire pure, puis expliquées.
+        [
+            'advCount',
+            'advPreview',
+            'advQuality',
+            'advGenerate',
+            'advGenererExcel',
+            'advControlerLesClesMaintenant',
+            'advColumnsOf',
+            'v12TmpFromSql',
+            'v12TmpFromTable'
+        ].forEach(nm =>
+            Studio.extend(
+                nm,
+                o =>
+                    async function () {
+                        v12State.noSpill++;
+                        try {
+                            return await o.apply(this, arguments);
+                        } finally {
+                            v12State.noSpill--;
+                        }
+                    },
+                { motif: 'requêtes relancées en mémoire pure en cas de débordement disque' }
+            )
         );

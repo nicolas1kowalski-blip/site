@@ -336,40 +336,66 @@
                 await duckDropTable(tId);
                 await conn.query(`CREATE ${kind} ${sqlIdent(tName)} AS ${readExpr(withFrn)}`);
             };
-            try {
-                if (asView) {
-                    await create('VIEW', true);
-                    table.storage = 'view';
-                } else {
-                    await create('TABLE', true);
-                    table.storage = 'table';
-                }
-            } catch (e) {
-                // Ce moteur ne connaît pas « encoding » : on convertit le fichier nous-mêmes en UTF-8 et
-                // l'on repart de zéro, sans cette option. C'est la seule lecture correcte possible ici.
-                if (erreurDEncodageInconnu(e) && decodeurDuFichier(table.config && table.config.enc)) {
-                    const enUtf8 = await recoderLeFichierEnUtf8(table.file, table.config.enc);
+            /*
+             * Les lectures possibles, de la meilleure à la dernière.
+             *
+             * Le MODE DE STOCKAGE voulu passe avant la façon de numéroter les lignes. C'est tout
+             * l'objet de ce tableau : un gros fichier doit rester lu directement (vue), même si ce
+             * moteur ignore « file_row_number » — l'ancien enchaînement retentait la vue AVEC cette
+             * option, échouait une seconde fois pour la même raison, et finissait par recopier le
+             * fichier entier dans la mémoire du moteur. Comme aucun moteur publié ne connaît
+             * « file_row_number » pour un CSV (vérifié : DuckDB v1.1.1 répond « Invalid named
+             * parameter »), AUCUN fichier n'était plus lu directement : un fichier de cent
+             * méga-octets saturait la mémoire, et toutes les requêtes suivantes s'arrêtaient sur
+             * « Résultat trop volumineux pour la mémoire du navigateur ».
+             *
+             * La recopie en table reste le tout dernier recours : mieux vaut un fichier chargé
+             * qu'un fichier refusé.
+             */
+            const lecturesAEssayer = asView
+                ? [
+                      ['VIEW', true],
+                      ['VIEW', false],
+                      ['TABLE', false]
+                  ]
+                : [
+                      ['TABLE', true],
+                      ['TABLE', false],
+                      ['VIEW', false]
+                  ];
+            /**
+             * Essaie les lectures dans l'ordre. Retourne l'erreur « ce moteur ne connaît pas
+             * encoding » s'il faut convertir le fichier avant d'insister, sinon rien.
+             */
+            const essayerLesLectures = async () => {
+                let derniereErreur = null;
+                for (const [kind, withFrn] of lecturesAEssayer) {
                     try {
-                        if (db.dropFile) await db.dropFile(virtualName);
-                    } catch (eDrop) {}
-                    await db.registerFileBuffer(virtualName, enUtf8);
-                    lecture = configSansEncodage(table.config);
-                    table.encRecode = true;
-                    await create(asView ? 'VIEW' : 'TABLE', true);
-                    table.storage = asView ? 'view' : 'table';
-                    return duckTableHeaders(tId);
+                        await create(kind, withFrn);
+                        table.storage = kind === 'VIEW' ? 'view' : 'table';
+                        return null;
+                    } catch (e) {
+                        derniereErreur = e;
+                        // Inutile d'insister : aucune lecture ne passera tant que le fichier n'est
+                        // pas converti en UTF-8.
+                        if (erreurDEncodageInconnu(e) && decodeurDuFichier(table.config && table.config.enc)) return e;
+                    }
                 }
-                // Repli ROBUSTE, quelle que soit l'erreur : on tente d'abord la lecture directe (vue),
-                // qui ne matérialise rien — c'est le mode le plus sûr contre l'"Out of Memory". On ne
-                // retente JAMAIS une matérialisation d'un gros fichier ici (ce serait un nouvel OOM).
+                throw derniereErreur;
+            };
+            const aConvertir = await essayerLesLectures();
+            if (aConvertir) {
+                // Ce moteur ne connaît pas « encoding » : on convertit le fichier nous-mêmes en UTF-8
+                // et l'on repart de zéro, sans cette option. C'est la seule lecture correcte possible ici.
+                const enUtf8 = await recoderLeFichierEnUtf8(table.file, table.config.enc);
                 try {
-                    await create('VIEW', true);
-                    table.storage = 'view';
-                } catch (e2) {
-                    // Dernier recours : moteur trop ancien pour file_row_number => table avec row_number().
-                    await create('TABLE', false);
-                    table.storage = 'table';
-                }
+                    if (db.dropFile) await db.dropFile(virtualName);
+                } catch (eDrop) {}
+                await db.registerFileBuffer(virtualName, enUtf8);
+                lecture = configSansEncodage(table.config);
+                table.encRecode = true;
+                const resteAConvertir = await essayerLesLectures();
+                if (resteAConvertir) throw resteAConvertir;
             }
             return duckTableHeaders(tId);
         }
@@ -630,10 +656,18 @@
             const { conn } = await getDB();
             // Un séparateur qui ne peut pas figurer dans un texte, aucun guillemet, aucun entête :
             // chaque ligne du fichier devient une ligne, quoi qu'elle contienne.
+            //
+            // « parallel=false » n'est PAS un détail : le lecteur découpe sinon le fichier en
+            // tranches d'environ huit méga-octets et, comme on lui demande de passer outre les
+            // lignes fautives, il garde les DEUX MOITIÉS de la ligne coupée à chaque jointure de
+            // tranches. Mesuré : un fichier propre de 600 000 lignes en annonçait 600 003, un de
+            // 1 500 000 en annonçait 1 500 014 — et la source déclenchait l'alerte « des lignes
+            // manquent » alors que rien ne manquait. En lecture suivie, le compte est exact, et
+            // même un peu plus rapide (408 ms contre 543 ms sur 23 Mo).
             const res = await conn.query(
                 `SELECT COUNT(*)::BIGINT AS n FROM read_csv(${sqlLiteral(nomVirtuel)},
                     columns={'ligne': 'VARCHAR'}, delim='\x1F', quote='', escape='',
-                    header=false, all_varchar=true, ignore_errors=true)`
+                    header=false, all_varchar=true, ignore_errors=true, parallel=false)`
             );
             return Number(arrowResultToObjects(res)[0].n);
         }

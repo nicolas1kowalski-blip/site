@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.50.1';
+        const V13_VERSION = '13.51.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.51.0',
+                d: '2026-10-12',
+                t: 'Correction : « trop volumineux » à répétition, et des lignes annoncées manquantes alors qu’elles sont là',
+                items: [
+                    'Un gros fichier était <b>recopié entier dans la mémoire du navigateur</b> au lieu d’être lu directement. Au-delà du seuil (40 Mo sans base sur disque, 400 Mo avec), une source doit rester une <b>vue sur le fichier</b> : la donnée reste dans le fichier et le moteur n’en garde rien. La lecture directe réclamait un numéro de ligne (« file_row_number ») <b>qu’aucun moteur publié ne connaît pour un CSV</b> ; le repli redemandait exactement la même chose, échouait pour la même raison, et finissait par recopier le fichier. Résultat : <b>plus aucun fichier n’était lu directement</b>, la mémoire était prise par la source elle-même, et chaque action répondait <b>« Résultat trop volumineux pour la mémoire du navigateur »</b>. C’est le cas de la version hors ligne ouverte depuis un poste, où le navigateur ne donne ni disque ni débordement : un fichier de cent méga-octets suffisait.',
+                    'Le mode de stockage voulu passe maintenant avant la façon de numéroter les lignes : un gros fichier reste lu directement, avec un numéro de ligne ordinaire. Mesuré sur 110 Mo : <b>351 ms au chargement au lieu de 3 178 ms</b>, et la mémoire du moteur reste libre pour les requêtes. La recopie demeure le tout dernier recours — mieux vaut un fichier chargé qu’un fichier refusé.',
+                    '<b>« X lignes chargées sur Y lignes dans le fichier — Z de moins »</b> s’affichait en rouge sur des fichiers parfaitement propres. Le compteur de lignes brutes lisait le fichier en parallèle et, comme on lui demande de passer outre les lignes fautives, il gardait les <b>deux moitiés</b> de la ligne coupée à chaque jointure de tranches, tous les huit méga-octets environ. Mesuré : 600 000 lignes annoncées 600 003, 1 500 000 annoncées 1 500 014. La lecture est désormais suivie : le compte est exact, et même un peu plus rapide.',
+                    '<b>« Contrôler les clés »</b> et <b>« Générer l’Excel »</b> matérialisent le résultat comme « générer », mais sans le repli mémoire : elles s’arrêtaient sur le message technique « HTML FileReaders do not support writing » au lieu d’être relancées en mémoire pure, puis expliquées. Elles en bénéficient maintenant comme les autres actions.',
+                    'Dix-neuf contrôles ajoutés sur ces trois points : le compte exact d’un fichier de 600 000 lignes sans la moindre alerte, la lecture directe au-delà du seuil (toutes les colonnes, toutes les lignes, une ligne précise, le numéro de ligne, deux lectures de suite), une extraction juste par-dessus une source lue directement, et le repli mémoire effectivement reçu par les deux actions.'
+                ]
+            },
             {
                 v: '13.50.1',
                 d: '2026-10-10',
