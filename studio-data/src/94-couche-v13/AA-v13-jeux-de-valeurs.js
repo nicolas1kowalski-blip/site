@@ -289,19 +289,48 @@
          * code ne vaut qu'une valeur, la colonne est forcée en « la première valeur » : un code qui
          * en vaudrait plusieurs ne serait plus un code.
          */
-        function v13ColonneDuCode(colonne) {
-            return Object.assign({}, colonne, {
+        function v13ColonneDuCode(colonne, baseId) {
+            const code = Object.assign({}, colonne, {
                 kind: undefined,
                 jvId: undefined,
                 alias: colonne.alias,
-                plusieurs: 'premiere'
+                plusieurs: 'premiere',
+                // La transformation demandée porte sur le LIBELLÉ, pas sur le code : c'est le
+                // libellé que l'on met en majuscules, pas la clé qui sert à le retrouver.
+                transform: 'none'
             });
+            // Le CHEMIN jusqu'à la table du code. Sans lui, un code venant d'une table LIÉE était
+            // cherché sur la table de départ : « Binder Error: Table "x0" does not have a column
+            // named "CLI_SEGMENT" ». Le moteur ne calcule le chemin que des colonnes ordinaires ;
+            // une colonne de libellé n'en est pas une, c'est donc ici qu'il faut le poser.
+            if (baseId && colonne.tableId && colonne.tableId !== baseId && !code._chemin)
+                code._chemin = advCheminDuLien(baseId, colonne.tableId, colonne.via || '');
+            return code;
         }
+        Studio.extend(
+            'buildAdvSql',
+            base =>
+                function (spec) {
+                    const orpheline = ((spec && spec.columns) || []).find(
+                        c =>
+                            c.kind === 'jv' &&
+                            c.tableId &&
+                            c.tableId !== spec.baseId &&
+                            !advCheminDuLien(spec.baseId, c.tableId, c.via || '')
+                    );
+                    if (orpheline)
+                        return {
+                            err: `« ${(state.tables[orpheline.tableId] || {}).name || '?'} » n’est plus reliée à la table de départ : le libellé de « ${orpheline.col} » ne peut pas être ramené. Retirez cette colonne ou rétablissez le lien.`
+                        };
+                    return base.apply(this, arguments);
+                },
+            { motif: 'un libellé dont le code n’est plus atteignable le dit, au lieu d’une erreur du moteur' }
+        );
         Studio.extend(
             'advColNeeds',
             base =>
                 function (c, baseId) {
-                    if (c && c.kind === 'jv') return base.call(this, v13ColonneDuCode(c), baseId);
+                    if (c && c.kind === 'jv') return base.call(this, v13ColonneDuCode(c, baseId), baseId);
                     return base.apply(this, arguments);
                 },
             { motif: 'un libellé de jeu de valeurs ne joint rien de plus que son code' }
@@ -315,18 +344,19 @@
                     const declaration = v13JeuDeValeurs(jeu);
                     const alias = c.alias || (c.col || '') + '_LIBELLE';
                     if (!declaration) return [{ expr: 'NULL', alias }];
-                    const codes = base.call(this, map, v13ColonneDuCode(c), hierRef, spec);
+                    const baseId = (spec && spec.baseId) || (state.advExtract || {}).baseId;
+                    const codes = base.call(this, map, v13ColonneDuCode(c, baseId), hierRef, spec);
                     const expressionDuCode = codes && codes.length ? codes[0].expr : 'NULL';
                     const conditionDuDomaine =
                         declaration.domaine && c.domaine
                             ? ` AND ${sqlCleDeLien('j.' + sqlIdent(declaration.domaine))} = ${sqlCleDeLien(sqlLiteral(c.domaine))}`
                             : '';
-                    const expr =
+                    const recherche =
                         `(SELECT NULLIF(TRIM(CAST(j.${sqlIdent(declaration.libelle)} AS VARCHAR)), '')` +
                         ` FROM ${sqlIdent(duckTableName(c.jvId))} j` +
                         ` WHERE ${sqlCleDeLien('j.' + sqlIdent(declaration.code))} = ${sqlCleDeLien(expressionDuCode)}${conditionDuDomaine}` +
                         ` LIMIT 1)`;
-                    return [{ expr, alias }];
+                    return [{ expr: advTransformee(recherche, c.transform), alias }];
                 },
             { motif: 'le libellé d’un jeu de valeurs se cherche par la valeur du code' }
         );

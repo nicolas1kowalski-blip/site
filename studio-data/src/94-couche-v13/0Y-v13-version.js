@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.55.0';
+        const V13_VERSION = '13.55.1';
         const V13_CHANGELOG = [
+            {
+                v: '13.55.1',
+                d: '2026-10-13',
+                t: 'Correction : le libellé d’un code venant d’une table liée',
+                items: [
+                    'Demander le libellé d’une colonne qui vient d’une <b>table liée</b> — et non de la table de départ — arrêtait l’aperçu sur <b>« Binder Error: Table "x0" does not have a column named "CLI_SEGMENT" »</b>. Le moteur ne calcule le chemin que des colonnes ordinaires ; une colonne de libellé n’en est pas une, et son code était donc cherché sur la table de départ, qui ne le porte pas. Le chemin est désormais posé par la couche qui crée la colonne.',
+                    'Et si le lien vient à disparaître, le refus est <b>en français et nomme la colonne</b> — « CLIENTS.csv n’est plus reliée à la table de départ : le libellé de CLI_SEGMENT ne peut pas être ramené » — au lieu de laisser le moteur protester en anglais.',
+                    'Au passage : la <b>transformation</b> choisie sur une colonne de libellé porte maintenant sur le libellé lui-même (le mettre en majuscules, par exemple), et non sur le code qui sert à le retrouver.',
+                    'Quatre contrôles ajoutés sur ce cas, du SQL produit jusqu’au libellé ramené.'
+                ]
+            },
             {
                 v: '13.55.0',
                 d: '2026-10-13',

@@ -168,6 +168,43 @@ const out = await p.evaluate(async () => {
     v13RetirerLeJeuDeValeurs('jvp');
     ok('un jeu de valeurs se retire', !v13JeuDeValeurs(state.tables['jvp']));
     ok('les autres restent', v13SourcesDesJeuxDeValeurs().length === 2);
+
+    // ---- 6. Le code vient d'une TABLE LIÉE, et non de la table de départ ----
+    //
+    // C'est le cas qui cassait : le moteur ne calcule le chemin que des colonnes ordinaires, et une
+    // colonne de libellé n'en est pas une. Le code d'une table liée était donc cherché sur la table
+    // de départ — « Binder Error: Table "x0" does not have a column named "CLI_SEGMENT" ».
+    await conn.query(`CREATE OR REPLACE TABLE t_cli AS SELECT row_number() OVER () AS __rn, 'CLI'||i AS NUM_CLIENT,
+        CASE WHEN i%2=0 THEN 'PART' ELSE 'PRO' END AS CLI_SEGMENT FROM range(1,51) tbl(i)`);
+    await conn.query(`CREATE OR REPLACE TABLE t_affc AS SELECT row_number() OVER () AS __rn, 'AFF'||i AS NUM_AFFAIRE,
+        'CLI'||((i-1)%50+1) AS NUM_CLIENT FROM range(1,201) tbl(i)`);
+    await conn.query(`CREATE OR REPLACE TABLE t_jvs AS SELECT row_number() OVER () AS __rn, * FROM (VALUES
+        ('PART','Clientele des particuliers'),('PRO','Clientele professionnelle')) v(CODE, LIBELLE)`);
+    poser('cli', 'CLIENTS.csv', ['NUM_CLIENT', 'CLI_SEGMENT'], 50);
+    poser('affc', 'AFFAIRES_CLIENT.csv', ['NUM_AFFAIRE', 'NUM_CLIENT'], 200);
+    poser('jvs', 'JV_SEGMENT.csv', ['CODE', 'LIBELLE'], 2);
+    state.relations = [{ id: 'rc', sourceTable: 'affc', targetTable: 'cli', sourceCol: 'NUM_CLIENT', targetCol: 'NUM_CLIENT', type: 'N-1' }];
+    v13DeclarerLeJeuDeValeurs('jvs', 'CODE', 'LIBELLE', '');
+    advSetBase('affc');
+    const liee = state.advExtract;
+    liee.columns = [
+        { id: 'd1', tableId: 'affc', col: 'NUM_AFFAIRE', alias: 'NUM_AFFAIRE', transform: 'none' },
+        { id: 'd2', tableId: 'cli', col: 'CLI_SEGMENT', alias: 'CLI_SEGMENT', transform: 'none' }
+    ];
+    await v13ChangerLeJeuDeValeursDeLaColonne('d2', 'jvs');
+    const requeteLiee = buildAdvSql(liee);
+    ok('le libellé d’un code venant d’une table LIÉE se construit', !requeteLiee.err);
+    const lignesLiees = await lire(`SELECT * FROM (${requeteLiee.sql}) z WHERE NUM_AFFAIRE = 'AFF2'`);
+    ok('et il est juste : le code est cherché sur SA table, pas sur la table de départ',
+        lignesLiees.length === 1 && lignesLiees[0].CLI_SEGMENT === 'PART' &&
+        lignesLiees[0].CLI_SEGMENT_LIBELLE === 'Clientele des particuliers');
+    const compteLie = (await lire(`SELECT COUNT(*)::BIGINT AS n FROM (${requeteLiee.sql}) z`))[0];
+    ok('et le nombre de lignes ne bouge toujours pas', Number(compteLie.n) === 200);
+    // Si le lien disparaît, on le dit au lieu de laisser le moteur protester.
+    state.relations = [];
+    const sansLien = buildAdvSql(liee);
+    ok('quand le lien n’existe plus, le refus est en français et nomme la colonne',
+        !!sansLien.err && /n’est plus reliée/.test(sansLien.err) && /CLI_SEGMENT/.test(sansLien.err));
     return R;
 });
 
