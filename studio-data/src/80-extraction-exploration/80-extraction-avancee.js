@@ -1337,6 +1337,15 @@
             return advColonneModifiee ? state.advExtract.columns.find(c => c.id === advColonneModifiee) || null : null;
         }
         /** Les genres de colonnes que le formulaire sait reprendre. */
+        /**
+         * Les boutons que les couches ajoutent à une ligne de colonne.
+         *
+         * Vide ici : c'est un point d'accroche. La couche V13 y met le bouton « 🏷️ libellé », qui
+         * va chercher dans les jeux de valeurs ce que veut dire un code.
+         */
+        function advBoutonsDeColonneHtml() {
+            return '';
+        }
         function advColonneModifiable(colonne) {
             return !!colonne && (!colonne.kind || colonne.kind === 'link');
         }
@@ -2124,7 +2133,7 @@
                         .join('')}</select>${advChoixPlusieursValeursHtml(c, extractSpec.baseId)}</td>
                     <td class="p-2 text-center">${advBoutonDeLaCleHtml(c, extractSpec)}</td>
                     ${!extractSpec.group.on && extractSpec.dedup.on ? `<td class="p-2 text-center"><input type="checkbox" ${extractSpec.dedup.keys.includes(c.id) ? 'checked' : ''} onchange="advToggleDedupKey('${c.id}',this.checked)"></td>` : ''}
-                    <td class="p-2 text-right whitespace-nowrap">${advColonneModifiable(c) ? `<button onclick="advModifierLaColonne('${c.id}')" title="Modifier cette colonne : sa source, son chemin, et pour une synthèse son mode et ses critères" class="text-slate-400 hover:text-indigo-600 font-bold mr-1">✎</button>` : ''}<button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>
+                    <td class="p-2 text-right whitespace-nowrap">${advBoutonsDeColonneHtml(c)}${advColonneModifiable(c) ? `<button onclick="advModifierLaColonne('${c.id}')" title="Modifier cette colonne : sa source, son chemin, et pour une synthèse son mode et ses critères" class="text-slate-400 hover:text-indigo-600 font-bold mr-1">✎</button>` : ''}<button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>
                 </tr>`
                     )
                     .join('');

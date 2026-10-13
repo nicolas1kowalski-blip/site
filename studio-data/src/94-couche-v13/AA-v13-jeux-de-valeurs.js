@@ -1,0 +1,533 @@
+        // ======================= V13 : JEUX DE VALEURS — LE CODE DEVIENT SON LIBELLÉ =======================
+        //
+        // Un fichier de gestion porte des codes : 01, 02, 03, « CTR_VIE », « TYP_A ». Le lecteur du
+        // fichier extrait, lui, veut lire « Contrat d'assurance vie ». La correspondance est dans un
+        // autre fichier, le JEU DE VALEURS — code, libellé, parfois le domaine auquel il appartient.
+        //
+        // Jusqu'ici il fallait, pour chaque code : déclarer un lien dans le modèle de données, puis
+        // ajouter la colonne du libellé dans l'extraction. Avec vingt codes et plusieurs fichiers de
+        // jeux de valeurs, cela fait vingt liens à déclarer pour une traduction mot à mot : c'est
+        // fastidieux, et cela encombre le modèle de liens qui ne décrivent rien du métier.
+        //
+        // Ici, AUCUN LIEN n'est déclaré. Un jeu de valeurs se déclare UNE FOIS — quelle colonne porte
+        // le code, laquelle porte le libellé — et l'application sait les repérer toute seule. Ensuite,
+        // sur n'importe quelle colonne de l'extraction, « + libellé » cherche dans quel jeu de valeurs
+        // ses valeurs se retrouvent, le dit, et ajoute la colonne du libellé. La traduction se fait par
+        // une recherche sur la valeur, comme un dictionnaire : rien n'est joint, donc rien ne peut
+        // multiplier les lignes.
+
+        /** Au-delà, un fichier n'est pas un jeu de valeurs mais un fichier de données. */
+        const V13_JV_LIGNES_MAX = 50000;
+        /** Le repérage automatique, lui, se limite aux petits fichiers : il doit se tromper rarement. */
+        const V13_JV_LIGNES_REPEREES_MAX = 20000;
+        /** Un libellé est un texte ; un code est court. C'est ce qui les distingue à la lecture. */
+        const V13_JV_LONGUEUR_DU_CODE = 40;
+        /** En dessous, les valeurs d'une colonne ne sont manifestement pas celles de ce jeu de valeurs. */
+        const V13_JV_TAUX_MINIMAL = 0.3;
+
+        /** La déclaration d'un jeu de valeurs, nettoyée de ce qui n'existe plus dans le fichier. */
+        function v13JeuDeValeurs(table) {
+            const declaration = table && table.jeuDeValeurs;
+            if (!declaration || !declaration.code || !declaration.libelle) return null;
+            const entetes = table.headers || [];
+            if (!entetes.includes(declaration.code) || !entetes.includes(declaration.libelle)) return null;
+            return {
+                code: declaration.code,
+                libelle: declaration.libelle,
+                domaine: declaration.domaine && entetes.includes(declaration.domaine) ? declaration.domaine : ''
+            };
+        }
+        /** Toutes les sources déclarées comme jeux de valeurs, jeux temporaires compris. */
+        function v13SourcesDesJeuxDeValeurs() {
+            const sources = Object.values(state.tables).filter(t => t && t.status === 'ready');
+            const temporaires = typeof v12TmpList === 'function' ? v12TmpList() : [];
+            const vues = new Set();
+            return [...sources, ...temporaires].filter(t => {
+                if (!t || vues.has(t.id) || !v13JeuDeValeurs(t)) return false;
+                vues.add(t.id);
+                return true;
+            });
+        }
+        /** Déclare — ou corrige — le jeu de valeurs porté par une source. */
+        function v13DeclarerLeJeuDeValeurs(tableId, code, libelle, domaine) {
+            const table = state.tables[tableId];
+            if (!table) return null;
+            table.jeuDeValeurs = { code, libelle, domaine: domaine || '' };
+            if (!table.temp) {
+                try {
+                    persistAppState();
+                } catch (e) {}
+            }
+            return v13JeuDeValeurs(table);
+        }
+        function v13RetirerLeJeuDeValeurs(tableId) {
+            const table = state.tables[tableId];
+            if (!table) return;
+            delete table.jeuDeValeurs;
+            if (!table.temp) {
+                try {
+                    persistAppState();
+                } catch (e) {}
+            }
+            renderAdvExtract();
+        }
+
+        /**
+         * Repère tout seul les fichiers qui SONT des jeux de valeurs.
+         *
+         * Un jeu de valeurs se reconnaît à sa forme : peu de lignes, peu de colonnes, une colonne
+         * dont chaque valeur est unique et courte — le code —, et une colonne de texte plus long —
+         * le libellé. Quand le code n'est unique qu'à l'intérieur d'un domaine (un seul fichier pour
+         * tous les jeux de valeurs de l'entreprise), la colonne qui répète peu de valeurs est
+         * proposée comme domaine.
+         *
+         * Une seule requête par fichier candidat, et seulement sur les petits fichiers.
+         */
+        async function v13RepererLesJeuxDeValeurs() {
+            const candidates = [...Object.values(state.tables), ...(typeof v12TmpList === 'function' ? v12TmpList() : [])];
+            const vues = new Set();
+            const propositions = [];
+            const { conn } = await getDB();
+            for (const table of candidates) {
+                if (!table || vues.has(table.id) || table.status !== 'ready') continue;
+                vues.add(table.id);
+                if (v13JeuDeValeurs(table)) continue;
+                const entetes = (table.headers || []).filter(h => h !== '__rn');
+                if (entetes.length < 2 || entetes.length > 8) continue;
+                if (table.lastRows != null && Number(table.lastRows) > V13_JV_LIGNES_REPEREES_MAX) continue;
+                try {
+                    const proposition = await v13ExaminerUnFichier(conn, table, entetes);
+                    if (proposition) propositions.push(proposition);
+                } catch (e) {}
+            }
+            return propositions;
+        }
+        /**
+         * Ce fichier a-t-il la forme d'un jeu de valeurs ?
+         *
+         * Le signal qui tranche n'est pas le nombre de lignes, c'est le LIBELLÉ : un libellé est du
+         * texte écrit pour être lu — il porte des minuscules ou des espaces (« Assurance
+         * automobile », « En cours »). Un code n'en porte pas (« VIE », « 01 », « AFF1203 »). Sans
+         * ce signal, n'importe quel fichier de gestion à trois colonnes passait pour une
+         * nomenclature : mesuré, un fichier d'affaires se proposait lui-même, « code NUM_AFFAIRE →
+         * libellé CODE_PRODUIT ».
+         */
+        async function v13ExaminerUnFichier(conn, table, entetes) {
+            const mesures = entetes.map(
+                (h, rang) =>
+                    `COUNT(DISTINCT ${sqlIdent(h)})::BIGINT AS d${rang}, ` +
+                    `MAX(LENGTH(CAST(${sqlIdent(h)} AS VARCHAR)))::BIGINT AS l${rang}, ` +
+                    `SUM(CASE WHEN CAST(${sqlIdent(h)} AS VARCHAR) LIKE '% %' ` +
+                    `OR regexp_matches(CAST(${sqlIdent(h)} AS VARCHAR), '[a-zà-ÿ]') THEN 1 ELSE 0 END)::BIGINT AS h${rang}`
+            );
+            const res = arrowResultToObjects(
+                await conn.query(
+                    `SELECT COUNT(*)::BIGINT AS lignes, ${mesures.join(', ')} FROM ${sqlIdent(duckTableName(table.id))}`
+                )
+            )[0];
+            const lignes = Number(res.lignes);
+            if (!lignes || lignes > V13_JV_LIGNES_REPEREES_MAX) return null;
+            const colonnes = entetes.map((h, rang) => ({
+                nom: h,
+                valeurs: Number(res['d' + rang]),
+                longueur: Number(res['l' + rang] || 0),
+                humaines: Number(res['h' + rang] || 0)
+            }));
+            // Le libellé : du texte écrit pour être lu, sur au moins la moitié des lignes.
+            const libelle = colonnes
+                .filter(c => c.humaines >= lignes / 2 && c.longueur >= 4)
+                .sort((a, b) => b.longueur - a.longueur)[0];
+            if (!libelle) return null;
+            // Le code : court, et unique — soit en lui-même, soit à l'intérieur d'un domaine.
+            const codes = colonnes
+                .filter(c => c.nom !== libelle.nom && c.longueur <= V13_JV_LONGUEUR_DU_CODE && c.valeurs > 1)
+                .sort((a, b) => v13AllureDuCode(b.nom) - v13AllureDuCode(a.nom) || a.longueur - b.longueur);
+            const codeUnique = codes.find(c => c.valeurs === lignes);
+            if (codeUnique)
+                return {
+                    tableId: table.id,
+                    nom: table.name,
+                    lignes,
+                    code: codeUnique.nom,
+                    libelle: libelle.nom,
+                    domaine: ''
+                };
+            // Un seul fichier pour tous les jeux de valeurs de la maison : le code ne se répète
+            // qu'une fois PAR DOMAINE. On cherche le couple qui rend chaque ligne unique — puis on
+            // décide LEQUEL des deux est le code, car le moteur ne voit que deux colonnes qui se
+            // répètent. Mesuré sur un fichier (DOMAINE, CODE, LIBELLE) : le premier couple venu
+            // prenait DOMAINE pour le code et CODE pour le domaine, et plus rien ne se traduisait.
+            const couples = [];
+            for (const code of codes) {
+                for (const domaine of colonnes) {
+                    if (domaine.nom === code.nom || domaine.nom === libelle.nom) continue;
+                    if (domaine.valeurs < 2 || domaine.valeurs >= lignes) continue;
+                    const couple = Number(
+                        arrowResultToObjects(
+                            await conn.query(
+                                `SELECT COUNT(DISTINCT (${sqlIdent(domaine.nom)}, ${sqlIdent(code.nom)}))::BIGINT AS n
+                                 FROM ${sqlIdent(duckTableName(table.id))}`
+                            )
+                        )[0].n
+                    );
+                    if (couple === lignes) couples.push({ code, domaine, score: v13ScoreDuCouple(code, domaine) });
+                }
+            }
+            if (!couples.length) return null;
+            couples.sort((a, b) => b.score - a.score);
+            return {
+                tableId: table.id,
+                nom: table.name,
+                lignes,
+                code: couples[0].code.nom,
+                libelle: libelle.nom,
+                domaine: couples[0].domaine.nom
+            };
+        }
+        /** Les mots qui désignent un code, et ceux qui désignent un domaine. */
+        const V13_NOM_DU_CODE = /(^|_)(CODE|CD|CLE|KEY|ID|NUM|REF|VALEUR)($|_)/;
+        const V13_NOM_DU_DOMAINE = /(DOMAINE|TYPE|FAMILLE|CATEGORIE|CATEG|GROUPE|NOMENCLATURE|JEU|RUBRIQUE|LISTE)/;
+        /** À quel point ce nom de colonne annonce un code plutôt qu'un domaine. */
+        function v13AllureDuCode(nom) {
+            const normalise = normColName(nom);
+            return (V13_NOM_DU_CODE.test('_' + normalise + '_') ? 1 : 0) - (V13_NOM_DU_DOMAINE.test(normalise) ? 1 : 0);
+        }
+        /**
+         * Lequel des deux est le code, lequel est le domaine ?
+         *
+         * La donnée d'abord : un domaine porte MOINS de valeurs différentes qu'il n'y a de codes
+         * (douze domaines, trois cents codes). À égalité — et c'est fréquent sur un petit fichier —
+         * les noms tranchent : « CODE » est un code, « DOMAINE » est un domaine.
+         */
+        function v13ScoreDuCouple(code, domaine) {
+            const parLesValeurs = domaine.valeurs < code.valeurs ? 2 : domaine.valeurs > code.valeurs ? -2 : 0;
+            return parLesValeurs + v13AllureDuCode(code.nom) - v13AllureDuCode(domaine.nom);
+        }
+
+        /**
+         * Dans quel jeu de valeurs les valeurs de cette colonne se retrouvent-elles ?
+         *
+         * On mesure, on ne devine pas : la part des valeurs de la colonne qui existent comme code
+         * dans chaque jeu de valeurs déclaré. Le mieux placé gagne, et le taux est affiché — « 1 »
+         * et « 2 » se retrouvent dans n'importe quelle nomenclature, c'est au lecteur de trancher
+         * quand deux jeux se valent.
+         */
+        async function v13ChercherLeJeuDeValeurs(tableId, colonne) {
+            const jeux = v13SourcesDesJeuxDeValeurs();
+            if (!jeux.length || !state.tables[tableId]) return [];
+            const { conn } = await getDB();
+            const trouves = [];
+            for (const jeu of jeux) {
+                const declaration = v13JeuDeValeurs(jeu);
+                try {
+                    const res = arrowResultToObjects(
+                        await conn.query(`
+                            WITH valeurs AS (
+                                SELECT DISTINCT ${sqlCleDeLien('x.' + sqlIdent(colonne))} AS k
+                                FROM ${sqlIdent(duckTableName(tableId))} x
+                            ), codes AS (
+                                SELECT DISTINCT ${sqlCleDeLien('j.' + sqlIdent(declaration.code))} AS k
+                                FROM ${sqlIdent(duckTableName(jeu.id))} j
+                            )
+                            SELECT (SELECT COUNT(*) FROM valeurs WHERE k IS NOT NULL)::BIGINT AS valeurs,
+                                   (SELECT COUNT(*) FROM valeurs v WHERE v.k IS NOT NULL
+                                        AND EXISTS (SELECT 1 FROM codes c WHERE c.k = v.k))::BIGINT AS reconnues`)
+                    )[0];
+                    const valeurs = Number(res.valeurs);
+                    let reconnues = Number(res.reconnues);
+                    if (!valeurs || !reconnues) continue;
+                    // Un seul fichier pour tous les jeux de valeurs de la maison : le code « 01 »
+                    // ne veut pas dire la même chose selon le domaine. On cherche donc DANS QUEL
+                    // domaine ces valeurs se retrouvent le mieux, et c'est celui-là que la colonne
+                    // interrogera — sinon le libellé ramené serait celui d'un autre jeu.
+                    let domaine = '';
+                    let autresDomaines = [];
+                    if (declaration.domaine) {
+                        const parDomaine = arrowResultToObjects(
+                            await conn.query(`
+                                WITH valeurs AS (
+                                    SELECT DISTINCT ${sqlCleDeLien('x.' + sqlIdent(colonne))} AS k
+                                    FROM ${sqlIdent(duckTableName(tableId))} x
+                                )
+                                SELECT j.${sqlIdent(declaration.domaine)} AS domaine,
+                                       COUNT(DISTINCT v.k)::BIGINT AS reconnues
+                                FROM ${sqlIdent(duckTableName(jeu.id))} j
+                                JOIN valeurs v ON ${sqlCleDeLien('j.' + sqlIdent(declaration.code))} = v.k
+                                GROUP BY 1 ORDER BY 2 DESC, 1 ASC`)
+                        );
+                        if (!parDomaine.length) continue;
+                        // À égalité, le premier dans l'ordre alphabétique : deux exécutions doivent
+                        // donner le même fichier, toujours.
+                        domaine = parDomaine[0].domaine == null ? '' : String(parDomaine[0].domaine);
+                        reconnues = Number(parDomaine[0].reconnues);
+                        const exAequo = parDomaine.filter(d => Number(d.reconnues) === reconnues);
+                        if (exAequo.length > 1) autresDomaines = exAequo.slice(1).map(d => String(d.domaine));
+                    }
+                    const taux = reconnues / valeurs;
+                    if (taux < V13_JV_TAUX_MINIMAL) continue;
+                    trouves.push({
+                        jeuId: jeu.id,
+                        nom: jeu.name,
+                        declaration,
+                        valeurs,
+                        reconnues,
+                        taux,
+                        domaine,
+                        autresDomaines
+                    });
+                } catch (e) {}
+            }
+            trouves.sort((a, b) => b.taux - a.taux);
+            return trouves;
+        }
+
+        // ---- Le SQL : une recherche par la valeur, jamais une jointure ----
+        /**
+         * La colonne du libellé s'appuie sur l'expression du CODE, quelle qu'elle soit : une colonne
+         * de la table de départ, ou une colonne ramenée d'une table liée par sous-requête. On la
+         * demande au moteur tel quel, puis on l'enveloppe dans la recherche du libellé. Comme le
+         * code ne vaut qu'une valeur, la colonne est forcée en « la première valeur » : un code qui
+         * en vaudrait plusieurs ne serait plus un code.
+         */
+        function v13ColonneDuCode(colonne) {
+            return Object.assign({}, colonne, {
+                kind: undefined,
+                jvId: undefined,
+                alias: colonne.alias,
+                plusieurs: 'premiere'
+            });
+        }
+        Studio.extend(
+            'advColNeeds',
+            base =>
+                function (c, baseId) {
+                    if (c && c.kind === 'jv') return base.call(this, v13ColonneDuCode(c), baseId);
+                    return base.apply(this, arguments);
+                },
+            { motif: 'un libellé de jeu de valeurs ne joint rien de plus que son code' }
+        );
+        Studio.extend(
+            'advExpandCol',
+            base =>
+                function (map, c, hierRef, spec) {
+                    if (!c || c.kind !== 'jv') return base.apply(this, arguments);
+                    const jeu = state.tables[c.jvId];
+                    const declaration = v13JeuDeValeurs(jeu);
+                    const alias = c.alias || (c.col || '') + '_LIBELLE';
+                    if (!declaration) return [{ expr: 'NULL', alias }];
+                    const codes = base.call(this, map, v13ColonneDuCode(c), hierRef, spec);
+                    const expressionDuCode = codes && codes.length ? codes[0].expr : 'NULL';
+                    const conditionDuDomaine =
+                        declaration.domaine && c.domaine
+                            ? ` AND ${sqlCleDeLien('j.' + sqlIdent(declaration.domaine))} = ${sqlCleDeLien(sqlLiteral(c.domaine))}`
+                            : '';
+                    const expr =
+                        `(SELECT NULLIF(TRIM(CAST(j.${sqlIdent(declaration.libelle)} AS VARCHAR)), '')` +
+                        ` FROM ${sqlIdent(duckTableName(c.jvId))} j` +
+                        ` WHERE ${sqlCleDeLien('j.' + sqlIdent(declaration.code))} = ${sqlCleDeLien(expressionDuCode)}${conditionDuDomaine}` +
+                        ` LIMIT 1)`;
+                    return [{ expr, alias }];
+                },
+            { motif: 'le libellé d’un jeu de valeurs se cherche par la valeur du code' }
+        );
+        Studio.extend(
+            'advColLabel',
+            base =>
+                function (c) {
+                    if (!c || c.kind !== 'jv') return base.apply(this, arguments);
+                    const jeu = state.tables[c.jvId] || {};
+                    const table = state.tables[c.tableId] || {};
+                    return `🏷️ Libellé de ${table.name || '?'}.${c.col} — jeu de valeurs « ${jeu.name || '?'} »`;
+                },
+            { motif: 'une colonne de libellé se lit comme ce qu’elle est' }
+        );
+
+        // ---- L'écran ----
+        v13State.jeuxDeValeurs = { propositions: null, enRecherche: false, message: '' };
+
+        /** Cette colonne peut-elle recevoir son libellé ? Un code vient d'une colonne, pas d'un calcul. */
+        function v13ColonneTraduisible(colonne) {
+            return !!colonne && !colonne.kind && !!colonne.col;
+        }
+        /** Le bouton « + libellé » d'une ligne de colonne. */
+        function v13BoutonDuLibelleHtml(colonne) {
+            if (!v13ColonneTraduisible(colonne)) return '';
+            const dejaTraduite = (state.advExtract.columns || []).some(
+                autre => autre.kind === 'jv' && autre.tableId === colonne.tableId && autre.col === colonne.col
+            );
+            if (dejaTraduite)
+                return `<span title="Le libellé de cette colonne est déjà dans le fichier" class="text-emerald-600 text-xs font-bold mr-1">🏷️</span>`;
+            return `<button onclick="v13AjouterLeLibelle('${colonne.id}')" title="Remplacer le code par son libellé : on cherche dans quel jeu de valeurs ces valeurs se retrouvent, et on ajoute la colonne du libellé. Aucun lien à déclarer." class="text-slate-400 hover:text-indigo-600 font-bold mr-1">🏷️</button>`;
+        }
+        Studio.extend(
+            'advBoutonsDeColonneHtml',
+            base =>
+                function (colonne) {
+                    return v13BoutonDuLibelleHtml(colonne) + base.apply(this, arguments);
+                },
+            { motif: 'le libellé d’un code s’ajoute depuis la ligne de la colonne' }
+        );
+        Studio.extend(
+            'v13SectionDesLiensHtml',
+            base =>
+                function () {
+                    const corps = base.apply(this, arguments);
+                    return corps ? corps + v13BlocDesJeuxDeValeursHtml() : corps;
+                },
+            { motif: 'les jeux de valeurs se déclarent là où l’on relie les sources' }
+        );
+
+        /**
+         * Ajoute le libellé d'une colonne : on cherche le jeu de valeurs qui reconnaît ses valeurs,
+         * et l'on pose la colonne juste après celle du code.
+         */
+        async function v13AjouterLeLibelle(identifiant) {
+            const spec = state.advExtract;
+            const colonne = (spec.columns || []).find(c => c.id === identifiant);
+            if (!colonne) return;
+            if (!v13SourcesDesJeuxDeValeurs().length) {
+                v13State.jeuxDeValeurs.message =
+                    'Aucun jeu de valeurs déclaré pour l’instant. « 🏷️ Repérer les jeux de valeurs » les trouve tout seul parmi vos fichiers.';
+                renderAdvExtract();
+                return showError(
+                    'Aucun jeu de valeurs n’est déclaré. Utilisez « 🏷️ Repérer les jeux de valeurs » dans « Sources reliées ».'
+                );
+            }
+            let trouves = [];
+            try {
+                trouves = await v13ChercherLeJeuDeValeurs(colonne.tableId, colonne.col);
+            } catch (e) {
+                return showError('Recherche impossible : ' + ((e && e.message) || e));
+            }
+            if (!trouves.length)
+                return showError(
+                    `Les valeurs de « ${advNomEnSortie(colonne)} » ne se retrouvent dans aucun jeu de valeurs déclaré.`
+                );
+            const meilleur = trouves[0];
+            const rang = (spec.columns || []).findIndex(c => c.id === identifiant);
+            spec.columns.splice(rang + 1, 0, {
+                id: 'jv_' + generateId(),
+                kind: 'jv',
+                tableId: colonne.tableId,
+                col: colonne.col,
+                via: colonne.via || '',
+                jvId: meilleur.jeuId,
+                domaine: meilleur.domaine || '',
+                alias: advNomEnSortie(colonne) + '_LIBELLE',
+                transform: 'none'
+            });
+            const pourcent = Math.round(meilleur.taux * 100);
+            renderAdvExtract();
+            showSuccess(
+                `🏷️ Libellé ajouté depuis « ${meilleur.nom} »${meilleur.domaine ? `, domaine « ${meilleur.domaine} »` : ''} : ${meilleur.reconnues} valeur(s) sur ${meilleur.valeurs} reconnues (${pourcent} %).` +
+                    ((meilleur.autresDomaines || []).length
+                        ? ` ⚠️ Ces codes existent aussi dans le(s) domaine(s) ${meilleur.autresDomaines.join(', ')} de ce fichier : vérifiez que « ${meilleur.domaine} » est le bon.`
+                        : '') +
+                    (trouves.length > 1 ? ` ${trouves.length - 1} autre(s) jeu(x) de valeurs contenaient aussi ces codes.` : '')
+            );
+        }
+        async function v13RepererLesJeuxDeValeursMaintenant() {
+            v13State.jeuxDeValeurs.enRecherche = true;
+            v13State.jeuxDeValeurs.message = '';
+            renderAdvExtract();
+            try {
+                const propositions = await v13RepererLesJeuxDeValeurs();
+                v13State.jeuxDeValeurs.propositions = propositions;
+                v13State.jeuxDeValeurs.message = propositions.length
+                    ? `${propositions.length} fichier(s) ressemblent à un jeu de valeurs.`
+                    : 'Aucun fichier ne ressemble à un jeu de valeurs (peu de lignes, un code unique et court, un libellé). Déclarez-le à la main ci-dessous.';
+            } catch (e) {
+                v13State.jeuxDeValeurs.message = 'Repérage impossible : ' + ((e && e.message) || e);
+            } finally {
+                v13State.jeuxDeValeurs.enRecherche = false;
+                renderAdvExtract();
+            }
+        }
+        function v13AccepterLeJeuDeValeurs(tableId, code, libelle, domaine) {
+            v13DeclarerLeJeuDeValeurs(tableId, code, libelle, domaine);
+            v13State.jeuxDeValeurs.propositions = (v13State.jeuxDeValeurs.propositions || []).filter(
+                p => p.tableId !== tableId
+            );
+            v13State.jeuxDeValeurs.message = `🏷️ « ${(state.tables[tableId] || {}).name} » est un jeu de valeurs. Le bouton 🏷️ de chaque colonne peut maintenant y chercher les libellés.`;
+            renderAdvExtract();
+        }
+        function v13DeclarerALaMain() {
+            const tableId = (el('v13-jv-table') || {}).value;
+            const code = (el('v13-jv-code') || {}).value;
+            const libelle = (el('v13-jv-libelle') || {}).value;
+            const domaine = (el('v13-jv-domaine') || {}).value;
+            if (!tableId || !code || !libelle)
+                return showError('Choisissez le fichier, la colonne du code et celle du libellé.');
+            if (code === libelle) return showError('Le code et le libellé ne peuvent pas être la même colonne.');
+            v13AccepterLeJeuDeValeurs(tableId, code, libelle, domaine);
+        }
+        function v13ChangerLaTableDuJeuDeValeurs(tableId) {
+            v13State.jeuxDeValeurs.tableChoisie = tableId;
+            v13State.jeuxDeValeurs.ouvert = true;
+            renderAdvExtract();
+        }
+        /** Le bloc « Jeux de valeurs », sous les sources reliées. */
+        function v13BlocDesJeuxDeValeursHtml() {
+            const etat = v13State.jeuxDeValeurs;
+            const declares = v13SourcesDesJeuxDeValeurs();
+            let html = `<div class="mt-3 pt-3 border-t border-slate-200">
+                <div class="text-[11px] text-slate-600 mb-2"><b>🏷️ Jeux de valeurs</b> — les fichiers qui disent ce que veut dire un code.
+                Déclarés une fois, le bouton 🏷️ de chaque colonne y cherche le libellé. <b>Aucun lien à déclarer.</b></div>`;
+            if (declares.length)
+                html += `<div class="mb-2">${declares
+                    .map(table => {
+                        const declaration = v13JeuDeValeurs(table);
+                        return `<span class="inline-flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-200 text-amber-900 rounded-full px-2 py-0.5 mr-1 mb-1">
+                            🏷️ ${escapeHTML(table.name)} : ${escapeHTML(declaration.code)} → ${escapeHTML(declaration.libelle)}${declaration.domaine ? ' (par ' + escapeHTML(declaration.domaine) + ')' : ''}
+                            <button onclick="v13RetirerLeJeuDeValeurs('${table.id}')" title="Ce fichier n’est pas un jeu de valeurs" class="text-amber-500 hover:text-red-600 font-bold">✕</button></span>`;
+                    })
+                    .join('')}</div>`;
+            html += `<button onclick="v13RepererLesJeuxDeValeursMaintenant()" ${etat.enRecherche ? 'disabled' : ''}
+                class="text-xs font-bold rounded-lg px-3 py-1.5 border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 ${etat.enRecherche ? 'opacity-50' : ''}">
+                ${etat.enRecherche ? '⏳ Repérage…' : '🏷️ Repérer les jeux de valeurs'}</button>`;
+            if (etat.message) html += `<p class="text-[11px] text-slate-600 mt-2">${escapeHTML(etat.message)}</p>`;
+            if (etat.propositions && etat.propositions.length)
+                html += `<div class="mt-2 grid gap-1.5">${etat.propositions
+                    .map(
+                        p => `<div class="flex items-center justify-between gap-2 border border-amber-200 bg-amber-50/40 rounded-lg px-2.5 py-1.5">
+                        <div class="text-[11px] text-slate-700"><b>${escapeHTML(p.nom)}</b> — ${v13Nombre(p.lignes)} ligne(s) :
+                            code <b>${escapeHTML(p.code)}</b> → libellé <b>${escapeHTML(p.libelle)}</b>${p.domaine ? `, par domaine <b>${escapeHTML(p.domaine)}</b>` : ''}</div>
+                        <button onclick="v13AccepterLeJeuDeValeurs('${p.tableId}', '${escapeHTML(p.code)}', '${escapeHTML(p.libelle)}', '${escapeHTML(p.domaine)}')"
+                            class="shrink-0 text-[10px] font-bold rounded-full px-2.5 py-1 bg-amber-600 text-white hover:bg-amber-700">C’est un jeu de valeurs</button>
+                    </div>`
+                    )
+                    .join('')}</div>`;
+            html += v13JeuDeValeursALaMainHtml();
+            return html + '</div>';
+        }
+        /** La déclaration à la main, pour les fichiers que le repérage ne reconnaît pas. */
+        function v13JeuDeValeursALaMainHtml() {
+            const tables = [
+                ...Object.values(state.tables).filter(t => t && t.status === 'ready'),
+                ...(typeof v12TmpList === 'function' ? v12TmpList() : [])
+            ];
+            if (!tables.length) return '';
+            const choisie = v13State.jeuxDeValeurs.tableChoisie && state.tables[v13State.jeuxDeValeurs.tableChoisie];
+            const tableId = choisie ? choisie.id : tables[0].id;
+            const entetes = ((state.tables[tableId] || {}).headers || []).filter(h => h !== '__rn');
+            const option = (valeur, libelle, selectionnee) =>
+                `<option value="${escapeHTML(valeur)}" ${selectionnee ? 'selected' : ''}>${escapeHTML(libelle)}</option>`;
+            return `<details class="mt-2 text-[11px]" ${v13State.jeuxDeValeurs.ouvert ? 'open' : ''} ontoggle="v13State.jeuxDeValeurs.ouvert = this.open">
+                <summary class="cursor-pointer text-slate-500 hover:text-amber-700">…ou déclarer un jeu de valeurs moi-même</summary>
+                <div class="mt-2 flex items-end gap-2 flex-wrap bg-white border border-slate-200 rounded-lg p-2">
+                    <label class="text-[10px] text-slate-500">Fichier
+                        <select id="v13-jv-table" onchange="v13ChangerLaTableDuJeuDeValeurs(this.value)" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
+                            ${tables.map(t => option(t.id, t.name + (t.temp ? ' (jeu temporaire)' : ''), t.id === tableId)).join('')}</select></label>
+                    <label class="text-[10px] text-slate-500">Colonne du code
+                        <select id="v13-jv-code" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
+                            ${entetes.map(h => option(h, h, false)).join('')}</select></label>
+                    <label class="text-[10px] text-slate-500">Colonne du libellé
+                        <select id="v13-jv-libelle" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
+                            ${entetes.map((h, rang) => option(h, h, rang === 1)).join('')}</select></label>
+                    <label class="text-[10px] text-slate-500">Domaine (si un seul fichier porte plusieurs jeux)
+                        <select id="v13-jv-domaine" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
+                            ${option('', '— aucun —', true)}${entetes.map(h => option(h, h, false)).join('')}</select></label>
+                    <button onclick="v13DeclarerALaMain()" class="text-xs font-bold rounded-lg px-3 py-1.5 bg-amber-600 text-white hover:bg-amber-700">Déclarer</button>
+                </div>
+            </details>`;
+        }

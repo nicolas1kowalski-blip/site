@@ -1,7 +1,21 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.53.0';
+        const V13_VERSION = '13.54.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.54.0',
+                d: '2026-10-13',
+                t: 'Jeux de valeurs : le code devient son libellé, sans déclarer le moindre lien',
+                items: [
+                    'Un fichier de gestion porte des codes — 01, 02, « VIE », « AUTO ». Le lecteur du fichier extrait, lui, veut lire « Assurance automobile ». Jusqu’ici il fallait, <b>pour chaque code</b>, déclarer un lien dans le modèle de données puis ajouter la colonne du libellé : vingt codes, vingt liens, pour une traduction mot à mot — et un modèle encombré de liens qui ne décrivent rien du métier.',
+                    'Désormais : <b>aucun lien</b>. Un jeu de valeurs se déclare <b>une fois</b> — quelle colonne porte le code, laquelle porte le libellé — et le bouton <b>🏷️</b> de chaque colonne en sortie y cherche le libellé <b>par la valeur du code</b>, comme un dictionnaire. Rien n’est joint, donc rien ne peut multiplier les lignes : vérifié sur 1 000 lignes, 1 000 en sortie.',
+                    '<b>« 🏷️ Repérer les jeux de valeurs »</b> les trouve tout seuls parmi vos fichiers. Le signal qui tranche n’est pas le nombre de lignes mais le <b>libellé</b> : un libellé est du texte écrit pour être lu — il porte des minuscules ou des espaces — là où un code n’en porte pas. Sans ce signal, n’importe quel fichier de gestion à trois colonnes passait pour une nomenclature : mesuré, un fichier d’affaires se proposait lui-même, « code NUM_AFFAIRE → libellé CODE_PRODUIT ».',
+                    'Un <b>seul fichier pour tous les jeux de valeurs</b> de la maison est reconnu aussi : le code n’y est unique que <b>par domaine</b>, et le domaine est trouvé. Lequel des deux est le code, lequel est le domaine ? La donnée d’abord — un domaine porte moins de valeurs différentes qu’il n’y a de codes — puis les noms, à égalité.',
+                    'Quand la colonne est traduite, l’application dit <b>d’où vient le libellé et combien de valeurs sont reconnues</b> : « depuis JV_PRODUIT.csv : 3 valeurs sur 3 reconnues (100 %) ». Pour un fichier à plusieurs domaines, elle dit <b>lequel</b> a été retenu, et prévient quand les mêmes codes existent dans un autre domaine du même fichier.',
+                    'Le libellé se pose <b>juste après</b> la colonne du code, pas à la fin du fichier. Une colonne déjà traduite ne le propose plus. Une déclaration <b>à la main</b> reste possible pour les fichiers que le repérage ne reconnaît pas.',
+                    'Vingt-quatre contrôles ajoutés.'
+                ]
+            },
             {
                 v: '13.53.0',
                 d: '2026-10-13',

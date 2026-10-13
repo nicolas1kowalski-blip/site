@@ -360,6 +360,10 @@
   {
    "file": "94-couche-v13/A9-v13-liens-a-la-volee.js",
    "role": "V13 : relier une source à la volée depuis Extraire — rapprochements cherchés et MESURÉS sur les données (combien de valeurs retrouvées, combien de lignes en face de chacune), lien créé en un clic et utilisable aussitôt, y compris depuis un jeu temporaire que le modèle de données ne voit pas"
+  },
+  {
+   "file": "94-couche-v13/AA-v13-jeux-de-valeurs.js",
+   "role": "V13 : jeux de valeurs — un fichier code/libellé se déclare une fois (ou se repère tout seul) et le bouton 🏷️ de chaque colonne y cherche le libellé par la VALEUR du code, sans aucun lien à déclarer et sans jointure"
   }
  ]
 }

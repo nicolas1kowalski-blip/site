@@ -374,6 +374,10 @@
    "role": "V13 : relier une source à la volée depuis Extraire — rapprochements cherchés et MESURÉS sur les données (combien de valeurs retrouvées, combien de lignes en face de chacune), lien créé en un clic et utilisable aussitôt, y compris depuis un jeu temporaire que le modèle de données ne voit pas"
   },
   {
+   "file": "94-couche-v13/AA-v13-jeux-de-valeurs.js",
+   "role": "V13 : jeux de valeurs — un fichier code/libellé se déclare une fois (ou se repère tout seul) et le bouton 🏷️ de chaque colonne y cherche le libellé par la VALEUR du code, sans aucun lien à déclarer et sans jointure"
+  },
+  {
    "file": "96-couche-v14/B0-v14-architecture.js",
    "role": "V14 : panneau « Architecture du code » — modules par domaine et par couche, chaîne d'extensions de chaque fonction, auto-contrôle Studio.selfCheck, export de l'index de l'API ; accès par l'aide « ? » et la palette"
   },
