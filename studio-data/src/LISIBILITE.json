@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-12T10:21:48.698Z",
+ "generated": "2026-10-13T09:03:54.912Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 53563,
-  "codeLines": 50123,
-  "commentLines": 3440,
-  "templateLines": 10474,
+  "lines": 54091,
+  "codeLines": 50559,
+  "commentLines": 3532,
+  "templateLines": 10568,
   "longLogicLines": 12,
   "multiStatementLines": 0,
-  "locals": 7009,
-  "shortLocals": 848,
-  "functions": 1780,
+  "locals": 7096,
+  "shortLocals": 850,
+  "functions": 1804,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.12098730204023399
+  "shortLocalsRatio": 0.1197857948139797
  },
  "files": [
   {
@@ -573,17 +573,17 @@
   },
   {
    "file": "40-modele-sources/49-modele-rendu-svg.js",
-   "lines": 677,
-   "codeLines": 651,
-   "commentLines": 26,
+   "lines": 684,
+   "codeLines": 652,
+   "commentLines": 32,
    "templateLines": 27,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 130,
+   "locals": 131,
    "shortLocals": 28,
    "functions": 22,
    "longestLogic": 125,
-   "shortLocalsRatio": 0.2153846153846154
+   "shortLocalsRatio": 0.21374045801526717
   },
   {
    "file": "50-sensibilite/50-sensibilite-rgpd-detection.js",
@@ -1069,10 +1069,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 648,
-   "codeLines": 646,
+   "lines": 662,
+   "codeLines": 660,
    "commentLines": 2,
-   "templateLines": 348,
+   "templateLines": 357,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
@@ -1209,6 +1209,20 @@
    "longLinesSample": [
     "const cle = `${advNk('s.' + sqlIdent(ancrage.childCol))} = ${advNk(advAlias(map, { tableId: ancrage.parentId, "
    ]
+  },
+  {
+   "file": "94-couche-v13/A9-v13-liens-a-la-volee.js",
+   "lines": 507,
+   "codeLines": 421,
+   "commentLines": 86,
+   "templateLines": 85,
+   "longLogicLines": 0,
+   "multiStatementLines": 0,
+   "locals": 86,
+   "shortLocals": 2,
+   "functions": 24,
+   "longestLogic": 124,
+   "shortLocalsRatio": 0.023255813953488372
   },
   {
    "file": "96-couche-v14/0Z-v14-version.js",

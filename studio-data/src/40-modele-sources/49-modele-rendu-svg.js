@@ -641,10 +641,17 @@
             const queue = [startNodeId];
             const adj = {};
             Object.keys(state.tables).forEach(t => (adj[t] = []));
+            // Le voisinage se crée à la demande. Deux tables peuvent être reliées sans figurer dans
+            // l'énumération des sources : un JEU TEMPORAIRE y est rangé exprès de façon non
+            // énumérable (il ne doit salir ni les sources, ni le modèle, ni les sauvegardes), et un
+            // lien déclaré à la volée depuis Extraire part justement de là. Sans cette précaution,
+            // le simple fait de relier son fichier d'entrée arrêtait l'écran sur
+            // « Cannot read properties of undefined (reading 'push') ».
+            const voisinage = identifiant => (adj[identifiant] = adj[identifiant] || []);
             state.relations.forEach(r => {
                 if (r.sourceCol && r.targetCol) {
-                    adj[r.sourceTable].push(r.targetTable);
-                    adj[r.targetTable].push(r.sourceTable);
+                    voisinage(r.sourceTable).push(r.targetTable);
+                    voisinage(r.targetTable).push(r.sourceTable);
                 }
             });
             while (queue.length > 0) {

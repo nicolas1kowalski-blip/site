@@ -1,7 +1,21 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.52.0';
+        const V13_VERSION = '13.53.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.53.0',
+                d: '2026-10-13',
+                t: 'Compléter un fichier d’entrée : relier une source à la volée, depuis Extraire',
+                items: [
+                    'Le besoin, dit simplement : <b>j’ai un fichier en entrée et j’ai besoin de le compléter</b>. On dépose sa liste — un jeu temporaire —, on la prend comme table de départ, et il ne reste qu’à aller chercher les colonnes qui manquent. Sauf qu’une colonne ne se ramène qu’en suivant un <b>lien</b>, et qu’un lien ne se déclarait que dans le modèle de données : un autre écran, un mode « lien », deux clics sur un schéma, puis le retour dans Extraire. Pire : <b>un jeu temporaire n’apparaît pas dans le modèle</b> (c’est voulu, il ne doit salir ni les sources ni les sauvegardes), donc le lien dont on avait besoin ne pouvait tout simplement pas se déclarer.',
+                    'Extraire gagne une section <b>« Sources reliées »</b>, au-dessus des colonnes : elle dit où l’on peut aller chercher des colonnes depuis la table de départ, et permet de s’y rattacher sans quitter l’écran.',
+                    '<b>« 🔎 Chercher les liens possibles »</b> compare les <b>valeurs elles-mêmes</b>, pas les noms des colonnes : une liste dont la colonne s’appelle « N_AFFAIRE » retrouve « NUM_AFFAIRE » dans une autre source sans qu’on ait rien à dire. Chaque table n’est lue qu’une fois, toutes ses colonnes comparées d’un coup ; les colonnes dont les valeurs n’ont pas la même allure sont écartées avant, sur l’échantillon déjà en mémoire, et une colonne qui ne porte qu’une seule valeur (« à traiter ») n’est jamais proposée comme clé.',
+                    'Chaque rapprochement est <b>mesuré avant d’être créé</b> : combien de valeurs de ma liste se retrouvent dans l’autre fichier, et <b>combien de lignes chacune y trouve</b>. Ce second nombre prévient la multiplication des lignes <b>avant</b> qu’elle n’arrive — « 300 valeurs sur 300 retrouvées (100 %) · une seule ligne en face de chacune », ou « ⚠️ 2 lignes en face de chacune — ce lien peut multiplier les lignes ».',
+                    'Un clic sur « 🔗 Relier » et la source est rattachée : ses colonnes sont aussitôt proposées dans « Ajouter une colonne ». Le lien porte une marque « à la volée » et se retire d’un clic ; s’il touche un jeu temporaire il n’est pas enregistré, puisque le jeu lui-même ne l’est pas, et il est oublié proprement si sa table disparaît. Un choix <b>à la main</b> reste possible — et la paire est mesurée avant d’être acceptée, au lieu de créer un lien qui ne ramènerait rien.',
+                    "Correction au passage : le calcul des tables atteignables ne connaissait que les sources énumérées. Relier un jeu temporaire arrêtait l’écran sur <b>« Cannot read properties of undefined (reading 'push') »</b> — le voisinage se crée désormais à la demande.",
+                    'Vingt-sept contrôles ajoutés, du rapprochement trouvé sans l’aide des noms jusqu’au fichier produit : 300 lignes en entrée, 300 en sortie, colonne complétée.'
+                ]
+            },
             {
                 v: '13.52.0',
                 d: '2026-10-12',

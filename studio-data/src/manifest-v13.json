@@ -356,6 +356,10 @@
   {
    "file": "94-couche-v13/A8-v13-colonnes-multi-chemins.js",
    "role": "V13 : une colonne qui emprunte « l'un ou l'autre lien » réunit ses chemins dans une sous-requête au lieu de les joindre (elle ne multiplie plus les lignes), et les colonnes réglées sur « une ligne par valeur » sont annoncées avant de produire le fichier"
+  },
+  {
+   "file": "94-couche-v13/A9-v13-liens-a-la-volee.js",
+   "role": "V13 : relier une source à la volée depuis Extraire — rapprochements cherchés et MESURÉS sur les données (combien de valeurs retrouvées, combien de lignes en face de chacune), lien créé en un clic et utilisable aussitôt, y compris depuis un jeu temporaire que le modèle de données ne voit pas"
   }
  ]
 }
