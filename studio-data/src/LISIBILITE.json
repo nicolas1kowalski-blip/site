@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-13T12:50:38.255Z",
+ "generated": "2026-10-13T15:40:57.256Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 54773,
-  "codeLines": 51098,
-  "commentLines": 3675,
-  "templateLines": 10690,
+  "lines": 54814,
+  "codeLines": 51133,
+  "commentLines": 3681,
+  "templateLines": 10699,
   "longLogicLines": 13,
   "multiStatementLines": 0,
-  "locals": 7186,
+  "locals": 7189,
   "shortLocals": 850,
   "functions": 1829,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.11828555524631228
+  "shortLocalsRatio": 0.11823619418556128
  },
  "files": [
   {
@@ -1069,10 +1069,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 699,
-   "codeLines": 697,
+   "lines": 710,
+   "codeLines": 708,
    "commentLines": 2,
-   "templateLines": 379,
+   "templateLines": 385,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
@@ -1226,13 +1226,13 @@
   },
   {
    "file": "94-couche-v13/AA-v13-jeux-de-valeurs.js",
-   "lines": 558,
-   "codeLines": 451,
-   "commentLines": 107,
-   "templateLines": 93,
+   "lines": 588,
+   "codeLines": 475,
+   "commentLines": 113,
+   "templateLines": 96,
    "longLogicLines": 1,
    "multiStatementLines": 0,
-   "locals": 80,
+   "locals": 83,
    "shortLocals": 0,
    "functions": 21,
    "longestLogic": 161,
