@@ -105,12 +105,20 @@ const out = await p.evaluate(async () => {
 
     // ---- 3. L'écran ----
     renderAdvExtract();
-    const section = document.querySelector('[data-sec="liens"]');
-    ok('une section « Sources reliées » apparaît dans Extraire', !!section);
-    ok('elle dit où l’on peut aller chercher des colonnes',
-        !!section && /AFFAIRES\.csv/.test(section.textContent));
-    ok('elle montre le lien créé à la volée, avec de quoi le retirer',
-        !!section && /N_AFFAIRE/.test(section.textContent) && !!section.querySelector('[onclick^="v13RetirerLeLien"]'));
+    // Les liens sont un RÉGLAGE, pas une étape : ils vivent dans la barre d'outils d'Extraire, à
+    // côté des paramétrages, et ne s'ouvrent que lorsqu'on les demande — l'écran principal ne porte
+    // que les colonnes, les filtres et la forme du résultat.
+    const bouton = document.querySelector('.v12x-toolbtn[data-tool="liens"]');
+    const panneau = document.querySelector('.v12x-tool[data-tool="liens"]');
+    ok('« Sources reliées » est un outil de la barre, pas une section de plus', !!bouton && !!panneau);
+    ok('le bouton porte le nombre de sources reliées',
+        !!bouton && !!bouton.querySelector('.n') && bouton.querySelector('.n').textContent === '1');
+    ok('le panneau dit où l’on peut aller chercher des colonnes',
+        !!panneau && /AFFAIRES\.csv/.test(panneau.textContent));
+    ok('il montre le lien créé à la volée, avec de quoi le retirer',
+        !!panneau && /N_AFFAIRE/.test(panneau.textContent) && !!panneau.querySelector('[onclick^="v13RetirerLeLien"]'));
+    ok('et il porte le choix à la main, déplié, en premier',
+        !!panneau && !!panneau.querySelector('#v13-lien-col-depart') && !!panneau.querySelector('[onclick^="v13RelierALaMain"]'));
 
     // ---- 4. Le même lien ne se crée pas deux fois ----
     const avant = state.relations.length;

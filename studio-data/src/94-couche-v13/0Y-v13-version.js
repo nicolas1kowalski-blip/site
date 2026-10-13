@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.54.1';
+        const V13_VERSION = '13.55.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.55.0',
+                d: '2026-10-13',
+                t: 'Extraire désencombré : les liens et les jeux de valeurs quittent le flux, le libellé se choisit sur la colonne',
+                items: [
+                    'J’avais ajouté <b>une quatrième section</b> dans la colonne principale d’Extraire — « Sources reliées », toujours dépliée, avec ses pastilles, son formulaire, sa recherche et, en dessous, les jeux de valeurs avec les leurs. L’écran en devenait illisible. Un lien ou un jeu de valeurs est un <b>réglage</b>, pas une étape : les deux rejoignent la <b>barre d’outils</b>, à côté de « Paramétrages » et « Objet métier », et ne s’ouvrent que lorsqu’on les demande. L’écran retrouve ses trois sections : colonnes, filtres, forme du résultat.',
+                    'Chaque bouton porte son compte — <b>« 🔗 Sources reliées 2 »</b>, <b>« 🏷️ Jeux de valeurs 3 »</b> — pour qu’on sache ce qui est déclaré sans avoir à ouvrir.',
+                    'Surtout : <b>on ne pouvait pas rattacher un jeu de valeurs à une colonne de sortie</b>. C’était une 🏷️ grise coincée entre le crayon et la croix, dans la colonne des actions : rien n’indiquait qu’elle servait à cela. Le choix se fait maintenant <b>sur la ligne de la colonne</b>, dans un sélecteur nommé, sous la transformation — là où se règle déjà tout ce qui concerne la valeur : <b>« 🏷️ sans libellé »</b> ou <b>« 🏷️ JV_PRODUIT.csv »</b>.',
+                    'Le sélecteur fait les deux sens : choisir un jeu <b>ajoute</b> la colonne du libellé juste après le code ; revenir à « sans libellé » la <b>retire</b>. Changer de jeu remplace la colonne sans la déplacer ni perdre son nom.',
+                    'Et le choix est vérifié : l’application dit aussitôt combien de valeurs ce jeu reconnaît, dans quel domaine, et <b>prévient quand il n’en reconnaît aucune</b> au lieu de laisser une colonne vide dans le fichier.'
+                ]
+            },
             {
                 v: '13.54.1',
                 d: '2026-10-13',

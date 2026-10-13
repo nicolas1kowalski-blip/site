@@ -349,83 +349,115 @@
         function v13ColonneTraduisible(colonne) {
             return !!colonne && !colonne.kind && !!colonne.col;
         }
-        /** Le bouton « + libellé » d'une ligne de colonne. */
-        function v13BoutonDuLibelleHtml(colonne) {
-            if (!v13ColonneTraduisible(colonne)) return '';
-            const dejaTraduite = (state.advExtract.columns || []).some(
-                autre => autre.kind === 'jv' && autre.tableId === colonne.tableId && autre.col === colonne.col
+        /** La colonne de libellé déjà posée pour ce code, s'il y en a une. */
+        function v13LibelleDeLaColonne(colonne) {
+            return (state.advExtract.columns || []).find(
+                autre =>
+                    autre.kind === 'jv' &&
+                    autre.tableId === colonne.tableId &&
+                    autre.col === colonne.col &&
+                    (autre.via || '') === (colonne.via || '')
             );
-            if (dejaTraduite)
-                return `<span title="Le libellé de cette colonne est déjà dans le fichier" class="text-emerald-600 text-xs font-bold mr-1">🏷️</span>`;
-            return `<button onclick="v13AjouterLeLibelle('${colonne.id}')" title="Remplacer le code par son libellé : on cherche dans quel jeu de valeurs ces valeurs se retrouvent, et on ajoute la colonne du libellé. Aucun lien à déclarer." class="text-slate-400 hover:text-indigo-600 font-bold mr-1">🏷️</button>`;
         }
+        /**
+         * Le choix du jeu de valeurs, sur la ligne de la colonne.
+         *
+         * C'était une 🏷️ grise dans la colonne des actions, entre le crayon et la croix : personne
+         * ne pouvait deviner qu'elle rattachait un jeu de valeurs à cette donnée de sortie. C'est
+         * maintenant un sélecteur nommé, sous la transformation — là où se règle déjà tout ce qui
+         * concerne la VALEUR de la colonne.
+         */
+        function v13ChoixDuJeuDeValeursHtml(colonne, baseId) {
+            if (!v13ColonneTraduisible(colonne)) return '';
+            const jeux = v13SourcesDesJeuxDeValeurs();
+            if (!jeux.length) return '';
+            const pose = v13LibelleDeLaColonne(colonne);
+            const choisi = pose ? pose.jvId : '';
+            const option = (valeur, libelle) =>
+                `<option value="${escapeHTML(valeur)}" ${valeur === choisi ? 'selected' : ''}>${escapeHTML(libelle)}</option>`;
+            return (
+                `<select onchange="v13ChangerLeJeuDeValeursDeLaColonne('${colonne.id}', this.value)" title="Ajouter à côté de ce code la colonne de son libellé, prise dans un jeu de valeurs. La correspondance se fait sur la valeur du code : aucun lien n’est déclaré, et le nombre de lignes ne change pas." class="mt-1 block w-full border p-1 rounded text-[10px] ${choisi ? 'border-amber-400 bg-amber-50 text-amber-900 font-bold' : 'border-slate-200 bg-white text-slate-500'}">` +
+                option('', '🏷️ sans libellé') +
+                jeux.map(jeu => option(jeu.id, '🏷️ ' + jeu.name)).join('') +
+                '</select>'
+            );
+        }
+
         Studio.extend(
-            'advBoutonsDeColonneHtml',
+            'advReglagesDeColonneHtml',
             base =>
-                function (colonne) {
-                    return v13BoutonDuLibelleHtml(colonne) + base.apply(this, arguments);
+                function (colonne, baseId) {
+                    return base.apply(this, arguments) + v13ChoixDuJeuDeValeursHtml(colonne, baseId);
                 },
-            { motif: 'le libellé d’un code s’ajoute depuis la ligne de la colonne' }
+            { motif: 'le jeu de valeurs d’une colonne se choisit sur la ligne de cette colonne' }
         );
-        Studio.extend(
-            'v13SectionDesLiensHtml',
-            base =>
-                function () {
-                    const corps = base.apply(this, arguments);
-                    return corps ? corps + v13BlocDesJeuxDeValeursHtml() : corps;
-                },
-            { motif: 'les jeux de valeurs se déclarent là où l’on relie les sources' }
-        );
+        /** L'outil « Jeux de valeurs » de la barre d'Extraire, posé par la couche des liens. */
+        function v13PoserLOutilDesJeuxDeValeurs() {
+            v13PoserUnOutil(
+                'jeuxdevaleurs',
+                '🏷️ Jeux de valeurs',
+                'Déclarer les fichiers qui disent ce que veut dire un code. Ensuite, chaque colonne en sortie peut afficher son libellé — sans aucun lien.',
+                v13SourcesDesJeuxDeValeurs().length,
+                v13BlocDesJeuxDeValeursHtml()
+            );
+        }
 
         /**
          * Ajoute le libellé d'une colonne : on cherche le jeu de valeurs qui reconnaît ses valeurs,
          * et l'on pose la colonne juste après celle du code.
          */
-        async function v13AjouterLeLibelle(identifiant) {
+        async function v13ChangerLeJeuDeValeursDeLaColonne(identifiant, jeuId) {
             const spec = state.advExtract;
             const colonne = (spec.columns || []).find(c => c.id === identifiant);
             if (!colonne) return;
-            if (!v13SourcesDesJeuxDeValeurs().length) {
-                v13State.jeuxDeValeurs.message =
-                    'Aucun jeu de valeurs déclaré pour l’instant. « 🏷️ Repérer les jeux de valeurs » les trouve tout seul parmi vos fichiers.';
+            const posee = v13LibelleDeLaColonne(colonne);
+            // « Pas de libellé » : la colonne du libellé s'en va, et le fichier retrouve sa forme.
+            if (!jeuId) {
+                if (posee) spec.columns = spec.columns.filter(c => c.id !== posee.id);
                 renderAdvExtract();
-                return showError(
-                    'Aucun jeu de valeurs n’est déclaré. Utilisez « 🏷️ Repérer les jeux de valeurs » dans « Sources reliées ».'
-                );
+                return;
             }
-            let trouves = [];
+            const jeu = state.tables[jeuId];
+            const declaration = v13JeuDeValeurs(jeu);
+            if (!declaration) return showError('Ce fichier n’est plus déclaré comme jeu de valeurs.');
+            // Le jeu est choisi par vous ; il reste à savoir ce qu'il reconnaît — et, si le fichier
+            // porte plusieurs jeux, dans quel domaine ces codes se trouvent.
+            let mesure = null;
             try {
-                trouves = await v13ChercherLeJeuDeValeurs(colonne.tableId, colonne.col);
+                const trouves = await v13ChercherLeJeuDeValeurs(colonne.tableId, colonne.col);
+                mesure = trouves.find(t => t.jeuId === jeuId) || null;
             } catch (e) {
-                return showError('Recherche impossible : ' + ((e && e.message) || e));
+                mesure = null;
             }
-            if (!trouves.length)
-                return showError(
-                    `Les valeurs de « ${advNomEnSortie(colonne)} » ne se retrouvent dans aucun jeu de valeurs déclaré.`
-                );
-            const meilleur = trouves[0];
-            const rang = (spec.columns || []).findIndex(c => c.id === identifiant);
-            spec.columns.splice(rang + 1, 0, {
-                id: 'jv_' + generateId(),
+            const nouvelle = {
+                id: posee ? posee.id : 'jv_' + generateId(),
                 kind: 'jv',
                 tableId: colonne.tableId,
                 col: colonne.col,
                 via: colonne.via || '',
-                jvId: meilleur.jeuId,
-                domaine: meilleur.domaine || '',
-                alias: advNomEnSortie(colonne) + '_LIBELLE',
-                transform: 'none'
-            });
-            const pourcent = Math.round(meilleur.taux * 100);
+                jvId: jeuId,
+                domaine: (mesure && mesure.domaine) || '',
+                alias: (posee && posee.alias) || advNomEnSortie(colonne) + '_LIBELLE',
+                transform: (posee && posee.transform) || 'none'
+            };
+            if (posee) spec.columns[spec.columns.findIndex(c => c.id === posee.id)] = nouvelle;
+            else spec.columns.splice(spec.columns.findIndex(c => c.id === identifiant) + 1, 0, nouvelle);
             renderAdvExtract();
-            showSuccess(
-                `🏷️ Libellé ajouté depuis « ${meilleur.nom} »${meilleur.domaine ? `, domaine « ${meilleur.domaine} »` : ''} : ${meilleur.reconnues} valeur(s) sur ${meilleur.valeurs} reconnues (${pourcent} %).` +
-                    ((meilleur.autresDomaines || []).length
-                        ? ` ⚠️ Ces codes existent aussi dans le(s) domaine(s) ${meilleur.autresDomaines.join(', ')} de ce fichier : vérifiez que « ${meilleur.domaine} » est le bon.`
-                        : '') +
-                    (trouves.length > 1 ? ` ${trouves.length - 1} autre(s) jeu(x) de valeurs contenaient aussi ces codes.` : '')
-            );
+            if (!mesure)
+                return showError(
+                    `« ${jeu.name} » ne reconnaît aucune valeur de « ${advNomEnSortie(colonne)} » : la colonne du libellé restera vide. Vérifiez le jeu de valeurs choisi.`
+                );
+            const pourcent = Math.round(mesure.taux * 100);
+            const message =
+                `🏷️ Libellé pris dans « ${mesure.nom} »${mesure.domaine ? `, domaine « ${mesure.domaine} »` : ''} : ` +
+                `${mesure.reconnues} valeur(s) sur ${mesure.valeurs} reconnues (${pourcent} %).` +
+                ((mesure.autresDomaines || []).length
+                    ? ` ⚠️ Ces codes existent aussi dans le(s) domaine(s) ${mesure.autresDomaines.join(', ')} de ce fichier : vérifiez que « ${mesure.domaine} » est le bon.`
+                    : '');
+            if (pourcent < 100) showError(message + ' Les valeurs non reconnues sortiront sans libellé.');
+            else showSuccess(message);
         }
+
         async function v13RepererLesJeuxDeValeursMaintenant() {
             v13State.jeuxDeValeurs.enRecherche = true;
             v13State.jeuxDeValeurs.message = '';

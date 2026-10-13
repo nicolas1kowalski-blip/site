@@ -529,6 +529,37 @@
         }
 
         // ---- L'insertion dans l'écran d'Extraire ----
+        //
+        // Pas une section de plus dans la colonne principale : l'écran d'Extraire en portait déjà
+        // trois, et en ajouter une quatrième, toujours dépliée, le rendait illisible. Les liens
+        // sont un RÉGLAGE, pas une étape : ils rejoignent la barre d'outils, à côté des
+        // paramétrages et de l'objet métier, et ne s'ouvrent que lorsqu'on les demande.
+        /**
+         * Pose un outil dans la barre d'Extraire : le bouton, et le panneau qu'il ouvre.
+         *
+         * Le mécanisme est celui de la couche V12 (`v12xTool`) : un seul panneau ouvert à la fois,
+         * et le bouton s'allume quand c'est le sien.
+         */
+        function v13PoserUnOutil(nom, libelle, infobulle, compte, corps) {
+            const racine = el('v12x');
+            if (!racine) return;
+            const barre = racine.querySelector('.v12x-tools');
+            if (!barre || barre.querySelector(`[data-tool="${nom}"]`)) return;
+            const bouton = document.createElement('button');
+            bouton.className = 'v12x-toolbtn';
+            bouton.dataset.tool = nom;
+            bouton.title = infobulle;
+            bouton.setAttribute('onclick', `v12xTool('${nom}')`);
+            bouton.innerHTML = libelle + (compte ? ` <span class="n">${compte}</span>` : '');
+            barre.appendChild(bouton);
+            const panneau = document.createElement('div');
+            panneau.className = 'v12x-tool';
+            panneau.dataset.tool = nom;
+            panneau.innerHTML = `<div class="v11-card p-3">${corps}</div>`;
+            const grille = racine.querySelector('.v12x-grid');
+            if (grille && grille.parentNode) grille.parentNode.insertBefore(panneau, grille);
+            else racine.appendChild(panneau);
+        }
         Studio.extend(
             'renderAdvExtract',
             base =>
@@ -536,19 +567,20 @@
                     const resultat = base.apply(this, arguments);
                     try {
                         v13OublierLesLiensOrphelins();
-                        const corps = v13SectionDesLiensHtml();
-                        if (!corps) return resultat;
-                        const colonnes = document.querySelector('.v12x-sec[data-sec="cols"]');
-                        if (!colonnes || colonnes.parentNode.querySelector('[data-sec="liens"]')) return resultat;
-                        const section = document.createElement('section');
-                        section.className = 'v12x-sec';
-                        section.setAttribute('data-sec', 'liens');
-                        section.innerHTML =
-                            `<div class="v12x-h"><span class="ic">🔗</span><div><b>Sources reliées</b><span class="sub">où l’on peut aller chercher des colonnes — et comment s’y rattacher</span></div>
-                                </div>` + `<div class="v12x-body">${corps}</div>`;
-                        colonnes.parentNode.insertBefore(section, colonnes);
+                        const spec = state.advExtract;
+                        if (!spec || !spec.baseId) return resultat;
+                        const reliees = (typeof advReachableTables === 'function' ? advReachableTables() : []).length - 1;
+                        v13PoserUnOutil(
+                            'liens',
+                            '🔗 Sources reliées',
+                            'Relier une autre source à la table de départ, pour aller y chercher des colonnes. Le rapprochement est mesuré avant d’être créé.',
+                            reliees > 0 ? reliees : 0,
+                            v13SectionDesLiensHtml()
+                        );
+                        if (typeof v13PoserLOutilDesJeuxDeValeurs === 'function') v13PoserLOutilDesJeuxDeValeurs();
+                        if (typeof v12xShowTools === 'function') v12xShowTools();
                     } catch (e) {}
                     return resultat;
                 },
-            { motif: 'relier une source à la volée, depuis Extraire' }
+            { motif: 'relier une source se fait depuis la barre d’outils d’Extraire' }
         );

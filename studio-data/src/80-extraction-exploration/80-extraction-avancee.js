@@ -1346,6 +1346,16 @@
         function advBoutonsDeColonneHtml() {
             return '';
         }
+        /**
+         * Les réglages que les couches ajoutent sous la transformation d'une colonne.
+         *
+         * Vide ici : c'est un point d'accroche. La couche V13 y met le choix du JEU DE VALEURS —
+         * le fichier qui dit ce que veut dire le code — parce que c'est une propriété de la colonne
+         * de sortie, et que cela se règle donc sur sa ligne, pas dans un panneau à côté.
+         */
+        function advReglagesDeColonneHtml() {
+            return '';
+        }
         function advColonneModifiable(colonne) {
             return !!colonne && (!colonne.kind || colonne.kind === 'link');
         }
@@ -2130,7 +2140,9 @@
                         ADV_TRANSFORMS
                     )
                         .map(([v, l]) => `<option value="${v}" ${v === c.transform ? 'selected' : ''}>${l}</option>`)
-                        .join('')}</select>${advChoixPlusieursValeursHtml(c, extractSpec.baseId)}</td>
+                        .join(
+                            ''
+                        )}</select>${advChoixPlusieursValeursHtml(c, extractSpec.baseId)}${advReglagesDeColonneHtml(c, extractSpec.baseId)}</td>
                     <td class="p-2 text-center">${advBoutonDeLaCleHtml(c, extractSpec)}</td>
                     ${!extractSpec.group.on && extractSpec.dedup.on ? `<td class="p-2 text-center"><input type="checkbox" ${extractSpec.dedup.keys.includes(c.id) ? 'checked' : ''} onchange="advToggleDedupKey('${c.id}',this.checked)"></td>` : ''}
                     <td class="p-2 text-right whitespace-nowrap">${advBoutonsDeColonneHtml(c)}${advColonneModifiable(c) ? `<button onclick="advModifierLaColonne('${c.id}')" title="Modifier cette colonne : sa source, son chemin, et pour une synthèse son mode et ses critères" class="text-slate-400 hover:text-indigo-600 font-bold mr-1">✎</button>` : ''}<button onclick="advRemoveColumn('${c.id}')" class="text-red-400 hover:text-red-600">✕</button></td>

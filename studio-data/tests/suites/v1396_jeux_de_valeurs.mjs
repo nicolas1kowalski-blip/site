@@ -85,8 +85,8 @@ const out = await p.evaluate(async () => {
     const ancienOk = window.showSuccess, ancienErr = window.showError;
     window.showSuccess = m => messages.push(String(m).replace(/<[^>]+>/g, ''));
     window.showError = m => messages.push('ERREUR : ' + String(m).replace(/<[^>]+>/g, ''));
-    await v13AjouterLeLibelle('c2');
-    await v13AjouterLeLibelle('c3');
+    await v13ChangerLeJeuDeValeursDeLaColonne('c2', 'jvp');
+    await v13ChangerLeJeuDeValeursDeLaColonne('c3', 'jvtout');
     window.showSuccess = ancienOk; window.showError = ancienErr;
     ok('le libellé se pose juste après le code, pas à la fin',
         spec.columns.map(c => c.alias).join(',') ===
@@ -126,26 +126,45 @@ const out = await p.evaluate(async () => {
 
     // ---- 4. L'écran ----
     renderAdvExtract();
-    const section = document.querySelector('[data-sec="liens"]');
-    ok('les jeux de valeurs se déclarent dans « Sources reliées »',
-        !!section && /Jeux de valeurs/.test(section.textContent));
+    ok('les jeux de valeurs ont leur propre outil dans la barre, replié tant qu’on ne le demande pas',
+        !!document.querySelector('.v12x-toolbtn[data-tool="jeuxdevaleurs"]') &&
+        !!document.querySelector('.v12x-tool[data-tool="jeuxdevaleurs"]'));
     ok('les jeux déclarés y sont listés avec leur code et leur libellé',
-        !!section && /JV_PRODUIT\.csv : CODE → LIBELLE/.test(section.textContent.replace(/\s+/g, ' ')));
-    ok('chaque colonne traduisible porte le bouton 🏷️',
-        /v13AjouterLeLibelle/.test(advBoutonsDeColonneHtml(spec.columns[0])));
-    ok('une colonne déjà traduite ne le propose plus deux fois',
-        !/v13AjouterLeLibelle/.test(advBoutonsDeColonneHtml(spec.columns[1])));
-    ok('une colonne calculée n’est pas traduisible', advBoutonsDeColonneHtml({ kind: 'calc', id: 'z' }) === '');
+        /JV_PRODUIT\.csv : CODE → LIBELLE/.test(
+            document.querySelector('.v12x-tool[data-tool="jeuxdevaleurs"]').textContent.replace(/\s+/g, ' ')));
+    ok('et le bouton porte leur nombre',
+        /2|3/.test(document.querySelector('.v12x-toolbtn[data-tool="jeuxdevaleurs"] .n').textContent));
+    // Le choix du jeu de valeurs est un SÉLECTEUR NOMMÉ sur la ligne de la colonne, et non plus une
+    // emoji grise entre le crayon et la croix, que personne ne pouvait relier à une donnée de sortie.
+    const reglages = advReglagesDeColonneHtml(spec.columns[1], 'aff');
+    ok('chaque colonne porte le choix de son jeu de valeurs, nommé',
+        /v13ChangerLeJeuDeValeursDeLaColonne/.test(reglages) && /sans libellé/.test(reglages));
+    ok('les jeux déclarés y sont proposés par leur nom', /JV_PRODUIT\.csv/.test(reglages));
+    ok('et celui qui est déjà choisi est sélectionné',
+        /value="jvp" selected/.test(advReglagesDeColonneHtml(spec.columns[1], 'aff')));
+    ok('une colonne calculée ne propose pas de libellé',
+        advReglagesDeColonneHtml({ kind: 'calc', id: 'z' }, 'aff') === '');
+    ok('le réglage vit dans la cellule de la transformation, pas dans une colonne de plus',
+        /<select/.test(reglages));
 
     // ---- 5. Ce qui doit échouer proprement ----
     let refus = '';
     const err2 = window.showError;
     window.showError = m => { refus = String(m); };
     spec.columns.push({ id: 'c9', tableId: 'aff', col: 'NUM_AFFAIRE', alias: 'NUM_AFFAIRE_2', transform: 'none' });
-    await v13AjouterLeLibelle('c9');
+    await v13ChangerLeJeuDeValeursDeLaColonne('c9', 'jvp');
     window.showError = err2;
-    ok('une colonne dont les valeurs ne sont dans aucun jeu de valeurs le dit, sans rien ajouter',
-        /aucun jeu de valeurs/.test(refus) && !spec.columns.some(c => c.alias === 'NUM_AFFAIRE_2_LIBELLE'));
+    ok('un jeu de valeurs qui ne reconnaît rien le dit franchement',
+        /ne reconnaît aucune valeur/.test(refus));
+    // Et l'on revient en arrière d'un seul geste : « pas de libellé ».
+    await v13ChangerLeJeuDeValeursDeLaColonne('c9', '');
+    ok('« pas de libellé » retire la colonne du libellé',
+        !spec.columns.some(c => c.alias === 'NUM_AFFAIRE_2_LIBELLE'));
+    await v13ChangerLeJeuDeValeursDeLaColonne('c2', '');
+    ok('et le fichier retrouve sa forme d’avant',
+        !spec.columns.some(c => c.alias === 'CODE_PRODUIT_LIBELLE'));
+    await v13ChangerLeJeuDeValeursDeLaColonne('c2', 'jvp');
+    ok('on peut le remettre aussitôt', spec.columns.some(c => c.alias === 'CODE_PRODUIT_LIBELLE'));
     v13RetirerLeJeuDeValeurs('jvp');
     ok('un jeu de valeurs se retire', !v13JeuDeValeurs(state.tables['jvp']));
     ok('les autres restent', v13SourcesDesJeuxDeValeurs().length === 2);
