@@ -352,6 +352,32 @@
                     class="shrink-0 text-[10px] font-bold rounded-full px-2.5 py-1 bg-indigo-600 text-white hover:bg-indigo-700">🔗 Relier</button>
             </div>`;
         }
+        /** Au-dessous, un rapprochement est trop faible pour être montré d'emblée : on le replie. */
+        const V13_TAUX_SOLIDE = 0.5;
+        /**
+         * Les rapprochements trouvés, les solides d'abord.
+         *
+         * Comparer toutes les colonnes de toutes les sources trouve forcément des coïncidences :
+         * deux colonnes de numéros partagent quelques valeurs sans avoir le moindre rapport. Les
+         * faibles ne sont pas jetés — l'un d'eux peut être le bon — mais ils sont repliés, pour que
+         * la liste reste lisible et que la recherche large ne noie pas ce que l'on cherchait.
+         */
+        function v13PropositionsHtml(etat, baseId) {
+            const propositions = (etat && etat.propositions) || [];
+            if (!propositions.length) return '';
+            const solides = propositions.filter(p => p.mesure.taux >= V13_TAUX_SOLIDE);
+            const faibles = propositions.filter(p => p.mesure.taux < V13_TAUX_SOLIDE);
+            let html = solides.length
+                ? `<div class="mt-2 grid gap-1.5">${solides.map(p => v13PropositionHtml(p, baseId)).join('')}</div>`
+                : '';
+            if (faibles.length)
+                html += `<details class="mt-2 text-[11px]" ${etat.faiblesOuverts ? 'open' : ''} ontoggle="v13State.liens.faiblesOuverts = this.open">
+                    <summary class="cursor-pointer text-slate-400 hover:text-indigo-700">${faibles.length} rapprochement(s) plus faible(s) — souvent des coïncidences</summary>
+                    <div class="mt-1.5 grid gap-1.5">${faibles.map(p => v13PropositionHtml(p, baseId)).join('')}</div>
+                </details>`;
+            return html;
+        }
+
         /** Le bloc complet « Sources reliées », tel qu'il s'insère dans Extraire. */
         function v13SectionDesLiensHtml() {
             const spec = state.advExtract;
@@ -375,16 +401,19 @@
                             <button onclick="v13RetirerLeLien('${r.id}')" title="Retirer ce lien créé à la volée" class="text-indigo-400 hover:text-red-600 font-bold">✕</button></span>`;
                     })
                     .join('')}</div>`;
-            corps += `<div class="flex items-center gap-2 flex-wrap">
+            // D'abord le lien choisi À LA MAIN : c'est celui qui connaît ses fichiers qui sait à quoi
+            // les relier. Il est mesuré exactement comme les autres — la mesure dit aussitôt si le
+            // rapprochement tient, et s'il va multiplier les lignes.
+            corps += v13LienAlaMainHtml(spec.baseId);
+            corps += `<div class="flex items-center gap-2 flex-wrap mt-2">
+                <span class="text-[10px] text-slate-400">Vous ne savez pas à quoi le relier ?</span>
                 <button onclick="v13ChercherDesLiensMaintenant()" ${etat.enRecherche ? 'disabled' : ''}
-                    class="text-xs font-bold rounded-lg px-3 py-1.5 border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50 ${etat.enRecherche ? 'opacity-50' : ''}">
-                    ${etat.enRecherche ? '⏳ Mesure en cours…' : '🔎 Chercher les liens possibles'}</button>
-                <span id="v13-liens-avancement" class="text-[10px] text-slate-500">on compare les valeurs elles-mêmes, pas les noms des colonnes</span>
+                    class="text-[11px] font-bold rounded-lg px-2.5 py-1 border border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:text-indigo-700 ${etat.enRecherche ? 'opacity-50' : ''}">
+                    ${etat.enRecherche ? '⏳ Mesure en cours…' : '🔎 Chercher dans toutes les sources'}</button>
+                <span id="v13-liens-avancement" class="text-[10px] text-slate-500"></span>
             </div>`;
             if (etat.message) corps += `<p class="text-[11px] text-slate-600 mt-2">${escapeHTML(etat.message)}</p>`;
-            if (etat.propositions && etat.propositions.length)
-                corps += `<div class="mt-2 grid gap-1.5">${etat.propositions.map(p => v13PropositionHtml(p, spec.baseId)).join('')}</div>`;
-            corps += v13LienAlaMainHtml(spec.baseId);
+            corps += v13PropositionsHtml(etat, spec.baseId);
             return corps;
         }
         /** Le lien choisi à la main, quand la recherche ne propose pas ce que l'on a en tête. */
@@ -396,22 +425,25 @@
             const autreId = choisie ? choisie.id : autres[0].id;
             const option = (valeur, libelle, selectionnee) =>
                 `<option value="${escapeHTML(valeur)}" ${selectionnee ? 'selected' : ''}>${escapeHTML(libelle)}</option>`;
-            return `<details class="mt-2 text-[11px]" ${v13State.liens.ouvert ? 'open' : ''} ontoggle="v13State.liens.ouvert = this.open">
-                <summary class="cursor-pointer text-slate-500 hover:text-indigo-700">…ou choisir le lien moi-même</summary>
-                <div class="mt-2 flex items-end gap-2 flex-wrap bg-white border border-slate-200 rounded-lg p-2">
+            return `<div class="flex items-end gap-2 flex-wrap bg-white border border-slate-200 rounded-lg p-2">
                     <label class="text-[10px] text-slate-500">Colonne de ${escapeHTML(tableDeDepart.name || '?')}
                         <select id="v13-lien-col-depart" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
-                            ${(tableDeDepart.headers || []).map(h => option(h, h, false)).join('')}</select></label>
+                            ${(tableDeDepart.headers || [])
+                                .filter(h => h !== '__rn')
+                                .map(h => option(h, h, false))
+                                .join('')}</select></label>
                     <span class="pb-2 text-slate-400">↔</span>
                     <label class="text-[10px] text-slate-500">Source à relier
                         <select id="v13-lien-table" onchange="v13ChangerLaTableAlaMain(this.value)" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
                             ${autres.map(t => option(t.id, t.name + (t.temp ? ' (jeu temporaire)' : ''), t.id === autreId)).join('')}</select></label>
                     <label class="text-[10px] text-slate-500">Sa colonne
                         <select id="v13-lien-col-autre" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
-                            ${((state.tables[autreId] || {}).headers || []).map(h => option(h, h, false)).join('')}</select></label>
-                    <button onclick="v13RelierALaMain()" class="text-xs font-bold rounded-lg px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700">Mesurer et relier</button>
-                </div>
-            </details>`;
+                            ${((state.tables[autreId] || {}).headers || [])
+                                .filter(h => h !== '__rn')
+                                .map(h => option(h, h, false))
+                                .join('')}</select></label>
+                    <button onclick="v13RelierALaMain()" class="text-xs font-bold rounded-lg px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700">🔗 Mesurer et relier</button>
+                </div>`;
         }
 
         // ---- Les actions, appelées depuis l'écran ----
@@ -428,9 +460,12 @@
                     if (zone) zone.textContent = `Lecture de « ${nom} » (${fait} / ${total})…`;
                 });
                 v13State.liens.propositions = propositions;
-                v13State.liens.message = propositions.length
-                    ? `${propositions.length} rapprochement(s) trouvé(s), le meilleur en premier.`
-                    : 'Aucun rapprochement trouvé : aucune colonne de cette table ne retrouve ses valeurs ailleurs. Choisissez le lien vous-même ci-dessous.';
+                const solides = propositions.filter(p => p.mesure.taux >= V13_TAUX_SOLIDE).length;
+                v13State.liens.message = !propositions.length
+                    ? 'Aucun rapprochement trouvé : aucune colonne de cette table ne retrouve ses valeurs ailleurs. Choisissez le lien vous-même ci-dessus.'
+                    : solides
+                      ? `${solides} rapprochement(s) solide(s), le meilleur en premier.`
+                      : 'Aucun rapprochement solide : les quelques valeurs communes trouvées sont probablement fortuites. Mieux vaut choisir le lien vous-même ci-dessus.';
             } catch (e) {
                 v13State.liens.message = 'Recherche impossible : ' + ((e && e.message) || e);
             } finally {

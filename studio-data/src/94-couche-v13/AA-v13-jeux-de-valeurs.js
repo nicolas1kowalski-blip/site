@@ -482,9 +482,16 @@
                             <button onclick="v13RetirerLeJeuDeValeurs('${table.id}')" title="Ce fichier n’est pas un jeu de valeurs" class="text-amber-500 hover:text-red-600 font-bold">✕</button></span>`;
                     })
                     .join('')}</div>`;
-            html += `<button onclick="v13RepererLesJeuxDeValeursMaintenant()" ${etat.enRecherche ? 'disabled' : ''}
-                class="text-xs font-bold rounded-lg px-3 py-1.5 border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 ${etat.enRecherche ? 'opacity-50' : ''}">
-                ${etat.enRecherche ? '⏳ Repérage…' : '🏷️ Repérer les jeux de valeurs'}</button>`;
+            // La déclaration À LA MAIN d'abord : vous savez quel fichier est une nomenclature et
+            // quelles colonnes portent le code et le libellé. Le repérage automatique n'est là que
+            // pour celui qui découvre des fichiers qu'il n'a pas produits.
+            html += v13JeuDeValeursALaMainHtml();
+            html += `<div class="flex items-center gap-2 flex-wrap mt-2">
+                <span class="text-[10px] text-slate-400">Vous ne savez pas lesquels le sont ?</span>
+                <button onclick="v13RepererLesJeuxDeValeursMaintenant()" ${etat.enRecherche ? 'disabled' : ''}
+                    class="text-[11px] font-bold rounded-lg px-2.5 py-1 border border-slate-300 bg-white text-slate-600 hover:border-amber-400 hover:text-amber-800 ${etat.enRecherche ? 'opacity-50' : ''}">
+                    ${etat.enRecherche ? '⏳ Repérage…' : '🏷️ Repérer les jeux de valeurs'}</button>
+            </div>`;
             if (etat.message) html += `<p class="text-[11px] text-slate-600 mt-2">${escapeHTML(etat.message)}</p>`;
             if (etat.propositions && etat.propositions.length)
                 html += `<div class="mt-2 grid gap-1.5">${etat.propositions
@@ -497,7 +504,6 @@
                     </div>`
                     )
                     .join('')}</div>`;
-            html += v13JeuDeValeursALaMainHtml();
             return html + '</div>';
         }
         /** La déclaration à la main, pour les fichiers que le repérage ne reconnaît pas. */
@@ -512,9 +518,7 @@
             const entetes = ((state.tables[tableId] || {}).headers || []).filter(h => h !== '__rn');
             const option = (valeur, libelle, selectionnee) =>
                 `<option value="${escapeHTML(valeur)}" ${selectionnee ? 'selected' : ''}>${escapeHTML(libelle)}</option>`;
-            return `<details class="mt-2 text-[11px]" ${v13State.jeuxDeValeurs.ouvert ? 'open' : ''} ontoggle="v13State.jeuxDeValeurs.ouvert = this.open">
-                <summary class="cursor-pointer text-slate-500 hover:text-amber-700">…ou déclarer un jeu de valeurs moi-même</summary>
-                <div class="mt-2 flex items-end gap-2 flex-wrap bg-white border border-slate-200 rounded-lg p-2">
+            return `<div class="flex items-end gap-2 flex-wrap bg-white border border-slate-200 rounded-lg p-2">
                     <label class="text-[10px] text-slate-500">Fichier
                         <select id="v13-jv-table" onchange="v13ChangerLaTableDuJeuDeValeurs(this.value)" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
                             ${tables.map(t => option(t.id, t.name + (t.temp ? ' (jeu temporaire)' : ''), t.id === tableId)).join('')}</select></label>
@@ -527,7 +531,6 @@
                     <label class="text-[10px] text-slate-500">Domaine (si un seul fichier porte plusieurs jeux)
                         <select id="v13-jv-domaine" class="block border border-slate-300 p-1.5 rounded text-xs bg-white">
                             ${option('', '— aucun —', true)}${entetes.map(h => option(h, h, false)).join('')}</select></label>
-                    <button onclick="v13DeclarerALaMain()" class="text-xs font-bold rounded-lg px-3 py-1.5 bg-amber-600 text-white hover:bg-amber-700">Déclarer</button>
-                </div>
-            </details>`;
+                    <button onclick="v13DeclarerALaMain()" class="text-xs font-bold rounded-lg px-3 py-1.5 bg-amber-600 text-white hover:bg-amber-700">🏷️ Déclarer</button>
+                </div>`;
         }

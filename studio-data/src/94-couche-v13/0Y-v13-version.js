@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.54.0';
+        const V13_VERSION = '13.54.1';
         const V13_CHANGELOG = [
+            {
+                v: '13.54.1',
+                d: '2026-10-13',
+                t: 'À la main d’abord : c’est vous qui savez à quoi relier vos fichiers',
+                items: [
+                    'Les deux nouveautés d’hier mettaient la <b>recherche automatique</b> en premier et le choix à la main replié derrière un petit triangle. C’est l’inverse qu’il fallait : celui qui a produit ses fichiers sait à quoi les relier, et une recherche qui compare toutes les colonnes de toutes les sources trouve forcément des coïncidences — du bruit, hors contexte.',
+                    '<b>Relier une source</b> : le choix à la main est maintenant la première chose à l’écran — ma colonne, la source, sa colonne, « Mesurer et relier ». La mesure reste faite, parce qu’elle dit en une ligne si le rapprochement tient et s’il va multiplier les lignes. La recherche large est reléguée derrière une phrase discrète : « Vous ne savez pas à quoi le relier ? ».',
+                    '<b>Jeux de valeurs</b> : même ordre. La déclaration à la main — fichier, colonne du code, colonne du libellé, domaine — est à l’écran ; le repérage automatique n’est plus là que pour les fichiers que l’on n’a pas produits soi-même.',
+                    'Et quand la recherche large est tout de même lancée, elle <b>ne noie plus ce que l’on cherchait</b> : les rapprochements solides (plus de la moitié des valeurs retrouvées) sont montrés, les plus faibles sont repliés sous « souvent des coïncidences ». Rien n’est jeté — l’un d’eux peut être le bon — mais la liste reste lisible. Quand aucun n’est solide, elle le dit et renvoie au choix à la main.'
+                ]
+            },
             {
                 v: '13.54.0',
                 d: '2026-10-13',
