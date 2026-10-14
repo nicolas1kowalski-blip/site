@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.56.0';
+        const V13_VERSION = '13.57.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.57.0',
+                d: '2026-10-14',
+                t: 'Une seule lecture par table liée : « Out of Memory » sur 40 000 lignes, c’était cinq fois le même travail',
+                items: [
+                    'Une colonne ramenée d’une table liée sans la joindre va chercher sa valeur par une sous-requête : c’est ce qui garantit <b>une ligne en sortie par ligne de départ</b>. Mais <b>cinq colonnes de la même table, c’était cinq sous-requêtes</b> — cinq lectures du même fichier, cinq regroupements sur la même clé. Mesuré sur 40 000 lignes de départ et 1 500 000 lignes liées : <b>5,2 s pour une colonne, 16,6 s pour trois, 26,2 s pour cinq</b>, et une mémoire qui finissait par manquer — « Out of Memory Error: Allocation failure » sur un fichier de quarante mille lignes.',
+                    'Les colonnes qui empruntent le <b>même chemin</b> et se regroupent de la même façon sont désormais réunies en <b>une seule lecture</b>, groupée sur la clé du lien et jointe une fois. Mesuré sur le même cas, à travers le moteur de l’application : <b>4,0 s au lieu de 26,2 s</b>, et une seule table en mémoire au lieu de cinq. Le résultat est <b>exactement le même</b>, valeur par valeur — c’est contrôlé.',
+                    'Une colonne seule garde sa sous-requête : il n’y a rien à mutualiser, et elle se lit mieux dans « Voir le SQL ».',
+                    'Rien ne change pour vous : ni les réglages, ni le nombre de lignes, ni les valeurs. Seulement le temps et la mémoire.'
+                ]
+            },
             {
                 v: '13.56.0',
                 d: '2026-10-14',
