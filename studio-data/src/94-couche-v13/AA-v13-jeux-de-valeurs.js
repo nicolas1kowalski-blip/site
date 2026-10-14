@@ -281,90 +281,55 @@
             return trouves;
         }
 
-        // ---- Le SQL : une recherche par la valeur, jamais une jointure ----
-        /**
-         * La colonne du libellé s'appuie sur l'expression du CODE, quelle qu'elle soit : une colonne
-         * de la table de départ, ou une colonne ramenée d'une table liée par sous-requête. On la
-         * demande au moteur tel quel, puis on l'enveloppe dans la recherche du libellé. Comme le
-         * code ne vaut qu'une valeur, la colonne est forcée en « la première valeur » : un code qui
-         * en vaudrait plusieurs ne serait plus un code.
-         */
-        function v13ColonneDuCode(colonne, baseId) {
-            const code = Object.assign({}, colonne, {
-                kind: undefined,
-                jvId: undefined,
-                alias: colonne.alias,
-                plusieurs: 'premiere',
-                // La transformation demandée porte sur le LIBELLÉ, pas sur le code : c'est le
-                // libellé que l'on met en majuscules, pas la clé qui sert à le retrouver.
-                transform: 'none'
-            });
-            // Le CHEMIN jusqu'à la table du code. Sans lui, un code venant d'une table LIÉE était
-            // cherché sur la table de départ : « Binder Error: Table "x0" does not have a column
-            // named "CLI_SEGMENT" ». Le moteur ne calcule le chemin que des colonnes ordinaires ;
-            // une colonne de libellé n'en est pas une, c'est donc ici qu'il faut le poser.
-            if (baseId && colonne.tableId && colonne.tableId !== baseId && !code._chemin)
-                code._chemin = advCheminDuLien(baseId, colonne.tableId, colonne.via || '');
-            return code;
+        // ---- Le SQL : la traduction se fait DANS la lecture de la colonne ----
+        //
+        // Première version : la colonne de libellé était une colonne à part (kind « jv »), dont
+        // l'expression enveloppait celle du code. Sur une colonne venant d'une table liée, cela
+        // donnait une sous-requête corrélée DANS une autre sous-requête corrélée, avec un
+        // « ORDER BY … LIMIT 1 » au milieu : le moteur n'avait plus qu'à parcourir la grosse table
+        // une fois de plus, en gardant tout en mémoire. Mesuré chez l'utilisateur : l'extraction
+        // passait, et tombait en « Out of Memory » dès qu'on ajoutait UN libellé.
+        //
+        // Désormais la colonne de libellé est une colonne ORDINAIRE de la même table que le code —
+        // même chemin, même mode, même lecture groupée. Seule sa VALEUR change : au lieu de la case
+        // brute, on y met la recherche du libellé. La traduction voyage donc avec la lecture déjà
+        // faite, sans une seule requête de plus.
+        /** Cette colonne est-elle le libellé d'un code ? */
+        function v13EstUnLibelle(colonne) {
+            return !!(colonne && colonne.jvId && !colonne.kind);
+        }
+        /** La recherche du libellé, autour de la case qui porte le code. */
+        function v13RechercheDuLibelle(colonne, caseDuCode) {
+            const jeu = state.tables[colonne.jvId];
+            const declaration = v13JeuDeValeurs(jeu);
+            if (!declaration) return 'NULL';
+            const conditionDuDomaine =
+                declaration.domaine && colonne.domaine
+                    ? ` AND ${sqlCleDeLien('j.' + sqlIdent(declaration.domaine))} = ${sqlCleDeLien(sqlLiteral(colonne.domaine))}`
+                    : '';
+            return (
+                `(SELECT NULLIF(TRIM(CAST(j.${sqlIdent(declaration.libelle)} AS VARCHAR)), '')` +
+                ` FROM ${sqlIdent(duckTableName(colonne.jvId))} j` +
+                ` WHERE ${sqlCleDeLien('j.' + sqlIdent(declaration.code))} = ${sqlCleDeLien(caseDuCode)}${conditionDuDomaine}` +
+                ` LIMIT 1)`
+            );
         }
         Studio.extend(
-            'buildAdvSql',
+            'advExpressionDeLaValeur',
             base =>
-                function (spec) {
-                    const orpheline = ((spec && spec.columns) || []).find(
-                        c =>
-                            c.kind === 'jv' &&
-                            c.tableId &&
-                            c.tableId !== spec.baseId &&
-                            !advCheminDuLien(spec.baseId, c.tableId, c.via || '')
-                    );
-                    if (orpheline)
-                        return {
-                            err: `« ${(state.tables[orpheline.tableId] || {}).name || '?'} » n’est plus reliée à la table de départ : le libellé de « ${orpheline.col} » ne peut pas être ramené. Retirez cette colonne ou rétablissez le lien.`
-                        };
-                    return base.apply(this, arguments);
+                function (colonne, caseBrute) {
+                    if (!v13EstUnLibelle(colonne)) return base.apply(this, arguments);
+                    // La transformation demandée porte sur le LIBELLÉ, pas sur le code : c'est le
+                    // libellé que l'on met en majuscules, pas la clé qui sert à le retrouver.
+                    return advTransformee(v13RechercheDuLibelle(colonne, caseBrute), colonne.transform);
                 },
-            { motif: 'un libellé dont le code n’est plus atteignable le dit, au lieu d’une erreur du moteur' }
-        );
-        Studio.extend(
-            'advColNeeds',
-            base =>
-                function (c, baseId) {
-                    if (c && c.kind === 'jv') return base.call(this, v13ColonneDuCode(c, baseId), baseId);
-                    return base.apply(this, arguments);
-                },
-            { motif: 'un libellé de jeu de valeurs ne joint rien de plus que son code' }
-        );
-        Studio.extend(
-            'advExpandCol',
-            base =>
-                function (map, c, hierRef, spec) {
-                    if (!c || c.kind !== 'jv') return base.apply(this, arguments);
-                    const jeu = state.tables[c.jvId];
-                    const declaration = v13JeuDeValeurs(jeu);
-                    const alias = c.alias || (c.col || '') + '_LIBELLE';
-                    if (!declaration) return [{ expr: 'NULL', alias }];
-                    const baseId = (spec && spec.baseId) || (state.advExtract || {}).baseId;
-                    const codes = base.call(this, map, v13ColonneDuCode(c, baseId), hierRef, spec);
-                    const expressionDuCode = codes && codes.length ? codes[0].expr : 'NULL';
-                    const conditionDuDomaine =
-                        declaration.domaine && c.domaine
-                            ? ` AND ${sqlCleDeLien('j.' + sqlIdent(declaration.domaine))} = ${sqlCleDeLien(sqlLiteral(c.domaine))}`
-                            : '';
-                    const recherche =
-                        `(SELECT NULLIF(TRIM(CAST(j.${sqlIdent(declaration.libelle)} AS VARCHAR)), '')` +
-                        ` FROM ${sqlIdent(duckTableName(c.jvId))} j` +
-                        ` WHERE ${sqlCleDeLien('j.' + sqlIdent(declaration.code))} = ${sqlCleDeLien(expressionDuCode)}${conditionDuDomaine}` +
-                        ` LIMIT 1)`;
-                    return [{ expr: advTransformee(recherche, c.transform), alias }];
-                },
-            { motif: 'le libellé d’un jeu de valeurs se cherche par la valeur du code' }
+            { motif: 'le libellé d’un jeu de valeurs remplace la valeur du code, dans la même lecture' }
         );
         Studio.extend(
             'advColLabel',
             base =>
                 function (c) {
-                    if (!c || c.kind !== 'jv') return base.apply(this, arguments);
+                    if (!v13EstUnLibelle(c)) return base.apply(this, arguments);
                     const jeu = state.tables[c.jvId] || {};
                     const table = state.tables[c.tableId] || {};
                     return `🏷️ Libellé de ${table.name || '?'}.${c.col} — jeu de valeurs « ${jeu.name || '?'} »`;
@@ -377,13 +342,13 @@
 
         /** Cette colonne peut-elle recevoir son libellé ? Un code vient d'une colonne, pas d'un calcul. */
         function v13ColonneTraduisible(colonne) {
-            return !!colonne && !colonne.kind && !!colonne.col;
+            return !!colonne && !colonne.kind && !colonne.jvId && !!colonne.col;
         }
         /** La colonne de libellé déjà posée pour ce code, s'il y en a une. */
         function v13LibelleDeLaColonne(colonne) {
             return (state.advExtract.columns || []).find(
                 autre =>
-                    autre.kind === 'jv' &&
+                    v13EstUnLibelle(autre) &&
                     autre.tableId === colonne.tableId &&
                     autre.col === colonne.col &&
                     (autre.via || '') === (colonne.via || '')
@@ -461,7 +426,6 @@
             }
             const nouvelle = {
                 id: posee ? posee.id : 'jv_' + generateId(),
-                kind: 'jv',
                 tableId: colonne.tableId,
                 col: colonne.col,
                 via: colonne.via || '',

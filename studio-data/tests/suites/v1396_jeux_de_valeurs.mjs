@@ -115,7 +115,7 @@ const out = await p.evaluate(async () => {
     const sansDomaine = buildAdvSql(Object.assign({}, spec, {
         columns: [
             { id: 'c1', tableId: 'aff', col: 'NUM_AFFAIRE', alias: 'NUM_AFFAIRE', transform: 'none' },
-            { id: 'x1', kind: 'jv', tableId: 'aff', col: 'CODE_CIVILITE', jvId: 'jvtout', domaine: '', alias: 'SANS_DOMAINE', transform: 'none' }
+            { id: 'x1', tableId: 'aff', col: 'CODE_CIVILITE', jvId: 'jvtout', domaine: '', alias: 'SANS_DOMAINE', transform: 'none' }
         ]
     }));
     const sans = (await lire(`SELECT SANS_DOMAINE FROM (${sansDomaine.sql}) z WHERE NUM_AFFAIRE = 'AFF3'`))[0];
@@ -203,8 +203,10 @@ const out = await p.evaluate(async () => {
     // Si le lien disparaît, on le dit au lieu de laisser le moteur protester.
     state.relations = [];
     const sansLien = buildAdvSql(liee);
-    ok('quand le lien n’existe plus, le refus est en français et nomme la colonne',
-        !!sansLien.err && /n’est plus reliée/.test(sansLien.err) && /CLI_SEGMENT/.test(sansLien.err));
+    // Une colonne de libellé est une colonne comme une autre : quand sa table n'est plus reliée,
+    // elle reçoit le même refus que n'importe quelle colonne, et il nomme la table à rebrancher.
+    ok('quand le lien n’existe plus, le refus est en français et nomme la table',
+        !!sansLien.err && /CLIENTS\.csv/.test(sansLien.err) && /pas reliée à la table de départ/.test(sansLien.err));
     return R;
 });
 

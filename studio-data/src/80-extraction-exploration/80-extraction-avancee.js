@@ -55,21 +55,20 @@
                     return expression;
             }
         }
+        /**
+         * La VALEUR d'une colonne, à partir de la case brute qui la porte.
+         *
+         * Un seul endroit pour cela, quel que soit le chemin par lequel la colonne arrive — jointe,
+         * ramenée par sous-requête, ou lue dans une lecture groupée. C'est aussi le point d'accroche
+         * des couches : celle des jeux de valeurs y remplace le code par son libellé, et la
+         * traduction se fait alors AU MÊME ENDROIT que la lecture, sans requête supplémentaire.
+         */
+        function advExpressionDeLaValeur(colonne, caseBrute) {
+            return advTransformee(caseBrute, colonne && colonne.transform);
+        }
         function advColExpr(map, c) {
             if (c.kind === 'calc') return advCalcExpr(map, c.calc);
-            const q = `${advAlias(map, c)}.${sqlIdent(c.col)}`;
-            switch (c.transform) {
-                case 'trim':
-                    return `TRIM(CAST(${q} AS VARCHAR))`;
-                case 'upper':
-                    return `UPPER(TRIM(CAST(${q} AS VARCHAR)))`;
-                case 'lower':
-                    return `LOWER(TRIM(CAST(${q} AS VARCHAR)))`;
-                case 'noaccent':
-                    return `strip_accents(TRIM(CAST(${q} AS VARCHAR)))`;
-                default:
-                    return q;
-            }
+            return advExpressionDeLaValeur(c, `${advAlias(map, c)}.${sqlIdent(c.col)}`);
         }
         // Traduit une colonne calculée « façon Excel » en SQL DuckDB.
         function advCalcExpr(map, calc) {
@@ -844,7 +843,7 @@
                 const condition =
                     traversee.condition +
                     advCriteresDeLaSyntheseSql({ conds: advFiltresDuCheminDeLaSynthese(spec, c) }, traversee.aliasDe);
-                const valeur = advTransformee(`s.${sqlIdent(c.col)}`, c.transform);
+                const valeur = advExpressionDeLaValeur(c, `s.${sqlIdent(c.col)}`);
                 const texte = `NULLIF(TRIM(CAST(${valeur} AS VARCHAR)), '')`;
                 const expr =
                     advPlusieursValeurs(c, spec.baseId) === 'premiere'
@@ -1019,7 +1018,7 @@
                 const champs = groupe.map(c => {
                     const champ = 'c_' + String(c.id).replace(/[^A-Za-z0-9_]/g, '');
                     spec._groupes[c.id] = { alias, champ };
-                    const valeur = advTransformee(`s.${sqlIdent(c.col)}`, c.transform);
+                    const valeur = advExpressionDeLaValeur(c, `s.${sqlIdent(c.col)}`);
                     const texte = `NULLIF(TRIM(CAST(${valeur} AS VARCHAR)), '')`;
                     return `STRING_AGG(DISTINCT ${texte}, ' | ') AS ${sqlIdent(champ)}`;
                 });
@@ -1068,8 +1067,13 @@
                 if (!joins.some(j => j.alias === alias)) {
                     // Pas de jointure à restreindre. Reste à savoir s'il sert à une synthèse :
                     // un filtre sur une table de liaison restreint ce que la synthèse compte.
+                    // Une colonne ORDINAIRE ramenée par sous-requête reçoit elle aussi les filtres
+                    // de son chemin : les déclarer « sans effet » était faux, et trompeur — on
+                    // croyait son extraction non filtrée alors qu'elle l'était.
                     const sertAUneSynthese = cols.some(
-                        colonne => colonne.kind === 'link' && advFiltresDuCheminDeLaSynthese(spec, colonne).includes(filtre)
+                        colonne =>
+                            (colonne.kind === 'link' || (!colonne.kind && colonne._chemin && colonne._chemin.length)) &&
+                            advFiltresDuCheminDeLaSynthese(spec, colonne).includes(filtre)
                     );
                     if (!sertAUneSynthese) filtresSansEffet.push(filtre.id);
                     return;

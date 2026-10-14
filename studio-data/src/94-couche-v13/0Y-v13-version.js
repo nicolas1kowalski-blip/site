@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.57.0';
+        const V13_VERSION = '13.58.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.58.0',
+                d: '2026-10-14',
+                t: 'Le libellé voyage avec la colonne — et vos filtres n’étaient pas « sans effet »',
+                items: [
+                    '<b>Ajouter un seul libellé faisait tomber l’extraction en « Out of Memory »</b>, alors qu’elle passait sans lui. La colonne de libellé était une colonne à part, dont l’expression enveloppait celle du code : sur un code venant d’une table liée, cela donnait une sous-requête corrélée <b>dans</b> une autre, avec un « ORDER BY … LIMIT 1 » au milieu. Le moteur reparcourait la grosse table une fois de plus, en gardant tout en mémoire.',
+                    'La colonne de libellé est maintenant une colonne <b>ordinaire</b> de la même table que le code — même chemin, même mode, <b>même lecture groupée</b>. Seule sa valeur change : au lieu de la case brute, on y met la recherche du libellé. Mesuré sur 40 000 lignes de départ et 1 500 000 lignes liées : cinq colonnes du contrat, 4,1 s ; <b>les mêmes plus le libellé, 5,8 s — et toujours une seule lecture</b>, au lieu d’une lecture entière de plus.',
+                    'Au passage, un point d’accroche unique sert désormais à fabriquer la valeur d’une colonne, quel que soit son chemin — jointe, ramenée par sous-requête, ou lue dans une lecture groupée. C’est ce qui permet à la traduction de se faire au même endroit que la lecture.',
+                    'Et une erreur d’affichage qui faisait douter de tout le reste : vos filtres « sur le lien » étaient étiquetés <b>« sans effet »</b> alors qu’ils <b>s’appliquaient bel et bien</b>. L’étiquette ne reconnaissait que les synthèses, pas les colonnes ordinaires ramenées par sous-requête — qui reçoivent pourtant les mêmes filtres. Un filtre n’est plus dit « sans effet » que lorsqu’il l’est vraiment.'
+                ]
+            },
             {
                 v: '13.57.0',
                 d: '2026-10-14',
