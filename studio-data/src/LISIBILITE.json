@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-13T15:40:57.256Z",
+ "generated": "2026-10-14T14:20:08.940Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 54814,
-  "codeLines": 51133,
-  "commentLines": 3681,
-  "templateLines": 10699,
+  "lines": 54902,
+  "codeLines": 51198,
+  "commentLines": 3704,
+  "templateLines": 10719,
   "longLogicLines": 13,
   "multiStatementLines": 0,
-  "locals": 7189,
+  "locals": 7200,
   "shortLocals": 850,
-  "functions": 1829,
+  "functions": 1832,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.11823619418556128
+  "shortLocalsRatio": 0.11805555555555555
  },
  "files": [
   {
@@ -733,15 +733,15 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 3452,
-   "codeLines": 3097,
-   "commentLines": 355,
+   "lines": 3462,
+   "codeLines": 3100,
+   "commentLines": 362,
    "templateLines": 594,
    "longLogicLines": 4,
    "multiStatementLines": 0,
    "locals": 520,
    "shortLocals": 56,
-   "functions": 156,
+   "functions": 157,
    "longestLogic": 210,
    "shortLocalsRatio": 0.1076923076923077,
    "longLinesSample": [
@@ -1069,10 +1069,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 710,
-   "codeLines": 708,
+   "lines": 722,
+   "codeLines": 720,
    "commentLines": 2,
-   "templateLines": 385,
+   "templateLines": 392,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
@@ -1212,17 +1212,17 @@
   },
   {
    "file": "94-couche-v13/A9-v13-liens-a-la-volee.js",
-   "lines": 573,
-   "codeLines": 464,
-   "commentLines": 109,
-   "templateLines": 92,
+   "lines": 639,
+   "codeLines": 514,
+   "commentLines": 125,
+   "templateLines": 105,
    "longLogicLines": 0,
    "multiStatementLines": 0,
-   "locals": 96,
+   "locals": 107,
    "shortLocals": 2,
-   "functions": 26,
+   "functions": 28,
    "longestLogic": 124,
-   "shortLocalsRatio": 0.020833333333333332
+   "shortLocalsRatio": 0.018691588785046728
   },
   {
    "file": "94-couche-v13/AA-v13-jeux-de-valeurs.js",
