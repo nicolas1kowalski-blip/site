@@ -1,22 +1,22 @@
 {
- "generated": "2026-10-14T14:20:08.940Z",
+ "generated": "2026-10-14T14:59:00.422Z",
  "thresholds": {
   "longLogicLines": 15,
   "multiStatementLines": 0,
   "shortLocalsRatio": 0.15
  },
  "total": {
-  "lines": 54902,
-  "codeLines": 51198,
-  "commentLines": 3704,
-  "templateLines": 10719,
+  "lines": 54975,
+  "codeLines": 51248,
+  "commentLines": 3727,
+  "templateLines": 10728,
   "longLogicLines": 13,
   "multiStatementLines": 0,
-  "locals": 7200,
+  "locals": 7213,
   "shortLocals": 850,
   "functions": 1832,
   "longestLogic": 210,
-  "shortLocalsRatio": 0.11805555555555555
+  "shortLocalsRatio": 0.11784278386247055
  },
  "files": [
   {
@@ -733,17 +733,17 @@
   },
   {
    "file": "80-extraction-exploration/80-extraction-avancee.js",
-   "lines": 3462,
-   "codeLines": 3100,
-   "commentLines": 362,
-   "templateLines": 594,
+   "lines": 3524,
+   "codeLines": 3139,
+   "commentLines": 385,
+   "templateLines": 597,
    "longLogicLines": 4,
    "multiStatementLines": 0,
-   "locals": 520,
+   "locals": 533,
    "shortLocals": 56,
    "functions": 157,
    "longestLogic": 210,
-   "shortLocalsRatio": 0.1076923076923077,
+   "shortLocalsRatio": 0.1050656660412758,
    "longLinesSample": [
     "key = `${advNk('s.' + sqlIdent(anchor.childCol))} = ${advNk(advAlias(map, { tableId: anchor.parentId, via: anc",
     "`LEFT JOIN (SELECT ${advNk('t2.' + sqlIdent(anchor.childCol))} AS jk, hh.chain FROM ${T} t2 LEFT JOIN ${H} hh ",
@@ -1069,10 +1069,10 @@
   },
   {
    "file": "94-couche-v13/0Y-v13-version.js",
-   "lines": 722,
-   "codeLines": 720,
+   "lines": 733,
+   "codeLines": 731,
    "commentLines": 2,
-   "templateLines": 392,
+   "templateLines": 398,
    "longLogicLines": 0,
    "multiStatementLines": 0,
    "locals": 2,
