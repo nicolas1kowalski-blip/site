@@ -1,7 +1,19 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.55.1';
+        const V13_VERSION = '13.56.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.56.0',
+                d: '2026-10-14',
+                t: 'Par où passe l’extraction : le chemin emprunté s’affiche enfin',
+                items: [
+                    'Une extraction qui « ne compte plus rien » et une <b>zone jaune « Quel lien utiliser ? »</b> que l’on ne s’explique pas ont la même cause : <b>le chemin</b>. Quand la table de départ et la table demandée ne se touchent pas, le moteur traverse les tables du milieu en prenant le plus court chemin du modèle. Dans un modèle de trente fichiers tous reliés, aller d’une liste de sites aux contrats peut passer par les <b>imputations</b> et les <b>tâches financières</b> : le résultat est vide ou faux, le comptage interminable — et <b>rien à l’écran ne le disait</b>.',
+                    'Sous chaque colonne, le chemin réellement emprunté est maintenant écrit : <b>« ⤳ passe par emplacement.csv → imputationsite.csv → TacheFinance_2.txt → CONTRAT.csv »</b>. À partir de trois tables traversées, il passe en rouge et dit quoi faire : <b>reliez directement</b>, c’est plus rapide et plus juste.',
+                    'C’est aussi l’explication de la zone jaune : elle demande quel lien utiliser pour une paire de tables que ce chemin traverse. En voyant le chemin, on comprend d’où sortent ces tables qu’on n’a jamais demandées.',
+                    'Le panneau <b>🔗 Sources reliées</b> ne déroule plus un mur de pastilles — trente-deux noms n’apprennent rien. Il dit maintenant <b>où va vraiment cette extraction</b>, source par source, avec le chemin de chacune ; les autres sources atteignables sont repliées derrière une ligne.',
+                    'Rappel utile : relier directement sa table de départ à la table voulue se fait en trois clics dans ce panneau, et le rapprochement est mesuré avant d’être créé.'
+                ]
+            },
             {
                 v: '13.55.1',
                 d: '2026-10-13',

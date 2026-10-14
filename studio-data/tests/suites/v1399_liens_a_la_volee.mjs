@@ -147,6 +147,42 @@ const out = await p.evaluate(async () => {
     ok('retirer le lien le fait disparaître', !state.relations.some(r => r.id === lien.id));
     ok('et la source n’est plus atteignable', !advReachableTables().some(t => t.id === 'aff'));
 
+    // ---- 7 bis. Le CHEMIN emprunté se voit, quand il traverse des tables ----
+    //
+    // Dans un modèle de trente fichiers tous reliés, aller d'une liste de sites aux contrats peut
+    // passer par les imputations et les tâches financières : le moteur prend le plus court chemin,
+    // qui n'est pas celui qu'on avait en tête. Le résultat est alors vide ou faux, et rien à
+    // l'écran ne le disait.
+    await conn.query(`CREATE OR REPLACE TABLE t_m1 AS SELECT row_number() OVER () AS __rn, 'A'||i AS K1, 'B'||i AS K2 FROM range(1,101) tbl(i)`);
+    await conn.query(`CREATE OR REPLACE TABLE t_m2 AS SELECT row_number() OVER () AS __rn, 'B'||i AS K2, 'C'||i AS K3 FROM range(1,101) tbl(i)`);
+    await conn.query(`CREATE OR REPLACE TABLE t_m3 AS SELECT row_number() OVER () AS __rn, 'C'||i AS K3, (i%7) AS VALEUR FROM range(1,101) tbl(i)`);
+    state.tables['m1'] = { id: 'm1', name: 'DEPART.csv', type: 'csv', status: 'ready', lastRows: 100, headers: ['K1', 'K2'], config: {}, columnsMeta: {} };
+    state.tables['m2'] = { id: 'm2', name: 'MILIEU.csv', type: 'csv', status: 'ready', lastRows: 100, headers: ['K2', 'K3'], config: {}, columnsMeta: {} };
+    state.tables['m3'] = { id: 'm3', name: 'LOIN.csv', type: 'csv', status: 'ready', lastRows: 100, headers: ['K3', 'VALEUR'], config: {}, columnsMeta: {} };
+    state.relations = [
+        { id: 'm_a', sourceTable: 'm1', targetTable: 'm2', sourceCol: 'K2', targetCol: 'K2', type: 'N-1' },
+        { id: 'm_b', sourceTable: 'm2', targetTable: 'm3', sourceCol: 'K3', targetCol: 'K3', type: 'N-1' }
+    ];
+    advSetBase('m1');
+    const loin = v13CheminLisible('m1', 'm3', '');
+    ok('le chemin jusqu’à une table éloignée est connu, saut par saut',
+        !!loin && loin.pas === 2 && loin.texte === 'MILIEU.csv → LOIN.csv');
+    const colonneLoin = { id: 'z1', tableId: 'm3', col: 'VALEUR', alias: 'VALEUR', transform: 'none' };
+    ok('et il est écrit sous la source de la colonne',
+        /passe par MILIEU\.csv → LOIN\.csv/.test(v13CheminDeLaColonneHtml(colonneLoin)));
+    ok('une table reliée directement n’affiche aucun chemin : il n’y a rien à expliquer',
+        v13CheminDeLaColonneHtml({ id: 'z2', tableId: 'm2', col: 'K3', alias: 'K3', transform: 'none' }) === '');
+    ok('une colonne de la table de départ non plus',
+        v13CheminDeLaColonneHtml({ id: 'z3', tableId: 'm1', col: 'K1', alias: 'K1', transform: 'none' }) === '');
+    state.advExtract.columns = [
+        { id: 'z0', tableId: 'm1', col: 'K1', alias: 'K1', transform: 'none' },
+        colonneLoin
+    ];
+    renderAdvExtract();
+    const panneauChemin = document.querySelector('.v12x-tool[data-tool="liens"]');
+    ok('le panneau dit par où passe l’extraction, au lieu d’aligner toutes les sources',
+        !!panneauChemin && /en passant par MILIEU\.csv → LOIN\.csv/.test(panneauChemin.textContent));
+
     // ---- 8. Depuis une source ordinaire aussi, pas seulement un jeu temporaire ----
     advSetBase('aff');
     const depuisUneSource = await v13ChercherDesLiens('aff');

@@ -1356,6 +1356,16 @@
         function advReglagesDeColonneHtml() {
             return '';
         }
+        /**
+         * Le CHEMIN réellement emprunté pour aller chercher une colonne.
+         *
+         * Vide ici : c'est un point d'accroche. Quand deux tables ne se touchent pas, le moteur
+         * passe par les tables du milieu — et il choisit tout seul le plus court chemin, qui n'est
+         * pas forcément celui que l'on avait en tête. Sans l'écrire, personne ne peut le deviner.
+         */
+        function advCheminDeLaColonneHtml() {
+            return '';
+        }
         function advColonneModifiable(colonne) {
             return !!colonne && (!colonne.kind || colonne.kind === 'link');
         }
@@ -2134,7 +2144,7 @@
                             rang
                         ) => `<tr class="hover:bg-slate-50" ondragover="reorderDragOver(event,'advcol')" ondragleave="reorderDragLeave(event)" ondrop="reorderDrop(event,'advcol',${rang},advDeposerColonne)">
                     <td class="p-2 text-center whitespace-nowrap"><span draggable="true" ondragstart="reorderDragStart(event,'advcol',${rang})" ondragend="reorderDragEnd(event)" class="inline-block cursor-grab text-slate-300 hover:text-indigo-600 select-none text-sm leading-none" title="Glisser pour changer l'ordre des colonnes en sortie">⠿</span><br><span class="inline-flex leading-none">${advFlechesDOrdreHtml(rang, extractSpec.columns.length)}</span></td>
-                    <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}${advCriteresDUneColonneHtml(c)}</td>
+                    <td class="p-2 font-mono text-[11px] text-slate-500">${escapeHTML(advColLabel(c))}${advCheminDeLaColonneHtml(c)}${advCriteresDUneColonneHtml(c)}</td>
                     <td class="p-2"><input type="text" value="${escapeHTML(c.alias)}" onchange="advUpdateColumn('${c.id}','alias',this.value)" class="border border-slate-300 p-1 rounded text-xs w-full font-bold bg-white"></td>
                     <td class="p-2"><select onchange="advUpdateColumn('${c.id}','transform',this.value)" class="border border-slate-200 p-1 rounded text-[11px] bg-white">${Object.entries(
                         ADV_TRANSFORMS

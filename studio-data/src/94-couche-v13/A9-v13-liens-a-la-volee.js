@@ -352,6 +352,43 @@
                     class="shrink-0 text-[10px] font-bold rounded-full px-2.5 py-1 bg-indigo-600 text-white hover:bg-indigo-700">🔗 Relier</button>
             </div>`;
         }
+        /**
+         * Le chemin réellement emprunté pour atteindre une table depuis la table de départ.
+         *
+         * Quand deux tables ne se touchent pas, le moteur traverse celles du milieu, en prenant le
+         * plus court chemin du modèle. Ce chemin n'est pas forcément celui que l'on avait en tête :
+         * dans un modèle de trente fichiers tous reliés les uns aux autres, aller d'une liste de
+         * sites aux contrats peut passer par les imputations et les tâches financières. Le résultat
+         * est alors vide ou faux, et rien à l'écran ne disait pourquoi.
+         */
+        function v13CheminLisible(baseId, tableId, via) {
+            if (!baseId || !tableId || tableId === baseId) return null;
+            const chemin = typeof advCheminDuLien === 'function' ? advCheminDuLien(baseId, tableId, via || '') : null;
+            if (!chemin || !chemin.length) return null;
+            const nom = identifiant => (state.tables[identifiant] || {}).name || identifiant;
+            return { pas: chemin.length, texte: chemin.map(pas => nom(pas.vers)).join(' → ') };
+        }
+        /** Ce chemin, écrit sous la source de la colonne — en ambre dès qu'il traverse une table. */
+        function v13CheminDeLaColonneHtml(colonne) {
+            if (!colonne || colonne.kind === 'calc') return '';
+            const spec = state.advExtract;
+            const lisible = v13CheminLisible(spec && spec.baseId, colonne.tableId, colonne.via);
+            if (!lisible || lisible.pas < 2) return '';
+            // À partir de trois tables traversées, le chemin est presque toujours un hasard du
+            // modèle, et chaque colonne le parcourt pour son compte : c'est long, et c'est souvent
+            // faux. On le dit, et on dit quoi faire.
+            const longuet = lisible.pas >= 3;
+            return `<div class="mt-0.5 text-[10px] ${longuet ? 'text-red-700' : 'text-amber-700'} font-sans" title="Ces deux tables ne se touchent pas : le moteur traverse les tables du milieu, en prenant le plus court chemin du modèle de données. Si ce chemin n’est pas celui que vous attendez, reliez directement votre table de départ à celle-ci (🔗 Sources reliées), ou choisissez un autre chemin avec le sélecteur « via » en ajoutant la colonne.">⤳ passe par ${escapeHTML(lisible.texte)}${longuet ? ' — reliez directement pour aller plus vite et plus juste' : ''}</div>`;
+        }
+        Studio.extend(
+            'advCheminDeLaColonneHtml',
+            base =>
+                function (colonne) {
+                    return base.apply(this, arguments) + v13CheminDeLaColonneHtml(colonne);
+                },
+            { motif: 'le chemin emprunté par une colonne se lit sous sa source' }
+        );
+
         /** Au-dessous, un rapprochement est trop faible pour être montré d'emblée : on le replie. */
         const V13_TAUX_SOLIDE = 0.5;
         /**
@@ -388,8 +425,38 @@
             const aLaVolee = (state.relations || []).filter(
                 r => r.volee && (r.sourceTable === spec.baseId || r.targetTable === spec.baseId)
             );
-            let corps = `<div class="text-[11px] text-slate-600 mb-2">Depuis <b>${escapeHTML(nomDeDepart)}</b>, on peut aller chercher des colonnes dans :
-                ${atteignables.length ? atteignables.map(t => `<span class="inline-block text-[10px] bg-white border border-slate-200 rounded-full px-2 py-0.5 mr-1 mb-1">${escapeHTML(t.name)}</span>`).join('') : '<i>aucune autre source — il n’y a encore aucun lien.</i>'}</div>`;
+            // Les sources VRAIMENT en jeu d'abord, avec le chemin emprunté pour chacune : dans un
+            // modèle de trente fichiers, la liste complète des tables atteignables est un mur de
+            // pastilles qui n'apprend rien. Ce qu'il faut voir, c'est par où passe l'extraction.
+            const enJeu = new Set();
+            (spec.columns || []).forEach(c => {
+                if (c.tableId && c.tableId !== spec.baseId) enJeu.add(c.tableId);
+                ((c.calc && c.calc.parts) || []).forEach(part => part.tableId && enJeu.add(part.tableId));
+            });
+            (spec.filters || []).forEach(f => f.tableId && f.tableId !== spec.baseId && enJeu.add(f.tableId));
+            const nom = identifiant => (state.tables[identifiant] || {}).name || identifiant;
+            const autres = atteignables.filter(t => t.id !== spec.baseId && !enJeu.has(t.id));
+            let corps = '';
+            if (enJeu.size)
+                corps += `<div class="text-[11px] text-slate-600 mb-2">Cette extraction va chercher des colonnes dans :
+                    ${[...enJeu]
+                        .map(identifiant => {
+                            const lisible = v13CheminLisible(spec.baseId, identifiant, '');
+                            const long = lisible && lisible.pas > 1;
+                            return `<div class="mt-1 ${long ? 'text-amber-800' : 'text-slate-700'}"><b>${escapeHTML(nom(identifiant))}</b>${
+                                lisible
+                                    ? ` <span class="text-[10px]">${long ? '⤳ en passant par ' : '— reliée directement : '}${escapeHTML(lisible.texte)}</span>`
+                                    : ' <span class="text-[10px] text-red-700">— aucun chemin depuis la table de départ</span>'
+                            }</div>`;
+                        })
+                        .join('')}</div>`;
+            else
+                corps += `<div class="text-[11px] text-slate-600 mb-2">Cette extraction ne va chercher aucune colonne ailleurs que dans <b>${escapeHTML(nomDeDepart)}</b>.</div>`;
+            if (autres.length)
+                corps += `<details class="mb-2 text-[11px]" ${v13State.liens.autresOuvertes ? 'open' : ''} ontoggle="v13State.liens.autresOuvertes = this.open">
+                    <summary class="cursor-pointer text-slate-400 hover:text-indigo-700">${autres.length} autre(s) source(s) atteignable(s) depuis ${escapeHTML(nomDeDepart)}</summary>
+                    <div class="mt-1">${autres.map(t => `<span class="inline-block text-[10px] bg-white border border-slate-200 rounded-full px-2 py-0.5 mr-1 mb-1">${escapeHTML(t.name)}</span>`).join('')}</div>
+                </details>`;
             if (aLaVolee.length)
                 corps += `<div class="mb-2">${aLaVolee
                     .map(r => {
