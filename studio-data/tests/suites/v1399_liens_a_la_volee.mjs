@@ -183,6 +183,43 @@ const out = await p.evaluate(async () => {
     ok('le panneau dit par où passe l’extraction, au lieu d’aligner toutes les sources',
         !!panneauChemin && /en passant par MILIEU\.csv → LOIN\.csv/.test(panneauChemin.textContent));
 
+    // ---- 7 ter. « Ne compter que… » suit la table que l'on vient de choisir ----
+    //
+    // Le critère d'une synthèse ne peut porter que sur les tables du CHEMIN. La liste était
+    // construite une fois pour toutes au dessin du formulaire : on choisissait ensuite « compter
+    // les CONTRATS » et « Ne compter que… » proposait encore la table du milieu, jamais les
+    // contrats eux-mêmes. Le critère que l'on voulait poser était introuvable.
+    await conn.query(`CREATE OR REPLACE TABLE t_n1 AS SELECT row_number() OVER () AS __rn, 'S'||i AS UO, 'E'||i AS DK FROM range(1,51) tbl(i)`);
+    await conn.query(`CREATE OR REPLACE TABLE t_n2 AS SELECT row_number() OVER () AS __rn, 'E'||i AS DK, (1980+i)::VARCHAR AS ANNEE FROM range(1,51) tbl(i)`);
+    await conn.query(`CREATE OR REPLACE TABLE t_n3 AS SELECT row_number() OVER () AS __rn, 'E'||((i-1)%50+1) AS DK, 'C360' AS SRC FROM range(1,151) tbl(i)`);
+    state.tables['n1'] = { id: 'n1', name: 'DEPART2.csv', type: 'csv', status: 'ready', lastRows: 50, headers: ['UO', 'DK'], config: {}, columnsMeta: {} };
+    state.tables['n2'] = { id: 'n2', name: 'MILIEU2.csv', type: 'csv', status: 'ready', lastRows: 50, headers: ['DK', 'ANNEE'], config: {}, columnsMeta: {} };
+    state.tables['n3'] = { id: 'n3', name: 'BOUT2.csv', type: 'csv', status: 'ready', lastRows: 150, headers: ['DK', 'SRC'], config: {}, columnsMeta: {} };
+    state.relations = [
+        { id: 'n_a', sourceTable: 'n1', targetTable: 'n2', sourceCol: 'DK', targetCol: 'DK', type: 'N-1' },
+        { id: 'n_b', sourceTable: 'n3', targetTable: 'n1', sourceCol: 'DK', targetCol: 'DK', type: 'N-1' }
+    ];
+    advSetBase('n1');
+    state.advExtract.columns = [{ id: 'q1', tableId: 'n1', col: 'UO', alias: 'UO', transform: 'none' }];
+    v12xAddMode('link');
+    renderAdvExtract();
+    v12xAddMode('link');
+    const tableLiee = el('adv-link-tbl');
+    const optionsDuCritere = () =>
+        Array.from((el('adv-linkc-tbl') || { options: [] }).options).map(o => o.text);
+    ok('le formulaire de synthèse est ouvert', !!tableLiee);
+    tableLiee.value = 'n2';
+    advLinkTblChanged();
+    ok('pour la table du milieu, le critère porte sur elle', optionsDuCritere().join(',') === 'MILIEU2.csv');
+    tableLiee.value = 'n3';
+    advLinkTblChanged();
+    ok('quand on change de table liée, « Ne compter que… » propose CETTE table',
+        optionsDuCritere().includes('BOUT2.csv'));
+    ok('et elle est choisie par défaut : c’est sur elle qu’on pose un critère neuf fois sur dix',
+        (el('adv-linkc-tbl') || {}).value === 'n3');
+    ok('ses colonnes suivent aussitôt',
+        Array.from((el('adv-linkc-col') || { options: [] }).options).map(o => o.text).join(',') === 'DK,SRC');
+
     // ---- 8. Depuis une source ordinaire aussi, pas seulement un jeu temporaire ----
     advSetBase('aff');
     const depuisUneSource = await v13ChercherDesLiens('aff');

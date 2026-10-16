@@ -1,7 +1,18 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.58.0';
+        const V13_VERSION = '13.58.1';
         const V13_CHANGELOG = [
+            {
+                v: '13.58.1',
+                d: '2026-10-16',
+                t: 'Correction : « Ne compter que… » ne proposait pas la table que l’on venait de choisir',
+                items: [
+                    'Dans une <b>synthèse d’une table liée</b>, le critère « ⛉ Ne compter que… » ne peut porter que sur les tables du <b>chemin</b>. Mais sa liste était construite une fois pour toutes au dessin du formulaire : on choisissait ensuite « compter les lignes de CONTRAT.csv », et le critère proposait encore <b>la table du milieu</b> restée du chemin précédent — jamais les contrats eux-mêmes. Le critère que l’on voulait poser était tout simplement introuvable.',
+                    'La liste suit désormais la table liée, et le <b>sélecteur « via »</b> aussi : changer l’une ou l’autre change le chemin, donc les tables sur lesquelles un critère a un sens.',
+                    'La <b>table résumée est proposée en premier</b> : c’est sur elle qu’on pose un critère neuf fois sur dix (« ne compter que les contrats actifs »). Les tables du milieu restent offertes — elles servent à restreindre le chemin lui-même — et les colonnes suivent aussitôt la table choisie.',
+                    'Cinq contrôles ajoutés sur ce point.'
+                ]
+            },
             {
                 v: '13.58.0',
                 d: '2026-10-14',

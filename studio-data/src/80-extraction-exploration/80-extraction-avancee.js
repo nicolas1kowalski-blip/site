@@ -612,8 +612,18 @@
         function advViaSelectHtml(id) {
             return (
                 `<span id="${id}-wrap" class="hidden items-center gap-1"><span class="text-[10px] font-bold text-amber-700" title="Ces deux tables sont reliées par plusieurs chemins : choisissez celui à emprunter.">via</span>` +
-                `<select id="${id}" class="border border-amber-300 p-1.5 rounded text-[11px] bg-white max-w-[280px]"></select></span>`
+                `<select id="${id}" onchange="advCheminChange('${id}')" class="border border-amber-300 p-1.5 rounded text-[11px] bg-white max-w-[280px]"></select></span>`
             );
+        }
+        /**
+         * Changer de chemin change les tables traversées : ce qui en dépend doit suivre.
+         *
+         * Pour l'instant, seule la synthèse a une liste qui dépend du chemin — celle des tables sur
+         * lesquelles on peut poser un critère (« Ne compter que… »).
+         */
+        function advCheminChange(id) {
+            if (id === 'adv-link-via' && typeof advRafraichirLesTablesDuCritere === 'function')
+                advRafraichirLesTablesDuCritere();
         }
         function advViaSync(id, tableId) {
             const w = el(id + '-wrap'),
@@ -3100,6 +3110,7 @@
             if (table && advLinkColElement)
                 advLinkColElement.innerHTML = table.headers.map(h => `<option>${escapeHTML(h)}</option>`).join('');
             advViaSync('adv-link-via', id);
+            advRafraichirLesTablesDuCritere();
             // Changer de table liée change le chemin : un critère préparé pour l'ancien chemin
             // n'a plus de sens, et le garder en silence donnerait un comptage faux.
             const permises = new Set(advTablesDUneSynthese(state.advExtract.baseId, id, advViaVal('adv-link-via')));
@@ -3146,6 +3157,31 @@
             return advTablesDUneSynthese(state.advExtract.baseId, choisie.value, advViaVal('adv-link-via'))
                 .map(identifiant => state.tables[identifiant])
                 .filter(Boolean);
+        }
+        /**
+         * La liste des tables du critère suit la table liée que l'on vient de choisir.
+         *
+         * Sans cela, la liste restait celle du chemin précédent : on demandait « compter les
+         * CONTRATS » et « Ne compter que… » ne proposait que « emplacement.csv », la table du
+         * milieu — jamais les contrats eux-mêmes. Le critère que l'on voulait poser était tout
+         * simplement introuvable.
+         *
+         * La table RÉSUMÉE est proposée en premier : c'est celle sur laquelle on veut poser un
+         * critère neuf fois sur dix (« ne compter que les contrats actifs »). Les tables du milieu
+         * restent offertes, elles servent à restreindre le chemin lui-même.
+         */
+        function advRafraichirLesTablesDuCritere() {
+            const selecteur = el('adv-linkc-tbl');
+            if (!selecteur) return;
+            const tables = advTablesPourUnCritere();
+            const voulue = (el('adv-link-tbl') || {}).value;
+            const avant = selecteur.value;
+            selecteur.innerHTML = tables
+                .map(table => `<option value="${table.id}">${escapeHTML(table.name)}</option>`)
+                .join('');
+            if (tables.some(table => table.id === avant)) selecteur.value = avant;
+            else if (tables.some(table => table.id === voulue)) selecteur.value = voulue;
+            advCritereTableChangee();
         }
         /** Les colonnes proposées suivent la table choisie pour le critère. */
         function advCritereTableChangee() {
@@ -3196,12 +3232,16 @@
         function advLigneDeCritereHtml() {
             const tables = advTablesPourUnCritere();
             if (!tables.length) return '';
-            const premiere = tables[0];
+            const voulue = (el('adv-link-tbl') || {}).value;
+            const premiere = tables.find(table => table.id === voulue) || tables[0];
             return `${advCriteresEnAttenteHtml()}
                 <div class="basis-full flex items-end gap-1.5 flex-wrap border-t border-sky-100 pt-2 mt-1">
                     <span class="text-[10px] font-bold text-sky-700" title="Le critère restreint ce qui est compté, pas les lignes du fichier : une ligne sans correspondance sort avec 0 au lieu de disparaître.">⛉ Ne compter que…</span>
                     <select id="adv-linkc-tbl" onchange="advCritereTableChangee()" class="border border-sky-300 p-1.5 rounded text-[11px] bg-white">${tables
-                        .map(table => `<option value="${table.id}">${escapeHTML(table.name)}</option>`)
+                        .map(
+                            table =>
+                                `<option value="${table.id}" ${table.id === premiere.id ? 'selected' : ''}>${escapeHTML(table.name)}</option>`
+                        )
                         .join('')}</select>
                     <select id="adv-linkc-col" class="border border-sky-300 p-1.5 rounded text-[11px] bg-white">${(
                         premiere.headers || []
