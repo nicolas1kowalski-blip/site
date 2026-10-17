@@ -58,6 +58,7 @@ namespace MesPremiersJeux.Views
                     ("🖼️", "L'imagier", "PS · MS", c => new VocabGame(c)),
                     ("🧒", "Le corps", "PS · MS", c => new BodyGame(c)),
                     ("🌍", "Le tour du monde", "MS", c => new CapitalsGame(c)),
+                    ("🪐", "Les planètes", "PS · MS", c => new PlanetsGame(c)),
                 },
             },
         };

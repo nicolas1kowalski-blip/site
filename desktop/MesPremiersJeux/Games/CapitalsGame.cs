@@ -96,13 +96,25 @@ namespace MesPremiersJeux.Games
             SetConsigne(new TextBlock { Text = "✈️🌍" },
                 () => "On visite " + p.Country + " ! Regarde le drapeau, puis le monument : ils te racontent !");
 
+            var plane = new TextBlock { Text = "✈️", FontSize = 90, HorizontalAlignment = HorizontalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5) };
+            var tt = new TranslateTransform();
+            plane.RenderTransform = tt;
+            var fly = new DoubleAnimation(-40, 40, TimeSpan.FromSeconds(2.4))
+            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+            tt.BeginAnimation(TranslateTransform.XProperty, fly);
+
             bool sawFlag = false, sawMonu = false;
             void CheckDone()
             {
                 if (!sawFlag || !sawMonu) return;
                 Locked = true;
                 Speak("Direction le pays suivant ! Accroche ta ceinture !");
-                Schedule(2300, Next);
+                // L'avion décolle pour de vrai vers la droite de l'écran.
+                SoundFx.Whistle();
+                var off = new DoubleAnimation(0, 1000, TimeSpan.FromMilliseconds(1600))
+                { BeginTime = TimeSpan.FromMilliseconds(600), EasingFunction = new SineEase { EasingMode = EasingMode.EaseIn } };
+                tt.BeginAnimation(TranslateTransform.XProperty, off);
+                Schedule(2400, Next);
             }
 
             var flagBtn = AnswerButton(FlagArt.Make(p.Flag, 290), 340);
@@ -139,13 +151,6 @@ namespace MesPremiersJeux.Games
                 sawMonu = true;
                 CheckDone();
             };
-
-            var plane = new TextBlock { Text = "✈️", FontSize = 90, HorizontalAlignment = HorizontalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5) };
-            var tt = new TranslateTransform();
-            plane.RenderTransform = tt;
-            var fly = new DoubleAnimation(-40, 40, TimeSpan.FromSeconds(2.4))
-            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
-            tt.BeginAnimation(TranslateTransform.XProperty, fly);
 
             var row = Row();
             row.Children.Add(flagBtn);
