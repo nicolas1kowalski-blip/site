@@ -238,14 +238,25 @@ namespace MesPremiersJeux.Games
             Schedule(1700, () => Demo(0, andCount: _act == 2 ? 0 : -1, thenSpeakCount: _act != 2));
         }
 
+        // Chaque syllabe a SA couleur (nénuphars arc-en-ciel) et SA note de
+        // musique : scander un mot, c'est chanter une petite mélodie.
+        private static readonly (Color Bg, Color Border, Color Text)[] PadColors =
+        {
+            (Color.FromRgb(0xFF, 0x9F, 0xA8), Color.FromRgb(0xD5, 0x5A, 0x6E), Color.FromRgb(0x8A, 0x1F, 0x33)),
+            (Color.FromRgb(0xFF, 0xD9, 0x7A), Color.FromRgb(0xD9, 0xA2, 0x2C), Color.FromRgb(0x7A, 0x52, 0x0A)),
+            (Color.FromRgb(0x8F, 0xD6, 0x7A), Color.FromRgb(0x5E, 0xA8, 0x4C), Color.FromRgb(0x1F, 0x4A, 0x2A)),
+            (Color.FromRgb(0x8A, 0xC8, 0xFF), Color.FromRgb(0x4A, 0x8A, 0xC8), Color.FromRgb(0x1F, 0x3A, 0x6E)),
+        };
+
         private Border BuildPad(string syll, int k)
         {
+            var col = PadColors[k % PadColors.Length];
             var label = new TextBlock
             {
                 Text = syll.ToUpperInvariant(),
                 FontSize = 46,
                 FontWeight = FontWeights.ExtraBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x4A, 0x2A)),
+                Foreground = new SolidColorBrush(col.Text),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -263,9 +274,9 @@ namespace MesPremiersJeux.Games
             {
                 Width = 190,
                 Height = 150,
-                Background = new SolidColorBrush(Color.FromRgb(0x8F, 0xD6, 0x7A)),
+                Background = new SolidColorBrush(col.Bg),
                 CornerRadius = new CornerRadius(90),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x5E, 0xA8, 0x4C)),
+                BorderBrush = new SolidColorBrush(col.Border),
                 BorderThickness = new Thickness(6),
                 RenderTransformOrigin = new Point(0.5, 0.5),
                 Child = new Grid { Children = { label, hit } },
@@ -313,8 +324,29 @@ namespace MesPremiersJeux.Games
             ay.KeyFrames.Add(new SplineDoubleKeyFrame(py, KeyTime.FromPercent(1), new KeySpline(0.5, 0, 0.8, 1)));
             ay.Completed += (s, e) =>
             {
-                SoundFx.Drum();
+                SoundFx.Note(k); // la syllabe a SA note : le mot devient mélodie
                 if (speak) Speech.SaySlow(_cur.S[k]);
+                // Une note de musique s'envole du nénuphar.
+                var mus = new TextBlock
+                {
+                    Text = k % 2 == 0 ? "🎵" : "🎶",
+                    FontSize = 40,
+                    IsHitTestVisible = false,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                };
+                var mtt = new TranslateTransform();
+                mus.RenderTransform = mtt;
+                Canvas.SetLeft(mus, px + 60);
+                Canvas.SetTop(mus, Canvas.GetTop(pad) - 20);
+                mus.SetValue(Panel.ZIndexProperty, 65);
+                _canvas.Children.Add(mus);
+                var upn = new DoubleAnimation(0, -110, TimeSpan.FromMilliseconds(900))
+                { EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } };
+                var fdn = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(900));
+                var capturedMus = mus;
+                fdn.Completed += (s2, e2) => _canvas.Children.Remove(capturedMus);
+                mtt.BeginAnimation(TranslateTransform.YProperty, upn);
+                mus.BeginAnimation(OpacityProperty, fdn);
                 // Le nénuphar s'enfonce et rebondit.
                 var sc = (ScaleTransform)pad.RenderTransform;
                 var dip = new DoubleAnimation(1, 0.86, TimeSpan.FromMilliseconds(160))

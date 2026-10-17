@@ -252,6 +252,33 @@ namespace MesPremiersJeux.Lib
         public static void PopSound()
             => Play("pop", () => Glide(420, 180, 0.1, 0.5));
 
+        /// <summary>Une note de musique douce et chantante (gamme pentatonique,
+        /// degré 0..5) AVEC un petit coup de tambour dessous — la mélodie
+        /// scandée des syllabes, en un seul son.</summary>
+        public static void Note(int degree)
+        {
+            int d = ((degree % 6) + 6) % 6;
+            Play("note-" + d, () =>
+            {
+                var buf = new List<float>();
+                AddNote(buf, Scale[d], 0.3, 0.45);
+                var s = buf.ToArray();
+                // Le tambour, mélangé au début de la note.
+                var rng = new Random(11);
+                double lp = 0;
+                int dn = Math.Min(s.Length, (int)(Rate * 0.2));
+                for (int i = 0; i < dn; i++)
+                {
+                    double t = i / (double)dn;
+                    double tone = Math.Sin(2 * Math.PI * (130 - 40 * t) * i / Rate) * Math.Exp(-9 * t);
+                    double noise = rng.NextDouble() * 2 - 1;
+                    lp += 0.25 * (noise - lp);
+                    s[i] = (float)Math.Max(-1, Math.Min(1, s[i] + (tone + lp * 0.25 * Math.Exp(-18 * t)) * 0.55));
+                }
+                return s;
+            });
+        }
+
         /// <summary>Coup de tambour rond et doux — pour SCANDER les syllabes.</summary>
         public static void Drum()
         {

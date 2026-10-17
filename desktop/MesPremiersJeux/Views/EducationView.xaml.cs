@@ -49,7 +49,7 @@ namespace MesPremiersJeux.Views
             },
             new Theme
             {
-                Icon = "🌍", Name = "Découvrir", Tint = Color.FromRgb(0xEA, 0xF8, 0xEE),
+                Icon = "🌱", Name = "Découvrir", Tint = Color.FromRgb(0xEA, 0xF8, 0xEE),
                 Activities = new (string, string, string, Func<Action, UserControl>)[]
                 {
                     ("🎨", "Couleurs magiques", "PS · MS", c => new ColorMagicGame(c)),
@@ -57,8 +57,18 @@ namespace MesPremiersJeux.Views
                     ("🟡", "Les suites", "MS", c => new PatternGame(c)),
                     ("🖼️", "L'imagier", "PS · MS", c => new VocabGame(c)),
                     ("🧒", "Le corps", "PS · MS", c => new BodyGame(c)),
+                },
+            },
+            new Theme
+            {
+                Icon = "🚀", Name = "Le monde et l'espace", Tint = Color.FromRgb(0xF1, 0xE6, 0xFF),
+                Activities = new (string, string, string, Func<Action, UserControl>)[]
+                {
                     ("🌍", "Le tour du monde", "MS", c => new CapitalsGame(c)),
+                    ("🧳", "La valise du voyageur", "PS · MS", c => new SuitcaseGame(c)),
+                    ("🍽️", "Les bons plats", "PS · MS", c => new FoodGame(c)),
                     ("🪐", "Les planètes", "PS · MS", c => new PlanetsGame(c)),
+                    ("🌙", "Jour et nuit", "PS · MS", c => new DayNightGame(c)),
                 },
             },
         };
