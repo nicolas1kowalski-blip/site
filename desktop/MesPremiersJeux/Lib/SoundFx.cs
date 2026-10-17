@@ -252,6 +252,27 @@ namespace MesPremiersJeux.Lib
         public static void PopSound()
             => Play("pop", () => Glide(420, 180, 0.1, 0.5));
 
+        /// <summary>Coup de tambour rond et doux — pour SCANDER les syllabes.</summary>
+        public static void Drum()
+        {
+            Play("drum", () =>
+            {
+                var rng = new Random(11);
+                int n = (int)(Rate * 0.22);
+                var s = new float[n];
+                double lp = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    double t = i / (double)n;
+                    double tone = Math.Sin(2 * Math.PI * (130 - 40 * t) * i / Rate) * Math.Exp(-9 * t);
+                    double noise = rng.NextDouble() * 2 - 1;
+                    lp += 0.25 * (noise - lp);
+                    s[i] = (float)((tone + lp * 0.25 * Math.Exp(-18 * t)) * 0.8);
+                }
+                return s;
+            });
+        }
+
         // ------------------------------------------------------------------
         //  Fabrique d'ondes
         // ------------------------------------------------------------------

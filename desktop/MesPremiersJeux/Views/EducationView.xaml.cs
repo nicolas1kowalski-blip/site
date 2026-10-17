@@ -34,6 +34,7 @@ namespace MesPremiersJeux.Views
                     ("💖", "Mon prénom", "PS · MS", c => new NameGame(c)),
                     ("🔤", "Les lettres", "PS · MS", c => new LettersGame(c)),
                     ("📖", "L'abécédaire", "PS · MS", c => new AlphabetBookGame(c)),
+                    ("🥁", "Les syllabes", "MS", c => new SyllableGame(c)),
                     ("✍️", "J'écris !", "MS", c => new EyeWriteGame(c)),
                 },
             },
@@ -56,6 +57,7 @@ namespace MesPremiersJeux.Views
                     ("🟡", "Les suites", "MS", c => new PatternGame(c)),
                     ("🖼️", "L'imagier", "PS · MS", c => new VocabGame(c)),
                     ("🧒", "Le corps", "PS · MS", c => new BodyGame(c)),
+                    ("🌍", "Le tour du monde", "MS", c => new CapitalsGame(c)),
                 },
             },
         };

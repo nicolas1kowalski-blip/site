@@ -141,6 +141,12 @@ namespace MesPremiersJeux.Lib
                     "  style cartoon, sans oiseaux », format paysage 16:9)\r\n" +
                     "  decor-tartes.png    (les tartes à la crème — ex. « chapiteau de\r\n" +
                     "  cirque vu de l'intérieur, gai et coloré », format paysage 16:9)\r\n\r\n" +
+                    "Le tour du monde (PHOTOS des monuments — remplacent les emojis) :\r\n" +
+                    "  lieu-france.png      (tour Eiffel)      lieu-angleterre.png (Big Ben)\r\n" +
+                    "  lieu-italie.png      (Colisée)          lieu-egypte.png     (pyramides)\r\n" +
+                    "  lieu-russie.png      (Kremlin)          lieu-chine.png      (Cité interdite)\r\n" +
+                    "  lieu-japon.png       (torii rouge)      lieu-amerique.png   (statue de la Liberté)\r\n" +
+                    "  (photos libres : commons.wikimedia.org, pexels.com, pixabay.com)\r\n\r\n" +
                     "D'autres noms seront ajoutés au fil des jeux (ce fichier est recréé\r\n" +
                     "s'il est supprimé, avec la liste à jour).\r\n");
             }
