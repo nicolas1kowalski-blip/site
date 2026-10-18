@@ -31,6 +31,7 @@ namespace MesPremiersJeux.Lib
         public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
         public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
         public bool CommButton = true;   // bouton « Parler » (grille de communication) toujours visible
+        public string StreamEngine = ""; // moteur Tobii direct qui a déjà marché : streamT (tablette) | stream (application)
         public bool AutoDwell = true;    // temps de fixation ajusté tout seul selon le jeu de l'enfant
 
         private static string Dir =>
@@ -71,6 +72,7 @@ namespace MesPremiersJeux.Lib
                         case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
                         case "CommButton": s.CommButton = val != "0"; break;
                         case "AutoDwell": s.AutoDwell = val != "0"; break;
+                        case "StreamEngine": s.StreamEngine = val; break;
                     }
                 }
             }
@@ -108,6 +110,7 @@ namespace MesPremiersJeux.Lib
                     "ContentDir=" + (ContentDir ?? ""),
                     "CommButton=" + (CommButton ? "1" : "0"),
                     "AutoDwell=" + (AutoDwell ? "1" : "0"),
+                    "StreamEngine=" + (StreamEngine ?? ""),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

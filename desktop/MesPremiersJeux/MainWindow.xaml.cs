@@ -41,7 +41,11 @@ namespace MesPremiersJeux
                 TopBar.Visibility = Chrome.Immersive ? Visibility.Collapsed : Visibility.Visible);
             BuildViews();
             Loaded += OnLoaded;
-            Closed += (s, e) => StopGazeSources();
+            Closed += (s, e) =>
+            {
+                try { System.IO.File.Delete(CrashFlag); } catch { } // fermeture normale : pas un plantage
+                StopGazeSources();
+            };
         }
 
         private void BuildViews()
@@ -344,17 +348,22 @@ namespace MesPremiersJeux
             if (string.IsNullOrWhiteSpace(driver)) driver = "auto";
             _dwell.PreferCursor = driver == "curseur";
             Lib.Log.Write("app", "Pilote du regard : " + driver);
+            CheckStreamCrash();
 
             try
             {
                 switch (driver)
                 {
                     case "direct":
-                        StartChain(Engines("consumer", "stream", "streamT", "pro")); // secours si la tablette ne répond pas
+                        StartChain(Engines("consumer", FirstStream(), SecondStream(), "pro")); // secours si la tablette ne répond pas
                         break;
 
                     case "stream":
-                        StartChain(Engines("stream", "streamT", "pro"));
+                        StartChain(Engines(FirstStream(), SecondStream(), "pro"));
+                        break;
+
+                    case "streamA": // le moteur fourni avec l'application, seul
+                        StartChain(Engines("stream", "pro"));
                         break;
 
                     case "pro":
@@ -369,7 +378,7 @@ namespace MesPremiersJeux
                         break;
 
                     default: // auto
-                        StartChain(Engines("pro", "consumer", "stream", "streamT"));
+                        StartChain(Engines("pro", "consumer", FirstStream(), SecondStream()));
                         break;
                 }
             }
@@ -414,6 +423,12 @@ namespace MesPremiersJeux
                     w.Stop();
                     _fallbackWatch = null;
                     Lib.Log.Write("app", "Regard direct confirmé : " + Label(order[i]) + " (" + Diag(order[i]) + ")");
+                    // On retient le moteur Tobii direct qui marche : essayé en premier la prochaine fois.
+                    if (order[i].StartsWith("stream") && _settings != null && _settings.StreamEngine != order[i])
+                    {
+                        _settings.StreamEngine = order[i];
+                        _settings.Save();
+                    }
                     return;
                 }
                 // Un flux VIVANT mais encore sans point valide (personne devant la
@@ -422,11 +437,12 @@ namespace MesPremiersJeux
                 double limit = alive ? 30.0 : 6.0;
                 if ((DateTime.UtcNow - t0).TotalSeconds < limit) return;
 
-                // Un Stream Engine VIVANT sans autre Stream Engine à essayer après
-                // lui : on le GARDE (il attend simplement que l'enfant regarde) ;
-                // en attendant, le curseur prend le relais tout seul.
-                bool nextIsStream = i + 1 < order.Length && order[i + 1].StartsWith("stream");
-                if (alive && !nextIsStream)
+                // Un Stream Engine VIVANT (il envoie des échantillons, simplement
+                // personne n'est encore vu) : on le GARDE TOUJOURS. Changer de
+                // moteur Tobii en cours de route faisait FERMER l'application
+                // (deux moteurs natifs dans le même programme). En attendant le
+                // regard, le curseur prend le relais tout seul.
+                if (alive)
                 {
                     w.Stop();
                     _fallbackWatch = null;
@@ -454,6 +470,11 @@ namespace MesPremiersJeux
 
         // « streamT » = le Stream Engine INSTALLÉ sur la tablette (plus récent) ;
         // retiré de la liste s'il n'y en a pas.
+        // Ordre des deux moteurs Tobii directs : celui qui a déjà marché d'abord,
+        // sinon celui de la TABLETTE (récent, comme le logiciel Tobii installé).
+        private string FirstStream() => _settings?.StreamEngine == "stream" || TabletEngine() == null ? "stream" : "streamT";
+        private string SecondStream() => FirstStream() == "stream" ? "streamT" : "stream";
+
         private string[] Engines(params string[] keys) =>
             keys.Where(k => k != "streamT" || TabletEngine() != null).ToArray();
 
@@ -470,10 +491,43 @@ namespace MesPremiersJeux
             return _tabletEngine;
         }
 
+        // GARDE-FOU : si l'application s'est fermée pendant le démarrage d'un
+        // moteur Tobii direct, la prochaine fois on prend l'autre moteur.
+        private static string CrashFlag => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux", "moteur-en-cours.txt");
+
+        private void CheckStreamCrash()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(CrashFlag)) return;
+                var k = System.IO.File.ReadAllText(CrashFlag).Trim();
+                System.IO.File.Delete(CrashFlag);
+                if (!k.StartsWith("stream") || _settings == null) return;
+                _settings.StreamEngine = k == "stream" ? "streamT" : "stream";
+                _settings.Save();
+                Lib.Log.Write("app", "La dernière fois, l'application s'est fermée au démarrage de " + Label(k) +
+                                     " : on essaie d'abord " + Label(_settings.StreamEngine));
+            }
+            catch { }
+        }
+
         private void StartOne(string k)
         {
             try
             {
+                if (k.StartsWith("stream"))
+                {
+                    try
+                    {
+                        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(CrashFlag));
+                        System.IO.File.WriteAllText(CrashFlag, k);
+                    }
+                    catch { }
+                    var clear = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+                    clear.Tick += (s, e) => { clear.Stop(); try { System.IO.File.Delete(CrashFlag); } catch { } };
+                    clear.Start();
+                }
                 if (k == "consumer") { _gaze = NewConsumer(); _gaze.Start(); }
                 else if (k == "streamT") { _stream = NewStream(TabletEngine()); _stream.Start(); }
                 else if (k == "stream") { _stream = NewStream(); _stream.Start(); }

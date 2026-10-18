@@ -93,6 +93,7 @@
                         <ComboBoxItem Tag="auto" Content="🤖 Auto — direct si possible, sinon repli" />
                         <ComboBoxItem Tag="direct" Content="👁 Regard direct (Tobii Experience)" />
                         <ComboBoxItem Tag="stream" Content="⚡ Moteur Tobii direct (comme Grid 3)" />
+                        <ComboBoxItem Tag="streamA" Content="⚡ Moteur Tobii direct — version de l'application" />
                         <ComboBoxItem Tag="pro" Content="🔬 Pro SDK (Tobii.Research)" />
                         <ComboBoxItem Tag="curseur" Content="🖱 Curseur (TD Control — tout appareil)" />
                     </ComboBox>
