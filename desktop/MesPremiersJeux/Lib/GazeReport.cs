@@ -96,7 +96,7 @@ namespace MesPremiersJeux.Lib
             return res.ToList();
         }
 
-        private static List<string> RunningTobii()
+        public static List<string> RunningTobii()
         {
             var res = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             try

@@ -447,6 +447,13 @@ namespace MesPremiersJeux
                     w.Stop();
                     _fallbackWatch = null;
                     Lib.Log.Write("app", "On garde " + Label(order[i]) + " : flux vivant, en attente d'un regard (" + Diag(order[i]) + ")");
+                    try { Lib.Log.Write("app", "Programmes Tobii en marche : " + string.Join(", ", Lib.GazeReport.RunningTobii())); } catch { }
+                    if (_stream != null && !_stream.HasGaze)
+                        ShowParentNotice("👀 La caméra Tobii marche mais ne voit pas les yeux.\n" +
+                                         "• Quelqu'un est-il bien en face, à 50–70 cm ?\n" +
+                                         "• Un calibrage Tobii est-il resté ouvert derrière ? (le fermer)\n" +
+                                         "• Le suivi est-il en pause dans le logiciel Tobii (icône près de l'horloge) ?\n" +
+                                         "• Sinon : redémarrer la tablette.");
                     return;
                 }
 
@@ -845,9 +852,10 @@ namespace MesPremiersJeux
         private void LaunchTool(Lib.TobiiTools.Tool tool)
         {
             Lib.Log.Write("calib", "Lancement : " + tool.Path);
+            System.Diagnostics.Process proc = null;
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tool.Path)
+                proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tool.Path)
                 {
                     UseShellExecute = true,
                     WorkingDirectory = System.IO.Path.GetDirectoryName(tool.Path),
@@ -868,14 +876,26 @@ namespace MesPremiersJeux
             Topmost = false;
             var since = DateTime.Now;
             var watch = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            bool resumed = false;
             watch.Tick += (s, e) =>
             {
                 double sec = (DateTime.Now - since).TotalSeconds;
-                if (sec < 8 || (!IsActive && sec < 180)) return;
-                watch.Stop();
-                Topmost = _isFullscreen;
-                GazeGate.Pop();
-                Lib.Log.Write("calib", "Retour dans l'application : regard réactivé");
+                if (!resumed && sec >= 8 && (IsActive || sec >= 180))
+                {
+                    resumed = true;
+                    GazeGate.Pop();
+                    Lib.Log.Write("calib", "Retour dans l'application : regard réactivé");
+                }
+                // Tant que l'outil Tobii est ouvert, on ne repasse PAS par-dessus :
+                // un calibrage resté ouvert caché derrière bloque la caméra.
+                bool toolOpen = false;
+                try { toolOpen = proc != null && !proc.HasExited; } catch { }
+                if (resumed && !toolOpen)
+                {
+                    watch.Stop();
+                    Topmost = _isFullscreen;
+                    Lib.Log.Write("calib", "Outil Tobii fermé : application de nouveau au premier plan");
+                }
             };
             watch.Start();
         }
