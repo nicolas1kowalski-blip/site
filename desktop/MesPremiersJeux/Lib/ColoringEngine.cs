@@ -26,6 +26,10 @@ namespace MesPremiersJeux.Lib
 
         // --- Remplissage par diffusion (scanline) sur un tampon BGRA (Pbgra32) ---
         // On ne remplit pas si le pixel de départ est un trait (sombre).
+        // La ZONE à remplir est délimitée par les TRAITS du dessin (pixels
+        // sombres), pas par la couleur actuelle : on peut donc repeindre d'un
+        // coup une zone déjà coloriée en arc-en-ciel, à paillettes, etc. —
+        // et les liserés gris d'anticrénelage sont repeints aussi (plus net).
         public static int FloodFill(byte[] data, int w, int h, int sx, int sy, Func<int, int, Rgb> filler, int tol = 62)
         {
             if (sx < 0 || sy < 0 || sx >= w || sy >= h) return 0;
@@ -33,11 +37,10 @@ namespace MesPremiersJeux.Lib
             byte sb = data[si], sg = data[si + 1], sr = data[si + 2];
             if (0.299 * sr + 0.587 * sg + 0.114 * sb < 95) return 0; // trait
 
-            int t2 = tol * tol;
             bool Matches(int i)
             {
-                int dr = data[i + 2] - sr, dg = data[i + 1] - sg, db = data[i] - sb;
-                return dr * dr + dg * dg + db * db <= t2;
+                // Appartient à la zone = n'est PAS un trait du dessin.
+                return 0.299 * data[i + 2] + 0.587 * data[i + 1] + 0.114 * data[i] >= 95;
             }
 
             var seen = new bool[w * h];

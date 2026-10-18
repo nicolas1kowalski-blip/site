@@ -193,7 +193,9 @@ namespace MesPremiersJeux.Games
             note.Opacity = 1;
 
             // Le lecteur de CET oiseau (indépendant → vraie polyphonie), qui
-            // reboucle sans fin jusqu'à ce qu'on l'arrête.
+            // reboucle sans fin jusqu'à ce qu'on l'arrête. Un VRAI chant
+            // d'oiseau déposé par le parent (Contenu\Sons\oiseau-N.wav ou .mp3)
+            // remplace le chant synthétisé.
             try
             {
                 var p = _players[idx];
@@ -203,7 +205,7 @@ namespace MesPremiersJeux.Games
                     p.MediaEnded += (s, e) => { p.Position = TimeSpan.Zero; p.Play(); };
                     _players[idx] = p;
                 }
-                p.Open(new Uri(SoundFx.BirdLoopFile(idx)));
+                p.Open(new Uri(UserBirdSound(idx) ?? SoundFx.BirdLoopFile(idx)));
                 p.Play();
             }
             catch { }
@@ -239,6 +241,21 @@ namespace MesPremiersJeux.Games
             Speak("Tous les oiseaux chantent ensemble ! Quel orchestre ! Bravo !");
             GameKit.Success();
             Celebrate();
+        }
+
+        // Un vrai chant d'oiseau déposé par le parent ? (wav ou mp3)
+        private static string UserBirdSound(int idx)
+        {
+            try
+            {
+                foreach (var ext in new[] { ".wav", ".mp3" })
+                {
+                    var path = System.IO.Path.Combine(UserContent.RootDir, "Sons", "oiseau-" + (idx + 1) + ext);
+                    if (System.IO.File.Exists(path)) return path;
+                }
+            }
+            catch { }
+            return null;
         }
 
         private void StopBird(int idx, ContentControl body, FrameworkElement closed, TextBlock note)

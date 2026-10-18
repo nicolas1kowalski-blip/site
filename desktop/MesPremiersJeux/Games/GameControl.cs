@@ -73,6 +73,41 @@ namespace MesPremiersJeux.Games
             Grid.SetRow(Body, 2);
             root.Children.Add(Body);
 
+            // LA TIRELIRE D'ÉTOILES, visible pendant le jeu (en haut à droite) :
+            // à chaque réussite, une étoile VOLE dedans et le compteur saute.
+            _jarText = new TextBlock
+            {
+                Text = "⭐ " + RewardStore.Balance,
+                FontSize = 24,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x52, 0x0A)),
+            };
+            _jar = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(230, 0xFF, 0xF2, 0xC4)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)),
+                BorderThickness = new Thickness(4),
+                CornerRadius = new CornerRadius(20),
+                Padding = new Thickness(14, 6, 14, 6),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 8, 14, 0),
+                IsHitTestVisible = false,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                Child = _jarText,
+            };
+            _jar.RenderTransform = new ScaleTransform(1, 1);
+            Grid.SetRowSpan(_jar, 3);
+            root.Children.Add(_jar);
+
+            _fxLayer = new Canvas { IsHitTestVisible = false };
+            Grid.SetRowSpan(_fxLayer, 3);
+            root.Children.Add(_fxLayer);
+
+            _onStars = () => Dispatcher.Invoke(() => _jarText.Text = "⭐ " + RewardStore.Balance);
+            RewardStore.Changed += _onStars;
+            Unloaded += (s, e) => RewardStore.Changed -= _onStars;
+
             Content = root;
             Loaded += (s, e) =>
             {
@@ -89,6 +124,48 @@ namespace MesPremiersJeux.Games
 
         private bool _started;
         private StackPanel _consigne;
+        private Border _jar;
+        private TextBlock _jarText;
+        private Canvas _fxLayer;
+        private Action _onStars;
+
+        // L'étoile gagnée VOLE du centre de l'écran jusqu'à la tirelire.
+        private void FlyStarToJar()
+        {
+            try
+            {
+                double w = ActualWidth, h = ActualHeight;
+                if (w < 100 || h < 100) return;
+                var star = new TextBlock { Text = "⭐", FontSize = 64, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
+                Canvas.SetLeft(star, w / 2 - 32);
+                Canvas.SetTop(star, h / 2 - 32);
+                _fxLayer.Children.Add(star);
+                double tx = w - 90, ty = 18;
+                var ax = new DoubleAnimation(w / 2 - 32, tx, TimeSpan.FromMilliseconds(750))
+                { EasingFunction = new SineEase { EasingMode = EasingMode.EaseIn } };
+                var ay = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(750) };
+                ay.KeyFrames.Add(new SplineDoubleKeyFrame(h / 2 - 170, KeyTime.FromPercent(0.4), new KeySpline(0.2, 0.8, 0.4, 1)));
+                ay.KeyFrames.Add(new SplineDoubleKeyFrame(ty, KeyTime.FromPercent(1), new KeySpline(0.5, 0, 0.8, 1)));
+                var sc = new ScaleTransform(1, 1);
+                star.RenderTransform = sc;
+                var shrink = new DoubleAnimation(1.3, 0.5, TimeSpan.FromMilliseconds(750));
+                ay.Completed += (s, e) =>
+                {
+                    _fxLayer.Children.Remove(star);
+                    // La tirelire saute de joie.
+                    var jsc = (ScaleTransform)_jar.RenderTransform;
+                    var bump = new DoubleAnimation(1, 1.25, TimeSpan.FromMilliseconds(180))
+                    { AutoReverse = true, EasingFunction = new SineEase() };
+                    jsc.BeginAnimation(ScaleTransform.ScaleXProperty, bump);
+                    jsc.BeginAnimation(ScaleTransform.ScaleYProperty, bump);
+                };
+                star.BeginAnimation(Canvas.LeftProperty, ax);
+                star.BeginAnimation(Canvas.TopProperty, ay);
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+            }
+            catch { }
+        }
 
         /// <summary>
         /// Remplit la barre de consigne accessible : un MODÈLE montré en grand
@@ -163,6 +240,7 @@ namespace MesPremiersJeux.Games
         protected void Celebrate()
         {
             RewardStore.Add(); // chaque réussite gagne une étoile ⭐
+            FlyStarToJar();    // ... qui VOLE dans la tirelire, sous ses yeux
             // La voix de PAPA/MAMAN dit bravo (si enregistrée dans les
             // réglages) — une fois sur trois, pour garder l'effet de surprise ;
             // la synthèse attend la fin avant de reprendre.

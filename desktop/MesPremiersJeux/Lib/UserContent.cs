@@ -358,6 +358,12 @@ namespace MesPremiersJeux.Lib
                     "  pop.wav       (apparitions, rebonds)\r\n" +
                     "  tambour.wav   (les syllabes scandées)\r\n" +
                     "  siffle.wav    (la fusée qui monte)\r\n\r\n" +
+                    "VRAIS CHANTS D'OISEAUX (jeu « Les oiseaux chanteurs ») :\r\n" +
+                    "  oiseau-1.wav ... oiseau-6.wav   (ou .mp3) — le chant de chaque\r\n" +
+                    "  oiseau en boucle, à la place du chant synthétisé.\r\n" +
+                    "  1 turquoise · 2 perroquet rouge · 3 petit vert · 4 gros violet ·\r\n" +
+                    "  5 toucan · 6 corbeau. Vrais chants gratuits : xeno-canto.org\r\n" +
+                    "  (des milliers d'enregistrements), ou freesound.org.\r\n\r\n" +
                     "Où trouver des sons gratuits ? freesound.org (filtrer licence CC0),\r\n" +
                     "ou kenney.nl (packs « Audio »). Format WAV conseillé ; sons courts\r\n" +
                     "(moins de 2 secondes), pas trop forts.\r\n");

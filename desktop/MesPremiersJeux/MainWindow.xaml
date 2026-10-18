@@ -28,6 +28,10 @@
                         <Button x:Name="SettingsBtn" Style="{StaticResource TabButton}"
                                 Content="⚙" FontSize="26" MinWidth="60" Margin="6,0" Click="Settings_Click" />
                     </StackPanel>
+                    <!-- Les onglets se RÉDUISENT si la place manque (Viewbox) :
+                         « Musique » ne peut plus disparaître hors de l'écran. -->
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
+                             HorizontalAlignment="Left" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                         <Button x:Name="TabStories" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="stories">
                             <StackPanel Orientation="Horizontal">
@@ -55,6 +59,7 @@
                             </StackPanel>
                         </Button>
                     </StackPanel>
+                    </Viewbox>
                 </DockPanel>
             </Border>
 
