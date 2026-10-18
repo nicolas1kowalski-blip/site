@@ -15,6 +15,7 @@ namespace MesPremiersJeux
         // PILOTE choisi dans les réglages (auto / direct / pro / curseur).
         private GazeService _gaze;
         private ProGazeSource _pro;
+        private StreamEngineSource _stream; // moteur bas niveau (comme Grid 3)
         private System.Windows.Threading.DispatcherTimer _fallbackWatch;
         private string _srcName = "Regard";
         private int _clicks;
@@ -347,14 +348,15 @@ namespace MesPremiersJeux
                 switch (driver)
                 {
                     case "direct":
-                        _gaze = NewConsumer();
-                        _gaze.Start();
-                        StartDirectWatch(); // secours si cette tablette ne répond pas
+                        StartChain("consumer", "stream", "pro"); // secours si la tablette ne répond pas
+                        break;
+
+                    case "stream":
+                        StartChain("stream", "pro");
                         break;
 
                     case "pro":
-                        _pro = NewPro();
-                        _pro.Start();
+                        StartChain("pro");
                         break;
 
                     case "curseur":
@@ -365,9 +367,7 @@ namespace MesPremiersJeux
                         break;
 
                     default: // auto
-                        _pro = NewPro();
-                        _pro.Start();
-                        StartConsumerFallbackWatch();
+                        StartChain("pro", "consumer", "stream");
                         break;
                 }
             }
@@ -383,123 +383,106 @@ namespace MesPremiersJeux
             _fallbackWatch = null;
             try { _gaze?.Dispose(); } catch { }
             try { _pro?.Dispose(); } catch { }
+            try { _stream?.Dispose(); } catch { }
             _gaze = null;
             _pro = null;
+            _stream = null;
         }
 
         /// <summary>
-        /// Mode AUTO : on laisse au Pro SDK sa chance d'ouvrir SEUL le flux de
-        /// regard direct. S'il n'a rien donné après ~6 s, on réveille le SDK
-        /// grand public en repli (comportement historique de la I-13).
+        /// Essaie les moteurs de regard l'un après l'autre (6 s chacun) jusqu'à
+        /// en trouver un qui ENVOIE vraiment des points : « consumer » (SDK grand
+        /// public, I-13), « stream » (Stream Engine, comme Grid 3, ex. PCEye 5),
+        /// « pro » (Pro SDK). Le Pro SDK, s'il tourne, reste allumé (il donne la
+        /// présence des yeux). Si aucun ne répond : on suit le curseur.
         /// </summary>
-        private void StartConsumerFallbackWatch()
+        private void StartChain(params string[] order)
         {
+            int i = 0;
             var t0 = DateTime.UtcNow;
+            StartOne(order[0]);
             var w = new System.Windows.Threading.DispatcherTimer
             { Interval = TimeSpan.FromMilliseconds(600) };
             _fallbackWatch = w;
             w.Tick += (s, e) =>
             {
                 if (!ReferenceEquals(_fallbackWatch, w)) { w.Stop(); return; } // pilote changé
-
-                if (_pro?.HasGaze == true)
+                if (HasGaze(order[i]))
                 {
                     w.Stop();
                     _fallbackWatch = null;
-                    Lib.Log.Write("app", $"Regard direct du Pro SDK confirmé ({_pro.Stats}) — SDK grand public NON démarré (pas de concurrence)");
-                    return;
-                }
-
-                if (_gaze == null && (DateTime.UtcNow - t0).TotalSeconds >= 6.0)
-                {
-                    Lib.Log.Write("app", $"Pas de regard direct du Pro SDK après 6 s ({_pro?.Stats ?? "—"}) — démarrage du SDK grand public (repli)");
-                    try
-                    {
-                        _gaze = NewConsumer();
-                        _gaze.Start();
-                    }
-                    catch (Exception ex) { Lib.Log.Write("app", "Repli grand public : " + ex.Message); }
-                    t0 = DateTime.UtcNow; // on laisse 6 s au repli
-                    return;
-                }
-
-                // Le repli grand public non plus ne donne rien : on suit le curseur.
-                if (_gaze != null)
-                {
-                    if (_gaze.Samples > 0)
-                    {
-                        w.Stop();
-                        _fallbackWatch = null;
-                        Lib.Log.Write("app", "Regard direct confirmé (SDK grand public, repli)");
-                        return;
-                    }
-                    if ((DateTime.UtcNow - t0).TotalSeconds >= 6.0)
-                    {
-                        w.Stop();
-                        _fallbackWatch = null;
-                        NoDirectGaze();
-                    }
-                }
-            };
-            w.Start();
-        }
-
-        /// <summary>
-        /// Mode « Regard direct » : si le SDK grand public ne donne AUCUN point
-        /// en 6 s (cas de certaines tablettes, ex. PCEye 5), on essaie le Pro
-        /// SDK, puis on suit le curseur — avec un message clair pour le parent
-        /// et un diagnostic précis dans le journal.
-        /// </summary>
-        private void StartDirectWatch()
-        {
-            var t0 = DateTime.UtcNow;
-            bool triedPro = false;
-            var w = new System.Windows.Threading.DispatcherTimer
-            { Interval = TimeSpan.FromMilliseconds(600) };
-            _fallbackWatch = w;
-            w.Tick += (s, e) =>
-            {
-                if (!ReferenceEquals(_fallbackWatch, w)) { w.Stop(); return; } // pilote changé
-                if ((_gaze?.Samples ?? 0) > 0 || _pro?.HasGaze == true)
-                {
-                    w.Stop();
-                    _fallbackWatch = null;
-                    Lib.Log.Write("app", _pro?.HasGaze == true
-                        ? $"Regard direct obtenu par le Pro SDK (secours) : {_pro.Stats}"
-                        : "Regard direct confirmé (SDK grand public)");
+                    Lib.Log.Write("app", "Regard direct confirmé : " + Label(order[i]) + " (" + Diag(order[i]) + ")");
                     return;
                 }
                 if ((DateTime.UtcNow - t0).TotalSeconds < 6.0) return;
 
-                if (!triedPro)
+                Lib.Log.Write("app", "Pas de regard par " + Label(order[i]) + " en 6 s — " + Diag(order[i]));
+                if (order[i] == "consumer") { try { _gaze?.Dispose(); } catch { } _gaze = null; }
+                if (order[i] == "stream") { try { _stream?.Dispose(); } catch { } _stream = null; }
+                i++;
+                t0 = DateTime.UtcNow;
+                if (i >= order.Length)
                 {
-                    triedPro = true;
-                    t0 = DateTime.UtcNow;
-                    long eyes = _gaze?.EyeSamples ?? 0;
-                    Lib.Log.Write("app", "Regard direct : AUCUN point du SDK grand public en 6 s (positions des yeux reçues : " + eyes + ") — " +
-                        (eyes > 0
-                            ? "les yeux sont vus mais pas le regard : l'ÉCRAN n'est sans doute pas configuré dans le logiciel Tobii de la tablette"
-                            : "rien du tout : moteur Tobii « Interaction » absent, arrêté ou incompatible sur cette tablette") +
-                        " — essai du Pro SDK");
-                    try { _gaze?.Dispose(); } catch { }
-                    _gaze = null;
-                    try { _pro = NewPro(); _pro.Start(); }
-                    catch (Exception ex) { Lib.Log.Write("app", "Pro SDK (secours) : " + ex.Message); }
+                    w.Stop();
+                    _fallbackWatch = null;
+                    NoDirectGaze();
                     return;
                 }
-
-                w.Stop();
-                _fallbackWatch = null;
-                NoDirectGaze();
+                Lib.Log.Write("app", "Essai suivant : " + Label(order[i]));
+                StartOne(order[i]);
             };
             w.Start();
+        }
+
+        private void StartOne(string k)
+        {
+            try
+            {
+                if (k == "consumer") { _gaze = NewConsumer(); _gaze.Start(); }
+                else if (k == "stream") { _stream = NewStream(); _stream.Start(); }
+                else if (_pro == null) { _pro = NewPro(); _pro.Start(); }
+            }
+            catch (Exception ex) { Lib.Log.Write("app", "Démarrage " + Label(k) + " : " + ex.Message); }
+        }
+
+        private bool HasGaze(string k) =>
+            k == "consumer" ? (_gaze?.Samples ?? 0) > 0
+            : k == "stream" ? _stream?.HasGaze == true
+            : _pro?.HasGaze == true;
+
+        private static string Label(string k) =>
+            k == "consumer" ? "SDK grand public (Tobii.Interaction)"
+            : k == "stream" ? "Stream Engine (comme Grid 3)"
+            : "Pro SDK (Tobii.Research)";
+
+        private string Diag(string k)
+        {
+            if (k == "consumer")
+            {
+                long eyes = _gaze?.EyeSamples ?? 0;
+                return "points " + (_gaze?.Samples ?? 0) + ", positions des yeux " + eyes +
+                       ((_gaze?.Samples ?? 0) == 0
+                           ? (eyes > 0 ? " — yeux vus mais pas le regard (écran non configuré dans le logiciel Tobii ?)"
+                                       : " — rien du tout (moteur Tobii « Interaction » absent ou incompatible)")
+                           : "");
+            }
+            if (k == "stream") return (_stream?.Status ?? "—") + ", points " + (_stream?.Stats ?? "—");
+            return "points " + (_pro?.Stats ?? "—") + ", guide " + (_pro?.GuideEvents ?? 0);
+        }
+
+        private StreamEngineSource NewStream()
+        {
+            var st = new StreamEngineSource();
+            st.Gaze += p => _dwell.PushGaze(p);
+            st.Presence += v => _dwell.PushEye(v);
+            return st;
         }
 
         // Aucun regard direct : l'application suit le curseur Windows (déplacé
         // par TD Control / Computer Control) et le dit clairement au parent.
         private void NoDirectGaze()
         {
-            Lib.Log.Write("app", $"Ni le SDK grand public ni le Pro SDK ne donnent le regard ({_pro?.Stats ?? "—"}) : on suit le CURSEUR");
+            Lib.Log.Write("app", "Aucun moteur Tobii ne donne le regard : on suit le CURSEUR");
             ShowParentNotice("👁 Le regard direct ne répond pas sur cette tablette : l'application suit le curseur.\n" +
                              "Activez le contrôle de l'ordinateur au regard (TD Control / Computer Control) en mode « souris », " +
                              "SANS clic automatique — l'application fait elle-même la sélection. (Réglages ⚙ → pilote « Curseur »)");
@@ -573,7 +556,7 @@ namespace MesPremiersJeux
             SettingsPopup.IsOpen = false;
             string driver = string.IsNullOrWhiteSpace(_settings?.GazeDriver) ? "auto" : _settings.GazeDriver;
             string before = _dwell.ActiveSource;
-            ShowParentNotice("🔎 Test du regard (15 s) : regarde l'écran tranquillement, sans bouger…");
+            ShowParentNotice("🔎 Test du regard (20 s) : regarde l'écran tranquillement, sans bouger…");
             StopGazeSources();
             var consumer = NewConsumer();
             try { consumer.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test grand public : " + ex.Message); }
@@ -584,24 +567,35 @@ namespace MesPremiersJeux
                 long cg = consumer.Samples, ce = consumer.EyeSamples;
                 try { consumer.Dispose(); } catch { }
                 _gaze = null;
-                var pro = NewPro();
-                try { pro.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test Pro SDK : " + ex.Message); }
-                _pro = pro;
+                var stream = NewStream();
+                try { stream.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test Stream Engine : " + ex.Message); }
+                _stream = stream;
 
                 After(7, () =>
                 {
-                    string path = null;
-                    try
+                    string sStatus = stream.Status, sStats = stream.Stats;
+                    try { stream.Dispose(); } catch { }
+                    _stream = null;
+                    var pro = NewPro();
+                    try { pro.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test Pro SDK : " + ex.Message); }
+                    _pro = pro;
+
+                    After(7, () =>
                     {
-                        path = GazeReport.Write(driver, before, cg, ce, pro.Stats, pro.GuideEvents, pro.DeviceName, pro.Diagnostic);
-                    }
-                    catch (Exception ex) { Lib.Log.Write("app", "Rapport du regard : " + ex.Message); }
-                    StartGazeSources(); // retour au pilote habituel
-                    if (path != null)
-                    {
-                        try { System.Diagnostics.Process.Start("notepad.exe", "\"" + path + "\""); } catch { }
-                        ShowParentNotice("🔎 Rapport écrit dans le dossier Contenu : " + System.IO.Path.GetFileName(path));
-                    }
+                        string path = null;
+                        try
+                        {
+                            path = GazeReport.Write(driver, before, cg, ce, sStatus, sStats,
+                                                    pro.Stats, pro.GuideEvents, pro.DeviceName, pro.Diagnostic);
+                        }
+                        catch (Exception ex) { Lib.Log.Write("app", "Rapport du regard : " + ex.Message); }
+                        StartGazeSources(); // retour au pilote habituel
+                        if (path != null)
+                        {
+                            try { System.Diagnostics.Process.Start("notepad.exe", "\"" + path + "\""); } catch { }
+                            ShowParentNotice("🔎 Rapport écrit dans le dossier Contenu : " + System.IO.Path.GetFileName(path));
+                        }
+                    });
                 });
             });
         }

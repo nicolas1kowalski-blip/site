@@ -18,6 +18,7 @@ namespace MesPremiersJeux.Lib
     public static class GazeReport
     {
         public static string Write(string driver, string activeSource, long consumerGaze, long consumerEyes,
+                                   string streamStatus, string streamStats,
                                    string proStats, long proGuide, string proDevice, string proDiagnostic)
         {
             var sb = new StringBuilder();
@@ -29,6 +30,7 @@ namespace MesPremiersJeux.Lib
             sb.AppendLine("CE QUE L'APPLICATION REÇOIT");
             sb.AppendLine("  Pilote choisi : " + driver + "   ·   source utilisée : " + activeSource);
             sb.AppendLine("  SDK grand public (Tobii.Interaction) : " + consumerGaze + " points de regard, " + consumerEyes + " positions des yeux");
+            sb.AppendLine("  Stream Engine (comme Grid 3) : " + streamStatus + " — regard valides/reçus = " + streamStats);
             sb.AppendLine("  Pro SDK (Tobii.Research) : regard valides/reçus = " + proStats + ", flux guide = " + proGuide);
             sb.AppendLine("  Tracker vu par le Pro SDK : " + (string.IsNullOrEmpty(proDevice) ? "(aucun)" : proDevice));
             if (!string.IsNullOrWhiteSpace(proDiagnostic))

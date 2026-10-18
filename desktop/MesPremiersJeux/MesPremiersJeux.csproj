@@ -33,6 +33,11 @@
          sans passer par le curseur. Gratuit ; ne se connecte qu'aux trackers
          visibles par le Pro SDK — sinon la source reste inactive (aucun impact). -->
     <PackageReference Include="Tobii.Research.x64" Version="1.11.1.1349" />
+    <!-- Tobii Stream Engine : le moteur de regard de plus bas niveau (celui des
+         logiciels de communication comme Grid 3). Seule source qui répond sur
+         certaines tablettes (ex. PCEye 5). La DLL native x64 est copiée à côté
+         de l'exe par le paquet. -->
+    <PackageReference Include="Tobii.StreamEngine" Version="2.2.2.363" />
     <!-- Lecteur Spotify intégré (onglet Musique) : héberge le Web Playback SDK.
          Nécessite le « WebView2 Runtime » installé sur le poste (présent par
          défaut sur Windows 10/11 récents). Toute version 1.0.* convient. -->
