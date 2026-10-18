@@ -39,8 +39,21 @@ namespace MesPremiersJeux.Lib
         private static DateTime _busyUntil = DateTime.MinValue;
         private static DateTime _busyStart = DateTime.MinValue;
 
-        /// <summary>La voix est-elle en train de parler ?</summary>
-        public static bool IsBusy => DateTime.Now < _busyUntil;
+        /// <summary>
+        /// La voix est-elle en train de parler ? Pour la voix WINDOWS, on
+        /// interroge l'état RÉEL du synthétiseur (aucune estimation — c'était
+        /// la cause des clics bloqués après la fin de la phrase) ; pour Azure,
+        /// la durée exacte du WAV fait foi.
+        /// </summary>
+        public static bool IsBusy
+        {
+            get
+            {
+                if (DateTime.Now < _busyUntil) return true;
+                try { return _tts != null && _tts.State == SynthesizerState.Speaking; }
+                catch { return false; }
+            }
+        }
 
         /// <summary>Depuis combien de secondes la voix parle-t-elle ? (0 si libre)
         /// — permet de ne pas bloquer l'enfant sur les très longues phrases.</summary>
@@ -72,7 +85,10 @@ namespace MesPremiersJeux.Lib
                 };
                 _tts.SpeakCompleted += (s, e) =>
                 {
-                    _busyUntil = DateTime.MinValue; // la voix Windows a VRAIMENT fini
+                    // La voix Windows a VRAIMENT fini. (Une annulation — nouvelle
+                    // phrase qui en coupe une autre — ne libère pas le verrou :
+                    // Azure vient peut-être de le poser pour la suite.)
+                    if (!e.Cancelled) _busyUntil = DateTime.MinValue;
                     if (_pageMode)
                     {
                         _pageMode = false;
@@ -172,7 +188,7 @@ namespace MesPremiersJeux.Lib
                 _tts.SpeakAsyncCancelAll();
                 ApplyVoice();
                 _tts.Rate = -4; // nettement plus lent (LocalSay remet 0)
-                MarkBusy(0.5 + text.Length / 8.0); // estimation, corrigée à la fin réelle
+                _busyStart = DateTime.Now; // l'état réel du synthétiseur fait foi
                 if (Math.Abs(Pitch) < 1) _tts.SpeakAsync(text);
                 else
                 {
@@ -198,7 +214,7 @@ namespace MesPremiersJeux.Lib
                 _tts.SpeakAsyncCancelAll();
                 ApplyVoice();
                 _tts.Rate = 0; // débit normal (SaySlow l'a peut-être ralenti)
-                MarkBusy(0.4 + text.Length / 14.0); // estimation, corrigée à la fin réelle
+                _busyStart = DateTime.Now; // l'état réel du synthétiseur fait foi
                 if (Math.Abs(Pitch) < 1)
                 {
                     _tts.SpeakAsync(text);
