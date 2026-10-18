@@ -45,7 +45,7 @@ namespace MesPremiersJeux.Games
         private bool[] _seen;
         private List<int> _findOrder;
         private int _findRound, _countRound;
-        private List<TextBlock> _countAnimals;
+        private List<FrameworkElement> _countAnimals;
         private readonly List<UIElement> _demoBadges = new List<UIElement>();
 
         public NumberPartyGame(Action celebrate) : base(celebrate) { }
@@ -387,18 +387,14 @@ namespace MesPremiersJeux.Games
 
             // Les animaux à compter, en GRAND au centre (on garde chaque animal
             // pour le comptage interactif : le chiffre s'affichera au-dessus).
-            _countAnimals = new List<TextBlock>();
+            _countAnimals = new List<FrameworkElement>();
             double aw = 130;
             double ax0 = (W - k * aw) / 2;
             for (int i = 0; i < k; i++)
             {
-                var a = new TextBlock
-                {
-                    Text = animal.Emoji,
-                    FontSize = 104,
-                    IsHitTestVisible = false,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                };
+                var a = Art.ForEmoji(animal.Emoji, 120);
+                a.IsHitTestVisible = false;
+                a.RenderTransformOrigin = new Point(0.5, 0.5);
                 Canvas.SetLeft(a, ax0 + i * aw);
                 Canvas.SetTop(a, 150);
                 _canvas.Children.Add(a);

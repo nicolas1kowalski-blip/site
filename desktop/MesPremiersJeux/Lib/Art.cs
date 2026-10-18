@@ -139,7 +139,25 @@ namespace MesPremiersJeux.Lib
             { "🚚", "camion" }, { "🚌", "bus" }, { "⛵", "voilier" }, { "🚤", "bateau" },
             { "🚢", "bateau" }, { "⛴", "bateau" }, { "🚗", "voiture" }, { "🚂", "train" },
             { "🚆", "train" }, { "✈", "avion" }, { "🛩", "avion" }, { "🚲", "velo" },
-            { "🚒", "camion-pompier" },
+            { "🚒", "camion-pompier" }, { "🚐", "autocar" }, { "🛴", "trottinette" },
+            { "🛹", "skateboard" }, { "🚕", "taxi" }, { "🚑", "ambulance" },
+            { "🚓", "voiture-police" }, { "🚔", "voiture-police" }, { "🚛", "camion-benne" },
+            { "🛸", "soucoupe" }, { "🛳", "paquebot" }, { "🛥", "bateau-moteur" },
+            { "🚇", "metro" },
+            // Animaux de la ferme et d'ailleurs
+            { "🐷", "cochon" }, { "🐖", "cochon" }, { "🐮", "vache" }, { "🐄", "vache" },
+            { "🐑", "mouton" }, { "🐔", "poule" }, { "🐓", "poule" }, { "🐣", "poussin" },
+            { "🐤", "poussin" }, { "🐥", "poussin" }, { "🫏", "ane" }, { "🐐", "chevre" },
+            { "🐭", "souris" }, { "🐁", "souris" }, { "🦫", "castor" }, { "🦡", "blaireau" },
+            { "🐊", "crocodile" }, { "🦛", "hippopotame" }, { "🐯", "tigre" }, { "🐅", "tigre" },
+            { "🦘", "kangourou" }, { "🐪", "chameau" }, { "🐫", "chameau" },
+            { "🐬", "dauphin" }, { "🐞", "coccinelle" },
+            // Fruits et légumes du marché
+            { "🍊", "orange" }, { "🥔", "pomme-de-terre" }, { "🥒", "concombre" },
+            { "🍑", "peche" }, { "🍈", "melon" }, { "🫐", "myrtille" }, { "🥭", "mangue" },
+            { "🥝", "kiwi" }, { "🥥", "noix-de-coco" }, { "🍋", "citron" },
+            { "🍆", "aubergine" }, { "🫑", "poivron" }, { "🧅", "oignon" },
+            { "🎃", "citrouille" }, { "🥬", "salade" }, { "🌟", "etoile" },
         };
 
         /// <summary>
@@ -234,10 +252,10 @@ namespace MesPremiersJeux.Lib
                     "  lieu-russie.png      (Kremlin)          lieu-chine.png      (Cité interdite)\r\n" +
                     "  lieu-japon.png       (torii rouge)      lieu-amerique.png   (statue de la Liberté)\r\n" +
                     "  (photos libres : commons.wikimedia.org, pexels.com, pixabay.com)\r\n\r\n" +
-                    "BON À SAVOIR : l'application embarque déjà ~115 petits dessins\r\n" +
-                    "cartoon (chat, chien, banane, tracteur, fusée...) qui remplacent les\r\n" +
-                    "emojis dans les jeux. Un fichier du MÊME NOM déposé ici (ex.\r\n" +
-                    "chat.png) remplace le dessin fourni.\r\n\r\n" +
+                    "BON À SAVOIR : l'application embarque déjà près de 200 petits\r\n" +
+                    "dessins cartoon (animaux, fruits et légumes, véhicules, objets...)\r\n" +
+                    "qui remplacent les emojis dans les jeux. Un fichier du MÊME NOM\r\n" +
+                    "déposé ici (ex. chat.png) remplace le dessin fourni.\r\n\r\n" +
                     "D'autres noms seront ajoutés au fil des jeux (ce fichier est recréé\r\n" +
                     "s'il est supprimé, avec la liste à jour).\r\n");
             }

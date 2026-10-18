@@ -133,7 +133,7 @@ namespace MesPremiersJeux.Games
             _cur = _act == 3 ? NameEntry() : Words[_rng.Next(Words.Length)];
 
             Question.Text = _act == 2 ? "🥁 Combien de syllabes ?" : "🥁 Les syllabes";
-            SetConsigne(new TextBlock { Text = _cur.Emoji, FontSize = 90 },
+            SetConsigne(Art.ForEmoji(_cur.Emoji, 110),
                 () => _act == 2
                     ? "Écoute bien " + _cur.Word + "... et dis combien de syllabes tu entends ! Compte les sauts de la grenouille !"
                     : "La grenouille saute une fois par syllabe ! Regarde un nénuphar pour réentendre sa syllabe !");
@@ -163,7 +163,7 @@ namespace MesPremiersJeux.Games
                 {
                     Children =
                     {
-                        new TextBlock { Text = _cur.Emoji, FontSize = 130, HorizontalAlignment = HorizontalAlignment.Center },
+                        Art.ForEmoji(_cur.Emoji, 150),
                         new TextBlock
                         {
                             Text = _act == 3 ? _cur.Word : _cur.Word,

@@ -136,17 +136,13 @@ namespace MesPremiersJeux.Games
             // garde son dessin ⭐ : on voit celles qui sont faites.
             double cx = Canvas.GetLeft(btn) + btn.Width / 2;
             double topY = Canvas.GetTop(btn);
-            var big = new TextBlock
-            {
-                Text = entry.Emoji,
-                FontSize = 96,
-                IsHitTestVisible = false,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-            };
+            var big = Art.ForEmoji(entry.Emoji, 110);
+            big.IsHitTestVisible = false;
+            big.RenderTransformOrigin = new Point(0.5, 0.5);
             var sc = new ScaleTransform(0.2, 0.2);
             big.RenderTransform = sc;
-            Canvas.SetLeft(big, cx - 48);
-            Canvas.SetTop(big, topY - 116);
+            Canvas.SetLeft(big, cx - 55);
+            Canvas.SetTop(big, topY - 124);
             big.SetValue(Panel.ZIndexProperty, 60);
             _canvas.Children.Add(big);
             var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(420))
@@ -285,14 +281,10 @@ namespace MesPremiersJeux.Games
             var rng = new Random();
             for (int i = 0; i < 6; i++)
             {
-                var t = new TextBlock
-                {
-                    Text = emoji,
-                    FontSize = 66 + rng.Next(46),
-                    IsHitTestVisible = false,
-                    Opacity = 0,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                };
+                var t = Art.ForEmoji(emoji, 85 + rng.Next(55));
+                t.IsHitTestVisible = false;
+                t.Opacity = 0;
+                t.RenderTransformOrigin = new Point(0.5, 0.5);
                 var sc = new ScaleTransform(0.2, 0.2);
                 var rot = new RotateTransform(rng.Next(-25, 25));
                 var grp = new TransformGroup();
@@ -351,7 +343,7 @@ namespace MesPremiersJeux.Games
                 BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)),
                 BorderThickness = new Thickness(6),
                 Padding = new Thickness(24, 8, 24, 8),
-                Child = new TextBlock { Text = target.Emoji, FontSize = 150 },
+                Child = Art.ForEmoji(target.Emoji, 190),
             };
             Canvas.SetLeft(card, W / 2 - 200);
             Canvas.SetTop(card, 10);

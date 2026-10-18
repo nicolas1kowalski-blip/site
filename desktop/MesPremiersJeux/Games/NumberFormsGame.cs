@@ -138,14 +138,18 @@ namespace MesPremiersJeux.Games
             return new Viewbox { Width = size, Height = size, Child = c };
         }
 
-        private static readonly string[] ObjEmojis = { "🍎", "⭐", "🐟", "🎈", "🌼" };
+        private static readonly string[] ObjEmojis = { "🍎", "🌟", "🐟", "🎈", "🌼" };
 
         private FrameworkElement Objects(int n, double size)
         {
             var emoji = ObjEmojis[_rng.Next(ObjEmojis.Length)];
             var wrap = new WrapPanel { Width = 190, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             for (int i = 0; i < n; i++)
-                wrap.Children.Add(new TextBlock { Text = emoji, FontSize = 58, Margin = new Thickness(4) });
+            {
+                var o = Art.ForEmoji(emoji, 64); // le dessin cartoon si on l'a
+                o.Margin = new Thickness(4);
+                wrap.Children.Add(o);
+            }
             return new Viewbox { Width = size, Height = size, Child = new Grid { Width = 200, Height = 200, Children = { wrap } } };
         }
 
