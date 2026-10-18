@@ -93,6 +93,78 @@ namespace MesPremiersJeux.Lib
             };
         }
 
+        // ------------------------------------------------------------------
+        //  LA BANQUE DE DESSINS : ~115 petites illustrations cartoon embarquées
+        //  (chat, banane, tracteur…). ForEmoji remplace un emoji par SON dessin
+        //  s'il existe — sinon l'emoji s'affiche comme avant, aucun risque.
+        // ------------------------------------------------------------------
+        private static readonly Dictionary<string, string> EmojiNames =
+            new Dictionary<string, string>
+        {
+            // Animaux
+            { "🦀", "crabe" }, { "🐙", "pieuvre" }, { "🦉", "hibou" }, { "🐌", "escargot" },
+            { "🐧", "pingouin" }, { "🐨", "koala" }, { "🐼", "panda" }, { "🐋", "baleine" },
+            { "🐳", "baleine" }, { "🦌", "faon" }, { "🦖", "dinosaure" }, { "🦕", "dinosaure" },
+            { "🦊", "renard" }, { "🐿", "ecureuil" }, { "🦭", "otarie" }, { "🦓", "zebre" },
+            { "🦄", "licorne" }, { "🐉", "dragon" }, { "🐲", "dragon" }, { "🦔", "herisson" },
+            { "🦈", "requin" }, { "🐛", "chenille" }, { "🦁", "lion" }, { "🐱", "chat" },
+            { "🐈", "chat" }, { "🐶", "chien" }, { "🐕", "chien" }, { "🐻", "ours" },
+            { "🧸", "ours" }, { "🐸", "grenouille" }, { "🦆", "canard" }, { "🦜", "perroquet" },
+            { "🐢", "tortue" }, { "🦒", "girafe" }, { "🐰", "lapin" }, { "🐇", "lapin" },
+            { "🐟", "poisson" }, { "🐠", "poisson" }, { "🐘", "elephant" }, { "🐵", "singe" },
+            { "🐒", "singe" }, { "🦋", "papillon" }, { "🐝", "abeille" },
+            // Fruits, légumes, gourmandises
+            { "🍓", "fraise" }, { "🍇", "raisin" }, { "🍉", "pasteque" }, { "🍐", "poire" },
+            { "🍒", "cerises" }, { "🌽", "mais" }, { "🥦", "brocoli" }, { "🍅", "tomate" },
+            { "🧁", "cupcake" }, { "🍩", "donut" }, { "🍕", "pizza" }, { "🍪", "cookie" },
+            { "🌰", "gland" }, { "🍍", "ananas" }, { "🍎", "pomme" }, { "🍌", "banane" },
+            { "🥕", "carotte" }, { "🎂", "gateau" }, { "🍦", "glace" }, { "🍨", "glace" },
+            // Nature
+            { "🍃", "feuille" }, { "🍂", "feuille" }, { "🐚", "coquillage" }, { "🌈", "arc-en-ciel" },
+            { "🌙", "lune" }, { "❄", "flocon" }, { "🌻", "tournesol" }, { "🌵", "cactus" },
+            { "☀", "soleil" }, { "🌞", "soleil" }, { "🌸", "fleur" }, { "🌼", "fleur" },
+            { "🌺", "fleur" }, { "🌳", "arbre" }, { "🌲", "arbre" }, { "🌠", "etoile" },
+            // Objets
+            { "🔨", "marteau" }, { "🖌", "pinceau" }, { "🎨", "palette" }, { "🎒", "sac" },
+            { "✏", "crayon" }, { "🔭", "telescope" }, { "🏀", "ballon-basket" }, { "🔍", "loupe" },
+            { "🪁", "cerf-volant" }, { "🔑", "cle" }, { "🗝", "cle" }, { "🪞", "miroir" },
+            { "📷", "appareil-photo" }, { "👑", "couronne" }, { "📱", "telephone" },
+            { "🧦", "chaussette" }, { "👟", "chaussure" }, { "🪣", "seau" }, { "🎸", "guitare" },
+            { "☂", "parapluie" }, { "🌂", "parapluie" }, { "☔", "parapluie" }, { "☕", "tasse" },
+            { "⏰", "reveil" }, { "📖", "livre" }, { "📚", "livre" }, { "🎁", "cadeau" },
+            { "🥁", "tambour" }, { "✂", "ciseaux" }, { "👒", "chapeau" }, { "🪥", "brosse-a-dents" },
+            { "⚽", "ballon-foot" }, { "🎈", "ballon" }, { "🏠", "maison" },
+            // Véhicules
+            { "🚁", "helicoptere" }, { "🚀", "fusee" }, { "🚜", "tracteur" }, { "🏍", "moto" },
+            { "🚚", "camion" }, { "🚌", "bus" }, { "⛵", "voilier" }, { "🚤", "bateau" },
+            { "🚢", "bateau" }, { "⛴", "bateau" }, { "🚗", "voiture" }, { "🚂", "train" },
+            { "🚆", "train" }, { "✈", "avion" }, { "🛩", "avion" }, { "🚲", "velo" },
+            { "🚒", "camion-pompier" },
+        };
+
+        /// <summary>
+        /// Le visuel d'un EMOJI : son dessin cartoon embarqué s'il existe (ou
+        /// l'image du parent de même nom), sinon l'emoji tel quel. Les jeux
+        /// peuvent l'appeler partout : c'est toujours sans risque.
+        /// </summary>
+        private static Dictionary<string, string> _emojiNorm;
+
+        public static FrameworkElement ForEmoji(string emoji, double size)
+        {
+            // Table normalisée sans le sélecteur de variante (FE0F), présent ou
+            // non selon la façon dont l'emoji a été tapé dans le code.
+            if (_emojiNorm == null)
+            {
+                _emojiNorm = new Dictionary<string, string>();
+                foreach (var kv in EmojiNames)
+                    _emojiNorm[kv.Key.Replace("️", "")] = kv.Value;
+            }
+            var key = (emoji ?? "").Replace("️", "").Trim();
+            return _emojiNorm.TryGetValue(key, out var name)
+                ? Visual(name, emoji, size)
+                : Visual(null, emoji, size);
+        }
+
         /// <summary>Crée le dossier « Images » et son mode d'emploi (une fois).</summary>
         public static void EnsureFolder()
         {
@@ -151,6 +223,10 @@ namespace MesPremiersJeux.Lib
                     "  lieu-russie.png      (Kremlin)          lieu-chine.png      (Cité interdite)\r\n" +
                     "  lieu-japon.png       (torii rouge)      lieu-amerique.png   (statue de la Liberté)\r\n" +
                     "  (photos libres : commons.wikimedia.org, pexels.com, pixabay.com)\r\n\r\n" +
+                    "BON À SAVOIR : l'application embarque déjà ~115 petits dessins\r\n" +
+                    "cartoon (chat, chien, banane, tracteur, fusée...) qui remplacent les\r\n" +
+                    "emojis dans les jeux. Un fichier du MÊME NOM déposé ici (ex.\r\n" +
+                    "chat.png) remplace le dessin fourni.\r\n\r\n" +
                     "D'autres noms seront ajoutés au fil des jeux (ce fichier est recréé\r\n" +
                     "s'il est supprimé, avec la liste à jour).\r\n");
             }

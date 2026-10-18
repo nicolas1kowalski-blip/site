@@ -110,7 +110,7 @@ namespace MesPremiersJeux.Games
                     Width = 170,
                     Height = 170,
                     RenderTransformOrigin = new Point(0.5, 0.5),
-                    Content = new TextBlock { Text = c.Emoji, FontSize = 100 },
+                    Content = Art.ForEmoji(c.Emoji, 120), // le dessin cartoon si on l'a
                 };
                 var captured = btn;
                 btn.Click += (s, e) => Pick(r, c.Emoji, c.Word, c.Stretched, c.Yes, captured);
@@ -272,7 +272,9 @@ namespace MesPremiersJeux.Games
             Speech.SaySlow(Cap(stretched) + " ! Oui ! On entend " + r.Sound + " ! Dans la maison !");
 
             // L'image vole dans la porte de la maison.
-            var flying = new TextBlock { Text = emoji, FontSize = 100, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
+            var flying = Art.ForEmoji(emoji, 120);
+            flying.IsHitTestVisible = false;
+            flying.RenderTransformOrigin = new Point(0.5, 0.5);
             double x0 = Canvas.GetLeft(btn) + 35, y0 = Canvas.GetTop(btn) + 25;
             double x1 = _doorX, y1 = _doorY;
             Canvas.SetLeft(flying, x0);
@@ -347,7 +349,7 @@ namespace MesPremiersJeux.Games
             var w = TrainWords[_rng.Next(TrainWords.Length)];
 
             Question.Text = "🚂 Où est le son " + w.Sound + " ?";
-            SetConsigne(new TextBlock { Text = w.Emoji, FontSize = 90 },
+            SetConsigne(Art.ForEmoji(w.Emoji, 110),
                 () => Cap(w.Word) + " ! Tu entends " + w.Sound + " au DÉBUT du mot, comme la locomotive ? " +
                       "Ou à la FIN, comme le dernier wagon ?");
 
@@ -364,10 +366,12 @@ namespace MesPremiersJeux.Games
             AddDecor("🌳", W - 170, 60, 90);
 
             // Le mot en grand, au centre-haut, qui se balance.
-            var big = new TextBlock { Text = w.Emoji, FontSize = 150, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0) };
+            var big = Art.ForEmoji(w.Emoji, 190);
+            big.IsHitTestVisible = false;
+            big.RenderTransformOrigin = new Point(0.5, 0);
             var sway = new RotateTransform(0);
             big.RenderTransform = sway;
-            Canvas.SetLeft(big, W / 2 - 85);
+            Canvas.SetLeft(big, W / 2 - 95);
             Canvas.SetTop(big, 40);
             _canvas.Children.Add(big);
             sway.BeginAnimation(RotateTransform.AngleProperty,
