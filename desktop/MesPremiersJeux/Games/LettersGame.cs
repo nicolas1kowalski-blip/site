@@ -63,6 +63,14 @@ namespace MesPremiersJeux.Games
         private Grid LetterVisual(string letter, Color col, double size)
         {
             var g = new Grid { Width = size, Height = size };
+            // La lettre-PERSONNAGE dessinée (lettre-A..Z, embarquées) si on
+            // l'a — sinon la pastille colorée d'origine.
+            var img = Art.Find("lettre-" + letter);
+            if (img != null)
+            {
+                g.Children.Add(new Image { Source = img, Stretch = Stretch.Uniform });
+                return g;
+            }
             g.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(size * 0.22),

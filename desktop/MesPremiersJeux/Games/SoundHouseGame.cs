@@ -281,28 +281,46 @@ namespace MesPremiersJeux.Games
             _joyX = 0.27 * W;
             _joyY = 0.32 * ih;
 
-            // La LETTRE géante dans la bulle, qui respire.
+            // La LETTRE géante dans la bulle, qui respire — la lettre-
+            // PERSONNAGE dessinée si on l'a, sinon la grande lettre violette.
             double bw = 0.34 * W, bh = 0.24 * ih;
-            _houseLetter = new TextBlock
+            FrameworkElement face;
+            var limg = Art.Find("lettre-" + r.Letter);
+            if (limg != null)
             {
-                Text = r.Letter,
-                FontSize = bh * 0.82,
-                FontWeight = FontWeights.ExtraBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-            };
-            _houseLetter.RenderTransform = new ScaleTransform(1, 1);
+                face = new Image
+                {
+                    Source = limg,
+                    Stretch = Stretch.Uniform,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                _houseLetter = null;
+            }
+            else
+            {
+                _houseLetter = new TextBlock
+                {
+                    Text = r.Letter,
+                    FontSize = bh * 0.82,
+                    FontWeight = FontWeights.ExtraBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                face = _houseLetter;
+            }
+            face.RenderTransformOrigin = new Point(0.5, 0.5);
+            face.RenderTransform = new ScaleTransform(1, 1);
             var bubble = new Grid { Width = bw, Height = bh, IsHitTestVisible = false };
-            bubble.Children.Add(_houseLetter);
+            bubble.Children.Add(face);
             Canvas.SetLeft(bubble, 0.482 * W - bw / 2);
             Canvas.SetTop(bubble, 0.162 * ih - bh / 2);
             bubble.SetValue(Panel.ZIndexProperty, 32);
             _canvas.Children.Add(bubble);
             var breathe = new DoubleAnimation(1, 1.12, TimeSpan.FromSeconds(1.4))
             { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
-            var lsc = (ScaleTransform)_houseLetter.RenderTransform;
+            var lsc = (ScaleTransform)face.RenderTransform;
             lsc.BeginAnimation(ScaleTransform.ScaleXProperty, breathe);
             lsc.BeginAnimation(ScaleTransform.ScaleYProperty, breathe);
 

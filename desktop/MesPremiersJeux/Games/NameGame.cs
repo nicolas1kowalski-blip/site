@@ -105,6 +105,14 @@ namespace MesPremiersJeux.Games
         private Grid LetterVisual(char ch, Color col, double size)
         {
             var g = new Grid { Width = size, Height = size };
+            // La lettre-PERSONNAGE dessinée si on l'a (chaque lettre garde la
+            // MÊME tête et les mêmes couleurs partout — repère de plus).
+            var img = Art.Find("lettre-" + ch);
+            if (img != null)
+            {
+                g.Children.Add(new Image { Source = img, Stretch = Stretch.Uniform });
+                return g;
+            }
             g.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(size * 0.32),
