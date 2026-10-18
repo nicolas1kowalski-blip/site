@@ -34,12 +34,12 @@ namespace MesPremiersJeux.Games
         private static readonly Place[] Places =
         {
             new Place { Country = "la France", In = "en France", Capital = "Paris", Monument = "la tour Eiffel", Emoji = "🗼", Key = "france", Flag = 0 },
-            new Place { Country = "l'Angleterre", In = "en Angleterre", Capital = "Londres", Monument = "Big Ben et son garde royal", Emoji = "💂", Key = "angleterre", Flag = 1 },
+            new Place { Country = "l'Angleterre", In = "en Angleterre", Capital = "Londres", Monument = "Big Ben, la grande horloge", Emoji = "💂", Key = "angleterre", Flag = 1 },
             new Place { Country = "l'Italie", In = "en Italie", Capital = "Rome", Monument = "le Colisée", Emoji = "🏛️", Key = "italie", Flag = 2 },
             new Place { Country = "l'Égypte", In = "en Égypte", Capital = "Le Caire", Monument = "les pyramides", Emoji = "🐫", Key = "egypte", Flag = 3 },
-            new Place { Country = "la Russie", In = "en Russie", Capital = "Moscou", Monument = "le grand château du Kremlin", Emoji = "🏰", Key = "russie", Flag = 4 },
-            new Place { Country = "la Chine", In = "en Chine", Capital = "Pékin", Monument = "le palais impérial", Emoji = "🏯", Key = "chine", Flag = 5 },
-            new Place { Country = "le Japon", In = "au Japon", Capital = "Tokyo", Monument = "le grand portail rouge", Emoji = "⛩️", Key = "japon", Flag = 6 },
+            new Place { Country = "la Russie", In = "en Russie", Capital = "Moscou", Monument = "la cathédrale aux bulbes de toutes les couleurs", Emoji = "🏰", Key = "russie", Flag = 4 },
+            new Place { Country = "la Chine", In = "en Chine", Capital = "Pékin", Monument = "la Cité interdite, le palais de l'empereur", Emoji = "🏯", Key = "chine", Flag = 5 },
+            new Place { Country = "le Japon", In = "au Japon", Capital = "Tokyo", Monument = "le mont Fuji, la montagne au chapeau de neige", Emoji = "⛩️", Key = "japon", Flag = 6 },
             new Place { Country = "l'Amérique", In = "en Amérique", Capital = "Washington", Monument = "la statue de la Liberté", Emoji = "🗽", Key = "amerique", Flag = 7 },
         };
 
@@ -147,7 +147,7 @@ namespace MesPremiersJeux.Games
             {
                 if (Locked) return;
                 Pop(monuBtn);
-                Speak("Voici " + p.Monument + " ! On peut le voir à " + p.Capital + ", " + p.In + " !");
+                Speak("Voici " + p.Monument + " ! C'est à " + p.Capital + ", " + p.In + " !");
                 sawMonu = true;
                 CheckDone();
             };
@@ -195,7 +195,7 @@ namespace MesPremiersJeux.Games
                         // L'erreur enseigne : ce monument-là a aussi son histoire.
                         Adaptive.Report("capitales", false);
                         Shake(btn);
-                        Speak("Ça, c'est " + pp.Monument + "... il est à " + pp.Capital + " ! Cherche " + target.Monument + " !");
+                        Speak("Ça, c'est " + pp.Monument + "... c'est à " + pp.Capital + " ! Cherche " + target.Monument + " !");
                     }
                 };
                 row.Children.Add(btn);

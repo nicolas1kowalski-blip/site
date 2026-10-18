@@ -11,7 +11,7 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// « Les bons plats » (PS/MS) : la pizza, le croissant, les sushis… chaque
+    /// « Les bons plats » (PS/MS) : la pizza, la crêpe, les sushis… chaque
     /// pays a son plat préféré ! Les plats FUMENT (vapeur animée), se dandinent,
     /// et quand on trouve la bonne réponse, le plat vole dans une grande bouche
     /// qui le CROQUE — miam ! Trois actes : découverte à table, « qui mange la
@@ -25,6 +25,7 @@ namespace MesPremiersJeux.Games
         private sealed class Dish
         {
             public string Emoji;
+            public string Key;       // dessin : plat-<Key>.png (fourni)
             public string Name;      // « la pizza »
             public string Country;   // « l'Italie »
             public string In;        // « en Italie »
@@ -33,13 +34,22 @@ namespace MesPremiersJeux.Games
 
         private static readonly Dish[] Dishes =
         {
-            new Dish { Emoji = "🥐", Name = "le croissant", Country = "la France", In = "en France", Flag = 0 },
-            new Dish { Emoji = "🍕", Name = "la pizza", Country = "l'Italie", In = "en Italie", Flag = 2 },
-            new Dish { Emoji = "🍣", Name = "les sushis", Country = "le Japon", In = "au Japon", Flag = 6 },
-            new Dish { Emoji = "🥟", Name = "les petits raviolis", Country = "la Chine", In = "en Chine", Flag = 5 },
-            new Dish { Emoji = "🍔", Name = "le hamburger", Country = "l'Amérique", In = "en Amérique", Flag = 7 },
-            new Dish { Emoji = "🍟", Name = "les frites du poisson-frites", Country = "l'Angleterre", In = "en Angleterre", Flag = 1 },
+            new Dish { Emoji = "🥞", Key = "crepe", Name = "la crêpe", Country = "la France", In = "en France", Flag = 0 },
+            new Dish { Emoji = "🍕", Key = "pizza", Name = "la pizza", Country = "l'Italie", In = "en Italie", Flag = 2 },
+            new Dish { Emoji = "🍣", Key = "sushi", Name = "les sushis", Country = "le Japon", In = "au Japon", Flag = 6 },
+            new Dish { Emoji = "🥟", Key = "raviolis", Name = "les petits raviolis", Country = "la Chine", In = "en Chine", Flag = 5 },
+            new Dish { Emoji = "🍔", Key = "hamburger", Name = "le hamburger", Country = "l'Amérique", In = "en Amérique", Flag = 7 },
+            new Dish { Emoji = "🍟", Key = "fish-and-chips", Name = "le poisson-frites", Country = "l'Angleterre", In = "en Angleterre", Flag = 1 },
+            new Dish { Emoji = "🧆", Key = "falafel", Name = "les boulettes de falafel", Country = "l'Égypte", In = "en Égypte", Flag = 3 },
         };
+
+        // « la crêpe, on LA mange » / « les sushis, on LES mange » / « le… LE ».
+        private static string Pronoun(Dish d) =>
+            d.Name.StartsWith("les ") ? "les" : d.Name.StartsWith("la ") ? "la" : "le";
+
+        // Le dessin du plat (plat-<key>) sinon l'emoji.
+        private static FrameworkElement DishVisual(Dish d, double size) =>
+            Art.Visual("plat-" + d.Key, d.Emoji, size);
 
         private readonly Random _rng = new Random();
         private Canvas _canvas;
@@ -63,7 +73,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             _round++;
-            if (_act == 1 && _round > 2) { _act = 2; _round = 1; }
+            if (_act == 1 && _round > (Dishes.Length + 2) / 3) { _act = 2; _round = 1; } // tous goûtés
             else if (_act == 2 && _round > 3) { _act = 3; _round = 1; }
             else if (_act == 3 && _round > 3)
             {
@@ -115,7 +125,7 @@ namespace MesPremiersJeux.Games
             Canvas.SetLeft(plate, 5);
             Canvas.SetTop(plate, size + 10);
             host.Children.Add(plate);
-            var food = Art.ForEmoji(d.Emoji, size * 1.25);
+            var food = DishVisual(d, size * 1.25);
             food.RenderTransformOrigin = new Point(0.5, 1);
             var sway = new RotateTransform(0);
             food.RenderTransform = sway;
@@ -168,7 +178,10 @@ namespace MesPremiersJeux.Games
 
             Table();
             var trio = _order.Skip((_round - 1) * 3).Take(3).ToList();
-            double[] xs = { 180, 620, 1060 };
+            // Un tour incomplet (1 ou 2 plats) reste centré sur la table.
+            double[] xs = trio.Count == 1 ? new double[] { 620 }
+                        : trio.Count == 2 ? new double[] { 400, 840 }
+                        : new double[] { 180, 620, 1060 };
             int eaten = 0;
             for (int i = 0; i < trio.Count; i++)
             {
@@ -188,7 +201,7 @@ namespace MesPremiersJeux.Games
                         _canvas.Children.Add(flag);
                     }
                     SoundFx.PopSound();
-                    Speak("Miam, " + d.Name + " ! On " + (d.Name.StartsWith("les") ? "les" : "le") + " mange " + d.In + " !");
+                    Speak("Miam, " + d.Name + " ! On " + Pronoun(d) + " mange " + d.In + " !");
                     if (eaten == trio.Count)
                     {
                         Locked = true;
@@ -218,7 +231,7 @@ namespace MesPremiersJeux.Games
             if (_act == 2)
             {
                 Question.Text = "🍕 Qui mange " + target.Name + " ?";
-                SetConsigne(Art.ForEmoji(target.Emoji, 110),
+                SetConsigne(DishVisual(target, 110),
                     () => "Dans quel pays mange-t-on " + target.Name + " ? Trouve le bon drapeau !");
                 // Le plat au centre-haut, fumant.
                 var dish = DishButton(target, 140);
@@ -248,7 +261,7 @@ namespace MesPremiersJeux.Games
                     _canvas.Children.Add(btn);
                 }
                 SetBody(_canvas);
-                Speak("Miam, " + target.Name + " ! Dans quel pays est-ce qu'on " + (target.Name.StartsWith("les") ? "les" : "le") + " mange ? Trouve le drapeau !");
+                Speak("Miam, " + target.Name + " ! Dans quel pays est-ce qu'on " + Pronoun(target) + " mange ? Trouve le drapeau !");
             }
             else
             {
@@ -268,7 +281,7 @@ namespace MesPremiersJeux.Games
                         else
                         {
                             Shake(captured);
-                            Speak("Ça, c'est " + d.Name + " ! On " + (d.Name.StartsWith("les") ? "les" : "le") + " mange " + d.In + " ! Cherche encore !");
+                            Speak("Ça, c'est " + d.Name + " ! On " + Pronoun(d) + " mange " + d.In + " ! Cherche encore !");
                         }
                     };
                     Canvas.SetLeft(btn, xs[i]);
@@ -299,7 +312,7 @@ namespace MesPremiersJeux.Games
             msc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
             msc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
 
-            var flying = Art.ForEmoji(d.Emoji, 120);
+            var flying = DishVisual(d, 120);
             flying.IsHitTestVisible = false;
             flying.RenderTransformOrigin = new Point(0.5, 0.5);
             var rot = new RotateTransform(0);

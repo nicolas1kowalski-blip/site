@@ -322,7 +322,7 @@ namespace MesPremiersJeux.Games
 
         public static readonly List<CartoonItem> Items = new List<CartoonItem>
         {
-            new CartoonItem { Name = "chateau",   Fr = "le château",     Cat = "la magie",    Build = Castle },
+            new CartoonItem { Name = "chateau",   Fr = "le château",     Cat = "la magie",    Build = Pic("monument-neuschwanstein", Castle) },
             new CartoonItem { Name = "chat",      Fr = "le chat",        Cat = "les animaux", Build = Pic("chat", Cat) },
             new CartoonItem { Name = "cochon",    Fr = "le cochon",      Cat = "les animaux", Build = Pic("cochon", Pig) },
             new CartoonItem { Name = "chien",     Fr = "le chien",       Cat = "les animaux", Build = Pic("chien", Dog) },

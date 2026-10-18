@@ -158,6 +158,16 @@ namespace MesPremiersJeux.Lib
             { "🥝", "kiwi" }, { "🥥", "noix-de-coco" }, { "🍋", "citron" },
             { "🍆", "aubergine" }, { "🫑", "poivron" }, { "🧅", "oignon" },
             { "🎃", "citrouille" }, { "🥬", "salade" }, { "🌟", "etoile" },
+            // Plats du monde
+            { "🍝", "plat-spaghetti" }, { "🌮", "plat-tacos" }, { "🌭", "plat-hot-dog" },
+            { "🍜", "plat-ramen" }, { "🍛", "plat-curry" }, { "🥙", "plat-kebab" },
+            { "🌯", "plat-burrito" }, { "🥨", "plat-bretzel" }, { "🍣", "plat-sushi" },
+            { "🍔", "plat-hamburger" }, { "🥞", "plat-crepe" }, { "🫕", "plat-fondue" },
+            { "🥘", "plat-paella" }, { "🍚", "plat-riz-frit" }, { "🥟", "plat-raviolis" },
+            { "🧆", "plat-falafel" }, { "🍟", "plat-fish-and-chips" },
+            // Monuments
+            { "🗼", "lieu-france" }, { "🗽", "lieu-amerique" }, { "🗻", "lieu-japon" },
+            { "🏯", "lieu-chine" }, { "🏰", "monument-neuschwanstein" },
         };
 
         /// <summary>
@@ -253,12 +263,18 @@ namespace MesPremiersJeux.Lib
                     "  photo-soleil.png ... photo-pluton.png     (les VRAIES photos,\r\n" +
                     "  montrées après chaque bonne réponse)\r\n" +
                     "  decor-espace.png    (la grande scène étoilée du fond)\r\n\r\n" +
-                    "Le tour du monde (PHOTOS des monuments — remplacent les emojis) :\r\n" +
+                    "Le tour du monde — monuments (dessins FOURNIS ; une PHOTO du même\r\n" +
+                    "nom déposée ici les remplace) :\r\n" +
                     "  lieu-france.png      (tour Eiffel)      lieu-angleterre.png (Big Ben)\r\n" +
                     "  lieu-italie.png      (Colisée)          lieu-egypte.png     (pyramides)\r\n" +
-                    "  lieu-russie.png      (Kremlin)          lieu-chine.png      (Cité interdite)\r\n" +
-                    "  lieu-japon.png       (torii rouge)      lieu-amerique.png   (statue de la Liberté)\r\n" +
+                    "  lieu-russie.png      (cathédrale aux bulbes) lieu-chine.png (Cité interdite)\r\n" +
+                    "  lieu-japon.png       (mont Fuji)        lieu-amerique.png   (statue de la Liberté)\r\n" +
+                    "  monument-*.png : 22 autres monuments (Taj Mahal, tour de Pise...)\r\n" +
                     "  (photos libres : commons.wikimedia.org, pexels.com, pixabay.com)\r\n\r\n" +
+                    "Le tour du monde — plats (dessins FOURNIS) :\r\n" +
+                    "  plat-crepe.png, plat-pizza.png, plat-sushi.png, plat-raviolis.png,\r\n" +
+                    "  plat-hamburger.png, plat-fish-and-chips.png, plat-falafel.png...\r\n" +
+                    "  (34 plats en tout : paella, couscous, tajine, ramen, tacos...)\r\n\r\n" +
                     "BON À SAVOIR : l'application embarque déjà près de 200 petits\r\n" +
                     "dessins cartoon (animaux, fruits et légumes, véhicules, objets...)\r\n" +
                     "qui remplacent les emojis dans les jeux. Un fichier du MÊME NOM\r\n" +
