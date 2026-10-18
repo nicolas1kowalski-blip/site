@@ -194,9 +194,9 @@ namespace MesPremiersJeux.Games
                     if (_tasted.Add(d.Emoji))
                     {
                         eaten++;
-                        var flag = FlagArt.Make(d.Flag, 110);
-                        Canvas.SetLeft(flag, Canvas.GetLeft(captured) + 60);
-                        Canvas.SetTop(flag, Canvas.GetTop(captured) - 70);
+                        var flag = FlagArt.Make(d.Flag, 130); // drapeau + nom du pays
+                        Canvas.SetLeft(flag, Canvas.GetLeft(captured) + 50);
+                        Canvas.SetTop(flag, Canvas.GetTop(captured) - 115);
                         flag.IsHitTestVisible = false;
                         _canvas.Children.Add(flag);
                     }

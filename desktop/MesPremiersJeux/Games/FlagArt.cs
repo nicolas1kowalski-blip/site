@@ -14,10 +14,18 @@ namespace MesPremiersJeux.Games
     /// </summary>
     public static class FlagArt
     {
-        public static FrameworkElement Make(int kind, double size)
+        /// <summary>Le nom écrit sous chaque drapeau — le même mot que celui
+        /// que dit la voix (d'où « Amérique » et non « États-Unis »).</summary>
+        public static readonly string[] Names =
+            { "France", "Angleterre", "Italie", "Égypte", "Russie", "Chine", "Japon", "Amérique" };
+
+        /// <summary>Le drapeau (largeur « size ») avec le NOM DU PAYS écrit
+        /// dessous ; named = false pour le drapeau seul.</summary>
+        public static FrameworkElement Make(int kind, double size, bool named = true)
         {
+            int k = ((kind % 8) + 8) % 8;
             var c = new Canvas { Width = 300, Height = 200 };
-            switch (((kind % 8) + 8) % 8)
+            switch (k)
             {
                 case 0: // France : trois bandes verticales
                     Add(c, Rect(C(0x00, 0x55, 0xA4), 100, 200, 0), 0, 0);
@@ -76,7 +84,32 @@ namespace MesPremiersJeux.Games
                 RadiusY = 8,
             };
             Add(c, frame, 0, 0);
-            return new Viewbox { Width = size, Height = size * 2 / 3, Stretch = Stretch.Uniform, Child = c };
+            if (!named)
+                return new Viewbox { Width = size, Height = size * 2 / 3, Stretch = Stretch.Uniform, Child = c };
+
+            // Le nom du pays dans une petite étiquette arrondie sous le drapeau.
+            var label = new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = new SolidColorBrush(C(0x4A, 0x3A, 0x5A)),
+                BorderThickness = new Thickness(4),
+                CornerRadius = new CornerRadius(26),
+                Padding = new Thickness(18, 2, 18, 4),
+                Margin = new Thickness(0, 10, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = Names[k],
+                    FontSize = 44,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(C(0x3B, 0x2A, 0x5A)),
+                },
+            };
+            var stack = new StackPanel { Width = 300 };
+            stack.Children.Add(c);
+            stack.Children.Add(label);
+            // 200 (drapeau) + ~74 (étiquette) : proportions gardées.
+            return new Viewbox { Width = size, Height = size * 274 / 300, Stretch = Stretch.Uniform, Child = stack };
         }
 
         private static void AddStar(Canvas c, double x, double y, double size, Color color)
