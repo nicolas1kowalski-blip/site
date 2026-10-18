@@ -40,7 +40,7 @@ namespace MesPremiersJeux.Games
                 Good = new[] { ("🧣", "l'écharpe"), ("🧤", "les moufles"), ("🧥", "le gros manteau") },
                 Bad = new[]
                 {
-                    ("🩳", "le maillot de bain", "Le maillot de bain dans la neige ? Brrr, on va geler ! Hi hi !"),
+                    ("maillot-de-bain|🩳", "le maillot de bain", "Le maillot de bain dans la neige ? Brrr, on va geler ! Hi hi !"),
                     ("🕶️", "les lunettes de soleil", "Des lunettes de soleil ? Mais il neige ! Hi hi !"),
                     ("🩴", "les tongs", "Des tongs dans la neige ? Les pieds vont devenir tout bleus ! Hi hi !"),
                 },
@@ -59,10 +59,10 @@ namespace MesPremiersJeux.Games
             new Trip
             {
                 Country = "l'Angleterre", Flag = 1, Weather = "pluie", Why = "il pleut beaucoup",
-                Good = new[] { ("☂️", "le parapluie"), ("👢", "les bottes"), ("🧥", "l'imperméable") },
+                Good = new[] { ("☂️", "le parapluie"), ("👢", "les bottes"), ("impermeable|🧥", "l'imperméable") },
                 Bad = new[]
                 {
-                    ("🩳", "le maillot de bain", "Le maillot sous la pluie ? Brrr ! Hi hi !"),
+                    ("maillot-de-bain|🩳", "le maillot de bain", "Le maillot sous la pluie ? Brrr ! Hi hi !"),
                     ("🕶️", "les lunettes de soleil", "Des lunettes de soleil sous les nuages gris ? Hi hi !"),
                     ("👒", "le chapeau de paille", "Le chapeau de paille va être tout mouillé ! Hi hi !"),
                 },
@@ -358,7 +358,8 @@ namespace MesPremiersJeux.Games
 
         private void AddDecor(string emoji, double x, double y, double size)
         {
-            var tb = new TextBlock { Text = emoji, FontSize = size, IsHitTestVisible = false };
+            var tb = Art.ForEmoji(emoji, size * 1.2);
+            tb.IsHitTestVisible = false;
             Canvas.SetLeft(tb, x);
             Canvas.SetTop(tb, y);
             _canvas.Children.Add(tb);

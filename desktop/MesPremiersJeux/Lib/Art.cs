@@ -109,7 +109,7 @@ namespace MesPremiersJeux.Lib
             { "🦄", "licorne" }, { "🐉", "dragon" }, { "🐲", "dragon" }, { "🦔", "herisson" },
             { "🦈", "requin" }, { "🐛", "chenille" }, { "🦁", "lion" }, { "🐱", "chat" },
             { "🐈", "chat" }, { "🐶", "chien" }, { "🐕", "chien" }, { "🐻", "ours" },
-            { "🧸", "ours" }, { "🐸", "grenouille" }, { "🦆", "canard" }, { "🦜", "perroquet" },
+            { "🧸", "ours-peluche" }, { "🐸", "grenouille" }, { "🦆", "canard" }, { "🦜", "perroquet" },
             { "🐢", "tortue" }, { "🦒", "girafe" }, { "🐰", "lapin" }, { "🐇", "lapin" },
             { "🐟", "poisson" }, { "🐠", "poisson" }, { "🐘", "elephant" }, { "🐵", "singe" },
             { "🐒", "singe" }, { "🦋", "papillon" }, { "🐝", "abeille" },
@@ -173,6 +173,19 @@ namespace MesPremiersJeux.Lib
             { "🛡", "chevalier" }, { "❤", "coeur" }, { "💖", "coeur-rose" },
             { "💗", "coeur-framboise" }, { "💜", "coeur-violet" }, { "☁", "nuage" },
             { "💎", "diamant" }, { "⭐", "etoile" },
+            // Vêtements
+            { "🧥", "manteau" }, { "👕", "t-shirt" }, { "👖", "jean" }, { "🩳", "short" },
+            { "👗", "robe" }, { "👔", "chemise" }, { "🩱", "maillot-de-bain" },
+            { "🧣", "echarpe" }, { "🧤", "moufles" }, { "🧢", "casquette" },
+            { "👢", "bottes" }, { "🩴", "tongs" }, { "🕶", "lunettes-de-soleil" },
+            { "🥿", "pantoufles" }, { "👠", "chaussure" },
+            // Jouets
+            { "🤖", "robot" }, { "🪀", "yoyo" }, { "🧩", "puzzle" }, { "🪅", "toupie" },
+            // Cuisine et salle de bain
+            { "🍽", "assiette" }, { "🥣", "bol" }, { "🍴", "fourchette" }, { "🥄", "cuillere" },
+            { "🍳", "poele" }, { "🫖", "theiere" }, { "🥛", "verre" }, { "🧽", "eponge" },
+            { "🛁", "baignoire" }, { "🚿", "douche" }, { "🧼", "savon" }, { "🚽", "toilettes" },
+            { "🧻", "papier-toilette" }, { "🧺", "panier-a-linge" },
         };
 
         /// <summary>
@@ -192,6 +205,11 @@ namespace MesPremiersJeux.Lib
                 foreach (var kv in EmojiNames)
                     _emojiNorm[kv.Key.Replace("️", "")] = kv.Value;
             }
+            // « nom|emoji » : le jeu désigne le dessin par son NOM (utile quand
+            // deux objets partagent le même emoji : manteau / imperméable).
+            int bar = (emoji ?? "").IndexOf('|');
+            if (bar > 0)
+                return Visual(emoji.Substring(0, bar), emoji.Substring(bar + 1), size);
             var key = (emoji ?? "").Replace("️", "").Trim();
             return _emojiNorm.TryGetValue(key, out var name)
                 ? Visual(name, emoji, size)
