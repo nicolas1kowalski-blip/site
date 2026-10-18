@@ -73,7 +73,7 @@ namespace MesPremiersJeux.Games
                 GazeFeed.Sample += OnGaze;
                 _tick.Tick += OnTick;
                 _tick.Start();
-                Speak("Regarde les bulles pour les faire éclater !");
+                Speech.Say("Regarde les bulles pour les faire éclater !");
             };
             Unloaded += (s, e) =>
             {
@@ -209,7 +209,7 @@ namespace MesPremiersJeux.Games
             {
                 RewardStore.Add();
                 _celebrate?.Invoke();
-                Speak("Bravo !");
+                Speech.Say("Bravo !");
             }
         }
 
