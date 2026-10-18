@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
@@ -76,28 +75,13 @@ namespace MesPremiersJeux.Games
         {
             _canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
             // Plein écran : la page autour de la scène continue l'espace.
-            SetPageBackground(new SolidColorBrush(Color.FromRgb(0x14, 0x16, 0x3A)));
-            // Le fond dessiné (decor-espace) : SEULEMENT le haut du dessin —
-            // le ciel aux constellations — car sa rangée de planètes se
-            // mélangerait avec celles du jeu. Léger voile pour la lisibilité.
+            SetPageBackground(new SolidColorBrush(Color.FromRgb(0x29, 0x1F, 0x4E)));
+            // Le fond galaxie (decor-espace) : une belle nébuleuse SANS
+            // planètes dedans — rien ne se mélange avec celles du jeu, donc
+            // l'image s'affiche entière, sans voile.
             var decor = Art.Find("decor-espace");
             if (decor != null)
-            {
-                ImageSource sky = decor;
-                try
-                {
-                    if (decor is BitmapSource bs)
-                        sky = new CroppedBitmap(bs, new Int32Rect(0, 0, bs.PixelWidth, (int)(bs.PixelHeight * 0.40)));
-                }
-                catch { }
-                _canvas.Children.Add(new Image { Source = sky, Width = W, Height = H, Stretch = Stretch.UniformToFill });
-                _canvas.Children.Add(new Rectangle
-                {
-                    Width = W,
-                    Height = H,
-                    Fill = new SolidColorBrush(Color.FromArgb(110, 0x14, 0x16, 0x3A)),
-                });
-            }
+                _canvas.Children.Add(new Image { Source = decor, Width = W, Height = H, Stretch = Stretch.UniformToFill });
             else
                 _canvas.Children.Add(new Rectangle
                 {
