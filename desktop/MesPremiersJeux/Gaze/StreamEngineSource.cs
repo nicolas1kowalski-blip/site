@@ -189,6 +189,7 @@ namespace MesPremiersJeux.Gaze
                 _deviceDestroy = Fn<DeviceFn>("tobii_device_destroy");
                 _apiDestroy = Fn<DeviceFn>("tobii_api_destroy");
                 _eyeSubscribe = Fn<EyeSubscribeFn>("tobii_eye_position_normalized_subscribe");
+                _getState = Fn<GetStateBoolFn>("tobii_get_state_bool");
                 _eyeUnsubscribe = Fn<DeviceFn>("tobii_eye_position_normalized_unsubscribe");
                 if (apiCreate == null || enumerate == null || subscribe == null || _process == null)
                 { Fail("fonctions du moteur introuvables dans cette version"); return; }
@@ -229,6 +230,7 @@ namespace MesPremiersJeux.Gaze
                 IsAvailable = true;
                 Status = "abonné au regard (" + _label + ", " + urls[0] + ")";
                 Lib.Log.Write("stream", "Stream Engine : " + Status);
+                Lib.Log.Write("stream", "État de la caméra : " + States());
 
                 int failures = 0, kicks = 0;
                 var nextKick = DateTime.MinValue;
@@ -304,6 +306,32 @@ namespace MesPremiersJeux.Gaze
             catch (Exception ex) { Fail(ex.GetType().Name + " : " + ex.Message); }
         }
 
+        private DateTime _statesAt = DateTime.MinValue;
+
+        // tobii_state_t (moteur 4.x) : ce qui peut empêcher la caméra de suivre.
+        private static readonly (int Id, string Name)[] StateNames =
+        {
+            (0, "économie d'énergie"), (2, "en pause"), (3, "réservée par un autre logiciel (mode exclusif)"),
+            (4, "en panne"), (5, "avertissement"), (7, "calibrage en cours"),
+        };
+
+        private string States()
+        {
+            if (_getState == null) return "non disponible avec ce moteur";
+            var on = new List<string>();
+            foreach (var (id, name) in StateNames)
+            {
+                try
+                {
+                    var err = _getState(_device, id, out int v);
+                    if (err == Err.NoError && v != 0) on.Add(name.ToUpperInvariant());
+                    else if (err != Err.NoError && err != Err.NotSupported) on.Add(name + " ? (" + err + ")");
+                }
+                catch { }
+            }
+            return on.Count == 0 ? "rien d'anormal signalé (yeux non vus ?)" : string.Join(", ", on);
+        }
+
         // Toutes les 5 s : débit et part de points valides (diagnostic).
         private DateTime _rateAt = DateTime.UtcNow;
         private long _rateEvents, _rateValid;
@@ -316,6 +344,13 @@ namespace MesPremiersJeux.Gaze
             long ev = _events - _rateEvents, va = _valid - _rateValid;
             Lib.Log.Write("stream", FormattableString.Invariant(
                 $"Débit ({_label}) : {ev / dt:0} échantillons/s, dont {va / dt:0} valides/s (total {_valid}/{_events})"));
+            // Flux vivant mais AUCUN point valide : on demande à la caméra son
+            // état (pause, économie d'énergie, autre logiciel en mode exclusif…).
+            if (ev > 0 && va == 0 && (now - _statesAt).TotalSeconds > 60)
+            {
+                _statesAt = now;
+                Lib.Log.Write("stream", "État de la caméra : " + States());
+            }
             _rateAt = now;
             _rateEvents = _events;
             _rateValid = _valid;
@@ -432,6 +467,7 @@ namespace MesPremiersJeux.Gaze
 
         private DeviceFn _process, _reconnect, _unsubscribe, _deviceDestroy, _apiDestroy, _eyeUnsubscribe;
         private EyeSubscribeFn _eyeSubscribe;
+        private GetStateBoolFn _getState;
 
         private enum Err
         {
@@ -496,6 +532,9 @@ namespace MesPremiersJeux.Gaze
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate Err DeviceFn(IntPtr device);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate Err GetStateBoolFn(IntPtr device, int state, out int value);
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern IntPtr LoadLibrary(string path);

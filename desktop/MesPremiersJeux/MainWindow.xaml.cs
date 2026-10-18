@@ -451,7 +451,7 @@ namespace MesPremiersJeux
                     if (_stream != null && !_stream.HasGaze)
                         ShowParentNotice("👀 La caméra Tobii marche mais ne voit pas les yeux.\n" +
                                          "• Quelqu'un est-il bien en face, à 50–70 cm ?\n" +
-                                         "• Un calibrage Tobii est-il resté ouvert derrière ? (le fermer)\n" +
+                                         "• Grid 3, TD Control ou un calibrage Tobii est-il ouvert ? (les fermer complètement)\n" +
                                          "• Le suivi est-il en pause dans le logiciel Tobii (icône près de l'horloge) ?\n" +
                                          "• Sinon : redémarrer la tablette.");
                     return;
