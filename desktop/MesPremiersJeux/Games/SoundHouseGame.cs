@@ -234,10 +234,13 @@ namespace MesPremiersJeux.Games
                     _roundIdx++;
                     if (_roundIdx >= Rounds.Length)
                     {
+                        // Toutes les maisons sont pleines : LE PETIT TRAIN DES
+                        // SONS prend le relais (début ou fin du mot ?).
                         Schedule(2600, () =>
                         {
-                            Speak("Bravo ! Tu as rempli toutes les maisons des sons ! Quelles bonnes oreilles !");
-                            Schedule(3000, NewRound);
+                            Speak("Toutes les maisons sont pleines ! Maintenant, le petit train des sons !");
+                            _trainIdx = 0;
+                            Schedule(2600, BuildTrain);
                         });
                     }
                     else Schedule(2800, BuildRound);
@@ -247,6 +250,135 @@ namespace MesPremiersJeux.Games
             flying.BeginAnimation(Canvas.TopProperty, ay);
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+        }
+
+        // ------------------------------------------------------------------
+        //  LE PETIT TRAIN DES SONS : « tu entends le son au DÉBUT ou à la
+        //  FIN du mot ? » (localiser un son — droit du programme MS).
+        // ------------------------------------------------------------------
+        private int _trainIdx;
+
+        private static readonly (string Emoji, string Word, string Sound, bool AtStart, string Stretched)[] TrainWords =
+        {
+            ("🍍", "ananas", "aaa", true, "AAA... nanas"),
+            ("🌳", "arbre", "aaa", true, "AAAARbre"),
+            ("🍫", "chocolat", "aaa", false, "chocol... AAAA"),
+            ("🐨", "koala", "aaa", false, "koal... AAAA"),
+            ("🏝️", "île", "iii", true, "IIIIle"),
+            ("🐭", "souris", "iii", false, "sour... IIII"),
+            ("🥝", "kiwi", "iii", false, "kiw... IIII"),
+            ("🤖", "robot", "ooo", false, "rob... OOOO"),
+        };
+
+        private void BuildTrain()
+        {
+            Locked = false;
+            var w = TrainWords[_rng.Next(TrainWords.Length)];
+
+            Question.Text = "🚂 Où est le son " + w.Sound + " ?";
+            SetConsigne(new TextBlock { Text = w.Emoji, FontSize = 90 },
+                () => Cap(w.Word) + " ! Tu entends " + w.Sound + " au DÉBUT du mot, comme la locomotive ? " +
+                      "Ou à la FIN, comme le dernier wagon ?");
+
+            _canvas = new Canvas { Width = W, Height = H };
+            _canvas.Children.Add(new Rectangle
+            {
+                Width = W,
+                Height = H,
+                RadiusX = 26,
+                RadiusY = 26,
+                Fill = new LinearGradientBrush(Color.FromRgb(0xE8, 0xF0, 0xFF), Color.FromRgb(0xEA, 0xF8, 0xEE), 90),
+            });
+            AddDecor("⛰️", 40, 50, 90);
+            AddDecor("🌳", W - 170, 60, 90);
+
+            // Le mot en grand, au centre-haut, qui se balance.
+            var big = new TextBlock { Text = w.Emoji, FontSize = 150, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0) };
+            var sway = new RotateTransform(0);
+            big.RenderTransform = sway;
+            Canvas.SetLeft(big, W / 2 - 85);
+            Canvas.SetTop(big, 40);
+            _canvas.Children.Add(big);
+            sway.BeginAnimation(RotateTransform.AngleProperty,
+                new DoubleAnimation(-7, 7, TimeSpan.FromSeconds(1.6))
+                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+
+            // Les rails.
+            var rail = new Rectangle { Width = W - 160, Height = 10, RadiusX = 5, RadiusY = 5, Fill = new SolidColorBrush(Color.FromRgb(0x8A, 0x7A, 0x6A)) };
+            Canvas.SetLeft(rail, 80);
+            Canvas.SetTop(rail, 500);
+            _canvas.Children.Add(rail);
+
+            // La LOCOMOTIVE (= début) et le DERNIER WAGON (= fin), nos boutons.
+            var loco = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = 300,
+                Height = 220,
+                Content = new StackPanel
+                {
+                    Children =
+                    {
+                        new TextBlock { Text = "🚂", FontSize = 110, HorizontalAlignment = HorizontalAlignment.Center },
+                        new TextBlock { Text = "au DÉBUT", FontSize = 28, FontWeight = FontWeights.Bold,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x2A, 0x5A, 0x3A)), HorizontalAlignment = HorizontalAlignment.Center },
+                    },
+                },
+            };
+            var wagon = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = 300,
+                Height = 220,
+                Content = new StackPanel
+                {
+                    Children =
+                    {
+                        new TextBlock { Text = "🚃🚩", FontSize = 110, HorizontalAlignment = HorizontalAlignment.Center },
+                        new TextBlock { Text = "à la FIN", FontSize = 28, FontWeight = FontWeights.Bold,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x1F, 0x33)), HorizontalAlignment = HorizontalAlignment.Center },
+                    },
+                },
+            };
+            void Answer(bool saidStart, Button btn)
+            {
+                if (Locked) return;
+                if (saidStart == w.AtStart)
+                {
+                    Locked = true;
+                    GameKit.Success();
+                    SoundFx.Whistle();
+                    Speech.SaySlow(w.Stretched + " ! Oui ! Le son " + w.Sound + " est " +
+                                   (w.AtStart ? "au DÉBUT" : "à la FIN") + " du mot ! Bravo !");
+                    Celebrate();
+                    _trainIdx++;
+                    if (_trainIdx >= 4)
+                    {
+                        Schedule(3200, () =>
+                        {
+                            Speak("Bravo ! Les maisons des sons ET le petit train : quelles bonnes oreilles !");
+                            Schedule(3000, NewRound);
+                        });
+                    }
+                    else Schedule(3200, BuildTrain);
+                }
+                else
+                {
+                    Shake(btn);
+                    Speech.SaySlow("Écoute encore : " + w.Stretched + " ! Où entends-tu " + w.Sound + " ?");
+                }
+            }
+            loco.Click += (s, e) => Answer(true, loco);
+            wagon.Click += (s, e) => Answer(false, wagon);
+            Canvas.SetLeft(loco, 240);
+            Canvas.SetTop(loco, 290);
+            Canvas.SetLeft(wagon, W - 540);
+            Canvas.SetTop(wagon, 290);
+            _canvas.Children.Add(loco);
+            _canvas.Children.Add(wagon);
+
+            SetBody(_canvas);
+            Speech.SaySlow(Cap(w.Stretched) + " ! Tu entends " + w.Sound + " au début, ou à la fin ?");
         }
 
         // La maison sautille de joie et des étoiles sortent de la cheminée.

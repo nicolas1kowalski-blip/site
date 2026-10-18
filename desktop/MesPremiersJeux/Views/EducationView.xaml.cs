@@ -48,6 +48,7 @@ namespace MesPremiersJeux.Views
                     ("🔢", "Les nombres", "PS · MS", c => new NumbersGame(c)),
                     ("🧺", "Le panier de 4", "MS", c => new CompleteGame(c)),
                     ("🎲", "Le nombre dans tous ses états", "MS", c => new NumberFormsGame(c)),
+                    ("🧩", "Reproduis le modèle", "MS", c => new ModelCopyGame(c)),
                 },
             },
             new Theme
@@ -58,6 +59,7 @@ namespace MesPremiersJeux.Views
                     ("🎨", "Couleurs magiques", "PS · MS", c => new ColorMagicGame(c)),
                     ("📏", "Grand ou petit", "PS", c => new SizeGame(c)),
                     ("🟡", "Les suites", "MS", c => new PatternGame(c)),
+                    ("📿", "Le collier de perles", "MS", c => new NecklaceGame(c)),
                     ("🖼️", "L'imagier", "PS · MS", c => new VocabGame(c)),
                     ("🧒", "Le corps", "PS · MS", c => new BodyGame(c)),
                 },
