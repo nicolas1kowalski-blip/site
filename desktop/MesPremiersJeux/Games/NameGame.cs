@@ -72,6 +72,7 @@ namespace MesPremiersJeux.Games
         private ScaleTransform[] _wagonScale;
         private double[] _wagonX;
         private double _wagonY, _wagonSize;
+        private bool _imgWagons; // vrais wagons dessinés (wagon-1..5) ?
 
         public NameGame(Action celebrate) : base(celebrate) { }
 
@@ -411,9 +412,10 @@ namespace MesPremiersJeux.Games
             double x0 = 250;
             _wagonY = 130;
 
-            var loco = new TextBlock { Text = "🚂", FontSize = 130 };
-            Canvas.SetLeft(loco, 60);
-            Canvas.SetTop(loco, _wagonY - 34);
+            _imgWagons = Art.Find("wagon-1") != null;
+            var loco = Art.Visual("locomotive", "🚂", 185);
+            Canvas.SetLeft(loco, 35);
+            Canvas.SetTop(loco, _wagonY + _wagonSize + 20 - 185); // posée au niveau des roues
             _trainLayer.Children.Add(loco);
 
             _wagons = new Border[n];
@@ -428,29 +430,42 @@ namespace MesPremiersJeux.Games
                 g.RenderTransform = sc;
                 _wagonScale[i] = sc;
 
+                var wimg = Art.Find("wagon-" + (i % 5 + 1));
                 var body = new Border
                 {
                     CornerRadius = new CornerRadius(18),
-                    Background = new SolidColorBrush(Color.FromArgb(0x2E, 0x9A, 0x8A, 0xB8)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x8A, 0xB8)),
+                    Background = wimg != null
+                        ? Brushes.Transparent
+                        : (Brush)new SolidColorBrush(Color.FromArgb(0x2E, 0x9A, 0x8A, 0xB8)),
+                    BorderBrush = wimg != null
+                        ? Brushes.Transparent
+                        : (Brush)new SolidColorBrush(Color.FromRgb(0x9A, 0x8A, 0xB8)),
                     BorderThickness = new Thickness(4),
                 };
+                if (wimg != null)
+                    body.Child = new Image { Source = wimg, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Bottom };
                 g.Children.Add(body);
                 var letter = new TextBlock
                 {
                     Text = _name[i].ToString(),
                     FontSize = _wagonSize * 0.56,
                     FontWeight = FontWeights.ExtraBold,
-                    Foreground = new SolidColorBrush(Color.FromArgb(0x55, 0x6B, 0x5A, 0x8A)),
+                    // Sur un wagon dessiné, le fantôme de lettre est blanc.
+                    Foreground = new SolidColorBrush(wimg != null
+                        ? Color.FromArgb(0xAA, 0xFF, 0xFF, 0xFF)
+                        : Color.FromArgb(0x55, 0x6B, 0x5A, 0x8A)),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
                 g.Children.Add(letter);
-                // Petites roues sous le wagon.
-                var wheels = new TextBlock { Text = "⚙⚙", FontSize = _wagonSize * 0.2, Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5A, 0x8A)) };
-                Canvas.SetLeft(wheels, x0 + i * (_wagonSize + gap) + _wagonSize * 0.24);
-                Canvas.SetTop(wheels, _wagonY + _wagonSize - 4);
-                _trainLayer.Children.Add(wheels);
+                if (wimg == null)
+                {
+                    // Petites roues sous le wagon (le wagon dessiné a les siennes).
+                    var wheels = new TextBlock { Text = "⚙⚙", FontSize = _wagonSize * 0.2, Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x5A, 0x8A)) };
+                    Canvas.SetLeft(wheels, x0 + i * (_wagonSize + gap) + _wagonSize * 0.24);
+                    Canvas.SetTop(wheels, _wagonY + _wagonSize - 4);
+                    _trainLayer.Children.Add(wheels);
+                }
 
                 _wagons[i] = body;
                 _wagonLetters[i] = letter;
@@ -512,7 +527,9 @@ namespace MesPremiersJeux.Games
                 }
                 else if (i > _slot)
                 {
-                    _wagons[i].BorderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x8A, 0xB8));
+                    _wagons[i].BorderBrush = _imgWagons
+                        ? Brushes.Transparent
+                        : (Brush)new SolidColorBrush(Color.FromRgb(0x9A, 0x8A, 0xB8));
                     _wagons[i].BorderThickness = new Thickness(4);
                 }
         }
@@ -561,6 +578,8 @@ namespace MesPremiersJeux.Games
             _wagons[slot].BorderBrush = Brushes.White;
             _wagons[slot].BorderThickness = new Thickness(5);
             _wagonLetters[slot].Foreground = Brushes.White;
+            if (_imgWagons)
+                _wagonLetters[slot].Effect = new DropShadowEffect { BlurRadius = 8, ShadowDepth = 1, Opacity = 0.75 };
             var pop = new DoubleAnimation(1, 1.25, TimeSpan.FromMilliseconds(240))
             { AutoReverse = true, EasingFunction = new SineEase() };
             _wagonScale[slot].BeginAnimation(ScaleTransform.ScaleXProperty, pop);

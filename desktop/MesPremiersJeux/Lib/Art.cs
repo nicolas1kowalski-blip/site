@@ -238,6 +238,10 @@ namespace MesPremiersJeux.Lib
                     "  maison-sons-1.png ... -4.png  (FACULTATIF : plusieurs poses de la\r\n" +
                     "  MÊME maison, à peine différentes — alternées doucement, la maison\r\n" +
                     "  RESPIRE ! 4 poses sont déjà fournies.)\r\n\r\n" +
+                    "Le train du prénom (fournis avec l'application) :\r\n" +
+                    "  locomotive.png                  (la locomotive rigolote)\r\n" +
+                    "  wagon-1.png ... wagon-5.png     (les wagons vides où les lettres\r\n" +
+                    "  du prénom viennent s'installer)\r\n\r\n" +
                     "Les planètes (TOUT est déjà fourni avec l'application) :\r\n" +
                     "  planete-soleil.png, planete-mercure.png, planete-venus.png,\r\n" +
                     "  planete-terre.png, planete-lune.png, planete-mars.png,\r\n" +

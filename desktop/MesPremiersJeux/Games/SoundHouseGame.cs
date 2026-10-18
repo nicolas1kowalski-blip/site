@@ -459,7 +459,7 @@ namespace MesPremiersJeux.Games
                 {
                     Children =
                     {
-                        new TextBlock { Text = "🚂", FontSize = 110, HorizontalAlignment = HorizontalAlignment.Center },
+                        Art.Visual("locomotive", "🚂", 140),
                         new TextBlock { Text = "au DÉBUT", FontSize = 28, FontWeight = FontWeights.Bold,
                             Foreground = new SolidColorBrush(Color.FromRgb(0x2A, 0x5A, 0x3A)), HorizontalAlignment = HorizontalAlignment.Center },
                     },
@@ -474,7 +474,7 @@ namespace MesPremiersJeux.Games
                 {
                     Children =
                     {
-                        new TextBlock { Text = "🚃🚩", FontSize = 110, HorizontalAlignment = HorizontalAlignment.Center },
+                        Art.Visual("wagon-3", "🚃🚩", 140),
                         new TextBlock { Text = "à la FIN", FontSize = 28, FontWeight = FontWeights.Bold,
                             Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x1F, 0x33)), HorizontalAlignment = HorizontalAlignment.Center },
                     },
