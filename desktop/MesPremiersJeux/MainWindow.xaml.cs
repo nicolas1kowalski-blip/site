@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -348,11 +349,11 @@ namespace MesPremiersJeux
                 switch (driver)
                 {
                     case "direct":
-                        StartChain("consumer", "stream", "pro"); // secours si la tablette ne répond pas
+                        StartChain(Engines("consumer", "streamT", "stream", "pro")); // secours si la tablette ne répond pas
                         break;
 
                     case "stream":
-                        StartChain("stream", "pro");
+                        StartChain(Engines("streamT", "stream", "pro"));
                         break;
 
                     case "pro":
@@ -367,7 +368,7 @@ namespace MesPremiersJeux
                         break;
 
                     default: // auto
-                        StartChain("pro", "consumer", "stream");
+                        StartChain(Engines("pro", "consumer", "streamT", "stream"));
                         break;
                 }
             }
@@ -416,13 +417,13 @@ namespace MesPremiersJeux
                 }
                 // Un flux VIVANT mais encore sans point valide (personne devant la
                 // caméra ?) : on lui laisse 30 s au lieu de 6 avant de passer au suivant.
-                bool alive = order[i] == "stream" && (_stream?.Events ?? 0) > 0;
+                bool alive = order[i].StartsWith("stream") && (_stream?.Events ?? 0) > 0;
                 double limit = alive ? 30.0 : 6.0;
                 if ((DateTime.UtcNow - t0).TotalSeconds < limit) return;
 
                 Lib.Log.Write("app", "Pas de regard par " + Label(order[i]) + " en " + limit + " s — " + Diag(order[i]));
                 if (order[i] == "consumer") { try { _gaze?.Dispose(); } catch { } _gaze = null; }
-                if (order[i] == "stream") { try { _stream?.Dispose(); } catch { } _stream = null; }
+                if (order[i].StartsWith("stream")) { try { _stream?.Dispose(); } catch { } _stream = null; }
                 i++;
                 t0 = DateTime.UtcNow;
                 if (i >= order.Length)
@@ -438,11 +439,30 @@ namespace MesPremiersJeux
             w.Start();
         }
 
+        // « streamT » = le Stream Engine INSTALLÉ sur la tablette (plus récent) ;
+        // retiré de la liste s'il n'y en a pas.
+        private string[] Engines(params string[] keys) =>
+            keys.Where(k => k != "streamT" || TabletEngine() != null).ToArray();
+
+        private string _tabletEngine;
+        private bool _tabletSearched;
+
+        private string TabletEngine()
+        {
+            if (_tabletSearched) return _tabletEngine;
+            _tabletSearched = true;
+            try { _tabletEngine = StreamEngineSource.FindInstalled().FirstOrDefault(); }
+            catch (Exception ex) { Lib.Log.Write("stream", "Recherche du moteur de la tablette : " + ex.Message); }
+            Lib.Log.Write("stream", "Moteur de la tablette retenu : " + (_tabletEngine ?? "aucun (moteur de l'application seul)"));
+            return _tabletEngine;
+        }
+
         private void StartOne(string k)
         {
             try
             {
                 if (k == "consumer") { _gaze = NewConsumer(); _gaze.Start(); }
+                else if (k == "streamT") { _stream = NewStream(TabletEngine()); _stream.Start(); }
                 else if (k == "stream") { _stream = NewStream(); _stream.Start(); }
                 else if (_pro == null) { _pro = NewPro(); _pro.Start(); }
             }
@@ -451,12 +471,13 @@ namespace MesPremiersJeux
 
         private bool HasGaze(string k) =>
             k == "consumer" ? (_gaze?.Samples ?? 0) > 0
-            : k == "stream" ? _stream?.HasGaze == true
+            : k.StartsWith("stream") ? _stream?.HasGaze == true
             : _pro?.HasGaze == true;
 
         private static string Label(string k) =>
             k == "consumer" ? "SDK grand public (Tobii.Interaction)"
-            : k == "stream" ? "Stream Engine (comme Grid 3)"
+            : k == "streamT" ? "Stream Engine de la tablette (comme Grid 3)"
+            : k == "stream" ? "Stream Engine de l'application"
             : "Pro SDK (Tobii.Research)";
 
         private string Diag(string k)
@@ -470,13 +491,13 @@ namespace MesPremiersJeux
                                        : " — rien du tout (moteur Tobii « Interaction » absent ou incompatible)")
                            : "");
             }
-            if (k == "stream") return (_stream?.Status ?? "—") + ", points " + (_stream?.Stats ?? "—");
+            if (k.StartsWith("stream")) return (_stream?.Status ?? "—") + ", points " + (_stream?.Stats ?? "—");
             return "points " + (_pro?.Stats ?? "—") + ", guide " + (_pro?.GuideEvents ?? 0);
         }
 
-        private StreamEngineSource NewStream()
+        private StreamEngineSource NewStream(string dllPath = null)
         {
-            var st = new StreamEngineSource();
+            var st = new StreamEngineSource(dllPath);
             st.Gaze += p => _dwell.PushGaze(p);
             st.Presence += v => _dwell.PushEye(v);
             return st;
@@ -571,7 +592,7 @@ namespace MesPremiersJeux
                 long cg = consumer.Samples, ce = consumer.EyeSamples;
                 try { consumer.Dispose(); } catch { }
                 _gaze = null;
-                var stream = NewStream();
+                var stream = NewStream(TabletEngine()); // le moteur de la tablette s'il existe
                 try { stream.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test Stream Engine : " + ex.Message); }
                 _stream = stream;
 
