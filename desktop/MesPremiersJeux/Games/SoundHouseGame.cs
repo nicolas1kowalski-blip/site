@@ -240,9 +240,20 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(image, 0);
             _canvas.Children.Add(image);
 
-            // LA MAISON RESPIRE : s'il y a plusieurs poses (maison-sons-1..N),
-            // on les alterne doucement en aller-retour (1 2 3 4 3 2...) —
-            // les notes, bulles et petits traits bougent, la scène est vivante.
+            // LA RESPIRATION : un très léger gonflement continu, ancré au sol —
+            // fluide et sans à-coup (les poses, elles, ne changent que les
+            // petits détails : notes, traits, confettis).
+            image.RenderTransformOrigin = new Point(0.5, 1);
+            var bsc = new ScaleTransform(1, 1);
+            image.RenderTransform = bsc;
+            var breath = new DoubleAnimation(1, 1.015, TimeSpan.FromSeconds(2.2))
+            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+            bsc.BeginAnimation(ScaleTransform.ScaleXProperty, breath);
+            bsc.BeginAnimation(ScaleTransform.ScaleYProperty, breath);
+
+            // Les poses quasi identiques (maison-sons-1..N, murs LISSES — la
+            // pose « froissée » a été écartée) alternent en aller-retour pour
+            // animer notes, bulles et petits traits.
             var frames = new List<ImageSource>();
             for (int i = 1; i <= 8; i++)
             {
@@ -253,8 +264,8 @@ namespace MesPremiersJeux.Games
             if (frames.Count >= 2)
             {
                 int step = 0;
-                int cycle = 2 * frames.Count - 2;
-                var beat = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(550) };
+                int cycle = Math.Max(2, 2 * frames.Count - 2);
+                var beat = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
                 beat.Tick += (s, e) =>
                 {
                     if (!image.IsLoaded) { beat.Stop(); return; } // scène quittée
