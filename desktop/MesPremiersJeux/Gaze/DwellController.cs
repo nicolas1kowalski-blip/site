@@ -68,6 +68,7 @@ namespace MesPremiersJeux.Gaze
         private const double CooldownSeconds = 0.5;
         private const double MoveEps = 6;           // px : en deçà, on considère le point immobile
         private const double GazeLostSeconds = 0.60; // yeux invalides plus longtemps = regard perdu
+        private const double CursorLostSeconds = 1.5; // idem quand le curseur pilote (clignements tolérés)
                                                      // (0,6 s : un clignement ne coupe pas le point)
         private const double FrozenSeconds = 2.2;   // point figé plus longtemps = pas d'action
         private const double IndicatorR = 37;       // rayon de l'arc de progression
@@ -481,7 +482,12 @@ namespace MesPremiersJeux.Gaze
                 _eyeSeen = false; // source de présence morte : on n'aveugle pas l'appli
                 Lib.Log.Write("dwell", "Source de présence muette depuis 10 s : détection de perte désactivée");
             }
-            double lostAfter = Math.Max(GazeLostSeconds, _eyeIntervalEma * 4 + 0.15);
+            // Quand le CURSEUR pilote (TD Control / Computer Control, ex. PCEye 5 :
+            // pas de regard direct), le logiciel de la tablette gère déjà les
+            // clignements : on tolère 1,5 s de « yeux invalides » au lieu de 0,6 s,
+            // sinon chaque clignement remettait la fixation à zéro.
+            bool cursorDriven = PreferCursor || !(_hasGaze && (t - _lastGazeTime) < 0.4);
+            double lostAfter = Math.Max(cursorDriven ? CursorLostSeconds : GazeLostSeconds, _eyeIntervalEma * 4 + 0.15);
             if (_eyeSeen && (t - _lastEyeValidTime) > lostAfter)
             {
                 if (!_lostLogged)
