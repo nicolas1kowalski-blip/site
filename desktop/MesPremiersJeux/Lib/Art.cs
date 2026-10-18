@@ -123,7 +123,7 @@ namespace MesPremiersJeux.Lib
             { "🍃", "feuille" }, { "🍂", "feuille" }, { "🐚", "coquillage" }, { "🌈", "arc-en-ciel" },
             { "🌙", "lune" }, { "❄", "flocon" }, { "🌻", "tournesol" }, { "🌵", "cactus" },
             { "☀", "soleil" }, { "🌞", "soleil" }, { "🌸", "fleur" }, { "🌼", "fleur" },
-            { "🌺", "fleur" }, { "🌳", "arbre" }, { "🌲", "arbre" }, { "🌠", "etoile" },
+            { "🌺", "fleur" }, { "🌳", "arbre" }, { "🌲", "arbre" }, { "🌠", "etoile-filante" },
             // Objets
             { "🔨", "marteau" }, { "🖌", "pinceau" }, { "🎨", "palette" }, { "🎒", "sac" },
             { "✏", "crayon" }, { "🔭", "telescope" }, { "🏀", "ballon-basket" }, { "🔍", "loupe" },
@@ -167,7 +167,12 @@ namespace MesPremiersJeux.Lib
             { "🧆", "plat-falafel" }, { "🍟", "plat-fish-and-chips" },
             // Monuments
             { "🗼", "lieu-france" }, { "🗽", "lieu-amerique" }, { "🗻", "lieu-japon" },
-            { "🏯", "lieu-chine" }, { "🏰", "monument-neuschwanstein" },
+            { "🏯", "lieu-chine" }, { "🏰", "chateau-conte" },
+            // Le monde magique
+            { "👸", "princesse" }, { "🧚", "fee" }, { "🪄", "baguette-magique" },
+            { "🛡", "chevalier" }, { "❤", "coeur" }, { "💖", "coeur-rose" },
+            { "💗", "coeur-framboise" }, { "💜", "coeur-violet" }, { "☁", "nuage" },
+            { "💎", "diamant" }, { "⭐", "etoile" },
         };
 
         /// <summary>
@@ -235,7 +240,12 @@ namespace MesPremiersJeux.Lib
                     "  surprise-5.png  (baleine)     surprise-6.png  (tracteur)\r\n" +
                     "  surprise-7.png  (arc-en-ciel) surprise-8.png  (dinosaure)\r\n" +
                     "  surprise-9.png  (gâteau)      surprise-10.png (éléphant)\r\n" +
-                    "  surprise-11.png (bateau)      surprise-12.png (manège)\r\n\r\n" +
+                    "  surprise-11.png (bateau)      surprise-12.png (princesse)\r\n" +
+                    "  surprise-13.png (fée)         surprise-14.png (chevalier)\r\n" +
+                    "  surprise-15.png (dragon)      (toutes FOURNIES avec l'application)\r\n\r\n" +
+                    "Le monde magique (fourni) : princesse, fee, chevalier, chateau-conte,\r\n" +
+                    "  baguette-magique, coeur, nuage, diamant, etoile-filante... (+ couleurs :\r\n" +
+                    "  princesse-bleue, coeur-violet, etoile-rose, dragon-rouge...)\r\n\r\n" +
                     "Décors de scène (toute l'image de fond d'un jeu) :\r\n" +
                     "  decor-oiseaux.png   (les oiseaux chanteurs — ex. « grand arbre\r\n" +
                     "  feuillu avec deux branches horizontales dégagées, ciel doux,\r\n" +

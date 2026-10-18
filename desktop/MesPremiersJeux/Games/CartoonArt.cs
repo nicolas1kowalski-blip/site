@@ -322,7 +322,7 @@ namespace MesPremiersJeux.Games
 
         public static readonly List<CartoonItem> Items = new List<CartoonItem>
         {
-            new CartoonItem { Name = "chateau",   Fr = "le château",     Cat = "la magie",    Build = Pic("monument-neuschwanstein", Castle) },
+            new CartoonItem { Name = "chateau",   Fr = "le château",     Cat = "la magie",    Build = Pic("chateau-conte", Castle) },
             new CartoonItem { Name = "chat",      Fr = "le chat",        Cat = "les animaux", Build = Pic("chat", Cat) },
             new CartoonItem { Name = "cochon",    Fr = "le cochon",      Cat = "les animaux", Build = Pic("cochon", Pig) },
             new CartoonItem { Name = "chien",     Fr = "le chien",       Cat = "les animaux", Build = Pic("chien", Dog) },
@@ -331,14 +331,14 @@ namespace MesPremiersJeux.Games
             new CartoonItem { Name = "poisson",   Fr = "le poisson",     Cat = "les animaux", Build = Pic("poisson", Fish) },
             new CartoonItem { Name = "papillon",  Fr = "le papillon",    Cat = "les animaux", Build = Pic("papillon", Butterfly) },
             new CartoonItem { Name = "licorne",   Fr = "la licorne",     Cat = "la magie",    Build = Pic("licorne", Unicorn) },
-            new CartoonItem { Name = "princesse", Fr = "la princesse",   Cat = "la magie",    Build = Princess },
+            new CartoonItem { Name = "princesse", Fr = "la princesse",   Cat = "la magie",    Build = Pic("princesse", Princess) },
             new CartoonItem { Name = "etoile",    Fr = "l'étoile",       Cat = "la magie",    Build = Pic("etoile", Star) },
-            new CartoonItem { Name = "coeur",     Fr = "le cœur",        Cat = "la magie",    Build = Heart },
+            new CartoonItem { Name = "coeur",     Fr = "le cœur",        Cat = "la magie",    Build = Pic("coeur", Heart) },
             new CartoonItem { Name = "fleur",     Fr = "la fleur",       Cat = "la magie",    Build = Pic("fleur", Flower) },
             new CartoonItem { Name = "couronne",  Fr = "la couronne",    Cat = "la magie",    Build = Pic("couronne", Crown) },
             new CartoonItem { Name = "arcenciel", Fr = "l'arc-en-ciel",  Cat = "la magie",    Build = Pic("arc-en-ciel", Rainbow) },
             new CartoonItem { Name = "soleil",    Fr = "le soleil",      Cat = "la magie",    Build = Pic("soleil", Sun) },
-            new CartoonItem { Name = "nuage",     Fr = "le nuage",       Cat = "la magie",    Build = Cloud },
+            new CartoonItem { Name = "nuage",     Fr = "le nuage",       Cat = "la magie",    Build = Pic("nuage", Cloud) },
         };
     }
 }

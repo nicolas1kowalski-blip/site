@@ -25,7 +25,8 @@ namespace MesPremiersJeux.Games
             ("🦁", "un lion"), ("🦄", "une licorne"), ("🚀", "une fusée"),
             ("🏰", "un château"), ("🐳", "une baleine"), ("🚜", "un tracteur"),
             ("🌈", "un arc-en-ciel"), ("🦖", "un dinosaure"), ("🎂", "un gâteau"),
-            ("🐘", "un éléphant"), ("⛵", "un bateau"), ("🎠", "un manège"),
+            ("🐘", "un éléphant"), ("⛵", "un bateau"), ("👸", "une princesse"),
+            ("🧚", "une fée"), ("🛡️", "un chevalier"), ("🐉", "un dragon"),
         };
 
         private readonly Random _rng = new Random();
