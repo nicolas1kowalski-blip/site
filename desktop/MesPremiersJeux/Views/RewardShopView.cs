@@ -42,7 +42,7 @@ namespace MesPremiersJeux.Views
 
         private readonly Reward[] _rewards;
 
-        private static string VideosDir => Path.Combine(UserContent.RootDir, "Videos");
+        private static string VideosDir => System.IO.Path.Combine(UserContent.RootDir, "Videos");
 
         public RewardShopView()
         {
@@ -364,7 +364,7 @@ namespace MesPremiersJeux.Views
                 if (!Directory.Exists(VideosDir)) return Array.Empty<string>();
                 return Directory.GetFiles(VideosDir)
                     .Where(f => new[] { ".mp4", ".wmv", ".avi", ".mov" }
-                        .Contains(Path.GetExtension(f).ToLowerInvariant()))
+                        .Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
                     .ToArray();
             }
             catch { return Array.Empty<string>(); }
