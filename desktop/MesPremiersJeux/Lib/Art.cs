@@ -196,10 +196,11 @@ namespace MesPremiersJeux.Lib
                     "  à moitié ouvertes — le battement devient tout fluide.)\r\n" +
                     "  oiseau-1-vole3.png ... (FACULTATIF : 2e pose intermédiaire,\r\n" +
                     "  ailes à peine ouvertes — battement encore plus fluide.)\r\n\r\n" +
-                    "Tartes à la crème :\r\n" +
-                    "  visage-1.png ... visage-8.png   (visages rigolos)\r\n" +
-                    "  visage-touche-1.png ... visage-touche-4.png   (grimaces « touché ! »)\r\n" +
-                    "  tarte.png                        (la tarte qui vole)\r\n\r\n" +
+                    "Tartes à la crème (21 personnages FOURNIS avec l'application) :\r\n" +
+                    "  visage-1.png ... visage-21.png        (visages rigolos)\r\n" +
+                    "  visage-touche-1.png ... -21.png       (le MÊME personnage qui a\r\n" +
+                    "  reçu la tarte — les numéros se correspondent !)\r\n" +
+                    "  tarte.png                             (la tarte qui vole)\r\n\r\n" +
                     "La fenêtre magique (les surprises cachées) :\r\n" +
                     "  surprise-1.png  (lion)        surprise-2.png  (licorne)\r\n" +
                     "  surprise-3.png  (fusée)       surprise-4.png  (château)\r\n" +

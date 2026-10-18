@@ -88,14 +88,28 @@ namespace MesPremiersJeux.Games
             return (60, 80);
         }
 
+        // Combien de visages en IMAGES sont disponibles (21 fournis avec
+        // l'application, remplaçables par le parent) — compté une fois.
+        private static int _imgFaces = -1;
+
+        private static int ImgFaces()
+        {
+            if (_imgFaces >= 0) return _imgFaces;
+            int n = 0;
+            while (n < 40 && Art.Find("visage-" + (n + 1)) != null) n++;
+            _imgFaces = n;
+            return n;
+        }
+
         private void SpawnFace()
         {
             var (fx, fy) = RandomSpot();
             _lastX = fx;
             _lastY = fy;
 
-            int fi = _rng.Next(Faces.Length);
-            // Le visage : image du parent (visage-N.png) → dessin vectoriel
+            int count = ImgFaces();
+            int fi = _rng.Next(count > 0 ? count : Faces.Length);
+            // Le visage : image (visage-N.png, 21 fournis) → dessin vectoriel
             // intégré (FaceArt) ; l'emoji n'est plus qu'un secours.
             var imgF = Art.Find("visage-" + (fi + 1));
             var visual = imgF != null
@@ -106,7 +120,7 @@ namespace MesPremiersJeux.Games
             var face = SceneButton(new ContentControl { Content = visual }, FaceSize, FaceSize);
             face.RenderTransformOrigin = new Point(0.5, 0.5);
             var captured = face;
-            face.Click += (s, e) => ThrowPie(captured, fx, fy);
+            face.Click += (s, e) => ThrowPie(captured, fx, fy, fi);
             Canvas.SetLeft(face, fx);
             Canvas.SetTop(face, fy);
             _canvas.Children.Add(face);
@@ -135,7 +149,7 @@ namespace MesPremiersJeux.Games
             return new Button { Template = tpl, Width = w, Height = h, Focusable = false, Content = content, Cursor = System.Windows.Input.Cursors.Hand };
         }
 
-        private void ThrowPie(Button face, double fx, double fy)
+        private void ThrowPie(Button face, double fx, double fy, int fi)
         {
             if (Locked) return;
             face.IsHitTestVisible = false;
@@ -165,17 +179,20 @@ namespace MesPremiersJeux.Games
             ay.Completed += (s, e) =>
             {
                 _canvas.Children.Remove(pie);
-                Splat(face, fx, fy);
+                Splat(face, fx, fy, fi);
             };
             pie.BeginAnimation(Canvas.LeftProperty, ax);
             pie.BeginAnimation(Canvas.TopProperty, ay);
         }
 
-        private void Splat(Button face, double fx, double fy)
+        private void Splat(Button face, double fx, double fy, int fi)
         {
             SoundFx.Splat();
+            // La grimace du MÊME personnage (visage-touche-N assorti) ; sinon
+            // une grimace au hasard, comme avant.
+            var imgH = Art.Find("visage-touche-" + (fi + 1));
             int hi = _rng.Next(Hit.Length);
-            var imgH = Art.Find("visage-touche-" + (hi + 1));
+            if (imgH == null) imgH = Art.Find("visage-touche-" + (hi + 1));
             ((ContentControl)face.Content).Content = imgH != null
                 ? (FrameworkElement)new Image { Source = imgH, Width = 265, Height = 265, Stretch = Stretch.Uniform }
                 : FaceArt.Hit(hi, 265);
