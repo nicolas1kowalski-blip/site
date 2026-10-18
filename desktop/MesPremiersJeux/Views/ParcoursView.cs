@@ -31,6 +31,7 @@ namespace MesPremiersJeux.Views
 
         private readonly Random _rng = new Random();
         private readonly Grid _host;
+        private readonly Canvas _fx;
         private readonly StackPanel _strip;
         private List<Step> _steps;
         private int _current;
@@ -67,6 +68,11 @@ namespace MesPremiersJeux.Views
             _host = new Grid();
             Grid.SetRow(_host, 1);
             root.Children.Add(_host);
+
+            // Le canevas des célébrations, par-dessus tout.
+            _fx = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
+            Grid.SetRowSpan(_fx, 2);
+            root.Children.Add(_fx);
 
             Content = root;
             Unloaded += (s, e) => StopStep();
@@ -217,6 +223,7 @@ namespace MesPremiersJeux.Views
         // Les jeux appellent ceci à chaque réussite (c'est leur « celebrate »).
         private void OnStepCelebrate()
         {
+            CelebrationKit.Play(_fx);
             _starsInStep++;
             if (_starsInStep >= 2) StepDone();
         }
