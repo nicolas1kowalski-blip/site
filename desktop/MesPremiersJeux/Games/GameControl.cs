@@ -41,7 +41,7 @@ namespace MesPremiersJeux.Games
             PreviewMouseLeftButtonDown += (s, e) =>
             {
                 if (_hint != null) { _hint.Stop(); _hint.Start(); }
-                if (GateVoice && Speech.IsBusy && Speech.BusyElapsedSeconds < 7)
+                if (GateVoice && Speech.IsGating && Speech.BusyElapsedSeconds < 7)
                 {
                     e.Handled = true;
                     ShowListenCue(e.GetPosition(this));

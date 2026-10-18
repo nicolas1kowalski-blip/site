@@ -60,6 +60,21 @@ namespace MesPremiersJeux.Lib
         public static double BusyElapsedSeconds =>
             IsBusy ? (DateTime.Now - _busyStart).TotalSeconds : 0;
 
+        // ------------------------------------------------------------------
+        //  Le verrou ne vaut que pour les CONSIGNES : les phrases dites
+        //  lentement (SaySlow) et les phrases longues (explications). Les
+        //  petits retours (« L ! Bravo ! ») ne bloquent JAMAIS le clic
+        //  suivant — sinon, enchaîner les lettres du prénom ne marchait
+        //  qu'une fois sur deux.
+        // ------------------------------------------------------------------
+        private static bool _gate;
+
+        /// <summary>La voix parle ET c'est une consigne à écouter.</summary>
+        public static bool IsGating => _gate && IsBusy;
+
+        /// <summary>La phrase en cours ne doit pas bloquer (voix de papa/maman…).</summary>
+        public static void ClearGate() => _gate = false;
+
         /// <summary>Déclare la voix occupée pendant « seconds » (0 = libre).</summary>
         public static void MarkBusy(double seconds)
         {
@@ -132,6 +147,9 @@ namespace MesPremiersJeux.Lib
         public static void Say(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
+            // Seules les phrases LONGUES (consignes, explications) verrouillent
+            // les clics ; les petits retours laissent l'enfant enchaîner.
+            _gate = text.Length >= 60;
 
             // Si la voix de papa/maman est en train de parler (VoiceBank), on
             // attend poliment la fin avant de parler à notre tour.
@@ -161,6 +179,7 @@ namespace MesPremiersJeux.Lib
         public static void SaySlow(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
+            _gate = true; // dit lentement = à écouter jusqu'au bout
             double wait = VoiceBank.RemainingSeconds();
             if (wait > 0.1)
             {

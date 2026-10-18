@@ -79,7 +79,8 @@ namespace MesPremiersJeux.Lib
                 _player.Play();
                 double dur = WavSeconds(path);
                 _clipUntil = DateTime.Now.AddSeconds(dur + 0.2);
-                Speech.MarkBusy(dur + 0.25); // le verrou « la voix d'abord » couvre aussi papa/maman
+                Speech.MarkBusy(dur + 0.25); // la synthèse attend la fin du clip
+                Speech.ClearGate();          // ... mais un bravo ne bloque pas les clics
                 return true;
             }
             catch { return false; }
