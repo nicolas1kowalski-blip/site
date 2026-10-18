@@ -26,6 +26,7 @@ namespace MesPremiersJeux.Games
         private sealed class Planet
         {
             public int Art;          // index PlanetArt
+            public string Key;       // nom de fichier : planete-<Key> / photo-<Key>
             public string Name;      // « Saturne »
             public string Fun;       // sa présentation rigolote
             public string Clue;      // l'indice de l'acte 2 (« la planète rouge »)
@@ -34,15 +35,25 @@ namespace MesPremiersJeux.Games
 
         private static readonly Planet[] All =
         {
-            new Planet { Art = 1, Name = "Mercure", Fun = "la toute petite, la plus proche du Soleil ! Elle a plein de petits trous, comme la Lune !", Clue = "la toute petite planète grise", Size = 100 },
-            new Planet { Art = 2, Name = "Vénus", Fun = "la planète dorée ! C'est la plus chaude de toutes !", Clue = "la planète dorée", Size = 125 },
-            new Planet { Art = 3, Name = "la Terre", Fun = "notre maison ! La planète bleue, avec ses mers et ses forêts !", Clue = "notre maison, la planète bleue", Size = 135 },
-            new Planet { Art = 4, Name = "Mars", Fun = "la planète rouge ! C'est là que vont les robots explorateurs !", Clue = "la planète rouge", Size = 120 },
-            new Planet { Art = 5, Name = "Jupiter", Fun = "la plus GROSSE de toutes ! Une vraie géante, avec sa grande tache rouge !", Clue = "la plus grosse, la géante", Size = 195 },
-            new Planet { Art = 6, Name = "Saturne", Fun = "la planète aux grands anneaux ! La plus élégante !", Clue = "la planète aux grands anneaux", Size = 185 },
-            new Planet { Art = 7, Name = "Uranus", Fun = "la planète bleu-vert, toute penchée sur le côté !", Clue = "la planète bleu-vert", Size = 125 },
-            new Planet { Art = 8, Name = "Neptune", Fun = "la planète bleu foncé, tout au bout, où souffle un vent terrible !", Clue = "la planète bleu foncé, la plus lointaine", Size = 125 },
+            new Planet { Art = 1, Key = "mercure", Name = "Mercure", Fun = "la toute petite, la plus proche du Soleil ! Elle a plein de petits trous, comme la Lune !", Clue = "la toute petite planète grise", Size = 100 },
+            new Planet { Art = 2, Key = "venus", Name = "Vénus", Fun = "la planète dorée ! C'est la plus chaude de toutes !", Clue = "la planète dorée", Size = 125 },
+            new Planet { Art = 3, Key = "terre", Name = "la Terre", Fun = "notre maison ! La planète bleue, avec ses mers et ses forêts !", Clue = "notre maison, la planète bleue", Size = 135 },
+            new Planet { Art = 4, Key = "mars", Name = "Mars", Fun = "la planète rouge ! C'est là que vont les robots explorateurs !", Clue = "la planète rouge", Size = 120 },
+            new Planet { Art = 5, Key = "jupiter", Name = "Jupiter", Fun = "la plus GROSSE de toutes ! Une vraie géante, avec sa grande tache rouge !", Clue = "la plus grosse, la géante", Size = 195 },
+            new Planet { Art = 6, Key = "saturne", Name = "Saturne", Fun = "la planète aux grands anneaux ! La plus élégante !", Clue = "la planète aux grands anneaux", Size = 185 },
+            new Planet { Art = 7, Key = "uranus", Name = "Uranus", Fun = "la planète bleu-vert, toute penchée sur le côté !", Clue = "la planète bleu-vert", Size = 125 },
+            new Planet { Art = 8, Key = "neptune", Name = "Neptune", Fun = "la planète bleu foncé, tout au bout, où souffle un vent terrible !", Clue = "la planète bleu foncé, la plus lointaine", Size = 125 },
         };
+
+        // L'astre : l'AUTOCOLLANT dessiné s'il existe (planete-<key>, fournis
+        // avec l'application), sinon le dessin vectoriel PlanetArt.
+        private static FrameworkElement Orb(string key, int art, double size)
+        {
+            var img = Art.Find("planete-" + key);
+            return img != null
+                ? (FrameworkElement)new Image { Source = img, Width = size, Height = size, Stretch = Stretch.Uniform }
+                : PlanetArt.Make(art, size);
+        }
 
         private readonly Random _rng = new Random();
         private Canvas _canvas;
@@ -63,14 +74,28 @@ namespace MesPremiersJeux.Games
         private void SpaceBackground()
         {
             _canvas = new Canvas { Width = W, Height = H };
-            _canvas.Children.Add(new Rectangle
+            // La grande scène spatiale dessinée (decor-espace) si elle existe,
+            // ASSOMBRIE pour que les planètes du jeu restent bien lisibles.
+            var decor = Art.Find("decor-espace");
+            if (decor != null)
             {
-                Width = W,
-                Height = H,
-                RadiusX = 26,
-                RadiusY = 26,
-                Fill = new LinearGradientBrush(Color.FromRgb(0x1A, 0x1E, 0x4A), Color.FromRgb(0x3A, 0x2A, 0x6E), 90),
-            });
+                _canvas.Children.Add(new Image { Source = decor, Width = W, Height = H, Stretch = Stretch.UniformToFill });
+                _canvas.Children.Add(new Rectangle
+                {
+                    Width = W,
+                    Height = H,
+                    Fill = new SolidColorBrush(Color.FromArgb(150, 0x14, 0x16, 0x3A)),
+                });
+            }
+            else
+                _canvas.Children.Add(new Rectangle
+                {
+                    Width = W,
+                    Height = H,
+                    RadiusX = 26,
+                    RadiusY = 26,
+                    Fill = new LinearGradientBrush(Color.FromRgb(0x1A, 0x1E, 0x4A), Color.FromRgb(0x3A, 0x2A, 0x6E), 90),
+                });
             for (int i = 0; i < 34; i++)
             {
                 var star = new TextBlock
@@ -139,7 +164,7 @@ namespace MesPremiersJeux.Games
             SpaceBackground();
 
             // Le Soleil, énorme, à gauche — lui aussi parle.
-            var sun = SceneButton(PlanetArt.Make(0, 280), 300, 300);
+            var sun = SceneButton(Orb("soleil", 0, 280), 300, 300);
             sun.Click += (s, e) =>
             {
                 if (Locked) return;
@@ -157,7 +182,7 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < All.Length; i++)
             {
                 var p = All[i];
-                var btn = SceneButton(PlanetArt.Make(p.Art, p.Size), Math.Max(150, p.Size + 40), Math.Max(150, p.Size + 40));
+                var btn = SceneButton(Orb(p.Key, p.Art, p.Size), Math.Max(150, p.Size + 40), Math.Max(150, p.Size + 40));
                 int idx = i;
                 var captured = btn;
                 btn.Click += (s, e) =>
@@ -267,7 +292,7 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < choices.Count; i++)
             {
                 var p = choices[i];
-                var btn = SceneButton(PlanetArt.Make(p.Art, 230), 290, 290);
+                var btn = SceneButton(Orb(p.Key, p.Art, 230), 290, 290);
                 var captured = btn;
                 if (p == target) correctBtn = btn;
                 btn.Click += (s, e) =>
@@ -283,7 +308,12 @@ namespace MesPremiersJeux.Games
                             GameKit.Success();
                             Speak("Oui ! " + target.Name + ", " + target.Clue + " ! Bravo !");
                             Celebrate();
-                            Schedule(2600, NextQuiz);
+                            if (Art.Find("photo-" + target.Key) != null)
+                            {
+                                Schedule(2400, () => ShowRealPhoto(target));
+                                Schedule(6400, NextQuiz);
+                            }
+                            else Schedule(2600, NextQuiz);
                         }
                         else
                         {
@@ -311,6 +341,58 @@ namespace MesPremiersJeux.Games
             Speak(_act == 2
                 ? "Trouve " + target.Clue + " !"
                 : "La fusée veut aller sur " + target.Name + " ! Regarde " + target.Clue + " pour l'y emmener !");
+        }
+
+        // La VRAIE planète, en photo prise dans l'espace : un petit émerveillement
+        // pédagogique après le dessin animé. La carte surgit, puis s'efface.
+        private void ShowRealPhoto(Planet p)
+        {
+            var img = Art.Find("photo-" + p.Key);
+            if (img == null) return;
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(30),
+                Background = new SolidColorBrush(Color.FromArgb(235, 0x10, 0x12, 0x30)),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(4),
+                Padding = new Thickness(20, 16, 20, 12),
+                IsHitTestVisible = false,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                Child = new StackPanel
+                {
+                    Children =
+                    {
+                        new Image { Source = img, Width = 300, Height = 300, Stretch = Stretch.Uniform },
+                        new TextBlock
+                        {
+                            Text = "✨ " + p.Name + " — en vrai ! ✨",
+                            FontSize = 30,
+                            FontWeight = FontWeights.Bold,
+                            Foreground = Brushes.White,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(0, 8, 0, 0),
+                        },
+                    },
+                },
+            };
+            Canvas.SetLeft(card, W / 2 - 190);
+            Canvas.SetTop(card, 110);
+            card.SetValue(Panel.ZIndexProperty, 90);
+            _canvas.Children.Add(card);
+            Speak("Et regarde : " + p.Name + " en vrai, prise en photo dans l'espace !");
+
+            var sc = new ScaleTransform(0.3, 0.3);
+            card.RenderTransform = sc;
+            var pop = new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(420))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+            Schedule(3400, () =>
+            {
+                var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(450));
+                fade.Completed += (s, e) => _canvas.Children.Remove(card);
+                card.BeginAnimation(OpacityProperty, fade);
+            });
         }
 
         private void Launch(double tx, double ty, Planet target)
@@ -348,7 +430,12 @@ namespace MesPremiersJeux.Games
                     GameKit.Success();
                     Speak("La fusée est arrivée sur " + target.Name + " ! Bravo, petit astronaute !");
                     Celebrate();
-                    Schedule(3000, NextQuiz);
+                    if (Art.Find("photo-" + target.Key) != null)
+                    {
+                        Schedule(2800, () => ShowRealPhoto(target));
+                        Schedule(6800, NextQuiz);
+                    }
+                    else Schedule(3000, NextQuiz);
                 };
                 rocket.BeginAnimation(Canvas.LeftProperty, ax);
                 rocket.BeginAnimation(Canvas.TopProperty, ay);

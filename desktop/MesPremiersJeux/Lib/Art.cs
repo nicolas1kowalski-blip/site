@@ -218,6 +218,14 @@ namespace MesPremiersJeux.Lib
                     "  avec une GRANDE BULLE BLANCHE VIDE au-dessus du toit : la lettre\r\n" +
                     "  du son s'affiche dedans ! Une image est déjà fournie avec\r\n" +
                     "  l'application ; la vôtre la remplace.)\r\n\r\n" +
+                    "Les planètes (TOUT est déjà fourni avec l'application) :\r\n" +
+                    "  planete-soleil.png, planete-mercure.png, planete-venus.png,\r\n" +
+                    "  planete-terre.png, planete-lune.png, planete-mars.png,\r\n" +
+                    "  planete-jupiter.png, planete-saturne.png, planete-uranus.png,\r\n" +
+                    "  planete-neptune.png, planete-pluton.png   (autocollants rigolos)\r\n" +
+                    "  photo-soleil.png ... photo-pluton.png     (les VRAIES photos,\r\n" +
+                    "  montrées après chaque bonne réponse)\r\n" +
+                    "  decor-espace.png    (la grande scène étoilée du fond)\r\n\r\n" +
                     "Le tour du monde (PHOTOS des monuments — remplacent les emojis) :\r\n" +
                     "  lieu-france.png      (tour Eiffel)      lieu-angleterre.png (Big Ben)\r\n" +
                     "  lieu-italie.png      (Colisée)          lieu-egypte.png     (pyramides)\r\n" +
