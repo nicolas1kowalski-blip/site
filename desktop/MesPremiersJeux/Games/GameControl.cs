@@ -54,15 +54,16 @@ namespace MesPremiersJeux.Games
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // consigne 🔊
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
+            // PLEIN ÉCRAN : le titre est COMPACT (le jeu prend toute la place).
             Question = new TextBlock
             {
-                FontSize = 40,
+                FontSize = 30,
                 FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(16, 12, 16, 4),
+                Margin = new Thickness(16, 4, 16, 0),
             };
             Grid.SetRow(Question, 0);
             root.Children.Add(Question);
@@ -79,9 +80,10 @@ namespace MesPremiersJeux.Games
             Grid.SetRow(_consigne, 1);
             root.Children.Add(_consigne);
 
-            Body = new Grid { Margin = new Thickness(12) };
+            Body = new Grid(); // aucune marge : le jeu va jusqu'aux bords
             Grid.SetRow(Body, 2);
             root.Children.Add(Body);
+            _rootGrid = root;
 
             // LA TIRELIRE D'ÉTOILES, visible pendant le jeu (en haut à droite) :
             // à chaque réussite, une étoile VOLE dedans et le compteur saute.
@@ -138,7 +140,15 @@ namespace MesPremiersJeux.Games
         }
 
         private bool _started;
+        private Grid _rootGrid;
         private StackPanel _consigne;
+
+        /// <summary>
+        /// La couleur de PAGE du jeu : elle remplit les bandes autour de la
+        /// scène (la scène garde ses proportions), pour que le jeu semble
+        /// occuper TOUT l'écran — ciel qui continue, espace qui continue…
+        /// </summary>
+        protected void SetPageBackground(Brush b) => _rootGrid.Background = b;
         private Border _jar;
         private TextBlock _jarText;
         private Canvas _fxLayer;
@@ -296,7 +306,7 @@ namespace MesPremiersJeux.Games
         /// ne lit pas : la consigne se voit et s'entend, elle ne se lit pas.
         /// À appeler à chaque tour ; (null, null) masque la barre.
         /// </summary>
-        protected void SetConsigne(UIElement model, Func<string> speech, double modelHeight = 130)
+        protected void SetConsigne(UIElement model, Func<string> speech, double modelHeight = 100)
         {
             _consigne.Children.Clear();
             if (model == null && speech == null)
@@ -321,7 +331,7 @@ namespace MesPremiersJeux.Games
             }
             if (speech != null)
             {
-                var b = SpeakerButton(speech, 96);
+                var b = SpeakerButton(speech, 78);
                 b.VerticalAlignment = VerticalAlignment.Center;
                 _consigne.Children.Add(b);
             }
@@ -455,7 +465,6 @@ namespace MesPremiersJeux.Games
             Child = child,
             Stretch = Stretch.Uniform,
             StretchDirection = StretchDirection.Both,
-            Margin = new Thickness(8),
         };
 
         /// <summary>Remplit toute la page avec un contenu étiré (ex. grille de cartes

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
@@ -79,17 +80,26 @@ namespace MesPremiersJeux.Games
             SetConsigne(new TextBlock { Text = r.Letter, FontSize = 96, FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xA0, 0x6C, 0xD5)) },
                 () => "C'est la maison du son " + r.Sound + " ! Trouve les images où tu ENTENDS " + r.Sound + " : elles entrent dans la maison !");
 
-            _canvas = new Canvas { Width = W, Height = H };
-            _canvas.Children.Add(new Rectangle
+            _canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
+            if (Art.Find("maison-sons") != null)
             {
-                Width = W,
-                Height = H,
-                RadiusX = 26,
-                RadiusY = 26,
-                Fill = new LinearGradientBrush(Color.FromRgb(0xF1, 0xE6, 0xFF), Color.FromRgb(0xFF, 0xF2, 0xDC), 90),
-            });
-            AddDecor("🌈", 30, 20, 90);
-            AddDecor("☁️", W - 200, 30, 70);
+                // Le dessin couvre TOUTE la scène, et la couleur de page
+                // prolonge son ciel et son herbe : vrai plein écran, sans
+                // bandes ni emojis de décor (moches en noir et blanc).
+                SetPageBackground(new LinearGradientBrush(
+                    Color.FromRgb(0x8F, 0xD1, 0xF2), Color.FromRgb(0x6E, 0xC4, 0x5E), 90));
+            }
+            else
+            {
+                SetPageBackground(new LinearGradientBrush(
+                    Color.FromRgb(0xF1, 0xE6, 0xFF), Color.FromRgb(0xFF, 0xF2, 0xDC), 90));
+                _canvas.Children.Add(new Rectangle
+                {
+                    Width = W,
+                    Height = H,
+                    Fill = new LinearGradientBrush(Color.FromRgb(0xF1, 0xE6, 0xFF), Color.FromRgb(0xFF, 0xF2, 0xDC), 90),
+                });
+            }
 
             BuildHouse(r);
 
@@ -104,14 +114,13 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < cards.Count; i++)
             {
                 var c = cards[i];
-                var btn = new Button
-                {
-                    Style = (Style)Application.Current.Resources["AnswerButton"],
-                    Width = 170,
-                    Height = 170,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                    Content = Art.ForEmoji(c.Emoji, 120), // le dessin cartoon si on l'a
-                };
+                // Plus de carte blanche : le dessin vit directement dans la
+                // scène, avec un halo blanc doux pour rester bien visible.
+                var vis = Art.ForEmoji(c.Emoji, 150);
+                vis.Effect = new DropShadowEffect
+                { BlurRadius = 18, ShadowDepth = 0, Color = Colors.White, Opacity = 0.95 };
+                var btn = SceneButton(vis, 170, 170);
+                btn.RenderTransformOrigin = new Point(0.5, 0.5);
                 var captured = btn;
                 btn.Click += (s, e) => Pick(r, c.Emoji, c.Word, c.Stretched, c.Yes, captured);
                 Canvas.SetLeft(btn, xs[i]);
@@ -196,28 +205,42 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(hit);
         }
 
-        // La maison DESSINÉE (image « maison-sons ») : la scène entière est
-        // affichée à hauteur de page ; la lettre du son vit DANS LA BULLE
-        // au-dessus du toit, et la porte rouge est la cible où volent les
-        // images gagnées. Les repères sont des fractions mesurées sur le dessin.
+        // Bouton transparent : la cible vit dans la scène, sans carte blanche.
+        private static Button SceneButton(UIElement content, double w, double h)
+        {
+            var tpl = new ControlTemplate(typeof(Button));
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(cp);
+            tpl.VisualTree = border;
+            return new Button { Template = tpl, Width = w, Height = h, Focusable = false, Content = content };
+        }
+
+        // La maison DESSINÉE (image « maison-sons ») : elle couvre TOUTE la
+        // largeur de la scène, calée en haut (le bas de l'herbe est rogné) ;
+        // la lettre du son vit DANS LA BULLE au-dessus du toit, et la porte
+        // rouge est la cible où volent les images gagnées. Les repères sont
+        // des fractions mesurées sur le dessin.
         private void BuildHouseFromImage(Round r, ImageSource img)
         {
             _house = null;
             double ratio = img.Width / img.Height;
-            double w = H * ratio;
-            double left = (W - w) / 2;
-            var image = new Image { Source = img, Width = w, Height = H, Stretch = Stretch.Uniform, IsHitTestVisible = false };
-            Canvas.SetLeft(image, left);
+            double ih = W / ratio; // hauteur affichée (déborde en bas, rognée)
+            var image = new Image { Source = img, Width = W, Height = ih, Stretch = Stretch.Uniform, IsHitTestVisible = false };
+            Canvas.SetLeft(image, 0);
             Canvas.SetTop(image, 0);
             _canvas.Children.Add(image);
 
-            _doorX = left + 0.525 * w - 50;
-            _doorY = 0.66 * H;
-            _joyX = left + 0.27 * w;
-            _joyY = 0.32 * H;
+            _doorX = 0.525 * W - 50;
+            _doorY = 0.66 * ih;
+            _joyX = 0.27 * W;
+            _joyY = 0.32 * ih;
 
             // La LETTRE géante dans la bulle, qui respire.
-            double bw = 0.32 * w, bh = 0.25 * H;
+            double bw = 0.34 * W, bh = 0.24 * ih;
             _houseLetter = new TextBlock
             {
                 Text = r.Letter,
@@ -231,8 +254,8 @@ namespace MesPremiersJeux.Games
             _houseLetter.RenderTransform = new ScaleTransform(1, 1);
             var bubble = new Grid { Width = bw, Height = bh, IsHitTestVisible = false };
             bubble.Children.Add(_houseLetter);
-            Canvas.SetLeft(bubble, left + 0.482 * w - bw / 2);
-            Canvas.SetTop(bubble, 0.162 * H - bh / 2);
+            Canvas.SetLeft(bubble, 0.482 * W - bw / 2);
+            Canvas.SetTop(bubble, 0.162 * ih - bh / 2);
             bubble.SetValue(Panel.ZIndexProperty, 32);
             _canvas.Children.Add(bubble);
             var breathe = new DoubleAnimation(1, 1.12, TimeSpan.FromSeconds(1.4))
@@ -248,12 +271,12 @@ namespace MesPremiersJeux.Games
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Opacity = 0,
-                Width = 0.42 * w,
-                Height = 0.58 * H,
+                Width = 0.40 * W,
+                Height = 0.50 * ih,
             };
             hit.Click += (s, e) => { if (!Locked) Speech.SaySlow(r.Sound + " ! " + r.Sound + " !"); };
-            Canvas.SetLeft(hit, left + 0.32 * w);
-            Canvas.SetTop(hit, 0.30 * H);
+            Canvas.SetLeft(hit, 0.32 * W);
+            Canvas.SetTop(hit, 0.30 * ih);
             hit.SetValue(Panel.ZIndexProperty, 31);
             _canvas.Children.Add(hit);
         }
@@ -354,12 +377,12 @@ namespace MesPremiersJeux.Games
                       "Ou à la FIN, comme le dernier wagon ?");
 
             _canvas = new Canvas { Width = W, Height = H };
+            SetPageBackground(new LinearGradientBrush(
+                Color.FromRgb(0xE8, 0xF0, 0xFF), Color.FromRgb(0xEA, 0xF8, 0xEE), 90));
             _canvas.Children.Add(new Rectangle
             {
                 Width = W,
                 Height = H,
-                RadiusX = 26,
-                RadiusY = 26,
                 Fill = new LinearGradientBrush(Color.FromRgb(0xE8, 0xF0, 0xFF), Color.FromRgb(0xEA, 0xF8, 0xEE), 90),
             });
             AddDecor("⛰️", 40, 50, 90);

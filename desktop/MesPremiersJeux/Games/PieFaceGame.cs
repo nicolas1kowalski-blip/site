@@ -42,6 +42,9 @@ namespace MesPremiersJeux.Games
                 () => "Cherche le visage rigolo... et regarde-le pour lancer la tarte ! SPLAT !");
 
             _canvas = new Canvas { Width = W, Height = H };
+            // Plein écran : la page autour de la scène continue le décor.
+            SetPageBackground(new LinearGradientBrush(
+                Color.FromRgb(0xFF, 0xE9, 0xF2), Color.FromRgb(0xFF, 0xF6, 0xDE), 90));
             // Décor : une IMAGE de scène du parent (decor-tartes.png) si elle
             // existe — sinon le fond dessiné.
             var decor = Art.Find("decor-tartes");

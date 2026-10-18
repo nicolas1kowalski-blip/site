@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
@@ -73,18 +74,28 @@ namespace MesPremiersJeux.Games
 
         private void SpaceBackground()
         {
-            _canvas = new Canvas { Width = W, Height = H };
-            // La grande scène spatiale dessinée (decor-espace) si elle existe,
-            // ASSOMBRIE pour que les planètes du jeu restent bien lisibles.
+            _canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
+            // Plein écran : la page autour de la scène continue l'espace.
+            SetPageBackground(new SolidColorBrush(Color.FromRgb(0x14, 0x16, 0x3A)));
+            // Le fond dessiné (decor-espace) : SEULEMENT le haut du dessin —
+            // le ciel aux constellations — car sa rangée de planètes se
+            // mélangerait avec celles du jeu. Léger voile pour la lisibilité.
             var decor = Art.Find("decor-espace");
             if (decor != null)
             {
-                _canvas.Children.Add(new Image { Source = decor, Width = W, Height = H, Stretch = Stretch.UniformToFill });
+                ImageSource sky = decor;
+                try
+                {
+                    if (decor is BitmapSource bs)
+                        sky = new CroppedBitmap(bs, new Int32Rect(0, 0, bs.PixelWidth, (int)(bs.PixelHeight * 0.40)));
+                }
+                catch { }
+                _canvas.Children.Add(new Image { Source = sky, Width = W, Height = H, Stretch = Stretch.UniformToFill });
                 _canvas.Children.Add(new Rectangle
                 {
                     Width = W,
                     Height = H,
-                    Fill = new SolidColorBrush(Color.FromArgb(150, 0x14, 0x16, 0x3A)),
+                    Fill = new SolidColorBrush(Color.FromArgb(110, 0x14, 0x16, 0x3A)),
                 });
             }
             else
@@ -92,8 +103,6 @@ namespace MesPremiersJeux.Games
                 {
                     Width = W,
                     Height = H,
-                    RadiusX = 26,
-                    RadiusY = 26,
                     Fill = new LinearGradientBrush(Color.FromRgb(0x1A, 0x1E, 0x4A), Color.FromRgb(0x3A, 0x2A, 0x6E), 90),
                 });
             for (int i = 0; i < 34; i++)
