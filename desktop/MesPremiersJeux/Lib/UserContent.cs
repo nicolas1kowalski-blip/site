@@ -298,6 +298,7 @@ namespace MesPremiersJeux.Lib
                 Directory.CreateDirectory(StoriesDir);
                 Directory.CreateDirectory(FamilyDir);
                 Art.EnsureFolder(); // Contenu\Images + son LISEZ-MOI
+                EnsureSoundsFolder(); // Contenu\Sons + son LISEZ-MOI
 
                 var readme = Path.Combine(RootDir, "LISEZ-MOI.txt");
                 if (!File.Exists(readme))
@@ -331,6 +332,34 @@ namespace MesPremiersJeux.Lib
                         "  lapin, oiseau, couronne, chateau). Ou « image »:\"photo.png\" (fichier\r\n" +
                         "  dans le dossier du livre). Le plus simple : le bouton « Nouveau livre ».\r\n");
                 }
+            }
+            catch { }
+        }
+
+        // Dossier « Sons » : de vrais bruitages (WAV) à la place des sons
+        // synthétisés — même principe de repli que les images.
+        private static void EnsureSoundsFolder()
+        {
+            try
+            {
+                var dir = Path.Combine(RootDir, "Sons");
+                Directory.CreateDirectory(dir);
+                var readme = Path.Combine(dir, "LISEZ-MOI.txt");
+                if (File.Exists(readme)) return;
+                File.WriteAllText(readme,
+                    "MES PREMIERS JEUX — Sons personnalisés\r\n" +
+                    "=======================================\r\n\r\n" +
+                    "Déposez ici des fichiers WAV avec ces noms : ils remplacent les sons\r\n" +
+                    "synthétisés de l'application (repli automatique s'il en manque).\r\n\r\n" +
+                    "  boum.wav      (explosion du feu d'artifice)\r\n" +
+                    "  splat.wav     (la tarte à la crème)\r\n" +
+                    "  pof.wav       (la buée qui s'efface)\r\n" +
+                    "  pop.wav       (apparitions, rebonds)\r\n" +
+                    "  tambour.wav   (les syllabes scandées)\r\n" +
+                    "  siffle.wav    (la fusée qui monte)\r\n\r\n" +
+                    "Où trouver des sons gratuits ? freesound.org (filtrer licence CC0),\r\n" +
+                    "ou kenney.nl (packs « Audio »). Format WAV conseillé ; sons courts\r\n" +
+                    "(moins de 2 secondes), pas trop forts.\r\n");
             }
             catch { }
         }

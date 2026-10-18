@@ -43,6 +43,7 @@ namespace MesPremiersJeux.Games
 
         public BirdSongGame(Action celebrate) : base(celebrate)
         {
+            GateVoice = false; // allumer/éteindre un oiseau répond toujours tout de suite
             Unloaded += (s, e) => StopAll(); // quitter le jeu coupe les chants
         }
 

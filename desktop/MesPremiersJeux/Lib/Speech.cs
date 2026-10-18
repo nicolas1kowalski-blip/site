@@ -30,6 +30,25 @@ namespace MesPremiersJeux.Lib
         private static bool _pageMode;
         private static int _wordCount;
 
+        // ------------------------------------------------------------------
+        //  « La voix d'abord » : tant qu'une consigne est en train d'être dite,
+        //  les jeux d'apprentissage IGNORENT les clics (GameControl s'en sert).
+        //  Azure donne la durée exacte du WAV ; la voix Windows est estimée
+        //  puis corrigée par son événement de fin.
+        // ------------------------------------------------------------------
+        private static DateTime _busyUntil = DateTime.MinValue;
+
+        /// <summary>La voix est-elle en train de parler ?</summary>
+        public static bool IsBusy => DateTime.Now < _busyUntil;
+
+        /// <summary>Déclare la voix occupée pendant « seconds » (0 = libre).</summary>
+        public static void MarkBusy(double seconds)
+        {
+            if (seconds <= 0) { _busyUntil = DateTime.MinValue; return; }
+            var until = DateTime.Now.AddSeconds(seconds);
+            if (until > _busyUntil) _busyUntil = until;
+        }
+
         private static void Ensure()
         {
             if (_init) return;
@@ -46,6 +65,7 @@ namespace MesPremiersJeux.Lib
                 };
                 _tts.SpeakCompleted += (s, e) =>
                 {
+                    _busyUntil = DateTime.MinValue; // la voix Windows a VRAIMENT fini
                     if (_pageMode)
                     {
                         _pageMode = false;
@@ -90,6 +110,17 @@ namespace MesPremiersJeux.Lib
         {
             if (string.IsNullOrWhiteSpace(text)) return;
 
+            // Si la voix de papa/maman est en train de parler (VoiceBank), on
+            // attend poliment la fin avant de parler à notre tour.
+            double wait = VoiceBank.RemainingSeconds();
+            if (wait > 0.1)
+            {
+                var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(wait + 0.1) };
+                t.Tick += (s, e) => { t.Stop(); Say(text); };
+                t.Start();
+                return;
+            }
+
             // Voix naturelle Azure si configurée, sinon voix Windows locale.
             if (AzureTts.Enabled)
             {
@@ -107,6 +138,14 @@ namespace MesPremiersJeux.Lib
         public static void SaySlow(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
+            double wait = VoiceBank.RemainingSeconds();
+            if (wait > 0.1)
+            {
+                var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(wait + 0.1) };
+                t.Tick += (s, e) => { t.Stop(); SaySlow(text); };
+                t.Start();
+                return;
+            }
             if (AzureTts.Enabled)
             {
                 LocalStop();
@@ -126,6 +165,7 @@ namespace MesPremiersJeux.Lib
                 _tts.SpeakAsyncCancelAll();
                 ApplyVoice();
                 _tts.Rate = -4; // nettement plus lent (LocalSay remet 0)
+                MarkBusy(0.5 + text.Length / 8.0); // estimation, corrigée à la fin réelle
                 if (Math.Abs(Pitch) < 1) _tts.SpeakAsync(text);
                 else
                 {
@@ -151,6 +191,7 @@ namespace MesPremiersJeux.Lib
                 _tts.SpeakAsyncCancelAll();
                 ApplyVoice();
                 _tts.Rate = 0; // débit normal (SaySlow l'a peut-être ralenti)
+                MarkBusy(0.4 + text.Length / 14.0); // estimation, corrigée à la fin réelle
                 if (Math.Abs(Pitch) < 1)
                 {
                     _tts.SpeakAsync(text);
@@ -205,6 +246,7 @@ namespace MesPremiersJeux.Lib
         {
             AzureTts.StopPlayback();
             LocalStop();
+            MarkBusy(0);
         }
 
         public static void Pop()

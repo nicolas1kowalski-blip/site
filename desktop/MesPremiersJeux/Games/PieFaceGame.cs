@@ -28,7 +28,10 @@ namespace MesPremiersJeux.Games
         private int _splats;
         private double _lastX = -999, _lastY = -999;
 
-        public PieFaceGame(Action celebrate) : base(celebrate) { }
+        public PieFaceGame(Action celebrate) : base(celebrate)
+        {
+            GateVoice = false; // la tarte part toujours tout de suite — c'est le jeu !
+        }
 
         protected override void NewRound()
         {

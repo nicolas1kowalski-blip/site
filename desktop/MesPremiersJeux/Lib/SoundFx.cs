@@ -184,12 +184,12 @@ namespace MesPremiersJeux.Lib
 
         /// <summary>Sifflement montant de la fusée (avant l'explosion).</summary>
         public static void Whistle()
-            => Play("whistle", () => Glide(500, 1400, 0.55, 0.16));
+            => Play("whistle", "siffle", () => Glide(500, 1400, 0.55, 0.16));
 
         /// <summary>Boum sourd et rond du feu d'artifice.</summary>
         public static void Boom()
         {
-            Play("boom", () =>
+            Play("boom", "boum", () =>
             {
                 var rng = new Random(42);
                 int n = (int)(Rate * 0.8);
@@ -210,7 +210,7 @@ namespace MesPremiersJeux.Lib
         /// <summary>SPLAT de la tarte à la crème (impact mou + éclaboussure).</summary>
         public static void Splat()
         {
-            Play("splat", () =>
+            Play("splat", "splat", () =>
             {
                 var rng = new Random(7);
                 int n = (int)(Rate * 0.35);
@@ -231,7 +231,7 @@ namespace MesPremiersJeux.Lib
         /// <summary>Petit « pof » doux de la buée qui s'efface.</summary>
         public static void Puff()
         {
-            Play("puff", () =>
+            Play("puff", "pof", () =>
             {
                 var rng = new Random(3);
                 int n = (int)(Rate * 0.18);
@@ -250,7 +250,7 @@ namespace MesPremiersJeux.Lib
 
         /// <summary>Petit « pop » joyeux (apparition, rebond).</summary>
         public static void PopSound()
-            => Play("pop", () => Glide(420, 180, 0.1, 0.5));
+            => Play("pop", "pop", () => Glide(420, 180, 0.1, 0.5));
 
         /// <summary>Une note de musique douce et chantante (gamme pentatonique,
         /// degré 0..5) AVEC un petit coup de tambour dessous — la mélodie
@@ -282,7 +282,7 @@ namespace MesPremiersJeux.Lib
         /// <summary>Coup de tambour rond et doux — pour SCANDER les syllabes.</summary>
         public static void Drum()
         {
-            Play("drum", () =>
+            Play("drum", "tambour", () =>
             {
                 var rng = new Random(11);
                 int n = (int)(Rate * 0.22);
@@ -334,12 +334,29 @@ namespace MesPremiersJeux.Lib
         }
 
         // ------------------------------------------------------------------
-        //  WAV en mémoire + lecture
+        //  WAV en mémoire + lecture. Si le parent a déposé un VRAI son dans
+        //  Contenu\Sons (ex. boum.wav), il est joué à la place du son
+        //  synthétisé — même principe que les images.
         // ------------------------------------------------------------------
-        private static void Play(string key, Func<float[]> make)
+        private static string SoundsDir => Path.Combine(
+            UserContent.RootDir, "Sons");
+
+        private static void Play(string key, Func<float[]> make) => Play(key, null, make);
+
+        private static void Play(string key, string fileName, Func<float[]> make)
         {
             try
             {
+                if (fileName != null)
+                {
+                    var path = Path.Combine(SoundsDir, fileName + ".wav");
+                    if (File.Exists(path))
+                    {
+                        _player = new SoundPlayer(path);
+                        _player.Play();
+                        return;
+                    }
+                }
                 if (!Cache.TryGetValue(key, out var wav))
                 {
                     wav = ToWav(make());

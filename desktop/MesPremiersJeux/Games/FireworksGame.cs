@@ -32,7 +32,10 @@ namespace MesPremiersJeux.Games
         private Canvas _canvas;
         private int _count;
 
-        public FireworksGame(Action celebrate) : base(celebrate) { }
+        public FireworksGame(Action celebrate) : base(celebrate)
+        {
+            GateVoice = false; // cause-à-effet pur : le ciel répond toujours tout de suite
+        }
 
         protected override void NewRound()
         {

@@ -60,6 +60,7 @@ namespace MesPremiersJeux.Lib
             {
                 var file = await GetAudio(text, pitch, 0);
                 StopPlayback();
+                Speech.MarkBusy(WavDurationSeconds(file) + 0.25); // durée EXACTE
                 _player = new SoundPlayer(file);
                 _player.Play();
             }
@@ -74,6 +75,7 @@ namespace MesPremiersJeux.Lib
             {
                 var file = await GetAudio(text, pitch, ratePercent);
                 StopPlayback();
+                Speech.MarkBusy(WavDurationSeconds(file) + 0.25);
                 _player = new SoundPlayer(file);
                 _player.Play();
             }
@@ -108,6 +110,7 @@ namespace MesPremiersJeux.Lib
                     await Fetch(ssml, path);
                 }
                 StopPlayback();
+                Speech.MarkBusy(WavDurationSeconds(path) + 0.25);
                 _player = new SoundPlayer(path);
                 _player.Play();
             }

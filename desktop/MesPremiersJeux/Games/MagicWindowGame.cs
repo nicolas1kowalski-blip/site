@@ -35,7 +35,10 @@ namespace MesPremiersJeux.Games
         private (string Emoji, string Name) _hidden;
         private FrameworkElement _picture;
 
-        public MagicWindowGame(Action celebrate) : base(celebrate) { }
+        public MagicWindowGame(Action celebrate) : base(celebrate)
+        {
+            GateVoice = false; // essuyer la buée répond toujours tout de suite
+        }
 
         protected override void NewRound()
         {

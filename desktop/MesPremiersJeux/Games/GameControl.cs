@@ -20,9 +20,24 @@ namespace MesPremiersJeux.Games
         protected readonly Grid Body;
         protected bool Locked;
 
+        /// <summary>
+        /// « LA VOIX D'ABORD » : quand true (défaut), tous les clics du jeu sont
+        /// IGNORÉS tant que la consigne est en train d'être dite — l'enfant
+        /// écoute jusqu'au bout avant d'agir. Les jeux sensoriels purs
+        /// (cause-à-effet) le désactivent pour rester instantanés.
+        /// </summary>
+        protected bool GateVoice = true;
+
         protected GameControl(Action celebrate)
         {
             _celebrate = celebrate;
+
+            // Le verrou « la voix d'abord » : intercepte le clic AVANT les
+            // boutons (vrai clic souris comme clic injecté par le regard).
+            PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                if (GateVoice && Speech.IsBusy) e.Handled = true;
+            };
 
             var root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -143,9 +158,15 @@ namespace MesPremiersJeux.Games
             return b;
         }
 
+        private static readonly Random PraiseRng = new Random();
+
         protected void Celebrate()
         {
             RewardStore.Add(); // chaque réussite gagne une étoile ⭐
+            // La voix de PAPA/MAMAN dit bravo (si enregistrée dans les
+            // réglages) — une fois sur trois, pour garder l'effet de surprise ;
+            // la synthèse attend la fin avant de reprendre.
+            if (PraiseRng.Next(3) == 0) VoiceBank.PlayPraise();
             _celebrate?.Invoke();
         }
 

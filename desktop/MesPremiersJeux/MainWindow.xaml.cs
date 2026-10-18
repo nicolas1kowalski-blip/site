@@ -162,6 +162,13 @@ namespace MesPremiersJeux
             ContentDirBox.Text = _settings.ContentDir;
             RefreshContentDirInfo();
 
+            // Le « Bonjour ! » de papa/maman (s'il est enregistré), après que
+            // tout est en place.
+            var helloTimer = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(1500) };
+            helloTimer.Tick += (s4, e4) => { helloTimer.Stop(); VoiceBank.Play("bonjour"); };
+            helloTimer.Start();
+
             // Une mise à jour de l'application attend-elle dans le dossier
             // partagé ? (vérifié un peu après le démarrage, sans bloquer.)
             var updTimer = new System.Windows.Threading.DispatcherTimer
@@ -598,6 +605,12 @@ namespace MesPremiersJeux
                                       " · embarquées avec l'appli : " + nb;
             }
             catch { ContentDirInfo.Text = ""; }
+        }
+
+        private void RecordVoices_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            new VoiceRecorderWindow { Owner = this }.ShowDialog();
         }
 
         private void ShareSettings_Click(object sender, RoutedEventArgs e)
