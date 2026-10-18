@@ -249,7 +249,9 @@ namespace MesPremiersJeux.Games
             }
 
             var target = All[_rng.Next(All.Length)];
-            var choices = All.Where(p => p != target).OrderBy(p => _rng.Next()).Take(2)
+            // ADAPTATION : au niveau 0 on ne montre que 2 planètes, puis 3.
+            int nChoices = Adaptive.Level("planetes") == 0 ? 2 : 3;
+            var choices = All.Where(p => p != target).OrderBy(p => _rng.Next()).Take(nChoices - 1)
                              .Concat(new[] { target }).OrderBy(p => _rng.Next()).ToList();
 
             SpaceBackground();
@@ -260,16 +262,20 @@ namespace MesPremiersJeux.Games
                     : "La fusée veut aller sur " + target.Name + ", " + target.Clue + " ! Montre-lui le chemin !");
 
             double[] xs = { 310, 750, 1190 };
-            for (int i = 0; i < 3; i++)
+            double[] xs2 = { 480, 1020, 0 };
+            Button correctBtn = null;
+            for (int i = 0; i < choices.Count; i++)
             {
                 var p = choices[i];
                 var btn = SceneButton(PlanetArt.Make(p.Art, 230), 290, 290);
                 var captured = btn;
+                if (p == target) correctBtn = btn;
                 btn.Click += (s, e) =>
                 {
                     if (Locked) return;
                     if (p == target)
                     {
+                        Adaptive.Report("planetes", true);
                         Locked = true;
                         Dance(captured);
                         if (_act == 2)
@@ -286,15 +292,20 @@ namespace MesPremiersJeux.Games
                     }
                     else
                     {
+                        Adaptive.Report("planetes", false);
                         Shake(captured);
                         Speak("Ça, c'est " + p.Name + ", " + p.Clue + " ! Cherche " + target.Clue + " !");
                     }
                 };
-                Canvas.SetLeft(btn, xs[i] - 145);
+                Canvas.SetLeft(btn, (choices.Count == 2 ? xs2[i] : xs[i]) - (choices.Count == 2 ? 0 : 145));
                 Canvas.SetTop(btn, 150);
                 _canvas.Children.Add(btn);
                 Drift(btn, i + 2);
             }
+            // Le coup de pouce : si rien ne bouge, la bonne planète respire.
+            ArmHint(correctBtn, () => _act == 2
+                ? "Trouve " + target.Clue + " !"
+                : "La fusée attend ! Regarde " + target.Clue + " !");
 
             SetBody(_canvas);
             Speak(_act == 2

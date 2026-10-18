@@ -203,10 +203,13 @@ namespace MesPremiersJeux.Games
         private void Quiz()
         {
             int n = 1 + _rng.Next(5);
-            var wrong = Enumerable.Range(1, 5).Where(v => v != n).OrderBy(v => _rng.Next()).Take(2).ToList();
+            // ADAPTATION : 2 cartes au niveau 0, 3 au niveau 1, 4 au niveau 2.
+            int nChoices = 2 + Adaptive.Level("nombres-formes");
+            var wrong = Enumerable.Range(1, 5).Where(v => v != n).OrderBy(v => _rng.Next()).Take(nChoices - 1).ToList();
             var values = wrong.Concat(new[] { n }).OrderBy(v => _rng.Next()).ToList();
             int kind = _rng.Next(3); // 0 dé · 1 abaque · 2 objets
             string kindName = kind == 0 ? "le dé" : kind == 1 ? "l'abaque" : "la carte d'objets";
+            Button correctBtn = null;
 
             if (_act == 2)
             {
@@ -221,10 +224,12 @@ namespace MesPremiersJeux.Games
                     var visual = kind == 0 ? Dice(vv, 210) : kind == 1 ? Abacus(vv, 210) : Objects(vv, 210);
                     var btn = AnswerButton(visual, 260);
                     var captured = btn;
+                    if (vv == n) correctBtn = btn;
                     btn.Click += (s, e) => Answer(vv, n, captured);
                     row.Children.Add(btn);
                 }
                 SetBody(row);
+                ArmHint(correctBtn, () => "Trouve " + kindName + " qui montre " + n + " ! Compte bien !");
                 Speak("Trouve " + kindName + " qui montre " + n + " !");
             }
             else
@@ -239,10 +244,12 @@ namespace MesPremiersJeux.Games
                     var vv = v;
                     var btn = AnswerButton(Digit(vv, 180), 230);
                     var captured = btn;
+                    if (vv == n) correctBtn = btn;
                     btn.Click += (s, e) => Answer(vv, n, captured);
                     row.Children.Add(btn);
                 }
                 SetBody(row);
+                ArmHint(correctBtn, () => "Compte bien la carte... et choisis le bon chiffre !");
                 Speak("Compte bien... et trouve le chiffre !");
             }
         }
@@ -252,6 +259,7 @@ namespace MesPremiersJeux.Games
             if (Locked) return;
             if (chosen == target)
             {
+                Adaptive.Report("nombres-formes", true);
                 Locked = true;
                 Pop(btn);
                 GameKit.Success();
@@ -261,6 +269,7 @@ namespace MesPremiersJeux.Games
             }
             else
             {
+                Adaptive.Report("nombres-formes", false);
                 Shake(btn);
                 Speak("On compte : " + CountWords(chosen) + " Ça fait " + chosen + ", pas " + target + " ! Cherche encore !");
             }

@@ -69,9 +69,23 @@ namespace MesPremiersJeux
                 Select("music");
             };
             ShopHost.Children.Add(_shop);
+
+            // Le parcours du jour (séance rituelle en pictogrammes).
+            _parcours = new ParcoursView { Visibility = Visibility.Collapsed };
+            _parcours.ShopRequested += () => { ShopHost.Visibility = Visibility.Visible; _shop.Open(); };
+            _parcours.ExitRequested += () => Select("games");
+            _views["parcours"] = _parcours;
+            ContentHost.Children.Add(_parcours);
         }
 
         private RewardShopView _shop;
+        private ParcoursView _parcours;
+
+        private void Parcours_Click(object sender, RoutedEventArgs e)
+        {
+            Select("parcours");
+            _parcours.Start();
+        }
 
         private void Shop_Click(object sender, RoutedEventArgs e)
         {
@@ -629,6 +643,12 @@ namespace MesPremiersJeux
         {
             SettingsPopup.IsOpen = false;
             new VoiceRecorderWindow { Owner = this }.ShowDialog();
+        }
+
+        private void Bilan_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            new BilanWindow { Owner = this }.ShowDialog();
         }
 
         private void ShareSettings_Click(object sender, RoutedEventArgs e)

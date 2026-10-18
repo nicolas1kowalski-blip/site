@@ -169,17 +169,20 @@ namespace MesPremiersJeux.Games
             SetConsigne(FlagArt.Make(target.Flag, 150),
                 () => "Trouve " + target.Monument + " ! C'est à " + target.Capital + ", le pays de ce drapeau !");
 
-            var choices = Pick3(target);
+            var choices = Pick(target);
             var row = Row();
+            Button correctBtn = null;
             foreach (var p in choices)
             {
                 var pp = p;
                 var btn = AnswerButton(new ContentControl { Content = Monument(pp, 220) }, 300);
+                if (pp == target) correctBtn = btn;
                 btn.Click += (s, e) =>
                 {
                     if (Locked) return;
                     if (pp == target)
                     {
+                        Adaptive.Report("capitales", true);
                         Locked = true;
                         Pop(btn);
                         GameKit.Success();
@@ -190,6 +193,7 @@ namespace MesPremiersJeux.Games
                     else
                     {
                         // L'erreur enseigne : ce monument-là a aussi son histoire.
+                        Adaptive.Report("capitales", false);
                         Shake(btn);
                         Speak("Ça, c'est " + pp.Monument + "... il est à " + pp.Capital + " ! Cherche " + target.Monument + " !");
                     }
@@ -197,6 +201,7 @@ namespace MesPremiersJeux.Games
                 row.Children.Add(btn);
             }
             SetBody(row);
+            ArmHint(correctBtn, () => "Cherche " + target.Monument + " !");
             Speak("Où est " + target.Monument + " ?");
         }
 
@@ -210,17 +215,20 @@ namespace MesPremiersJeux.Games
                 () => Cap(target.Monument) + " est à " + target.Capital + ", " + target.In +
                       " ! Trouve le drapeau de " + target.Country + " !");
 
-            var choices = Pick3(target);
+            var choices = Pick(target);
             var row = Row();
+            Button correctBtn = null;
             foreach (var p in choices)
             {
                 var pp = p;
                 var btn = AnswerButton(FlagArt.Make(pp.Flag, 250), 300);
+                if (pp == target) correctBtn = btn;
                 btn.Click += (s, e) =>
                 {
                     if (Locked) return;
                     if (pp == target)
                     {
+                        Adaptive.Report("capitales", true);
                         Locked = true;
                         Pop(btn);
                         GameKit.Success();
@@ -230,6 +238,7 @@ namespace MesPremiersJeux.Games
                     }
                     else
                     {
+                        Adaptive.Report("capitales", false);
                         Shake(btn);
                         Speak("Ça, c'est le drapeau de " + pp.Country + " ! Cherche celui de " + target.Country + " !");
                     }
@@ -237,12 +246,15 @@ namespace MesPremiersJeux.Games
                 row.Children.Add(btn);
             }
             SetBody(row);
+            ArmHint(correctBtn, () => "Cherche le drapeau de " + target.Country + " !");
             Speak(Cap(target.Monument) + " ! Trouve le drapeau de son pays : " + target.Country + " !");
         }
 
-        private List<Place> Pick3(Place target)
+        // ADAPTATION : 2 choix au niveau 0, 3 ensuite.
+        private List<Place> Pick(Place target)
         {
-            var others = Places.Where(p => p != target).OrderBy(p => _rng.Next()).Take(2);
+            int n = Adaptive.Level("capitales") == 0 ? 1 : 2;
+            var others = Places.Where(p => p != target).OrderBy(p => _rng.Next()).Take(n);
             return others.Concat(new[] { target }).OrderBy(p => _rng.Next()).ToList();
         }
 

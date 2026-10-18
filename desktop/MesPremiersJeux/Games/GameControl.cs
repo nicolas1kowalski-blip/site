@@ -34,8 +34,11 @@ namespace MesPremiersJeux.Games
 
             // Le verrou « la voix d'abord » : intercepte le clic AVANT les
             // boutons (vrai clic souris comme clic injecté par le regard).
+            // Un clic (même bloqué) repousse aussi le coup de pouce : l'enfant
+            // est actif, pas besoin d'aide.
             PreviewMouseLeftButtonDown += (s, e) =>
             {
+                if (_hint != null) { _hint.Stop(); _hint.Start(); }
                 if (GateVoice && Speech.IsBusy) e.Handled = true;
             };
 
@@ -106,7 +109,7 @@ namespace MesPremiersJeux.Games
 
             _onStars = () => Dispatcher.Invoke(() => _jarText.Text = "⭐ " + RewardStore.Balance);
             RewardStore.Changed += _onStars;
-            Unloaded += (s, e) => RewardStore.Changed -= _onStars;
+            Unloaded += (s, e) => { RewardStore.Changed -= _onStars; DisarmHint(); };
 
             Content = root;
             Loaded += (s, e) =>
@@ -128,6 +131,53 @@ namespace MesPremiersJeux.Games
         private TextBlock _jarText;
         private Canvas _fxLayer;
         private Action _onStars;
+
+        // ------------------------------------------------------------------
+        //  💫 LE COUP DE POUCE AU REGARD : si l'enfant ne clique rien pendant
+        //  un moment, la BONNE réponse se met à « respirer » doucement, puis la
+        //  consigne est redite — un échafaudage qui s'efface dès qu'elle agit.
+        //  Chaque jeu l'arme avec ArmHint(bonBouton, consigne).
+        // ------------------------------------------------------------------
+        private DispatcherTimer _hint;
+        private FrameworkElement _hintTarget;
+        private Func<string> _hintSay;
+        private int _hintStage;
+
+        protected void ArmHint(FrameworkElement target, Func<string> say = null)
+        {
+            DisarmHint();
+            _hintTarget = target;
+            _hintSay = say;
+            _hintStage = 0;
+            _hint = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
+            _hint.Tick += (s, e) =>
+            {
+                if (Speech.IsBusy || Locked) return; // on n'interrompt pas la voix
+                _hintStage++;
+                PulseHint();
+            };
+            _hint.Start();
+        }
+
+        protected void DisarmHint()
+        {
+            try { _hint?.Stop(); } catch { }
+            _hint = null;
+            _hintTarget = null;
+        }
+
+        private void PulseHint()
+        {
+            var t = _hintTarget;
+            if (t == null) return;
+            // La cible « respire » : douce la première fois, plus franche ensuite.
+            int reps = _hintStage == 1 ? 3 : 5;
+            var pulse = new DoubleAnimation(1, 0.45, TimeSpan.FromMilliseconds(420))
+            { AutoReverse = true, RepeatBehavior = new RepeatBehavior(reps), EasingFunction = new SineEase() };
+            t.BeginAnimation(OpacityProperty, pulse);
+            if (_hintStage == 1 && _hintSay != null) { try { Speak(_hintSay()); } catch { } }
+            else if (_hintStage >= 2) Speak("Regarde ! C'est par ici !");
+        }
 
         // L'étoile gagnée VOLE du centre de l'écran jusqu'à la tirelire.
         private void FlyStarToJar()
@@ -240,6 +290,8 @@ namespace MesPremiersJeux.Games
         protected void Celebrate()
         {
             RewardStore.Add(); // chaque réussite gagne une étoile ⭐
+            Progress.Add(GetType().Name); // ... comptée dans le bilan parent
+            DisarmHint();      // plus besoin d'aide : c'est gagné
             FlyStarToJar();    // ... qui VOLE dans la tirelire, sous ses yeux
             // La voix de PAPA/MAMAN dit bravo (si enregistrée dans les
             // réglages) — une fois sur trois, pour garder l'effet de surprise ;

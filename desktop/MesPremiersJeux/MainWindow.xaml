@@ -58,6 +58,11 @@
                                 <TextBlock Text="🎵  " FontSize="24" /><TextBlock Text="Musique" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
+                        <Button x:Name="TabParcours" Style="{StaticResource TabButton}" Click="Parcours_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📅  " FontSize="24" /><TextBlock Text="Parcours" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                     </Viewbox>
                 </DockPanel>
@@ -129,6 +134,7 @@
 
                     <TextBlock Text="🎙 Vos voix (bravo de papa/maman)" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
                     <Button Content="🎙  Enregistrer vos voix" FontSize="14" Padding="8,8" Margin="0,4,0,0" Click="RecordVoices_Click" />
+                    <Button Content="📊  Bilan (semaine, niveaux, étoiles)" FontSize="14" Padding="8,8" Margin="0,6,0,0" Click="Bilan_Click" />
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
                                Text="Enregistrez des « Bravo ! » et un « Bonjour ! » avec votre voix : l'application les joue aux moments forts, à la place de la voix de synthèse." />
 
