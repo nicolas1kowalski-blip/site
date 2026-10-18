@@ -24,12 +24,17 @@ namespace MesPremiersJeux.Games
         protected bool Locked;
 
         /// <summary>
-        /// « LA VOIX D'ABORD » : quand true, les clics sont ignorés tant que la
-        /// consigne est dite. DÉSACTIVÉ par défaut : un clic au regard qui ne
-        /// fait rien est trop frustrant (« on croit avoir choisi, mais non »).
-        /// Désormais un clic marche TOUJOURS et coupe la voix en cours.
+        /// « LA VOIX D'ABORD » : quand true (défaut), la consigne va jusqu'au
+        /// bout. Un clic pendant qu'elle parle n'est PAS perdu : le bouton
+        /// s'enfonce et fait « pop » (l'enfant voit qu'il a cliqué), et le
+        /// clic part tout seul dès que la voix se tait. Les jeux sensoriels
+        /// purs (cause-à-effet) restent instantanés.
         /// </summary>
-        protected bool GateVoice = false;
+        protected bool GateVoice = true;
+
+        // Le clic EN ATTENTE de la fin de la consigne (le dernier bouton visé).
+        private Button _pendingClick;
+        private DispatcherTimer _pendingWatch;
 
         protected GameControl(Action celebrate)
         {
@@ -47,7 +52,9 @@ namespace MesPremiersJeux.Games
                 if (GateVoice && Speech.IsGating && Speech.BusyElapsedSeconds < 7)
                 {
                     e.Handled = true;
-                    ShowListenCue(e.GetPosition(this));
+                    var btn = ButtonUnder(e.OriginalSource as DependencyObject);
+                    if (btn != null) HoldClick(btn);
+                    else ShowListenCue(e.GetPosition(this));
                 }
             };
 
@@ -130,6 +137,8 @@ namespace MesPremiersJeux.Games
             {
                 // Retour au menu : le jeu s'arrête VRAIMENT (voix, suites programmées).
                 Closed = true;
+                _pendingClick = null;
+                try { _pendingWatch?.Stop(); } catch { }
                 foreach (var t in _scheduled.ToArray()) t.Stop();
                 _scheduled.Clear();
                 Speech.Stop();
@@ -377,6 +386,58 @@ namespace MesPremiersJeux.Games
                 _consigne.Children.Add(b);
             }
             _consigneBubble.Visibility = Visibility.Visible;
+        }
+
+        private static Button ButtonUnder(DependencyObject d)
+        {
+            while (d != null && !(d is Button))
+                d = d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+            return d as Button;
+        }
+
+        // Le bouton s'ENFONCE (comme un vrai clic) et le clic est rejoué dès que
+        // la voix a fini — l'enfant a cliqué, c'est juste que ça arrive après.
+        private void HoldClick(Button btn)
+        {
+            SoundFx.PopSound();
+            PressAnim(btn);
+            _pendingClick = btn;
+            if (_pendingWatch == null)
+            {
+                _pendingWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+                _pendingWatch.Tick += (s, e) =>
+                {
+                    if (Speech.IsGating && Speech.BusyElapsedSeconds < 7) return;
+                    _pendingWatch.Stop();
+                    var b = _pendingClick;
+                    _pendingClick = null;
+                    if (b == null || Closed || !b.IsLoaded || !b.IsEnabled) return;
+                    Schedule(150, () =>
+                    {
+                        if (Closed || !b.IsLoaded) return;
+                        b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, b));
+                    });
+                };
+            }
+            _pendingWatch.Stop();
+            _pendingWatch.Start();
+        }
+
+        private static void PressAnim(FrameworkElement el)
+        {
+            if (!(el.RenderTransform is ScaleTransform sc))
+            {
+                // Un bouton déjà tourné/déplacé par le jeu garde sa transformation.
+                if (el.RenderTransform != null && el.RenderTransform != Transform.Identity &&
+                    !(el.RenderTransform is MatrixTransform m && m.Matrix.IsIdentity)) return;
+                sc = new ScaleTransform(1, 1);
+                el.RenderTransform = sc;
+                el.RenderTransformOrigin = new Point(0.5, 0.5);
+            }
+            var a = new DoubleAnimation(1, 0.88, TimeSpan.FromMilliseconds(110))
+            { AutoReverse = true, EasingFunction = new SineEase(), FillBehavior = FillBehavior.Stop };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, a);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, a);
         }
 
         // La petite oreille « écoute d'abord ! » là où le clic a été bloqué.
