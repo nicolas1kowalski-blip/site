@@ -23,12 +23,12 @@ namespace MesPremiersJeux.Games
         protected bool Locked;
 
         /// <summary>
-        /// « LA VOIX D'ABORD » : quand true (défaut), tous les clics du jeu sont
-        /// IGNORÉS tant que la consigne est en train d'être dite — l'enfant
-        /// écoute jusqu'au bout avant d'agir. Les jeux sensoriels purs
-        /// (cause-à-effet) le désactivent pour rester instantanés.
+        /// « LA VOIX D'ABORD » : quand true, les clics sont ignorés tant que la
+        /// consigne est dite. DÉSACTIVÉ par défaut : un clic au regard qui ne
+        /// fait rien est trop frustrant (« on croit avoir choisi, mais non »).
+        /// Désormais un clic marche TOUJOURS et coupe la voix en cours.
         /// </summary>
-        protected bool GateVoice = true;
+        protected bool GateVoice = false;
 
         protected GameControl(Action celebrate)
         {

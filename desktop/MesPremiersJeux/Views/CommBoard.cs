@@ -270,7 +270,7 @@ namespace MesPremiersJeux.Views
                 Height = 128,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(16),
+                Margin = new Thickness(8, 0, 0, 8), // tout au coin, en bas à gauche
                 Background = new LinearGradientBrush(Color.FromRgb(0xFF, 0x8F, 0xC8), Color.FromRgb(0xA0, 0x6C, 0xD5), 90),
                 BorderBrush = Brushes.White,
                 BorderThickness = new Thickness(5),

@@ -312,12 +312,12 @@ namespace MesPremiersJeux.Games
                      "<phoneme alphabet='ipa' ph='" + p.Ipa + "'>" +
                      System.Security.SecurityElement.Escape(p.Phon) +
                      "</phoneme></prosody>";
-            return System.Security.SecurityElement.Escape("Écoute bien ! Le " + p.L + " fait...") +
+            return System.Security.SecurityElement.Escape(Speech.Fix("Écoute bien ! Le " + p.L + " fait...")) +
                    "<break time='600ms'/>" + ph +
                    "<break time='900ms'/>" + ph +
                    "<break time='900ms'/>" + ph +
                    "<break time='700ms'/>" +
-                   System.Security.SecurityElement.Escape(p.Phon + "... comme " + p.Words[0].Word + " !");
+                   System.Security.SecurityElement.Escape(Speech.Fix(p.Phon + "... comme " + p.Words[0].Word + " !"));
         }
 
         private static void FallbackSound(Page p)

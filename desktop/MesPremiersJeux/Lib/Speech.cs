@@ -156,9 +156,40 @@ namespace MesPremiersJeux.Lib
             try { Say(text); } finally { Hold = h; }
         }
 
+        // ------------------------------------------------------------------
+        //  Les LETTRES lues comme des CHIFFRES ROMAINS : « iii » devenait
+        //  « trois », « IIII » « quatre », « le I » « le un »… On réécrit ces
+        //  mots pour que la voix dise bien le son ou le nom de la lettre.
+        // ------------------------------------------------------------------
+        private static readonly Dictionary<string, string> RomanLetters = new Dictionary<string, string>
+        {
+            ["I"] = "i", ["V"] = "vé", ["X"] = "ixe", ["L"] = "elle", ["C"] = "cé", ["D"] = "dé", ["M"] = "emme",
+        };
+
+        private static readonly System.Text.RegularExpressions.Regex IRun =
+            new System.Text.RegularExpressions.Regex(@"(?<![\p{L}'’-])([iI]{2,})(\p{L}*)(?![\p{L}'’-])");
+
+        private static readonly System.Text.RegularExpressions.Regex LoneCap =
+            new System.Text.RegularExpressions.Regex(@"(?<![\p{L}'’-])([IVXLCDM])(?![\p{L}'’-])");
+
+        /// <summary>Texte prêt pour la voix : pas de chiffres romains par erreur.</summary>
+        public static string Fix(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            // « iii », « IIII » (son étiré) → « hiii » (le h est muet) ;
+            // « IIIIle » (île étirée) → « iiiile ».
+            text = IRun.Replace(text, m => m.Groups[2].Length == 0
+                ? "h" + m.Groups[1].Value.ToLowerInvariant()
+                : m.Groups[1].Value.ToLowerInvariant() + m.Groups[2].Value);
+            // Une lettre majuscule SEULE (« le I », « Trouve le L ») → son nom.
+            text = LoneCap.Replace(text, m => RomanLetters[m.Groups[1].Value]);
+            return text;
+        }
+
         public static void Say(string text)
         {
             if (string.IsNullOrWhiteSpace(text) || Hold) return;
+            text = Fix(text);
             // Seules les phrases LONGUES (consignes, explications) verrouillent
             // les clics ; les petits retours laissent l'enfant enchaîner.
             _gate = text.Length >= 60;
@@ -191,6 +222,7 @@ namespace MesPremiersJeux.Lib
         public static void SaySlow(string text)
         {
             if (string.IsNullOrWhiteSpace(text) || Hold) return;
+            text = Fix(text);
             _gate = true; // dit lentement = à écouter jusqu'au bout
             double wait = VoiceBank.RemainingSeconds();
             if (wait > 0.1)
