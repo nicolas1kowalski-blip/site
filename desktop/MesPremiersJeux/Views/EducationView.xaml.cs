@@ -35,6 +35,7 @@ namespace MesPremiersJeux.Views
                     ("🔤", "Les lettres", "PS · MS", c => new LettersGame(c)),
                     ("📖", "L'abécédaire", "PS · MS", c => new AlphabetBookGame(c)),
                     ("🥁", "Les syllabes", "MS", c => new SyllableGame(c)),
+                    ("🏠", "La maison des sons", "MS", c => new SoundHouseGame(c)),
                     ("✍️", "J'écris !", "MS", c => new EyeWriteGame(c)),
                 },
             },
@@ -45,6 +46,8 @@ namespace MesPremiersJeux.Views
                 {
                     ("🎈", "Fête des nombres", "PS · MS", c => new NumberPartyGame(c)),
                     ("🔢", "Les nombres", "PS · MS", c => new NumbersGame(c)),
+                    ("🧺", "Le panier de 4", "MS", c => new CompleteGame(c)),
+                    ("🎲", "Le nombre dans tous ses états", "MS", c => new NumberFormsGame(c)),
                 },
             },
             new Theme
