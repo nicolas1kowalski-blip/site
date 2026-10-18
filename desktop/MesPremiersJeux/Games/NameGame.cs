@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
@@ -98,16 +99,26 @@ namespace MesPremiersJeux.Games
 
         private string Pretty => char.ToUpperInvariant(_name[0]) + _name.Substring(1).ToLowerInvariant();
 
-        // --- Brique visuelle : une grosse lettre colorée et brillante. ---
+        // --- Brique visuelle : une grosse lettre « bonbon », toute ronde et
+        //     brillante (dégradé, reflet glacé en haut, ombre douce). ---
         private Grid LetterVisual(char ch, Color col, double size)
         {
             var g = new Grid { Width = size, Height = size };
             g.Children.Add(new Border
             {
-                CornerRadius = new CornerRadius(size * 0.22),
+                CornerRadius = new CornerRadius(size * 0.32),
                 Background = new LinearGradientBrush(Lighten(col), col, 90),
-                BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(5),
+                Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 3, Opacity = 0.28 },
+            });
+            g.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(size * 0.26),
+                Height = size * 0.44,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(size * 0.09, size * 0.06, size * 0.09, 0),
+                Background = new LinearGradientBrush(
+                    Color.FromArgb(130, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90),
+                IsHitTestVisible = false,
             });
             g.Children.Add(new TextBlock
             {
@@ -363,6 +374,7 @@ namespace MesPremiersJeux.Games
                 sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
                 sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
                 Twinkle(Canvas.GetLeft(btn) + btn.Width / 2, Canvas.GetTop(btn) + btn.Height / 2);
+                RewardStar(); // chaque lettre trouvée = une étoile qui vole
                 _ask++;
                 Schedule(1700, AskNext);
             }
@@ -554,6 +566,7 @@ namespace MesPremiersJeux.Games
             _wagonScale[slot].BeginAnimation(ScaleTransform.ScaleXProperty, pop);
             _wagonScale[slot].BeginAnimation(ScaleTransform.ScaleYProperty, pop);
             Speak(ch + " !");
+            RewardStar(); // chaque wagon rempli = une étoile qui vole
 
             _slot++;
             if (_slot >= _name.Length) { FinishTrain(); return; }

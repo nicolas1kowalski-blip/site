@@ -4,6 +4,13 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
 
+        <!-- Fond « carte douce » : blanc qui glisse vers un lavande très pâle,
+             pour des cartes moins plates, plus veloutées. -->
+        <LinearGradientBrush x:Key="CardFill" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FFFFFFFF" Offset="0" />
+            <GradientStop Color="#FFF3EDFF" Offset="1" />
+        </LinearGradientBrush>
+
         <!-- Pastille de couleur de la palette -->
         <Style x:Key="SwatchButton" TargetType="Button">
             <Setter Property="Width" Value="104" />
@@ -15,9 +22,13 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="20" Background="{TemplateBinding Background}"
+                        <Border CornerRadius="34" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" />
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.25" />
+                            </Border.Effect>
+                        </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -35,10 +46,13 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="16" Background="{TemplateBinding Background}"
+                        <Border CornerRadius="26" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 Padding="4">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.18" />
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                     </ControlTemplate>
@@ -58,7 +72,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="16" Background="{TemplateBinding Background}">
+                        <Border CornerRadius="26" Background="{TemplateBinding Background}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.18" />
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                     </ControlTemplate>
@@ -73,10 +90,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="26" Background="{TemplateBinding Background}"
+                        <Border CornerRadius="34" Background="{TemplateBinding Background}"
                                 BorderBrush="White" BorderThickness="4">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.2" />
+                                <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.2" />
                             </Border.Effect>
                         </Border>
                     </ControlTemplate>
@@ -84,21 +101,21 @@
             </Setter>
         </Style>
 
-        <!-- Bouton-réponse d'un jeu (grande carte blanche) -->
+        <!-- Bouton-réponse d'un jeu (grande carte douce, très arrondie) -->
         <Style x:Key="AnswerButton" TargetType="Button">
             <Setter Property="Margin" Value="5" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="Background" Value="{StaticResource CardFill}" />
             <Setter Property="BorderBrush" Value="#FF7E3FF2" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="22" Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd" CornerRadius="30" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}" Padding="8">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.18" />
+                                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.16" />
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -108,7 +125,7 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Effect">
                                     <Setter.Value>
-                                        <DropShadowEffect BlurRadius="28" ShadowDepth="0"
+                                        <DropShadowEffect BlurRadius="34" ShadowDepth="0"
                                                           Color="#FFB388FF" Opacity="0.9" />
                                     </Setter.Value>
                                 </Setter>
@@ -140,17 +157,17 @@
             <Setter Property="Height" Value="220" />
             <Setter Property="Margin" Value="8" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="Background" Value="{StaticResource CardFill}" />
             <Setter Property="BorderBrush" Value="#FF7E3FF2" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="26" Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd" CornerRadius="36" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.2" />
+                                <DropShadowEffect BlurRadius="20" ShadowDepth="3" Opacity="0.18" />
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -177,13 +194,13 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Foreground" Value="#FF3B2A5A" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="Background" Value="{StaticResource CardFill}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="20" Background="{TemplateBinding Background}" Padding="20,8">
+                        <Border CornerRadius="33" Background="{TemplateBinding Background}" Padding="20,8">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.2" />
+                                <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.2" />
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -204,9 +221,12 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="18" Background="{TemplateBinding Background}"
+                        <Border CornerRadius="26" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.15" />
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                     </ControlTemplate>
@@ -227,7 +247,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" CornerRadius="20" Background="{TemplateBinding Background}"
+                        <Border x:Name="bd" CornerRadius="38" Background="{TemplateBinding Background}"
                                 Padding="18,6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
