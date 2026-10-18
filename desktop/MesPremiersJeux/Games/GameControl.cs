@@ -476,6 +476,7 @@ namespace MesPremiersJeux.Games
         private static readonly System.Collections.Generic.Dictionary<string, (string Decor, byte Veil)> Decors =
             new System.Collections.Generic.Dictionary<string, (string, byte)>
         {
+            { "SyllableGame", ("decor-mare", 0) },
             { "MagicWindowGame", ("decor-foret", 0x40) },
             { "StringsGame", ("decor-foret", 0x70) },
             { "CountGame", ("decor-ferme", 0x30) },

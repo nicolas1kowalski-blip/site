@@ -149,9 +149,12 @@ namespace MesPremiersJeux.Games
                 RadiusY = 26,
                 Fill = new LinearGradientBrush(Color.FromRgb(0xC9, 0xED, 0xF7), Color.FromRgb(0x9E, 0xD9, 0xEE), 90),
             });
-            AddDecor("🌾", 30, H - 150, 80);
-            AddDecor("🌾", W - 110, H - 160, 86);
-            AddDecor("🦋", W - 220, 40, 44);
+            if (Art.Find("decor-mare") == null) // la mare dessinée a déjà ses roseaux
+            {
+                AddDecor("🌾", 30, H - 150, 80);
+                AddDecor("🌾", W - 110, H - 160, 86);
+                AddDecor("🦋", W - 220, 40, 44);
+            }
 
             // Le MOT en image, en grand à gauche.
             var card = new Border

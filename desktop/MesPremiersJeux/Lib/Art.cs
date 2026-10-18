@@ -288,7 +288,7 @@ namespace MesPremiersJeux.Lib
                     "  decor-oiseaux (ciel + 2 fils à 50 % et 86 % de la hauteur),\r\n" +
                     "  decor-ferme, decor-montagnes, decor-neige, decor-bonbons,\r\n" +
                     "  decor-jungle, decor-robots, decor-foret, decor-ocean,\r\n" +
-                    "  decor-ocean-epave, decor-montgolfieres, decor-espace\r\n\r\n" +
+                    "  decor-ocean-epave, decor-montgolfieres, decor-espace, decor-mare\r\n\r\n" +
                     "Jour et nuit (fourni) : la MÊME maison à 4 moments, même cadrage :\r\n" +
                     "  scene-jour.jpg, scene-coucher.jpg, scene-soir.jpg, scene-nuit.jpg\r\n" +
                     "  (fondues l'une dans l'autre : un vrai coucher / lever de soleil)\r\n\r\n" +
