@@ -17,7 +17,9 @@ namespace MesPremiersJeux.Games
     /// </summary>
     public sealed class PieFaceGame : GameControl
     {
-        private const double W = 1500, H = 720;
+        // La largeur suit la FORME DE L'ÉCRAN : la scène remplit tout l'écran.
+        private double W = 1500;
+        private const double H = 720;
         private const double FaceSize = 290;
 
         private static readonly string[] Faces = { "😀", "🤠", "🤓", "😮", "🥸", "😊", "🧐", "😁" };
@@ -41,6 +43,7 @@ namespace MesPremiersJeux.Games
             SetConsigne(new TextBlock { Text = "🔍🥧" },
                 () => "Cherche le visage rigolo... et regarde-le pour lancer la tarte ! SPLAT !");
 
+            W = Math.Round(H * ScreenAspect);
             _canvas = new Canvas { Width = W, Height = H };
             // Plein écran : la page autour de la scène continue le décor.
             SetPageBackground(new LinearGradientBrush(

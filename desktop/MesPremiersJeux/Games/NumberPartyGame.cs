@@ -61,6 +61,11 @@ namespace MesPremiersJeux.Games
         private Grid DigitVisual(int n, double size)
         {
             var g = new Grid { Width = size, Height = size };
+            if (Art.Find("chiffre-" + n) is ImageSource img) // le chiffre-personnage
+            {
+                g.Children.Add(new Image { Source = img, Stretch = Stretch.Uniform });
+                return g;
+            }
             g.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(size * 0.22),

@@ -55,7 +55,10 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         //  Les quatre VISUELS d'un nombre
         // ------------------------------------------------------------------
-        private static FrameworkElement Digit(int n, double size) => new Viewbox
+        private static FrameworkElement Digit(int n, double size) =>
+            Art.Find("chiffre-" + n) is ImageSource img
+                ? new Image { Source = img, Width = size, Height = size, Stretch = Stretch.Uniform }
+                : (FrameworkElement)new Viewbox
         {
             Width = size,
             Height = size,
@@ -71,6 +74,8 @@ namespace MesPremiersJeux.Games
         // Le dé : points noirs disposés comme sur un vrai dé.
         private static FrameworkElement Dice(int n, double size)
         {
+            if (Art.Find("de-" + n) is ImageSource dimg) // la face de dé dessinée
+                return new Image { Source = dimg, Width = size, Height = size, Stretch = Stretch.Uniform };
             var c = new Canvas { Width = 200, Height = 200 };
             c.Children.Add(new Rectangle
             {

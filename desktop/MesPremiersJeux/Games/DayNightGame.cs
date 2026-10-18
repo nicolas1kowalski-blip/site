@@ -104,10 +104,7 @@ namespace MesPremiersJeux.Games
             // Le SOLEIL et la LUNE — nos deux boutons. Sur le paysage dessiné,
             // ils se posent EXACTEMENT sur le soleil et la lune du dessin :
             // jamais deux soleils ni deux lunes, et toujours visibles.
-            var sunImg = Art.Find("planete-soleil");
-            var sun = SceneButton(sunImg != null
-                    ? (UIElement)new Image { Source = sunImg, Width = 250, Height = 250 }
-                    : PlanetArt.Make(0, 230), 270, 270);
+            var sun = SceneButton(SunVisual(250), 270, 270);
             sun.Click += (s, e) => { if (!Locked) GoDay(); };
             Canvas.SetLeft(sun, painted ? 356 - 135 : 60);
             Canvas.SetTop(sun, painted ? 177 - 135 : 30);
@@ -253,12 +250,12 @@ namespace MesPremiersJeux.Games
                 Canvas.SetTop(star, _rng.NextDouble() * (H - 30));
                 _canvas.Children.Add(star);
             }
-            var sun = PlanetArt.Make(0, 300);
+            var sun = SunVisual(300);
             Canvas.SetLeft(sun, 100);
             Canvas.SetTop(sun, H / 2 - 150);
             _canvas.Children.Add(sun);
 
-            var earth = PlanetArt.Make(3, 240);
+            var earth = OrbImage("planete-terre", 3, 240);
             earth.RenderTransformOrigin = new Point(0.5, 0.5);
             var spin = new RotateTransform(0);
             earth.RenderTransform = spin;
@@ -278,8 +275,29 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         //  Acte 2 : les formes de la Lune — Acte 3 : jour ou nuit ?
         // ------------------------------------------------------------------
+        // Le Soleil et la Terre dessinés (planete-soleil / planete-terre).
+        private static FrameworkElement SunVisual(double size) => OrbImage("planete-soleil", 0, size);
+        private static FrameworkElement OrbImage(string name, int art, double size)
+        {
+            var img = Art.Find(name);
+            return img != null
+                ? (FrameworkElement)new Image { Source = img, Width = size, Height = size, Stretch = Stretch.Uniform }
+                : PlanetArt.Make(art, size);
+        }
+
         private FrameworkElement MoonVisual(double size, bool full, double phase = 0)
         {
+            // Les dessins d'abord : pleine lune (lune-pleine, sinon planete-lune),
+            // croissant (lune-croissant, sinon lune), demi-lune (lune-demi).
+            string[] names = full ? new[] { "lune-pleine", "planete-lune" }
+                           : phase >= 0.7 ? new[] { "lune-croissant", "lune" }
+                           : new[] { "lune-demi" };
+            foreach (var n in names)
+            {
+                var img = Art.Find(n);
+                if (img != null)
+                    return new Image { Source = img, Width = size, Height = size, Stretch = Stretch.Uniform };
+            }
             // phase 0 = pleine ; 0.55 = moitié ; 0.8 = croissant.
             var c = new Canvas { Width = 240, Height = 240 };
             var cream = Color.FromRgb(0xF2, 0xE8, 0xC4);
@@ -458,7 +476,7 @@ namespace MesPremiersJeux.Games
 
             // Sur les dessins, chaque bouton se pose sur le soleil / la lune du
             // dessin (moitié jour cadrée à gauche, moitié nuit à droite).
-            var sunBtn = SceneButton(PlanetArt.Make(0, 240), 300, 300);
+            var sunBtn = SceneButton(SunVisual(240), 300, 300);
             Canvas.SetLeft(sunBtn, painted ? 287 - 150 : W / 4 - 150);
             Canvas.SetTop(sunBtn, painted ? 167 - 150 : 260);
             _canvas.Children.Add(sunBtn);

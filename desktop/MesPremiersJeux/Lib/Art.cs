@@ -258,6 +258,14 @@ namespace MesPremiersJeux.Lib
                     "  maison-sons-1.png ... -4.png  (FACULTATIF : plusieurs poses de la\r\n" +
                     "  MÊME maison, à peine différentes — alternées doucement, la maison\r\n" +
                     "  RESPIRE ! 4 poses sont déjà fournies.)\r\n\r\n" +
+                    "PLACES PRÊTES (le jeu les utilise dès que l'image existe) :\r\n" +
+                    "  tarte.png                    (la tarte à la crème qui vole)\r\n" +
+                    "  lune-pleine.png, lune-demi.png, lune-croissant.png (formes de la Lune)\r\n" +
+                    "  drapeau-france.png ... drapeau-amerique.png (8 drapeaux, le nom du\r\n" +
+                    "  pays est ajouté dessous automatiquement)\r\n" +
+                    "  chiffre-1.png ... chiffre-10.png (chiffres-personnages)\r\n" +
+                    "  de-1.png ... de-6.png        (les faces du dé)\r\n" +
+                    "  gobelet.png                  (le gobelet du bonneteau)\r\n\r\n" +
                     "Jour et nuit (fourni) : la MÊME maison à 4 moments, même cadrage :\r\n" +
                     "  scene-jour.jpg, scene-coucher.jpg, scene-soir.jpg, scene-nuit.jpg\r\n" +
                     "  (fondues l'une dans l'autre : un vrai coucher / lever de soleil)\r\n\r\n" +

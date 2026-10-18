@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using MesPremiersJeux.Lib;
 using static MesPremiersJeux.Games.VecKit;
 
 namespace MesPremiersJeux.Games
@@ -21,10 +22,20 @@ namespace MesPremiersJeux.Games
 
         /// <summary>Le drapeau (largeur « size ») avec le NOM DU PAYS écrit
         /// dessous ; named = false pour le drapeau seul.</summary>
+        private static readonly string[] Keys =
+            { "france", "angleterre", "italie", "egypte", "russie", "chine", "japon", "amerique" };
+
         public static FrameworkElement Make(int kind, double size, bool named = true)
         {
             int k = ((kind % 8) + 8) % 8;
             var c = new Canvas { Width = 300, Height = 200 };
+            // Le drapeau DESSINÉ (drapeau-<pays>.png) s'il existe.
+            var img = Art.Find("drapeau-" + Keys[k]);
+            if (img != null)
+            {
+                c.Children.Add(new Image { Source = img, Width = 300, Height = 200, Stretch = Stretch.Uniform });
+                return Finish(c, k, size, named);
+            }
             switch (k)
             {
                 case 0: // France : trois bandes verticales
@@ -84,6 +95,11 @@ namespace MesPremiersJeux.Games
                 RadiusY = 8,
             };
             Add(c, frame, 0, 0);
+            return Finish(c, k, size, named);
+        }
+
+        private static FrameworkElement Finish(Canvas c, int k, double size, bool named)
+        {
             if (!named)
                 return new Viewbox { Width = size, Height = size * 2 / 3, Stretch = Stretch.Uniform, Child = c };
 

@@ -17,7 +17,9 @@ namespace MesPremiersJeux.Games
     /// </summary>
     public sealed class FireworksGame : GameControl
     {
-        private const double W = 1500, H = 740;
+        // La largeur suit la FORME DE L'ÉCRAN : la scène remplit tout l'écran.
+        private double W = 1500;
+        private const double H = 740;
         private const int Cols = 5, Rows = 3;
 
         private static readonly Color[] Palette =
@@ -45,6 +47,7 @@ namespace MesPremiersJeux.Games
             SetConsigne(new TextBlock { Text = "👀✨" },
                 () => "Regarde le ciel... et une fusée explose juste là ! Encore !");
 
+            W = Math.Round(H * ScreenAspect);
             _canvas = new Canvas { Width = W, Height = H };
 
             // Nuit étoilée.
@@ -69,7 +72,8 @@ namespace MesPremiersJeux.Games
                 Canvas.SetTop(star, _rng.NextDouble() * (H - 120));
                 _canvas.Children.Add(star);
             }
-            var moon = new TextBlock { Text = "🌙", FontSize = 68, IsHitTestVisible = false };
+            var moon = Art.ForEmoji("🌙", 90);
+            moon.IsHitTestVisible = false;
             Canvas.SetLeft(moon, W - 140);
             Canvas.SetTop(moon, 24);
             _canvas.Children.Add(moon);

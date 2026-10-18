@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using MesPremiersJeux.Lib;
 
@@ -49,12 +50,12 @@ namespace MesPremiersJeux.Games
                 }
             };
 
+            // VRAI PLEIN ÉCRAN : une seule couche — le jeu occupe TOUT l'écran,
+            // et la consigne flotte par-dessus le décor dans une petite bulle.
             var root = new Grid();
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // consigne 🔊
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            // PLEIN ÉCRAN : le titre est COMPACT (le jeu prend toute la place).
+            // Le titre écrit n'est plus affiché (l'enfant ne lit pas : la voix
+            // dit tout) — gardé pour les jeux qui le remplissent.
             Question = new TextBlock
             {
                 FontSize = 30,
@@ -64,26 +65,29 @@ namespace MesPremiersJeux.Games
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(16, 4, 16, 0),
-            };
-            Grid.SetRow(Question, 0);
-            root.Children.Add(Question);
-
-            // Barre de consigne SANS LECTURE : le modèle en grand + le bouton 🔊
-            // qui répète la consigne (remplie par chaque jeu via SetConsigne).
-            _consigne = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 2, 0, 2),
                 Visibility = Visibility.Collapsed,
             };
-            Grid.SetRow(_consigne, 1);
-            root.Children.Add(_consigne);
 
-            Body = new Grid(); // aucune marge : le jeu va jusqu'aux bords
-            Grid.SetRow(Body, 2);
+            Body = new Grid(); // tout l'écran, sans marge
             root.Children.Add(Body);
             _rootGrid = root;
+
+            // La consigne SANS LECTURE (le modèle + le bouton 🔊), en bulle
+            // translucide posée sur le décor, en haut au centre.
+            _consigne = new StackPanel { Orientation = Orientation.Horizontal };
+            _consigneBubble = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF)),
+                CornerRadius = new CornerRadius(40),
+                Padding = new Thickness(12, 6, 12, 6),
+                Margin = new Thickness(0, 8, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 1, Opacity = 0.2 },
+                Visibility = Visibility.Collapsed,
+                Child = _consigne,
+            };
+            root.Children.Add(_consigneBubble);
 
             // LA TIRELIRE D'ÉTOILES, visible pendant le jeu (en haut à droite) :
             // à chaque réussite, une étoile VOLE dedans et le compteur saute.
@@ -114,11 +118,9 @@ namespace MesPremiersJeux.Games
                 Child = _jarText,
             };
             _jar.RenderTransform = new ScaleTransform(1, 1);
-            Grid.SetRowSpan(_jar, 3);
             root.Children.Add(_jar);
 
             _fxLayer = new Canvas { IsHitTestVisible = false };
-            Grid.SetRowSpan(_fxLayer, 3);
             root.Children.Add(_fxLayer);
 
             _onStars = () => Dispatcher.Invoke(() => _jarText.Text = "⭐ " + RewardStore.Balance);
@@ -142,13 +144,31 @@ namespace MesPremiersJeux.Games
         private bool _started;
         private Grid _rootGrid;
         private StackPanel _consigne;
+        private Border _consigneBubble;
+        private bool _pageExplicit; // le jeu a choisi lui-même la couleur de page
 
         /// <summary>
         /// La couleur de PAGE du jeu : elle remplit les bandes autour de la
         /// scène (la scène garde ses proportions), pour que le jeu semble
         /// occuper TOUT l'écran — ciel qui continue, espace qui continue…
         /// </summary>
-        protected void SetPageBackground(Brush b) => _rootGrid.Background = b;
+        protected void SetPageBackground(Brush b) { _pageExplicit = true; _rootGrid.Background = b; }
+
+        /// <summary>Proportions de l'écran de jeu (largeur / hauteur) — pour les
+        /// jeux « tout l'écran » qui adaptent la largeur de leur scène.</summary>
+        protected double ScreenAspect
+        {
+            get
+            {
+                double w = ActualWidth, h = ActualHeight;
+                if (w < 100 || h < 100)
+                {
+                    w = SystemParameters.PrimaryScreenWidth;
+                    h = SystemParameters.PrimaryScreenHeight;
+                }
+                return Math.Max(1.2, Math.Min(2.6, w / h));
+            }
+        }
         private Border _jar;
         private TextBlock _jarText;
         private Canvas _fxLayer;
@@ -306,14 +326,15 @@ namespace MesPremiersJeux.Games
         /// ne lit pas : la consigne se voit et s'entend, elle ne se lit pas.
         /// À appeler à chaque tour ; (null, null) masque la barre.
         /// </summary>
-        protected void SetConsigne(UIElement model, Func<string> speech, double modelHeight = 100)
+        protected void SetConsigne(UIElement model, Func<string> speech, double modelHeight = 72)
         {
             _consigne.Children.Clear();
             if (model == null && speech == null)
             {
-                _consigne.Visibility = Visibility.Collapsed;
+                _consigneBubble.Visibility = Visibility.Collapsed;
                 return;
             }
+            modelHeight = Math.Min(modelHeight, 80); // bulle compacte : le jeu garde la place
             if (model != null)
             {
                 _consigne.Children.Add(new Border
@@ -331,11 +352,11 @@ namespace MesPremiersJeux.Games
             }
             if (speech != null)
             {
-                var b = SpeakerButton(speech, 78);
+                var b = SpeakerButton(speech, 66);
                 b.VerticalAlignment = VerticalAlignment.Center;
                 _consigne.Children.Add(b);
             }
-            _consigne.Visibility = Visibility.Visible;
+            _consigneBubble.Visibility = Visibility.Visible;
         }
 
         // La petite oreille « écoute d'abord ! » là où le clic a été bloqué.
@@ -426,9 +447,29 @@ namespace MesPremiersJeux.Games
             t.Start();
         }
 
+        /// <summary>
+        /// PLEIN ÉCRAN AUTOMATIQUE : si la scène commence par un grand fond
+        /// (rectangle couvrant toute la scène), ses coins arrondis disparaissent
+        /// et sa couleur devient celle de la page — le décor continue jusqu'aux
+        /// bords de l'écran, sans cadre ni bandes. (Un jeu qui a choisi sa page
+        /// avec SetPageBackground garde la sienne.)
+        /// </summary>
+        private void AutoPage(UIElement content)
+        {
+            if (_pageExplicit) return;
+            if (content is Canvas c && c.Children.Count > 0 && c.Children[0] is Rectangle r
+                && r.Width >= c.Width - 1 && r.Height >= c.Height - 1 && r.Fill != null)
+            {
+                r.RadiusX = 0;
+                r.RadiusY = 0;
+                _rootGrid.Background = r.Fill;
+            }
+        }
+
         /// <summary>Dispose une « scène » centrale et une rangée de réponses en bas.</summary>
         protected void SetBody(UIElement stage, UIElement answers)
         {
+            AutoPage(stage);
             Body.Children.Clear();
             var dp = new DockPanel { LastChildFill = true };
             if (answers != null)
@@ -454,6 +495,7 @@ namespace MesPremiersJeux.Games
         /// <summary>Remplit le corps avec un contenu unique (grilles, etc.).</summary>
         protected void SetBody(UIElement content)
         {
+            AutoPage(content);
             Body.Children.Clear();
             Body.Children.Add(FitBox(content));
         }

@@ -43,6 +43,11 @@ namespace MesPremiersJeux.Games
         private static UIElement CupVisual(Color c)
         {
             var g = new Grid { Width = CupW, Height = CupH };
+            if (Art.Find("gobelet") is ImageSource img) // le gobelet dessiné
+            {
+                g.Children.Add(new Image { Source = img, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Bottom });
+                return g;
+            }
             var ink = new SolidColorBrush(Color.FromRgb(0x2B, 0x2D, 0x42));
 
             // Corps.
