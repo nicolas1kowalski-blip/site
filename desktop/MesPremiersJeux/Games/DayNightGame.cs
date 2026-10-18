@@ -27,6 +27,10 @@ namespace MesPremiersJeux.Games
         private GradientStop _skyTop, _skyBottom;
         private readonly List<TextBlock> _stars = new List<TextBlock>();
         private TextBlock _zzz;
+        // Le paysage DESSINÉ (scene-jour / -coucher / -soir / -nuit) : 4 calques
+        // superposés que l'on fond l'un dans l'autre — un vrai coucher de soleil.
+        private Image[] _scene;
+        private SolidColorBrush _page;
         private bool _sawDay, _sawNight;
         private int _round;
         private int _act;
@@ -65,9 +69,16 @@ namespace MesPremiersJeux.Games
                 Fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1), GradientStops = { _skyTop, _skyBottom } },
             };
             _canvas.Children.Add(sky);
+            _canvas.ClipToBounds = true;
+            _page = new SolidColorBrush(Color.FromRgb(0x8A, 0xC8, 0xFF));
+            SetPageBackground(_page); // le ciel continue jusqu'aux bords de l'écran
+            _stars.Clear();
+            _scene = PaintedScene();
+            bool painted = _scene != null;
 
-            // Les étoiles (invisibles le jour, elles s'allument la nuit).
-            for (int i = 0; i < 26; i++)
+            // Les étoiles (invisibles le jour, elles s'allument la nuit) — le
+            // dessin de nuit a déjà les siennes.
+            for (int i = 0; i < (painted ? 0 : 26); i++)
             {
                 var star = new TextBlock
                 {
@@ -83,7 +94,83 @@ namespace MesPremiersJeux.Games
                 _stars.Add(star);
             }
 
-            // Le paysage : collines, maison, arbre.
+            // Le paysage : collines, maison, arbre (sans dessin seulement).
+            if (!painted) AddVectorLandscape();
+            _zzz = new TextBlock { Text = "💤", FontSize = 60, Opacity = 0, IsHitTestVisible = false };
+            Canvas.SetLeft(_zzz, painted ? 975 : W / 2 + 40);   // près de la cheminée
+            Canvas.SetTop(_zzz, painted ? 120 : H - 360);
+            _canvas.Children.Add(_zzz);
+
+            // Le SOLEIL et la LUNE — nos deux boutons. Sur le paysage dessiné,
+            // ils se posent EXACTEMENT sur le soleil et la lune du dessin :
+            // jamais deux soleils ni deux lunes, et toujours visibles.
+            var sunImg = Art.Find("planete-soleil");
+            var sun = SceneButton(sunImg != null
+                    ? (UIElement)new Image { Source = sunImg, Width = 250, Height = 250 }
+                    : PlanetArt.Make(0, 230), 270, 270);
+            sun.Click += (s, e) => { if (!Locked) GoDay(); };
+            Canvas.SetLeft(sun, painted ? 356 - 135 : 60);
+            Canvas.SetTop(sun, painted ? 177 - 135 : 30);
+            _canvas.Children.Add(sun);
+            Bob(sun, 0);
+
+            var moon = SceneButton(MoonVisual(painted ? 215 : 230, full: true), 240, 240);
+            moon.Click += (s, e) => { if (!Locked) GoNight(); };
+            Canvas.SetLeft(moon, painted ? 1287 - 120 : W - 320);
+            Canvas.SetTop(moon, painted ? 122 - 120 + 6 : 30);
+            _canvas.Children.Add(moon);
+            Bob(moon, 1);
+
+            SetBody(_canvas);
+            Speak("Jour et nuit ! Regarde le Soleil pour faire venir le jour... et la Lune pour faire venir la nuit !");
+        }
+
+        // Les 4 moments de la journée dessinés, empilés (jour en dessous, nuit
+        // au-dessus) ; seul le jour est visible au départ. null si absents.
+        private Image[] PaintedScene()
+        {
+            var keys = new[] { "scene-jour", "scene-coucher", "scene-soir", "scene-nuit" };
+            var srcs = keys.Select(Art.Find).ToArray();
+            if (srcs.Any(x => x == null)) return null;
+            double ih = W * srcs[0].Height / srcs[0].Width; // ~840 : on rogne un peu le bas
+            var layers = new Image[4];
+            for (int i = 0; i < 4; i++)
+            {
+                layers[i] = new Image
+                {
+                    Source = srcs[i],
+                    Width = W,
+                    Height = ih,
+                    Stretch = Stretch.Fill,
+                    Opacity = i == 0 ? 1 : 0,
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(layers[i], 0);
+                Canvas.SetTop(layers[i], -30); // repère des boutons soleil/lune
+                _canvas.Children.Add(layers[i]);
+            }
+            return layers;
+        }
+
+        // Fond l'un dans l'autre : la nuit tombe (coucher → soir → nuit) ou le
+        // jour se lève (nuit → soir → coucher → jour), en ~2,7 s.
+        private void FadeScene(bool toNight)
+        {
+            if (_scene == null) return;
+            for (int k = 1; k <= 3; k++)
+            {
+                int step = toNight ? k - 1 : 3 - k; // ordre d'apparition / de disparition
+                _scene[k].BeginAnimation(UIElement.OpacityProperty,
+                    new DoubleAnimation(toNight ? 1 : 0, TimeSpan.FromMilliseconds(1000))
+                    {
+                        BeginTime = TimeSpan.FromMilliseconds(step * 850),
+                        EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                    });
+            }
+        }
+
+        private void AddVectorLandscape()
+        {
             var hill1 = new Ellipse { Width = 1100, Height = 380, Fill = new SolidColorBrush(Color.FromRgb(0x8F, 0xD6, 0x7A)) };
             Canvas.SetLeft(hill1, -220);
             Canvas.SetTop(hill1, H - 220);
@@ -95,32 +182,12 @@ namespace MesPremiersJeux.Games
             AddDecor("🏡", W / 2 - 110, H - 290, 150);
             AddDecor("🌳", W / 2 + 160, H - 300, 130);
             AddDecor("🌷🌼🌷", 180, H - 160, 48);
-            _zzz = new TextBlock { Text = "💤", FontSize = 60, Opacity = 0, IsHitTestVisible = false };
-            Canvas.SetLeft(_zzz, W / 2 + 40);
-            Canvas.SetTop(_zzz, H - 360);
-            _canvas.Children.Add(_zzz);
-
-            // Le SOLEIL (à gauche) et la LUNE (à droite) — nos deux boutons.
-            var sun = SceneButton(PlanetArt.Make(0, 230), 260, 260);
-            sun.Click += (s, e) => { if (!Locked) GoDay(); };
-            Canvas.SetLeft(sun, 60);
-            Canvas.SetTop(sun, 30);
-            _canvas.Children.Add(sun);
-            Bob(sun, 0);
-
-            var moon = SceneButton(MoonVisual(230, full: true), 260, 260);
-            moon.Click += (s, e) => { if (!Locked) GoNight(); };
-            Canvas.SetLeft(moon, W - 320);
-            Canvas.SetTop(moon, 30);
-            _canvas.Children.Add(moon);
-            Bob(moon, 1);
-
-            SetBody(_canvas);
-            Speak("Jour et nuit ! Regarde le Soleil pour faire venir le jour... et la Lune pour faire venir la nuit !");
         }
 
         private void AnimateSky(Color top, Color bottom)
         {
+            _page?.BeginAnimation(SolidColorBrush.ColorProperty,
+                new ColorAnimation(top, TimeSpan.FromMilliseconds(2400)));
             _skyTop.BeginAnimation(GradientStop.ColorProperty,
                 new ColorAnimation(top, TimeSpan.FromMilliseconds(1400)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
             _skyBottom.BeginAnimation(GradientStop.ColorProperty,
@@ -130,6 +197,7 @@ namespace MesPremiersJeux.Games
         private void GoDay()
         {
             AnimateSky(Color.FromRgb(0x8A, 0xC8, 0xFF), Color.FromRgb(0xE8, 0xF4, 0xFF));
+            FadeScene(toNight: false); // le soleil se lève sur la maison
             foreach (var st in _stars)
                 st.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(900)));
             _zzz.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(600)));
@@ -142,6 +210,7 @@ namespace MesPremiersJeux.Games
         private void GoNight()
         {
             AnimateSky(Color.FromRgb(0x1A, 0x1E, 0x4A), Color.FromRgb(0x3A, 0x2A, 0x6E));
+            FadeScene(toNight: true); // coucher de soleil, puis la nuit tombe
             foreach (var st in _stars)
             {
                 st.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(1200))
@@ -339,19 +408,40 @@ namespace MesPremiersJeux.Games
 
             _canvas = new Canvas { Width = W, Height = H };
             // Moitié jour / moitié nuit, séparées au milieu.
-            _canvas.Children.Add(new Rectangle { Width = W / 2, Height = H, RadiusX = 26, RadiusY = 26, Fill = new LinearGradientBrush(Color.FromRgb(0x8A, 0xC8, 0xFF), Color.FromRgb(0xE8, 0xF4, 0xFF), 90) });
-            var night = new Rectangle { Width = W / 2, Height = H, RadiusX = 26, RadiusY = 26, Fill = new LinearGradientBrush(Color.FromRgb(0x1A, 0x1E, 0x4A), Color.FromRgb(0x3A, 0x2A, 0x6E), 90) };
+            // La maison au soleil / la maison sous les étoiles (dessins) si on
+            // les a, sinon les deux ciels en dégradé.
+            var dayImg = Art.Find("scene-jour");
+            var nightImg = Art.Find("scene-nuit");
+            bool painted = dayImg != null && nightImg != null;
+            SetPageBackground(new LinearGradientBrush(Color.FromRgb(0x8A, 0xC8, 0xFF), Color.FromRgb(0x1A, 0x1E, 0x4A), 0));
+            _canvas.Children.Add(new Rectangle
+            {
+                Width = W / 2, Height = H, RadiusX = 26, RadiusY = 26,
+                Fill = painted
+                    ? new ImageBrush(dayImg) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Left }
+                    : (Brush)new LinearGradientBrush(Color.FromRgb(0x8A, 0xC8, 0xFF), Color.FromRgb(0xE8, 0xF4, 0xFF), 90),
+            });
+            var night = new Rectangle
+            {
+                Width = W / 2, Height = H, RadiusX = 26, RadiusY = 26,
+                Fill = painted
+                    ? new ImageBrush(nightImg) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right }
+                    : (Brush)new LinearGradientBrush(Color.FromRgb(0x1A, 0x1E, 0x4A), Color.FromRgb(0x3A, 0x2A, 0x6E), 90),
+            };
             Canvas.SetLeft(night, W / 2);
             _canvas.Children.Add(night);
-            for (int i = 0; i < 12; i++)
+            for (int i = 0; i < (painted ? 0 : 12); i++)
             {
                 var star = new TextBlock { Text = "✦", FontSize = 10 + _rng.Next(14), Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 242, 196)), IsHitTestVisible = false };
                 Canvas.SetLeft(star, W / 2 + 30 + _rng.NextDouble() * (W / 2 - 80));
                 Canvas.SetTop(star, _rng.NextDouble() * (H - 60));
                 _canvas.Children.Add(star);
             }
-            AddDecor("🌼", 90, H - 140, 56);
-            AddDecor("🦉", W - 160, H - 190, 90);
+            if (!painted)
+            {
+                AddDecor("🌼", 90, H - 140, 56);
+                AddDecor("🦉", W - 160, H - 190, 90);
+            }
 
             // L'activité mystère, au centre, qui se balance.
             var item = Art.ForEmoji(target.Emoji, 170);
@@ -366,14 +456,16 @@ namespace MesPremiersJeux.Games
             sway.BeginAnimation(RotateTransform.AngleProperty,
                 new DoubleAnimation(-8, 8, TimeSpan.FromSeconds(1.6)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
 
+            // Sur les dessins, chaque bouton se pose sur le soleil / la lune du
+            // dessin (moitié jour cadrée à gauche, moitié nuit à droite).
             var sunBtn = SceneButton(PlanetArt.Make(0, 240), 300, 300);
-            Canvas.SetLeft(sunBtn, W / 4 - 150);
-            Canvas.SetTop(sunBtn, 260);
+            Canvas.SetLeft(sunBtn, painted ? 287 - 150 : W / 4 - 150);
+            Canvas.SetTop(sunBtn, painted ? 167 - 150 : 260);
             _canvas.Children.Add(sunBtn);
             Bob(sunBtn, 0);
-            var moonBtn = SceneButton(MoonVisual(240, full: true), 300, 300);
-            Canvas.SetLeft(moonBtn, 3 * W / 4 - 150);
-            Canvas.SetTop(moonBtn, 260);
+            var moonBtn = SceneButton(MoonVisual(painted ? 215 : 240, full: true), painted ? 240 : 300, painted ? 240 : 300);
+            Canvas.SetLeft(moonBtn, painted ? 1328 - 120 : 3 * W / 4 - 150);
+            Canvas.SetTop(moonBtn, painted ? 3 : 260);
             _canvas.Children.Add(moonBtn);
             Bob(moonBtn, 1);
 
@@ -429,7 +521,8 @@ namespace MesPremiersJeux.Games
 
         private void AddDecor(string emoji, double x, double y, double size)
         {
-            var tb = new TextBlock { Text = emoji, FontSize = size, IsHitTestVisible = false };
+            var tb = Art.ForEmoji(emoji, size * 1.2);
+            tb.IsHitTestVisible = false;
             Canvas.SetLeft(tb, x);
             Canvas.SetTop(tb, y);
             _canvas.Children.Add(tb);

@@ -258,6 +258,9 @@ namespace MesPremiersJeux.Lib
                     "  maison-sons-1.png ... -4.png  (FACULTATIF : plusieurs poses de la\r\n" +
                     "  MÊME maison, à peine différentes — alternées doucement, la maison\r\n" +
                     "  RESPIRE ! 4 poses sont déjà fournies.)\r\n\r\n" +
+                    "Jour et nuit (fourni) : la MÊME maison à 4 moments, même cadrage :\r\n" +
+                    "  scene-jour.jpg, scene-coucher.jpg, scene-soir.jpg, scene-nuit.jpg\r\n" +
+                    "  (fondues l'une dans l'autre : un vrai coucher / lever de soleil)\r\n\r\n" +
                     "Les lettres-personnages (fournies avec l'application) :\r\n" +
                     "  lettre-A.png ... lettre-Z.png   (l'alphabet rigolo — abécédaire,\r\n" +
                     "  Mon prénom, la bulle de la maison des sons)\r\n\r\n" +
