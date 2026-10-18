@@ -228,7 +228,7 @@ namespace MesPremiersJeux.Games
             ay.Completed += (s, e) =>
             {
                 SoundFx.Note(slot);
-                Speech.Say(Beads[kind].Name + " !");
+                Speak(Beads[kind].Name + " !");
                 if (_next < _pattern.Length) return;
 
                 // Collier fini : il brille puis va au cou du nounours.

@@ -130,7 +130,7 @@ namespace MesPremiersJeux.Games
             }
 
             SetBody(_canvas);
-            Speech.SaySlow("La maison du son " + r.Sound + " ! " + r.Sound + " ! Trouve les images où tu entends " + r.Sound + " !");
+            SpeakSlow("La maison du son " + r.Sound + " ! " + r.Sound + " ! Trouve les images où tu entends " + r.Sound + " !");
         }
 
         // La grande maison colorée, avec sa lettre et sa porte ouverte.
@@ -199,7 +199,7 @@ namespace MesPremiersJeux.Games
                 Width = 380,
                 Height = 400,
             };
-            hit.Click += (s, e) => { if (!Locked) Speech.SaySlow(r.Sound + " ! " + r.Sound + " !"); };
+            hit.Click += (s, e) => { if (!Locked) SpeakSlow(r.Sound + " ! " + r.Sound + " !"); };
             Canvas.SetLeft(hit, W / 2 - 190);
             Canvas.SetTop(hit, 120);
             hit.SetValue(Panel.ZIndexProperty, 31);
@@ -334,7 +334,7 @@ namespace MesPremiersJeux.Games
                 Width = 0.40 * W,
                 Height = 0.50 * ih,
             };
-            hit.Click += (s, e) => { if (!Locked) Speech.SaySlow(r.Sound + " ! " + r.Sound + " !"); };
+            hit.Click += (s, e) => { if (!Locked) SpeakSlow(r.Sound + " ! " + r.Sound + " !"); };
             Canvas.SetLeft(hit, 0.32 * W);
             Canvas.SetTop(hit, 0.30 * ih);
             hit.SetValue(Panel.ZIndexProperty, 31);
@@ -347,12 +347,12 @@ namespace MesPremiersJeux.Games
             if (!yes)
             {
                 Shake(btn);
-                Speech.SaySlow(Cap(word) + "... " + word + " ! Non, on n'entend pas " + r.Sound + " dans " + word + " ! Cherche encore !");
+                SpeakSlow(Cap(word) + "... " + word + " ! Non, on n'entend pas " + r.Sound + " dans " + word + " ! Cherche encore !");
                 return;
             }
 
             btn.IsHitTestVisible = false;
-            Speech.SaySlow(Cap(stretched) + " ! Oui ! On entend " + r.Sound + " ! Dans la maison !");
+            SpeakSlow(Cap(stretched) + " ! Oui ! On entend " + r.Sound + " ! Dans la maison !");
 
             // L'image vole dans la porte de la maison.
             var flying = Art.ForEmoji(emoji, 120);
@@ -506,7 +506,7 @@ namespace MesPremiersJeux.Games
                     Locked = true;
                     GameKit.Success();
                     SoundFx.Whistle();
-                    Speech.SaySlow(w.Stretched + " ! Oui ! Le son " + w.Sound + " est " +
+                    SpeakSlow(w.Stretched + " ! Oui ! Le son " + w.Sound + " est " +
                                    (w.AtStart ? "au DÉBUT" : "à la FIN") + " du mot ! Bravo !");
                     Celebrate();
                     _trainIdx++;
@@ -523,7 +523,7 @@ namespace MesPremiersJeux.Games
                 else
                 {
                     Shake(btn);
-                    Speech.SaySlow("Écoute encore : " + w.Stretched + " ! Où entends-tu " + w.Sound + " ?");
+                    SpeakSlow("Écoute encore : " + w.Stretched + " ! Où entends-tu " + w.Sound + " ?");
                 }
             }
             loco.Click += (s, e) => Answer(true, loco);
@@ -536,7 +536,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(wagon);
 
             SetBody(_canvas);
-            Speech.SaySlow(Cap(w.Stretched) + " ! Tu entends " + w.Sound + " au début, ou à la fin ?");
+            SpeakSlow(Cap(w.Stretched) + " ! Tu entends " + w.Sound + " au début, ou à la fin ?");
         }
 
         // La maison sautille de joie et des étoiles sortent de la cheminée.

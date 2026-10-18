@@ -180,7 +180,7 @@ namespace MesPremiersJeux.Games
                 _inBasket++;
                 AddFruitInBasket(_inBasket - 1, pop: true);
                 SoundFx.Note(_inBasket);
-                Speech.Say(_inBasket.ToString() + " !");
+                Speak(_inBasket.ToString() + " !");
                 BumpCounter();
                 if (_inBasket >= Target)
                 {
@@ -253,7 +253,7 @@ namespace MesPremiersJeux.Games
                 {
                     AddFruitInBasket(slot, pop: true);
                     SoundFx.Note(num);
-                    Speech.Say(num.ToString() + " !");
+                    Speak(num.ToString() + " !");
                     _countBig.Text = num.ToString();
                     BumpCounter();
                 });

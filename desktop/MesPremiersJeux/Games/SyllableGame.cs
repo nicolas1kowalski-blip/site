@@ -29,22 +29,177 @@ namespace MesPremiersJeux.Games
             public string[] S;
         }
 
+        private static Entry E(string word, string pic, params string[] s) =>
+            new Entry { Word = word, Emoji = pic, S = s };
+
+        // Les mots, avec les dessins de la banque d'images (« nom|emoji »).
+        // Les syllabes sont ORALES et écrites pour que la voix les dise bien.
         private static readonly Entry[] Words =
         {
-            new Entry { Word = "chat", Emoji = "🐱", S = new[] { "chat" } },
-            new Entry { Word = "lapin", Emoji = "🐰", S = new[] { "la", "pin" } },
-            new Entry { Word = "vélo", Emoji = "🚲", S = new[] { "vé", "lo" } },
-            new Entry { Word = "bateau", Emoji = "⛵", S = new[] { "ba", "teau" } },
-            new Entry { Word = "soleil", Emoji = "☀️", S = new[] { "so", "leil" } },
-            new Entry { Word = "tomate", Emoji = "🍅", S = new[] { "to", "mate" } },
-            new Entry { Word = "papillon", Emoji = "🦋", S = new[] { "pa", "pi", "llon" } },
-            new Entry { Word = "éléphant", Emoji = "🐘", S = new[] { "é", "lé", "phant" } },
-            new Entry { Word = "chocolat", Emoji = "🍫", S = new[] { "cho", "co", "lat" } },
-            new Entry { Word = "kangourou", Emoji = "🦘", S = new[] { "kan", "gou", "rou" } },
-            new Entry { Word = "domino", Emoji = "🎲", S = new[] { "do", "mi", "no" } },
-            new Entry { Word = "ananas", Emoji = "🍍", S = new[] { "a", "na", "nas" } },
-            new Entry { Word = "crocodile", Emoji = "🐊", S = new[] { "cro", "co", "dile" } },
+            // — 1 syllabe —
+            E("chat", "chat|🐱", "chat"),
+            E("chien", "chien|🐶", "chien"),
+            E("ours", "ours|🐻", "ours"),
+            E("pomme", "pomme|🍎", "pomme"),
+            E("poire", "poire|🍐", "poire"),
+            E("fraise", "fraise|🍓", "fraise"),
+            E("train", "train|🚆", "train"),
+            E("bus", "bus|🚌", "bus"),
+            E("bol", "bol|🥣", "bol"),
+            E("pull", "pull|🧶", "pull"),
+            E("jupe", "jupe|👗", "jupe"),
+            E("robe", "robe|👗", "robe"),
+            E("glace", "glace|🍦", "glace"),
+            E("poule", "poule|🐔", "poule"),
+            E("vache", "vache|🐄", "vache"),
+            E("crabe", "crabe|🦀", "crabe"),
+            E("lune", "lune|🌙", "lune"),
+            E("fleur", "fleur|🌸", "fleur"),
+            E("seau", "seau|🪣", "seau"),
+            E("chou", "chou|🥬", "chou"),
+            E("singe", "singe|🐒", "singe"),
+            E("livre", "livre|📖", "livre"),
+            E("tasse", "tasse|☕", "tasse"),
+            E("pelle", "pelle|🧹", "pelle"),
+            E("phoque", "phoque|🦭", "phoque"),
+            E("cerf", "cerf|🦌", "cerf"),
+            // — 2 syllabes —
+            E("lapin", "lapin|🐰", "la", "pin"),
+            E("vélo", "velo|🚲", "vé", "lo"),
+            E("bateau", "bateau|⛵", "ba", "teau"),
+            E("soleil", "soleil|☀️", "so", "leil"),
+            E("tomate", "tomate|🍅", "to", "mate"),
+            E("canard", "canard|🦆", "ca", "nard"),
+            E("mouton", "mouton|🐑", "mou", "ton"),
+            E("cochon", "cochon|🐷", "co", "chon"),
+            E("poussin", "poussin|🐤", "pou", "sin"),
+            E("tortue", "tortue|🐢", "tor", "tue"),
+            E("girafe", "girafe|🦒", "gi", "rafe"),
+            E("panda", "panda|🐼", "pan", "da"),
+            E("renard", "renard|🦊", "re", "nard"),
+            E("hibou", "hibou|🦉", "hi", "bou"),
+            E("poisson", "poisson|🐟", "pois", "son"),
+            E("carotte", "carotte|🥕", "ca", "rotte"),
+            E("citron", "citron|🍋", "ci", "tron"),
+            E("melon", "melon|🍈", "me", "lon"),
+            E("gâteau", "gateau|🎂", "gâ", "teau"),
+            E("pizza", "pizza|🍕", "pi", "za"),
+            E("ballon", "ballon|🎈", "bal", "lon"),
+            E("camion", "camion|🚚", "ca", "mion"),
+            E("avion", "avion|✈️", "a", "vion"),
+            E("maison", "maison|🏠", "mai", "son"),
+            E("nuage", "nuage|☁️", "nu", "age"),
+            E("étoile", "etoile|⭐", "é", "toile"),
+            E("fusée", "fusee|🚀", "fu", "sée"),
+            E("robot", "robot|🤖", "ro", "bot"),
+            E("poupée", "poupee|🪆", "pou", "pée"),
+            E("tambour", "tambour|🥁", "tam", "bour"),
+            E("guitare", "guitare|🎸", "gui", "tare"),
+            E("cadeau", "cadeau|🎁", "ca", "deau"),
+            E("chapeau", "chapeau|👒", "cha", "peau"),
+            E("bonnet", "bonnet|🧢", "bo", "net"),
+            E("manteau", "manteau|🧥", "man", "teau"),
+            E("baleine", "baleine|🐋", "ba", "leine"),
+            E("dauphin", "dauphin|🐬", "dau", "phin"),
+            E("requin", "requin|🦈", "re", "quin"),
+            E("chameau", "chameau|🐫", "cha", "meau"),
+            E("castor", "castor|🦫", "cas", "tor"),
+            E("souris", "souris|🐭", "sou", "ris"),
+            E("kiwi", "kiwi|🥝", "ki", "wi"),
+            E("raisin", "raisin|🍇", "rai", "sin"),
+            E("banane", "banane|🍌", "ba", "nane"),
+            E("licorne", "licorne|🦄", "li", "corne"),
+            E("grenouille", "grenouille|🐸", "gre", "nouille"),
+            E("chenille", "chenille|🐛", "che", "nille"),
+            E("pingouin", "pingouin|🐧", "pin", "gouin"),
+            E("dragon", "dragon|🐉", "dra", "gon"),
+            E("toupie", "toupie|🪀", "tou", "pie"),
+            E("yoyo", "yoyo|🪀", "yo", "yo"),
+            E("crayon", "crayon|✏️", "cra", "yon"),
+            E("ciseaux", "ciseaux|✂️", "ci", "seaux"),
+            E("marteau", "marteau|🔨", "mar", "teau"),
+            E("tracteur", "tracteur|🚜", "trac", "teur"),
+            E("lion", "lion|🦁", "li", "on"),
+            E("frigo", "frigo|🧊", "fri", "go"),
+            E("salade", "salade|🥗", "sa", "lade"),
+            E("radis", "radis|🥕", "ra", "dis"),
+            E("framboise", "framboise|🍓", "fram", "boise"),
+            E("princesse", "princesse|👸", "prin", "cesse"),
+            E("cerises", "cerises|🍒", "ce", "rises"),
+            // — 3 syllabes —
+            E("papillon", "papillon|🦋", "pa", "pi", "yon"),
+            E("éléphant", "elephant|🐘", "é", "lé", "phant"),
+            E("kangourou", "kangourou|🦘", "kan", "gou", "rou"),
+            E("ananas", "ananas|🍍", "a", "na", "nas"),
+            E("crocodile", "crocodile|🐊", "cro", "co", "dile"),
+            E("dinosaure", "dinosaure|🦕", "di", "no", "saure"),
+            E("escargot", "escargot|🐌", "es", "car", "got"),
+            E("coccinelle", "coccinelle|🐞", "coc", "ci", "nelle"),
+            E("hérisson", "herisson|🦔", "hé", "ris", "son"),
+            E("écureuil", "ecureuil|🐿️", "é", "cu", "reuil"),
+            E("parapluie", "parapluie|☂️", "pa", "ra", "pluie"),
+            E("pantalon", "pantalon|👖", "pan", "ta", "lon"),
+            E("salopette", "salopette|👖", "sa", "lo", "pette"),
+            E("abricot", "abricot|🍑", "a", "bri", "cot"),
+            E("koala", "koala|🐨", "ko", "a", "la"),
+            E("perroquet", "perroquet|🦜", "pé", "ro", "quet"),
+            E("ambulance", "ambulance|🚑", "am", "bu", "lance"),
+            E("trottinette", "trottinette|🛴", "trot", "ti", "nette"),
+            E("xylophone", "xylophone|🎹", "xy", "lo", "phone"),
+            E("aubergine", "aubergine|🍆", "au", "ber", "gine"),
+            E("brocoli", "brocoli|🥦", "bro", "co", "li"),
+            E("téléphone", "telephone|📞", "té", "lé", "phone"),
+            E("montgolfière", "montgolfiere|🎈", "mont", "gol", "fière"),
+            E("tournesol", "tournesol|🌻", "tour", "ne", "sol"),
+            E("otarie", "otarie|🦭", "o", "ta", "rie"),
+            E("avocat", "avocat|🥑", "a", "vo", "cat"),
+            E("anorak", "anorak|🧥", "a", "no", "rak"),
+            E("coquillage", "coquillage|🐚", "co", "qui", "yage"),
+            E("chevalier", "chevalier|🛡️", "che", "va", "lier"),
+            E("cerf-volant", "cerf-volant|🪁", "cerf", "vo", "lant"),
+            E("sous-marin", "sous-marin|🚢", "sous", "ma", "rin"),
+            E("pamplemousse", "pamplemousse|🍊", "pam", "ple", "mousse"),
+            E("télescope", "telescope|🔭", "té", "les", "cope"),
+            E("arc-en-ciel", "arc-en-ciel|🌈", "arc", "en", "ciel"),
+            E("patate douce", "patate-douce|🍠", "pa", "tate", "douce"),
+            E("brosse à dents", "brosse-a-dents|🪥", "bro", "ssa", "dents"),
+            E("lave-vaisselle", "lave-vaisselle|🍽️", "lave", "vai", "sselle"),
+            // — 4 syllabes —
+            E("hélicoptère", "helicoptere|🚁", "hé", "li", "cop", "tère"),
+            E("hippopotame", "hippopotame|🦛", "hi", "po", "po", "tame"),
+            E("locomotive", "locomotive|🚂", "lo", "co", "mo", "tive"),
+            E("camion de pompiers", "camion-pompier|🚒", "ca", "mion", "pom", "piers"),
+            E("baguette magique", "baguette-magique|🪄", "ba", "guette", "ma", "gique"),
+            E("ours en peluche", "ours-peluche|🧸", "our", "sen", "pe", "luche"),
+            E("maillot de bain", "maillot-de-bain|🩱", "mai", "yot", "de", "bain"),
+            E("noix de coco", "noix-de-coco|🥥", "noix", "de", "co", "co"),
+            E("camion poubelle", "camion-poubelle|🚛", "ca", "mion", "pou", "belle"),
+            E("voiture de course", "voiture-de-course|🏎️", "voi", "ture", "de", "course"),
+            E("étoile de mer", "etoile-de-mer|⭐", "é", "toile", "de", "mer"),
         };
+
+        // VARIÉTÉ : un paquet mélangé par nombre de syllabes, qui ne se
+        // reforme qu'une fois tous ses mots passés (même d'une partie à
+        // l'autre) — jamais deux fois le même mot de suite.
+        private static readonly Dictionary<int, List<Entry>> Decks = new Dictionary<int, List<Entry>>();
+        private static Entry _lastWord;
+
+        private static Entry Draw(string key)
+        {
+            int c = GameKit.NextNumber(key, 1, 4); // 1, 2, 3 ou 4 syllabes, bien mélangés
+            if (!Decks.TryGetValue(c, out var deck) || deck.Count == 0)
+            {
+                deck = GameKit.Shuffle(Words.Where(w => w.S.Length == c));
+                if (deck.Count == 0) deck = GameKit.Shuffle(Words);
+                if (deck.Count > 1 && deck[0] == _lastWord)
+                    (deck[0], deck[deck.Count - 1]) = (deck[deck.Count - 1], deck[0]);
+                Decks[c] = deck;
+            }
+            var e = deck[0];
+            deck.RemoveAt(0);
+            _lastWord = e;
+            return e;
+        }
 
         private readonly Random _rng = new Random();
         private Canvas _canvas;
@@ -130,7 +285,7 @@ namespace MesPremiersJeux.Games
             if (_act == 1 && _round > 2) { _act = 2; _round = 1; }
             if (_act == 2 && _round > 3) { _act = 3; _round = 1; }
 
-            _cur = _act == 3 ? NameEntry() : Words[_rng.Next(Words.Length)];
+            _cur = _act == 3 ? NameEntry() : Draw(_act == 2 ? "syllabes-compter" : "syllabes-decouvrir");
 
             Question.Text = _act == 2 ? "🥁 Combien de syllabes ?" : "🥁 Les syllabes";
             SetConsigne(Art.ForEmoji(_cur.Emoji, 110),
@@ -341,7 +496,7 @@ namespace MesPremiersJeux.Games
                 int k = i;
                 Schedule(400 + k * 800, () =>
                 {
-                    Speech.Say(NWord[Math.Min(k, NWord.Length - 1)] + " !");
+                    Speak(NWord[Math.Min(k, NWord.Length - 1)] + " !");
                     SoundFx.Note(k);
                     PulseBadge(_badges[k]);
                     var sc = (ScaleTransform)_pads[k].RenderTransform;
@@ -415,7 +570,7 @@ namespace MesPremiersJeux.Games
             ay.Completed += (s, e) =>
             {
                 SoundFx.Note(k); // la syllabe a SA note : le mot devient mélodie
-                if (speak) Speech.SaySlow(_cur.S[k]);
+                if (speak) SpeakSlow(_cur.S[k]);
                 // Une note de musique s'envole du nénuphar.
                 var mus = new TextBlock
                 {

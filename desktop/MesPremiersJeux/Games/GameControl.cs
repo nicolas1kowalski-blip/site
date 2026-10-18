@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -127,6 +128,11 @@ namespace MesPremiersJeux.Games
             RewardStore.Changed += _onStars;
             Unloaded += (s, e) =>
             {
+                // Retour au menu : le jeu s'arrête VRAIMENT (voix, suites programmées).
+                Closed = true;
+                foreach (var t in _scheduled.ToArray()) t.Stop();
+                _scheduled.Clear();
+                Speech.Stop();
                 RewardStore.Changed -= _onStars;
                 DisarmHint();
                 GazeStats.RecordGame(GetType().Name, (DateTime.Now - _playStart).TotalSeconds, _wins);
@@ -137,7 +143,12 @@ namespace MesPremiersJeux.Games
             {
                 _playStart = _lastWin = DateTime.Now; // mesures du bilan
                 _wins = 0;
-                if (_started) return;
+                if (_started)
+                {
+                    // Revenu dans la page après en être sorti : on repart d'un tour neuf.
+                    if (Closed) { Closed = false; try { NewRound(); } catch { } }
+                    return;
+                }
                 _started = true;
                 try { NewRound(); }
                 catch (Exception ex)
@@ -405,7 +416,13 @@ namespace MesPremiersJeux.Games
         /// <summary>Démarre un nouveau tour (implémenté par chaque jeu).</summary>
         protected abstract void NewRound();
 
-        protected void Speak(string text) => Speech.Say(text);
+        // Jeu QUITTÉ (retour au menu) : plus un mot, plus une suite programmée.
+        protected bool Closed { get; private set; }
+        private readonly List<DispatcherTimer> _scheduled = new List<DispatcherTimer>();
+
+        protected void Speak(string text) { if (!Closed) Speech.Say(text); }
+
+        protected void SpeakSlow(string text) { if (!Closed) Speech.SaySlow(text); }
 
         /// <summary>
         /// Gros bouton 🔊 qui RÉPÈTE la consigne à voix haute — pour un enfant qui
@@ -454,8 +471,15 @@ namespace MesPremiersJeux.Games
 
         protected void Schedule(int ms, Action action)
         {
+            if (Closed) return;
             var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
-            t.Tick += (s, e) => { t.Stop(); action(); };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                _scheduled.Remove(t);
+                if (!Closed) action();
+            };
+            _scheduled.Add(t);
             t.Start();
         }
 

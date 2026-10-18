@@ -188,7 +188,7 @@ namespace MesPremiersJeux.Games
                 {
                     if (Locked) return;
                     Pop(captured);
-                    Speech.SaySlow(f.Said);
+                    SpeakSlow(f.Said);
                     if (!done[idx]) { done[idx] = true; seen++; }
                     if (seen == forms.Length)
                     {
