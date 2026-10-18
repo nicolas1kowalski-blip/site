@@ -57,9 +57,20 @@ namespace MesPremiersJeux.Views
                 Content = "⬅",
                 MinWidth = 80,
             };
-            back.Click += (s, e) => { StopStep(); ExitRequested?.Invoke(); };
+            back.Click += (s, e) => { StopStep(); Chrome.Immersive = false; ExitRequested?.Invoke(); };
             DockPanel.SetDock(back, Dock.Left);
             barRow.Children.Add(back);
+            // Le bouton « Suivant » (cliquable au regard) : on peut TOUJOURS
+            // passer à l'étape d'après sans attendre les réussites.
+            var next = new Button
+            {
+                Style = (Style)Application.Current.Resources["BackButton"],
+                Content = "Suivant  ▶",
+                MinWidth = 150,
+            };
+            next.Click += (s, e) => { if (_current >= 0 && _current < _steps?.Count) StepDone(); };
+            DockPanel.SetDock(next, Dock.Right);
+            barRow.Children.Add(next);
             _strip = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
             barRow.Children.Add(_strip);
             bar.Child = barRow;
@@ -200,6 +211,7 @@ namespace MesPremiersJeux.Views
             if (step.Make == null)
             {
                 // La dernière étape : LA BOUTIQUE !
+                Chrome.Immersive = false;
                 _host.Children.Clear();
                 Speech.Say("Ton parcours est fini ! Bravo ! Et maintenant... ta boutique !");
                 var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3.2) };
@@ -213,19 +225,23 @@ namespace MesPremiersJeux.Views
             _host.Children.Clear();
             try { _host.Children.Add(step.Make(OnStepCelebrate)); }
             catch { NextStep(); return; }
+            Chrome.Immersive = true; // PLEIN ÉCRAN pendant le jeu (la frise reste)
 
-            // Filet de sécurité : au bout de 5 minutes, on avance quand même.
-            _stepTimeout = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+            // Filet de sécurité : au bout de 3 minutes, on avance quand même.
+            _stepTimeout = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
             _stepTimeout.Tick += (s, e) => StepDone();
             _stepTimeout.Start();
         }
 
         // Les jeux appellent ceci à chaque réussite (c'est leur « celebrate »).
+        // Le jeu magique (étape 1) avance dès UNE réussite — ses victoires sont
+        // longues à obtenir ; les autres étapes en demandent deux.
         private void OnStepCelebrate()
         {
             CelebrationKit.Play(_fx);
             _starsInStep++;
-            if (_starsInStep >= 2) StepDone();
+            int needed = _current == 0 ? 1 : 2;
+            if (_starsInStep >= needed) StepDone();
         }
 
         private void StepDone()

@@ -34,12 +34,18 @@ namespace MesPremiersJeux.Games
 
             // Le verrou « la voix d'abord » : intercepte le clic AVANT les
             // boutons (vrai clic souris comme clic injecté par le regard).
-            // Un clic (même bloqué) repousse aussi le coup de pouce : l'enfant
-            // est actif, pas besoin d'aide.
+            // Il est LIMITÉ (jamais plus de 7 s de blocage, même sur une longue
+            // phrase) et VISIBLE : une petite oreille 👂 apparaît là où l'enfant
+            // a cliqué, pour dire « écoute d'abord ! » — fini les clics avalés
+            // mystérieusement. Un clic repousse aussi le coup de pouce.
             PreviewMouseLeftButtonDown += (s, e) =>
             {
                 if (_hint != null) { _hint.Stop(); _hint.Start(); }
-                if (GateVoice && Speech.IsBusy) e.Handled = true;
+                if (GateVoice && Speech.IsBusy && Speech.BusyElapsedSeconds < 7)
+                {
+                    e.Handled = true;
+                    ShowListenCue(e.GetPosition(this));
+                }
             };
 
             var root = new Grid();
@@ -253,6 +259,29 @@ namespace MesPremiersJeux.Games
                 _consigne.Children.Add(b);
             }
             _consigne.Visibility = Visibility.Visible;
+        }
+
+        // La petite oreille « écoute d'abord ! » là où le clic a été bloqué.
+        private DateTime _lastCue = DateTime.MinValue;
+
+        private void ShowListenCue(Point at)
+        {
+            if ((DateTime.Now - _lastCue).TotalMilliseconds < 600) return; // pas de spam
+            _lastCue = DateTime.Now;
+            var cue = new TextBlock { Text = "👂", FontSize = 54, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
+            var sc = new ScaleTransform(0.4, 0.4);
+            cue.RenderTransform = sc;
+            Canvas.SetLeft(cue, at.X - 27);
+            Canvas.SetTop(cue, at.Y - 70);
+            _fxLayer.Children.Add(cue);
+            var grow = new DoubleAnimation(0.4, 1.15, TimeSpan.FromMilliseconds(260))
+            { AutoReverse = true, EasingFunction = new SineEase() };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(400)) { BeginTime = TimeSpan.FromMilliseconds(450) };
+            var captured = cue;
+            fade.Completed += (s, e) => _fxLayer.Children.Remove(captured);
+            cue.BeginAnimation(OpacityProperty, fade);
         }
 
         /// <summary>Démarre un nouveau tour (implémenté par chaque jeu).</summary>

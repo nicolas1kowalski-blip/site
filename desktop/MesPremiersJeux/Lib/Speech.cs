@@ -37,14 +37,21 @@ namespace MesPremiersJeux.Lib
         //  puis corrigée par son événement de fin.
         // ------------------------------------------------------------------
         private static DateTime _busyUntil = DateTime.MinValue;
+        private static DateTime _busyStart = DateTime.MinValue;
 
         /// <summary>La voix est-elle en train de parler ?</summary>
         public static bool IsBusy => DateTime.Now < _busyUntil;
+
+        /// <summary>Depuis combien de secondes la voix parle-t-elle ? (0 si libre)
+        /// — permet de ne pas bloquer l'enfant sur les très longues phrases.</summary>
+        public static double BusyElapsedSeconds =>
+            IsBusy ? (DateTime.Now - _busyStart).TotalSeconds : 0;
 
         /// <summary>Déclare la voix occupée pendant « seconds » (0 = libre).</summary>
         public static void MarkBusy(double seconds)
         {
             if (seconds <= 0) { _busyUntil = DateTime.MinValue; return; }
+            if (!IsBusy) _busyStart = DateTime.Now;
             var until = DateTime.Now.AddSeconds(seconds);
             if (until > _busyUntil) _busyUntil = until;
         }
