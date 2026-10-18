@@ -299,6 +299,7 @@ namespace MesPremiersJeux.Lib
                 Directory.CreateDirectory(FamilyDir);
                 Art.EnsureFolder(); // Contenu\Images + son LISEZ-MOI
                 EnsureSoundsFolder(); // Contenu\Sons + son LISEZ-MOI
+                EnsureVideosFolder(); // Contenu\Videos (récompenses) + LISEZ-MOI
 
                 var readme = Path.Combine(RootDir, "LISEZ-MOI.txt");
                 if (!File.Exists(readme))
@@ -360,6 +361,28 @@ namespace MesPremiersJeux.Lib
                     "Où trouver des sons gratuits ? freesound.org (filtrer licence CC0),\r\n" +
                     "ou kenney.nl (packs « Audio »). Format WAV conseillé ; sons courts\r\n" +
                     "(moins de 2 secondes), pas trop forts.\r\n");
+            }
+            catch { }
+        }
+
+        // Dossier « Videos » : les récompenses de la boutique d'étoiles.
+        private static void EnsureVideosFolder()
+        {
+            try
+            {
+                var dir = Path.Combine(RootDir, "Videos");
+                Directory.CreateDirectory(dir);
+                var readme = Path.Combine(dir, "LISEZ-MOI.txt");
+                if (File.Exists(readme)) return;
+                File.WriteAllText(readme,
+                    "MES PREMIERS JEUX — Vidéos récompenses\r\n" +
+                    "========================================\r\n\r\n" +
+                    "Déposez ici des petites vidéos (MP4 de préférence) : dans la\r\n" +
+                    "BOUTIQUE D'ÉTOILES (le bouton ⭐ en haut de l'application),\r\n" +
+                    "l'enfant peut en échanger une contre 10 étoiles gagnées — une\r\n" +
+                    "vidéo au hasard est jouée en plein écran.\r\n\r\n" +
+                    "Idées : des vidéos de la famille, ses comptines préférées,\r\n" +
+                    "des moments de vacances... Courtes de préférence (1 à 3 min).\r\n");
             }
             catch { }
         }

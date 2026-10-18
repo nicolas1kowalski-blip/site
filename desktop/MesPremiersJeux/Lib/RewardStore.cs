@@ -12,6 +12,22 @@ namespace MesPremiersJeux.Lib
     {
         public static int Total { get; private set; }
         public static int Today { get; private set; }
+        public static int Spent { get; private set; }
+
+        /// <summary>Le porte-monnaie : les étoiles gagnées moins celles déjà
+        /// dépensées à la boutique de récompenses.</summary>
+        public static int Balance => Math.Max(0, Total - Spent);
+
+        /// <summary>Dépense « cost » étoiles si le porte-monnaie le permet.</summary>
+        public static bool TrySpend(int cost)
+        {
+            Load();
+            if (Balance < cost) return false;
+            Spent += cost;
+            Save();
+            Changed?.Invoke();
+            return true;
+        }
 
         /// <summary>Levé après chaque gain (pour rafraîchir l'affichage).</summary>
         public static event Action Changed;
@@ -37,6 +53,7 @@ namespace MesPremiersJeux.Lib
                     var key = line.Substring(0, eq).Trim();
                     var val = line.Substring(eq + 1).Trim();
                     if (key == "Total" && int.TryParse(val, out var t)) Total = t;
+                    if (key == "Spent" && int.TryParse(val, out var sp)) Spent = sp;
                     if (key == "Day") _day = val;
                     if (key == "Today" && int.TryParse(val, out var d)) Today = d;
                 }
@@ -66,6 +83,7 @@ namespace MesPremiersJeux.Lib
                 File.WriteAllLines(FilePath, new[]
                 {
                     "Total=" + Total.ToString(CultureInfo.InvariantCulture),
+                    "Spent=" + Spent.ToString(CultureInfo.InvariantCulture),
                     "Day=" + _day,
                     "Today=" + Today.ToString(CultureInfo.InvariantCulture),
                 });

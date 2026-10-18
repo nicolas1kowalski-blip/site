@@ -59,6 +59,24 @@ namespace MesPremiersJeux
                 ContentHost.Children.Add(v);
             }
             Select("coloring");
+
+            // La boutique de récompenses (surcouche plein écran).
+            _shop = new RewardShopView();
+            _shop.CloseRequested += () => ShopHost.Visibility = Visibility.Collapsed;
+            _shop.MusicRequested += () =>
+            {
+                ShopHost.Visibility = Visibility.Collapsed;
+                Select("music");
+            };
+            ShopHost.Children.Add(_shop);
+        }
+
+        private RewardShopView _shop;
+
+        private void Shop_Click(object sender, RoutedEventArgs e)
+        {
+            ShopHost.Visibility = Visibility.Visible;
+            _shop.Open();
         }
 
         private static FrameworkElement Placeholder(string emoji, string title, string subtitle)
