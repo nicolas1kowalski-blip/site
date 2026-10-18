@@ -481,21 +481,26 @@ namespace MesPremiersJeux.Views
             var rtb = RenderDrawing(_pages[_pageIdx], Size);
             _pixels = new byte[Size * Size * 4];
             rtb.CopyPixels(_pixels, Size * 4, 0);
+            // Le masque des TRAITS d'origine : la seule vraie frontière des
+            // zones (peindre en noir ne crée pas de nouveaux « traits »).
+            _lines = ColoringEngine.LinesMask(_pixels, Size, Size);
             _bmp = new WriteableBitmap(Size, Size, 96, 96, PixelFormats.Pbgra32, null);
             _bmp.WritePixels(new Int32Rect(0, 0, Size, Size), _pixels, Size * 4, 0);
             Img.Source = _bmp;
             _lastFillX = _lastFillY = -999;
         }
 
+        private bool[] _lines; // traits du dessin d'origine (frontières fixes)
+
         private void FillAtImagePoint(Point p)
         {
-            if (_pixels == null) return;
+            if (_pixels == null || _lines == null) return;
             // Précision regard : si le point tombe près d'un trait (frontière entre
             // deux zones), on le repousse vers le CŒUR de la zone visée.
             p = NudgeAwayFromLines(p);
             int px = (int)Math.Round(p.X);
             int py = (int)Math.Round(p.Y);
-            int n = ColoringEngine.FloodFill(_pixels, Size, Size, px, py, ColoringEngine.MakeFiller(_spec));
+            int n = ColoringEngine.FloodFill(_pixels, Size, Size, px, py, ColoringEngine.MakeFiller(_spec), _lines);
             if (n > 0)
             {
                 _bmp.WritePixels(new Int32Rect(0, 0, Size, Size), _pixels, Size * 4, 0);
@@ -517,9 +522,7 @@ namespace MesPremiersJeux.Views
                 {
                     int x = px + dx, y = py + dy;
                     if (x < 0 || y < 0 || x >= Size || y >= Size) continue;
-                    int i = (y * Size + x) * 4;
-                    double lum = 0.299 * _pixels[i + 2] + 0.587 * _pixels[i + 1] + 0.114 * _pixels[i];
-                    if (lum >= 95) continue; // pas un trait
+                    if (!_lines[y * Size + x]) continue; // pas un trait d'origine
                     double d2 = dx * dx + dy * dy;
                     if (d2 < 1) d2 = 1;
                     vx -= dx / d2; vy -= dy / d2;

@@ -25,23 +25,16 @@ namespace MesPremiersJeux.Lib
         }
 
         // --- Remplissage par diffusion (scanline) sur un tampon BGRA (Pbgra32) ---
-        // On ne remplit pas si le pixel de départ est un trait (sombre).
-        // La ZONE à remplir est délimitée par les TRAITS du dessin (pixels
-        // sombres), pas par la couleur actuelle : on peut donc repeindre d'un
-        // coup une zone déjà coloriée en arc-en-ciel, à paillettes, etc. —
-        // et les liserés gris d'anticrénelage sont repeints aussi (plus net).
-        public static int FloodFill(byte[] data, int w, int h, int sx, int sy, Func<int, int, Rgb> filler, int tol = 62)
+        // La ZONE à remplir est délimitée par le MASQUE DES TRAITS du dessin
+        // D'ORIGINE (capturé au chargement de la page), jamais par les couleurs
+        // actuelles : on peut repeindre une zone arc-en-ciel d'un coup, ET une
+        // zone peinte en noir reste repeignable (elle n'est pas un « trait »).
+        public static int FloodFill(byte[] data, int w, int h, int sx, int sy, Func<int, int, Rgb> filler, bool[] lines)
         {
             if (sx < 0 || sy < 0 || sx >= w || sy >= h) return 0;
-            int si = (sy * w + sx) * 4;
-            byte sb = data[si], sg = data[si + 1], sr = data[si + 2];
-            if (0.299 * sr + 0.587 * sg + 0.114 * sb < 95) return 0; // trait
+            if (lines[sy * w + sx]) return 0; // on ne peint pas les traits
 
-            bool Matches(int i)
-            {
-                // Appartient à la zone = n'est PAS un trait du dessin.
-                return 0.299 * data[i + 2] + 0.587 * data[i + 1] + 0.114 * data[i] >= 95;
-            }
+            bool Matches(int p) => !lines[p]; // la zone = tout sauf les traits
 
             var seen = new bool[w * h];
             var stack = new Stack<int>();
@@ -56,9 +49,9 @@ namespace MesPremiersJeux.Lib
                 if (seen[baseIdx + x]) continue;
 
                 int l = x;
-                while (l > 0 && !seen[baseIdx + l - 1] && Matches((baseIdx + l - 1) * 4)) l--;
+                while (l > 0 && !seen[baseIdx + l - 1] && Matches(baseIdx + l - 1)) l--;
                 int r = x;
-                while (r < w - 1 && !seen[baseIdx + r + 1] && Matches((baseIdx + r + 1) * 4)) r++;
+                while (r < w - 1 && !seen[baseIdx + r + 1] && Matches(baseIdx + r + 1)) r++;
 
                 for (int ix = l; ix <= r; ix++)
                 {
@@ -69,11 +62,24 @@ namespace MesPremiersJeux.Lib
                     int pi = p * 4;
                     data[pi] = c.B; data[pi + 1] = c.G; data[pi + 2] = c.R; data[pi + 3] = 255;
                     filled++;
-                    if (y > 0) { int up = p - w; if (!seen[up] && Matches(up * 4)) { stack.Push(ix); stack.Push(y - 1); } }
-                    if (y < h - 1) { int dn = p + w; if (!seen[dn] && Matches(dn * 4)) { stack.Push(ix); stack.Push(y + 1); } }
+                    if (y > 0) { int up = p - w; if (!seen[up] && Matches(up)) { stack.Push(ix); stack.Push(y - 1); } }
+                    if (y < h - 1) { int dn = p + w; if (!seen[dn] && Matches(dn)) { stack.Push(ix); stack.Push(y + 1); } }
                 }
             }
             return filled;
+        }
+
+        /// <summary>Le masque des TRAITS d'un dessin fraîchement chargé : tout
+        /// pixel sombre (luminance &lt; 95) est un trait infranchissable.</summary>
+        public static bool[] LinesMask(byte[] data, int w, int h)
+        {
+            var lines = new bool[w * h];
+            for (int p = 0; p < lines.Length; p++)
+            {
+                int i = p * 4;
+                lines[p] = 0.299 * data[i + 2] + 0.587 * data[i + 1] + 0.114 * data[i] < 95;
+            }
+            return lines;
         }
 
         // --- Fonctions de remplissage par pastille ---
