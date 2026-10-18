@@ -5,14 +5,16 @@
             {
                 v: '13.59.0',
                 d: '2026-10-18',
-                t: 'SOMME.SI, MOYENNE.SI, plus petite et plus grande valeur — avec leur propre condition',
+                t: 'SOMME.SI, MOYENNE.SI, plus petite et plus grande valeur — et une synthèse qui ignore les filtres',
                 items: [
+                    'Une synthèse peut désormais être déclarée <b>indépendante des filtres de l’extraction</b> : une case « ignorer les filtres de l’extraction » dans le formulaire. Par défaut, un filtre posé « sur le lien » restreint aussi ce que la synthèse compte — c’est ce que l’on veut en écrivant « ne ramener que les contrats actifs ». Mais on veut parfois l’inverse <b>dans la même extraction</b> : « le nombre TOTAL de contrats de ce site », à côté du reste déjà filtré. Les deux colonnes cohabitent maintenant côte à côte, et l’étiquette de celle qui est indépendante le dit, pour qu’on ne les confonde pas.',
+                    'Indépendante des filtres ne veut pas dire sans critère : le critère « ⛉ Ne compter que… » de la synthèse, lui, s’applique toujours.',
                     'Une synthèse de table liée savait <b>compter</b>. Elle sait maintenant <b>additionner</b>, faire une <b>moyenne</b>, et donner la <b>plus petite</b> ou la <b>plus grande valeur</b> — quatre fonctions de plus, chacune avec <b>son</b> critère « ⛉ Ne compter que… », indépendant des filtres de l’extraction.',
                     'C’est toute la différence entre <b>« le montant des contrats ACTIFS de ce site »</b> et <b>« ne garder que les sites qui ont un contrat actif »</b> : la première ne retire aucune ligne du fichier, la seconde si. Les deux conditions cohabitent sans se mélanger — vérifié : avec un filtre global « fermé » posé par-dessus, les colonnes « si actif » continuent de compter les actifs.',
                     'La <b>plus petite et la plus grande valeur</b> se comparent comme des <b>nombres</b> quand toute la colonne en est — « 9 » ne passe plus pour plus grand que « 1200 » — et dans l’ordre alphabétique sinon, ce qui donne le bon résultat sur des dates écrites en ISO. La valeur rendue est celle du fichier, <b>telle quelle</b> : on ne la transforme pas en nombre pour la recracher autrement.',
                     'Une ligne sans aucune correspondance garde sa place : son compte vaut <b>0</b> et sa somme aussi, comme dans un tableur ; sa moyenne et ses extrêmes restent <b>vides</b>, parce que zéro serait un mensonge.',
                     'Ce qui ne se lit pas comme un nombre est ignoré par la somme et la moyenne, là encore comme dans un tableur. Et le nom proposé dit ce que la colonne contient — <b>total_MONTANT</b>, <b>moyenne_MONTANT</b> — au lieu de reprendre le nom de la colonne d’origine.',
-                    'Les quatre fonctions valent aussi quand la table est atteinte par <b>plusieurs chemins à la fois</b> : les lignes de toutes les routes sont réunies, puis additionnées une seule fois. Vingt contrôles ajoutés.'
+                    'Les quatre fonctions valent aussi quand la table est atteinte par <b>plusieurs chemins à la fois</b> : les lignes de toutes les routes sont réunies, puis additionnées une seule fois. Vingt-six contrôles ajoutés.'
                 ]
             },
             {

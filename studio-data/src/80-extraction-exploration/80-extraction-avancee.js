@@ -768,6 +768,10 @@
          * lien est emprunté.
          */
         function advFiltresDuCheminDeLaSynthese(spec, colonne) {
+            // Une synthèse peut être déclarée INDÉPENDANTE : elle ne compte alors que selon ses
+            // propres critères. « Le nombre total de contrats de ce site » reste le nombre total,
+            // même quand l'extraction ne ramène par ailleurs que les contrats actifs.
+            if (colonne && colonne.sansFiltres) return [];
             const tablesDuChemin = new Set(
                 colonne._chemin && colonne._chemin.length ? colonne._chemin.map(pas => pas.vers) : [colonne.tableId]
             );
@@ -1061,7 +1065,10 @@
                 if (c.kind || !c._chemin || !c._chemin.length) return;
                 if (!advColonneSansJointure(c, spec.baseId)) return;
                 if (advPlusieursValeurs(c, spec.baseId) !== 'regroupees') return;
-                const cle = advRouteKey(c.tableId, c.via || '');
+                // Le groupe réunit les colonnes qui lisent LA MÊME CHOSE : même chemin, et mêmes
+                // filtres. Une colonne déclarée indépendante des filtres lit autre chose : elle a
+                // son propre groupe.
+                const cle = advRouteKey(c.tableId, c.via || '') + (c.sansFiltres ? '¦libre' : '');
                 (colonnesParChemin[cle] = colonnesParChemin[cle] || []).push(c);
             });
             Object.keys(colonnesParChemin).forEach((cle, rang) => {
@@ -1546,6 +1553,8 @@
                     poser('adv-link-col', colonne.col);
                     poser('adv-link-n', colonne.n);
                     poser('adv-link-alias', colonne.alias);
+                    const libre = el('adv-link-libre');
+                    if (libre) libre.checked = !!colonne.sansFiltres;
                 } else {
                     poser('adv-col-tbl', colonne.tableId);
                     advColColChanged();
@@ -2028,7 +2037,7 @@
             }
             if (c.kind === 'link') {
                 const table = state.tables[c.tableId];
-                return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${table ? table.name : '?'}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}${advViaTxt(c.via)}${advCriteresDeLaSyntheseTexte(c)}`;
+                return `Σ ${ADV_LINK_MODES[c.mode] || c.mode} — ${table ? table.name : '?'}${c.col ? '.' + c.col : ''}${c.mode === 'indexed' ? ' (' + (c.n || 3) + ' col.)' : ''}${advViaTxt(c.via)}${advCriteresDeLaSyntheseTexte(c)}${c.sansFiltres ? ' · sans les filtres de l’extraction' : ''}`;
             }
             if (c.kind === 'hier') {
                 const table = state.tables[c.tableId];
@@ -2324,6 +2333,8 @@
                     <input type="number" id="adv-link-n" value="3" min="1" max="12" class="border border-slate-300 p-1.5 rounded text-[11px] w-14"></div>
                     <div><label class="text-[9px] uppercase font-bold text-slate-400 block">Nom en sortie</label>
                     <input type="text" id="adv-link-alias" placeholder="auto" class="border border-slate-300 p-1.5 rounded text-[11px] w-28"></div>
+                    <label class="flex items-center gap-1.5 text-[11px] text-slate-600 bg-white border border-slate-200 rounded px-2 py-1.5" title="Par défaut, un filtre de l'extraction posé « sur le lien » restreint aussi ce que cette synthèse compte. Cochez pour qu'elle n'obéisse qu'à ses propres critères : « le nombre TOTAL de contrats » reste le total, même si l'extraction ne ramène par ailleurs que les contrats actifs.">
+                        <input type="checkbox" id="adv-link-libre" class="w-3.5 h-3.5"> ignorer les filtres de l’extraction</label>
                     <button onclick="advAddLinkColumn()" class="text-[11px] bg-sky-600 text-white px-3 py-1.5 rounded font-bold">${
                         advLaColonneModifiee() && advLaColonneModifiee().kind === 'link'
                             ? '✔ Modifier'
@@ -3320,9 +3331,11 @@
             const tn = (state.tables[element] || {}).name || '';
             // Les critères préparés partent avec la synthèse, et le nom en sortie les rappelle :
             // « nb_SINISTRES » et « nb_SINISTRES_si_OUVERT » ne doivent pas se confondre.
+            const sansFiltres = !!(el('adv-link-libre') || {}).checked;
             const criteres = advCriteresDeSyntheseEnAttente.slice();
             advCriteresDeSyntheseEnAttente = [];
-            const suffixe = criteres.length ? '_si_' + criteres.map(c => c.val || c.op).join('_') : '';
+            const suffixe =
+                (criteres.length ? '_si_' + criteres.map(c => c.val || c.op).join('_') : '') + (sansFiltres ? '_tous' : '');
             // Le nom proposé dit CE QUE la colonne contient : « MONTANT » pour une somme ferait
             // croire au montant d'un contrat, alors que c'est le total de tous.
             const prefixes = {
@@ -3345,6 +3358,7 @@
                 n: parseInt(el('adv-link-n').value) || 3,
                 via: advViaVal('adv-link-via'),
                 conds: criteres,
+                sansFiltres,
                 alias: aliasSaisi || def,
                 transform: enModification ? enModification.transform : 'none',
                 _aliasSaisi: !!aliasSaisi

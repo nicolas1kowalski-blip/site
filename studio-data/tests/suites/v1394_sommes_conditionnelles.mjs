@@ -100,7 +100,39 @@ const out = await p.evaluate(async () => {
     ok('mais les synthèses gardent LEUR critère, qui n’a rien à voir avec le filtre',
         String(avecFiltre[0].nb_si_actif) === '2' && Number(avecFiltre[0].total_si_actif) === 1550);
 
-    // ---- 5. Ce que l'écran propose ----
+    // ---- 5. Une synthèse INDÉPENDANTE des filtres de l'extraction ----
+    //
+    // Par défaut, un filtre posé « sur le lien » restreint aussi ce que la synthèse compte : c'est
+    // ce qu'on veut quand on écrit « ne ramener que les contrats actifs ». Mais on veut parfois
+    // l'inverse dans la même extraction : « le nombre TOTAL de contrats de ce site », à côté du
+    // reste déjà filtré. La synthèse peut donc être déclarée indépendante.
+    spec.filters = [{ id: 'f2', tableId: 'ctr', col: 'CTT_STAT', op: '!=', val: 'FER', portee: 'lien' }];
+    spec.columns = [
+        { id: 'UO', tableId: 'site', col: 'UO', alias: 'UO', transform: 'none' },
+        synthese('nb_filtre', 'count'),
+        Object.assign(synthese('nb_tous', 'count'), { sansFiltres: true }),
+        synthese('total_filtre', 'somme', 'MONTANT'),
+        Object.assign(synthese('total_tous', 'somme', 'MONTANT'), { sansFiltres: true }),
+        Object.assign(synthese('nb_tous_si_actif', 'count', '', siActif), { sansFiltres: true })
+    ];
+    const melange = arrowResultToObjects(
+        await conn.query(`SELECT * FROM (${buildAdvSql(spec).sql}) z ORDER BY UO`)
+    );
+    const un = melange.find(l => l.UO === 'SITE1');
+    ok('par défaut, le filtre « sur le lien » restreint bien ce qui est compté',
+        String(un.nb_filtre) === '2' && Number(un.total_filtre) === 1550);
+    ok('déclarée indépendante, la même synthèse compte TOUT : le filtre ne la concerne plus',
+        String(un.nb_tous) === '3' && Number(un.total_tous) === 10550);
+    ok('les deux cohabitent dans la MÊME extraction, côte à côte',
+        String(un.nb_filtre) === '2' && String(un.nb_tous) === '3');
+    ok('indépendante des filtres ne veut pas dire sans critère : le sien s’applique toujours',
+        String(un.nb_tous_si_actif) === '2');
+    ok('et l’étiquette de la colonne le dit, pour qu’on ne confonde pas deux colonnes voisines',
+        / sans les filtres de l’extraction/.test(advColLabel(spec.columns[2])));
+    ok('la colonne indépendante n’est pas mélangée à la lecture groupée des autres',
+        !spec._groupes || !spec._groupes.nb_tous || spec._groupes.nb_tous.alias !== (spec._groupes.nb_filtre || {}).alias);
+
+    // ---- 6. Ce que l'écran propose ----
     ok('les quatre fonctions sont proposées dans la liste des modes',
         ADV_LINK_MODES.somme && ADV_LINK_MODES.moyenne && ADV_LINK_MODES.min && ADV_LINK_MODES.max);
     ok('elles portent des noms que tout le monde comprend',
