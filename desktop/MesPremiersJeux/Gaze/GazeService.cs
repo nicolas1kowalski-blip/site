@@ -50,6 +50,13 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Nombre de points de regard reçus (diagnostic).</summary>
         public long Samples => _samples;
 
+        private long _eyeSamples;
+
+        /// <summary>Nombre de mesures de position des yeux reçues (diagnostic :
+        /// des yeux SANS points de regard = écran non configuré dans le logiciel
+        /// Tobii ; ni l'un ni l'autre = moteur Tobii absent ou incompatible).</summary>
+        public long EyeSamples => _eyeSamples;
+
         public void Start()
         {
             try
@@ -70,13 +77,17 @@ namespace MesPremiersJeux.Gaze
                 try
                 {
                     var eye = _host.Streams.CreateEyePositionStream();
-                    eye.EyePosition(d => Eyes?.Invoke(new EyeSample
+                    eye.EyePosition(d =>
+                    {
+                        if (++_eyeSamples == 1) Lib.Log.Write("sdk", "1re position des yeux reçue (Tobii.Interaction)");
+                        Eyes?.Invoke(new EyeSample
                     {
                         HasLeft = d.HasLeftEyePosition,
                         HasRight = d.HasRightEyePosition,
                         LX = d.LeftEyeNormalized.X, LY = d.LeftEyeNormalized.Y, LZ = d.LeftEyeNormalized.Z,
                         RX = d.RightEyeNormalized.X, RY = d.RightEyeNormalized.Y, RZ = d.RightEyeNormalized.Z,
-                    }));
+                    });
+                    });
                     _eyeStream = eye;
                 }
                 catch { _eyeStream = null; }

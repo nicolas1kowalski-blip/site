@@ -349,6 +349,7 @@ namespace MesPremiersJeux
                     case "direct":
                         _gaze = NewConsumer();
                         _gaze.Start();
+                        StartDirectWatch(); // secours si cette tablette ne répond pas
                         break;
 
                     case "pro":
@@ -409,10 +410,8 @@ namespace MesPremiersJeux
                     return;
                 }
 
-                if ((DateTime.UtcNow - t0).TotalSeconds >= 6.0)
+                if (_gaze == null && (DateTime.UtcNow - t0).TotalSeconds >= 6.0)
                 {
-                    w.Stop();
-                    _fallbackWatch = null;
                     Lib.Log.Write("app", $"Pas de regard direct du Pro SDK après 6 s ({_pro?.Stats ?? "—"}) — démarrage du SDK grand public (repli)");
                     try
                     {
@@ -420,9 +419,111 @@ namespace MesPremiersJeux
                         _gaze.Start();
                     }
                     catch (Exception ex) { Lib.Log.Write("app", "Repli grand public : " + ex.Message); }
+                    t0 = DateTime.UtcNow; // on laisse 6 s au repli
+                    return;
+                }
+
+                // Le repli grand public non plus ne donne rien : on suit le curseur.
+                if (_gaze != null)
+                {
+                    if (_gaze.Samples > 0)
+                    {
+                        w.Stop();
+                        _fallbackWatch = null;
+                        Lib.Log.Write("app", "Regard direct confirmé (SDK grand public, repli)");
+                        return;
+                    }
+                    if ((DateTime.UtcNow - t0).TotalSeconds >= 6.0)
+                    {
+                        w.Stop();
+                        _fallbackWatch = null;
+                        NoDirectGaze();
+                    }
                 }
             };
             w.Start();
+        }
+
+        /// <summary>
+        /// Mode « Regard direct » : si le SDK grand public ne donne AUCUN point
+        /// en 6 s (cas de certaines tablettes, ex. PCEye 5), on essaie le Pro
+        /// SDK, puis on suit le curseur — avec un message clair pour le parent
+        /// et un diagnostic précis dans le journal.
+        /// </summary>
+        private void StartDirectWatch()
+        {
+            var t0 = DateTime.UtcNow;
+            bool triedPro = false;
+            var w = new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(600) };
+            _fallbackWatch = w;
+            w.Tick += (s, e) =>
+            {
+                if (!ReferenceEquals(_fallbackWatch, w)) { w.Stop(); return; } // pilote changé
+                if ((_gaze?.Samples ?? 0) > 0 || _pro?.HasGaze == true)
+                {
+                    w.Stop();
+                    _fallbackWatch = null;
+                    Lib.Log.Write("app", _pro?.HasGaze == true
+                        ? $"Regard direct obtenu par le Pro SDK (secours) : {_pro.Stats}"
+                        : "Regard direct confirmé (SDK grand public)");
+                    return;
+                }
+                if ((DateTime.UtcNow - t0).TotalSeconds < 6.0) return;
+
+                if (!triedPro)
+                {
+                    triedPro = true;
+                    t0 = DateTime.UtcNow;
+                    long eyes = _gaze?.EyeSamples ?? 0;
+                    Lib.Log.Write("app", "Regard direct : AUCUN point du SDK grand public en 6 s (positions des yeux reçues : " + eyes + ") — " +
+                        (eyes > 0
+                            ? "les yeux sont vus mais pas le regard : l'ÉCRAN n'est sans doute pas configuré dans le logiciel Tobii de la tablette"
+                            : "rien du tout : moteur Tobii « Interaction » absent, arrêté ou incompatible sur cette tablette") +
+                        " — essai du Pro SDK");
+                    try { _gaze?.Dispose(); } catch { }
+                    _gaze = null;
+                    try { _pro = NewPro(); _pro.Start(); }
+                    catch (Exception ex) { Lib.Log.Write("app", "Pro SDK (secours) : " + ex.Message); }
+                    return;
+                }
+
+                w.Stop();
+                _fallbackWatch = null;
+                NoDirectGaze();
+            };
+            w.Start();
+        }
+
+        // Aucun regard direct : l'application suit le curseur Windows (déplacé
+        // par TD Control / Computer Control) et le dit clairement au parent.
+        private void NoDirectGaze()
+        {
+            Lib.Log.Write("app", $"Ni le SDK grand public ni le Pro SDK ne donnent le regard ({_pro?.Stats ?? "—"}) : on suit le CURSEUR");
+            ShowParentNotice("👁 Le regard direct ne répond pas sur cette tablette : l'application suit le curseur.\n" +
+                             "Activez le contrôle de l'ordinateur au regard (TD Control / Computer Control) en mode « souris », " +
+                             "SANS clic automatique — l'application fait elle-même la sélection. (Réglages ⚙ → pilote « Curseur »)");
+        }
+
+        private void ShowParentNotice(string text)
+        {
+            var note = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x3B, 0x2A, 0x5A)),
+                CornerRadius = new CornerRadius(18),
+                Padding = new Thickness(20, 12, 20, 12),
+                Margin = new Thickness(0, 90, 0, 0),
+                MaxWidth = 900,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false,
+                Child = new TextBlock { Text = text, Foreground = Brushes.White, FontSize = 18, TextWrapping = TextWrapping.Wrap },
+            };
+            int gi = RootGrid.Children.IndexOf(GazeLayer);
+            RootGrid.Children.Insert(gi, note);
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
+            t.Tick += (s, e) => { t.Stop(); RootGrid.Children.Remove(note); };
+            t.Start();
         }
 
         private void SyncDriverCombo()
