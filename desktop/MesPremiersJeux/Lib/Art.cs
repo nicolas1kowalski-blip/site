@@ -163,8 +163,8 @@ namespace MesPremiersJeux.Lib
             { "🍜", "plat-ramen" }, { "🍛", "plat-curry" }, { "🥙", "plat-kebab" },
             { "🌯", "plat-burrito" }, { "🥨", "plat-bretzel" }, { "🍣", "plat-sushi" },
             { "🍔", "plat-hamburger" }, { "🥞", "plat-crepe" }, { "🫕", "plat-fondue" },
-            { "🥘", "plat-paella" }, { "🍚", "plat-riz-frit" }, { "🥟", "plat-raviolis" },
-            { "🧆", "plat-falafel" }, { "🍟", "plat-fish-and-chips" },
+            { "🥘", "plat-paella" }, { "🍚", "plat-riz-frit" }, { "🥟", "plat-dim-sum" },
+            { "🧆", "plat-falafel" }, { "🍲", "plat-goulasch" }, { "🍟", "plat-fish-and-chips" },
             // Monuments
             { "🗼", "lieu-france" }, { "🗽", "lieu-amerique" }, { "🗻", "lieu-japon" },
             { "🏯", "lieu-chine" }, { "🏰", "chateau-conte" },
@@ -284,7 +284,7 @@ namespace MesPremiersJeux.Lib
                     "Le tour du monde — plats (dessins FOURNIS) :\r\n" +
                     "  plat-crepe.png, plat-pizza.png, plat-sushi.png, plat-raviolis.png,\r\n" +
                     "  plat-hamburger.png, plat-fish-and-chips.png, plat-falafel.png...\r\n" +
-                    "  (34 plats en tout : paella, couscous, tajine, ramen, tacos...)\r\n\r\n" +
+                    "  (53 plats en tout : paella, couscous, tajine, ramen, dim-sum, kimchi...)\r\n\r\n" +
                     "BON À SAVOIR : l'application embarque déjà près de 200 petits\r\n" +
                     "dessins cartoon (animaux, fruits et légumes, véhicules, objets...)\r\n" +
                     "qui remplacent les emojis dans les jeux. Un fichier du MÊME NOM\r\n" +

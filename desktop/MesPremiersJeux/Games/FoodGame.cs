@@ -37,7 +37,7 @@ namespace MesPremiersJeux.Games
             new Dish { Emoji = "🥞", Key = "crepe", Name = "la crêpe", Country = "la France", In = "en France", Flag = 0 },
             new Dish { Emoji = "🍕", Key = "pizza", Name = "la pizza", Country = "l'Italie", In = "en Italie", Flag = 2 },
             new Dish { Emoji = "🍣", Key = "sushi", Name = "les sushis", Country = "le Japon", In = "au Japon", Flag = 6 },
-            new Dish { Emoji = "🥟", Key = "raviolis", Name = "les petits raviolis", Country = "la Chine", In = "en Chine", Flag = 5 },
+            new Dish { Emoji = "🥟", Key = "dim-sum", Name = "les petits raviolis", Country = "la Chine", In = "en Chine", Flag = 5 },
             new Dish { Emoji = "🍔", Key = "hamburger", Name = "le hamburger", Country = "l'Amérique", In = "en Amérique", Flag = 7 },
             new Dish { Emoji = "🍟", Key = "fish-and-chips", Name = "le poisson-frites", Country = "l'Angleterre", In = "en Angleterre", Flag = 1 },
             new Dish { Emoji = "🧆", Key = "falafel", Name = "les boulettes de falafel", Country = "l'Égypte", In = "en Égypte", Flag = 3 },
