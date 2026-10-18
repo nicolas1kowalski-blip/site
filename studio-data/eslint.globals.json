@@ -1240,6 +1240,7 @@
  "advViaTxt": "writable",
  "advPlanJoins": "writable",
  "advFiltresDuCheminDeLaSynthese": "writable",
+ "advExtremeSql": "writable",
  "advExpandCol": "writable",
  "buildAdvSql": "writable",
  "advCurrentSql": "writable",

@@ -775,6 +775,23 @@
                 f => advPorteeDuFiltre(f, spec.baseId) === 'lien' && tablesDuChemin.has(f.tableId)
             );
         }
+        /**
+         * La plus petite — ou la plus grande — valeur d'une colonne, comparée comme il faut.
+         *
+         * En nombres quand toute la colonne en est (« 9 » n'est alors plus plus grand que « 1200 »),
+         * en ordre alphabétique sinon — ce qui est juste pour une date écrite en ISO. La valeur
+         * rendue est celle du fichier, telle quelle : on ne la transforme pas en nombre pour la
+         * recracher autrement.
+         */
+        function advExtremeSql(valeur, mode) {
+            const parLaValeur = mode === 'min' ? 'min_by' : 'max_by';
+            const alphabetique = mode === 'min' ? 'MIN' : 'MAX';
+            return (
+                `CASE WHEN COUNT(${valeur}) = COUNT(TRY_CAST(${valeur} AS DOUBLE))` +
+                ` THEN ${parLaValeur}(${valeur}, TRY_CAST(${valeur} AS DOUBLE))` +
+                ` ELSE ${alphabetique}(${valeur}) END`
+            );
+        }
         function advExpandCol(map, c, hierRef, spec) {
             if (c.kind === 'link') {
                 // La table résumée est atteinte DANS la sous-requête, en traversant s'il le faut les
@@ -809,6 +826,37 @@
                             alias: al
                         }
                     ];
+                /*
+                 * Somme, moyenne, plus petite et plus grande valeur — la famille des « SOMME.SI ».
+                 *
+                 * Ce sont des NB.SI au sens d'Excel : le critère de la synthèse restreint ce qui est
+                 * additionné, et lui seul. Les filtres de l'extraction, eux, décident des lignes du
+                 * fichier — les deux ne se mélangent pas, et c'est tout l'intérêt : « le montant des
+                 * contrats ACTIFS de ce site » sans retirer du fichier les sites qui n'en ont aucun.
+                 *
+                 * Ce qui ne se lit pas comme un nombre est ignoré par la somme et la moyenne, comme
+                 * dans un tableur. Pour la plus petite et la plus grande valeur, on compare comme des
+                 * NOMBRES quand toute la colonne en est, sinon dans l'ordre alphabétique — ce qui
+                 * donne le bon résultat sur des dates écrites en ISO (2031-01-02 après 2030-03-01) et
+                 * évite que « 9 » passe pour plus grand que « 1200 ».
+                 */
+                const valeurDuChamp = c.col ? `NULLIF(${colRaw}, '')` : null;
+                if (c.mode === 'somme')
+                    return [
+                        {
+                            expr: `(SELECT COALESCE(ROUND(SUM(TRY_CAST(${valeurDuChamp} AS DOUBLE)), 2), 0) FROM ${S} WHERE ${key})`,
+                            alias: al
+                        }
+                    ];
+                if (c.mode === 'moyenne')
+                    return [
+                        {
+                            expr: `(SELECT ROUND(AVG(TRY_CAST(${valeurDuChamp} AS DOUBLE)), 2) FROM ${S} WHERE ${key})`,
+                            alias: al
+                        }
+                    ];
+                if (c.mode === 'min' || c.mode === 'max')
+                    return [{ expr: `(SELECT ${advExtremeSql(valeurDuChamp, c.mode)} FROM ${S} WHERE ${key})`, alias: al }];
                 if (c.mode === 'values')
                     return [
                         {
@@ -3100,6 +3148,10 @@
         const ADV_LINK_MODES = {
             count: 'Compter les lignes liées',
             countd: 'Compter les valeurs uniques',
+            somme: 'Additionner (somme)',
+            moyenne: 'Moyenne',
+            min: 'La plus petite valeur',
+            max: 'La plus grande valeur',
             values: 'Transposer en texte (valeurs concaténées)',
             indexed: 'Transposer en colonnes (n premières)'
         };
@@ -3271,7 +3323,17 @@
             const criteres = advCriteresDeSyntheseEnAttente.slice();
             advCriteresDeSyntheseEnAttente = [];
             const suffixe = criteres.length ? '_si_' + criteres.map(c => c.val || c.op).join('_') : '';
-            const def = ((mode === 'count' ? 'nb_' + tn : mode === 'countd' ? 'nbu_' + col : col) + suffixe).slice(0, 60);
+            // Le nom proposé dit CE QUE la colonne contient : « MONTANT » pour une somme ferait
+            // croire au montant d'un contrat, alors que c'est le total de tous.
+            const prefixes = {
+                count: 'nb_' + tn,
+                countd: 'nbu_' + col,
+                somme: 'total_' + col,
+                moyenne: 'moyenne_' + col,
+                min: 'min_' + col,
+                max: 'max_' + col
+            };
+            const def = ((prefixes[mode] || col) + suffixe).slice(0, 60);
             const aliasSaisi = (el('adv-link-alias').value || '').trim();
             const enModification = advLaColonneModifiee();
             advPoserLaColonne({

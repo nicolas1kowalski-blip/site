@@ -1,7 +1,20 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.58.1';
+        const V13_VERSION = '13.59.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.59.0',
+                d: '2026-10-18',
+                t: 'SOMME.SI, MOYENNE.SI, plus petite et plus grande valeur — avec leur propre condition',
+                items: [
+                    'Une synthèse de table liée savait <b>compter</b>. Elle sait maintenant <b>additionner</b>, faire une <b>moyenne</b>, et donner la <b>plus petite</b> ou la <b>plus grande valeur</b> — quatre fonctions de plus, chacune avec <b>son</b> critère « ⛉ Ne compter que… », indépendant des filtres de l’extraction.',
+                    'C’est toute la différence entre <b>« le montant des contrats ACTIFS de ce site »</b> et <b>« ne garder que les sites qui ont un contrat actif »</b> : la première ne retire aucune ligne du fichier, la seconde si. Les deux conditions cohabitent sans se mélanger — vérifié : avec un filtre global « fermé » posé par-dessus, les colonnes « si actif » continuent de compter les actifs.',
+                    'La <b>plus petite et la plus grande valeur</b> se comparent comme des <b>nombres</b> quand toute la colonne en est — « 9 » ne passe plus pour plus grand que « 1200 » — et dans l’ordre alphabétique sinon, ce qui donne le bon résultat sur des dates écrites en ISO. La valeur rendue est celle du fichier, <b>telle quelle</b> : on ne la transforme pas en nombre pour la recracher autrement.',
+                    'Une ligne sans aucune correspondance garde sa place : son compte vaut <b>0</b> et sa somme aussi, comme dans un tableur ; sa moyenne et ses extrêmes restent <b>vides</b>, parce que zéro serait un mensonge.',
+                    'Ce qui ne se lit pas comme un nombre est ignoré par la somme et la moyenne, là encore comme dans un tableur. Et le nom proposé dit ce que la colonne contient — <b>total_MONTANT</b>, <b>moyenne_MONTANT</b> — au lieu de reprendre le nom de la colonne d’origine.',
+                    'Les quatre fonctions valent aussi quand la table est atteinte par <b>plusieurs chemins à la fois</b> : les lignes de toutes les routes sont réunies, puis additionnées une seule fois. Vingt contrôles ajoutés.'
+                ]
+            },
             {
                 v: '13.58.1',
                 d: '2026-10-16',

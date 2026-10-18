@@ -104,6 +104,30 @@
                                         alias: al
                                     }
                                 ];
+                            // Somme, moyenne et extrêmes valent aussi quand la table est atteinte
+                            // par PLUSIEURS chemins à la fois : les lignes de toutes les routes sont
+                            // réunies, puis additionnées une seule fois.
+                            if (c.mode === 'somme')
+                                return [
+                                    {
+                                        expr: `(SELECT COALESCE(ROUND(SUM(TRY_CAST(u.v AS DOUBLE)), 2), 0) FROM (${v12LinkSrcSql(map, c, anchors, colRaw)}) u)`,
+                                        alias: al
+                                    }
+                                ];
+                            if (c.mode === 'moyenne')
+                                return [
+                                    {
+                                        expr: `(SELECT ROUND(AVG(TRY_CAST(u.v AS DOUBLE)), 2) FROM (${v12LinkSrcSql(map, c, anchors, colRaw)}) u)`,
+                                        alias: al
+                                    }
+                                ];
+                            if (c.mode === 'min' || c.mode === 'max')
+                                return [
+                                    {
+                                        expr: `(SELECT ${advExtremeSql("NULLIF(u.v, '')", c.mode)} FROM (${v12LinkSrcSql(map, c, anchors, colRaw)}) u)`,
+                                        alias: al
+                                    }
+                                ];
                             if (c.mode === 'values')
                                 return [
                                     {
