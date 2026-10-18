@@ -33,6 +33,9 @@ namespace MesPremiersJeux.Gaze
 
         public bool HasGaze => _valid > 0;
 
+        /// <summary>Échantillons reçus (valides ou non) : le flux est-il vivant ?</summary>
+        public long Events => _events;
+
         /// <summary>Dernière étape atteinte ou erreur (pour le rapport).</summary>
         public string Status { get; private set; } = "non démarré";
 
@@ -52,6 +55,12 @@ namespace MesPremiersJeux.Gaze
         {
             try
             {
+                try
+                {
+                    if (tobii_get_api_version(out var v) == Err.NoError)
+                        Lib.Log.Write("stream", $"Stream Engine version {v.Major}.{v.Minor}.{v.Revision}.{v.Build}");
+                }
+                catch { }
                 var err = tobii_api_create(out _api, IntPtr.Zero, IntPtr.Zero);
                 if (err != Err.NoError) { Fail("création de l'API : " + err); return; }
 
@@ -91,6 +100,9 @@ namespace MesPremiersJeux.Gaze
                         continue;
                     }
                     err = tobii_device_process_callbacks(_device);
+                    if (err != Err.NoError && err != Err.ConnectionFailed && ++failures % 20 == 1)
+                        Lib.Log.Write("stream", "Traitement des données : " + err);
+                    LogRate();
                     if (err == Err.ConnectionFailed)
                     {
                         Lib.Log.Write("stream", "Connexion perdue : tentative de reconnexion");
@@ -104,9 +116,30 @@ namespace MesPremiersJeux.Gaze
             catch (Exception ex) { Fail(ex.GetType().Name + " : " + ex.Message); }
         }
 
+        // Toutes les 5 s : débit et part de points valides (diagnostic).
+        private DateTime _rateAt = DateTime.UtcNow;
+        private long _rateEvents, _rateValid;
+
+        private void LogRate()
+        {
+            var now = DateTime.UtcNow;
+            double dt = (now - _rateAt).TotalSeconds;
+            if (dt < 5) return;
+            long ev = _events - _rateEvents, va = _valid - _rateValid;
+            Lib.Log.Write("stream", FormattableString.Invariant(
+                $"Débit : {ev / dt:0} échantillons/s, dont {va / dt:0} valides/s (total {_valid}/{_events})"));
+            _rateAt = now;
+            _rateEvents = _events;
+            _rateValid = _valid;
+        }
+
         private void OnGaze(ref GazePointData p, IntPtr userData)
         {
             _events++;
+            // Les premiers échantillons BRUTS (vérifie le format des données).
+            if (_events <= 3)
+                Lib.Log.Write("stream", FormattableString.Invariant(
+                    $"Échantillon brut n°{_events} : validité={p.Validity} x={p.X:0.###} y={p.Y:0.###} t={p.TimestampUs}"));
             bool ok = p.Validity == 1 && p.X >= -0.1 && p.X <= 1.1 && p.Y >= -0.1 && p.Y <= 1.1;
             if (ok)
             {
@@ -170,6 +203,12 @@ namespace MesPremiersJeux.Gaze
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         private delegate void UrlReceiver(string url, IntPtr userData);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ApiVersion { public int Major, Minor, Revision, Build; }
+
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+        private static extern Err tobii_get_api_version(out ApiVersion version);
 
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
         private static extern Err tobii_api_create(out IntPtr api, IntPtr customAlloc, IntPtr customLog);

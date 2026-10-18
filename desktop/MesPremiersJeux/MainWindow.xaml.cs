@@ -414,9 +414,13 @@ namespace MesPremiersJeux
                     Lib.Log.Write("app", "Regard direct confirmé : " + Label(order[i]) + " (" + Diag(order[i]) + ")");
                     return;
                 }
-                if ((DateTime.UtcNow - t0).TotalSeconds < 6.0) return;
+                // Un flux VIVANT mais encore sans point valide (personne devant la
+                // caméra ?) : on lui laisse 30 s au lieu de 6 avant de passer au suivant.
+                bool alive = order[i] == "stream" && (_stream?.Events ?? 0) > 0;
+                double limit = alive ? 30.0 : 6.0;
+                if ((DateTime.UtcNow - t0).TotalSeconds < limit) return;
 
-                Lib.Log.Write("app", "Pas de regard par " + Label(order[i]) + " en 6 s — " + Diag(order[i]));
+                Lib.Log.Write("app", "Pas de regard par " + Label(order[i]) + " en " + limit + " s — " + Diag(order[i]));
                 if (order[i] == "consumer") { try { _gaze?.Dispose(); } catch { } _gaze = null; }
                 if (order[i] == "stream") { try { _stream?.Dispose(); } catch { } _stream = null; }
                 i++;
