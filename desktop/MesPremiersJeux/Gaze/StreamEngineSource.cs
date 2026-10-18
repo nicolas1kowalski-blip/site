@@ -28,8 +28,19 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Présence : un point valide vient d'arriver (ou non).</summary>
         public event Action<bool> Presence;
 
-        /// <summary>Position des yeux dans la boîte de suivi (0..1), hors thread UI.</summary>
-        public event Action<EyeSample> Eyes;
+        /// <summary>Position des yeux dans la boîte de suivi (0..1), hors thread UI.
+        /// Demandée au moteur SEULEMENT tant que quelqu'un écoute (la fenêtre
+        /// « position des yeux ») : en jeu, le moteur ne fournit que le regard.</summary>
+        public event Action<EyeSample> Eyes
+        {
+            add { lock (_eyeLock) { _eyes += value; _wantEyes = _eyes != null; } }
+            remove { lock (_eyeLock) { _eyes -= value; _wantEyes = _eyes != null; } }
+        }
+
+        private readonly object _eyeLock = new object();
+        private Action<EyeSample> _eyes;
+        private volatile bool _wantEyes;
+        private bool _eyeTried; // une seule tentative par ouverture (pas d'insistance si refus)
 
         private long _eyeEvents;
 
@@ -218,7 +229,6 @@ namespace MesPremiersJeux.Gaze
                 IsAvailable = true;
                 Status = "abonné au regard (" + _label + ", " + urls[0] + ")";
                 Lib.Log.Write("stream", "Stream Engine : " + Status);
-                SubscribeEyes();
 
                 int failures = 0, kicks = 0;
                 var nextKick = DateTime.MinValue;
@@ -256,13 +266,27 @@ namespace MesPremiersJeux.Gaze
                                 var ce = CreateDevice();
                                 var se = ce == Err.NoError ? subscribe(_device, _callback, IntPtr.Zero) : ce;
                                 Lib.Log.Write("stream", "Appareil recréé : " + ce + " / abonnement : " + se);
-                                if (se == Err.NoError) SubscribeEyes();
+                                _eyeCallback = null; // à redemander si la fenêtre des yeux est ouverte
+                                _eyeTried = false;
                             }
                         }
                         catch (Exception ex) { Lib.Log.Write("stream", "Relance : " + ex.Message); }
                     }
                     // Appareil pas (encore) recréé : on n'y touche pas, on attend la relance suivante.
                     if (_device == IntPtr.Zero) { Thread.Sleep(1000); continue; }
+
+                    // Position des yeux à la demande (toujours dans ce fil).
+                    if (_wantEyes && _eyeCallback == null && !_eyeTried) { _eyeTried = true; SubscribeEyes(); }
+                    else if (!_wantEyes && (_eyeCallback != null || _eyeTried))
+                    {
+                        if (_eyeCallback != null)
+                        {
+                            try { _eyeUnsubscribe?.Invoke(_device); } catch { }
+                            Lib.Log.Write("stream", "Position des yeux : arrêtée (fenêtre fermée)");
+                        }
+                        _eyeCallback = null;
+                        _eyeTried = false;
+                    }
 
                     err = _process(_device);
                     if (err == Err.ConnectionFailed)
@@ -345,7 +369,7 @@ namespace MesPremiersJeux.Gaze
                 if (++_eyeEvents == 1)
                     Lib.Log.Write("stream", FormattableString.Invariant(
                         $"1re position des yeux : G={d.LeftValidity} ({d.LX:0.##};{d.LY:0.##};{d.LZ:0.##}) D={d.RightValidity} ({d.RX:0.##};{d.RY:0.##};{d.RZ:0.##})"));
-                Eyes?.Invoke(new EyeSample
+                _eyes?.Invoke(new EyeSample
                 {
                     HasLeft = d.LeftValidity == 1,
                     HasRight = d.RightValidity == 1,

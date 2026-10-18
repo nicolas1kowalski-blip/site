@@ -198,6 +198,7 @@ namespace MesPremiersJeux
                     DriverStatus.Text =
                         "Pro : " + (_pro?.IsAvailable == true ? _pro.Stats : "—")
                         + " · Direct : " + (_gaze?.IsAvailable == true ? _gaze.Samples + " pts" : "—")
+                        + " · Moteur Tobii : " + (_stream?.IsAvailable == true ? _stream.Stats : (_stream != null ? _stream.Status : "—"))
                         + "\n" + _dwell.PrecisionInfo;
 
                 if (AdminCheck?.IsChecked == true || GazeGate.IsPaused) return; // texte « pause » prioritaire
@@ -512,7 +513,6 @@ namespace MesPremiersJeux
             var st = new StreamEngineSource(dllPath);
             st.Gaze += p => _dwell.PushGaze(p);
             st.Presence += v => _dwell.PushEye(v);
-            st.Eyes += s => _dwell.PushHead(s); // tête (référence de l'étoile)
             return st;
         }
 
@@ -807,20 +807,23 @@ namespace MesPremiersJeux
             }
 
             // Le temps du calibrage : regard en pause ici, fenêtre en arrière-plan.
-            // On reprend dès que l'application revient au premier plan.
+            // On reprend dès que l'application est de nouveau au premier plan
+            // (vérifié chaque seconde, après 8 s), et au plus tard après 3 min :
+            // le regard ne doit JAMAIS rester bloqué en pause.
             GazeGate.Push();
             Topmost = false;
             var since = DateTime.Now;
-            EventHandler back = null;
-            back = (s, e) =>
+            var watch = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            watch.Tick += (s, e) =>
             {
-                if ((DateTime.Now - since).TotalSeconds < 3) return; // le temps que l'outil s'ouvre
-                Activated -= back;
+                double sec = (DateTime.Now - since).TotalSeconds;
+                if (sec < 8 || (!IsActive && sec < 180)) return;
+                watch.Stop();
                 Topmost = _isFullscreen;
                 GazeGate.Pop();
                 Lib.Log.Write("calib", "Retour dans l'application : regard réactivé");
             };
-            Activated += back;
+            watch.Start();
         }
 
         private void GazeMode_Changed(object sender, RoutedEventArgs e) => ApplyGazeMode();
