@@ -52,6 +52,9 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Vrai si le flux de regard direct émet des points valides.</summary>
         public bool HasGaze => _valid > 0;
 
+        /// <summary>Diagnostic : échantillons du flux « guide » (position des yeux).</summary>
+        public long GuideEvents => _guideEvents;
+
         /// <summary>
         /// Fiche technique du tracker vue par le Pro SDK : modèle, série, firmware,
         /// CAPACITÉS (dont « HasGazeData » : le flux de regard est-il autorisé ?)

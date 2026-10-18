@@ -505,6 +505,8 @@ namespace MesPremiersJeux
                              "SANS clic automatique — l'application fait elle-même la sélection. (Réglages ⚙ → pilote « Curseur »)");
         }
 
+        private Border _notice;
+
         private void ShowParentNotice(string text)
         {
             var note = new Border
@@ -519,10 +521,12 @@ namespace MesPremiersJeux
                 IsHitTestVisible = false,
                 Child = new TextBlock { Text = text, Foreground = Brushes.White, FontSize = 18, TextWrapping = TextWrapping.Wrap },
             };
+            if (_notice != null) RootGrid.Children.Remove(_notice); // un message à la fois
+            _notice = note;
             int gi = RootGrid.Children.IndexOf(GazeLayer);
             RootGrid.Children.Insert(gi, note);
             var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
-            t.Tick += (s, e) => { t.Stop(); RootGrid.Children.Remove(note); };
+            t.Tick += (s, e) => { t.Stop(); RootGrid.Children.Remove(note); if (_notice == note) _notice = null; };
             t.Start();
         }
 
@@ -559,6 +563,54 @@ namespace MesPremiersJeux
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
             SettingsPopup.IsOpen = !SettingsPopup.IsOpen;
+        }
+
+        // 🔎 Rapport du regard : teste les DEUX moteurs Tobii l'un après l'autre
+        // (~7 s chacun), note les logiciels Tobii installés, écrit le rapport
+        // dans le dossier Contenu, puis relance le pilote habituel.
+        private void GazeReport_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            string driver = string.IsNullOrWhiteSpace(_settings?.GazeDriver) ? "auto" : _settings.GazeDriver;
+            string before = _dwell.ActiveSource;
+            ShowParentNotice("🔎 Test du regard (15 s) : regarde l'écran tranquillement, sans bouger…");
+            StopGazeSources();
+            var consumer = NewConsumer();
+            try { consumer.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test grand public : " + ex.Message); }
+            _gaze = consumer;
+
+            After(7, () =>
+            {
+                long cg = consumer.Samples, ce = consumer.EyeSamples;
+                try { consumer.Dispose(); } catch { }
+                _gaze = null;
+                var pro = NewPro();
+                try { pro.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Test Pro SDK : " + ex.Message); }
+                _pro = pro;
+
+                After(7, () =>
+                {
+                    string path = null;
+                    try
+                    {
+                        path = GazeReport.Write(driver, before, cg, ce, pro.Stats, pro.GuideEvents, pro.DeviceName, pro.Diagnostic);
+                    }
+                    catch (Exception ex) { Lib.Log.Write("app", "Rapport du regard : " + ex.Message); }
+                    StartGazeSources(); // retour au pilote habituel
+                    if (path != null)
+                    {
+                        try { System.Diagnostics.Process.Start("notepad.exe", "\"" + path + "\""); } catch { }
+                        ShowParentNotice("🔎 Rapport écrit dans le dossier Contenu : " + System.IO.Path.GetFileName(path));
+                    }
+                });
+            });
+        }
+
+        private static void After(double seconds, Action a)
+        {
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+            t.Tick += (s, e) => { t.Stop(); a(); };
+            t.Start();
         }
 
         private void OpenLog_Click(object sender, RoutedEventArgs e)
