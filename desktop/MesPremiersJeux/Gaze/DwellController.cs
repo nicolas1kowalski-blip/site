@@ -82,6 +82,7 @@ namespace MesPremiersJeux.Gaze
         private FrameworkElement _curTargetEl;   // cible en cours de fixation
         private Rect _curTargetRect;
         private double _progressSec;             // fixation accumulée (s)
+        private double _acqT = -1;               // arrivée du regard sur la cible (mesures)
         private double _lastTickTime = -1;
         private double _outSince = -1;           // sortie momentanée (grâce)
         private Point _prevScreen;
@@ -628,7 +629,8 @@ namespace MesPremiersJeux.Gaze
                         double kept = _memProgress - (t - _memAt) * MemDecayPerSec * (EffectiveDwellMs / 1000.0);
                         _progressSec = Math.Max(0, kept);
                     }
-                    else _progressSec = 0;
+                    else { _progressSec = 0; _acqT = t; }
+                    if (_acqT < 0) _acqT = t;
                     _memTargetEl = null;
                 }
                 _curTargetRect = tgt.ScreenRect;
@@ -767,6 +769,11 @@ namespace MesPremiersJeux.Gaze
 
         private void ClearTarget()
         {
+            // Mesure : fixation bien entamée puis lâchée = « presque choisi ».
+            if (_curTargetEl != null && _progressSec * 1000.0 > EffectiveDwellMs * 0.6)
+            {
+                try { Lib.GazeStats.RecordAbort(RectCenter(_curTargetRect)); } catch { }
+            }
             // La progression n'est pas jetée : on la mémorise (décroissante) pour
             // la rendre si le regard revient vite sur la même cible.
             if (_curTargetEl != null && _progressSec > 0)
@@ -785,6 +792,7 @@ namespace MesPremiersJeux.Gaze
         private void StartFreeHold(Point screen, Point local, double t)
         {
             _holdActive = true;
+            _acqT = t;
             _holdScreen = screen;
             _holdLocal = local;
             _progressSec = 0;
@@ -816,6 +824,9 @@ namespace MesPremiersJeux.Gaze
         // Injecte un vrai clic souris Windows au point donné (pixels écran).
         private void Click(Point screen, double t)
         {
+            double took = _acqT >= 0 ? t - _acqT : EffectiveDwellMs / 1000.0;
+            _acqT = -1;
+            _progressSec = 0; // une sélection réussie n'est pas un abandon
             ResetHold();
             _memTargetEl = null; // pas de reprise de progression après un clic
             _cooldownUntil = t + CooldownSeconds;
@@ -832,6 +843,7 @@ namespace MesPremiersJeux.Gaze
 
             Lib.Log.Write("dwell", FormattableString.Invariant($"CLIC injecté à ({screen.X:0};{screen.Y:0})"));
             Clicked?.Invoke(screen);
+            try { Lib.GazeStats.RecordSelection(screen, took); } catch { }
         }
 
         private void ResetHold()

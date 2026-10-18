@@ -125,11 +125,18 @@ namespace MesPremiersJeux.Games
 
             _onStars = () => Dispatcher.Invoke(() => _jarText.Text = "⭐ " + RewardStore.Balance);
             RewardStore.Changed += _onStars;
-            Unloaded += (s, e) => { RewardStore.Changed -= _onStars; DisarmHint(); };
+            Unloaded += (s, e) =>
+            {
+                RewardStore.Changed -= _onStars;
+                DisarmHint();
+                GazeStats.RecordGame(GetType().Name, (DateTime.Now - _playStart).TotalSeconds, _wins);
+            };
 
             Content = root;
             Loaded += (s, e) =>
             {
+                _playStart = _lastWin = DateTime.Now; // mesures du bilan
+                _wins = 0;
                 if (_started) return;
                 _started = true;
                 try { NewRound(); }
@@ -142,6 +149,8 @@ namespace MesPremiersJeux.Games
         }
 
         private bool _started;
+        private DateTime _playStart = DateTime.Now, _lastWin = DateTime.Now;
+        private int _wins;
         private Grid _rootGrid;
         private StackPanel _consigne;
         private Border _consigneBubble;
@@ -194,7 +203,7 @@ namespace MesPremiersJeux.Games
             _hint = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
             _hint.Tick += (s, e) =>
             {
-                if (Speech.IsBusy || Locked) return; // on n'interrompt pas la voix
+                if (Speech.IsBusy || Locked || Views.CommBoard.IsOpen) return; // on n'interrompt pas la voix
                 _hintStage++;
                 PulseHint();
             };
@@ -429,6 +438,9 @@ namespace MesPremiersJeux.Games
         {
             RewardStore.Add(); // chaque réussite gagne une étoile ⭐
             Progress.Add(GetType().Name); // ... comptée dans le bilan parent
+            GazeStats.RecordSuccess((DateTime.Now - _lastWin).TotalSeconds);
+            _lastWin = DateTime.Now;
+            _wins++;
             DisarmHint();      // plus besoin d'aide : c'est gagné
             FlyStarToJar();    // ... qui VOLE dans la tirelire, sous ses yeux
             // La voix de PAPA/MAMAN dit bravo (si enregistrée dans les
@@ -619,6 +631,7 @@ namespace MesPremiersJeux.Games
         // --- Animation de tremblement (mauvaise réponse) ---
         protected static void Shake(FrameworkElement el)
         {
+            GazeStats.RecordWrong(); // une erreur (bilan + réglage du regard)
             el.RenderTransformOrigin = new Point(0.5, 0.5);
             var tt = new TranslateTransform();
             el.RenderTransform = tt;

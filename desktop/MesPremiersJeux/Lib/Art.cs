@@ -292,6 +292,17 @@ namespace MesPremiersJeux.Lib
                     "Jour et nuit (fourni) : la MÊME maison à 4 moments, même cadrage :\r\n" +
                     "  scene-jour.jpg, scene-coucher.jpg, scene-soir.jpg, scene-nuit.jpg\r\n" +
                     "  (fondues l'une dans l'autre : un vrai coucher / lever de soleil)\r\n\r\n" +
+                    "La grille de communication 💬 (pictogrammes, fond blanc ou transparent) :\r\n" +
+                    "  comm-oui, comm-non, comm-encore, comm-fini, comm-aide, comm-viens,\r\n" +
+                    "  comm-mal, comm-calin, comm-content, comm-rigolo, comm-triste, comm-colere,\r\n" +
+                    "  comm-peur, comm-malade, comm-sommeil, comm-ennui, comm-bruit, comm-pause,\r\n" +
+                    "  comm-dormir, comm-tele, comm-position, comm-tete, comm-ventre, comm-dos,\r\n" +
+                    "  comm-gorge, comm-dents, comm-oreille, comm-yeux, comm-bras, comm-main,\r\n" +
+                    "  comm-jambe, comm-pied, comm-maman, comm-papa, comm-mamie, comm-papi,\r\n" +
+                    "  comm-copain, comm-docteur, comm-bonjour, comm-aurevoir, comm-merci,\r\n" +
+                    "  comm-stp, comm-bisou, comm-bravo   (sinon : un emoji en attendant)\r\n" +
+                    "  Les PHOTOS du dossier Famille apparaissent dans la page « Les gens ».\r\n" +
+                    "  Voix d'un parent pour une case : Contenu\\Voix\\comm-<clé>-1.wav\r\n\r\n" +
                     "Les lettres-personnages (fournies avec l'application) :\r\n" +
                     "  lettre-A.png ... lettre-Z.png   (l'alphabet rigolo — abécédaire,\r\n" +
                     "  Mon prénom, la bulle de la maison des sons)\r\n\r\n" +

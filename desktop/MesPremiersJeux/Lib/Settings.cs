@@ -30,6 +30,8 @@ namespace MesPremiersJeux.Lib
         public string ContentDir = "";   // dossier du contenu (ex. OneDrive partagé entre tablettes)
         public string SpotifyClientId = "";     // « Client ID » de l'app Spotify du parent
         public string SpotifyRefreshToken = ""; // jeton de reconnexion Spotify (après login)
+        public bool CommButton = true;   // bouton « Parler » (grille de communication) toujours visible
+        public bool AutoDwell = true;    // temps de fixation ajusté tout seul selon le jeu de l'enfant
 
         private static string Dir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MesPremiersJeux");
@@ -67,6 +69,8 @@ namespace MesPremiersJeux.Lib
                         case "ContentDir": s.ContentDir = val; break;
                         case "SpotifyClientId": s.SpotifyClientId = val; break;
                         case "SpotifyRefreshToken": s.SpotifyRefreshToken = val; break;
+                        case "CommButton": s.CommButton = val != "0"; break;
+                        case "AutoDwell": s.AutoDwell = val != "0"; break;
                     }
                 }
             }
@@ -102,6 +106,8 @@ namespace MesPremiersJeux.Lib
                     "QuickOffset=" + (QuickOffset ?? ""),
                     "ChildName=" + (ChildName ?? "Laura"),
                     "ContentDir=" + (ContentDir ?? ""),
+                    "CommButton=" + (CommButton ? "1" : "0"),
+                    "AutoDwell=" + (AutoDwell ? "1" : "0"),
                 };
                 File.WriteAllLines(FilePath, lines);
             }

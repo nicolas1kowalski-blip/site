@@ -26,10 +26,18 @@ namespace MesPremiersJeux.Gaze
             public Rect ScreenRect; // pixels écran (physiques)
         }
 
+        /// <summary>
+        /// Surcouche MODALE (grille de communication) : quand elle est visible,
+        /// seules SES cibles comptent — le regard ne peut pas viser un bouton du
+        /// jeu caché derrière.
+        /// </summary>
+        public static FrameworkElement ModalRoot;
+
         /// <summary>Collecte les cibles visibles sous la racine donnée.</summary>
         public static List<Target> Collect(Visual root)
         {
             var list = new List<Target>();
+            if (ModalRoot != null && ModalRoot.IsVisible) root = ModalRoot;
             Walk(root, list);
             return list;
         }

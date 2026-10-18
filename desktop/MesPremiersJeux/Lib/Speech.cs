@@ -144,9 +144,21 @@ namespace MesPremiersJeux.Lib
                    "</prosody></speak>";
         }
 
+        /// <summary>Grille de communication ouverte : les JEUX se taisent (seule
+        /// la grille parle, via SayAlways).</summary>
+        public static bool Hold;
+
+        /// <summary>Parle même quand <see cref="Hold"/> est actif (la grille).</summary>
+        public static void SayAlways(string text)
+        {
+            bool h = Hold;
+            Hold = false;
+            try { Say(text); } finally { Hold = h; }
+        }
+
         public static void Say(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) return;
+            if (string.IsNullOrWhiteSpace(text) || Hold) return;
             // Seules les phrases LONGUES (consignes, explications) verrouillent
             // les clics ; les petits retours laissent l'enfant enchaîner.
             _gate = text.Length >= 60;
@@ -178,7 +190,7 @@ namespace MesPremiersJeux.Lib
         /// </summary>
         public static void SaySlow(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) return;
+            if (string.IsNullOrWhiteSpace(text) || Hold) return;
             _gate = true; // dit lentement = à écouter jusqu'au bout
             double wait = VoiceBank.RemainingSeconds();
             if (wait > 0.1)

@@ -76,6 +76,56 @@ namespace MesPremiersJeux
             _parcours.ExitRequested += () => Select("games");
             _views["parcours"] = _parcours;
             ContentHost.Children.Add(_parcours);
+
+            // 💬 La grille de communication + son bouton « Parler », posés
+            // au-dessus de TOUT (jeux en plein écran, boutique) sauf le regard.
+            _comm = new CommBoard { Visibility = Visibility.Collapsed };
+            _comm.CloseRequested += CloseComm;
+            _commBtn = CommBoard.MakeOpenButton();
+            _commBtn.Click += (s, e) => OpenComm();
+            int gi = RootGrid.Children.IndexOf(GazeLayer);
+            RootGrid.Children.Insert(gi, _commBtn);
+            RootGrid.Children.Insert(gi + 1, _comm);
+        }
+
+        private CommBoard _comm;
+        private Button _commBtn;
+
+        private void OpenComm()
+        {
+            Speech.Stop();
+            Speech.Hold = true;              // les jeux se taisent, la grille parle
+            GazeTargets.ModalRoot = _comm;   // le regard ne vise que la grille
+            _commBtn.Visibility = Visibility.Collapsed;
+            _comm.Visibility = Visibility.Visible;
+            _comm.Open();
+        }
+
+        private void CloseComm()
+        {
+            _comm.Visibility = Visibility.Collapsed;
+            _comm.MarkClosed();
+            GazeTargets.ModalRoot = null;
+            Speech.Hold = false;
+            _commBtn.Visibility = _settings == null || _settings.CommButton ? Visibility.Visible : Visibility.Collapsed;
+            Speech.Say("On reprend !");
+        }
+
+        private void CommBtn_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return;
+            _settings.CommButton = CommBtnCheck.IsChecked == true;
+            _settings.Save();
+            if (_commBtn != null && !CommBoard.IsOpen)
+                _commBtn.Visibility = _settings.CommButton ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void AutoDwell_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return;
+            _settings.AutoDwell = AutoDwellCheck.IsChecked == true;
+            _settings.Save();
+            GazeStats.AutoDwell = _settings.AutoDwell;
         }
 
         private RewardShopView _shop;
@@ -216,6 +266,20 @@ namespace MesPremiersJeux
             _dwell.SetQuickOffsetFromString(_settings.QuickOffset); // réglage éclair
             SyncDriverCombo(); // reflète le pilote choisi dans la liste
             ChildNameBox.Text = _settings.ChildName; // prénom (« Mon prénom »)
+
+            // 👁 Mesures du regard + temps de fixation ajusté tout seul.
+            GazeStats.AutoDwell = _settings.AutoDwell;
+            GazeStats.GetDwell = () => _dwell.DwellTime;
+            GazeStats.SetDwell = v =>
+            {
+                _dwell.DwellTime = v;
+                _settings.DwellTime = v;
+                _settings.Save();
+                if (DwellSlider != null) DwellSlider.Value = v;
+            };
+            CommBtnCheck.IsChecked = _settings.CommButton;
+            AutoDwellCheck.IsChecked = _settings.AutoDwell;
+            _commBtn.Visibility = _settings.CommButton ? Visibility.Visible : Visibility.Collapsed;
 
             // Bilan de session (carte de chaleur + compteurs).
             SessionLog.Init();
