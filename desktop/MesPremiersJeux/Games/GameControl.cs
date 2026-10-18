@@ -457,13 +457,74 @@ namespace MesPremiersJeux.Games
         private void AutoPage(UIElement content)
         {
             if (_pageExplicit) return;
+            var decor = DecorBrush();
             if (content is Canvas c && c.Children.Count > 0 && c.Children[0] is Rectangle r
                 && r.Width >= c.Width - 1 && r.Height >= c.Height - 1 && r.Fill != null)
             {
                 r.RadiusX = 0;
                 r.RadiusY = 0;
-                _rootGrid.Background = r.Fill;
+                if (decor != null) r.Fill = Brushes.Transparent; // le décor se voit à travers
+                else _rootGrid.Background = r.Fill;
             }
+            if (decor != null) _rootGrid.Background = decor;
+        }
+
+        // ------------------------------------------------------------------
+        //  LES DÉCORS PLEIN ÉCRAN : chaque jeu a son paysage dessiné (Images        //  decor-*.jpg), qui remplit TOUT l'écran derrière le jeu. Les décors
+        //  chargés reçoivent un voile blanc léger pour garder les objets lisibles.
+        // ------------------------------------------------------------------
+        private static readonly System.Collections.Generic.Dictionary<string, (string Decor, byte Veil)> Decors =
+            new System.Collections.Generic.Dictionary<string, (string, byte)>
+        {
+            { "MagicWindowGame", ("decor-foret", 0x40) },
+            { "StringsGame", ("decor-foret", 0x70) },
+            { "CountGame", ("decor-ferme", 0x30) },
+            { "NumbersGame", ("decor-ferme", 0x30) },
+            { "FamiliesGame", ("decor-ferme", 0x30) },
+            { "CompleteGame", ("decor-ferme", 0x30) },
+            { "SizeGame", ("decor-montagnes", 0) },
+            { "VocabGame", ("decor-montagnes", 0) },
+            { "PuzzleGame", ("decor-montagnes", 0) },
+            { "ShadowGame", ("decor-neige", 0) },
+            { "MemoryGame", ("decor-bonbons", 0x50) },
+            { "ColorsGame", ("decor-bonbons", 0x50) },
+            { "NecklaceGame", ("decor-bonbons", 0x50) },
+            { "NumberPartyGame", ("decor-montgolfieres", 0x20) },
+            { "NumberFormsGame", ("decor-jungle", 0x60) },
+            { "PatternGame", ("decor-robots", 0x70) },
+            { "ShapesGame", ("decor-robots", 0x70) },
+            { "ModelCopyGame", ("decor-robots", 0x70) },
+            { "SeekFindGame", ("decor-ocean-epave", 0x30) },
+            { "CupsGame", ("decor-ocean-epave", 0x30) },
+        };
+
+        private Brush _decorBrush;
+        private bool _decorTried;
+
+        private Brush DecorBrush()
+        {
+            if (_decorTried) return _decorBrush;
+            _decorTried = true;
+            if (!Decors.TryGetValue(GetType().Name, out var d)) return null;
+            _decorBrush = MakeDecorBrush(d.Decor, d.Veil);
+            return _decorBrush;
+        }
+
+        /// <summary>Le décor <paramref name="name"/> en pinceau plein écran
+        /// (UniformToFill), avec un voile blanc d'opacité <paramref name="veil"/>.</summary>
+        public static Brush MakeDecorBrush(string name, byte veil)
+        {
+            var img = Art.Find(name);
+            if (img == null) return null;
+            var rect = new Rect(0, 0, img.Width, img.Height);
+            var group = new DrawingGroup();
+            group.Children.Add(new ImageDrawing(img, rect));
+            if (veil > 0)
+                group.Children.Add(new GeometryDrawing(
+                    new SolidColorBrush(Color.FromArgb(veil, 0xFF, 0xFF, 0xFF)), null, new RectangleGeometry(rect)));
+            var brush = new DrawingBrush(group) { Stretch = Stretch.UniformToFill };
+            brush.Freeze();
+            return brush;
         }
 
         /// <summary>Dispose une « scène » centrale et une rangée de réponses en bas.</summary>
@@ -513,6 +574,7 @@ namespace MesPremiersJeux.Games
         /// dont chaque carte occupe sa cellule au maximum).</summary>
         protected void SetBodyFill(UIElement content)
         {
+            AutoPage(content);
             Body.Children.Clear();
             if (content is FrameworkElement fe)
             {

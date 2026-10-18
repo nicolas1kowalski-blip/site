@@ -41,6 +41,9 @@ namespace MesPremiersJeux.Games
             _canvas = new Canvas { ClipToBounds = true };
             _canvas.Background = new LinearGradientBrush(
                 Color.FromRgb(0xD8, 0xF0, 0xFF), Color.FromRgb(0xF3, 0xE9, 0xFF), 90);
+            // Le ciel aux montgolfières dessiné, plein écran (sinon le dégradé).
+            var sky = GameControl.MakeDecorBrush("decor-montgolfieres", 0x20);
+            if (sky != null) _canvas.Background = sky;
             Content = _canvas;
 
             _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(30) };

@@ -49,6 +49,9 @@ namespace MesPremiersJeux.Games
             var root = new Grid();
             root.Background = new LinearGradientBrush(
                 Color.FromRgb(0x1E, 0x2A, 0x4A), Color.FromRgb(0x3A, 0x21, 0x55), 90);
+            // Le fond marin dessiné, plein écran (sinon le dégradé).
+            var sea = GameControl.MakeDecorBrush("decor-ocean", 0);
+            if (sea != null) root.Background = sea;
             _canvas = new Canvas { ClipToBounds = true };
             root.Children.Add(_canvas);
             root.Children.Add(new TextBlock

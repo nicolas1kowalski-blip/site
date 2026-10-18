@@ -29,6 +29,16 @@ namespace MesPremiersJeux.Games
         private const double Branch1 = 400, Branch2 = 700;
         private const double PerchY = 230 - 48 - 4; // pattes à 4 px DANS la branche
 
+        // Creux des fils (décor dessiné) : un oiseau au milieu se pose plus bas
+        // qu'un oiseau au bord. 0 = branches droites.
+        private double _wireSag;
+        private double WireDy(double cx)
+        {
+            if (_wireSag <= 0) return 0;
+            double u = (cx - W / 2) / (W / 2);
+            return _wireSag * (1 - u * u) - _wireSag * 0.74; // repère : le calage de l'image
+        }
+
         private static readonly (string Emoji, double X, double Y)[] Perch =
         {
             ("🐦", 150, Branch1 - PerchY), ("🐤", 620, Branch1 - PerchY), ("🦜", 1120, Branch1 - PerchY),
@@ -62,9 +72,20 @@ namespace MesPremiersJeux.Games
             // Décor : une IMAGE de scène du parent (decor-oiseaux.png) si elle
             // existe — sinon le décor dessiné (ciel, soleil, branches).
             var decor = Art.Find("decor-oiseaux");
+            _wireSag = 0;
             if (decor != null)
             {
-                _canvas.Children.Add(new Image { Source = decor, Width = W, Height = H, Stretch = Stretch.UniformToFill });
+                // Le ciel aux deux FILS : l'image (pleine largeur) est calée pour
+                // que le fil du haut passe sous la 1re rangée d'oiseaux — le fil
+                // du bas tombe alors sous la 2e. Elle déborde un peu en haut et
+                // en bas : le ciel continue jusqu'aux bords de l'écran.
+                double ih = W * decor.Height / decor.Width;
+                var sky = new Image { Source = decor, Width = W, Height = ih, Stretch = Stretch.Fill, IsHitTestVisible = false };
+                Canvas.SetLeft(sky, 0);
+                Canvas.SetTop(sky, Branch1 - 0.504 * ih);
+                _canvas.Children.Add(sky);
+                _wireSag = 0.026 * ih; // les fils pendent un peu au milieu
+                SetPageBackground(new LinearGradientBrush(Color.FromRgb(0x88, 0xD7, 0xF8), Color.FromRgb(0x9C, 0xDC, 0xF8), 90));
             }
             else
             {
@@ -167,7 +188,7 @@ namespace MesPremiersJeux.Games
                 int idx = i;
                 bird.Click += (s, e) => Toggle(idx, body, cycle, sc, tt, note, x, y);
                 Canvas.SetLeft(bird, x);
-                Canvas.SetTop(bird, y);
+                Canvas.SetTop(bird, y + WireDy(x + 115)); // pattes sur le fil
                 _canvas.Children.Add(bird);
             }
 
