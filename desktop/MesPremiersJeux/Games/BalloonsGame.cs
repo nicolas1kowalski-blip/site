@@ -188,7 +188,7 @@ namespace MesPremiersJeux.Games
             _target += 2;
             UpdateLevelUi();
             RewardStore.Add(); // une étoile par niveau ⭐
-            if (!Closed) Speech.Say($"Bravo ! Niveau {_level} !");
+            Speech.Say($"Bravo ! Niveau {_level} !");
             CelebrateLevel();
 
             int newCount = Math.Min(14, 8 + (_level - 1) * 2);
