@@ -216,8 +216,10 @@ namespace MesPremiersJeux.Lib
                     "  cirque vu de l'intérieur, gai et coloré », format paysage 16:9)\r\n" +
                     "  maison-sons.png     (la maison des sons — maison cartoon rigolote\r\n" +
                     "  avec une GRANDE BULLE BLANCHE VIDE au-dessus du toit : la lettre\r\n" +
-                    "  du son s'affiche dedans ! Une image est déjà fournie avec\r\n" +
-                    "  l'application ; la vôtre la remplace.)\r\n\r\n" +
+                    "  du son s'affiche dedans ! Fournie avec l'application.)\r\n" +
+                    "  maison-sons-1.png ... -4.png  (FACULTATIF : plusieurs poses de la\r\n" +
+                    "  MÊME maison, à peine différentes — alternées doucement, la maison\r\n" +
+                    "  RESPIRE ! 4 poses sont déjà fournies.)\r\n\r\n" +
                     "Les planètes (TOUT est déjà fourni avec l'application) :\r\n" +
                     "  planete-soleil.png, planete-mercure.png, planete-venus.png,\r\n" +
                     "  planete-terre.png, planete-lune.png, planete-mars.png,\r\n" +

@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
@@ -81,7 +82,7 @@ namespace MesPremiersJeux.Games
                 () => "C'est la maison du son " + r.Sound + " ! Trouve les images où tu ENTENDS " + r.Sound + " : elles entrent dans la maison !");
 
             _canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
-            if (Art.Find("maison-sons") != null)
+            if (HouseImage() != null)
             {
                 // Le dessin couvre TOUTE la scène, et la couleur de page
                 // prolonge son ciel et son herbe : vrai plein écran, sans
@@ -137,7 +138,7 @@ namespace MesPremiersJeux.Games
         {
             // La maison DESSINÉE si l'image existe (maison-sons, embarquée) :
             // toute la scène, avec la lettre du son affichée dans la bulle.
-            var img = Art.Find("maison-sons");
+            var img = HouseImage();
             if (img != null) { BuildHouseFromImage(r, img); return; }
 
             _doorX = W / 2 - 40; _doorY = 395;
@@ -205,6 +206,11 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(hit);
         }
 
+        // La première pose de la maison dessinée (maison-sons-1, animée) ou
+        // l'image unique (maison-sons) — null si aucune.
+        private static ImageSource HouseImage() =>
+            Art.Find("maison-sons-1") ?? Art.Find("maison-sons");
+
         // Bouton transparent : la cible vit dans la scène, sans carte blanche.
         private static Button SceneButton(UIElement content, double w, double h)
         {
@@ -233,6 +239,31 @@ namespace MesPremiersJeux.Games
             Canvas.SetLeft(image, 0);
             Canvas.SetTop(image, 0);
             _canvas.Children.Add(image);
+
+            // LA MAISON RESPIRE : s'il y a plusieurs poses (maison-sons-1..N),
+            // on les alterne doucement en aller-retour (1 2 3 4 3 2...) —
+            // les notes, bulles et petits traits bougent, la scène est vivante.
+            var frames = new List<ImageSource>();
+            for (int i = 1; i <= 8; i++)
+            {
+                var f = Art.Find("maison-sons-" + i);
+                if (f == null) break;
+                frames.Add(f);
+            }
+            if (frames.Count >= 2)
+            {
+                int step = 0;
+                int cycle = 2 * frames.Count - 2;
+                var beat = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(550) };
+                beat.Tick += (s, e) =>
+                {
+                    if (!image.IsLoaded) { beat.Stop(); return; } // scène quittée
+                    step++;
+                    int k = step % cycle;
+                    image.Source = frames[k < frames.Count ? k : cycle - k];
+                };
+                beat.Start();
+            }
 
             _doorX = 0.525 * W - 50;
             _doorY = 0.66 * ih;
