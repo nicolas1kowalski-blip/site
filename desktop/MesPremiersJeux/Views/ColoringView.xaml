@@ -42,9 +42,10 @@
             <StackPanel x:Name="TopTools" Grid.Column="2" Orientation="Vertical"
                         VerticalAlignment="Top" Margin="6,8,10,8" />
 
-            <!-- Droite (bas) : recommencer / plein écran / supprimer -->
+            <!-- Droite (bas) : recommencer / plein écran / supprimer — au-dessus
+                 du bouton « Parler » 💬 posé dans le coin en bas à droite. -->
             <StackPanel x:Name="BottomTools" Grid.Column="2" Orientation="Vertical"
-                        VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="6,8,10,10" />
+                        VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="6,8,10,150" />
         </Grid>
     </Grid>
 </UserControl>

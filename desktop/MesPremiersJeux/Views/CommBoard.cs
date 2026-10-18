@@ -268,9 +268,9 @@ namespace MesPremiersJeux.Views
                 Style = (Style)Application.Current.Resources["AnswerButton"],
                 Width = 128,
                 Height = 128,
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(8, 0, 0, 8), // tout au coin, en bas à gauche
+                Margin = new Thickness(0, 0, 8, 8), // tout au coin, en bas à droite
                 Background = new LinearGradientBrush(Color.FromRgb(0xFF, 0x8F, 0xC8), Color.FromRgb(0xA0, 0x6C, 0xD5), 90),
                 BorderBrush = Brushes.White,
                 BorderThickness = new Thickness(5),

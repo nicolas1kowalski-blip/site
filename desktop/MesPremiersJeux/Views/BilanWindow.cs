@@ -229,7 +229,7 @@ namespace MesPremiersJeux.Views
                 .OrderByDescending(t => t.Count).ToList();
             var todayTop = Top(today);
             var wk = Top(week);
-            if (wk.Count == 0) { Line(root, "(la grille n'a pas encore été utilisée — bouton « Parler » 💬 en bas à gauche)"); return; }
+            if (wk.Count == 0) { Line(root, "(la grille n'a pas encore été utilisée — bouton « Parler » 💬 en bas à droite)"); return; }
             Line(root, "• Aujourd'hui : " + (todayTop.Count == 0 ? "rien" : string.Join(", ", todayTop.Take(8).Select(x => Nice(x.Key) + " ×" + x.Count.ToString("0")))));
             Line(root, "• Cette semaine : " + string.Join(", ", wk.Take(10).Select(x => Nice(x.Key) + " ×" + x.Count.ToString("0"))));
         }
