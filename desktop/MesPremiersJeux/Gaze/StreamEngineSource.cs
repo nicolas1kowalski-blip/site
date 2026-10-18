@@ -41,6 +41,16 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Échantillons reçus (valides ou non) : le flux est-il vivant ?</summary>
         public long Events => _events;
 
+        // Dernier échantillon reçu : un flux qui se tait est relancé.
+        private long _lastEventTicks;
+
+        /// <summary>Secondes depuis le dernier échantillon (0 tant que rien n'est arrivé).</summary>
+        public double SilentSeconds =>
+            _lastEventTicks == 0 ? 0 : (DateTime.UtcNow - new DateTime(_lastEventTicks, DateTimeKind.Utc)).TotalSeconds;
+
+        /// <summary>Le chemin demandé à la création (null = moteur de l'application).</summary>
+        public string RequestedPath { get; }
+
         /// <summary>Dernière étape atteinte ou erreur (pour le rapport).</summary>
         public string Status { get; private set; } = "non démarré";
 
@@ -55,6 +65,7 @@ namespace MesPremiersJeux.Gaze
         /// (null = celle fournie avec l'application).</param>
         public StreamEngineSource(string dllPath = null)
         {
+            RequestedPath = dllPath;
             _dllPath = dllPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tobii_stream_engine.dll");
             _label = dllPath == null ? "moteur de l'application" : "moteur de la tablette";
         }
@@ -199,9 +210,28 @@ namespace MesPremiersJeux.Gaze
                 Status = "abonné au regard (" + _label + ", " + urls[0] + ")";
                 Lib.Log.Write("stream", "Stream Engine : " + Status);
 
-                int failures = 0;
+                int failures = 0, kicks = 0;
+                var lastKick = DateTime.MinValue;
                 while (_running)
                 {
+                    // FLUX MUET (le regard est sorti de l'écran, la caméra s'est
+                    // endormie…) : on le relance — reconnexion, puis réabonnement.
+                    double silent = SilentSeconds;
+                    if (silent < 1) kicks = 0;
+                    else if (_events > 0 && silent > 3 && (DateTime.UtcNow - lastKick).TotalSeconds > 3)
+                    {
+                        lastKick = DateTime.UtcNow;
+                        kicks++;
+                        Lib.Log.Write("stream", FormattableString.Invariant($"Flux muet depuis {silent:0} s : relance n°{kicks}"));
+                        if (kicks % 2 == 1) _reconnect?.Invoke(_device);
+                        else
+                        {
+                            _unsubscribe?.Invoke(_device);
+                            var re = subscribe(_device, _callback, IntPtr.Zero);
+                            Lib.Log.Write("stream", "Réabonnement au regard : " + re);
+                        }
+                    }
+
                     err = _process(_device);
                     if (err == Err.ConnectionFailed)
                     {
@@ -238,6 +268,7 @@ namespace MesPremiersJeux.Gaze
         private void OnGaze(ref GazePointData p, IntPtr userData)
         {
             _events++;
+            _lastEventTicks = DateTime.UtcNow.Ticks;
             // Les premiers échantillons BRUTS (vérifie le format des données).
             if (_events <= 3)
                 Lib.Log.Write("stream", FormattableString.Invariant(

@@ -349,11 +349,11 @@ namespace MesPremiersJeux
                 switch (driver)
                 {
                     case "direct":
-                        StartChain(Engines("consumer", "streamT", "stream", "pro")); // secours si la tablette ne répond pas
+                        StartChain(Engines("consumer", "stream", "streamT", "pro")); // secours si la tablette ne répond pas
                         break;
 
                     case "stream":
-                        StartChain(Engines("streamT", "stream", "pro"));
+                        StartChain(Engines("stream", "streamT", "pro"));
                         break;
 
                     case "pro":
@@ -368,7 +368,7 @@ namespace MesPremiersJeux
                         break;
 
                     default: // auto
-                        StartChain(Engines("pro", "consumer", "streamT", "stream"));
+                        StartChain(Engines("pro", "consumer", "stream", "streamT"));
                         break;
                 }
             }
@@ -420,6 +420,18 @@ namespace MesPremiersJeux
                 bool alive = order[i].StartsWith("stream") && (_stream?.Events ?? 0) > 0;
                 double limit = alive ? 30.0 : 6.0;
                 if ((DateTime.UtcNow - t0).TotalSeconds < limit) return;
+
+                // Un Stream Engine VIVANT sans autre Stream Engine à essayer après
+                // lui : on le GARDE (il attend simplement que l'enfant regarde) ;
+                // en attendant, le curseur prend le relais tout seul.
+                bool nextIsStream = i + 1 < order.Length && order[i + 1].StartsWith("stream");
+                if (alive && !nextIsStream)
+                {
+                    w.Stop();
+                    _fallbackWatch = null;
+                    Lib.Log.Write("app", "On garde " + Label(order[i]) + " : flux vivant, en attente d'un regard (" + Diag(order[i]) + ")");
+                    return;
+                }
 
                 Lib.Log.Write("app", "Pas de regard par " + Label(order[i]) + " en " + limit + " s — " + Diag(order[i]));
                 if (order[i] == "consumer") { try { _gaze?.Dispose(); } catch { } _gaze = null; }
@@ -495,8 +507,29 @@ namespace MesPremiersJeux
             return "points " + (_pro?.Stats ?? "—") + ", guide " + (_pro?.GuideEvents ?? 0);
         }
 
+        // Filet de sécurité : si le Stream Engine se tait plus de 12 s malgré ses
+        // propres relances, on le recrée entièrement (même moteur).
+        private System.Windows.Threading.DispatcherTimer _streamWatch;
+
+        private void StartStreamWatch()
+        {
+            if (_streamWatch != null) return;
+            _streamWatch = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _streamWatch.Tick += (s, e) =>
+            {
+                var st = _stream;
+                if (st == null || !st.HasGaze || st.SilentSeconds < 12) return;
+                Lib.Log.Write("app", "Stream Engine muet depuis 12 s malgré les relances : redémarrage complet du moteur");
+                try { st.Dispose(); } catch { }
+                _stream = NewStream(st.RequestedPath);
+                try { _stream.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Redémarrage Stream Engine : " + ex.Message); }
+            };
+            _streamWatch.Start();
+        }
+
         private StreamEngineSource NewStream(string dllPath = null)
         {
+            StartStreamWatch();
             var st = new StreamEngineSource(dllPath);
             st.Gaze += p => _dwell.PushGaze(p);
             st.Presence += v => _dwell.PushEye(v);
