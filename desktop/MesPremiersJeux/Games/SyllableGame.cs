@@ -52,7 +52,7 @@ namespace MesPremiersJeux.Games
         private int _round;
         private Entry _cur;
         private List<Border> _pads;
-        private TextBlock _frog;
+        private FrameworkElement _frog;
         private bool _demoRunning;
 
         public SyllableGame(Action celebrate) : base(celebrate) { }
@@ -196,7 +196,9 @@ namespace MesPremiersJeux.Games
             }
 
             // La grenouille, au bord de la mare.
-            _frog = new TextBlock { Text = "🐸", FontSize = 96, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
+            _frog = Art.ForEmoji("🐸", 120);
+            _frog.IsHitTestVisible = false;
+            _frog.RenderTransformOrigin = new Point(0.5, 0.5);
             _frog.RenderTransform = new TranslateTransform();
             Canvas.SetLeft(_frog, 360);
             Canvas.SetTop(_frog, 330);
@@ -238,7 +240,7 @@ namespace MesPremiersJeux.Games
                 Speak("Écoute bien : " + _cur.Word + " !");
             else
                 Speak(_cur.Word + " ! Regarde la grenouille scander les syllabes !");
-            Schedule(1700, () => Demo(0, andCount: _act == 2 ? 0 : -1, thenSpeakCount: _act != 2));
+            Schedule(1700, () => Demo(0, andCount: 0, thenSpeakCount: _act != 2));
         }
 
         // Chaque syllabe a SA couleur (nénuphars arc-en-ciel) et SA note de
@@ -291,26 +293,111 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         //  La grenouille scande : saut + tambour + syllabe (+ badge compteur)
         // ------------------------------------------------------------------
-        private readonly List<TextBlock> _badges = new List<TextBlock>();
+        private readonly List<FrameworkElement> _badges = new List<FrameworkElement>();
 
-        private void Demo(int k, int andCount, bool thenSpeakCount)
+        private static readonly string[] NWord = { "un", "deux", "trois", "quatre", "cinq", "six" };
+
+        private static string Syll(int n) => n + (n > 1 ? " syllabes" : " syllabe");
+
+        /// <summary>
+        /// La grenouille saute sur chaque nénuphar (sa syllabe + son CHIFFRE
+        /// qui apparaît dessous), puis ON COMPTE : chaque chiffre brille pendant
+        /// que la voix dit « un… deux… trois… ». Ensuite <paramref name="after"/>
+        /// (par défaut : le total en grand, ou « combien ? » à l'acte 2).
+        /// </summary>
+        private void Demo(int k, int andCount, bool thenSpeakCount, Action after = null)
         {
             _demoRunning = true;
             if (k == 0) ClearBadges();
             if (k >= _cur.S.Length)
             {
-                _demoRunning = false;
-                if (thenSpeakCount)
+                int n = _cur.S.Length;
+                CountAloud(() =>
                 {
-                    Speak(string.Join("... ", _cur.S.Select(s => s.ToUpperInvariant())) + " ! " +
-                          _cur.S.Length + (_cur.S.Length > 1 ? " syllabes !" : " syllabe !"));
-                    if (_act == 3) FinaleName();
-                    else Schedule(3300, NextWord);
-                }
+                    _demoRunning = false;
+                    if (after != null) { after(); return; }
+                    if (thenSpeakCount)
+                    {
+                        ShowTotal(n);
+                        if (_act == 3) { FinaleName(); return; }
+                        Speak(Cap(_cur.Word) + " : " + Syll(n) + " !");
+                        Schedule(2800, NextWord);
+                    }
+                    else Speak("Alors... combien de syllabes ? Montre le bon nombre !");
+                });
                 return;
             }
             HopTo(k, speak: true, withBadge: andCount >= 0);
-            Schedule(1050, () => Demo(k + 1, andCount, thenSpeakCount));
+            Schedule(1050, () => Demo(k + 1, andCount, thenSpeakCount, after));
+        }
+
+        // « Un… deux… trois… » : chaque chiffre (et son nénuphar) brille au
+        // moment où la voix le dit.
+        private void CountAloud(Action then)
+        {
+            int n = Math.Min(_badges.Count, _pads.Count);
+            for (int i = 0; i < n; i++)
+            {
+                int k = i;
+                Schedule(400 + k * 800, () =>
+                {
+                    Speech.Say(NWord[Math.Min(k, NWord.Length - 1)] + " !");
+                    SoundFx.Note(k);
+                    PulseBadge(_badges[k]);
+                    var sc = (ScaleTransform)_pads[k].RenderTransform;
+                    var dip = new DoubleAnimation(1, 1.12, TimeSpan.FromMilliseconds(220))
+                    { AutoReverse = true, EasingFunction = new SineEase() };
+                    sc.BeginAnimation(ScaleTransform.ScaleXProperty, dip);
+                    sc.BeginAnimation(ScaleTransform.ScaleYProperty, dip);
+                });
+            }
+            Schedule(400 + n * 800 + 300, then);
+        }
+
+        private static void PulseBadge(FrameworkElement b)
+        {
+            if (!(b.RenderTransform is ScaleTransform sc)) return;
+            var pop = new DoubleAnimation(1, 1.45, TimeSpan.FromMilliseconds(240))
+            { AutoReverse = true, EasingFunction = new SineEase() };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+        }
+
+        // Le TOTAL en très grand au-dessus de la mare (actes 1 et 3).
+        private void ShowTotal(int n)
+        {
+            var total = new Border
+            {
+                Width = 150,
+                Height = 150,
+                CornerRadius = new CornerRadius(75),
+                Background = new SolidColorBrush(Color.FromRgb(0xE8, 0x5A, 0x2C)),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(8),
+                IsHitTestVisible = false,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                Child = new TextBlock
+                {
+                    Text = n.ToString(),
+                    FontSize = 100,
+                    FontWeight = FontWeights.ExtraBold,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, -10, 0, 0),
+                },
+            };
+            var sc = new ScaleTransform(0.2, 0.2);
+            total.RenderTransform = sc;
+            Canvas.SetLeft(total, 480 + (W - 480 - 180) / 2 - 75);
+            Canvas.SetTop(total, 110);
+            total.SetValue(Panel.ZIndexProperty, 80);
+            _canvas.Children.Add(total);
+            _badges.Add(total);
+            var pop = new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(420))
+            { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.8 } };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
         }
 
         private void HopTo(int k, bool speak, bool withBadge = false)
@@ -357,7 +444,7 @@ namespace MesPremiersJeux.Games
                 sc.BeginAnimation(ScaleTransform.ScaleXProperty, dip);
                 sc.BeginAnimation(ScaleTransform.ScaleYProperty, dip);
                 Splash(px + 40, Canvas.GetTop(pad) + 140);
-                if (withBadge) AddBadge(k, Canvas.GetLeft(pad) + 70, Canvas.GetTop(pad) - 130);
+                if (withBadge) AddBadge(k, Canvas.GetLeft(pad) + 95 - 42, Canvas.GetTop(pad) + 160);
             };
             _frog.BeginAnimation(Canvas.LeftProperty, ax);
             _frog.BeginAnimation(Canvas.TopProperty, ay);
@@ -365,14 +452,26 @@ namespace MesPremiersJeux.Games
 
         private void AddBadge(int k, double x, double y)
         {
-            var b = new TextBlock
+            var b = new Border
             {
-                Text = (k + 1).ToString(),
-                FontSize = 62,
-                FontWeight = FontWeights.ExtraBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0x5A, 0x2C)),
+                Width = 84,
+                Height = 84,
+                CornerRadius = new CornerRadius(42),
+                Background = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0xE8, 0x5A, 0x2C)),
+                BorderThickness = new Thickness(6),
                 IsHitTestVisible = false,
                 RenderTransformOrigin = new Point(0.5, 0.5),
+                Child = new TextBlock
+                {
+                    Text = (k + 1).ToString(),
+                    FontSize = 54,
+                    FontWeight = FontWeights.ExtraBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0x5A, 0x2C)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, -6, 0, 0),
+                },
             };
             var sc = new ScaleTransform(0.2, 0.2);
             b.RenderTransform = sc;
@@ -428,15 +527,15 @@ namespace MesPremiersJeux.Games
             {
                 Locked = true;
                 GameKit.Success();
-                Speak("Oui ! " + n + (n > 1 ? " syllabes !" : " syllabe !") + " On compte ensemble !");
+                Speak("Oui ! " + Syll(n) + " ! On compte ensemble !");
                 ClearBadges();
                 ResetFrog();
-                Schedule(1400, () => Demo(0, andCount: 0, thenSpeakCount: false));
-                Schedule(1400 + n * 1050 + 600, () =>
+                Schedule(1400, () => Demo(0, andCount: 0, thenSpeakCount: false, after: () =>
                 {
+                    Speak(Syll(n) + " ! Bravo !");
                     Celebrate();
-                    Schedule(1800, NextWord);
-                });
+                    Schedule(2400, NextWord);
+                }));
                 return;
             }
 
@@ -448,12 +547,11 @@ namespace MesPremiersJeux.Games
                 : "Tu as dit " + choice + "... mais écoute, il y en a moins ! On compte !");
             ClearBadges();
             ResetFrog();
-            Schedule(1600, () => Demo(0, andCount: 0, thenSpeakCount: false));
-            Schedule(1600 + n * 1050 + 500, () =>
+            Schedule(1600, () => Demo(0, andCount: 0, thenSpeakCount: false, after: () =>
             {
-                Speak(n + (n > 1 ? " syllabes !" : " syllabe !") + " Essaie encore !");
+                Speak(Syll(n) + " ! Essaie encore !");
                 Locked = false;
-            });
+            }));
         }
 
         private void ResetFrog()
@@ -496,6 +594,8 @@ namespace MesPremiersJeux.Games
             Celebrate();
             Schedule(4500, NewRound);
         }
+
+        private static string Cap(string w) => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w.Substring(1);
 
         private void AddDecor(string emoji, double x, double y, double size)
         {
