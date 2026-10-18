@@ -25,7 +25,7 @@ namespace MesPremiersJeux.Views
         {
             ["NameGame"] = "Mon prénom", ["LettersGame"] = "Les lettres", ["AlphabetBookGame"] = "L'abécédaire",
             ["SyllableGame"] = "Les syllabes", ["SoundHouseGame"] = "La maison des sons", ["EyeWriteGame"] = "J'écris !",
-            ["NumberPartyGame"] = "Fête des nombres", ["NumbersGame"] = "Les nombres", ["CompleteGame"] = "Le panier de 4",
+            ["NumberPartyGame"] = "Fête des nombres", ["NumbersGame"] = "Les nombres", ["CompleteGame"] = "Le panier",
             ["NumberFormsGame"] = "Le nombre dans tous ses états", ["ModelCopyGame"] = "Reproduis le modèle",
             ["ColorMagicGame"] = "Couleurs magiques", ["SizeGame"] = "Grand ou petit", ["PatternGame"] = "Les suites",
             ["NecklaceGame"] = "Le collier de perles", ["VocabGame"] = "L'imagier", ["BodyGame"] = "Le corps",

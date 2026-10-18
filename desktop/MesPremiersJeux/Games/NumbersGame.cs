@@ -30,7 +30,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             int n;
-            do { n = 1 + GameKit.RandInt(5); } while (n == _lastN);
+            n = GameKit.NextNumber("nombres", 1, 5);
             _lastN = n;
 
             var item = GameKit.Rand(CartoonArt.Items);

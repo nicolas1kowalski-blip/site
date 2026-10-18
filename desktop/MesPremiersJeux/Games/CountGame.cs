@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,9 +17,12 @@ namespace MesPremiersJeux.Games
             { 1, Color.FromRgb(0xFF, 0xE9, 0xC7) },
             { 2, Color.FromRgb(0xC6, 0xF0, 0xE7) },
             { 3, Color.FromRgb(0xFF, 0xD3, 0xDC) },
+            { 4, Color.FromRgb(0xDC, 0xD6, 0xFF) },
+            { 5, Color.FromRgb(0xFF, 0xF3, 0xB0) },
         };
 
         private int _lastN;
+        private static readonly string[] Words = { "zéro", "un", "deux", "trois", "quatre", "cinq" };
 
         public CountGame(Action celebrate) : base(celebrate) { }
 
@@ -26,11 +30,13 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             int n;
-            do { n = 1 + GameKit.RandInt(3); } while (n == _lastN); // évite de répéter le même chiffre
+            n = GameKit.NextNumber("compter", 1, 5);
             _lastN = n;
-            var options = GameKit.Shuffle(new[] { 1, 2, 3 });
+            // Trois choix voisins (dont la bonne réponse), dans l'ordre 1 → 5.
+            var options = GameKit.PickN(Enumerable.Range(1, 5).ToList(), 3, n).OrderBy(v => v).ToList();
+            string ask = "Combien ? " + string.Join("... ", options.Select(v => Words[v])) + " ?";
             Question.Text = "Combien ?";
-            SetConsigne(null, () => "Combien ? Un... Deux... ou Trois ?");
+            SetConsigne(null, () => ask);
 
             var item = GameKit.Rand(CartoonArt.Items);
             var visuals = Row();
@@ -63,7 +69,7 @@ namespace MesPremiersJeux.Games
             }
 
             SetBody(visuals, row);
-            Schedule(350, () => Speak("Combien ? Un... Deux... ou Trois ?"));
+            Schedule(350, () => Speak(ask));
         }
 
         private void Answer(int num, int n, Button btn)
@@ -74,7 +80,7 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 GameKit.Success();
                 Celebrate();
-                string detail = n == 1 ? "Il y en a un !" : n == 2 ? "Il y en a deux !" : "Il y en a trois !";
+                string detail = "Il y en a " + Words[n] + " !";
                 Speak($"{GameKit.Praise()} {detail}");
                 ScheduleNext(2400);
             }

@@ -163,7 +163,7 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         private void Parade()
         {
-            int n = 2 + _rng.Next(3); // 2..4 pour la découverte
+            int n = GameKit.NextNumber("formes-defile", 1, 5);
             Question.Text = "🔢 Le nombre dans tous ses états";
             SetConsigne(Digit(n, 110),
                 () => "Le nombre " + n + " peut se montrer de plein de façons ! Regarde chaque carte : elle se présente !");
@@ -211,7 +211,7 @@ namespace MesPremiersJeux.Games
         // ------------------------------------------------------------------
         private void Quiz()
         {
-            int n = 1 + _rng.Next(5);
+            int n = GameKit.NextNumber("formes-quiz", 1, 5);
             // ADAPTATION : 2 cartes au niveau 0, 3 au niveau 1, 4 au niveau 2.
             int nChoices = 2 + Adaptive.Level("nombres-formes");
             var wrong = Enumerable.Range(1, 5).Where(v => v != n).OrderBy(v => _rng.Next()).Take(nChoices - 1).ToList();

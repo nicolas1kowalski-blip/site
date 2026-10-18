@@ -385,7 +385,7 @@ namespace MesPremiersJeux.Games
 
             _phase = 3;
             Locked = false;
-            int k = 1 + GameKit.RandInt(Max);
+            int k = GameKit.NextNumber("fete-nombres", 1, Max);
             var animal = Animals[GameKit.RandInt(Animals.Length)];
             Question.Text = "🧮 Combien de " + animal.Name + " ?";
             _canvas = new Canvas { Width = W, Height = H };

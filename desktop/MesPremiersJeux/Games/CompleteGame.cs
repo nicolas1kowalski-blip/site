@@ -9,7 +9,7 @@ using MesPremiersJeux.Lib;
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// « Le panier de 4 » (MS — maths : COMPLÉMENTS À 4, compléter une
+    /// « Le panier » (MS — maths : COMPLÉMENTS de 2 à 5, compléter une
     /// collection, droit du programme de l'école) : il faut 4 fruits dans le
     /// panier ; il y en a déjà quelques-uns — combien en manque-t-il ?
     /// Acte 1 : on complète librement (chaque fruit vole dans le panier, on
@@ -19,7 +19,8 @@ namespace MesPremiersJeux.Games
     public sealed class CompleteGame : GameControl
     {
         private const double W = 1460, H = 660;
-        private const int Target = 4;
+        private int Target = 4; // le total du panier : change à chaque tour (2 à 5)
+        private int _lastMissing;
 
         private static readonly (string Emoji, string One, string Many)[] Items =
         {
@@ -51,8 +52,8 @@ namespace MesPremiersJeux.Games
             if (_act == 1 && _round > 2) { _act = 2; _round = 1; }
             if (_act == 2 && _round > 3)
             {
-                Question.Text = "🧺 Champion du panier de 4 !";
-                Speak("Bravo ! Tu sais toujours compléter jusqu'à 4 ! Quel champion !");
+                Question.Text = "🧺 Champion du panier !";
+                Speak("Bravo ! Tu sais compléter le panier ! Quel champion !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3200, NewRound);
@@ -60,8 +61,15 @@ namespace MesPremiersJeux.Games
             }
 
             _item = Items[_rng.Next(Items.Length)];
-            _inBasket = 1 + _rng.Next(Target - 1); // 1 à 3 déjà dans le panier
-            int missing = Target - _inBasket;
+            // Le total varie (pioche 2..5) et le nombre qui MANQUE varie aussi :
+            // jamais le même deux fois de suite.
+            Target = GameKit.NextNumber("complement-total", 2, 5);
+            int missing;
+            int guard = 0;
+            do { missing = 1 + _rng.Next(Target - 1); }
+            while (missing == _lastMissing && Target > 2 && ++guard < 20);
+            _lastMissing = missing;
+            _inBasket = Target - missing; // au moins 1 déjà dans le panier
 
             Question.Text = "🧺 Le panier de " + Target;
             SetConsigne(Art.ForEmoji(_item.Emoji, 100),
@@ -108,7 +116,7 @@ namespace MesPremiersJeux.Games
             };
             for (int gi = 0; gi < Target; gi++)
                 goal.Children.Add(Art.ForEmoji(_item.Emoji, 48));
-            Canvas.SetLeft(goal, W / 2 - 110);
+            Canvas.SetLeft(goal, W / 2 - Target * 26);
             Canvas.SetTop(goal, H - 530);
             _canvas.Children.Add(goal);
 
@@ -279,7 +287,7 @@ namespace MesPremiersJeux.Games
         }
 
         // ------------------------------------------------------------------
-        private double BasketSlotX(int slot) => W / 2 - 92 + slot * 50;
+        private double BasketSlotX(int slot) => W / 2 - Target * 25 + 8 + slot * 50; // centré sur le total
 
         private void AddFruitInBasket(int slot, bool pop)
         {

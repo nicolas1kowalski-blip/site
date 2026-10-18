@@ -108,7 +108,7 @@ namespace MesPremiersJeux.Views
                 Pick(
                     new Step { Icon = "🥁", Label = "Les syllabes", Say = "les syllabes", Make = c => new SyllableGame(c) },
                     new Step { Icon = "🏠", Label = "Maison des sons", Say = "la maison des sons", Make = c => new SoundHouseGame(c) },
-                    new Step { Icon = "🧺", Label = "Panier de 4", Say = "le panier de 4", Make = c => new CompleteGame(c) },
+                    new Step { Icon = "🧺", Label = "Le panier", Say = "le panier", Make = c => new CompleteGame(c) },
                     new Step { Icon = "🎲", Label = "Les nombres", Say = "le nombre dans tous ses états", Make = c => new NumberFormsGame(c) },
                     new Step { Icon = "🪐", Label = "Les planètes", Say = "les planètes", Make = c => new PlanetsGame(c) },
                     new Step { Icon = "🌍", Label = "Tour du monde", Say = "le tour du monde", Make = c => new CapitalsGame(c) }),

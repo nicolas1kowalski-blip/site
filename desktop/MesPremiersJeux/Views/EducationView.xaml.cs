@@ -46,7 +46,7 @@ namespace MesPremiersJeux.Views
                 {
                     ("🎈", "Fête des nombres", "PS · MS", c => new NumberPartyGame(c)),
                     ("🔢", "Les nombres", "PS · MS", c => new NumbersGame(c)),
-                    ("🧺", "Le panier de 4", "MS", c => new CompleteGame(c)),
+                    ("🧺", "Le panier", "MS", c => new CompleteGame(c)),
                     ("🎲", "Le nombre dans tous ses états", "MS", c => new NumberFormsGame(c)),
                     ("🧩", "Reproduis le modèle", "MS", c => new ModelCopyGame(c)),
                 },

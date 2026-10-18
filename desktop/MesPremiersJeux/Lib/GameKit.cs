@@ -15,6 +15,29 @@ namespace MesPremiersJeux.Lib
         /// <summary>Entier dans [0, maxExclusive) via le générateur partagé.</summary>
         public static int RandInt(int maxExclusive) => Rng.Next(maxExclusive);
 
+        // ------------------------------------------------------------------
+        //  LA PIOCHE DE NOMBRES : chaque nombre de [min, max] sort UNE fois,
+        //  dans le désordre, avant que la pioche soit remélangée — et jamais
+        //  deux fois le même d'affilée (même d'une partie à l'autre).
+        // ------------------------------------------------------------------
+        private static readonly Dictionary<string, List<int>> Bags = new Dictionary<string, List<int>>();
+        private static readonly Dictionary<string, int> LastDrawn = new Dictionary<string, int>();
+
+        public static int NextNumber(string key, int min, int max)
+        {
+            if (!Bags.TryGetValue(key, out var bag) || bag.Count == 0)
+            {
+                bag = Shuffle(Enumerable.Range(min, max - min + 1));
+                if (bag.Count > 1 && LastDrawn.TryGetValue(key, out var last) && bag[0] == last)
+                    (bag[0], bag[bag.Count - 1]) = (bag[bag.Count - 1], bag[0]);
+                Bags[key] = bag;
+            }
+            int v = bag[0];
+            bag.RemoveAt(0);
+            LastDrawn[key] = v;
+            return v;
+        }
+
         public static List<T> Shuffle<T>(IEnumerable<T> src)
         {
             var list = src.ToList();
