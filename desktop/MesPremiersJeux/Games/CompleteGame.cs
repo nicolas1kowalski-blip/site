@@ -64,7 +64,7 @@ namespace MesPremiersJeux.Games
             int missing = Target - _inBasket;
 
             Question.Text = "🧺 Le panier de " + Target;
-            SetConsigne(new TextBlock { Text = _item.Emoji + "🧺", FontSize = 80 },
+            SetConsigne(Art.ForEmoji(_item.Emoji, 100),
                 () => _act == 1
                     ? "Il faut " + Target + " " + _item.Many + " dans le panier ! Ajoute les " + _item.Many + " qui manquent !"
                     : "Il y a " + _inBasket + " " + _item.Many + "... Il en faut " + Target + " ! COMBIEN en manque-t-il ? Choisis le chiffre !");
@@ -100,13 +100,14 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(_countBig, H - 450);
             _canvas.Children.Add(_countBig);
             // Le but : 4 silhouettes au-dessus (ce qu'on vise).
-            var goal = new TextBlock
+            var goal = new StackPanel
             {
-                Text = string.Concat(System.Linq.Enumerable.Repeat(_item.Emoji, Target)),
-                FontSize = 42,
+                Orientation = Orientation.Horizontal,
                 Opacity = 0.45,
                 IsHitTestVisible = false,
             };
+            for (int gi = 0; gi < Target; gi++)
+                goal.Children.Add(Art.ForEmoji(_item.Emoji, 48));
             Canvas.SetLeft(goal, W / 2 - 110);
             Canvas.SetTop(goal, H - 530);
             _canvas.Children.Add(goal);
@@ -135,7 +136,7 @@ namespace MesPremiersJeux.Games
                     Style = (Style)Application.Current.Resources["AnswerButton"],
                     Width = 150,
                     Height = 150,
-                    Content = new TextBlock { Text = _item.Emoji, FontSize = 86 },
+                    Content = Art.ForEmoji(_item.Emoji, 105),
                 };
                 var captured = btn;
                 btn.Click += (s, e) => AddOne(captured);
@@ -151,7 +152,8 @@ namespace MesPremiersJeux.Games
             btn.IsHitTestVisible = false;
             btn.Visibility = Visibility.Hidden;
 
-            var flying = new TextBlock { Text = _item.Emoji, FontSize = 86, IsHitTestVisible = false };
+            var flying = Art.ForEmoji(_item.Emoji, 105);
+            flying.IsHitTestVisible = false;
             double x0 = Canvas.GetLeft(btn) + 30, y0 = Canvas.GetTop(btn) + 20;
             Canvas.SetLeft(flying, x0);
             Canvas.SetTop(flying, y0);
@@ -261,13 +263,9 @@ namespace MesPremiersJeux.Games
         {
             for (int i = 0; i < missing; i++)
             {
-                var ghost = new TextBlock
-                {
-                    Text = _item.Emoji,
-                    FontSize = 62,
-                    Opacity = 0,
-                    IsHitTestVisible = false,
-                };
+                var ghost = Art.ForEmoji(_item.Emoji, 75);
+                ghost.Opacity = 0;
+                ghost.IsHitTestVisible = false;
                 Canvas.SetLeft(ghost, BasketSlotX(_inBasket + i));
                 Canvas.SetTop(ghost, H - 300);
                 ghost.SetValue(Panel.ZIndexProperty, 55);
@@ -285,13 +283,9 @@ namespace MesPremiersJeux.Games
 
         private void AddFruitInBasket(int slot, bool pop)
         {
-            var f = new TextBlock
-            {
-                Text = _item.Emoji,
-                FontSize = 62,
-                IsHitTestVisible = false,
-                RenderTransformOrigin = new Point(0.5, 0.5),
-            };
+            var f = Art.ForEmoji(_item.Emoji, 75);
+            f.IsHitTestVisible = false;
+            f.RenderTransformOrigin = new Point(0.5, 0.5);
             Canvas.SetLeft(f, BasketSlotX(slot));
             Canvas.SetTop(f, H - 300);
             f.SetValue(Panel.ZIndexProperty, 50);

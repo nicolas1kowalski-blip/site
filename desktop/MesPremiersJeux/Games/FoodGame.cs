@@ -115,7 +115,8 @@ namespace MesPremiersJeux.Games
             Canvas.SetLeft(plate, 5);
             Canvas.SetTop(plate, size + 10);
             host.Children.Add(plate);
-            var food = new TextBlock { Text = d.Emoji, FontSize = size, RenderTransformOrigin = new Point(0.5, 1) };
+            var food = Art.ForEmoji(d.Emoji, size * 1.25);
+            food.RenderTransformOrigin = new Point(0.5, 1);
             var sway = new RotateTransform(0);
             food.RenderTransform = sway;
             Canvas.SetLeft(food, 30);
@@ -217,7 +218,7 @@ namespace MesPremiersJeux.Games
             if (_act == 2)
             {
                 Question.Text = "🍕 Qui mange " + target.Name + " ?";
-                SetConsigne(new TextBlock { Text = target.Emoji, FontSize = 90 },
+                SetConsigne(Art.ForEmoji(target.Emoji, 110),
                     () => "Dans quel pays mange-t-on " + target.Name + " ? Trouve le bon drapeau !");
                 // Le plat au centre-haut, fumant.
                 var dish = DishButton(target, 140);
@@ -298,7 +299,9 @@ namespace MesPremiersJeux.Games
             msc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
             msc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
 
-            var flying = new TextBlock { Text = d.Emoji, FontSize = 100, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
+            var flying = Art.ForEmoji(d.Emoji, 120);
+            flying.IsHitTestVisible = false;
+            flying.RenderTransformOrigin = new Point(0.5, 0.5);
             var rot = new RotateTransform(0);
             flying.RenderTransform = rot;
             Canvas.SetLeft(flying, fromX);

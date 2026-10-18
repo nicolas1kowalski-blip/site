@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Views
 {
@@ -18,7 +19,7 @@ namespace MesPremiersJeux.Views
         public static Button ThemeTile(string icon, string name, Color tint, string miniIcons)
         {
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            content.Children.Add(new TextBlock { Text = icon, FontSize = 96, HorizontalAlignment = HorizontalAlignment.Center });
+            content.Children.Add(Art.ForEmoji(icon, 115)); // le dessin cartoon si on l'a
             content.Children.Add(new TextBlock
             {
                 Text = name,
@@ -45,7 +46,7 @@ namespace MesPremiersJeux.Views
         public static Button GameTile(string icon, string label, string sub = null)
         {
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            content.Children.Add(new TextBlock { Text = icon, FontSize = 82, HorizontalAlignment = HorizontalAlignment.Center });
+            content.Children.Add(Art.ForEmoji(icon, 100)); // le dessin cartoon si on l'a
             content.Children.Add(new TextBlock
             {
                 Text = label,

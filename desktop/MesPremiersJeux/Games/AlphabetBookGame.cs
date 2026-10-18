@@ -186,7 +186,7 @@ namespace MesPremiersJeux.Games
                         VerticalAlignment = VerticalAlignment.Center,
                         Children =
                         {
-                            new TextBlock { Text = emoji, FontSize = 118, HorizontalAlignment = HorizontalAlignment.Center },
+                            Art.ForEmoji(emoji, 140),
                             new TextBlock
                             {
                                 Text = word,

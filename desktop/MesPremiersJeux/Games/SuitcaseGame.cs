@@ -111,7 +111,7 @@ namespace MesPremiersJeux.Games
             for (int i = 0; i < items.Count; i++)
             {
                 var it = items[i];
-                var btn = SceneButton(new TextBlock { Text = it.Emoji, FontSize = 110 }, 190, 190);
+                var btn = SceneButton(Art.ForEmoji(it.Emoji, 135), 190, 190);
                 var captured = btn;
                 btn.Click += (s, e) => PickItem(t, it.Emoji, it.Name, it.Joke, it.Good, captured);
                 Canvas.SetLeft(btn, xs[i]);
@@ -271,7 +271,9 @@ namespace MesPremiersJeux.Games
             SoundFx.PopSound();
 
             // L'habit VOLE en cloche jusqu'à la valise.
-            var flying = new TextBlock { Text = emoji, FontSize = 90, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
+            var flying = Art.ForEmoji(emoji, 110);
+            flying.IsHitTestVisible = false;
+            flying.RenderTransformOrigin = new Point(0.5, 0.5);
             double x0 = Canvas.GetLeft(btn) + 40, y0 = Canvas.GetTop(btn) + 30;
             double x1 = W / 2 - 40, y1 = H - 230;
             Canvas.SetLeft(flying, x0);

@@ -334,7 +334,7 @@ namespace MesPremiersJeux.Games
             var target = acts[_rng.Next(acts.Length)];
 
             Question.Text = "🌞🌙 Le jour ou la nuit ?";
-            SetConsigne(new TextBlock { Text = target.Emoji, FontSize = 96 },
+            SetConsigne(Art.ForEmoji(target.Emoji, 115),
                 () => Cap(target.Name) + "... c'est le JOUR, avec le soleil ? Ou la NUIT, avec la lune ?");
 
             _canvas = new Canvas { Width = W, Height = H };
@@ -354,7 +354,9 @@ namespace MesPremiersJeux.Games
             AddDecor("🦉", W - 160, H - 190, 90);
 
             // L'activité mystère, au centre, qui se balance.
-            var item = new TextBlock { Text = target.Emoji, FontSize = 140, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0) };
+            var item = Art.ForEmoji(target.Emoji, 170);
+            item.IsHitTestVisible = false;
+            item.RenderTransformOrigin = new Point(0.5, 0);
             var sway = new RotateTransform(0);
             item.RenderTransform = sway;
             Canvas.SetLeft(item, W / 2 - 80);
