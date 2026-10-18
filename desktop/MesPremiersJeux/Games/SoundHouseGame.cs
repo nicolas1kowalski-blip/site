@@ -56,8 +56,10 @@ namespace MesPremiersJeux.Games
         private Canvas _canvas;
         private int _roundIdx;
         private int _found;
-        private Canvas _house;
+        private Canvas _house;          // la maison vectorielle (null si image)
         private TextBlock _houseLetter;
+        private double _doorX, _doorY;  // où volent les images gagnées
+        private double _joyX, _joyY;    // d'où sortent les étoiles de joie
 
         public SoundHouseGame(Action celebrate) : base(celebrate) { }
 
@@ -124,6 +126,13 @@ namespace MesPremiersJeux.Games
         // La grande maison colorée, avec sa lettre et sa porte ouverte.
         private void BuildHouse(Round r)
         {
+            // La maison DESSINÉE si l'image existe (maison-sons, embarquée) :
+            // toute la scène, avec la lettre du son affichée dans la bulle.
+            var img = Art.Find("maison-sons");
+            if (img != null) { BuildHouseFromImage(r, img); return; }
+
+            _doorX = W / 2 - 40; _doorY = 395;
+            _joyX = W / 2 + 100; _joyY = 160;
             _house = new Canvas { Width = 380, Height = 400, RenderTransformOrigin = new Point(0.5, 1) };
             // Les murs.
             Add(_house, RectShape(Color.FromRgb(0xFF, 0xE2, 0x9A), 320, 230, 12), 30, 150);
@@ -187,6 +196,68 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(hit);
         }
 
+        // La maison DESSINÉE (image « maison-sons ») : la scène entière est
+        // affichée à hauteur de page ; la lettre du son vit DANS LA BULLE
+        // au-dessus du toit, et la porte rouge est la cible où volent les
+        // images gagnées. Les repères sont des fractions mesurées sur le dessin.
+        private void BuildHouseFromImage(Round r, ImageSource img)
+        {
+            _house = null;
+            double ratio = img.Width / img.Height;
+            double w = H * ratio;
+            double left = (W - w) / 2;
+            var image = new Image { Source = img, Width = w, Height = H, Stretch = Stretch.Uniform, IsHitTestVisible = false };
+            Canvas.SetLeft(image, left);
+            Canvas.SetTop(image, 0);
+            _canvas.Children.Add(image);
+
+            _doorX = left + 0.525 * w - 50;
+            _doorY = 0.66 * H;
+            _joyX = left + 0.27 * w;
+            _joyY = 0.32 * H;
+
+            // La LETTRE géante dans la bulle, qui respire.
+            double bw = 0.32 * w, bh = 0.25 * H;
+            _houseLetter = new TextBlock
+            {
+                Text = r.Letter,
+                FontSize = bh * 0.82,
+                FontWeight = FontWeights.ExtraBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+            };
+            _houseLetter.RenderTransform = new ScaleTransform(1, 1);
+            var bubble = new Grid { Width = bw, Height = bh, IsHitTestVisible = false };
+            bubble.Children.Add(_houseLetter);
+            Canvas.SetLeft(bubble, left + 0.482 * w - bw / 2);
+            Canvas.SetTop(bubble, 0.162 * H - bh / 2);
+            bubble.SetValue(Panel.ZIndexProperty, 32);
+            _canvas.Children.Add(bubble);
+            var breathe = new DoubleAnimation(1, 1.12, TimeSpan.FromSeconds(1.4))
+            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+            var lsc = (ScaleTransform)_houseLetter.RenderTransform;
+            lsc.BeginAnimation(ScaleTransform.ScaleXProperty, breathe);
+            lsc.BeginAnimation(ScaleTransform.ScaleYProperty, breathe);
+
+            // La maison fait entendre son son quand on la regarde (zone choisie
+            // pour ne recouvrir aucune carte-réponse).
+            var hit = new Button
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Opacity = 0,
+                Width = 0.42 * w,
+                Height = 0.58 * H,
+            };
+            hit.Click += (s, e) => { if (!Locked) Speech.SaySlow(r.Sound + " ! " + r.Sound + " !"); };
+            Canvas.SetLeft(hit, left + 0.32 * w);
+            Canvas.SetTop(hit, 0.30 * H);
+            hit.SetValue(Panel.ZIndexProperty, 31);
+            _canvas.Children.Add(hit);
+        }
+
         private void Pick(Round r, string emoji, string word, string stretched, bool yes, Button btn)
         {
             if (Locked) return;
@@ -203,7 +274,7 @@ namespace MesPremiersJeux.Games
             // L'image vole dans la porte de la maison.
             var flying = new TextBlock { Text = emoji, FontSize = 100, IsHitTestVisible = false, RenderTransformOrigin = new Point(0.5, 0.5) };
             double x0 = Canvas.GetLeft(btn) + 35, y0 = Canvas.GetTop(btn) + 25;
-            double x1 = W / 2 - 40, y1 = 395;
+            double x1 = _doorX, y1 = _doorY;
             Canvas.SetLeft(flying, x0);
             Canvas.SetTop(flying, y0);
             flying.SetValue(Panel.ZIndexProperty, 60);
@@ -384,20 +455,23 @@ namespace MesPremiersJeux.Games
         // La maison sautille de joie et des étoiles sortent de la cheminée.
         private void HouseJoy()
         {
-            var sc = new ScaleTransform(1, 1);
-            _house.RenderTransform = sc;
-            var hop = new DoubleAnimation(1, 1.06, TimeSpan.FromMilliseconds(180))
-            { AutoReverse = true, EasingFunction = new SineEase() };
-            sc.BeginAnimation(ScaleTransform.ScaleXProperty, hop);
-            sc.BeginAnimation(ScaleTransform.ScaleYProperty, hop);
+            if (_house != null)
+            {
+                var sc = new ScaleTransform(1, 1);
+                _house.RenderTransform = sc;
+                var hop = new DoubleAnimation(1, 1.06, TimeSpan.FromMilliseconds(180))
+                { AutoReverse = true, EasingFunction = new SineEase() };
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, hop);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, hop);
+            }
             for (int i = 0; i < 4; i++)
             {
                 var star = new TextBlock { Text = "✨", FontSize = 30, IsHitTestVisible = false };
-                Canvas.SetLeft(star, W / 2 + 100 + _rng.Next(60));
-                Canvas.SetTop(star, 160);
+                Canvas.SetLeft(star, _joyX + _rng.Next(60));
+                Canvas.SetTop(star, _joyY);
                 star.SetValue(Panel.ZIndexProperty, 65);
                 _canvas.Children.Add(star);
-                var up = new DoubleAnimation(160, 60 - i * 16, TimeSpan.FromMilliseconds(900))
+                var up = new DoubleAnimation(_joyY, _joyY - 100 - i * 16, TimeSpan.FromMilliseconds(900))
                 { BeginTime = TimeSpan.FromMilliseconds(i * 120), EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } };
                 var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(900)) { BeginTime = TimeSpan.FromMilliseconds(i * 120) };
                 var captured = star;

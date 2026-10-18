@@ -140,7 +140,11 @@ namespace MesPremiersJeux.Lib
                     "  feuillu avec deux branches horizontales dégagées, ciel doux,\r\n" +
                     "  style cartoon, sans oiseaux », format paysage 16:9)\r\n" +
                     "  decor-tartes.png    (les tartes à la crème — ex. « chapiteau de\r\n" +
-                    "  cirque vu de l'intérieur, gai et coloré », format paysage 16:9)\r\n\r\n" +
+                    "  cirque vu de l'intérieur, gai et coloré », format paysage 16:9)\r\n" +
+                    "  maison-sons.png     (la maison des sons — maison cartoon rigolote\r\n" +
+                    "  avec une GRANDE BULLE BLANCHE VIDE au-dessus du toit : la lettre\r\n" +
+                    "  du son s'affiche dedans ! Une image est déjà fournie avec\r\n" +
+                    "  l'application ; la vôtre la remplace.)\r\n\r\n" +
                     "Le tour du monde (PHOTOS des monuments — remplacent les emojis) :\r\n" +
                     "  lieu-france.png      (tour Eiffel)      lieu-angleterre.png (Big Ben)\r\n" +
                     "  lieu-italie.png      (Colisée)          lieu-egypte.png     (pyramides)\r\n" +
