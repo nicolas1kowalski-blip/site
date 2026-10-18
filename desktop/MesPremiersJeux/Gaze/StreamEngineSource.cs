@@ -185,17 +185,15 @@ namespace MesPremiersJeux.Gaze
                 // Version 4 et plus : on déclare l'usage « interactif » (le regard
                 // n'est ni enregistré ni transmis) — ce que fait un logiciel de
                 // pilotage au regard.
-                if (major >= 4)
-                {
-                    var create4 = Fn<DeviceCreate4Fn>("tobii_device_create");
-                    err = create4(_api, urls[0], 1 /* TOBII_FIELD_OF_USE_STORE_OR_TRANSFER_FALSE */, out _device);
-                }
-                else
-                {
-                    var create2 = Fn<DeviceCreate2Fn>("tobii_device_create");
-                    err = create2(_api, urls[0], out _device);
-                }
-                if (err != Err.NoError) { Fail("connexion à " + urls[0] + " : " + err); return; }
+                var create4 = major >= 4 ? Fn<DeviceCreate4Fn>("tobii_device_create") : null;
+                var create2 = major >= 4 ? null : Fn<DeviceCreate2Fn>("tobii_device_create");
+                string url = urls[0];
+                Err CreateDevice() => create4 != null
+                    ? create4(_api, url, 1 /* TOBII_FIELD_OF_USE_STORE_OR_TRANSFER_FALSE */, out _device)
+                    : create2(_api, url, out _device);
+
+                err = CreateDevice();
+                if (err != Err.NoError) { Fail("connexion à " + url + " : " + err); return; }
 
                 _callback = OnGaze;
                 err = subscribe(_device, _callback, IntPtr.Zero);
@@ -211,33 +209,53 @@ namespace MesPremiersJeux.Gaze
                 Lib.Log.Write("stream", "Stream Engine : " + Status);
 
                 int failures = 0, kicks = 0;
-                var lastKick = DateTime.MinValue;
+                var nextKick = DateTime.MinValue;
                 while (_running)
                 {
-                    // FLUX MUET (le regard est sorti de l'écran, la caméra s'est
-                    // endormie…) : on le relance — reconnexion, puis réabonnement.
+                    // FLUX MUET (la caméra s'est tue) : relances DOUCES et de plus en
+                    // plus espacées (5 s, 10 s, 20 s, puis toutes les 30 s), TOUTES
+                    // dans ce fil — jamais en même temps qu'une lecture :
+                    // 1) réabonnement, 2) reconnexion, 3+) appareil recréé.
                     double silent = SilentSeconds;
-                    if (silent < 1) kicks = 0;
-                    else if (_events > 0 && silent > 3 && (DateTime.UtcNow - lastKick).TotalSeconds > 3)
+                    if (silent < 1) { kicks = 0; nextKick = DateTime.MinValue; }
+                    else if (_events > 0 && silent > 5 && DateTime.UtcNow >= nextKick)
                     {
-                        lastKick = DateTime.UtcNow;
                         kicks++;
+                        nextKick = DateTime.UtcNow.AddSeconds(Math.Min(30, 5 * Math.Pow(2, kicks - 1)));
                         Lib.Log.Write("stream", FormattableString.Invariant($"Flux muet depuis {silent:0} s : relance n°{kicks}"));
-                        if (kicks % 2 == 1) _reconnect?.Invoke(_device);
-                        else
+                        try
                         {
-                            _unsubscribe?.Invoke(_device);
-                            var re = subscribe(_device, _callback, IntPtr.Zero);
-                            Lib.Log.Write("stream", "Réabonnement au regard : " + re);
+                            if (kicks == 1 && _device != IntPtr.Zero)
+                            {
+                                _unsubscribe?.Invoke(_device);
+                                Lib.Log.Write("stream", "Réabonnement au regard : " + subscribe(_device, _callback, IntPtr.Zero));
+                            }
+                            else if (kicks == 2 && _device != IntPtr.Zero)
+                                Lib.Log.Write("stream", "Reconnexion : " + (_reconnect?.Invoke(_device) ?? Err.NotSupported));
+                            else
+                            {
+                                if (_device != IntPtr.Zero)
+                                {
+                                    _unsubscribe?.Invoke(_device);
+                                    _deviceDestroy?.Invoke(_device);
+                                    _device = IntPtr.Zero;
+                                }
+                                var ce = CreateDevice();
+                                var se = ce == Err.NoError ? subscribe(_device, _callback, IntPtr.Zero) : ce;
+                                Lib.Log.Write("stream", "Appareil recréé : " + ce + " / abonnement : " + se);
+                            }
                         }
+                        catch (Exception ex) { Lib.Log.Write("stream", "Relance : " + ex.Message); }
                     }
+                    // Appareil pas (encore) recréé : on n'y touche pas, on attend la relance suivante.
+                    if (_device == IntPtr.Zero) { Thread.Sleep(1000); continue; }
 
                     err = _process(_device);
                     if (err == Err.ConnectionFailed)
                     {
                         Lib.Log.Write("stream", "Connexion perdue : tentative de reconnexion");
                         _reconnect?.Invoke(_device);
-                        Thread.Sleep(500);
+                        Thread.Sleep(1000);
                     }
                     else if (err != Err.NoError && ++failures % 200 == 1)
                         Lib.Log.Write("stream", "Traitement des données : " + err);
@@ -267,6 +285,12 @@ namespace MesPremiersJeux.Gaze
 
         private void OnGaze(ref GazePointData p, IntPtr userData)
         {
+            try { OnGazeCore(ref p); }
+            catch { /* une erreur ici ne doit JAMAIS remonter dans le moteur natif */ }
+        }
+
+        private void OnGazeCore(ref GazePointData p)
+        {
             _events++;
             _lastEventTicks = DateTime.UtcNow.Ticks;
             // Les premiers échantillons BRUTS (vérifie le format des données).
@@ -293,7 +317,17 @@ namespace MesPremiersJeux.Gaze
         public void Dispose()
         {
             _running = false;
-            try { _thread?.Join(600); } catch { }
+            bool stopped = true;
+            try { stopped = _thread == null || _thread.Join(5000); } catch { }
+            if (!stopped)
+            {
+                // Le fil est encore dans le moteur (reconnexion lente) : détruire
+                // maintenant ferait planter l'application. On abandonne la
+                // connexion telle quelle, le fil s'arrêtera de lui-même.
+                Lib.Log.Write("stream", "Arrêt : le moteur est encore occupé — connexion laissée telle quelle");
+                IsAvailable = false;
+                return;
+            }
             try
             {
                 if (_device != IntPtr.Zero)

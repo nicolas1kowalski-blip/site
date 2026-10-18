@@ -507,29 +507,8 @@ namespace MesPremiersJeux
             return "points " + (_pro?.Stats ?? "—") + ", guide " + (_pro?.GuideEvents ?? 0);
         }
 
-        // Filet de sécurité : si le Stream Engine se tait plus de 12 s malgré ses
-        // propres relances, on le recrée entièrement (même moteur).
-        private System.Windows.Threading.DispatcherTimer _streamWatch;
-
-        private void StartStreamWatch()
-        {
-            if (_streamWatch != null) return;
-            _streamWatch = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-            _streamWatch.Tick += (s, e) =>
-            {
-                var st = _stream;
-                if (st == null || !st.HasGaze || st.SilentSeconds < 12) return;
-                Lib.Log.Write("app", "Stream Engine muet depuis 12 s malgré les relances : redémarrage complet du moteur");
-                try { st.Dispose(); } catch { }
-                _stream = NewStream(st.RequestedPath);
-                try { _stream.Start(); } catch (Exception ex) { Lib.Log.Write("app", "Redémarrage Stream Engine : " + ex.Message); }
-            };
-            _streamWatch.Start();
-        }
-
         private StreamEngineSource NewStream(string dllPath = null)
         {
-            StartStreamWatch();
             var st = new StreamEngineSource(dllPath);
             st.Gaze += p => _dwell.PushGaze(p);
             st.Presence += v => _dwell.PushEye(v);
