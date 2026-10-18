@@ -102,6 +102,8 @@
                                FontSize="12" Foreground="#FF9A8AB8" TextWrapping="Wrap" Margin="0,2,0,0" />
                     <Button Content="👁 Vérifier la position des yeux" FontSize="14" Padding="8,8"
                             Margin="0,8,0,0" Click="EyeTrack_Click" />
+                    <Button Content="🎯 Calibrer la tablette (logiciel Tobii, sans TD Control)" FontSize="14" Padding="8,8"
+                            Margin="0,6,0,0" Click="DeviceCalib_Click" />
                     <Button Content="⭐ Réglage éclair (3 s, 1 étoile)" FontSize="14" Padding="8,8"
                             Margin="0,6,0,0" Click="QuickFix_Click" />
                     <UniformGrid Columns="2" Margin="0,6,0,0">
@@ -205,7 +207,7 @@
 
                     <Border Background="#FFF3E9FF" CornerRadius="10" Padding="10" Margin="0,14,0,0">
                         <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="#FF5A4A7A"
-                                   Text="Calibrage : sur la TD I-13, il se fait dans les réglages d'eye-tracking de l'appareil (Tobii Dynavox → Calibrer). Active le mode « Contrôle de l'ordinateur » pour que le regard déplace le curseur, puis coche « Piloter au regard » ci-dessus." />
+                                   Text="Calibrage : « 🎯 Calibrer la tablette » ouvre le calibrage Tobii installé (TD I-13, PCEye 5…). Active le mode « Contrôle de l'ordinateur » pour que le regard déplace le curseur, puis coche « Piloter au regard » ci-dessus." />
                     </Border>
 
                     <Separator Margin="0,14,0,10" />

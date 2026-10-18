@@ -44,6 +44,12 @@ namespace MesPremiersJeux.Lib
             if (apps.Count == 0) sb.AppendLine("  (aucun trouvé)");
             foreach (var a in apps) sb.AppendLine("  • " + a);
             sb.AppendLine();
+            sb.AppendLine("OUTILS DE CALIBRAGE TROUVÉS (bouton « 🎯 Calibrer la tablette »)");
+            List<TobiiTools.Tool> tools;
+            try { tools = TobiiTools.FindCalibrationTools(); } catch { tools = new List<TobiiTools.Tool>(); }
+            if (tools.Count == 0) sb.AppendLine("  (aucun)");
+            foreach (var t in tools) sb.AppendLine("  • " + t.Name + " — " + t.Path);
+            sb.AppendLine();
             sb.AppendLine("PROGRAMMES TOBII EN MARCHE");
             var procs = RunningTobii();
             if (procs.Count == 0) sb.AppendLine("  (aucun)");

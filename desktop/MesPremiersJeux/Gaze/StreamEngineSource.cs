@@ -28,8 +28,16 @@ namespace MesPremiersJeux.Gaze
         /// <summary>Présence : un point valide vient d'arriver (ou non).</summary>
         public event Action<bool> Presence;
 
-        // Pas de position des yeux ici (interface commune) — jamais levé.
-        public event Action<EyeSample> Eyes { add { } remove { } }
+        /// <summary>Position des yeux dans la boîte de suivi (0..1), hors thread UI.</summary>
+        public event Action<EyeSample> Eyes;
+
+        private long _eyeEvents;
+
+        /// <summary>Diagnostic : positions des yeux reçues.</summary>
+        public long EyeEvents => _eyeEvents;
+
+        /// <summary>État de l'abonnement à la position des yeux (pour la fenêtre des yeux).</summary>
+        public string EyeStatus { get; private set; } = "non demandé";
 
         private long _events, _valid;
 
@@ -60,6 +68,7 @@ namespace MesPremiersJeux.Gaze
         private Thread _thread;
         private volatile bool _running;
         private GazeCallback _callback; // gardé en vie : appelé depuis le code natif
+        private EyePosCallback _eyeCallback;
 
         /// <param name="dllPath">Chemin complet de tobii_stream_engine.dll
         /// (null = celle fournie avec l'application).</param>
@@ -168,6 +177,8 @@ namespace MesPremiersJeux.Gaze
                 _unsubscribe = Fn<DeviceFn>("tobii_gaze_point_unsubscribe");
                 _deviceDestroy = Fn<DeviceFn>("tobii_device_destroy");
                 _apiDestroy = Fn<DeviceFn>("tobii_api_destroy");
+                _eyeSubscribe = Fn<EyeSubscribeFn>("tobii_eye_position_normalized_subscribe");
+                _eyeUnsubscribe = Fn<DeviceFn>("tobii_eye_position_normalized_unsubscribe");
                 if (apiCreate == null || enumerate == null || subscribe == null || _process == null)
                 { Fail("fonctions du moteur introuvables dans cette version"); return; }
 
@@ -207,6 +218,7 @@ namespace MesPremiersJeux.Gaze
                 IsAvailable = true;
                 Status = "abonné au regard (" + _label + ", " + urls[0] + ")";
                 Lib.Log.Write("stream", "Stream Engine : " + Status);
+                SubscribeEyes();
 
                 int failures = 0, kicks = 0;
                 var nextKick = DateTime.MinValue;
@@ -237,12 +249,14 @@ namespace MesPremiersJeux.Gaze
                                 if (_device != IntPtr.Zero)
                                 {
                                     _unsubscribe?.Invoke(_device);
+                                    if (_eyeCallback != null) _eyeUnsubscribe?.Invoke(_device);
                                     _deviceDestroy?.Invoke(_device);
                                     _device = IntPtr.Zero;
                                 }
                                 var ce = CreateDevice();
                                 var se = ce == Err.NoError ? subscribe(_device, _callback, IntPtr.Zero) : ce;
                                 Lib.Log.Write("stream", "Appareil recréé : " + ce + " / abonnement : " + se);
+                                if (se == Err.NoError) SubscribeEyes();
                             }
                         }
                         catch (Exception ex) { Lib.Log.Write("stream", "Relance : " + ex.Message); }
@@ -307,6 +321,41 @@ namespace MesPremiersJeux.Gaze
             Presence?.Invoke(ok);
         }
 
+        // Position des yeux (facultative) : pour « Vérifier la position des yeux »
+        // et la référence de tête de l'étoile. Un refus n'empêche pas le regard.
+        private void SubscribeEyes()
+        {
+            if (_eyeSubscribe == null) { EyeStatus = "non proposée par ce moteur"; Lib.Log.Write("stream", "Position des yeux : " + EyeStatus); return; }
+            try
+            {
+                _eyeCallback = OnEyePos;
+                var err = _eyeSubscribe(_device, _eyeCallback, IntPtr.Zero);
+                if (err != Err.NoError) _eyeCallback = null;
+                EyeStatus = err == Err.NoError ? "abonné"
+                    : "refusée (" + err + (err == Err.InsufficientLicense ? " : réservée aux logiciels licenciés" : "") + ")";
+            }
+            catch (Exception ex) { _eyeCallback = null; EyeStatus = "erreur : " + ex.Message; }
+            Lib.Log.Write("stream", "Position des yeux : " + EyeStatus);
+        }
+
+        private void OnEyePos(ref EyePosData d, IntPtr userData)
+        {
+            try
+            {
+                if (++_eyeEvents == 1)
+                    Lib.Log.Write("stream", FormattableString.Invariant(
+                        $"1re position des yeux : G={d.LeftValidity} ({d.LX:0.##};{d.LY:0.##};{d.LZ:0.##}) D={d.RightValidity} ({d.RX:0.##};{d.RY:0.##};{d.RZ:0.##})"));
+                Eyes?.Invoke(new EyeSample
+                {
+                    HasLeft = d.LeftValidity == 1,
+                    HasRight = d.RightValidity == 1,
+                    LX = d.LX, LY = d.LY, LZ = d.LZ,
+                    RX = d.RX, RY = d.RY, RZ = d.RZ,
+                });
+            }
+            catch { /* jamais d'erreur vers le moteur natif */ }
+        }
+
         private void Fail(string why)
         {
             Status = why;
@@ -333,6 +382,7 @@ namespace MesPremiersJeux.Gaze
                 if (_device != IntPtr.Zero)
                 {
                     _unsubscribe?.Invoke(_device);
+                    if (_eyeCallback != null) _eyeUnsubscribe?.Invoke(_device);
                     _deviceDestroy?.Invoke(_device);
                 }
                 if (_api != IntPtr.Zero) _apiDestroy?.Invoke(_api);
@@ -356,7 +406,8 @@ namespace MesPremiersJeux.Gaze
             return p == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer(p, typeof(T)) as T;
         }
 
-        private DeviceFn _process, _reconnect, _unsubscribe, _deviceDestroy, _apiDestroy;
+        private DeviceFn _process, _reconnect, _unsubscribe, _deviceDestroy, _apiDestroy, _eyeUnsubscribe;
+        private EyeSubscribeFn _eyeSubscribe;
 
         private enum Err
         {
@@ -376,6 +427,24 @@ namespace MesPremiersJeux.Gaze
             public int Validity;   // 1 = valide
             public float X, Y;     // 0..1 sur la zone d'affichage de l'écran
         }
+
+        // tobii_eye_position_normalized_t : position de chaque œil dans la boîte
+        // de suivi, 0..1 sur chaque axe.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct EyePosData
+        {
+            public long TimestampUs;
+            public int LeftValidity;   // 1 = valide
+            public float LX, LY, LZ;
+            public int RightValidity;
+            public float RX, RY, RZ;
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void EyePosCallback(ref EyePosData data, IntPtr userData);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate Err EyeSubscribeFn(IntPtr device, EyePosCallback callback, IntPtr userData);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void GazeCallback(ref GazePointData gazePoint, IntPtr userData);

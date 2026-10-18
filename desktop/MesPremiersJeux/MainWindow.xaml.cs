@@ -512,6 +512,7 @@ namespace MesPremiersJeux
             var st = new StreamEngineSource(dllPath);
             st.Gaze += p => _dwell.PushGaze(p);
             st.Presence += v => _dwell.PushEye(v);
+            st.Eyes += s => _dwell.PushHead(s); // tête (référence de l'étoile)
             return st;
         }
 
@@ -709,7 +710,9 @@ namespace MesPremiersJeux
             SettingsPopup.IsOpen = false;
             // La fenêtre des yeux utilise la meilleure source disponible, et affiche
             // la fiche technique du tracker (diagnostic licence/capacités).
-            IEyeStream src = _pro?.IsAvailable == true ? (IEyeStream)_pro : _gaze;
+            // Moteur Tobii direct (PCEye 5…) d'abord, puis Pro SDK, puis grand public.
+            IEyeStream src = _stream?.IsAvailable == true ? _stream
+                : _pro?.IsAvailable == true ? (IEyeStream)_pro : _gaze;
             if (src == null)
             {
                 MessageBox.Show(this,
@@ -718,9 +721,106 @@ namespace MesPremiersJeux
                     "Position des yeux");
                 return;
             }
-            new EyeTrackWindow(src,
-                _pro?.IsAvailable == true ? _pro.Diagnostic + "\nFlux de regard : " + _pro.Stats : null)
-            { Owner = this }.ShowDialog();
+            string diag =
+                src == _stream ? "Moteur Tobii direct (" + _stream.Status + ")\nRegard : " + _stream.Stats +
+                                 " · position des yeux : " + _stream.EyeStatus + " (" + _stream.EyeEvents + " reçues)"
+                : src == _pro ? _pro.Diagnostic + "\nFlux de regard : " + _pro.Stats
+                : null;
+            new EyeTrackWindow(src, diag, CalibrateDevice) { Owner = this }.ShowDialog();
+        }
+
+        private void DeviceCalib_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            CalibrateDevice();
+        }
+
+        // 🎯 Calibrage de la TABLETTE (logiciel Tobii / Tobii Dynavox installé),
+        // sans TD Control. Pendant ce temps : pas de clics au regard chez nous,
+        // et notre fenêtre quitte le premier plan pour laisser la place.
+        private void CalibrateDevice()
+        {
+            List<Lib.TobiiTools.Tool> tools;
+            try { tools = Lib.TobiiTools.FindCalibrationTools(); }
+            catch (Exception ex) { Lib.Log.Write("calib", "Recherche des outils : " + ex.Message); tools = new List<Lib.TobiiTools.Tool>(); }
+            if (tools.Count == 0)
+            {
+                MessageBox.Show(this,
+                    "Aucun programme de calibrage Tobii n'a été trouvé sur cette tablette.\n\n" +
+                    "Calibre depuis l'icône Tobii près de l'horloge (en bas à droite), puis reviens ici.\n" +
+                    "« 🔎 Rapport du regard » liste les logiciels Tobii installés.",
+                    "Calibrer la tablette");
+                return;
+            }
+            if (tools.Count == 1 || tools[0].Rank == 0 && tools.Count(t => t.Rank == 0) == 1) { LaunchTool(tools[0]); return; }
+
+            // Plusieurs candidats : le parent choisit (gros boutons).
+            var win = new Window
+            {
+                Title = "Calibrer la tablette", Owner = this, SizeToContent = SizeToContent.WidthAndHeight,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize,
+                Topmost = true,
+            };
+            var panel = new StackPanel { Margin = new Thickness(20), MinWidth = 420 };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Quel programme Tobii ouvrir pour calibrer ?", FontSize = 18, FontWeight = FontWeights.Bold,
+                Margin = new Thickness(0, 0, 0, 12),
+            });
+            foreach (var t in tools)
+            {
+                var b = new Button
+                {
+                    Content = (t.Rank == 0 ? "🎯 " : "⚙ ") + t.Name, FontSize = 16, Padding = new Thickness(12, 10, 12, 10),
+                    Margin = new Thickness(0, 0, 0, 8), HorizontalContentAlignment = HorizontalAlignment.Left,
+                    ToolTip = t.Path,
+                };
+                var tool = t;
+                b.Click += (s2, e2) => { win.Close(); LaunchTool(tool); };
+                panel.Children.Add(b);
+            }
+            var cancel = new Button { Content = "Annuler", FontSize = 14, Padding = new Thickness(12, 6, 12, 6), HorizontalAlignment = HorizontalAlignment.Right };
+            cancel.Click += (s2, e2) => win.Close();
+            panel.Children.Add(cancel);
+            win.Content = panel;
+            GazeGate.Push();
+            win.Closed += (s2, e2) => GazeGate.Pop();
+            win.ShowDialog();
+        }
+
+        private void LaunchTool(Lib.TobiiTools.Tool tool)
+        {
+            Lib.Log.Write("calib", "Lancement : " + tool.Path);
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tool.Path)
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = System.IO.Path.GetDirectoryName(tool.Path),
+                });
+            }
+            catch (Exception ex)
+            {
+                Lib.Log.Write("calib", "Lancement impossible : " + ex.Message);
+                MessageBox.Show(this, "Impossible d'ouvrir « " + tool.Name + " » :\n" + ex.Message, "Calibrer la tablette");
+                return;
+            }
+
+            // Le temps du calibrage : regard en pause ici, fenêtre en arrière-plan.
+            // On reprend dès que l'application revient au premier plan.
+            GazeGate.Push();
+            Topmost = false;
+            var since = DateTime.Now;
+            EventHandler back = null;
+            back = (s, e) =>
+            {
+                if ((DateTime.Now - since).TotalSeconds < 3) return; // le temps que l'outil s'ouvre
+                Activated -= back;
+                Topmost = _isFullscreen;
+                GazeGate.Pop();
+                Lib.Log.Write("calib", "Retour dans l'application : regard réactivé");
+            };
+            Activated += back;
         }
 
         private void GazeMode_Changed(object sender, RoutedEventArgs e) => ApplyGazeMode();

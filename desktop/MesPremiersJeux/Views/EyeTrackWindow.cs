@@ -28,7 +28,7 @@ namespace MesPremiersJeux.Views
         private EyeSample _latest;
         private DateTime _lastEye = DateTime.MinValue;
 
-        public EyeTrackWindow(IEyeStream gaze, string diagnostic = null)
+        public EyeTrackWindow(IEyeStream gaze, string diagnostic = null, Action calibrate = null)
         {
             _gaze = gaze;
             Gaze.GazeGate.Push();
@@ -94,9 +94,18 @@ namespace MesPremiersJeux.Views
             };
             root.Children.Add(_status);
 
-            var close = new Button { Content = "Fermer", FontSize = 16, Padding = new Thickness(22, 10, 22, 10), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 18) };
+            // Bien placé ? On enchaîne avec le calibrage de la tablette.
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 18) };
+            if (calibrate != null)
+            {
+                var calib = new Button { Content = "🎯 Calibrer la tablette", FontSize = 16, Padding = new Thickness(22, 10, 22, 10), Margin = new Thickness(0, 0, 12, 0) };
+                calib.Click += (s, e) => { Close(); calibrate(); };
+                buttons.Children.Add(calib);
+            }
+            var close = new Button { Content = "Fermer", FontSize = 16, Padding = new Thickness(22, 10, 22, 10) };
             close.Click += (s, e) => Close();
-            root.Children.Add(close);
+            buttons.Children.Add(close);
+            root.Children.Add(buttons);
 
             // Fiche technique du tracker (diagnostic) : petit texte en bas.
             if (!string.IsNullOrEmpty(diagnostic))
