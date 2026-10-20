@@ -93,6 +93,7 @@ namespace MesPremiersJeux.Lib
                 _tts = new SpeechSynthesizer();
                 try { _tts.SelectVoiceByHints(VoiceGender.Female, VoiceAge.Adult, 0, new CultureInfo("fr-FR")); }
                 catch { }
+                try { _defaultVoice = _tts.Voice.Name; } catch { }
                 _tts.Rate = 0;
                 _tts.SpeakProgress += (s, e) =>
                 {
@@ -128,10 +129,110 @@ namespace MesPremiersJeux.Lib
             catch { return new List<string>(); }
         }
 
+        private static string _defaultVoice; // la voix française de départ (retour après l'anglais)
+
         private static void ApplyVoice()
         {
-            if (_tts == null || string.IsNullOrEmpty(VoiceName)) return;
-            try { if (_tts.Voice.Name != VoiceName) _tts.SelectVoice(VoiceName); } catch { }
+            if (_tts == null) return;
+            var want = string.IsNullOrEmpty(VoiceName) ? _defaultVoice : VoiceName;
+            if (string.IsNullOrEmpty(want)) return;
+            try { if (_tts.Voice.Name != want) _tts.SelectVoice(want); } catch { }
+        }
+
+        // ------------------------------------------------------------------
+        //  🇬🇧 L'ANGLAIS : voix Azure anglaise (enfant) si configurée, sinon une
+        //  voix anglaise installée dans Windows, sinon la voix française qui
+        //  lit une écriture « à la française » du mot (hello → « hèlo-ou »).
+        // ------------------------------------------------------------------
+        private static string _englishVoice; // nom de la voix anglaise locale (ou "" = aucune)
+
+        /// <summary>Comment l'anglais sera dit (pour les réglages / le journal).</summary>
+        public static string EnglishMode()
+        {
+            if (AzureTts.Enabled) return "voix naturelle Azure (anglais)";
+            return string.IsNullOrEmpty(FindEnglishVoice()) ? "voix française (à défaut de voix anglaise installée)" : "voix Windows anglaise : " + _englishVoice;
+        }
+
+        private static string FindEnglishVoice()
+        {
+            if (_englishVoice != null) return _englishVoice;
+            Ensure();
+            _englishVoice = "";
+            try
+            {
+                foreach (var v in _tts.GetInstalledVoices())
+                    if (v.Enabled && v.VoiceInfo.Culture.TwoLetterISOLanguageName == "en")
+                    {
+                        _englishVoice = v.VoiceInfo.Name;
+                        if (v.VoiceInfo.Gender == VoiceGender.Female) break; // on préfère une voix féminine
+                    }
+            }
+            catch { }
+            return _englishVoice;
+        }
+
+        public static void SayEnglish(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text) || Hold) return;
+            _gate = false; // un mot anglais ne bloque jamais le clic
+            if (AzureTts.Enabled)
+            {
+                LocalStop();
+                MarkBusy(2.5); // occupée le temps que l'audio arrive (la durée exacte suivra)
+                AzureTts.SpeakLang(text, "en-US", "en-US-AnaNeural", Pitch, () => LocalSayEnglish(text));
+                return;
+            }
+            LocalSayEnglish(text);
+        }
+
+        private static void LocalSayEnglish(string text)
+        {
+            Ensure();
+            if (_tts == null) return;
+            try
+            {
+                _pageMode = false;
+                _tts.SpeakAsyncCancelAll();
+                _tts.Rate = -2; // un peu plus lent : l'enfant découvre les sons
+                _busyStart = DateTime.Now;
+                var en = FindEnglishVoice();
+                if (!string.IsNullOrEmpty(en))
+                {
+                    try { _tts.SelectVoice(en); } catch { en = ""; }
+                }
+                if (!string.IsNullOrEmpty(en)) _tts.SpeakAsync(text);
+                else { ApplyVoice(); _tts.SpeakAsync(FrenchSpelling(text)); }
+            }
+            catch { }
+        }
+
+        // Écriture « à la française » des mots anglais de l'application, pour
+        // la voix française quand aucune voix anglaise n'est disponible.
+        private static readonly Dictionary<string, string> EnglishAsFrench = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hello"] = "hèlo-ou", ["bye-bye"] = "baille baille", ["goodbye"] = "goude baille", ["thank you"] = "sènn kiou",
+            ["please"] = "plize", ["yes"] = "yèsse", ["no"] = "no-ou", ["good morning"] = "goude morningue",
+            ["cat"] = "kate", ["dog"] = "dogue", ["fish"] = "fiche", ["bird"] = "beurde", ["rabbit"] = "rabite",
+            ["cow"] = "kaou", ["pig"] = "pigue", ["duck"] = "deuk", ["frog"] = "frogue", ["lion"] = "laï-onne",
+            ["horse"] = "horse", ["sheep"] = "chipe", ["mouse"] = "maouce", ["bear"] = "bère", ["elephant"] = "élifeunte",
+            ["monkey"] = "meunki", ["butterfly"] = "beuteurflaï", ["turtle"] = "teurteul",
+            ["apple"] = "apeul", ["banana"] = "beunana", ["strawberry"] = "strobéri", ["cake"] = "kéïke", ["milk"] = "milke",
+            ["car"] = "kar", ["house"] = "haouce", ["sun"] = "seunne", ["moon"] = "moune", ["star"] = "star",
+            ["flower"] = "flaoueur", ["book"] = "bouk", ["ball"] = "bol", ["train"] = "tréïne", ["boat"] = "bo-oute",
+            ["red"] = "rède", ["blue"] = "blou", ["yellow"] = "yèlo-ou", ["green"] = "grine", ["pink"] = "pinke", ["orange"] = "orinje",
+            ["one"] = "ouanne", ["two"] = "tou", ["three"] = "sri", ["four"] = "for", ["five"] = "faïve",
+            ["where is the"] = "ouère ize ze", ["show me"] = "cho-ou mi", ["how many"] = "haou mèni", ["very good"] = "véri goude",
+            ["the"] = "ze", ["is"] = "ize", ["it's"] = "itse", ["well done"] = "ouèl deune", ["let's count"] = "lètse kaounte",
+            ["good night"] = "goude naïte", ["i love you"] = "aï love you", ["my name is"] = "maï néïme ize",
+        };
+
+        private static string FrenchSpelling(string text)
+        {
+            var t = text;
+            foreach (var kv in EnglishAsFrench.OrderByDescending(k => k.Key.Length))
+                t = System.Text.RegularExpressions.Regex.Replace(t, @"(?<![\p{L}])" + System.Text.RegularExpressions.Regex.Escape(kv.Key) + @"(?![\p{L}])",
+                    kv.Value, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return t;
         }
 
         private static string Ssml(string text)

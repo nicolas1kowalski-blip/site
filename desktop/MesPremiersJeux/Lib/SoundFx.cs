@@ -279,6 +279,108 @@ namespace MesPremiersJeux.Lib
             });
         }
 
+        // ------------------------------------------------------------------
+        //  🎵 LE PETIT ORCHESTRE : des timbres d'instruments synthétisés (le
+        //  parent peut déposer de VRAIS sons dans Contenu\Sons : tambour.wav,
+        //  guitare.wav, xylophone.wav, piano.wav, trompette.wav, violon.wav).
+        // ------------------------------------------------------------------
+        private static readonly double[] Major = { 261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88, 523.25 }; // do ré mi fa sol la si do
+
+        /// <summary>Joue la note n° <paramref name="degree"/> (0 = do … 7 = do aigu)
+        /// avec le timbre demandé (xylophone par défaut).</summary>
+        public static void PlayNote(int degree, string timbre = "xylophone", double dur = 0.55)
+        {
+            int d = Math.Max(0, Math.Min(Major.Length - 1, degree));
+            Play(timbre + "-n" + d + "-" + (int)(dur * 100), () => Timbre(timbre, Major[d], dur, 0.5));
+        }
+
+        /// <summary>Le petit motif de présentation d'un instrument (3 notes, ou
+        /// 3 coups pour le tambour).</summary>
+        public static void Instrument(string name)
+        {
+            Play("instr-" + name, name, () =>
+            {
+                var parts = new List<float[]>();
+                if (name == "tambour")
+                {
+                    for (int k = 0; k < 3; k++) { parts.Add(DrumHit(k == 2 ? 0.9 : 0.7)); parts.Add(Silence(k == 1 ? 0.12 : 0.22)); }
+                    return Concat(parts);
+                }
+                int[] motif = { 0, 2, 4 };
+                foreach (var d in motif) { parts.Add(Timbre(name, Major[d], name == "violon" || name == "trompette" ? 0.45 : 0.4, 0.5)); parts.Add(Silence(0.05)); }
+                parts.Add(Timbre(name, Major[7], 0.7, 0.5));
+                return Concat(parts);
+            });
+        }
+
+        private static float[] DrumHit(double vol)
+        {
+            var rng = new Random(11);
+            int n = (int)(Rate * 0.22);
+            var s = new float[n];
+            double lp = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double t = i / (double)n;
+                double tone = Math.Sin(2 * Math.PI * (130 - 40 * t) * i / Rate) * Math.Exp(-9 * t);
+                double noise = rng.NextDouble() * 2 - 1;
+                lp += 0.25 * (noise - lp);
+                s[i] = (float)((tone + lp * 0.25 * Math.Exp(-18 * t)) * vol);
+            }
+            return s;
+        }
+
+        // Un timbre par instrument : enveloppe et harmoniques différentes.
+        private static float[] Timbre(string name, double f, double dur, double vol)
+        {
+            if (name == "tambour") return DrumHit(vol * 1.4);
+            int n = (int)(Rate * dur);
+            var s = new float[n];
+            double phase = 0;
+            var rng = new Random(5);
+            for (int i = 0; i < n; i++)
+            {
+                double t = i / (double)n;
+                double ts = i / (double)Rate;
+                double w, env;
+                switch (name)
+                {
+                    case "guitare": // corde pincée : attaque nette, décroissance, harmoniques riches
+                        phase += 2 * Math.PI * f / Rate;
+                        w = Math.Sin(phase) + 0.5 * Math.Sin(2 * phase) + 0.25 * Math.Sin(3 * phase) + 0.12 * Math.Sin(4 * phase);
+                        env = Math.Exp(-4.5 * ts / dur) * Math.Min(1, ts * 400);
+                        break;
+                    case "piano": // attaque douce-nette, décroissance régulière, 2 harmoniques
+                        phase += 2 * Math.PI * f / Rate;
+                        w = Math.Sin(phase) + 0.35 * Math.Sin(2 * phase) + 0.1 * Math.Sin(3 * phase);
+                        env = Math.Exp(-3 * ts / dur) * Math.Min(1, ts * 250);
+                        break;
+                    case "trompette": // cuivre : harmoniques impaires fortes, attaque franche, tenue
+                        phase += 2 * Math.PI * f / Rate;
+                        w = Math.Sin(phase) + 0.6 * Math.Sin(2 * phase) + 0.45 * Math.Sin(3 * phase) + 0.25 * Math.Sin(5 * phase);
+                        env = Math.Min(1, ts * 60) * (t < 0.85 ? 1 : (1 - t) / 0.15);
+                        w *= 0.6;
+                        break;
+                    case "violon": // archet : attaque lente, vibrato, tenue
+                        {
+                            double vib = 1 + 0.008 * Math.Sin(2 * Math.PI * 5.5 * ts);
+                            phase += 2 * Math.PI * f * vib / Rate;
+                            w = Math.Sin(phase) + 0.4 * Math.Sin(2 * phase) + 0.3 * Math.Sin(3 * phase) + 0.15 * Math.Sin(4 * phase);
+                            env = Math.Min(1, ts * 12) * (t < 0.8 ? 1 : (1 - t) / 0.2);
+                            w *= 0.7;
+                        }
+                        break;
+                    default: // xylophone : son clair et bref, harmonique haute, décroissance rapide
+                        phase += 2 * Math.PI * f / Rate;
+                        w = Math.Sin(phase) + 0.3 * Math.Sin(3.9 * phase) * Math.Exp(-8 * ts);
+                        env = Math.Exp(-6 * ts / dur) * Math.Min(1, ts * 600);
+                        break;
+                }
+                s[i] = (float)Math.Max(-1, Math.Min(1, w * env * vol));
+            }
+            return s;
+        }
+
         /// <summary>Coup de tambour rond et doux — pour SCANDER les syllabes.</summary>
         public static void Drum()
         {

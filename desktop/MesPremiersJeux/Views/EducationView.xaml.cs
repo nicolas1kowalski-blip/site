@@ -66,6 +66,15 @@ namespace MesPremiersJeux.Views
             },
             new Theme
             {
+                Icon = "🎵", Name = "Musique et anglais", Tint = Color.FromRgb(0xFF, 0xF3, 0xD6),
+                Activities = new (string, string, string, Func<Action, UserControl>)[]
+                {
+                    ("🎵", "Le petit orchestre", "PS · MS", c => new MusicSchoolGame(c)),
+                    ("🇬🇧", "Hello ! L'anglais", "PS · MS", c => new EnglishGame(c)),
+                },
+            },
+            new Theme
+            {
                 Icon = "🚀", Name = "Le monde et l'espace", Tint = Color.FromRgb(0xF1, 0xE6, 0xFF),
                 Activities = new (string, string, string, Func<Action, UserControl>)[]
                 {

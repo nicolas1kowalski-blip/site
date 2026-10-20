@@ -67,6 +67,37 @@ namespace MesPremiersJeux.Lib
             catch { onFail?.Invoke(); }
         }
 
+        /// <summary>Parle dans une AUTRE LANGUE (l'anglais : voix d'enfant
+        /// « Ana »), avec la hauteur de l'application.</summary>
+        public static async void SpeakLang(string text, string lang, string voice, double pitch, Action onFail)
+        {
+            try
+            {
+                Directory.CreateDirectory(CacheDir);
+                var keyText = voice + "|" + (int)pitch + "|" + lang + "|" + text;
+                string hash;
+                using (var sha = SHA1.Create())
+                    hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(keyText))).Replace("-", "");
+                var path = Path.Combine(CacheDir, hash + ".wav");
+                if (!File.Exists(path))
+                {
+                    var sign = pitch >= 0 ? "+" : "";
+                    var ssml =
+                        $"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang}'>" +
+                        $"<voice name='{voice}'>" +
+                        $"<prosody pitch='{sign}{(int)pitch}%' rate='-10%'>" +
+                        SecurityElement.Escape(text) +
+                        "</prosody></voice></speak>";
+                    await Fetch(ssml, path);
+                }
+                StopPlayback();
+                Speech.MarkBusy(WavDurationSeconds(path) + 0.25);
+                _player = new SoundPlayer(path);
+                _player.Play();
+            }
+            catch { onFail?.Invoke(); }
+        }
+
         /// <summary>Comme <see cref="Speak"/>, mais avec une vitesse ajustée
         /// (ratePercent négatif = plus lent — pour les sons des lettres).</summary>
         public static async void SpeakRate(string text, double pitch, int ratePercent, Action onFail)
