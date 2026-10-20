@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -138,8 +140,9 @@ namespace MesPremiersJeux.Views
                 Margin = new Thickness(0),
             }, 22, 10));
 
-            // Les trois cartes « fun » : l'ami du jour · mes étoiles · surprise.
-            var cards = new UniformGrid { Columns = 3, Margin = new Thickness(0, 16, 0, 10), HorizontalAlignment = HorizontalAlignment.Center };
+            // Les quatre cartes : dire bonjour · l'ami du jour · mes étoiles · surprise.
+            var cards = new UniformGrid { Columns = 4, Margin = new Thickness(0, 16, 0, 10), HorizontalAlignment = HorizontalAlignment.Center };
+            cards.Children.Add(HelloCard(name));
             column.Children.Add(cards);
 
             var friend = Friend(now);
@@ -343,6 +346,59 @@ namespace MesPremiersJeux.Views
             Child = child,
         };
 
+        // 👋 DIRE BONJOUR : la carte parle POUR l'enfant. Avec les photos de la
+        // famille (Contenu\Famille), chaque regard salue quelqu'un d'autre
+        // (« Bonjour Papa ! », photo à l'appui), puis tout le monde.
+        private Button HelloCard(string childName)
+        {
+            var host = new Grid { Width = 150, Height = 150 };
+            var wave = new TextBlock { Text = "👋", FontSize = 110, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            host.Children.Add(wave);
+            var card = Card(host, "Dire bonjour", "Bonjour !", Color.FromRgb(0xDD, 0xEE, 0xFF));
+
+            List<(string Name, string Path)> family;
+            try { family = UserContent.LoadFamily().Take(8).ToList(); } catch { family = new List<(string, string)>(); }
+            int turn = -1;
+            card.Click += (s, e) =>
+            {
+                SoundFx.PopSound();
+                string hello = Hello(DateTime.Now);
+                string text;
+                FrameworkElement pic = wave;
+                if (family.Count > 0)
+                {
+                    turn = (turn + 1) % (family.Count + 1);
+                    if (turn < family.Count)
+                    {
+                        var f = family[turn];
+                        text = hello + " " + Cap(f.Name) + " !";
+                        try
+                        {
+                            pic = new Border
+                            {
+                                CornerRadius = new CornerRadius(24), ClipToBounds = true, Width = 150, Height = 150,
+                                Child = new Image { Source = UserContent.LoadBitmap(f.Path, 400), Stretch = Stretch.UniformToFill },
+                            };
+                        }
+                        catch { pic = wave; }
+                    }
+                    else text = hello + " tout le monde ! C'est " + childName + " !";
+                }
+                else
+                {
+                    string[] v = { hello + " !", "Coucou !", hello + " tout le monde !", hello + ", c'est " + childName + " !" };
+                    turn = (turn + 1) % v.Length;
+                    text = v[turn];
+                }
+                host.Children.Clear();
+                host.Children.Add(pic);
+                Bounce(pic);
+                Speech.Say(text);
+                GazeStats.RecordComm("bonjour");
+            };
+            return card;
+        }
+
         private static Button Card(FrameworkElement pic, string title, string sub, Color tint)
         {
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
@@ -363,7 +419,7 @@ namespace MesPremiersJeux.Views
             var b = new Button
             {
                 Style = (Style)Application.Current.Resources["MenuTile"],
-                Width = 300, Height = 300,
+                Width = 270, Height = 290,
                 Background = new SolidColorBrush(tint),
                 Content = new Viewbox { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(12), Child = content },
             };
