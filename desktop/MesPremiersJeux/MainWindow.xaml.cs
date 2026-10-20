@@ -98,13 +98,25 @@ namespace MesPremiersJeux
             _comm.CloseRequested += CloseComm;
             _commBtn = CommBoard.MakeOpenButton();
             _commBtn.Click += (s, e) => OpenComm();
+            _yesNo = CommBoard.MakeYesNoBar();
             int gi = RootGrid.Children.IndexOf(GazeLayer);
-            RootGrid.Children.Insert(gi, _commBtn);
-            RootGrid.Children.Insert(gi + 1, _comm);
+            RootGrid.Children.Insert(gi, _yesNo);
+            RootGrid.Children.Insert(gi + 1, _commBtn);
+            RootGrid.Children.Insert(gi + 2, _comm);
         }
 
         private CommBoard _comm;
         private Button _commBtn;
+        private FrameworkElement _yesNo;
+
+        private void YesNo_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return;
+            _settings.YesNoButtons = YesNoCheck.IsChecked == true;
+            _settings.Save();
+            if (_yesNo != null && !CommBoard.IsOpen)
+                _yesNo.Visibility = _settings.YesNoButtons ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         private void OpenComm()
         {
@@ -112,6 +124,7 @@ namespace MesPremiersJeux
             Speech.Hold = true;              // les jeux se taisent, la grille parle
             GazeTargets.ModalRoot = _comm;   // le regard ne vise que la grille
             _commBtn.Visibility = Visibility.Collapsed;
+            _yesNo.Visibility = Visibility.Collapsed;
             _comm.Visibility = Visibility.Visible;
             _comm.Open();
         }
@@ -123,6 +136,7 @@ namespace MesPremiersJeux
             GazeTargets.ModalRoot = null;
             Speech.Hold = false;
             _commBtn.Visibility = _settings == null || _settings.CommButton ? Visibility.Visible : Visibility.Collapsed;
+            _yesNo.Visibility = _settings == null || _settings.YesNoButtons ? Visibility.Visible : Visibility.Collapsed;
             Speech.Say("On reprend !");
         }
 
@@ -294,8 +308,10 @@ namespace MesPremiersJeux
                 if (DwellSlider != null) DwellSlider.Value = v;
             };
             CommBtnCheck.IsChecked = _settings.CommButton;
+            YesNoCheck.IsChecked = _settings.YesNoButtons;
             AutoDwellCheck.IsChecked = _settings.AutoDwell;
             _commBtn.Visibility = _settings.CommButton ? Visibility.Visible : Visibility.Collapsed;
+            _yesNo.Visibility = _settings.YesNoButtons ? Visibility.Visible : Visibility.Collapsed;
 
             // Bilan de session (carte de chaleur + compteurs).
             SessionLog.Init();

@@ -62,6 +62,8 @@ namespace MesPremiersJeux.Views
                     ("📿", "Le collier de perles", "MS", c => new NecklaceGame(c)),
                     ("🖼️", "L'imagier", "PS · MS", c => new VocabGame(c)),
                     ("🧒", "Le corps", "PS · MS", c => new BodyGame(c)),
+                    ("😊", "Les émotions", "PS · MS", c => new EmotionsGame(c)),
+                    ("🏠", "Range la maison", "PS · MS", c => new TidyHouseGame(c)),
                 },
             },
             new Theme

@@ -287,6 +287,57 @@ namespace MesPremiersJeux.Views
             return b;
         }
 
+        /// <summary>✅ ❌ OUI / NON toujours à portée de regard (coin bas gauche) :
+        /// pour répondre à une question qu'on lui pose, sans ouvrir la grille.</summary>
+        public static FrameworkElement MakeYesNoBar()
+        {
+            var bar = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(8, 0, 0, 8),
+            };
+            bar.Children.Add(YesNoButton("✓", "Oui", "Oui !", "oui", Color.FromRgb(0x4C, 0xC2, 0x6B), Color.FromRgb(0x2E, 0x9E, 0x4F)));
+            bar.Children.Add(YesNoButton("✗", "Non", "Non !", "non", Color.FromRgb(0xFF, 0x7A, 0x7A), Color.FromRgb(0xE0, 0x4A, 0x4A)));
+            return bar;
+        }
+
+        private static Button YesNoButton(string glyph, string label, string say, string key, Color c1, Color c2)
+        {
+            var b = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = 118,
+                Height = 118,
+                Margin = new Thickness(0, 0, 8, 0),
+                Background = new LinearGradientBrush(c1, c2, 90),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(5),
+                ToolTip = label,
+                Content = new StackPanel
+                {
+                    Children =
+                    {
+                        new TextBlock { Text = glyph, FontSize = 48, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, -4, 0, -6) },
+                        new TextBlock { Text = label, FontSize = 24, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center },
+                    },
+                },
+            };
+            b.Click += (o, ev) =>
+            {
+                if (!VoiceBank.Play("comm-" + key)) Speech.SayAlways(say);
+                GazeStats.RecordComm(key);
+                var sc = new ScaleTransform(1, 1);
+                b.RenderTransformOrigin = new Point(0.5, 0.5);
+                b.RenderTransform = sc;
+                var a = new DoubleAnimation(1, 1.18, TimeSpan.FromMilliseconds(150)) { AutoReverse = true };
+                sc.BeginAnimation(ScaleTransform.ScaleXProperty, a);
+                sc.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+            };
+            return b;
+        }
+
         /// <summary>Ouverture : la grille s'annonce (« J'ai quelque chose à dire ! »).</summary>
         public void Open()
         {
