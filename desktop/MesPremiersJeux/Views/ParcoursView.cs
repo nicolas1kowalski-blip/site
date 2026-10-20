@@ -213,24 +213,31 @@ namespace MesPremiersJeux.Views
                 // La dernière étape : LA BOUTIQUE !
                 Chrome.Immersive = false;
                 _host.Children.Clear();
-                Speech.Say("Ton parcours est fini ! Bravo ! Et maintenant... ta boutique !");
-                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3.2) };
-                t.Tick += (s, e) => { t.Stop(); ShopRequested?.Invoke(); };
-                t.Start();
+                Speech.WhenQuiet(() =>
+                {
+                    Speech.Say("Ton parcours est fini ! Bravo ! Et maintenant... ta boutique !");
+                    Speech.WhenQuiet(() => ShopRequested?.Invoke(), 3.2);
+                }, 0, 6);
                 return;
             }
 
             _starsInStep = 0;
-            Speech.Say("Et maintenant... " + step.Say + " !");
             _host.Children.Clear();
-            try { _host.Children.Add(step.Make(OnStepCelebrate)); }
-            catch { NextStep(); return; }
-            Chrome.Immersive = true; // PLEIN ÉCRAN pendant le jeu (la frise reste)
+            Speech.Say("Et maintenant... " + step.Say + " !");
+            // Le jeu n'arrive qu'une fois l'annonce finie : sa consigne ne la coupe pas.
+            int idx = _current;
+            Speech.WhenQuiet(() =>
+            {
+                if (_current != idx || !IsVisible) return; // parcours quitté entre-temps
+                try { _host.Children.Add(step.Make(OnStepCelebrate)); }
+                catch { NextStep(); return; }
+                Chrome.Immersive = true; // PLEIN ÉCRAN pendant le jeu (la frise reste)
 
-            // Filet de sécurité : au bout de 3 minutes, on avance quand même.
-            _stepTimeout = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
-            _stepTimeout.Tick += (s, e) => StepDone();
-            _stepTimeout.Start();
+                // Filet de sécurité : au bout de 3 minutes, on avance quand même.
+                _stepTimeout = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
+                _stepTimeout.Tick += (s, e) => StepDone();
+                _stepTimeout.Start();
+            }, 0.6, 5);
         }
 
         // Les jeux appellent ceci à chaque réussite (c'est leur « celebrate »).
@@ -248,10 +255,12 @@ namespace MesPremiersJeux.Views
         {
             StopStep();
             SoundFx.PopSound();
-            Speech.Say("Étape réussie ! Regarde ta frise !");
-            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.4) };
-            t.Tick += (s, e) => { t.Stop(); NextStep(); };
-            t.Start();
+            // Le « Bravo ! » du jeu finit sa phrase, puis la frise, puis la suite.
+            Speech.WhenQuiet(() =>
+            {
+                Speech.Say("Étape réussie ! Regarde ta frise !");
+                Speech.WhenQuiet(NextStep, 2.4);
+            }, 0, 6);
         }
 
         private void StopStep()

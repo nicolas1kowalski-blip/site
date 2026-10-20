@@ -33,6 +33,11 @@
                     <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
                              HorizontalAlignment="Left" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Button x:Name="TabAccueil" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="accueil">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🏠  " FontSize="24" /><TextBlock Text="Accueil" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="TabStories" Style="{StaticResource TabButton}" Click="Tab_Click" Tag="stories">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="📖  " FontSize="24" /><TextBlock Text="Histoires" VerticalAlignment="Center" />

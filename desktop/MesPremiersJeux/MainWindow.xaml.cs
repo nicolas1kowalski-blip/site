@@ -53,6 +53,15 @@ namespace MesPremiersJeux
             var coloring = new ColoringView();
             coloring.ToggleFullscreenRequested += (s, e) => ToggleFullscreen();
 
+            // 🏠 L'accueil : bonjour, la date, l'ami du jour… et les grands boutons.
+            var accueil = new AccueilView();
+            accueil.Navigate += id =>
+            {
+                if (id == "parcours") Parcours_Click(this, null);
+                else Select(id);
+            };
+            accueil.ShopRequested += () => Shop_Click(this, null);
+            _views["accueil"] = accueil;
             _views["stories"] = new StoriesView();
             _views["games"] = new GamesView();
             _views["edu"] = new EducationView();
@@ -64,7 +73,7 @@ namespace MesPremiersJeux
                 v.Visibility = Visibility.Collapsed;
                 ContentHost.Children.Add(v);
             }
-            Select("coloring");
+            Select("accueil");
 
             // La boutique de récompenses (surcouche plein écran).
             _shop = new RewardShopView();

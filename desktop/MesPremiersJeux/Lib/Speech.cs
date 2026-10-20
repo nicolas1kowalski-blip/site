@@ -186,13 +186,47 @@ namespace MesPremiersJeux.Lib
             return text;
         }
 
+        // ------------------------------------------------------------------
+        //  DÉJÀ DIT : une phrase entendue une fois (il y a moins de 2 min) ne
+        //  verrouille plus rien — l'enfant la connaît, il peut la couper.
+        // ------------------------------------------------------------------
+        private static readonly Dictionary<string, DateTime> Heard = new Dictionary<string, DateTime>();
+
+        private static bool AlreadyHeard(string text)
+        {
+            var now = DateTime.Now;
+            bool heard = Heard.TryGetValue(text, out var at) && (now - at).TotalSeconds < 120;
+            Heard[text] = now;
+            if (Heard.Count > 300)
+                foreach (var k in Heard.Where(kv => (now - kv.Value).TotalSeconds > 120).Select(kv => kv.Key).ToList())
+                    Heard.Remove(k);
+            return heard;
+        }
+
+        /// <summary>Attend que la voix se taise (au plus <paramref name="maxSeconds"/>,
+        /// et au moins <paramref name="minSeconds"/>), puis agit.</summary>
+        public static void WhenQuiet(Action then, double minSeconds = 0, double maxSeconds = 8)
+        {
+            var start = DateTime.Now;
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            t.Tick += (s, e) =>
+            {
+                double sec = (DateTime.Now - start).TotalSeconds;
+                if (sec < minSeconds || (IsBusy && sec < maxSeconds)) return;
+                t.Stop();
+                then();
+            };
+            t.Start();
+        }
+
         public static void Say(string text)
         {
             if (string.IsNullOrWhiteSpace(text) || Hold) return;
             text = Fix(text);
             // Seules les phrases LONGUES (consignes, explications) verrouillent
             // les clics ; les petits retours laissent l'enfant enchaîner.
-            _gate = text.Length >= 60;
+            // Une phrase déjà entendue ne verrouille plus.
+            _gate = text.Length >= 60 && !AlreadyHeard(text);
 
             // Si la voix de papa/maman est en train de parler (VoiceBank), on
             // attend poliment la fin avant de parler à notre tour.
@@ -223,7 +257,7 @@ namespace MesPremiersJeux.Lib
         {
             if (string.IsNullOrWhiteSpace(text) || Hold) return;
             text = Fix(text);
-            _gate = true; // dit lentement = à écouter jusqu'au bout
+            _gate = !AlreadyHeard(text); // dit lentement = à écouter jusqu'au bout (la 1re fois)
             double wait = VoiceBank.RemainingSeconds();
             if (wait > 0.1)
             {

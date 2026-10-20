@@ -141,7 +141,9 @@ namespace MesPremiersJeux.Games
                 try { _pendingWatch?.Stop(); } catch { }
                 foreach (var t in _scheduled.ToArray()) t.Stop();
                 _scheduled.Clear();
-                Speech.Stop();
+                // Une longue consigne s'arrête ; un petit « Bravo ! » finit sa phrase
+                // (le parcours enchaîne les jeux : ses mots ne doivent pas être coupés).
+                if (Speech.IsGating) Speech.Stop();
                 RewardStore.Changed -= _onStars;
                 DisarmHint();
                 GazeStats.RecordGame(GetType().Name, (DateTime.Now - _playStart).TotalSeconds, _wins);
@@ -534,8 +536,19 @@ namespace MesPremiersJeux.Games
         {
             if (Closed) return;
             var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+            // Une longue attente (≥ 2 s) est un PASSAGE (tour suivant, nouveau
+            // jeu) : il attend que la voix ait fini sa phrase (6 s au plus) —
+            // plus de mots coupés. Les petites attentes rythment les animations.
+            bool transition = ms >= 2000;
+            double extra = 0;
             t.Tick += (s, e) =>
             {
+                if (transition && Speech.IsBusy && extra < 6)
+                {
+                    extra += 0.12;
+                    t.Interval = TimeSpan.FromMilliseconds(120);
+                    return;
+                }
                 t.Stop();
                 _scheduled.Remove(t);
                 if (!Closed) action();
