@@ -66,12 +66,14 @@ namespace MesPremiersJeux.Games
         private List<Border> _bars;
         private TextBlock _lyrics;
 
-        public MusicSchoolGame(Action celebrate) : base(celebrate) { }
+        private readonly int _startAct; // 1 = les instruments · 3 = le xylophone et la chanson
+
+        public MusicSchoolGame(Action celebrate, int startAct = 1) : base(celebrate) { _startAct = startAct; }
 
         protected override void NewRound()
         {
             _session = GameKit.Shuffle(Instruments).ToList();
-            StartInstruments();
+            if (_startAct >= 3) StartXylophone(); else StartInstruments();
         }
 
         private static FrameworkElement Pic(Instr i, double size) => Art.Visual(i.Key, i.Emoji, size);

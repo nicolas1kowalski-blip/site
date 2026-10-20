@@ -79,12 +79,16 @@ namespace MesPremiersJeux.Games
         private Colour _colourTarget;
         private int _countTarget;
 
-        public EnglishGame(Action celebrate) : base(celebrate) { }
+        private readonly int _startAct; // 1 = hello · 2 = les animaux · 4 = couleurs et nombres
+
+        public EnglishGame(Action celebrate, int startAct = 1) : base(celebrate) { _startAct = startAct; }
 
         protected override void NewRound()
         {
             _animals = GameKit.Shuffle(Animals).Take(6).ToList();
-            StartHello();
+            if (_startAct >= 4) StartColours();
+            else if (_startAct >= 2) StartAnimals();
+            else StartHello();
         }
 
         // L'anglais d'abord, puis le français quand la voix a fini.

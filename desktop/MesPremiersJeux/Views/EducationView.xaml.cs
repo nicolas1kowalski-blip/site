@@ -66,11 +66,22 @@ namespace MesPremiersJeux.Views
             },
             new Theme
             {
-                Icon = "🎵", Name = "Musique et anglais", Tint = Color.FromRgb(0xFF, 0xF3, 0xD6),
+                Icon = "🎵", Name = "La musique", Tint = Color.FromRgb(0xFF, 0xF3, 0xD6),
                 Activities = new (string, string, string, Func<Action, UserControl>)[]
                 {
-                    ("🎵", "Le petit orchestre", "PS · MS", c => new MusicSchoolGame(c)),
-                    ("🇬🇧", "Hello ! L'anglais", "PS · MS", c => new EnglishGame(c)),
+                    ("🥁", "Le petit orchestre", "PS · MS", c => new MusicSchoolGame(c, 1)),
+                    ("🎹", "Le xylophone et la chanson", "PS · MS", c => new MusicSchoolGame(c, 3)),
+                    ("🐦", "Les oiseaux chanteurs", "PS", c => new BirdSongGame(c)),
+                },
+            },
+            new Theme
+            {
+                Icon = "🇬🇧", Name = "L'anglais", Tint = Color.FromRgb(0xDD, 0xEE, 0xFF),
+                Activities = new (string, string, string, Func<Action, UserControl>)[]
+                {
+                    ("👋", "Hello ! Les petits mots", "PS · MS", c => new EnglishGame(c, 1)),
+                    ("🐾", "The animals", "PS · MS", c => new EnglishGame(c, 2)),
+                    ("🎨", "Colours and numbers", "MS", c => new EnglishGame(c, 4)),
                 },
             },
             new Theme
