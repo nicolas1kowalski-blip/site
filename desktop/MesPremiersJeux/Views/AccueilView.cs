@@ -27,6 +27,16 @@ namespace MesPremiersJeux.Views
         private readonly Canvas _fx = new Canvas { IsHitTestVisible = false };
         private readonly TextBlock _starsText;
         private FrameworkElement _friendPic;
+
+        // Le PASSAGE JOUR / NUIT : 4 paysages empilés (jour, coucher, soir, nuit)
+        // fondus l'un dans l'autre, le soleil ou la lune en haut à droite (qui
+        // se regarde : la nuit tombe, ou le jour se lève), et les étoiles.
+        private Image[] _layers;
+        private FrameworkElement _sun, _moon;
+        private Canvas _stars;
+        private int _phase = -1;        // 0 jour · 1 coucher · 2 soir · 3 nuit
+        private int _autoPhase = -1;    // la phase « vraie » (selon l'heure)
+        private readonly DispatcherTimer _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         private DateTime _lastHello = DateTime.MinValue;
         private readonly Random _rng = new Random();
 
@@ -79,15 +89,18 @@ namespace MesPremiersJeux.Views
             var root = new Grid();
             Content = root;
 
-            // Le décor du moment (jour / coucher / soir / nuit).
+            // Le décor du moment (jour / coucher / soir / nuit), et les étoiles.
             root.Children.Add(Decor());
+            _stars = new Canvas { IsHitTestVisible = false, Opacity = 0 };
+            root.Children.Add(_stars);
+            AddStars();
 
             // Petites choses qui flottent doucement (ballon, papillon, étoile…).
             var floats = new Canvas { IsHitTestVisible = false };
             root.Children.Add(floats);
             AddFloat(floats, "ballon", "🎈", 0.06, 0.55, 6.5);
             AddFloat(floats, "papillon", "🦋", 0.14, 0.18, 5.0);
-            AddFloat(floats, "etoile", "⭐", 0.86, 0.14, 4.2);
+            AddFloat(floats, "etoile", "⭐", 0.70, 0.12, 4.2);
             AddFloat(floats, "nuage", "☁️", 0.80, 0.60, 8.0);
             AddFloat(floats, "montgolfiere", "🎈", 0.93, 0.36, 7.0);
 
@@ -178,7 +191,23 @@ namespace MesPremiersJeux.Views
             go.Children.Add(Go("📖", "Histoires", "stories"));
             go.Children.Add(Go("🎵", "Musique", "music"));
 
+            // Le soleil / la lune : un regard dessus, et la nuit tombe (ou le jour se lève).
+            root.Children.Add(OrbButton());
+
             root.Children.Add(_fx);
+
+            // L'heure tourne : si le vrai moment de la journée change (le soir
+            // tombe pendant qu'on joue), le paysage suit tout seul.
+            _autoPhase = PhaseNow();
+            SetPhase(_autoPhase, false);
+            _clock.Tick += (s, e) =>
+            {
+                int p = PhaseNow();
+                if (p == _autoPhase) return;
+                _autoPhase = p;
+                if (IsVisible) SetPhase(p, true); else SetPhase(p, false);
+            };
+            _clock.Start();
 
             // Le bonjour à voix haute, à l'arrivée sur la page (pas plus d'une fois par heure).
             IsVisibleChanged += (s, e) =>
@@ -201,17 +230,106 @@ namespace MesPremiersJeux.Views
         // ------------------------------------------------------------------
         //  Les morceaux
         // ------------------------------------------------------------------
-        private FrameworkElement Decor()
+        private static int PhaseNow()
         {
             int h = DateTime.Now.Hour;
-            string scene = h < 7 || h >= 21 ? "scene-nuit" : h < 17 ? "scene-jour" : h < 19 ? "scene-coucher" : "scene-soir";
-            var src = Art.Find(scene);
-            if (src == null) return DecorBackground.ForGames();
+            return h < 7 || h >= 21 ? 3 : h < 17 ? 0 : h < 19 ? 1 : 2;
+        }
+
+        private FrameworkElement Decor()
+        {
+            var keys = new[] { "scene-jour", "scene-coucher", "scene-soir", "scene-nuit" };
+            var srcs = new ImageSource[4];
+            for (int i = 0; i < 4; i++) srcs[i] = Art.Find(keys[i]);
+            if (srcs[0] == null) return DecorBackground.ForGames();
             var g = new Grid { IsHitTestVisible = false };
-            g.Children.Add(new Image { Source = src, Stretch = Stretch.UniformToFill });
+            _layers = new Image[4];
+            for (int i = 0; i < 4; i++)
+            {
+                _layers[i] = new Image { Source = srcs[i] ?? srcs[0], Stretch = Stretch.UniformToFill, Opacity = i == 0 ? 1 : 0 };
+                g.Children.Add(_layers[i]);
+            }
             // Un léger voile clair pour que les textes restent lisibles.
             g.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)) });
             return g;
+        }
+
+        // Fond les paysages l'un dans l'autre : la nuit tombe (coucher → soir →
+        // nuit) ou le jour se lève, en ~2,7 s ; soleil et lune se relaient.
+        private void SetPhase(int phase, bool animate)
+        {
+            if (phase == _phase) return;
+            bool toNight = phase > _phase;
+            _phase = phase;
+            if (_layers != null)
+                for (int k = 1; k <= 3; k++)
+                {
+                    double target = k <= phase ? 1 : 0;
+                    if (!animate) { _layers[k].BeginAnimation(UIElement.OpacityProperty, null); _layers[k].Opacity = target; continue; }
+                    int step = toNight ? k - 1 : 3 - k;
+                    _layers[k].BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(target, TimeSpan.FromMilliseconds(1000))
+                    {
+                        BeginTime = TimeSpan.FromMilliseconds(step * 850),
+                        EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                    });
+                }
+            bool night = phase >= 2;
+            var dur = TimeSpan.FromMilliseconds(animate ? 2200 : 0);
+            _sun?.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(night ? 0 : 1, dur));
+            _moon?.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(night ? 1 : 0, dur));
+            _stars?.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(phase == 3 ? 1 : phase == 2 ? 0.5 : 0, dur));
+        }
+
+        private Button OrbButton()
+        {
+            _sun = Art.Visual("soleil", "☀️", 150);
+            _moon = Art.Visual("lune", "🌙", 150);
+            var stack = new Grid();
+            stack.Children.Add(_sun);
+            stack.Children.Add(_moon);
+            var b = new Button
+            {
+                Style = (Style)Application.Current.Resources["AnswerButton"],
+                Width = 190, Height = 190,
+                Background = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 24, 28, 0),
+                ToolTip = "Jour / nuit",
+                Content = stack,
+            };
+            b.Click += (s, e) =>
+            {
+                bool night = _phase >= 2;
+                SetPhase(night ? 0 : 3, true);
+                Bounce(night ? _sun : _moon);
+                SoundFx.PopSound();
+                Speech.Say(night
+                    ? "Le soleil se lève ! Cocorico ! Bonjour tout le monde !"
+                    : "La nuit tombe... Regarde les étoiles ! Chut, tout le monde dort. Bonne nuit !");
+            };
+            return b;
+        }
+
+        private void AddStars()
+        {
+            var rng = new Random(7);
+            for (int i = 0; i < 14; i++)
+            {
+                var star = new TextBlock { Text = i % 3 == 0 ? "⭐" : "✨", FontSize = 22 + rng.Next(22), Opacity = 0.4 + rng.NextDouble() * 0.6 };
+                double fx = 0.03 + rng.NextDouble() * 0.94, fy = 0.03 + rng.NextDouble() * 0.42;
+                _stars.Children.Add(star);
+                void Place()
+                {
+                    Canvas.SetLeft(star, fx * Math.Max(1, _stars.ActualWidth));
+                    Canvas.SetTop(star, fy * Math.Max(1, _stars.ActualHeight));
+                }
+                _stars.SizeChanged += (s, e) => Place();
+                Place();
+                // Scintillement doux, chacune à son rythme.
+                star.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0.25, 1, TimeSpan.FromSeconds(1.2 + rng.NextDouble() * 2))
+                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, BeginTime = TimeSpan.FromMilliseconds(rng.Next(2000)) });
+            }
         }
 
         private static Border Bubble(UIElement child, double radius, double pad = 16) => new Border
