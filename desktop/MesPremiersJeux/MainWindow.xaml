@@ -242,6 +242,9 @@
         <!-- La boutique de récompenses (surcouche plein écran, remplie en code) -->
         <Grid x:Name="ShopHost" Visibility="Collapsed" />
 
+        <!-- 📒 Mon carnet (surcouche plein écran, remplie en code) -->
+        <Grid x:Name="BookHost" Visibility="Collapsed" />
+
         <!-- Cercle de progression du dwell (au-dessus de tout, non cliquable) -->
         <Canvas x:Name="GazeLayer" IsHitTestVisible="False">
             <!-- Point de regard toujours visible : l'enfant voit où il regarde. -->

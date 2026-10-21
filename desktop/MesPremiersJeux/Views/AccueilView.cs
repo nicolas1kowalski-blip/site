@@ -25,6 +25,7 @@ namespace MesPremiersJeux.Views
         /// <summary>Aller vers un onglet (« games », « parcours », « stories », « music »).</summary>
         public event Action<string> Navigate;
         public event Action ShopRequested;
+        public event Action BookRequested;
 
         private readonly Canvas _fx = new Canvas { IsHitTestVisible = false };
         private readonly TextBlock _starsText;
@@ -163,14 +164,8 @@ namespace MesPremiersJeux.Views
                 Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0x9E, 0x00)),
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
-            var starsCard = Card(_starsText, "Mes étoiles", "Ma boutique", Color.FromRgb(0xFF, 0xF4, 0xD6));
-            starsCard.Click += (s, e) =>
-            {
-                int n = RewardStore.Balance;
-                Speech.Say(n == 0 ? "Pas encore d'étoile ! Viens jouer pour en gagner !"
-                    : "Tu as " + n + (n > 1 ? " étoiles" : " étoile") + " ! Bravo ! On va voir la boutique ?");
-                if (n > 0) ShopRequested?.Invoke();
-            };
+            var starsCard = Card(_starsText, "Mes étoiles", "Mon carnet", Color.FromRgb(0xFF, 0xF4, 0xD6));
+            starsCard.Click += (s, e) => BookRequested?.Invoke();
             cards.Children.Add(starsCard);
             RewardStore.Changed += () => Dispatcher.Invoke(() => _starsText.Text = "⭐ " + RewardStore.Balance);
 

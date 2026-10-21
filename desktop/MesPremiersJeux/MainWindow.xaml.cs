@@ -85,6 +85,13 @@ namespace MesPremiersJeux
             };
             ShopHost.Children.Add(_shop);
 
+            // 📒 Le carnet de progrès (ouvert depuis l'accueil, carte « Mes étoiles »).
+            _book = new ProgressBookView();
+            _book.CloseRequested += () => BookHost.Visibility = Visibility.Collapsed;
+            _book.ShopRequested += () => { BookHost.Visibility = Visibility.Collapsed; Shop_Click(this, null); };
+            BookHost.Children.Add(_book);
+            accueil.BookRequested += () => { BookHost.Visibility = Visibility.Visible; _book.Open(); };
+
             // Le parcours du jour (séance rituelle en pictogrammes).
             _parcours = new ParcoursView { Visibility = Visibility.Collapsed };
             _parcours.ShopRequested += () => { ShopHost.Visibility = Visibility.Visible; _shop.Open(); };
@@ -158,6 +165,7 @@ namespace MesPremiersJeux
         }
 
         private RewardShopView _shop;
+        private ProgressBookView _book;
         private ParcoursView _parcours;
 
         private void Parcours_Click(object sender, RoutedEventArgs e)
