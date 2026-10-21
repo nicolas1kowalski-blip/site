@@ -118,6 +118,8 @@
                         <Button Content="↺ Annuler la correction" FontSize="14" Padding="8,8"
                                 Margin="4,0,0,0" Click="ClearBias_Click" />
                     </UniformGrid>
+                    <Button Content="🙋 Je choisis (2 à 4 images, elle regarde celle qu'elle veut)" FontSize="14" Padding="8,8"
+                            Margin="0,10,0,0" Click="Choice_Click" />
                     <Button Content="📊 Bilan de la session…" FontSize="14" Padding="8,8"
                             Margin="0,6,0,0" Click="Session_Click" />
                     <Button Content="🧾 Ouvrir le journal (diagnostic)" FontSize="14" Padding="8,8"
@@ -244,6 +246,9 @@
 
         <!-- 📒 Mon carnet (surcouche plein écran, remplie en code) -->
         <Grid x:Name="BookHost" Visibility="Collapsed" />
+
+        <!-- 🙋 Je choisis (surcouche plein écran, remplie en code) -->
+        <Grid x:Name="ChoiceHost" Visibility="Collapsed" />
 
         <!-- Cercle de progression du dwell (au-dessus de tout, non cliquable) -->
         <Canvas x:Name="GazeLayer" IsHitTestVisible="False">

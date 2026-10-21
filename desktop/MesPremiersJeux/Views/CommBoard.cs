@@ -39,9 +39,10 @@ namespace MesPremiersJeux.Views
 
         private sealed class Category
         {
-            public string Icon, Name;
+            public string Key, Icon, Name;
             public Color Tint;
             public Func<List<Item>> Items;
+            public int MinLevel = 1; // la grille GRANDIT avec le niveau de l'enfant
         }
 
         private static Item I(string key, string label, string say, string img, string emoji, bool alert = false) =>
@@ -181,10 +182,67 @@ namespace MesPremiersJeux.Views
             new Category { Icon = "🙌", Name = "Je veux", Tint = Green, Items = () => Wants },
             new Category { Icon = "🤕", Name = "J'ai mal où ?", Tint = Red, Items = () => Body },
             new Category { Icon = "👪", Name = "Les gens", Tint = Yellow, Items = People },
+            new Category { Key = "jour", Icon = "📅", Name = "Ma journée", Tint = Pink, Items = () => DayItems },
+            new Category { Key = "phrase", Icon = "🧩", Name = "Je fais une phrase", Tint = Color.FromRgb(0xE0, 0xE8, 0xFF), Items = () => Starters, MinLevel = 2 },
         };
+
+        // --- 📅 MA JOURNÉE : raconter ce qu'on a fait (les pictos s'ajoutent, puis on raconte). ---
+        private static readonly List<Item> DayItems = new List<Item>
+        {
+            I("raconte", "Raconter", "Aujourd'hui...", "livre", "📣"),
+            I("ecole", "L'école", "l'école", "bus", "🏫"), I("cantine", "La cantine", "la cantine", "assiette", "🍽"),
+            I("copains", "Les copains", "les copains", "ballon-foot", "🧒"), I("promenade", "La promenade", "la promenade", "velo", "🚶"),
+            I("piscine", "La piscine", "la piscine", "maillot", "🏊"), I("bain2", "Le bain", "le bain", "baignoire", "🛁"),
+            I("tele2", "La télé", "la télé", "radio", "📺"), I("musique2", "La musique", "la musique", "note-musique", "🎵"),
+            I("jeux", "Les jeux", "les jeux", "cubes", "🧸"), I("calin", "Un câlin", "un câlin", "coeur", "🤗"),
+            I("docteur", "Le docteur", "le docteur", "ambulance", "🩺"),
+        };
+        private static readonly List<Item> _day = new List<Item>();
+        private static DateTime _dayDate = DateTime.MinValue;
+
+        // --- 🧩 JE FAIS UNE PHRASE : un début, puis un mot → la phrase entière. ---
+        private static readonly List<Item> Starters = new List<Item>
+        {
+            I("s-veux", "Je veux", "Je veux", "comm-veux", "🙌"), I("s-aime", "J'aime", "J'aime", "coeur", "💖"),
+            I("s-pasaime", "Je n'aime pas", "Je n'aime pas", "comm-non", "🙅"), I("s-encore", "Encore", "Encore", "comm-encore", "🔁"),
+            I("s-donne", "Donne-moi", "Donne-moi", "comm-donne", "🤲"), I("s-vois", "Je vois", "Je vois", "comm-vois", "👀"),
+            I("s-fini", "J'ai fini", "J'ai fini", "comm-fini", "✅"), I("s-ou", "Où est", "Où est", "comm-ou", "❓"),
+        };
+        private static readonly List<Item> SentenceWords = new List<Item>
+        {
+            I("w-jus", "Le jus", "le jus", "verre", "🧃"), I("w-gateau", "Le gâteau", "le gâteau", "gateau", "🎂"),
+            I("w-pomme", "La pomme", "la pomme", "pomme", "🍎"), I("w-ballon", "Le ballon", "le ballon", "ballon", "🎈"),
+            I("w-livre", "Le livre", "le livre", "livre", "📖"), I("w-doudou", "Mon doudou", "mon doudou", "ours-peluche", "🧸"),
+            I("w-musique", "La musique", "la musique", "note-musique", "🎵"), I("w-dehors", "Dehors", "dehors", "arbre", "🌳"),
+            I("w-dodo", "Dodo", "dormir", "lune", "🌙"), I("w-bain", "Le bain", "le bain", "baignoire", "🛁"),
+            I("w-calin", "Un câlin", "un câlin", "coeur", "🤗"), I("w-chat", "Le chat", "le chat", "chat", "🐱"),
+        };
+        private Item _starter; // le début de phrase choisi (null = on choisit le début)
 
         private readonly UniformGrid _grid = new UniformGrid { Columns = 4, Rows = 3, Margin = new Thickness(6) };
         private readonly List<Button> _tabs = new List<Button>();
+        private readonly UniformGrid _tabsPanel = new UniformGrid { Columns = 1, Margin = new Thickness(0, 0, 8, 0) };
+        private int _tabCount;
+
+        private void BuildTabs()
+        {
+            var visible = Cats.Where(c => c.MinLevel <= Level.Current).ToList();
+            if (visible.Count == _tabCount && _tabs.Count > 0) return;
+            _tabCount = visible.Count;
+            _tabsPanel.Children.Clear();
+            _tabs.Clear();
+            _tabsPanel.Rows = visible.Count;
+            for (int i = 0; i < visible.Count; i++)
+            {
+                int idx = Array.IndexOf(Cats, visible[i]);
+                var t = BigButton(Cats[idx].Icon, Cats[idx].Name, Cats[idx].Tint);
+                t.Width = double.NaN;
+                t.Height = double.NaN;
+                t.Click += (s, e) => { ShowCategory(idx); Speech.SayAlways(Cats[idx].Name + " !"); };
+                _tabsPanel.Children.Add(t);
+                _tabs.Add(t);
+            }
+        }
         private readonly ContentControl _msgPic = new ContentControl { Width = 110, Height = 110 };
         private readonly TextBlock _msgText = new TextBlock
         {
@@ -236,20 +294,10 @@ namespace MesPremiersJeux.Views
             Grid.SetColumnSpan(top, 2);
             root.Children.Add(top);
 
-            // --- À gauche : les pages ---
-            var tabs = new UniformGrid { Columns = 1, Rows = Cats.Length, Margin = new Thickness(0, 0, 8, 0) };
-            for (int i = 0; i < Cats.Length; i++)
-            {
-                int idx = i;
-                var t = BigButton(Cats[i].Icon, Cats[i].Name, Cats[i].Tint);
-                t.Width = double.NaN;
-                t.Height = double.NaN;
-                t.Click += (s, e) => { ShowCategory(idx); Speech.SayAlways(Cats[idx].Name + " !"); };
-                tabs.Children.Add(t);
-                _tabs.Add(t);
-            }
-            Grid.SetRow(tabs, 1);
-            root.Children.Add(tabs);
+            // --- À gauche : les pages (celles du niveau de l'enfant) ---
+            Grid.SetRow(_tabsPanel, 1);
+            root.Children.Add(_tabsPanel);
+            BuildTabs();
 
             // --- Au centre : les 12 cases ---
             Grid.SetRow(_grid, 1);
@@ -342,6 +390,8 @@ namespace MesPremiersJeux.Views
         public void Open()
         {
             IsOpen = true;
+            BuildTabs();
+            _starter = null;
             ShowCategory(0);
             Speech.SayAlways("J'ai quelque chose à dire !");
         }
@@ -350,13 +400,17 @@ namespace MesPremiersJeux.Views
 
         private void ShowCategory(int i)
         {
+            var visible = Cats.Where(c => c.MinLevel <= Level.Current).ToList();
+            int vi = visible.IndexOf(Cats[i]);
             for (int k = 0; k < _tabs.Count; k++)
             {
-                _tabs[k].BorderBrush = k == i ? new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)) : Brushes.Transparent;
-                _tabs[k].BorderThickness = new Thickness(k == i ? 7 : 0);
+                _tabs[k].BorderBrush = k == vi ? new SolidColorBrush(Color.FromRgb(0x7E, 0x3F, 0xF2)) : Brushes.Transparent;
+                _tabs[k].BorderThickness = new Thickness(k == vi ? 7 : 0);
             }
             _grid.Children.Clear();
             var cat = Cats[i];
+            if (cat.Key == "phrase") { ShowSentence(cat); return; }
+            if (cat.Key == "jour") { ShowDay(cat); return; }
             var items = cat.Items();
             foreach (var it in items.Take(12))
             {
@@ -365,6 +419,85 @@ namespace MesPremiersJeux.Views
                 cell.Click += (s, e) => SayItem(item, record: true, btn: cell);
                 _grid.Children.Add(cell);
             }
+        }
+
+        // 🧩 La phrase : d'abord le début (« Je veux »), puis le mot (« le gâteau »).
+        private void ShowSentence(Category cat)
+        {
+            if (_starter == null)
+            {
+                _msgText.Text = "Je fais une phrase...";
+                foreach (var it in Starters.Take(12))
+                {
+                    var item = it;
+                    var cell = Cell(item, cat.Tint);
+                    cell.Click += (s, e) =>
+                    {
+                        _starter = item;
+                        _msgText.Text = item.Say + "...";
+                        _msgPic.Content = Art.Visual(item.Img, item.Emoji, 110);
+                        Speech.SayAlways(item.Say + "...");
+                        ShowSentence(cat);
+                    };
+                    _grid.Children.Add(cell);
+                }
+                return;
+            }
+            _grid.Children.Clear();
+            var words = SentenceWords.ToList();
+            // Les gens de la famille font aussi des mots (« Je veux papa »).
+            try
+            {
+                foreach (var p in People().Where(x => x.Key.StartsWith("pers-")).Take(3))
+                    words.Insert(0, p);
+            }
+            catch { }
+            foreach (var it in words.Take(12))
+            {
+                var item = it;
+                var cell = Cell(item, item.Key.StartsWith("pers-") ? Yellow : Green);
+                cell.Click += (s, e) =>
+                {
+                    string obj = item.Key.StartsWith("pers-") ? item.Label : item.Say;
+                    var sentence = new Item { Key = "phrase", Label = _starter.Say + " " + obj, Say = _starter.Say + " " + obj + " !", Img = item.Img, Emoji = item.Emoji, Photo = item.Photo };
+                    SayItem(sentence, record: true, btn: cell);
+                    GazeStats.RecordComm("phrase-" + _starter.Key + "-" + item.Key);
+                    _starter = null;
+                    var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
+                    t.Tick += (s2, e2) => { t.Stop(); if (IsOpen && _starter == null) ShowSentence(cat); };
+                    t.Start();
+                };
+                _grid.Children.Add(cell);
+            }
+        }
+
+        // 📅 Ma journée : chaque picto s'ajoute à l'histoire du jour ; « Raconter » la dit.
+        private void ShowDay(Category cat)
+        {
+            if (_dayDate != DateTime.Today) { _day.Clear(); _dayDate = DateTime.Today; }
+            foreach (var it in DayItems.Take(12))
+            {
+                var item = it;
+                bool done = _day.Contains(item);
+                var cell = Cell(item, item.Key == "raconte" ? Orange : done ? Color.FromRgb(0xB8, 0xF0, 0xC0) : cat.Tint);
+                if (done) cell.Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 0, Color = Color.FromRgb(0x4C, 0xC2, 0x6B), Opacity = 0.9 };
+                cell.Click += (s, e) =>
+                {
+                    if (item.Key == "raconte") { TellDay(cell); return; }
+                    if (!_day.Contains(item)) { _day.Add(item); GazeStats.RecordComm("jour-" + item.Key); }
+                    var said = new Item { Key = "jour-" + item.Key, Label = item.Label, Say = "J'ai fait " + item.Say + " !", Img = item.Img, Emoji = item.Emoji };
+                    SayItem(said, record: false, btn: cell);
+                    ShowDay(cat);
+                };
+                _grid.Children.Add(cell);
+            }
+        }
+
+        private void TellDay(Button btn)
+        {
+            string story = _day.Count == 0 ? "Aujourd'hui... je n'ai encore rien raconté !"
+                : "Aujourd'hui, j'ai fait " + (_day.Count == 1 ? _day[0].Say : string.Join(", ", _day.Take(_day.Count - 1).Select(d => d.Say)) + " et " + _day.Last().Say) + " !";
+            SayItem(new Item { Key = "raconte", Label = "Ma journée", Say = story, Img = "livre", Emoji = "📣" }, record: true, btn: btn);
         }
 
         private static Color? SocialTint(Item it) => Social.Contains(it) ? Pink : (Color?)null;

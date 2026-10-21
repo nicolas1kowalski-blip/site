@@ -90,6 +90,11 @@ namespace MesPremiersJeux
             _book.CloseRequested += () => BookHost.Visibility = Visibility.Collapsed;
             _book.ShopRequested += () => { BookHost.Visibility = Visibility.Collapsed; Shop_Click(this, null); };
             BookHost.Children.Add(_book);
+
+            // 🙋 Je choisis (ouvert par le parent depuis les réglages).
+            _choice = new ChoiceView();
+            _choice.CloseRequested += () => { ChoiceHost.Visibility = Visibility.Collapsed; _choice.MarkClosed(); };
+            ChoiceHost.Children.Add(_choice);
             accueil.BookRequested += () => { BookHost.Visibility = Visibility.Visible; _book.Open(); };
 
             // Le parcours du jour (séance rituelle en pictogrammes).
@@ -166,6 +171,14 @@ namespace MesPremiersJeux
 
         private RewardShopView _shop;
         private ProgressBookView _book;
+        private ChoiceView _choice;
+
+        private void Choice_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            ChoiceHost.Visibility = Visibility.Visible;
+            _choice.Open();
+        }
         private ParcoursView _parcours;
 
         private void Parcours_Click(object sender, RoutedEventArgs e)
