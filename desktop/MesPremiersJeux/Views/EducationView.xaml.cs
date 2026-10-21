@@ -37,6 +37,10 @@ namespace MesPremiersJeux.Views
                     ("🥁", "Les syllabes", "MS", c => new SyllableGame(c)),
                     ("🏠", "La maison des sons", "MS", c => new SoundHouseGame(c)),
                     ("✍️", "J'écris !", "MS", c => new EyeWriteGame(c)),
+                    ("💖", "Mon prénom écrit", "GS", c => new ReadingGame(c, 1)),
+                    ("🖼️", "Le mot et l'image", "GS · CP", c => new ReadingGame(c, 2)),
+                    ("🔡", "Les lettres mobiles", "GS · CP", c => new ReadingGame(c, 3)),
+                    ("👂", "Le son de la fin", "GS", c => new ReadingGame(c, 4)),
                 },
             },
             new Theme
