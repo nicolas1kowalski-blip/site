@@ -421,7 +421,7 @@ namespace MesPremiersJeux.Games
             {
                 var (key, name, emoji) = Playable[i];
                 var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                content.Children.Add(Art.Visual(key == "batterie" ? "tambour" : key, emoji, 180));
+                content.Children.Add(Art.Visual(key, emoji, 180));
                 content.Children.Add(new TextBlock
                 {
                     Text = name, FontSize = 34, FontWeight = FontWeights.Bold,
@@ -455,7 +455,7 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(back, 16);
             _canvas.Children.Add(back);
 
-            SetConsigne(Art.Visual(key == "batterie" ? "tambour" : key, "🎵", 110), () => name + " ! Regarde une touche, elle joue ! La flèche change d'instrument.");
+            SetConsigne(Art.Visual(key, "🎵", 110), () => name + " ! Regarde une touche, elle joue ! La flèche change d'instrument.");
             SetBody(_canvas);
             Schedule(300, () => Speak(name + " ! Regarde les touches pour jouer !"));
         }
