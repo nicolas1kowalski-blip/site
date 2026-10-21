@@ -162,7 +162,7 @@ namespace MesPremiersJeux.Games
             {
                 if (Locked) return;
                 Dance(sun);
-                Speak("Le Soleil ! Ce n'est pas une planète : c'est une étoile ! Il chauffe et éclaire tout le monde !");
+                Speak("Le Soleil ! C'est une étoile, pas une planète !");
             };
             Canvas.SetLeft(sun, -60);
             Canvas.SetTop(sun, H / 2 - 150);
@@ -199,7 +199,7 @@ namespace MesPremiersJeux.Games
                             {
                                 GameKit.Success();
                                 Celebrate();
-                                Speak("Bravo ! Tu as rencontré toutes les planètes ! Maintenant, on joue à les retrouver !");
+                                Speak("Bravo ! Maintenant, retrouve les planètes !");
                                 _act = 2;
                                 _round = 0;
                                 Schedule(3400, NextQuiz);
@@ -214,7 +214,7 @@ namespace MesPremiersJeux.Games
             }
 
             SetBody(_canvas);
-            Speak("Les planètes ! Bienvenue dans l'espace ! Regarde une planète pour faire sa connaissance !");
+            Speak("Bienvenue dans l'espace ! Regarde une planète !");
         }
 
         private static void Dance(FrameworkElement el)
@@ -259,7 +259,7 @@ namespace MesPremiersJeux.Games
             if (_act == 3 && _round > 3)
             {
                 Question.Text = "🪐 Quel voyage dans les étoiles !";
-                Speak("Bravo, petit astronaute ! Tu connais les planètes ! Quel beau voyage !");
+                Speak("Bravo, petit astronaute !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3400, NewRound);

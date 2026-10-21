@@ -259,7 +259,7 @@ namespace MesPremiersJeux.Games
             if (_celebrated) return;
             foreach (var v in _on) if (!v) return;
             _celebrated = true;
-            Speak("Tous les oiseaux chantent ensemble ! Quel orchestre ! Bravo !");
+            Speak("Tous les oiseaux chantent ! Bravo !");
             GameKit.Success();
             Celebrate();
         }

@@ -159,7 +159,7 @@ namespace MesPremiersJeux.Games
 
             SetConsigne(Art.ForEmoji("🎵", 110), () => "Regarde un instrument : il joue tout de suite ! Fixe-le pour entendre son nom.");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Le petit orchestre ! Regarde un instrument, et il joue ! Fixe-le pour entendre son nom."));
+            Schedule(450, () => Speak("Regarde un instrument : il joue !"));
         }
 
         private void NameInstrument(Button btn, int i)
@@ -178,7 +178,7 @@ namespace MesPremiersJeux.Games
             Locked = true;
             Schedule(3000, () =>
             {
-                Speak("Tu as entendu tous les instruments ! Maintenant, écoute bien : qui fait ce bruit ?");
+                Speak("Bravo ! Maintenant : qui fait ce bruit ?");
                 Schedule(3800, StartQuiz);
             });
         }
@@ -271,7 +271,7 @@ namespace MesPremiersJeux.Games
             BuildBars(5, "xylophone", null);
             SetConsigne(Art.Visual("xylophone", "🎹", 110), () => "Regarde les lames du xylophone : chacune chante sa note ! Do, ré, mi, fa, sol !");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Voici le xylophone ! Regarde une lame, elle chante. Du grave... à l'aigu !"));
+            Schedule(450, () => Speak("Le xylophone ! Regarde une lame, elle chante !"));
         }
 
         // Les lames (ou touches) : n notes, un timbre, et ce qui se passe quand
@@ -339,7 +339,7 @@ namespace MesPremiersJeux.Games
                     Locked = true;
                     Schedule(1800, () =>
                     {
-                        Speak("Bravo ! Maintenant, on joue une chanson : Au clair de la lune ! Regarde la lame qui brille !");
+                        Speak("Bravo ! Maintenant, une chanson : regarde la lame qui brille !");
                         Schedule(5200, StartSong);
                     });
                 }
@@ -491,7 +491,7 @@ namespace MesPremiersJeux.Games
             }
             SetConsigne(Art.ForEmoji("🎵", 110), () => "Choisis un instrument, et joue avec tes yeux !");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Je joue ! Choisis un instrument : tu en joueras avec tes yeux !"));
+            Schedule(450, () => Speak("Choisis un instrument !"));
         }
 
         private void OpenInstrument(string key, string name)

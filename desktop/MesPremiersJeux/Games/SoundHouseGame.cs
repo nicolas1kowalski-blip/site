@@ -394,7 +394,7 @@ namespace MesPremiersJeux.Games
                         // SONS prend le relais (début ou fin du mot ?).
                         Schedule(2600, () =>
                         {
-                            Speak("Toutes les maisons sont pleines ! Maintenant, le petit train des sons !");
+                            Speak("Bravo ! Maintenant, le petit train des sons !");
                             _trainIdx = 0;
                             Schedule(2600, BuildTrain);
                         });
@@ -514,7 +514,7 @@ namespace MesPremiersJeux.Games
                     {
                         Schedule(3200, () =>
                         {
-                            Speak("Bravo ! Les maisons des sons ET le petit train : quelles bonnes oreilles !");
+                            Speak("Bravo ! Quelles bonnes oreilles !");
                             Schedule(3000, NewRound);
                         });
                     }

@@ -331,7 +331,7 @@ namespace MesPremiersJeux.Games
                         {
                             Schedule(2600, () =>
                             {
-                                Speak("Bravo ! Tu es un vrai petit voyageur ! Tu sais faire ta valise pour tous les pays !");
+                                Speak("Bravo, petit voyageur !");
                                 Schedule(3200, NewRound);
                             });
                         }

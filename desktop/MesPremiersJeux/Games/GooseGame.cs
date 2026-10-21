@@ -781,7 +781,7 @@ namespace MesPremiersJeux.Games
                 case Kind.Mort:
                     HighlightCell(idx);
                     _recapEmoji = "👻"; _recapMsg = PlayerName[p] + " croise un fantôme farceur !\nIl recule de 10.";
-                    Speak("Hou ! Un petit fantôme farceur te fait reculer de dix cases !");
+                    Speak("Hou ! Le fantôme te fait reculer !");
                     Teleport(p, Math.Max(0, idx - 10), null);
                     return;
 

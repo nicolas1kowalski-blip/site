@@ -141,7 +141,7 @@ namespace MesPremiersJeux.Games
             }
             SetConsigne(Art.Visual("maison", "🏠", 90), () => "Voici la maison ! Regarde chaque pièce pour savoir à quoi elle sert.");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Range la maison ! Voici trois pièces : regarde chaque pièce pour savoir à quoi elle sert."));
+            Schedule(450, () => Speak("Regarde chaque pièce de la maison !"));
         }
 
         private void DiscoverRoom(Button btn, int i)
@@ -158,7 +158,7 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 Schedule(3600, () =>
                 {
-                    Speak("Oh là là, tout est en désordre ! On range ? Chaque objet va dans sa pièce !");
+                    Speak("Tout est en désordre ! On range ?");
                     Schedule(3800, StartTidy);
                 });
             }
@@ -291,7 +291,7 @@ namespace MesPremiersJeux.Games
             SetConsigne(null, null);
             SetBody(_canvas);
             Pulse(house);
-            Speak("La maison est toute rangée ! Tout est à sa place ! Bravo, " + GameKit.Praise());
+            Speak("La maison est rangée ! " + GameKit.Praise());
             Celebrate();
             Schedule(4500, NewRound);
         }

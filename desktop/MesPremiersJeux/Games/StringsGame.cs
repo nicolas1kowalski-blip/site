@@ -169,7 +169,7 @@ namespace MesPremiersJeux.Games
             }
 
             SetBody(canvas);
-            Schedule(350, () => Speak("Suis les ficelles ! Laquelle mène la princesse à son château ? A, B, C ou D ?"));
+            Schedule(350, () => Speak("Quelle ficelle mène au château ?"));
         }
 
         private static double CenterY(int lane, int n) => (lane + 0.5) * PlayH / n;

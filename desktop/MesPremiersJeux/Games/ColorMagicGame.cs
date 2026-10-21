@@ -220,7 +220,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(speaker);
 
             SetBody(_canvas);
-            Schedule(450, () => Speak("La potion des couleurs ! Regarde chaque pot de peinture pour le renverser !"));
+            Schedule(450, () => Speak("Renverse les pots de peinture !"));
         }
 
         private void DiscoverPot(Button btn, int ci)
@@ -242,7 +242,7 @@ namespace MesPremiersJeux.Games
             {
                 _phase = 0;
                 Locked = true;
-                Speak("Bravo, tu as renversé tous les pots ! Et maintenant... le chaudron magique !");
+                Speak("Bravo ! Maintenant, le chaudron magique !");
                 Schedule(3000, () => { _mixRound = 0; StartMixRound(); });
             }
         }
@@ -256,7 +256,7 @@ namespace MesPremiersJeux.Games
             {
                 Locked = true;
                 Celebrate();
-                Speak("Tu as fait toutes les potions magiques ! Maintenant, trouve les couleurs !");
+                Speak("Bravo ! Maintenant, trouve les couleurs !");
                 Schedule(3000, StartFind);
                 return;
             }
@@ -280,7 +280,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(speaker);
 
             SetBody(_canvas);
-            Schedule(400, () => Speak("Verse le " + CName[a] + " et le " + CName[b] + " dans le chaudron ! Regarde un pot pour le verser !"));
+            Schedule(400, () => Speak("Verse le " + CName[a] + " et le " + CName[b] + " !"));
         }
 
         // Un VRAI chaudron de sorcière : pieds, ventre bombé avec reflet, anses,
@@ -656,7 +656,7 @@ namespace MesPremiersJeux.Games
             }
 
             SetBody(_canvas);
-            Schedule(400, () => Speak("Oh, les objets ont perdu leurs couleurs ! Trouve celui qui est " + CName[target] + ", et colorie-le !"));
+            Schedule(400, () => Speak("Trouve celui qui est " + CName[target] + " !"));
         }
 
         private void PickObject(Button btn, int ci, int target, UIElement silhouette, Grid tinted, string emoji)

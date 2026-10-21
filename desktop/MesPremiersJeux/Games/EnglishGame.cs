@@ -235,7 +235,7 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 Schedule(4200, () =>
                 {
-                    Speak("Tu connais six animaux en anglais ! Maintenant, écoute et trouve !");
+                    Speak("Bravo ! Maintenant, écoute et trouve !");
                     Schedule(3200, StartWhere);
                 });
             }

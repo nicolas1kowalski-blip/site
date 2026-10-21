@@ -96,7 +96,7 @@ namespace MesPremiersJeux.Games
                 }
 
             SetBody(_canvas);
-            Speak("Les feux d'artifice ! Regarde le ciel, là où tu veux... et boum !");
+            Speak("Regarde le ciel... et boum !");
         }
 
         private static Button InvisibleZone(double w, double h)

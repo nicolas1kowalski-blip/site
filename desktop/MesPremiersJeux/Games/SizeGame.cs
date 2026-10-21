@@ -97,7 +97,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(speaker);
 
             SetBody(_canvas);
-            Schedule(450, () => Speak("Regarde : le GRAND " + noun + "... et le petit " + noun + " ! Touche-les avec tes yeux !"));
+            Schedule(450, () => Speak("Le grand " + noun + "... et le petit " + noun + " !"));
         }
 
         private void DiscoverSize(Button btn, bool isBig, string noun)
@@ -164,7 +164,7 @@ namespace MesPremiersJeux.Games
                 _phase = 0;
                 Locked = true;
                 Celebrate();
-                Speak("Super ! Maintenant, on les range du plus petit au plus grand !");
+                Speak("Super ! Du plus petit au plus grand !");
                 Schedule(2800, () => { _orderRound = 0; NextOrder(); });
                 return;
             }

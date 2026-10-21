@@ -78,7 +78,7 @@ namespace MesPremiersJeux.Games
             else if (_act == 3 && _round > 3)
             {
                 Question.Text = "🍽️ Quel festin !";
-                Speak("Bravo, petit gourmand ! Tu connais les plats du monde entier ! Bon appétit !");
+                Speak("Bravo, petit gourmand ! Bon appétit !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3200, NewRound);
@@ -261,7 +261,7 @@ namespace MesPremiersJeux.Games
                     _canvas.Children.Add(btn);
                 }
                 SetBody(_canvas);
-                Speak("Miam, " + target.Name + " ! Dans quel pays est-ce qu'on " + Pronoun(target) + " mange ? Trouve le drapeau !");
+                Speak("Miam, " + target.Name + " ! Trouve le drapeau du pays !");
             }
             else
             {

@@ -42,7 +42,7 @@ namespace MesPremiersJeux.Games
             else if (_act == 3 && _round > 3)
             {
                 Question.Text = "🔢 Champion des nombres !";
-                Speak("Bravo ! Chiffre, dé, abaque, objets : tu reconnais les nombres partout ! Champion !");
+                Speak("Bravo ! Tu reconnais les nombres partout !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3200, NewRound);
@@ -195,7 +195,7 @@ namespace MesPremiersJeux.Games
                         Locked = true;
                         Schedule(2600, () =>
                         {
-                            Speak("Toujours " + n + " ! Le chiffre, le dé, l'abaque, les objets : c'est le même nombre !");
+                            Speak("Toujours " + n + " ! C'est le même nombre !");
                             Schedule(3400, Next);
                         });
                     }

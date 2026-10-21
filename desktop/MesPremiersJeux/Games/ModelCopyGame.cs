@@ -65,7 +65,7 @@ namespace MesPremiersJeux.Games
             else if (_act == 3 && _round > 2)
             {
                 Question.Text = "🧩 Les yeux de lynx !";
-                Speak("Bravo ! Tu reproduis les modèles sans te tromper ! Quels yeux de lynx !");
+                Speak("Bravo ! Quels yeux de lynx !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3200, NewRound);

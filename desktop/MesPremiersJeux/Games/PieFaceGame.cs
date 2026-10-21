@@ -76,7 +76,7 @@ namespace MesPremiersJeux.Games
             SpawnFace();
 
             SetBody(_canvas);
-            Speak("Les tartes à la crème ! Cherche le visage... et regarde-le bien pour lancer la tarte !");
+            Speak("Regarde un visage pour lancer la tarte !");
         }
 
         // Un endroit au hasard, loin du bord, du plat de tartes… et du visage

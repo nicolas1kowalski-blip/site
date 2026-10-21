@@ -111,7 +111,7 @@ namespace MesPremiersJeux.Games
                 }
 
             SetBody(_canvas);
-            Speak("La fenêtre magique ! Qu'est-ce qui se cache derrière la buée ? Essuie avec tes yeux !");
+            Speak("Essuie la buée avec tes yeux !");
         }
 
         // Essuie le carreau regardé ET ses voisins : chaque regard dégage une

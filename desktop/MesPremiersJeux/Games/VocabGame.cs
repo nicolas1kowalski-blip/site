@@ -165,7 +165,7 @@ namespace MesPremiersJeux.Games
                 _phase = 0;
                 Locked = true;
                 Celebrate();
-                Speak("Super ! Maintenant, le grand imagier : toutes les images en même temps !");
+                Speak("Super ! Maintenant, le grand imagier !");
                 Schedule(2800, () => { _hardRound = 0; NextHard(); });
                 return;
             }

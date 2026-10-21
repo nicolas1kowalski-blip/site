@@ -164,7 +164,7 @@ namespace MesPremiersJeux.Games
             }
             SetConsigne(Face(Emotions[0], 90), () => "Regarde chaque visage pour savoir ce qu'il ressent !");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Les émotions ! Regarde chaque visage : il te dit ce qu'il ressent !"));
+            Schedule(450, () => Speak("Regarde chaque visage !"));
         }
 
         private void Discover(Button btn, int i)
@@ -181,7 +181,7 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 Schedule(3800, () =>
                 {
-                    Speak("Tu connais toutes les émotions ! Maintenant, montre-moi celui que je dis !");
+                    Speak("Bravo ! Maintenant, montre-moi celui que je dis !");
                     Schedule(3400, StartShow);
                 });
             }
@@ -255,7 +255,7 @@ namespace MesPremiersJeux.Games
         {
             _act = 3;
             _round = 0;
-            Speak("Maintenant, écoute bien l'histoire, et dis-moi comment il se sent !");
+            Speak("Écoute l'histoire : il est comment ?");
             Schedule(3400, NextStory);
         }
 
@@ -343,7 +343,7 @@ namespace MesPremiersJeux.Games
             }
             SetConsigne(new TextBlock { Text = "💖", FontSize = 60 }, () => "Et toi, aujourd'hui, tu te sens comment ? Montre-moi le visage qui te ressemble !");
             SetBody(_canvas);
-            Schedule(400, () => Speak("Et toi, aujourd'hui, tu te sens comment ? Montre-moi le visage qui te ressemble !"));
+            Schedule(400, () => Speak("Et toi, tu te sens comment ?"));
         }
 
         private void AnswerYou(Button btn, Emotion e)

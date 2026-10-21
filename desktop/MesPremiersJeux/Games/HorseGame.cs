@@ -335,7 +335,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(go);
 
             SetBody(_canvas);
-            Schedule(300, () => Speak("Qui joue ? Touche un joueur pour choisir humain ou ordinateur, puis c'est parti !"));
+            Schedule(300, () => Speak("Qui joue ? Choisis les joueurs !"));
         }
 
         private void RefreshWhoRow(Button row, int p)

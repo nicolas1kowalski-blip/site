@@ -511,7 +511,7 @@ namespace MesPremiersJeux.Games
             }
 
             SetBody(_canvas);
-            Schedule(450, () => Speak("Mets les lettres dans les wagons, dans l'ordre, pour écrire " + Pretty + " !"));
+            Schedule(450, () => Speak("Écris " + Pretty + " avec les wagons !"));
         }
 
         // 🔊 du train : répète quelle lettre il faut mettre maintenant.

@@ -154,7 +154,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(speaker);
 
             SetBody(_canvas);
-            Schedule(450, () => Speak("La fête des nombres ! Regarde chaque ballon pour le faire éclater !"));
+            Schedule(450, () => Speak("Regarde un ballon pour l'éclater !"));
         }
 
         private void DiscoverBalloon(Button btn, int n)
@@ -222,7 +222,7 @@ namespace MesPremiersJeux.Games
                 {
                     _phase = 0;
                     Locked = true;
-                    Speak("Tous les ballons ont éclaté, bravo ! Et maintenant, retrouve les nombres !");
+                    Speak("Bravo ! Maintenant, retrouve les nombres !");
                     Schedule(2800, () =>
                     {
                         _findOrder = GameKit.Shuffle(Enumerable.Range(1, Max));

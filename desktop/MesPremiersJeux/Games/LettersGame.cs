@@ -167,7 +167,7 @@ namespace MesPremiersJeux.Games
             {
                 _phase = 0;
                 Locked = true;
-                Speak("Bravo, tu connais les cinq lettres ! Et maintenant, attrape-les !");
+                Speak("Bravo ! Maintenant, attrape les lettres !");
                 Schedule(2800, () =>
                 {
                     _findOrder = GameKit.Shuffle(Enumerable.Range(0, 5));
@@ -187,7 +187,7 @@ namespace MesPremiersJeux.Games
                 _phase = 0;
                 Locked = true;
                 Celebrate();
-                Speak("Super ! Maintenant, le jeu des mots : trouve la première lettre !");
+                Speak("Super ! Trouve la première lettre du mot !");
                 Schedule(2800, () => { _wordRound = 0; NextWord(); });
                 return;
             }
@@ -332,7 +332,7 @@ namespace MesPremiersJeux.Games
                 Locked = true;
                 Question.Text = "🎉 Tu connais bien tes lettres !";
                 Celebrate();
-                Speak("Bravo ! Tu connais tes lettres, et même le début des mots !");
+                Speak("Bravo ! Tu connais tes lettres !");
                 ScheduleNext(4800);
                 return;
             }

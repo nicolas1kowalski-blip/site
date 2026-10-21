@@ -119,7 +119,7 @@ namespace MesPremiersJeux.Games
             Bob(moon, 1);
 
             SetBody(_canvas);
-            Speak("Jour et nuit ! Regarde le Soleil pour faire venir le jour... et la Lune pour faire venir la nuit !");
+            Speak("Regarde le soleil... ou la lune !");
         }
 
         // Les 4 moments de la journée dessinés, empilés (jour en dessous, nuit
@@ -198,7 +198,7 @@ namespace MesPremiersJeux.Games
             foreach (var st in _stars)
                 st.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(900)));
             _zzz.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(600)));
-            Speak("Cocorico ! C'est le JOUR ! Le soleil brille, les oiseaux chantent, on joue dehors !");
+            Speak("Cocorico ! C'est le jour !");
             SoundFx.BirdChirp(2);
             _sawDay = true;
             CheckBoth();
@@ -217,7 +217,7 @@ namespace MesPremiersJeux.Games
                 st.BeginAnimation(UIElement.OpacityProperty, tw, HandoffBehavior.Compose);
             }
             _zzz.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(1400)));
-            Speak("Hou, hou ! C'est la NUIT ! Les étoiles s'allument... Chut, tout le monde dort ! Dodo...");
+            Speak("Hou, hou ! C'est la nuit ! Chut...");
             _sawNight = true;
             CheckBoth();
         }
@@ -332,7 +332,7 @@ namespace MesPremiersJeux.Games
             if (_act == 3 && _round > 3)
             {
                 Question.Text = "🌙 Quelle belle journée... et quelle belle nuit !";
-                Speak("Bravo ! Tu sais tout sur le jour, la nuit et la Lune ! Fais de beaux rêves !");
+                Speak("Bravo ! Fais de beaux rêves !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3400, NewRound);

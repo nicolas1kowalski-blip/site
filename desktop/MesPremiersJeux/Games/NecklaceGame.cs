@@ -55,7 +55,7 @@ namespace MesPremiersJeux.Games
             else if (_act == 2 && _round > 2)
             {
                 Question.Text = "📿 Quel beau bijou !";
-                Speak("Bravo ! Tu enfiles les perles comme une vraie bijoutière ! Nounours est ravi !");
+                Speak("Bravo ! Nounours est ravi !");
                 GameKit.Success();
                 Celebrate();
                 Schedule(3200, NewRound);
@@ -236,7 +236,7 @@ namespace MesPremiersJeux.Games
                 Schedule(900, () =>
                 {
                     GameKit.Success();
-                    Speak("Le collier est fini ! Il est magnifique ! On l'offre à Nounours !");
+                    Speak("Le collier est fini ! Pour Nounours !");
                     for (int i = 0; i < 8; i++)
                     {
                         var sp = new TextBlock { Text = "✨", FontSize = 30, IsHitTestVisible = false };
