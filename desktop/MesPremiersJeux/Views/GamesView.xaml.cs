@@ -50,6 +50,7 @@ namespace MesPremiersJeux.Views
                     ("🧩", "Puzzle", c => new PuzzleGame(c)),
                     ("🗂️", "Les familles", c => new FamiliesGame(c)),
                     ("🃏", "Les paires", c => new MemoryGame(c)),
+                    ("👧👨", "Les paires à deux", c => new MemoryGame(c, duo: true)),
                 },
             },
             new Theme

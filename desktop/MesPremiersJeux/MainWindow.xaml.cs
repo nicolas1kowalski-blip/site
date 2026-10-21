@@ -332,6 +332,10 @@ namespace MesPremiersJeux
                 if ((string)it.Tag == Level.Setting) { LevelCombo.SelectedItem = it; break; }
             if (LevelCombo.SelectedItem == null) LevelCombo.SelectedIndex = 0;
             RefreshLevelStatus();
+            foreach (ComboBoxItem it in SessionCombo.Items)
+                if ((string)it.Tag == _settings.SessionMinutes.ToString()) { SessionCombo.SelectedItem = it; break; }
+            if (SessionCombo.SelectedItem == null) SessionCombo.SelectedIndex = 2;
+            StartSessionWatch();
             Level.Changed += (lvl, up) => Dispatcher.Invoke(() =>
             {
                 RefreshLevelStatus();
@@ -824,6 +828,95 @@ namespace MesPremiersJeux
             _settings.Save();
             RefreshLevelStatus();
             Lib.Log.Write("niveau", "Réglé par le parent : " + tag + " → " + Level.Name(Level.Current));
+        }
+
+        private void Session_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_settings == null) return;
+            var tag = (SessionCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+            if (tag == null || !int.TryParse(tag, out var m)) return;
+            _settings.SessionMinutes = m;
+            _settings.Save();
+            _playedSeconds = 0;
+        }
+
+        // ------------------------------------------------------------------
+        //  ⏱ LES SÉANCES : au bout de N minutes de jeu, la voix propose une
+        //  pause — deux gros choix : « Encore un peu » ou « Une pause » (la
+        //  musique, calme). Le temps ne compte que pendant les jeux.
+        // ------------------------------------------------------------------
+        private double _playedSeconds;
+        private bool _pauseShown;
+
+        private void StartSessionWatch()
+        {
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            t.Tick += (s, e) =>
+            {
+                int limit = _settings?.SessionMinutes ?? 0;
+                if (limit <= 0 || _pauseShown || CommBoard.IsOpen) return;
+                bool playing = _views.Any(kv => kv.Value.IsVisible && (kv.Key == "games" || kv.Key == "edu" || kv.Key == "parcours" || kv.Key == "stories" || kv.Key == "coloring"));
+                if (!playing || !IsActive) return;
+                _playedSeconds += 5;
+                if (_playedSeconds >= limit * 60) ProposePause();
+            };
+            t.Start();
+        }
+
+        private void ProposePause()
+        {
+            _pauseShown = true;
+            _playedSeconds = 0;
+            Lib.Log.Write("seance", "Pause proposée après " + (_settings?.SessionMinutes ?? 0) + " min de jeu");
+            PauseHost.Children.Clear();
+            var veil = new Grid { Background = new SolidColorBrush(Color.FromArgb(0xD8, 0x2A, 0x1E, 0x5A)) };
+            var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Ça fait un moment qu'on joue !", FontSize = 52, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 30),
+            });
+            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            Button Choice(string pic, string emoji, string label, Color tint)
+            {
+                var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                content.Children.Add(Art.Visual(pic, emoji, 200));
+                content.Children.Add(new TextBlock { Text = label, FontSize = 40, FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) });
+                return new Button
+                {
+                    Style = (Style)Application.Current.Resources["AnswerButton"], Width = 420, Height = 360, Margin = new Thickness(30),
+                    Background = new SolidColorBrush(tint), Content = new Viewbox { Child = content, Margin = new Thickness(20) },
+                };
+            }
+            var more = Choice("ballon", "🎈", "Encore un peu !", Color.FromRgb(0xFF, 0xF1, 0xB8));
+            more.Click += (s, e) => { EndPause(false); };
+            var rest = Choice("note-musique", "🎵", "Une pause", Color.FromRgb(0xD6, 0xF0, 0xFF));
+            rest.Click += (s, e) => { EndPause(true); };
+            row.Children.Add(more);
+            row.Children.Add(rest);
+            panel.Children.Add(row);
+            veil.Children.Add(panel);
+            PauseHost.Children.Add(veil);
+            PauseHost.Visibility = Visibility.Visible;
+            GazeTargets.ModalRoot = PauseHost;
+            Speech.Stop();
+            Speech.Say("Ça fait un moment qu'on joue ! On continue encore un peu, ou on fait une petite pause ?");
+        }
+
+        private void EndPause(bool rest)
+        {
+            GazeTargets.ModalRoot = null;
+            PauseHost.Visibility = Visibility.Collapsed;
+            PauseHost.Children.Clear();
+            _pauseShown = false;
+            _playedSeconds = 0;
+            GazeStats.RecordComm(rest ? "pause-oui" : "pause-non");
+            if (rest)
+            {
+                Speech.Say("On fait une pause, avec un peu de musique. Tu reviendras quand tu veux !");
+                Select("music");
+            }
+            else Speech.Say("On continue ! Mais pas trop longtemps !");
         }
 
         private void RefreshLevelStatus()
