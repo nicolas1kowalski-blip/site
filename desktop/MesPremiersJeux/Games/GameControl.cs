@@ -602,6 +602,7 @@ namespace MesPremiersJeux.Games
             RewardStore.Add(); // chaque réussite gagne une étoile ⭐
             Progress.Add(GetType().Name); // ... comptée dans le bilan parent
             GazeStats.RecordSuccess((DateTime.Now - _lastWin).TotalSeconds);
+            Level.Record(true);
             _lastWin = DateTime.Now;
             _wins++;
             DisarmHint();      // plus besoin d'aide : c'est gagné
@@ -813,6 +814,7 @@ namespace MesPremiersJeux.Games
         protected static void Shake(FrameworkElement el)
         {
             GazeStats.RecordWrong(); // une erreur (bilan + réglage du regard)
+            Level.Record(false);     // ... et le niveau automatique
             el.RenderTransformOrigin = new Point(0.5, 0.5);
             var tt = new TranslateTransform();
             el.RenderTransform = tt;

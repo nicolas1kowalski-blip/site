@@ -19,7 +19,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             var target = GameKit.Rand(GameData.Shapes);
-            var options = GameKit.PickN(GameData.Shapes, 3, target);
+            var options = Level.Pick(GameData.Shapes, target);
             Question.Text = $"Trouve : {target.Name}";
             // Le modèle est déjà montré en grand au centre : on ajoute le 🔊.
             SetConsigne(null, () => $"Trouve la même forme : {target.Name} !");

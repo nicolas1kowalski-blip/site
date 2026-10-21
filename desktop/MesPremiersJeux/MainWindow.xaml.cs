@@ -303,6 +303,25 @@ namespace MesPremiersJeux
             SyncDriverCombo(); // reflète le pilote choisi dans la liste
             ChildNameBox.Text = _settings.ChildName; // prénom (« Mon prénom »)
 
+            // 🎚 Le niveau : réglage, sauvegarde, et la voix quand elle monte.
+            Level.Setting = _settings.Level ?? "auto";
+            Level.Auto = _settings.AutoLevel;
+            Level.Save = () => { _settings.AutoLevel = Level.Auto; _settings.Save(); };
+            foreach (ComboBoxItem it in LevelCombo.Items)
+                if ((string)it.Tag == Level.Setting) { LevelCombo.SelectedItem = it; break; }
+            if (LevelCombo.SelectedItem == null) LevelCombo.SelectedIndex = 0;
+            RefreshLevelStatus();
+            Level.Changed += (lvl, up) => Dispatcher.Invoke(() =>
+            {
+                RefreshLevelStatus();
+                if (up)
+                {
+                    Speech.Say("Bravo ! Tu as grandi : tu passes au niveau suivant !");
+                    ShowParentNotice("🎚 Niveau automatique : " + Level.Name(lvl) + " (elle réussit presque tout)");
+                }
+                else ShowParentNotice("🎚 Niveau automatique : retour à " + Level.Name(lvl) + " (trop d'erreurs ces derniers temps)");
+            });
+
             // 👁 Mesures du regard + temps de fixation ajusté tout seul.
             GazeStats.AutoDwell = _settings.AutoDwell;
             GazeStats.GetDwell = () => _dwell.DwellTime;
@@ -774,6 +793,28 @@ namespace MesPremiersJeux
         }
 
         // Prénom de l'enfant : utilisé par l'activité « Mon prénom » (Éducatif).
+        private void Level_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_settings == null) return;
+            var tag = (LevelCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+            if (string.IsNullOrEmpty(tag) || tag == _settings.Level) return;
+            _settings.Level = tag;
+            Level.Setting = tag;
+            _settings.Save();
+            RefreshLevelStatus();
+            Lib.Log.Write("niveau", "Réglé par le parent : " + tag + " → " + Level.Name(Level.Current));
+        }
+
+        private void RefreshLevelStatus()
+        {
+            try
+            {
+                LevelStatus.Text = "En ce moment : " + Level.Name(Level.Current) + " — " + Level.Choices + " choix, nombres jusqu'à " + Level.MaxNumber +
+                    (Level.IsAuto ? ". Toutes les 20 réponses : ≥ 85 % de réussite → niveau suivant, < 40 % → niveau précédent." : ".");
+            }
+            catch { }
+        }
+
         private void ChildName_Changed(object sender, RoutedEventArgs e)
         {
             if (_settings == null) return;

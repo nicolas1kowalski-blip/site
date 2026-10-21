@@ -22,7 +22,7 @@ namespace MesPremiersJeux.Games
         };
 
         private int _lastN;
-        private static readonly string[] Words = { "zéro", "un", "deux", "trois", "quatre", "cinq" };
+        private static readonly string[] Words = { "zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix" };
 
         public CountGame(Action celebrate) : base(celebrate) { }
 
@@ -30,10 +30,10 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             int n;
-            n = GameKit.NextNumber("compter", 1, 5);
+            n = GameKit.NextNumber("compter", 1, Level.MaxNumber);
             _lastN = n;
             // Trois choix voisins (dont la bonne réponse), dans l'ordre 1 → 5.
-            var options = GameKit.PickN(Enumerable.Range(1, 5).ToList(), 3, n).OrderBy(v => v).ToList();
+            var options = Level.Pick(Enumerable.Range(1, Level.MaxNumber).ToList(), n).OrderBy(v => v).ToList();
             string ask = "Combien ? " + string.Join("... ", options.Select(v => Words[v])) + " ?";
             Question.Text = "Combien ?";
             SetConsigne(null, () => ask);

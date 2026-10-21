@@ -203,11 +203,11 @@ namespace MesPremiersJeux.Games
             _round++;
             if (_round > 4) { StartStories(); return; }
             _target = Emotions[GameKit.NextNumber("emotions-montre", 0, Emotions.Length - 1)];
-            var choices = GameKit.PickN(Emotions.ToList(), 3, _target);
+            var choices = Level.Pick(Emotions.ToList(), _target, 4);
             Question.Text = "🔎 Montre-moi celui qui est " + _target.Adj;
             _canvas = new Canvas { Width = W, Height = H };
-            double size = 340, gap = 60;
-            double x0 = (W - 3 * size - 2 * gap) / 2;
+            double gap = 60, size = Math.Min(340, (W - 100 - (choices.Count - 1) * gap) / choices.Count);
+            double x0 = (W - choices.Count * size - (choices.Count - 1) * gap) / 2;
             for (int k = 0; k < choices.Count; k++)
             {
                 var e = choices[k];
@@ -266,7 +266,7 @@ namespace MesPremiersJeux.Games
             if (_round > 4) { StartYou(); return; }
             var story = _stories[(_round - 1) % _stories.Count];
             _target = Emotions.First(x => x.Key == story.Key);
-            var choices = GameKit.PickN(Emotions.ToList(), 3, _target);
+            var choices = Level.Pick(Emotions.ToList(), _target, 4);
             Question.Text = "💭 Il est comment ?";
             _canvas = new Canvas { Width = W, Height = H };
 
@@ -276,8 +276,8 @@ namespace MesPremiersJeux.Games
             Canvas.SetTop(pic, 10);
             _canvas.Children.Add(pic);
 
-            double size = 280, gap = 70;
-            double x0 = (W - 3 * size - 2 * gap) / 2;
+            double gap = 70, size = Math.Min(280, (W - 100 - (choices.Count - 1) * gap) / choices.Count);
+            double x0 = (W - choices.Count * size - (choices.Count - 1) * gap) / 2;
             for (int k = 0; k < choices.Count; k++)
             {
                 var e = choices[k];

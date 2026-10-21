@@ -39,7 +39,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             var target = GameKit.Rand(CartoonArt.Items);
-            var options = GameKit.PickN(CartoonArt.Items, 3, target);
+            var options = Level.Pick(CartoonArt.Items, target);
             Question.Text = "Quel objet fait cette ombre ?";
             // L'ombre est le modèle, déjà en grand : on ajoute le 🔊.
             SetConsigne(null, () => "Quel objet fait cette ombre ? Regarde bien sa forme !");

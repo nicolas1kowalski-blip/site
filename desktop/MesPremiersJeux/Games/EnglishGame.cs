@@ -257,12 +257,12 @@ namespace MesPremiersJeux.Games
             _round++;
             if (_round > 5) { StartColours(); return; }
             _target = _animals[(_round - 1) % _animals.Count];
-            var choices = GameKit.PickN(_animals, 3, _target);
+            var choices = Level.Pick(_animals, _target, 4);
             Question.Text = "🔎 Where is the " + _target.En.ToLowerInvariant() + "?";
             _canvas = new Canvas { Width = W, Height = H };
 
-            double size = 340, gap = 60;
-            double x0 = (W - 3 * size - 2 * gap) / 2;
+            double gap = 60, size = Math.Min(340, (W - 100 - (choices.Count - 1) * gap) / choices.Count);
+            double x0 = (W - choices.Count * size - (choices.Count - 1) * gap) / 2;
             for (int k = 0; k < choices.Count; k++)
             {
                 var w = choices[k];

@@ -218,7 +218,7 @@ namespace MesPremiersJeux.Games
             _canvas.Children.Add(speaker);
 
             // Choix : d'abord les lettres de la session, puis d'autres de l'alphabet.
-            int nChoices = _findRound < 2 ? 2 : (_findRound < 4 ? 3 : 4);
+            int nChoices = Math.Min(4, Math.Max(2, Level.Choices - (_findRound < 2 ? 1 : 0))); // le niveau, un peu plus doux au début
             var picks = new List<int> { _session[si] };
             foreach (var s2 in GameKit.Shuffle(_session.Where(v => v != _session[si])))
             {

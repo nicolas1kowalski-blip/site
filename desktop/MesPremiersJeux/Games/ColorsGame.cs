@@ -17,7 +17,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             var target = GameKit.Rand(GameData.Colors);
-            var options = GameKit.PickN(GameData.Colors, 3, target);
+            var options = Level.Pick(GameData.Colors, target);
             Question.Text = $"Trouve la couleur : {target.Name}";
             // Consigne sans lecture : le rond de couleur modèle en GRAND + 🔊.
             SetConsigne(new System.Windows.Shapes.Ellipse

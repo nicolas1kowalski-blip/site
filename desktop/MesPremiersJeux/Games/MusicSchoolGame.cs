@@ -203,12 +203,12 @@ namespace MesPremiersJeux.Games
             if (_quizRound > 4) { StartXylophone(); return; }
 
             _quizTarget = _session[(_quizRound - 1) % _session.Count];
-            var choices = GameKit.PickN(_session, 3, _quizTarget);
+            var choices = Level.Pick(_session, _quizTarget, 4);
             Question.Text = "👂 Qui fait ce bruit ?";
             _canvas = new Canvas { Width = W, Height = H };
 
-            double size = 330, gap = 60;
-            double x0 = (W - 3 * size - 2 * gap) / 2;
+            double gap = 60, size = Math.Min(330, (W - 100 - (choices.Count - 1) * gap) / choices.Count);
+            double x0 = (W - choices.Count * size - (choices.Count - 1) * gap) / 2;
             for (int k = 0; k < choices.Count; k++)
             {
                 var ins = choices[k];

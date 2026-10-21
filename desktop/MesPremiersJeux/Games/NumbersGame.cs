@@ -30,7 +30,7 @@ namespace MesPremiersJeux.Games
         {
             Locked = false;
             int n;
-            n = GameKit.NextNumber("nombres", 1, 5);
+            n = GameKit.NextNumber("nombres", 1, Level.MaxNumber);
             _lastN = n;
 
             var item = GameKit.Rand(CartoonArt.Items);
@@ -57,8 +57,8 @@ namespace MesPremiersJeux.Games
             }
 
             // Trois chiffres possibles (dont le bon).
-            var candidates = Enumerable.Range(1, 5).ToList();
-            var options = GameKit.PickN(candidates, 3, n);
+            var candidates = Enumerable.Range(1, Level.MaxNumber).ToList();
+            var options = Level.Pick(candidates, n);
             var row = Row();
             foreach (var num in options)
             {

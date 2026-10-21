@@ -63,7 +63,7 @@ namespace MesPremiersJeux.Games
             _item = Items[_rng.Next(Items.Length)];
             // Le total varie (pioche 2..5) et le nombre qui MANQUE varie aussi :
             // jamais le même deux fois de suite.
-            Target = GameKit.NextNumber("complement-total", 2, 5);
+            Target = GameKit.NextNumber("complement-total", 2, Math.Min(6, Level.MaxNumber)); // le panier : 6 au plus
             int missing;
             int guard = 0;
             do { missing = 1 + _rng.Next(Target - 1); }
