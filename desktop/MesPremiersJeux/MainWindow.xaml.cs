@@ -263,6 +263,12 @@ namespace MesPremiersJeux
                 AzureVoiceCombo.Items.Add(new ComboBoxItem { Content = label, Tag = name });
             foreach (ComboBoxItem it in AzureVoiceCombo.Items)
                 if ((string)it.Tag == _settings.AzureVoice) { AzureVoiceCombo.SelectedItem = it; break; }
+            try
+            {
+                EnglishVoiceText.Text = "🇬🇧 Anglais : " + Speech.EnglishMode() +
+                    ". Pour une vraie voix anglaise sans clé Azure : Paramètres Windows → Heure et langue → Voix → Ajouter des voix → English.";
+            }
+            catch { }
 
             // Sauvegarde en ligne (Supabase).
             CloudSync.Url = _settings.SupabaseUrl;

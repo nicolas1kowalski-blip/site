@@ -5,22 +5,23 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Shapes;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
 {
     /// <summary>
-    /// 🎵 « Le petit orchestre » (PS/MS) : apprendre la musique en quatre actes.
-    ///   1. LES INSTRUMENTS — regarder un instrument le fait jouer et dit son nom.
+    /// 🎵 « Le petit orchestre » (PS/MS) : apprendre la musique.
+    /// TOUT JOUE DÈS QUE LE REGARD SE POSE (pas besoin de fixer) — jamais de
+    /// silence : regarder un instrument, c'est l'entendre.
+    ///   1. LES INSTRUMENTS — un regard : ça joue ; une fixation : son nom.
     ///   2. QUI FAIT CE BRUIT ? — on entend un instrument, on le retrouve parmi trois.
-    ///   3. LE XYLOPHONE — cinq lames de couleur : do, ré, mi, fa, sol ; chaque
-    ///      lame chante sa note et dit son nom (du grave à l'aigu).
-    ///   4. LA CHANSON — « Au clair de la lune » : la lame à jouer brille,
-    ///      l'enfant joue la mélodie note après note, puis on l'écoute en entier.
-    /// Les sons sont synthétisés ; le parent peut déposer de vrais sons dans
-    /// Contenu\Sons (tambour.wav, guitare.wav, xylophone.wav, piano.wav,
-    /// trompette.wav, violon.wav).
+    ///   3. LE XYLOPHONE — cinq lames : do, ré, mi, fa, sol, qui chantent au regard.
+    ///   4. LA CHANSON — « Au clair de la lune » : la lame à jouer brille.
+    ///   5. JE JOUE ! — on choisit un instrument (xylophone, piano, guitare,
+    ///      trompette, violon, batterie) et on en joue librement au regard.
+    /// Le parent peut déposer de vrais sons dans Contenu\Sons (tambour.wav,
+    /// guitare.wav, xylophone.wav, piano.wav, trompette.wav, violon.wav,
+    /// grosse-caisse.wav, caisse-claire.wav, tom.wav, cymbale.wav).
     /// </summary>
     public sealed class MusicSchoolGame : GameControl
     {
@@ -41,53 +42,64 @@ namespace MesPremiersJeux.Games
             new Instr { Key = "violon", Name = "violon", Article = "le", Emoji = "🎻", Says = "On le frotte avec un archet !" },
         };
 
-        // Les cinq lames du xylophone : note, nom, couleur.
-        private static readonly (int Degree, string Name, Color Color)[] Bars =
+        // Les notes : nom et couleur (do … do aigu).
+        private static readonly (string Name, Color Color)[] Notes =
         {
-            (0, "do", Color.FromRgb(0xFF, 0x6B, 0x6B)),
-            (1, "ré", Color.FromRgb(0xFF, 0xA9, 0x3C)),
-            (2, "mi", Color.FromRgb(0xFF, 0xD9, 0x3C)),
-            (3, "fa", Color.FromRgb(0x7B, 0xE0, 0x6C)),
-            (4, "sol", Color.FromRgb(0x5D, 0xAD, 0xE2)),
+            ("do", Color.FromRgb(0xFF, 0x6B, 0x6B)), ("ré", Color.FromRgb(0xFF, 0xA9, 0x3C)), ("mi", Color.FromRgb(0xFF, 0xD9, 0x3C)),
+            ("fa", Color.FromRgb(0x7B, 0xE0, 0x6C)), ("sol", Color.FromRgb(0x5D, 0xAD, 0xE2)), ("la", Color.FromRgb(0x7E, 0x8C, 0xF2)),
+            ("si", Color.FromRgb(0xC0, 0x7E, 0xE6)), ("do", Color.FromRgb(0xFF, 0x8F, 0xC8)),
         };
 
-        // « Au clair de la lune » (première phrase), en degrés des lames.
+        // « Au clair de la lune » (première phrase), en degrés.
         private static readonly int[] Song = { 0, 0, 0, 1, 2, 1, 0, 2, 1, 1, 0 };
         private static readonly string[] SongWords = { "Au", "clair", "de", "la", "lu", "ne", "mon", "a", "mi", "Pier", "rot" };
 
+        private readonly int _startAct; // 1 instruments · 3 xylophone et chanson · 5 je joue
         private Canvas _canvas;
         private int _act;
         private bool[] _seen;
         private List<Instr> _session;
         private int _quizRound;
         private Instr _quizTarget;
-        private int _played;          // acte 3 : notes essayées
-        private int _songPos;         // acte 4 : prochaine note à jouer
+        private int _played;
+        private int _songPos;
         private List<Border> _bars;
         private TextBlock _lyrics;
-
-        private readonly int _startAct; // 1 = les instruments · 3 = le xylophone et la chanson
+        private readonly Dictionary<int, DateTime> _lastPlay = new Dictionary<int, DateTime>();
 
         public MusicSchoolGame(Action celebrate, int startAct = 1) : base(celebrate) { _startAct = startAct; }
 
         protected override void NewRound()
         {
             _session = GameKit.Shuffle(Instruments).ToList();
-            if (_startAct >= 3) StartXylophone(); else StartInstruments();
+            if (_startAct >= 5) StartFreePlay();
+            else if (_startAct >= 3) StartXylophone();
+            else StartInstruments();
         }
 
         private static FrameworkElement Pic(Instr i, double size) => Art.Visual(i.Key, i.Emoji, size);
 
+        // Un pad ne rejoue pas s'il vient de jouer (le regard tremble un peu).
+        private bool CanPlay(int pad, int cooldownMs)
+        {
+            var now = DateTime.Now;
+            if (_lastPlay.TryGetValue(pad, out var t) && (now - t).TotalMilliseconds < cooldownMs) return false;
+            _lastPlay[pad] = now;
+            return true;
+        }
+
         // ==================================================================
-        // ACTE 1 — Les instruments
+        // ACTE 1 — Les instruments : ça joue dès le regard, le nom au clic.
         // ==================================================================
         private void StartInstruments()
         {
             _act = 1;
             Locked = false;
             _seen = new bool[_session.Count];
+            _lastPlay.Clear();
             Question.Text = "🎵 Le petit orchestre";
             _canvas = new Canvas { Width = W, Height = H };
+            var pads = new List<FrameworkElement>();
 
             double size = 300, gapX = 60, gapY = 30;
             int cols = 3;
@@ -105,51 +117,56 @@ namespace MesPremiersJeux.Games
                     Margin = new Thickness(0, 6, 0, 0),
                 });
                 var btn = AnswerButton(new Viewbox { Child = content, Margin = new Thickness(14) }, size);
-                btn.Height = size;
                 var captured = btn;
-                btn.Click += (o, ev) => PlayInstrument(captured, idx);
+                btn.Click += (o, ev) => NameInstrument(captured, idx);
                 Canvas.SetLeft(btn, x0 + (i % cols) * (size + gapX));
                 Canvas.SetTop(btn, y0 + (i / cols) * (size + gapY));
                 _canvas.Children.Add(btn);
+                pads.Add(btn);
             }
+            SetGazePads(pads, i =>
+            {
+                if (i < 0 || _act != 1 || Locked || !CanPlay(i, 1500)) return;
+                SoundFx.Instrument(_session[i].Key);
+                Pulse(pads[i]);
+                Highlight(pads[i], false);
+                if (!_seen[i]) { _seen[i] = true; RewardStar(); CheckAllHeard(); }
+            });
 
-            SetConsigne(Art.ForEmoji("🎵", 110), () => "Regarde chaque instrument pour l'entendre jouer !");
+            SetConsigne(Art.ForEmoji("🎵", 110), () => "Regarde un instrument : il joue tout de suite ! Fixe-le pour entendre son nom.");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Bienvenue dans le petit orchestre ! Regarde chaque instrument pour l'entendre jouer !"));
+            Schedule(450, () => Speak("Le petit orchestre ! Regarde un instrument, et il joue ! Fixe-le pour entendre son nom."));
         }
 
-        private void PlayInstrument(Button btn, int i)
+        private void NameInstrument(Button btn, int i)
         {
             if (_act != 1 || Locked) return;
             var ins = _session[i];
-            Pulse(btn);
             SoundFx.Instrument(ins.Key);
-            bool first = !_seen[i];
-            _seen[i] = true;
-            Speech.WhenQuiet(() =>
+            Pulse(btn);
+            Speech.WhenQuiet(() => { if (!Closed && _act == 1) Speak(Cap(ins.Article) + " " + ins.Name + " ! " + ins.Says); }, 1.4, 3);
+            if (!_seen[i]) { _seen[i] = true; RewardStar(); CheckAllHeard(); }
+        }
+
+        private void CheckAllHeard()
+        {
+            if (!_seen.All(x => x)) return;
+            Locked = true;
+            Schedule(3000, () =>
             {
-                if (Closed || _act != 1) return;
-                Speak(Cap(ins.Article) + " " + ins.Name + " ! " + ins.Says);
-            }, 1.6, 3);
-            if (first) RewardStar();
-            if (_seen.All(x => x))
-            {
-                Locked = true;
-                Schedule(3200, () =>
-                {
-                    Speak("Tu connais tous les instruments ! Maintenant, écoute bien : qui fait ce bruit ?");
-                    Schedule(3800, StartQuiz);
-                });
-            }
+                Speak("Tu as entendu tous les instruments ! Maintenant, écoute bien : qui fait ce bruit ?");
+                Schedule(3800, StartQuiz);
+            });
         }
 
         // ==================================================================
-        // ACTE 2 — Qui fait ce bruit ?
+        // ACTE 2 — Qui fait ce bruit ? (au clic : c'est un choix)
         // ==================================================================
         private void StartQuiz()
         {
             _act = 2;
             _quizRound = 0;
+            SetGazePads(null, null);
             NextQuiz();
         }
 
@@ -177,7 +194,6 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(btn);
             }
 
-            // Le haut-parleur REJOUE le son (pas le nom : c'est l'oreille qui travaille).
             var ear = AnswerButton(new TextBlock { Text = "👂", FontSize = 90, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }, 150);
             ear.Click += (o, ev) => { if (!Locked) SoundFx.Instrument(_quizTarget.Key); };
             Canvas.SetLeft(ear, W / 2 - 75);
@@ -204,7 +220,7 @@ namespace MesPremiersJeux.Games
                 GameKit.Success();
                 Pulse(btn);
                 SoundFx.Instrument(ins.Key);
-                Speech.WhenQuiet(() => { if (!Closed) Speak("Oui ! C'est " + ins.Article + " " + ins.Name + " ! " + GameKit.Praise()); }, 1.6, 3);
+                Speech.WhenQuiet(() => { if (!Closed) Speak("Oui ! C'est " + ins.Article + " " + ins.Name + " ! " + GameKit.Praise()); }, 1.4, 3);
                 Celebrate();
                 Schedule(3400, NextQuiz);
             }
@@ -217,12 +233,12 @@ namespace MesPremiersJeux.Games
                     if (Closed || _act != 2) return;
                     Speak("Ça, c'est " + ins.Article + " " + ins.Name + ". Écoute encore !");
                     Schedule(2200, () => { if (!Locked) SoundFx.Instrument(_quizTarget.Key); });
-                }, 1.6, 3);
+                }, 1.4, 3);
             }
         }
 
         // ==================================================================
-        // ACTE 3 — Le xylophone (do ré mi fa sol)
+        // ACTE 3 — Le xylophone (do ré mi fa sol), qui chante au regard
         // ==================================================================
         private void StartXylophone()
         {
@@ -230,31 +246,37 @@ namespace MesPremiersJeux.Games
             Locked = false;
             _played = 0;
             Question.Text = "🎹 Le xylophone";
-            BuildXylophone();
+            BuildBars(5, "xylophone", null);
             SetConsigne(Art.Visual("xylophone", "🎹", 110), () => "Regarde les lames du xylophone : chacune chante sa note ! Do, ré, mi, fa, sol !");
             SetBody(_canvas);
-            Schedule(450, () => Speak("Voici le xylophone ! Regarde une lame pour l'entendre chanter. Du grave... à l'aigu !"));
+            Schedule(450, () => Speak("Voici le xylophone ! Regarde une lame, elle chante. Du grave... à l'aigu !"));
         }
 
-        private void BuildXylophone()
+        // Les lames (ou touches) : n notes, un timbre, et ce qui se passe quand
+        // une note est jouée (regard ou clic).
+        private void BuildBars(int n, string timbre, Action<int> onPlayed)
         {
             _canvas = new Canvas { Width = W, Height = H };
             _bars = new List<Border>();
-            double barW = 190, gap = 34, baseH = 520;
-            double x0 = (W - 5 * barW - 4 * gap) / 2;
-            for (int i = 0; i < 5; i++)
+            _lastPlay.Clear();
+            var pads = new List<FrameworkElement>();
+            double gap = n > 5 ? 18 : 34;
+            double barW = Math.Min(190, (W - 80 - (n - 1) * gap) / n);
+            double baseH = 520;
+            double x0 = (W - n * barW - (n - 1) * gap) / 2;
+            for (int i = 0; i < n; i++)
             {
-                var (deg, name, col) = Bars[i];
-                double h = baseH - i * 62; // les lames raccourcissent vers l'aigu
+                var (name, col) = Notes[i];
+                double h = baseH - i * (n > 5 ? 40 : 62); // plus court vers l'aigu
                 var label = new TextBlock
                 {
-                    Text = name, FontSize = 56, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White,
+                    Text = name, FontSize = n > 5 ? 44 : 56, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
                     Margin = new Thickness(0, 0, 0, 22),
                 };
                 var bar = new Border
                 {
-                    Width = barW, Height = h, CornerRadius = new CornerRadius(40),
+                    Width = barW, Height = h, CornerRadius = new CornerRadius(Math.Min(40, barW / 3)),
                     Background = new LinearGradientBrush(Lighten(col), col, 90),
                     BorderBrush = Brushes.White, BorderThickness = new Thickness(5),
                     Child = label, RenderTransformOrigin = new Point(0.5, 1),
@@ -266,36 +288,37 @@ namespace MesPremiersJeux.Games
                     Background = Brushes.Transparent, Content = bar,
                 };
                 int idx = i;
-                btn.Click += (o, ev) => BarPlayed(idx);
+                btn.Click += (o, ev) => PlayBar(idx, timbre, onPlayed, 0);
                 Canvas.SetLeft(btn, x0 + i * (barW + gap));
                 Canvas.SetTop(btn, H - 40 - h - 16);
                 _canvas.Children.Add(btn);
                 _bars.Add(bar);
+                pads.Add(btn);
             }
+            SetGazePads(pads, i => { if (i >= 0) PlayBar(i, timbre, onPlayed, 350); });
         }
 
-        private void BarPlayed(int i)
+        private void PlayBar(int i, string timbre, Action<int> onPlayed, int cooldown)
         {
-            if (Locked) return;
-            var (deg, name, col) = Bars[i];
-            SoundFx.PlayNote(deg);
+            if (Locked || !CanPlay(i, cooldown)) return;
+            SoundFx.PlayNote(i, timbre);
             Pulse(_bars[i]);
+            if (onPlayed != null) { onPlayed(i); return; }
             if (_act == 3)
             {
-                Speech.WhenQuiet(() => { if (!Closed && _act == 3) Speak(name + " !"); }, 0.5, 2);
+                Speech.WhenQuiet(() => { if (!Closed && _act == 3) Speak(Notes[i].Name + " !"); }, 0.4, 1.5);
                 if (++_played == 1) RewardStar();
-                if (_played >= 6)
+                if (_played >= 8)
                 {
                     Locked = true;
                     Schedule(1800, () =>
                     {
-                        Speak("Bravo ! Maintenant, on joue une chanson ensemble : Au clair de la lune ! Joue la lame qui brille !");
+                        Speak("Bravo ! Maintenant, on joue une chanson : Au clair de la lune ! Regarde la lame qui brille !");
                         Schedule(5200, StartSong);
                     });
                 }
-                return;
             }
-            if (_act == 4) SongStep(i);
+            else if (_act == 4) SongStep(i);
         }
 
         // ==================================================================
@@ -307,7 +330,7 @@ namespace MesPremiersJeux.Games
             Locked = false;
             _songPos = 0;
             Question.Text = "🌙 Au clair de la lune";
-            BuildXylophone();
+            BuildBars(5, "xylophone", null);
             _lyrics = new TextBlock
             {
                 FontSize = 44, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
@@ -319,7 +342,7 @@ namespace MesPremiersJeux.Games
             Canvas.SetLeft(moon, 40);
             Canvas.SetTop(moon, 10);
             _canvas.Children.Add(moon);
-            SetConsigne(Art.Visual("lune", "🌙", 110), () => "Au clair de la lune ! Joue la lame qui brille, note après note !");
+            SetConsigne(Art.Visual("lune", "🌙", 110), () => "Au clair de la lune ! Regarde la lame qui brille, note après note !");
             SetBody(_canvas);
             ShowLyrics();
             Glow(Song[0]);
@@ -327,7 +350,6 @@ namespace MesPremiersJeux.Games
 
         private void ShowLyrics()
         {
-            // Les syllabes déjà jouées en clair, la prochaine en gras entre crochets.
             var parts = new List<string>();
             for (int k = 0; k < Song.Length; k++)
                 parts.Add(k == _songPos ? "[" + SongWords[k] + "]" : SongWords[k]);
@@ -337,13 +359,7 @@ namespace MesPremiersJeux.Games
         private void SongStep(int bar)
         {
             int want = Song[_songPos];
-            if (bar != want)
-            {
-                // On a quand même entendu la note (c'est de la musique !) ; on remontre.
-                Glow(want);
-                if (_songPos == 0) Speak("Joue la lame qui brille !");
-                return;
-            }
+            if (bar != want) { Glow(want); return; } // on a entendu la note ; la bonne rebrille
             _songPos++;
             if (_songPos == 1) RewardStar();
             if (_songPos >= Song.Length)
@@ -360,23 +376,18 @@ namespace MesPremiersJeux.Games
             Glow(Song[_songPos]);
         }
 
-        // Rejoue la mélodie en entier, lame après lame, puis la fête.
         private void PlayBack()
         {
             for (int k = 0; k < Song.Length; k++)
             {
                 int bar = Song[k];
-                Schedule(60 + k * 520, () =>
-                {
-                    SoundFx.PlayNote(Bars[bar].Degree);
-                    Pulse(_bars[bar]);
-                });
+                Schedule(60 + k * 520, () => { SoundFx.PlayNote(bar); Pulse(_bars[bar]); });
             }
             Schedule(60 + Song.Length * 520 + 400, () =>
             {
-                Speak("Au clair de la lune, mon ami Pierrot ! Bravo, petite musicienne ! " + GameKit.Praise());
+                Speak("Au clair de la lune, mon ami Pierrot ! Bravo ! " + GameKit.Praise());
                 Celebrate();
-                Schedule(4500, NewRound);
+                Schedule(4500, _startAct >= 3 ? (Action)StartFreePlay : NewRound);
             });
         }
 
@@ -389,6 +400,116 @@ namespace MesPremiersJeux.Games
             }
             _bars[bar].BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0.6, TimeSpan.FromMilliseconds(500))
             { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+        }
+
+        // ==================================================================
+        // ACTE 5 — Je joue ! Choisir un instrument, puis en jouer au regard.
+        // ==================================================================
+        private static readonly (string Key, string Name, string Emoji)[] Playable =
+        {
+            ("xylophone", "Le xylophone", "🎹"), ("piano", "Le piano", "🎹"), ("guitare", "La guitare", "🎸"),
+            ("trompette", "La trompette", "🎺"), ("violon", "Le violon", "🎻"), ("batterie", "La batterie", "🥁"),
+        };
+
+        private void StartFreePlay()
+        {
+            _act = 5;
+            Locked = false;
+            SetGazePads(null, null);
+            Question.Text = "🎸 Je joue !";
+            _canvas = new Canvas { Width = W, Height = H };
+            double size = 300, gapX = 60, gapY = 30;
+            int cols = 3;
+            double x0 = (W - cols * size - (cols - 1) * gapX) / 2, y0 = 20;
+            for (int i = 0; i < Playable.Length; i++)
+            {
+                var (key, name, emoji) = Playable[i];
+                var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                content.Children.Add(Art.Visual(key == "batterie" ? "tambour" : key, emoji, 180));
+                content.Children.Add(new TextBlock
+                {
+                    Text = name, FontSize = 34, FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0),
+                });
+                var btn = AnswerButton(new Viewbox { Child = content, Margin = new Thickness(14) }, size);
+                var k = key; var n = name;
+                btn.Click += (o, ev) => OpenInstrument(k, n);
+                Canvas.SetLeft(btn, x0 + (i % cols) * (size + gapX));
+                Canvas.SetTop(btn, y0 + (i / cols) * (size + gapY));
+                _canvas.Children.Add(btn);
+            }
+            SetConsigne(Art.ForEmoji("🎵", 110), () => "Choisis un instrument, et joue avec tes yeux !");
+            SetBody(_canvas);
+            Schedule(450, () => Speak("Je joue ! Choisis un instrument : tu en joueras avec tes yeux !"));
+        }
+
+        private void OpenInstrument(string key, string name)
+        {
+            if (_act != 5 || Locked) return;
+            _act = 6;
+            Question.Text = "🎵 " + name;
+            if (key == "batterie") BuildDrums();
+            else BuildBars(8, key, i => { if (i == 0 && _played == 0) RewardStar(); _played++; });
+            _played = 0;
+
+            // Le bouton pour changer d'instrument (au clic, en haut à droite).
+            var back = AnswerButton(new TextBlock { Text = "🔁", FontSize = 70, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }, 130);
+            back.Click += (o, ev) => { if (_act == 6) StartFreePlay(); };
+            Canvas.SetLeft(back, W - 150);
+            Canvas.SetTop(back, 16);
+            _canvas.Children.Add(back);
+
+            SetConsigne(Art.Visual(key == "batterie" ? "tambour" : key, "🎵", 110), () => name + " ! Regarde une touche, elle joue ! La flèche change d'instrument.");
+            SetBody(_canvas);
+            Schedule(300, () => Speak(name + " ! Regarde les touches pour jouer !"));
+        }
+
+        // La batterie : quatre gros pads (grosse caisse, caisse claire, tom, cymbale).
+        private void BuildDrums()
+        {
+            _canvas = new Canvas { Width = W, Height = H };
+            _bars = new List<Border>();
+            _lastPlay.Clear();
+            var pads = new List<FrameworkElement>();
+            (string Name, Color C)[] kit =
+            {
+                ("boum", Color.FromRgb(0xE0, 0x4A, 0x4A)), ("tac", Color.FromRgb(0xFF, 0xC1, 0x07)),
+                ("tom", Color.FromRgb(0x4C, 0xC2, 0x6B)), ("tching", Color.FromRgb(0x5D, 0xAD, 0xE2)),
+            };
+            double size = 280, gap = 40;
+            double x0 = (W - 4 * size - 3 * gap) / 2;
+            for (int i = 0; i < 4; i++)
+            {
+                var pad = new Border
+                {
+                    Width = size, Height = size, CornerRadius = new CornerRadius(size / 2),
+                    Background = new RadialGradientBrush(Lighten(kit[i].C), kit[i].C),
+                    BorderBrush = Brushes.White, BorderThickness = new Thickness(8),
+                    Child = new TextBlock { Text = kit[i].Name, FontSize = 48, FontWeight = FontWeights.ExtraBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                };
+                var btn = new Button
+                {
+                    Style = (Style)Application.Current.Resources["AnswerButton"],
+                    Width = size + 16, Height = size + 16, Padding = new Thickness(0), Background = Brushes.Transparent, Content = pad,
+                };
+                int idx = i;
+                btn.Click += (o, ev) => HitDrum(idx, 0);
+                Canvas.SetLeft(btn, x0 + i * (size + gap));
+                Canvas.SetTop(btn, 220);
+                _canvas.Children.Add(btn);
+                _bars.Add(pad);
+                pads.Add(btn);
+            }
+            SetGazePads(pads, i => { if (i >= 0) HitDrum(i, 250); });
+        }
+
+        private void HitDrum(int i, int cooldown)
+        {
+            if (Locked || !CanPlay(i, cooldown)) return;
+            SoundFx.DrumKit(i);
+            Pulse(_bars[i]);
+            if (_played++ == 0) RewardStar();
         }
 
         // ------------------------------------------------------------------

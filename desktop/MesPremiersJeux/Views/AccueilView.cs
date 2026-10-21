@@ -133,7 +133,7 @@ namespace MesPremiersJeux.Views
             column.Children.Add(Bubble(new TextBlock
             {
                 Text = SeasonEmoji(now) + "  " + Cap(DateText(now)) + "   ·   " + Special(now),
-                FontSize = 38,
+                FontSize = 30,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0x4A, 0x7A)),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -146,7 +146,7 @@ namespace MesPremiersJeux.Views
             column.Children.Add(cards);
 
             var friend = Friend(now);
-            _friendPic = Art.Visual(friend.Img, "🐾", 150);
+            _friendPic = Art.Visual(friend.Img, "🐾", 175);
             var friendCard = Card(_friendPic, "L'ami du jour", Cap(friend.Name), Color.FromRgb(0xE2, 0xF6, 0xE4));
             friendCard.Click += (s, e) =>
             {
@@ -174,7 +174,7 @@ namespace MesPremiersJeux.Views
             cards.Children.Add(starsCard);
             RewardStore.Changed += () => Dispatcher.Invoke(() => _starsText.Text = "⭐ " + RewardStore.Balance);
 
-            var giftPic = Art.Visual("cadeau", "🎁", 150);
+            var giftPic = Art.Visual("cadeau", "🎁", 175);
             var giftCard = Card(giftPic, "Surprise !", "Regarde-moi", Color.FromRgb(0xFF, 0xE4, 0xF1));
             giftCard.Click += (s, e) =>
             {
@@ -404,7 +404,7 @@ namespace MesPremiersJeux.Views
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
             content.Children.Add(new TextBlock
             {
-                Text = title, FontSize = 24, FontWeight = FontWeights.Bold,
+                Text = title, FontSize = 20, FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0x4A, 0x7A)),
                 HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8),
             });

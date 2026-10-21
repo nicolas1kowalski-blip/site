@@ -210,6 +210,7 @@
                     <ComboBox x:Name="AzureVoiceCombo" FontSize="13" SelectionChanged="Azure_Changed" />
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,6,0,0"
                                Text="Sans clé : voix Windows. Avec clé : voix naturelle (Eloise = voix d'enfant). Repli automatique hors ligne." />
+                    <TextBlock x:Name="EnglishVoiceText" TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0" />
 
                     <Button Content="🔈 Écouter un exemple" FontSize="14" Padding="8,6" Margin="0,10,0,0" Click="VoiceTest_Click" />
 

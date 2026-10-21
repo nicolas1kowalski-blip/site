@@ -313,6 +313,48 @@ namespace MesPremiersJeux.Lib
             });
         }
 
+        /// <summary>La batterie : 0 grosse caisse · 1 caisse claire · 2 tom · 3 cymbale.</summary>
+        public static void DrumKit(int kind)
+        {
+            string[] names = { "grosse-caisse", "caisse-claire", "tom", "cymbale" };
+            int k = Math.Max(0, Math.Min(3, kind));
+            Play("kit-" + k, names[k], () =>
+            {
+                var rng = new Random(3 + k);
+                double dur = k == 3 ? 0.9 : k == 0 ? 0.35 : 0.3;
+                int n = (int)(Rate * dur);
+                var s = new float[n];
+                double lp = 0, phase = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    double t = i / (double)n, ts = i / (double)Rate;
+                    double noise = rng.NextDouble() * 2 - 1;
+                    double v;
+                    switch (k)
+                    {
+                        case 0: // grosse caisse : sinus qui plonge, très rond
+                            phase += 2 * Math.PI * (120 - 70 * Math.Min(1, ts * 8)) / Rate;
+                            v = Math.Sin(phase) * Math.Exp(-6 * t) * 1.1;
+                            break;
+                        case 1: // caisse claire : coup + bruit sec
+                            lp += 0.6 * (noise - lp);
+                            v = Math.Sin(2 * Math.PI * 190 * ts) * Math.Exp(-18 * t) * 0.6 + lp * Math.Exp(-9 * t) * 0.9;
+                            break;
+                        case 2: // tom : note moyenne qui descend
+                            phase += 2 * Math.PI * (240 - 90 * Math.Min(1, ts * 6)) / Rate;
+                            v = Math.Sin(phase) * Math.Exp(-7 * t) * 0.9;
+                            break;
+                        default: // cymbale : bruit brillant qui s'éteint lentement
+                            lp += 0.9 * (noise - lp);
+                            v = (noise - lp * 0.5) * Math.Exp(-3.2 * t) * 0.5;
+                            break;
+                    }
+                    s[i] = (float)Math.Max(-1, Math.Min(1, v));
+                }
+                return s;
+            });
+        }
+
         private static float[] DrumHit(double vol)
         {
             var rng = new Random(11);

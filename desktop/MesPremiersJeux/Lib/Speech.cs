@@ -171,10 +171,16 @@ namespace MesPremiersJeux.Lib
             return _englishVoice;
         }
 
+        private static bool _englishLogged;
+
         public static void SayEnglish(string text)
         {
             if (string.IsNullOrWhiteSpace(text) || Hold) return;
             _gate = false; // un mot anglais ne bloque jamais le clic
+            if (!_englishLogged) { _englishLogged = true; Log.Write("voix", "Anglais : " + EnglishMode()); }
+            // Un enregistrement du parent (Voix\en-<mot>, ex. en-hello, en-where-is-the-cat) passe avant tout.
+            var slug = "en-" + System.Text.RegularExpressions.Regex.Replace(text.ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+            if (VoiceBank.Has(slug)) { LocalStop(); AzureTts.StopPlayback(); VoiceBank.Play(slug); return; }
             if (AzureTts.Enabled)
             {
                 LocalStop();

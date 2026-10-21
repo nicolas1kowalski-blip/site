@@ -7,6 +7,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using MesPremiersJeux.Gaze;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
@@ -49,13 +50,15 @@ namespace MesPremiersJeux.Games
             PreviewMouseLeftButtonDown += (s, e) =>
             {
                 if (_hint != null) { _hint.Stop(); _hint.Start(); }
+                var under = ButtonUnder(e.OriginalSource as DependencyObject);
                 if (GateVoice && Speech.IsGating && Speech.BusyElapsedSeconds < 7)
                 {
                     e.Handled = true;
-                    var btn = ButtonUnder(e.OriginalSource as DependencyObject);
-                    if (btn != null) HoldClick(btn);
+                    if (under != null) HoldClick(under);
                     else ShowListenCue(e.GetPosition(this));
                 }
+                // Ce dont la voix parle reste EN SURBRILLANCE tant qu'elle parle.
+                else if (under != null) Highlight(under);
             };
 
             // VRAI PLEIN ÉCRAN : une seule couche — le jeu occupe TOUT l'écran,
@@ -137,6 +140,8 @@ namespace MesPremiersJeux.Games
             {
                 // Retour au menu : le jeu s'arrête VRAIMENT (voix, suites programmées).
                 Closed = true;
+                if (_gazeHooked) { _gazeHooked = false; GazeFeed.Sample -= OnGazeSample; }
+                Unlight();
                 _pendingClick = null;
                 try { _pendingWatch?.Stop(); } catch { }
                 foreach (var t in _scheduled.ToArray()) t.Stop();
@@ -152,6 +157,7 @@ namespace MesPremiersJeux.Games
             Content = root;
             Loaded += (s, e) =>
             {
+                if (!_gazeHooked) { _gazeHooked = true; GazeFeed.Sample += OnGazeSample; }
                 _playStart = _lastWin = DateTime.Now; // mesures du bilan
                 _wins = 0;
                 if (_started)
@@ -403,6 +409,7 @@ namespace MesPremiersJeux.Games
         {
             SoundFx.PopSound();
             PressAnim(btn);
+            Highlight(btn); // le clic est pris : on le voit
             _pendingClick = btn;
             if (_pendingWatch == null)
             {
@@ -440,6 +447,79 @@ namespace MesPremiersJeux.Games
             { AutoReverse = true, EasingFunction = new SineEase(), FillBehavior = FillBehavior.Stop };
             sc.BeginAnimation(ScaleTransform.ScaleXProperty, a);
             sc.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+        }
+
+        // ------------------------------------------------------------------
+        //  SURBRILLANCE : l'élément dont la voix parle garde un halo doré tant
+        //  qu'elle parle (puis il s'éteint tout seul).
+        // ------------------------------------------------------------------
+        private FrameworkElement _lit;
+        private DispatcherTimer _litWatch;
+
+        protected void Highlight(FrameworkElement el, bool untilQuiet = true)
+        {
+            Unlight();
+            if (el == null) return;
+            _lit = el;
+            el.Effect = new DropShadowEffect { BlurRadius = 46, ShadowDepth = 0, Color = Color.FromRgb(0xFF, 0xB3, 0x00), Opacity = 0.95 };
+            if (!untilQuiet) return;
+            var start = DateTime.Now;
+            _litWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            var watch = _litWatch;
+            watch.Tick += (s, e) =>
+            {
+                double sec = (DateTime.Now - start).TotalSeconds;
+                if (sec < 0.4 || (sec < 12 && (Speech.IsBusy || _pendingClick != null))) return;
+                watch.Stop();
+                if (_lit == el) Unlight();
+            };
+            watch.Start();
+        }
+
+        protected void Unlight()
+        {
+            try { _litWatch?.Stop(); } catch { }
+            _litWatch = null;
+            if (_lit != null) _lit.Effect = null;
+            _lit = null;
+        }
+
+        // ------------------------------------------------------------------
+        //  REGARD POSÉ (sans clic) : le jeu déclare des « pads » ; dès que le
+        //  regard arrive sur l'un d'eux, onEnter(index) est appelé (−1 : aucun).
+        //  Sert aux instruments : ça joue dès qu'on regarde, sans attendre.
+        // ------------------------------------------------------------------
+        private bool _gazeHooked;
+        private IList<FrameworkElement> _gazePads;
+        private Action<int> _gazeEnter;
+        private int _gazeIdx = -1;
+
+        protected void SetGazePads(IList<FrameworkElement> pads, Action<int> onEnter)
+        {
+            _gazePads = pads;
+            _gazeEnter = onEnter;
+            _gazeIdx = -1;
+        }
+
+        private void OnGazeSample(Point screen, bool valid)
+        {
+            if (_gazePads == null || Closed || !IsVisible) return;
+            int hit = -1;
+            if (valid)
+                for (int i = 0; i < _gazePads.Count; i++)
+                {
+                    var p = _gazePads[i];
+                    if (!p.IsLoaded || !p.IsVisible) continue;
+                    try
+                    {
+                        var l = p.PointFromScreen(screen);
+                        if (l.X >= 0 && l.Y >= 0 && l.X < p.ActualWidth && l.Y < p.ActualHeight) { hit = i; break; }
+                    }
+                    catch { }
+                }
+            if (hit == _gazeIdx) return;
+            _gazeIdx = hit;
+            try { _gazeEnter?.Invoke(hit); } catch { }
         }
 
         // La petite oreille « écoute d'abord ! » là où le clic a été bloqué.

@@ -92,11 +92,14 @@ namespace MesPremiersJeux.Games
         }
 
         // L'anglais d'abord, puis le français quand la voix a fini.
-        private void En(string en, string fr)
+        // En découverte (twice), le mot anglais est dit DEUX fois, bien séparées.
+        private void En(string en, string fr, bool twice = false)
         {
             if (Closed) return;
             Speech.SayEnglish(en);
-            if (fr != null) Speech.WhenQuiet(() => { if (!Closed) Speak(fr); }, 0.4, 6);
+            Action french = () => { if (fr != null) Speech.WhenQuiet(() => { if (!Closed) Speak(fr); }, 0.3, 6); };
+            if (twice) Speech.WhenQuiet(() => { if (Closed) return; Speech.SayEnglish(en); french(); }, 0.6, 6);
+            else french();
         }
 
         // Le mot écrit avec les lettres dessinées (lettre-A … lettre-Z).
@@ -169,7 +172,8 @@ namespace MesPremiersJeux.Games
             Pulse(btn);
             bool first = !_seen[i];
             _seen[i] = true;
-            En(w.En + "!", Cap(w.En) + ", ça veut dire " + w.Fr + " !");
+            SetConsigne(WordVisual(w.En, 56), () => w.En + " ! " + Cap(w.En) + ", ça veut dire " + w.Fr + " !");
+            En(w.En + "!", Cap(w.En) + ", ça veut dire " + w.Fr + " !", twice: true);
             if (first) RewardStar();
             if (_seen.All(x => x))
             {
@@ -223,7 +227,8 @@ namespace MesPremiersJeux.Games
             Pulse(btn);
             bool first = !_seen[i];
             _seen[i] = true;
-            En(w.En + "!", Cap(w.Fr) + " ! En anglais, on dit " + w.En.ToLowerInvariant() + " !");
+            SetConsigne(WordVisual(w.En, 56), () => w.En + " ! " + Cap(w.Fr) + " ! En anglais, on dit " + w.En.ToLowerInvariant() + " !");
+            En(w.En + "!", Cap(w.Fr) + " ! En anglais, on dit " + w.En.ToLowerInvariant() + " !", twice: true);
             if (first) RewardStar();
             if (_seen.All(x => x))
             {
@@ -350,7 +355,8 @@ namespace MesPremiersJeux.Games
             Pulse(btn);
             bool first = !_seen[i];
             _seen[i] = true;
-            En(c.En + "!", Cap(c.Fr) + " ! En anglais, " + c.En.ToLowerInvariant() + " !");
+            SetConsigne(WordVisual(c.En, 56), () => c.En + " ! " + Cap(c.Fr) + " ! En anglais, " + c.En.ToLowerInvariant() + " !");
+            En(c.En + "!", Cap(c.Fr) + " ! En anglais, " + c.En.ToLowerInvariant() + " !", twice: true);
             if (first) RewardStar();
             if (_seen.All(x => x))
             {
