@@ -34,6 +34,7 @@ namespace MesPremiersJeux.Games
             public Color Tint;
         }
 
+        // Les six émotions de base (actes 1 à 3)…
         private static readonly Emotion[] Emotions =
         {
             new Emotion { Key = "content", Adj = "content", Noun = "la joie", Says = "Il sourit, il rit ! Youpi !", Mouth = "smile", Brow = 0, Tint = Color.FromRgb(0xFF, 0xF1, 0xB8) },
@@ -42,6 +43,14 @@ namespace MesPremiersJeux.Games
             new Emotion { Key = "surpris", Adj = "surpris", Noun = "la surprise", Says = "Il ouvre grand les yeux et la bouche : oh !", Mouth = "o", Brow = -0.3, Tint = Color.FromRgb(0xE8, 0xD8, 0xFF) },
             new Emotion { Key = "peur", Adj = "effrayé", Noun = "la peur", Says = "Il tremble, il a peur ! Ouh là là !", Mouth = "wavy", Brow = -0.8, Tint = Color.FromRgb(0xD8, 0xF0, 0xE8) },
             new Emotion { Key = "fatigue", Adj = "fatigué", Noun = "la fatigue", Says = "Il bâille, ses yeux se ferment... il a sommeil.", Mouth = "yawn", Brow = -0.2, Tint = Color.FromRgb(0xE6, 0xE6, 0xF2) },
+        };
+
+        // … et trois de plus pour dire comment ON se sent (acte 4).
+        private static readonly Emotion[] More =
+        {
+            new Emotion { Key = "malade", Adj = "malade", Noun = "la maladie", Says = "Il ne se sent pas bien, il a chaud au front.", Mouth = "frown", Brow = -0.4, Tint = Color.FromRgb(0xE0, 0xF2, 0xDC) },
+            new Emotion { Key = "calme", Adj = "calme", Noun = "le calme", Says = "Il respire doucement, tout va bien.", Mouth = "smile", Brow = 0, Tint = Color.FromRgb(0xE2, 0xF4, 0xFF) },
+            new Emotion { Key = "excite", Adj = "tout excité", Noun = "l'excitation", Says = "Il saute partout, il a des étoiles dans les yeux !", Mouth = "smile", Brow = 0, Tint = Color.FromRgb(0xFF, 0xE8, 0xC8) },
         };
 
         // Les petites situations de l'acte 3 : (image, histoire, émotion).
@@ -318,12 +327,13 @@ namespace MesPremiersJeux.Games
             Locked = false;
             Question.Text = "💖 Et toi, tu te sens comment ?";
             _canvas = new Canvas { Width = W, Height = H };
-            double size = 300, gapX = 60, gapY = 30;
+            var all = Emotions.Concat(More).ToList();
+            double size = 215, gapX = 40, gapY = 14;
             int cols = 3;
-            double x0 = (W - cols * size - (cols - 1) * gapX) / 2, y0 = 20;
-            for (int i = 0; i < Emotions.Length; i++)
+            double x0 = (W - cols * size - (cols - 1) * gapX) / 2, y0 = 4;
+            for (int i = 0; i < all.Count; i++)
             {
-                var e = Emotions[i];
+                var e = all[i];
                 var btn = FaceButton(e, size, true);
                 var captured = btn;
                 btn.Click += (o, ev) => AnswerYou(captured, e);
@@ -347,7 +357,10 @@ namespace MesPremiersJeux.Games
                 : e.Key == "fache" ? "C'est la colère ! On souffle fort... et ça passe."
                 : e.Key == "surpris" ? "C'est la surprise ! Oh ! Qu'est-ce qui t'a surprise ?"
                 : e.Key == "peur" ? "C'est la peur... Je suis là, tout va bien. Respire doucement."
-                : "C'est la fatigue... Tu peux te reposer, on rejouera après.";
+                : e.Key == "fatigue" ? "C'est la fatigue... Tu peux te reposer, on rejouera après."
+                : e.Key == "malade" ? "Tu es malade... On va le dire à papa ou maman, et bien te soigner."
+                : e.Key == "calme" ? "C'est le calme... Comme c'est agréable ! On respire tout doucement."
+                : "C'est l'excitation ! Youhou ! Tu as plein d'énergie aujourd'hui !";
             Speak("Aujourd'hui, c'est " + e.Noun + ". " + reply);
             RewardStar();
             Celebrate();
