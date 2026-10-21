@@ -53,6 +53,9 @@ namespace MesPremiersJeux.Views
                     ("🧺", "Le panier", "MS", c => new CompleteGame(c)),
                     ("🎲", "Le nombre dans tous ses états", "MS", c => new NumberFormsGame(c)),
                     ("🧩", "Reproduis le modèle", "MS", c => new ModelCopyGame(c)),
+                    ("➕", "Un de plus, un de moins", "GS · CP", c => new MathGame(c, 1)),
+                    ("🍰", "Partager en deux", "GS · CP", c => new MathGame(c, 2)),
+                    ("🔢", "La bande numérique", "GS · CP", c => new MathGame(c, 3)),
                 },
             },
             new Theme
