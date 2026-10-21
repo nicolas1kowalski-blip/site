@@ -144,7 +144,7 @@ namespace MesPremiersJeux.Games
             var ins = _session[i];
             SoundFx.Instrument(ins.Key);
             Pulse(btn);
-            Speech.WhenQuiet(() => { if (!Closed && _act == 1) Speak(Cap(ins.Article) + " " + ins.Name + " ! " + ins.Says); }, 1.4, 3);
+            Speak(Cap(ins.Article) + " " + ins.Name + " ! " + ins.Says);
             if (!_seen[i]) { _seen[i] = true; RewardStar(); CheckAllHeard(); }
         }
 
@@ -220,7 +220,7 @@ namespace MesPremiersJeux.Games
                 GameKit.Success();
                 Pulse(btn);
                 SoundFx.Instrument(ins.Key);
-                Speech.WhenQuiet(() => { if (!Closed) Speak("Oui ! C'est " + ins.Article + " " + ins.Name + " ! " + GameKit.Praise()); }, 1.4, 3);
+                Speak("Oui ! C'est " + ins.Article + " " + ins.Name + " ! " + GameKit.Praise());
                 Celebrate();
                 Schedule(3400, NextQuiz);
             }
@@ -228,12 +228,8 @@ namespace MesPremiersJeux.Games
             {
                 Shake(btn);
                 SoundFx.Instrument(ins.Key);
-                Speech.WhenQuiet(() =>
-                {
-                    if (Closed || _act != 2) return;
-                    Speak("Ça, c'est " + ins.Article + " " + ins.Name + ". Écoute encore !");
-                    Schedule(2200, () => { if (!Locked) SoundFx.Instrument(_quizTarget.Key); });
-                }, 1.4, 3);
+                Speak("Ça, c'est " + ins.Article + " " + ins.Name + ". Écoute encore !");
+                Schedule(2600, () => { if (!Locked && _act == 2) SoundFx.Instrument(_quizTarget.Key); });
             }
         }
 
@@ -306,7 +302,7 @@ namespace MesPremiersJeux.Games
             if (onPlayed != null) { onPlayed(i); return; }
             if (_act == 3)
             {
-                Speech.WhenQuiet(() => { if (!Closed && _act == 3) Speak(Notes[i].Name + " !"); }, 0.4, 1.5);
+                Speak(Notes[i].Name + " !");
                 if (++_played == 1) RewardStar();
                 if (_played >= 8)
                 {

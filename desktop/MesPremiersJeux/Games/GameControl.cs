@@ -33,6 +33,12 @@ namespace MesPremiersJeux.Games
         /// </summary>
         protected bool GateVoice = true;
 
+        // La consigne n'est protégée que ses PREMIÈRES secondes : passé ce
+        // délai, un clic agit tout de suite et coupe la voix. Un clic fait plus
+        // tôt part au bout de ce délai (jamais plus tard) — le retour de
+        // l'enfant ne doit jamais arriver « en retard » sur sa sélection.
+        private const double GateSeconds = 2.0;
+
         // Le clic EN ATTENTE de la fin de la consigne (le dernier bouton visé).
         private Button _pendingClick;
         private DispatcherTimer _pendingWatch;
@@ -51,7 +57,7 @@ namespace MesPremiersJeux.Games
             {
                 if (_hint != null) { _hint.Stop(); _hint.Start(); }
                 var under = ButtonUnder(e.OriginalSource as DependencyObject);
-                if (GateVoice && Speech.IsGating && Speech.BusyElapsedSeconds < 7)
+                if (GateVoice && Speech.IsGating && Speech.BusyElapsedSeconds < GateSeconds)
                 {
                     e.Handled = true;
                     if (under != null) HoldClick(under);
@@ -416,16 +422,13 @@ namespace MesPremiersJeux.Games
                 _pendingWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
                 _pendingWatch.Tick += (s, e) =>
                 {
-                    if (Speech.IsGating && Speech.BusyElapsedSeconds < 7) return;
+                    if (Speech.IsGating && Speech.BusyElapsedSeconds < GateSeconds) return;
                     _pendingWatch.Stop();
                     var b = _pendingClick;
                     _pendingClick = null;
                     if (b == null || Closed || !b.IsLoaded || !b.IsEnabled) return;
-                    Schedule(150, () =>
-                    {
-                        if (Closed || !b.IsLoaded) return;
-                        b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, b));
-                    });
+                    if (!b.IsLoaded) return;
+                    b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, b));
                 };
             }
             _pendingWatch.Stop();
