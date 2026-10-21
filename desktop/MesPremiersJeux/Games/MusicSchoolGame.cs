@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using MesPremiersJeux.Lib;
 
 namespace MesPremiersJeux.Games
@@ -64,10 +66,30 @@ namespace MesPremiersJeux.Games
         private int _played;
         private int _songPos;
         private List<Border> _bars;
+        private List<Button> _barButtons;
         private TextBlock _lyrics;
+        private FrameworkElement _marker; // l'étoile qui désigne la lame à jouer
         private readonly Dictionary<int, DateTime> _lastPlay = new Dictionary<int, DateTime>();
 
-        public MusicSchoolGame(Action celebrate, int startAct = 1) : base(celebrate) { _startAct = startAct; }
+        // REGARD TENU = la note se RÉPÈTE (do, do, do…) : pas besoin de sortir
+        // et de revenir sur la lame. Toutes les 750 ms tant qu'on reste dessus.
+        private int _gazeBar = -1;
+        private Action<int> _repeatAction;
+        private readonly DispatcherTimer _repeat = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        private const int RepeatMs = 750;
+
+        public MusicSchoolGame(Action celebrate, int startAct = 1) : base(celebrate)
+        {
+            _startAct = startAct;
+            _repeat.Tick += (o, ev) =>
+            {
+                if (Closed || Locked || _gazeBar < 0 || _repeatAction == null) return;
+                if (_lastPlay.TryGetValue(_gazeBar, out var t) && (DateTime.Now - t).TotalMilliseconds < RepeatMs) return;
+                _repeatAction(_gazeBar);
+            };
+            Loaded += (o, ev) => _repeat.Start();
+            Unloaded += (o, ev) => _repeat.Stop();
+        }
 
         protected override void NewRound()
         {
@@ -124,8 +146,10 @@ namespace MesPremiersJeux.Games
                 _canvas.Children.Add(btn);
                 pads.Add(btn);
             }
+            _repeatAction = null; // les instruments ne se répètent pas en boucle
             SetGazePads(pads, i =>
             {
+                _gazeBar = -1;
                 if (i < 0 || _act != 1 || Locked || !CanPlay(i, 1500)) return;
                 SoundFx.Instrument(_session[i].Key);
                 Pulse(pads[i]);
@@ -167,6 +191,8 @@ namespace MesPremiersJeux.Games
             _act = 2;
             _quizRound = 0;
             SetGazePads(null, null);
+            _repeatAction = null;
+            _gazeBar = -1;
             NextQuiz();
         }
 
@@ -291,7 +317,11 @@ namespace MesPremiersJeux.Games
                 _bars.Add(bar);
                 pads.Add(btn);
             }
-            SetGazePads(pads, i => { if (i >= 0) PlayBar(i, timbre, onPlayed, 350); });
+            _barButtons = pads.Cast<Button>().ToList();
+            _marker = null;
+            _gazeBar = -1;
+            _repeatAction = i => PlayBar(i, timbre, onPlayed, 0);
+            SetGazePads(pads, i => { _gazeBar = i; if (i >= 0) PlayBar(i, timbre, onPlayed, 350); });
         }
 
         private void PlayBar(int i, string timbre, Action<int> onPlayed, int cooldown)
@@ -362,7 +392,7 @@ namespace MesPremiersJeux.Games
             {
                 Locked = true;
                 ShowLyrics();
-                foreach (var b in _bars) b.BeginAnimation(UIElement.OpacityProperty, null);
+                ClearGlow();
                 GameKit.Success();
                 Speak("Tu as joué toute la chanson ! Écoute-la !");
                 Schedule(2600, PlayBack);
@@ -387,15 +417,38 @@ namespace MesPremiersJeux.Games
             });
         }
 
+        // La lame à jouer est ÉVIDENTE : les autres s'éteignent, elle garde un
+        // gros halo doré, et une étoile sautille juste au-dessus.
         private void Glow(int bar)
         {
             for (int i = 0; i < _bars.Count; i++)
             {
                 _bars[i].BeginAnimation(UIElement.OpacityProperty, null);
-                _bars[i].Opacity = i == bar ? 1 : 0.55;
+                _bars[i].Opacity = i == bar ? 1 : 0.35;
+                _bars[i].Effect = i == bar
+                    ? new DropShadowEffect { BlurRadius = 70, ShadowDepth = 0, Color = Color.FromRgb(0xFF, 0xB3, 0x00), Opacity = 1 }
+                    : null;
             }
-            _bars[bar].BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0.6, TimeSpan.FromMilliseconds(500))
-            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+            if (_marker == null)
+            {
+                _marker = Art.Visual("etoile", "⭐", 110);
+                _marker.IsHitTestVisible = false;
+                var tr = new TranslateTransform();
+                _marker.RenderTransform = tr;
+                tr.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-18, 14, TimeSpan.FromMilliseconds(380))
+                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+                _canvas.Children.Add(_marker);
+            }
+            var btn = _barButtons[bar];
+            // Dans le haut de la lame (au-dessus, elle cacherait les paroles).
+            Canvas.SetLeft(_marker, Canvas.GetLeft(btn) + btn.Width / 2 - 55);
+            Canvas.SetTop(_marker, Canvas.GetTop(btn) + 22);
+        }
+
+        private void ClearGlow()
+        {
+            foreach (var b in _bars) { b.BeginAnimation(UIElement.OpacityProperty, null); b.Opacity = 1; b.Effect = null; }
+            if (_marker != null) { _canvas.Children.Remove(_marker); _marker = null; }
         }
 
         // ==================================================================
@@ -412,6 +465,8 @@ namespace MesPremiersJeux.Games
             _act = 5;
             Locked = false;
             SetGazePads(null, null);
+            _repeatAction = null;
+            _gazeBar = -1;
             Question.Text = "🎸 Je joue !";
             _canvas = new Canvas { Width = W, Height = H };
             double size = 300, gapX = 60, gapY = 30;
@@ -497,7 +552,9 @@ namespace MesPremiersJeux.Games
                 _bars.Add(pad);
                 pads.Add(btn);
             }
-            SetGazePads(pads, i => { if (i >= 0) HitDrum(i, 250); });
+            _gazeBar = -1;
+            _repeatAction = i => HitDrum(i, 0);
+            SetGazePads(pads, i => { _gazeBar = i; if (i >= 0) HitDrum(i, 250); });
         }
 
         private void HitDrum(int i, int cooldown)
