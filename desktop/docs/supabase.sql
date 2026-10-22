@@ -133,3 +133,163 @@ grant execute on function public.activate_licence(text, text, text) to anon, aut
 
 -- Première licence (à toi) :  canal test, 3 tablettes.
 -- select public.create_licence('Famille Kowalski', 'test', 3);
+
+-- ============================================================================
+--  TABLETTES : limite STRICTE au nombre de tablettes, désactivation d'un poste
+--  (à distance par l'éditeur, ou « Libérer cette tablette » par la famille).
+-- ============================================================================
+alter table public.activations add column if not exists enabled boolean not null default true;
+alter table public.activations add column if not exists disabled_at timestamptz;
+
+-- L'ACTIVATION (version 2) : seules les tablettes ACTIVES comptent ; une
+-- tablette désactivée est refusée ; la réponse dit combien de places sont prises.
+create or replace function public.activate_licence(p_key text, p_machine text, p_version text default null)
+returns json language plpgsql security definer as $$
+declare lic public.licences%rowtype; act public.activations%rowtype; n int;
+begin
+  select * into lic from public.licences where key = upper(trim(p_key));
+  if not found then
+    return json_build_object('ok', false, 'message', 'Numéro de licence inconnu.');
+  end if;
+  if not lic.enabled then
+    return json_build_object('ok', false, 'family', lic.family, 'message', 'Cette licence a été désactivée.');
+  end if;
+  if lic.expires_at is not null and lic.expires_at < current_date then
+    return json_build_object('ok', false, 'family', lic.family, 'message', 'Cette licence a expiré le ' || to_char(lic.expires_at, 'DD/MM/YYYY') || '.');
+  end if;
+  select * into act from public.activations where licence_key = lic.key and machine = p_machine;
+  if found and not act.enabled then
+    return json_build_object('ok', false, 'family', lic.family, 'message', 'Cette tablette a été désactivée pour la licence ' || lic.family || '. Demandez à l''éditeur de la réactiver, ou libérez une autre tablette.');
+  end if;
+  select count(*) into n from public.activations where licence_key = lic.key and machine <> p_machine and enabled;
+  if act.licence_key is null and n >= lic.max_tablets then
+    return json_build_object('ok', false, 'family', lic.family, 'message', 'Cette licence est déjà utilisée sur ' || n || ' tablette(s), le maximum. Sur une ancienne tablette : réglages → « Libérer cette tablette ».');
+  end if;
+  insert into public.activations(licence_key, machine, app_version) values (lic.key, p_machine, p_version)
+    on conflict (licence_key, machine) do update set last_seen = now(), app_version = excluded.app_version;
+  perform public.ensure_cloud_identity(lic.key);
+  select * into lic from public.licences where key = lic.key;
+  return json_build_object('ok', true, 'family', lic.family, 'channel', lic.channel, 'max_tablets', lic.max_tablets,
+                           'used_tablets', n + 1,
+                           'expires_at', lic.expires_at, 'message', 'Bienvenue, ' || lic.family || ' !',
+                           'cloud_email', 'famille-' || replace(lower(lic.key), '-', '') || '@mpj.local',
+                           'cloud_secret', lic.cloud_secret);
+end $$;
+grant execute on function public.activate_licence(text, text, text) to anon, authenticated;
+
+-- La famille libère sa tablette (bouton « Libérer cette tablette ») : la ligne
+-- est supprimée, la place redevient libre. Il faut connaître le numéro de licence.
+create or replace function public.release_activation(p_key text, p_machine text)
+returns json language plpgsql security definer as $$
+declare n int;
+begin
+  delete from public.activations where licence_key = upper(trim(p_key)) and machine = p_machine;
+  get diagnostics n = row_count;
+  if n = 0 then return json_build_object('ok', false, 'message', 'Cette tablette n''était pas enregistrée.'); end if;
+  return json_build_object('ok', true, 'message', 'Tablette libérée.');
+end $$;
+grant execute on function public.release_activation(text, text) to anon, authenticated;
+
+-- L'ÉDITEUR désactive (ou réactive) une tablette à distance :
+--   select public.disable_tablet('MPJ-XXXX-XXXX-XXXX-XXXX', 'NOM-DE-LA-TABLETTE');
+--   select public.disable_tablet('MPJ-XXXX-XXXX-XXXX-XXXX', 'NOM-DE-LA-TABLETTE', true);  -- réactiver
+-- La tablette perd l'accès à sa prochaine vérification (au plus 30 jours hors ligne).
+create or replace function public.disable_tablet(p_key text, p_machine text, p_enabled boolean default false)
+returns text language plpgsql security definer as $$
+declare n int;
+begin
+  update public.activations set enabled = p_enabled, disabled_at = case when p_enabled then null else now() end
+   where licence_key = upper(trim(p_key)) and machine = p_machine;
+  get diagnostics n = row_count;
+  return case when n = 0 then 'tablette inconnue' when p_enabled then 'réactivée' else 'désactivée' end;
+end $$;
+revoke all on function public.disable_tablet(text, text, boolean) from public, anon;
+
+-- Vue : toutes les tablettes, par famille (Table Editor → tablettes, ou SQL).
+create or replace view public.tablettes as
+  select l.family as famille, l.key as licence, a.machine as tablette, a.enabled as active,
+         a.app_version as version, a.first_seen as premiere_fois, a.last_seen as derniere_fois,
+         l.max_tablets as max_tablettes
+    from public.activations a join public.licences l on l.key = a.licence_key
+   order by l.family, a.last_seen desc;
+revoke all on public.tablettes from public, anon;
+
+-- ============================================================================
+--  USAGE PAR FAMILLE : ce qui est utilisé le plus et le moins.
+--  L'application envoie, une fois par jour et à la fermeture, ses compteurs :
+--  par jour et par activité, ouvertures / réussites / secondes. Rien d'autre
+--  (ni prénom, ni contenu). Les lignes d'un jour sont REMPLACÉES par la
+--  dernière valeur envoyée (la tablette est la référence).
+-- ============================================================================
+create table if not exists public.usage (
+  licence_key  text not null references public.licences(key) on delete cascade,
+  machine      text not null,
+  day          date not null,
+  activity     text not null,
+  label        text,
+  launches     int  not null default 0,
+  successes    int  not null default 0,
+  seconds      int  not null default 0,
+  updated_at   timestamptz not null default now(),
+  primary key (licence_key, machine, day, activity)
+);
+alter table public.usage enable row level security;
+
+create or replace function public.report_usage(p_key text, p_machine text, p_rows json)
+returns json language plpgsql security definer as $$
+declare lic public.licences%rowtype; act public.activations%rowtype; r json; n int := 0;
+begin
+  select * into lic from public.licences where key = upper(trim(p_key));
+  if not found or not lic.enabled then return json_build_object('ok', false, 'message', 'licence inconnue ou désactivée'); end if;
+  select * into act from public.activations where licence_key = lic.key and machine = p_machine;
+  if not found or not act.enabled then return json_build_object('ok', false, 'message', 'tablette non activée'); end if;
+  for r in select * from json_array_elements(coalesce(p_rows, '[]'::json)) loop
+    insert into public.usage(licence_key, machine, day, activity, label, launches, successes, seconds)
+      values (lic.key, p_machine, (r->>'day')::date, left(r->>'activity', 80), left(r->>'label', 120),
+              greatest(0, least(100000, coalesce((r->>'launches')::int, 0))),
+              greatest(0, least(100000, coalesce((r->>'successes')::int, 0))),
+              greatest(0, least(86400, coalesce((r->>'seconds')::int, 0))))
+      on conflict (licence_key, machine, day, activity) do update
+        set label = excluded.label, launches = excluded.launches, successes = excluded.successes,
+            seconds = excluded.seconds, updated_at = now();
+    n := n + 1;
+  end loop;
+  update public.activations set last_seen = now() where licence_key = lic.key and machine = p_machine;
+  return json_build_object('ok', true, 'rows', n);
+end $$;
+grant execute on function public.report_usage(text, text, json) to anon, authenticated;
+
+-- Vue : par famille et par activité, du plus utilisé au moins utilisé (toutes dates).
+create or replace view public.usage_par_famille as
+  select l.family as famille, u.activity as activite, max(u.label) as nom,
+         sum(u.seconds) / 60 as minutes, sum(u.launches) as ouvertures, sum(u.successes) as reussites,
+         count(distinct u.day) as jours, max(u.day) as dernier_jour
+    from public.usage u join public.licences l on l.key = u.licence_key
+   group by l.family, u.activity
+   order by l.family, minutes desc;
+revoke all on public.usage_par_famille from public, anon;
+
+-- Vue : la même chose sur les 30 derniers jours.
+create or replace view public.usage_30_jours as
+  select l.family as famille, u.activity as activite, max(u.label) as nom,
+         sum(u.seconds) / 60 as minutes, sum(u.launches) as ouvertures, sum(u.successes) as reussites,
+         count(distinct u.day) as jours, max(u.day) as dernier_jour
+    from public.usage u join public.licences l on l.key = u.licence_key
+   where u.day >= current_date - 30
+   group by l.family, u.activity
+   order by l.family, minutes desc;
+revoke all on public.usage_30_jours from public, anon;
+
+-- Vue : un résumé par famille (temps total, jours d'utilisation, tablettes, dernière fois).
+create or replace view public.usage_resume as
+  select l.family as famille, l.key as licence,
+         coalesce(sum(u.seconds) / 60, 0) as minutes_total,
+         count(distinct u.day) as jours_utilises,
+         count(distinct u.machine) as tablettes_vues,
+         max(u.day) as dernier_jour,
+         (select count(*) from public.activations a where a.licence_key = l.key and a.enabled) as tablettes_actives,
+         l.max_tablets as max_tablettes
+    from public.licences l left join public.usage u on u.licence_key = l.key
+   group by l.family, l.key, l.max_tablets
+   order by minutes_total desc;
+revoke all on public.usage_resume from public, anon;

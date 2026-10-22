@@ -22,24 +22,7 @@ namespace MesPremiersJeux.Views
         private static readonly Brush Soft = new SolidColorBrush(Color.FromRgb(0x8A, 0x7A, 0xA8));
 
         // Noms français des activités (le journal stocke les noms techniques).
-        private static readonly Dictionary<string, string> Names = new Dictionary<string, string>
-        {
-            ["NameGame"] = "Mon prénom", ["LettersGame"] = "Les lettres", ["AlphabetBookGame"] = "L'abécédaire",
-            ["SyllableGame"] = "Les syllabes", ["SoundHouseGame"] = "La maison des sons", ["EyeWriteGame"] = "J'écris !",
-            ["NumberPartyGame"] = "Fête des nombres", ["NumbersGame"] = "Les nombres", ["CompleteGame"] = "Le panier",
-            ["NumberFormsGame"] = "Le nombre dans tous ses états", ["ModelCopyGame"] = "Reproduis le modèle",
-            ["ColorMagicGame"] = "Couleurs magiques", ["SizeGame"] = "Grand ou petit", ["PatternGame"] = "Les suites",
-            ["NecklaceGame"] = "Le collier de perles", ["VocabGame"] = "L'imagier", ["BodyGame"] = "Le corps",
-            ["CapitalsGame"] = "Le tour du monde", ["SuitcaseGame"] = "La valise du voyageur", ["FoodGame"] = "Les bons plats",
-            ["PlanetsGame"] = "Les planètes", ["DayNightGame"] = "Jour et nuit",
-            ["MagicGame"] = "Bulles magiques", ["BalloonsGame"] = "Ballons 3D", ["ColorsGame"] = "Couleurs",
-            ["ShapesGame"] = "Formes", ["CountGame"] = "Compter", ["ShadowGame"] = "Les ombres",
-            ["SeekFindGame"] = "Cherche et trouve", ["StringsGame"] = "Les ficelles", ["CupsGame"] = "Les gobelets",
-            ["PuzzleGame"] = "Puzzle", ["FamiliesGame"] = "Les familles", ["MemoryGame"] = "Les paires",
-            ["GooseGame"] = "Jeu de l'oie", ["HorseGame"] = "Petits chevaux", ["TicTacToeGame"] = "Morpion",
-            ["ConnectFourGame"] = "Puissance 4", ["BirdSongGame"] = "Oiseaux chanteurs",
-            ["FireworksGame"] = "Feux d'artifice", ["MagicWindowGame"] = "Fenêtre magique", ["PieFaceGame"] = "Tartes à la crème",
-        };
+        private static Dictionary<string, string> Names => ActivityNames.Games;
 
         private static readonly Dictionary<string, string> SkillNames = new Dictionary<string, string>
         {

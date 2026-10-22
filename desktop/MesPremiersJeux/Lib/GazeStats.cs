@@ -91,7 +91,7 @@ namespace MesPremiersJeux.Lib
         }
 
         /// <summary>Un message dit avec la grille de communication.</summary>
-        public static void RecordComm(string key) => Add("c:" + key, 1);
+        public static void RecordComm(string key) { Add("c:" + key, 1); Usage.Success("parler"); }
 
         // ------------------------------------------------------------------
         //  Lecture (pour le bilan)

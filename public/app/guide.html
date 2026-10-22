@@ -79,6 +79,7 @@ a{color:var(--accent)}
 </ul>
 <p>Sur le même écran, choisissez un <strong>mot de passe famille</strong> (6 caractères au moins). Tapez le même sur toutes vos tablettes. Il sert à chiffrer vos contenus avant qu'ils ne quittent la tablette : personne d'autre, pas même l'éditeur, ne peut les lire. Notez-le : s'il est perdu, les contenus déjà envoyés ne pourront pas être relus par une nouvelle tablette (ils restent sur les tablettes où ils sont).</p>
 <p>La licence est vérifiée en ligne à l'activation, puis au plus une fois par jour. Sans réseau, elle reste valable <strong>30 jours</strong>.</p>
+<p>Elle est limitée à un <strong>nombre de tablettes</strong> (deux, en général). Quand elles sont toutes prises, une nouvelle tablette est refusée : sur l'ancienne, réglages → <strong>🚫 Libérer cette tablette</strong> rend la place. Les réglages affichent toujours « tablettes : 1/2 ».</p>
 <h3 id="le-prnom-de-l-enfant">Le prénom de l'enfant</h3>
 <p>Juste après, l'application demande le <strong>prénom de l'enfant</strong>. Il est utilisé sur l'accueil (« Bonjour Laura ! ») et dans l'activité « Mon prénom ». On peut le changer plus tard dans les réglages.</p>
 <h3 id="vos-anciens-contenus">Vos anciens contenus</h3>
@@ -135,7 +136,7 @@ a{color:var(--accent)}
 <li><strong>📊 Bilan</strong> : la semaine, les niveaux, les étoiles, les mots dits.</li>
 <li><strong>📁 Le contenu de la famille</strong> : photos, voix, livres, coloriages et images ajoutées vivent dans <code>%LocalAppData%\MesPremiersJeux\Contenu</code>. <strong>📦 Exporter</strong> fabrique un seul fichier (sauvegarde ou copie vers une autre tablette avec <strong>📥 Importer</strong>).</li>
 <li><strong>☁️ Le nuage</strong> : si l'éditeur a configuré le serveur, le contenu voyage tout seul entre vos tablettes (récupéré au démarrage, envoyé à la fermeture), chiffré avec votre mot de passe famille. Deux boutons pour forcer : <strong>Envoyer maintenant</strong> / <strong>Récupérer maintenant</strong>.</li>
-<li><strong>🔑 Licence et mises à jour</strong> : la licence active, la version installée, <strong>🔄 Vérifier les mises à jour</strong>, <strong>↩ Version précédente</strong>, <strong>🔑 Changer la licence</strong>.</li>
+<li><strong>🔑 Licence et mises à jour</strong> : la licence active (famille, canal, tablettes utilisées), la version installée, <strong>🔄 Vérifier les mises à jour</strong>, <strong>↩ Version précédente</strong>, <strong>🔑 Changer la licence</strong>, <strong>🚫 Libérer cette tablette</strong> (changement de poste : la place redevient libre, l'application se ferme et redemandera une licence ; le contenu reste sur la tablette).</li>
 </ul>
 <h2 id="6-les-mises-jour">6. Les mises à jour</h2>
 <p>L'application se met à jour <strong>comme une application du Store</strong> : au démarrage, elle regarde s'il existe une version plus récente de son canal, la télécharge, vérifie son empreinte, l'installe en silence et se relance. Le contenu de la famille et les réglages ne sont jamais touchés.</p>
@@ -150,6 +151,7 @@ a{color:var(--accent)}
 <li>Vers le nuage ne partent que des fichiers <strong>chiffrés</strong> (AES-256) avec votre mot de passe famille. Le serveur, et l'éditeur, voient un fichier illisible.</li>
 <li>Chaque famille a son espace, cloisonné par le serveur : une tablette d'une famille ne peut pas lire une autre famille.</li>
 <li>Le numéro de licence n'est pas un secret absolu (quelqu'un qui l'a peut activer une tablette de votre famille, dans la limite du nombre autorisé) ; le mot de passe famille, lui, protège vos contenus. Ne les écrivez pas au même endroit.</li>
+<li>L'application envoie à l'éditeur, une fois par jour, des <strong>compteurs d'usage</strong> : par jour et par activité, le nombre d'ouvertures, de réussites et de minutes, avec le nom de la tablette. Rien d'autre : ni le prénom, ni les photos, ni les voix, ni ce qui a été dit. Ils servent à savoir ce qui est utilisé et ce qui ne l'est pas, pour améliorer l'application.</li>
 <li>Le journal (<code>%LocalAppData%\MesPremiersJeux\journal.txt</code>) note ce qui se passe (jeux, erreurs). En cas de plantage, un fichier <code>plantage-&lt;tablette&gt;.txt</code> est écrit dans le dossier du contenu : envoyez-le à l'éditeur.</li>
 </ul>
 <h2 id="8-problmes-frquents">8. Problèmes fréquents</h2>
@@ -167,6 +169,8 @@ a{color:var(--accent)}
 <li><strong>Donner</strong> à la famille : le lien de téléchargement, le numéro de licence, ce guide. Elle choisit elle-même son mot de passe famille.</li>
 <li><strong>Publier une version</strong> : chaque poussée de code compile une version <em>test</em> (pré-version) sur GitHub. Pour la passer en <em>prod</em> : GitHub → Releases → Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ». Les tablettes prod la reçoivent au prochain démarrage.</li>
 <li><strong>Révoquer</strong> une licence : dans la table <code>licences</code>, passer <code>enabled</code> à <code>false</code> ; la tablette perd l'accès au plus tard 30 jours après (ou à sa prochaine vérification en ligne).</li>
+<li><strong>Désactiver une tablette</strong> (perdue, remplacée, prêtée) : <code>select public.disable_tablet('MPJ-…', 'NOM-DE-LA-TABLETTE');</code> (même fonction avec <code>true</code> en 3ᵉ paramètre pour la réactiver). La vue <code>tablettes</code> liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que <code>max_tablets</code> est refusée tant qu'une place n'est pas libérée.</li>
+<li><strong>Voir ce qui est utilisé</strong>, par famille : la vue <code>usage_par_famille</code> (du plus utilisé au moins utilisé : minutes, ouvertures, réussites, jours), <code>usage_30_jours</code> (les 30 derniers jours) et <code>usage_resume</code> (une ligne par famille : minutes, jours, tablettes, dernière fois). Dans Supabase : Table Editor → choisir la vue, ou SQL : <code>select * from public.usage_30_jours where famille = 'Famille Martin';</code></li>
 </ol>
 <p>Les fichiers utiles : <code>desktop/docs/supabase.sql</code> (le serveur), <code>desktop/installer/MesPremiersJeux.iss</code> (l'installeur), <code>.github/workflows/build.yml</code> (la compilation automatique).</p>
 <hr>

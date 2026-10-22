@@ -45,6 +45,7 @@ namespace MesPremiersJeux
             {
                 try { System.IO.File.Delete(CrashFlag); } catch { } // fermeture normale : pas un plantage
                 StopGazeSources();
+                Usage.AtExit(_settings);
                 CloudSyncAtExit();
             };
         }
@@ -228,6 +229,7 @@ namespace MesPremiersJeux
             }
             RefreshLicenceText();
             _ = Licence.RecheckAsync(_settings).ContinueWith(t => Dispatcher.Invoke(RefreshLicenceText));
+            _ = Usage.SendDailyAsync(_settings).ContinueWith(t => { if (t.Result != null) Lib.Log.Write("usage", "Envoi : " + t.Result); });
             Updater.Cleanup();
             CheckUpdatesAtStartup();
             RefreshCloudStatus();
@@ -851,6 +853,26 @@ namespace MesPremiersJeux
                 VersionText.Text = "Version " + Updater.Current + (Updater.IsDevBuild ? " (compilée à la main : pas de mise à jour automatique)" : " · canal " + (Licence.IsTest(_settings) ? "TEST" : "prod"));
             }
             catch { }
+        }
+
+        private async void ReleaseTablet_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            GazeGate.Push();
+            try
+            {
+                var r = MessageBox.Show(this,
+                    "Libérer cette tablette ?\n\nSa place dans la licence « " + (_settings.LicenceFamily ?? "") + " » redevient libre pour une autre tablette. " +
+                    "L'application va se fermer et redemandera un numéro de licence au prochain démarrage.\n\nLes photos, voix et livres restent sur la tablette.",
+                    "Changement de poste", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (r != MessageBoxResult.Yes) return;
+                Usage.AtExit(_settings);
+                var err = await Licence.ReleaseAsync(_settings);
+                if (err != null) { MessageBox.Show(this, err, "Libérer cette tablette", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+                MessageBox.Show(this, "C'est fait : la place est libre. À bientôt !", "Libérer cette tablette", MessageBoxButton.OK, MessageBoxImage.Information);
+                Close();
+            }
+            finally { GazeGate.Pop(); }
         }
 
         private void Licence_Click(object sender, RoutedEventArgs e)
@@ -1487,6 +1509,7 @@ namespace MesPremiersJeux
         {
             Chrome.Immersive = false; // changer d'onglet réaffiche toujours la barre
             foreach (var kv in _views) kv.Value.Visibility = kv.Key == id ? Visibility.Visible : Visibility.Collapsed;
+            Usage.Screen(id);
         }
 
         private void Fullscreen_Click(object sender, RoutedEventArgs e)

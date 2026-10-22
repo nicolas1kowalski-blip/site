@@ -67,6 +67,7 @@ namespace MesPremiersJeux.Lib
             var sb = new StringBuilder();
             sb.Append(s.LicenceKey).Append(" · ").Append(string.IsNullOrEmpty(s.LicenceFamily) ? "famille" : s.LicenceFamily);
             sb.Append(" · canal ").Append(IsTest(s) ? "TEST" : "prod");
+            if (s.LicenceUsed > 0) sb.Append(" · tablettes : ").Append(s.LicenceUsed).Append('/').Append(s.LicenceMax);
             if (!string.IsNullOrEmpty(s.LicenceUntil)) sb.Append(" · jusqu'au ").Append(s.LicenceUntil);
             if (!string.IsNullOrEmpty(s.LicenceChecked)) sb.Append(" · vérifiée le ").Append(s.LicenceChecked);
             if (!IsValid(s)) sb.Append(" · ⚠ NON VALIDE");
@@ -83,6 +84,7 @@ namespace MesPremiersJeux.Lib
             if (IsMaster(key))
             {
                 Apply(s, key, "Développement", "test", 99, "", true);
+                s.LicenceUsed = 1; s.Save();
                 Log.Write("licence", "Licence maître activée (test)");
                 return null;
             }
@@ -111,6 +113,7 @@ namespace MesPremiersJeux.Lib
             }
             int max = 2;
             int.TryParse(Cloud.JsonGet(json, "max_tablets") ?? "2", out max);
+            int.TryParse(Cloud.JsonGet(json, "used_tablets") ?? "1", out s.LicenceUsed);
             s.CloudEmail = Cloud.JsonGet(json, "cloud_email") ?? s.CloudEmail;
             s.CloudSecret = Cloud.JsonGet(json, "cloud_secret") ?? s.CloudSecret;
             Apply(s, key, Cloud.JsonGet(json, "family") ?? "", (Cloud.JsonGet(json, "channel") ?? "prod").ToLowerInvariant(), max,
@@ -136,6 +139,30 @@ namespace MesPremiersJeux.Lib
             if (s == null || !s.LicenceOk || IsMaster(s.LicenceKey) || !Cloud.Configured) return;
             if (DateTime.TryParseExact(s.LicenceChecked ?? "", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var c) && c == DateTime.Today) return;
             await ActivateAsync(s, s.LicenceKey);
+        }
+
+        /// <summary>Libère cette tablette (changement de poste) : la place redevient libre pour une autre.
+        /// Renvoie null si OK, sinon le message.</summary>
+        public static async Task<string> ReleaseAsync(Settings s)
+        {
+            if (s == null || string.IsNullOrWhiteSpace(s.LicenceKey)) return "Aucune licence sur cette tablette.";
+            if (!IsMaster(s.LicenceKey))
+            {
+                if (!Cloud.Configured) return "Le serveur de licences n'est pas configuré : impossible de libérer la place.";
+                try
+                {
+                    var body = "{\"p_key\":\"" + s.LicenceKey + "\",\"p_machine\":\"" + Esc(Environment.MachineName) + "\"}";
+                    var json = await Cloud.RpcAsync("release_activation", body);
+                    if (!string.Equals(Cloud.JsonGet(json, "ok"), "true", StringComparison.OrdinalIgnoreCase))
+                        return Cloud.JsonGet(json, "message") ?? "refusé";
+                }
+                catch (Exception ex) { return "Impossible de joindre le serveur : " + ex.Message; }
+            }
+            Log.Write("licence", "Tablette libérée (" + s.LicenceKey + ")");
+            s.LicenceOk = false; s.LicenceUsed = 0; s.LicenceChecked = "";
+            s.CloudEmail = ""; s.CloudSecret = ""; s.CloudLastSync = ""; s.CloudLastFingerprint = "";
+            s.Save();
+            return null;
         }
 
         private static string Esc(string v) => (v ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");

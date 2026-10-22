@@ -38,7 +38,8 @@ namespace MesPremiersJeux.Lib
         public bool NameAsked = false;   // le prénom a été demandé au premier démarrage sur cette tablette
         // 🔑 Licence (voir Lib/Licence.cs)
         public string LicenceKey = "", LicenceFamily = "", LicenceChannel = "prod", LicenceUntil = "", LicenceChecked = "";
-        public int LicenceMax = 2;
+        public int LicenceMax = 2, LicenceUsed = 0;
+        public string UsageSent = "";     // dernier jour d'envoi des compteurs d'usage
         public bool LicenceOk = false;
         public string LastUpdateSeen = ""; // dernière version proposée (pour ne pas insister)
         // ☁🔒 Nuage de la famille (voir Lib/FamilyCloud.cs)
@@ -95,6 +96,8 @@ namespace MesPremiersJeux.Lib
                         case "LicenceUntil": s.LicenceUntil = val; break;
                         case "LicenceChecked": s.LicenceChecked = val; break;
                         case "LicenceMax": int.TryParse(val, out s.LicenceMax); break;
+                        case "LicenceUsed": int.TryParse(val, out s.LicenceUsed); break;
+                        case "UsageSent": s.UsageSent = val; break;
                         case "LicenceOk": s.LicenceOk = val != "0"; break;
                         case "LastUpdateSeen": s.LastUpdateSeen = val; break;
                         case "CloudEmail": s.CloudEmail = val; break;
@@ -151,6 +154,8 @@ namespace MesPremiersJeux.Lib
                     "LicenceUntil=" + (LicenceUntil ?? ""),
                     "LicenceChecked=" + (LicenceChecked ?? ""),
                     "LicenceMax=" + LicenceMax,
+                    "LicenceUsed=" + LicenceUsed,
+                    "UsageSent=" + (UsageSent ?? ""),
                     "LicenceOk=" + (LicenceOk ? "1" : "0"),
                     "LastUpdateSeen=" + (LastUpdateSeen ?? ""),
                     "CloudEmail=" + (CloudEmail ?? ""),

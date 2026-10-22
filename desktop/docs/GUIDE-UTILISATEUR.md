@@ -34,6 +34,8 @@ Sur le même écran, choisissez un **mot de passe famille** (6 caractères au mo
 
 La licence est vérifiée en ligne à l'activation, puis au plus une fois par jour. Sans réseau, elle reste valable **30 jours**.
 
+Elle est limitée à un **nombre de tablettes** (deux, en général). Quand elles sont toutes prises, une nouvelle tablette est refusée : sur l'ancienne, réglages → **🚫 Libérer cette tablette** rend la place. Les réglages affichent toujours « tablettes : 1/2 ».
+
 ### Le prénom de l'enfant
 Juste après, l'application demande le **prénom de l'enfant**. Il est utilisé sur l'accueil (« Bonjour Laura ! ») et dans l'activité « Mon prénom ». On peut le changer plus tard dans les réglages.
 
@@ -103,7 +105,7 @@ Après 10 minutes de jeu (réglable : jamais, 5, 10, 15, 20), l'application dema
 - **📊 Bilan** : la semaine, les niveaux, les étoiles, les mots dits.
 - **📁 Le contenu de la famille** : photos, voix, livres, coloriages et images ajoutées vivent dans `%LocalAppData%\MesPremiersJeux\Contenu`. **📦 Exporter** fabrique un seul fichier (sauvegarde ou copie vers une autre tablette avec **📥 Importer**).
 - **☁️ Le nuage** : si l'éditeur a configuré le serveur, le contenu voyage tout seul entre vos tablettes (récupéré au démarrage, envoyé à la fermeture), chiffré avec votre mot de passe famille. Deux boutons pour forcer : **Envoyer maintenant** / **Récupérer maintenant**.
-- **🔑 Licence et mises à jour** : la licence active, la version installée, **🔄 Vérifier les mises à jour**, **↩ Version précédente**, **🔑 Changer la licence**.
+- **🔑 Licence et mises à jour** : la licence active (famille, canal, tablettes utilisées), la version installée, **🔄 Vérifier les mises à jour**, **↩ Version précédente**, **🔑 Changer la licence**, **🚫 Libérer cette tablette** (changement de poste : la place redevient libre, l'application se ferme et redemandera une licence ; le contenu reste sur la tablette).
 
 ## 6. Les mises à jour
 
@@ -120,6 +122,7 @@ Le canal est porté par la licence. **↩ Version précédente** réinstalle la 
 - Vers le nuage ne partent que des fichiers **chiffrés** (AES-256) avec votre mot de passe famille. Le serveur, et l'éditeur, voient un fichier illisible.
 - Chaque famille a son espace, cloisonné par le serveur : une tablette d'une famille ne peut pas lire une autre famille.
 - Le numéro de licence n'est pas un secret absolu (quelqu'un qui l'a peut activer une tablette de votre famille, dans la limite du nombre autorisé) ; le mot de passe famille, lui, protège vos contenus. Ne les écrivez pas au même endroit.
+- L'application envoie à l'éditeur, une fois par jour, des **compteurs d'usage** : par jour et par activité, le nombre d'ouvertures, de réussites et de minutes, avec le nom de la tablette. Rien d'autre : ni le prénom, ni les photos, ni les voix, ni ce qui a été dit. Ils servent à savoir ce qui est utilisé et ce qui ne l'est pas, pour améliorer l'application.
 - Le journal (`%LocalAppData%\MesPremiersJeux\journal.txt`) note ce qui se passe (jeux, erreurs). En cas de plantage, un fichier `plantage-<tablette>.txt` est écrit dans le dossier du contenu : envoyez-le à l'éditeur.
 
 ## 8. Problèmes fréquents
@@ -147,5 +150,7 @@ Le canal est porté par la licence. **↩ Version précédente** réinstalle la 
 2. **Donner** à la famille : le lien de téléchargement, le numéro de licence, ce guide. Elle choisit elle-même son mot de passe famille.
 3. **Publier une version** : chaque poussée de code compile une version *test* (pré-version) sur GitHub. Pour la passer en *prod* : GitHub → Releases → Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ». Les tablettes prod la reçoivent au prochain démarrage.
 4. **Révoquer** une licence : dans la table `licences`, passer `enabled` à `false` ; la tablette perd l'accès au plus tard 30 jours après (ou à sa prochaine vérification en ligne).
+5. **Désactiver une tablette** (perdue, remplacée, prêtée) : `select public.disable_tablet('MPJ-…', 'NOM-DE-LA-TABLETTE');` (même fonction avec `true` en 3ᵉ paramètre pour la réactiver). La vue `tablettes` liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que `max_tablets` est refusée tant qu'une place n'est pas libérée.
+6. **Voir ce qui est utilisé**, par famille : la vue `usage_par_famille` (du plus utilisé au moins utilisé : minutes, ouvertures, réussites, jours), `usage_30_jours` (les 30 derniers jours) et `usage_resume` (une ligne par famille : minutes, jours, tablettes, dernière fois). Dans Supabase : Table Editor → choisir la vue, ou SQL : `select * from public.usage_30_jours where famille = 'Famille Martin';`
 
 Les fichiers utiles : `desktop/docs/supabase.sql` (le serveur), `desktop/installer/MesPremiersJeux.iss` (l'installeur), `.github/workflows/build.yml` (la compilation automatique).

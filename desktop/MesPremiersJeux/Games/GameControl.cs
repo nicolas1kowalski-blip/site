@@ -158,12 +158,14 @@ namespace MesPremiersJeux.Games
                 RewardStore.Changed -= _onStars;
                 DisarmHint();
                 GazeStats.RecordGame(GetType().Name, (DateTime.Now - _playStart).TotalSeconds, _wins);
+                Usage.GameStop();
             };
 
             Content = root;
             Loaded += (s, e) =>
             {
                 if (!_gazeHooked) { _gazeHooked = true; GazeFeed.Sample += OnGazeSample; }
+                Usage.GameStart(GetType().Name);
                 _playStart = _lastWin = DateTime.Now; // mesures du bilan
                 _wins = 0;
                 if (_started)
@@ -601,6 +603,7 @@ namespace MesPremiersJeux.Games
         {
             RewardStore.Add(); // chaque réussite gagne une étoile ⭐
             Progress.Add(GetType().Name); // ... comptée dans le bilan parent
+            Usage.Success(GetType().Name);
             GazeStats.RecordSuccess((DateTime.Now - _lastWin).TotalSeconds);
             Level.Record(true);
             _lastWin = DateTime.Now;
