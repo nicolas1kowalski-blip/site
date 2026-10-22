@@ -55,7 +55,9 @@ jobs:
         run: |
           $v = "${{ steps.ver.outputs.version }}"
           Compress-Archive -Path desktop/MesPremiersJeux/bin/x64/Release/net472/* -DestinationPath "desktop/installer/Output/MesPremiersJeux-$v.zip"
-          Get-ChildItem desktop/installer/Output/* | ForEach-Object {
+          # Copie à nom fixe : https://github.com/nicolas1kowalski-blip/site/releases/latest/download/MesPremiersJeux-Setup.exe
+          Copy-Item "desktop/installer/Output/MesPremiersJeux-Setup-$v.exe" "desktop/installer/Output/MesPremiersJeux-Setup.exe"
+          Get-ChildItem desktop/installer/Output/*.exe, desktop/installer/Output/*.zip | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$h  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
           }

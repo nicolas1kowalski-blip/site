@@ -162,15 +162,6 @@
                         <ComboBoxItem Tag="15" Content="15 minutes" />
                         <ComboBoxItem Tag="20" Content="20 minutes" />
                     </ComboBox>
-                    <TextBlock Text="Contenu (livres, coloriages, photos)" FontSize="14" Foreground="#FF6B5B8A" Margin="0,12,0,4" />
-                    <Button Content="📂 Ouvrir le dossier du contenu" FontSize="14" Padding="8,8" Click="OpenContent_Click" />
-                    <UniformGrid Columns="2" Margin="0,6,0,0">
-                        <Button Content="📦 Exporter…" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="ExportContent_Click" />
-                        <Button Content="📥 Importer…" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="ImportContent_Click" />
-                    </UniformGrid>
-                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
-                               Text="Le contenu vit dans le dossier « Contenu » à côté de l'application : copier le dossier de l'appli transporte tout sur un autre PC." />
-
                     <TextBlock Text="🎙 Vos voix (bravo de papa/maman)" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
                     <Button Content="🎙  Enregistrer vos voix" FontSize="14" Padding="8,8" Margin="0,4,0,0" Click="RecordVoices_Click" />
                     <Button Content="📊  Bilan (semaine, niveaux, étoiles)" FontSize="14" Padding="8,8" Margin="0,6,0,0" Click="Bilan_Click" />
@@ -185,6 +176,11 @@
 
                     <TextBlock Text="📁 Le contenu de la famille" FontSize="14" FontWeight="Bold" Foreground="#FF6B5B8A" Margin="0,12,0,2" />
                     <TextBlock x:Name="ContentDirInfo" TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,2,0,0" />
+                    <Button Content="📂 Ouvrir le dossier du contenu" FontSize="14" Padding="8,8" Click="OpenContent_Click" />
+                    <UniformGrid Columns="2" Margin="0,6,0,0">
+                        <Button Content="📦 Exporter…" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="ExportContent_Click" />
+                        <Button Content="📥 Importer…" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="ImportContent_Click" />
+                    </UniformGrid>
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
                                Text="Photos, voix, livres, coloriages et images ajoutées vivent sur cette tablette, dans le dossier de l'application. « Exporter » fait un seul fichier (sauvegarde, ou copie vers une autre tablette avec « Importer »)." />
 
