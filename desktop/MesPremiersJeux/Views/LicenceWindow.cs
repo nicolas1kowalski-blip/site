@@ -71,7 +71,7 @@ namespace MesPremiersJeux.Views
 
             panel.Children.Add(new TextBlock
             {
-                Text = "Version " + Updater.Current + (Cloud.Configured ? "" : " · serveur de licences non configuré (licences maîtres seulement)"),
+                Text = "eyzi.fr · version " + Updater.Current + (Cloud.Configured ? "" : " · serveur de licences non configuré (licences maîtres seulement)"),
                 FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x8A, 0xB8)), Margin = new Thickness(0, 14, 0, 0),
             });
             Content = panel;

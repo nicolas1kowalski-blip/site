@@ -9,5 +9,7 @@
 - `eyzi-i-symbol.svg` : le « i » qui regarde, en vectoriel (symbole SVG, couleur par `currentColor`).
 - `planche.png` : la planche de présentation.
 
+Domaine : eyzi.fr (pris le 22/10/2026).
+
 Couleurs : violet profond #2A1B4A · violet #5B2FD1 · jaune #FFD24D · blanc.
 Caractère du lettrage : Baloo 2 ExtraBold (licence libre OFL). Badge : Fredoka Bold.

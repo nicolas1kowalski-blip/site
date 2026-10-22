@@ -63,7 +63,7 @@ a{color:var(--accent)}
 </ul>
 <h3 id="les-tapes">Les étapes</h3>
 <ol>
-<li>Téléchargez <strong>Eyzi-Setup.exe</strong> depuis la page « Application » du site (ou la page des versions sur GitHub).</li>
+<li>Téléchargez <strong>Eyzi-Setup.exe</strong> sur <strong>eyzi.fr</strong> (ou la page des versions sur GitHub).</li>
 <li>Ouvrez le fichier. Windows peut afficher un écran bleu « Windows a protégé votre ordinateur » : cliquez sur <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>. C'est normal pour une application qui n'est pas encore signée par un certificat payant.</li>
 <li>L'installeur est en français et ne demande <strong>aucun droit administrateur</strong> : il installe l'application dans le profil de l'utilisateur. Cochez « Lancer au démarrage de Windows » si la tablette est dédiée à l'enfant.</li>
 <li>À la fin, l'application se lance toute seule. Un raccourci « Eyzi » est sur le bureau et dans le menu Démarrer.</li>
@@ -166,7 +166,7 @@ a{color:var(--accent)}
 <h2 id="9-pour-l-diteur-donner-l-application-une-autre-famille">9. Pour l'éditeur : donner l'application à une autre famille</h2>
 <ol>
 <li><strong>Créer une licence</strong> dans le serveur (Supabase → SQL) : <code>select public.create_licence('Famille Martin', 'prod', 2);</code> — le nom, le canal (<code>test</code> ou <code>prod</code>), le nombre de tablettes, et une date de fin facultative en 4ᵉ paramètre. La fonction renvoie le numéro <code>EYZ-…</code> à transmettre.</li>
-<li><strong>Donner</strong> à la famille : le lien de téléchargement, le numéro de licence, ce guide. Elle choisit elle-même son mot de passe famille.</li>
+<li><strong>Donner</strong> à la famille : l'adresse eyzi.fr, le numéro de licence, ce guide (eyzi.fr/guide.html). Elle choisit elle-même son mot de passe famille.</li>
 <li><strong>Publier une version</strong> : chaque poussée de code compile une version <em>test</em> (pré-version) sur GitHub. Pour la passer en <em>prod</em> : GitHub → Releases → Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ». Les tablettes prod la reçoivent au prochain démarrage.</li>
 <li><strong>Révoquer</strong> une licence : dans la table <code>licences</code>, passer <code>enabled</code> à <code>false</code> ; la tablette perd l'accès au plus tard 30 jours après (ou à sa prochaine vérification en ligne).</li>
 <li><strong>Désactiver une tablette</strong> (perdue, remplacée, prêtée) : <code>select public.disable_tablet('EYZ-…', 'NOM-DE-LA-TABLETTE');</code> (même fonction avec <code>true</code> en 3ᵉ paramètre pour la réactiver). La vue <code>tablettes</code> liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que <code>max_tablets</code> est refusée tant qu'une place n'est pas libérée.</li>
