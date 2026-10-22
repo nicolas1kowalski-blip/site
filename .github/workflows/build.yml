@@ -1,0 +1,79 @@
+# Compilation et publication automatiques de « Mes Premiers Jeux ».
+# À chaque poussée de code : compilation Windows, installeur, puis une
+# version TEST (pré-version GitHub). Les tablettes en canal « test » la
+# reçoivent ; le canal « prod » ne voit que les versions promues (non
+# pré-version), promues d'un clic dans GitHub → Releases → « Edit » →
+# décocher « Set as a pre-release » → « Set as the latest release ».
+name: build
+
+on:
+  push:
+    branches: [ main, "claude/**" ]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Numéro de version (AAAA.M.J.N)
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Date -Format "yyyy.M.d") + "." + $env:GITHUB_RUN_NUMBER
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $v"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Compilation
+        shell: pwsh
+        run: |
+          dotnet build desktop/MesPremiersJeux/MesPremiersJeux.csproj -c Release -p:Platform=x64 -p:Version=${{ steps.ver.outputs.version }} --nologo
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem desktop/MesPremiersJeux/bin/x64/Release/net472 | Select-Object -First 5
+
+      - name: Installeur (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DVersion=${{ steps.ver.outputs.version }}" "/DSource=..\MesPremiersJeux\bin\x64\Release\net472" desktop\installer\MesPremiersJeux.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Archive portable + empreintes
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          Compress-Archive -Path desktop/MesPremiersJeux/bin/x64/Release/net472/* -DestinationPath "desktop/installer/Output/MesPremiersJeux-$v.zip"
+          Get-ChildItem desktop/installer/Output/* | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
+          }
+          Get-ChildItem desktop/installer/Output
+
+      - name: Version test (pré-version GitHub)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Mes Premiers Jeux ${{ steps.ver.outputs.version }}
+          prerelease: true
+          body: |
+            Version **test** ${{ steps.ver.outputs.version }} — compilée automatiquement depuis `${{ github.ref_name }}` (${{ github.sha }}).
+
+            - `MesPremiersJeux-Setup-*.exe` : l'installeur (par utilisateur, sans droits administrateur).
+            - `MesPremiersJeux-*.zip` : la version portable.
+            - `*.sha256` : empreintes de contrôle, vérifiées par l'appli avant toute mise à jour.
+
+            Pour la promouvoir en **prod** : Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ».
+          files: |
+            desktop/installer/Output/*

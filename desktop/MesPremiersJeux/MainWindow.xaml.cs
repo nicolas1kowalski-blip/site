@@ -213,6 +213,24 @@ namespace MesPremiersJeux
             if (SharedSettings.Apply(_settings)) _settings.Save();
             _accueil?.RefreshName(); // le prénom (réglages partagés compris)
 
+            // ☁ Le serveur de l'application (réglages en priorité, sinon la valeur embarquée).
+            if (!string.IsNullOrWhiteSpace(_settings.SupabaseUrl)) Cloud.Url = _settings.SupabaseUrl;
+            if (!string.IsNullOrWhiteSpace(_settings.SupabaseKey)) Cloud.AnonKey = _settings.SupabaseKey;
+
+            // 🔑 LA LICENCE, avant tout le reste : sans licence valide, on s'arrête là.
+            if (!Licence.IsValid(_settings))
+            {
+                GazeGate.Push();
+                var lw = new LicenceWindow(_settings) { Owner = this };
+                bool okLic = lw.ShowDialog() == true;
+                GazeGate.Pop();
+                if (!okLic) { Lib.Log.Write("licence", "Pas de licence : fermeture"); Close(); return; }
+            }
+            RefreshLicenceText();
+            _ = Licence.RecheckAsync(_settings).ContinueWith(t => Dispatcher.Invoke(RefreshLicenceText));
+            Updater.Cleanup();
+            CheckUpdatesAtStartup();
+
             // 👋 PREMIER DÉMARRAGE sur cette tablette : on demande le prénom de
             // l'enfant (une seule fois ; les réglages partagés peuvent déjà l'avoir).
             if (!_settings.NameAsked) Dispatcher.BeginInvoke(new Action(AskChildName), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
@@ -825,6 +843,92 @@ namespace MesPremiersJeux
         }
 
         // Prénom de l'enfant : utilisé par l'activité « Mon prénom » (Éducatif).
+        // ------------------------------------------------------------------
+        //  🔑 Licence et 🔄 mises à jour
+        // ------------------------------------------------------------------
+        private void RefreshLicenceText()
+        {
+            try
+            {
+                LicenceText.Text = "Licence : " + Licence.Describe(_settings);
+                VersionText.Text = "Version " + Updater.Current + (Updater.IsDevBuild ? " (compilée à la main : pas de mise à jour automatique)" : " · canal " + (Licence.IsTest(_settings) ? "TEST" : "prod"));
+            }
+            catch { }
+        }
+
+        private void Licence_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            GazeGate.Push();
+            var lw = new LicenceWindow(_settings) { Owner = this };
+            lw.ShowDialog();
+            GazeGate.Pop();
+            RefreshLicenceText();
+        }
+
+        private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            if (Updater.IsDevBuild)
+            {
+                MessageBox.Show(this, "Cette version a été compilée à la main (Visual Studio) : les mises à jour automatiques ne s'appliquent qu'aux versions installées avec l'installeur.", "Mises à jour");
+                return;
+            }
+            ShowParentNotice("🔄 Recherche d'une mise à jour…");
+            Updater.Info info = null;
+            try { info = await Updater.CheckAsync(Licence.IsTest(_settings)); }
+            catch (Exception ex) { MessageBox.Show(this, "Impossible de vérifier : " + ex.Message, "Mises à jour"); return; }
+            if (info == null || !info.IsNewer)
+            {
+                MessageBox.Show(this, "Tu as déjà la dernière version (" + Updater.Current + ").", "Mises à jour");
+                return;
+            }
+            await OfferUpdate(info);
+        }
+
+        private async void CheckUpdatesAtStartup()
+        {
+            if (Updater.IsDevBuild) return;
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(4000);
+                var info = await Updater.CheckAsync(Licence.IsTest(_settings));
+                if (info == null || !info.IsNewer) return;
+                Lib.Log.Write("maj", "Version disponible : " + info.Version + (info.Prerelease ? " (test)" : " (prod)"));
+                await OfferUpdate(info);
+            }
+            catch (Exception ex) { Lib.Log.Write("maj", "Vérification au démarrage : " + ex.Message); }
+        }
+
+        private async System.Threading.Tasks.Task OfferUpdate(Updater.Info info)
+        {
+            GazeGate.Push();
+            var r = MessageBox.Show(this,
+                "Nouvelle version disponible : " + info.Version + (info.Prerelease ? " (test)" : "") + "\n" +
+                "Tu as la " + Updater.Current + ".\n\nL'installer maintenant ? L'application se ferme, s'installe toute seule et se relance (moins d'une minute).",
+                "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            GazeGate.Pop();
+            _settings.LastUpdateSeen = info.Version.ToString();
+            _settings.Save();
+            if (r != MessageBoxResult.Yes) return;
+            ShowParentNotice("🔄 Mise à jour vers " + info.Version + " : téléchargement…");
+            var err = await Updater.InstallAsync(info, s => ShowParentNotice("🔄 " + s));
+            if (err != null) MessageBox.Show(this, err, "Mise à jour");
+        }
+
+        private void Rollback_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsPopup.IsOpen = false;
+            var prev = Updater.PreviousSetup();
+            if (prev == null) { MessageBox.Show(this, "Aucune version précédente n'est disponible sur cette tablette.", "Version précédente"); return; }
+            GazeGate.Push();
+            var r = MessageBox.Show(this, "Revenir à la version précédente ?\n" + System.IO.Path.GetFileName(prev) + "\n\nL'application se ferme, se réinstalle et se relance.", "Version précédente", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            GazeGate.Pop();
+            if (r != MessageBoxResult.Yes) return;
+            var err = Updater.Rollback();
+            if (err != null) MessageBox.Show(this, err, "Version précédente");
+        }
+
         private void Level_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_settings == null) return;

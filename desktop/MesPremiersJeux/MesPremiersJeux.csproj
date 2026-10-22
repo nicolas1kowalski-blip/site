@@ -16,6 +16,13 @@
     <Platforms>x64;x86</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <Nullable>disable</Nullable>
+    <!-- Version : fixée par la compilation automatique (GitHub) en AAAA.M.J.N ;
+         0.0.0.1 = compilée à la main. L'appli l'affiche et s'en sert pour se mettre à jour. -->
+    <Version Condition="'$(Version)' == ''">0.0.0.1</Version>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Company>Mes Premiers Jeux</Company>
+    <Product>Mes Premiers Jeux</Product>
+    <Copyright>© Mes Premiers Jeux</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

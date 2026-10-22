@@ -36,6 +36,11 @@ namespace MesPremiersJeux.Lib
         public string Level = "auto";    // niveau : auto | 1 | 2 | 3
         public int SessionMinutes = 10;  // au bout de N minutes de jeu, on propose une pause (0 = jamais)
         public bool NameAsked = false;   // le prénom a été demandé au premier démarrage sur cette tablette
+        // 🔑 Licence (voir Lib/Licence.cs)
+        public string LicenceKey = "", LicenceFamily = "", LicenceChannel = "prod", LicenceUntil = "", LicenceChecked = "";
+        public int LicenceMax = 2;
+        public bool LicenceOk = false;
+        public string LastUpdateSeen = ""; // dernière version proposée (pour ne pas insister)
         public int AutoLevel = 1;        // niveau atteint en automatique
         public bool AutoDwell = true;    // temps de fixation ajusté tout seul selon le jeu de l'enfant
 
@@ -82,6 +87,14 @@ namespace MesPremiersJeux.Lib
                         case "Level": s.Level = val; break;
                         case "SessionMinutes": int.TryParse(val, out s.SessionMinutes); break;
                         case "NameAsked": s.NameAsked = val != "0"; break;
+                        case "LicenceKey": s.LicenceKey = val; break;
+                        case "LicenceFamily": s.LicenceFamily = val; break;
+                        case "LicenceChannel": s.LicenceChannel = val; break;
+                        case "LicenceUntil": s.LicenceUntil = val; break;
+                        case "LicenceChecked": s.LicenceChecked = val; break;
+                        case "LicenceMax": int.TryParse(val, out s.LicenceMax); break;
+                        case "LicenceOk": s.LicenceOk = val != "0"; break;
+                        case "LastUpdateSeen": s.LastUpdateSeen = val; break;
                         case "AutoLevel": int.TryParse(val, out s.AutoLevel); break;
                     }
                 }
@@ -125,6 +138,14 @@ namespace MesPremiersJeux.Lib
                     "Level=" + (Level ?? "auto"),
                     "SessionMinutes=" + SessionMinutes,
                     "NameAsked=" + (NameAsked ? "1" : "0"),
+                    "LicenceKey=" + (LicenceKey ?? ""),
+                    "LicenceFamily=" + (LicenceFamily ?? ""),
+                    "LicenceChannel=" + (LicenceChannel ?? "prod"),
+                    "LicenceUntil=" + (LicenceUntil ?? ""),
+                    "LicenceChecked=" + (LicenceChecked ?? ""),
+                    "LicenceMax=" + LicenceMax,
+                    "LicenceOk=" + (LicenceOk ? "1" : "0"),
+                    "LastUpdateSeen=" + (LastUpdateSeen ?? ""),
                     "AutoLevel=" + AutoLevel,
                 };
                 File.WriteAllLines(FilePath, lines);
