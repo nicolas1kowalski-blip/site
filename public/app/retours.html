@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vos retours — Eyzi</title>
+<meta name="description" content="Donnez votre avis sur Eyzi, version bêta : ce qui marche, ce qui manque, vos idées.">
+<link rel="icon" type="image/png" href="img/favicon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F6F0FF;--card:#fff;--ink:#2A1B4A;--muted:#6B5B8A;--line:#E3D8F5;--accent:#5B2FD1;--gold:#FFD24D;--code:#F1EBFF;--ok:#2E9E4F;--err:#C0392B}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1B1430;--card:#261C42;--ink:#F1EAFF;--muted:#B9ACD6;--line:#3A2E5C;--accent:#B99CFF;--code:#332757}}
+:root[data-theme="dark"]{--bg:#1B1430;--card:#261C42;--ink:#F1EAFF;--muted:#B9ACD6;--line:#3A2E5C;--accent:#B99CFF;--code:#332757}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Fredoka,"Segoe UI",system-ui,sans-serif;font-size:17px;line-height:1.55}
+.top{background:linear-gradient(90deg,#B388FF,#8AD6FF);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.top a{color:#2A1B4A;text-decoration:none;font-weight:700;background:rgba(255,255,255,.6);padding:8px 16px;border-radius:999px}
+.top .brand{background:none;padding:0}.top .brand img{height:38px;display:block}
+.wrap{max-width:720px;margin:0 auto;padding:28px 16px 64px}
+h1{font-family:"Baloo 2",Fredoka,sans-serif;font-size:34px;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 20px}
+form{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}
+label{display:block;font-weight:600;margin:14px 0 6px}
+input,select,textarea{width:100%;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+textarea{min-height:120px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:560px){.row{grid-template-columns:1fr}}
+.hp{position:absolute;left:-9999px;top:-9999px}
+button{margin-top:20px;width:100%;padding:16px;border:0;border-radius:999px;background:var(--accent);color:#fff;font:inherit;font-weight:700;font-size:19px;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+.msg{margin-top:16px;padding:14px 16px;border-radius:14px;display:none}
+.msg.ok{display:block;background:#E8F7EC;color:#1E6B36}.msg.err{display:block;background:#FDEAEA;color:#8E2A20}
+.note{background:var(--code);border-left:5px solid var(--gold);border-radius:12px;padding:12px 16px;margin:18px 0 0;font-size:15px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="top"><a class="brand" href="./"><img src="img/eyzi-logo-light.png" alt="Eyzi"></a><div><a href="./">Télécharger</a> <a href="licence.html">Demander une licence</a> <a href="guide.html">Le guide</a></div></div>
+<div class="wrap">
+  <h1>💬 Vos retours</h1>
+  <p class="lead">Eyzi est en <strong>version bêta</strong> : elle marche, et elle s'améliore grâce à vous. Un jeu trop difficile, une voix trop rapide, une activité qui manque, un bug : dites-le ici. Chaque message est lu.</p>
+  <form id="f" novalidate>
+    <input type="hidden" name="topic" value="retour">
+    <div class="hp"><label>Site web<input name="site" tabindex="-1" autocomplete="off"></label></div>
+    <label for="message">Votre retour *</label><textarea id="message" name="message" required maxlength="2000" placeholder="Ce qui a plu, ce qui a coincé, ce que vous aimeriez…"></textarea>
+    <div class="row">
+      <div><label for="kind">Vous êtes</label><select id="kind" name="kind"><option value="famille">Une famille</option><option value="etablissement">Un établissement</option><option value="professionnel">Un professionnel</option></select></div>
+      <div><label for="child">Âge de l'enfant et commande oculaire utilisée</label><input id="child" name="child" maxlength="40" placeholder="par exemple : 5 ans, TD I-13"></div>
+    </div>
+    <div class="row">
+      <div><label for="name">Votre nom (facultatif)</label><input id="name" name="name" maxlength="120" autocomplete="name"></div>
+      <div><label for="email">Votre e-mail, si vous voulez une réponse (facultatif)</label><input id="email" name="email" type="email" maxlength="160" autocomplete="email"></div>
+    </div>
+    <button id="send" type="submit">Envoyer mon retour</button>
+    <div id="msg" class="msg"></div>
+    <p class="note">Ces informations servent uniquement à améliorer l'application et, si vous laissez un e-mail, à vous répondre.</p>
+  </form>
+</div>
+<script>
+(function(){
+  var f=document.getElementById('f'), msg=document.getElementById('msg'), btn=document.getElementById('send');
+  f.addEventListener('submit', async function(ev){
+    ev.preventDefault(); msg.className='msg'; msg.textContent='';
+    var d={}; new FormData(f).forEach(function(v,k){ d[k]=v; });
+    if(!d.message || d.message.trim().length<5){ msg.className='msg err'; msg.textContent='Écrivez votre retour.'; return; }
+    if(d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)){ msg.className='msg err'; msg.textContent='Cette adresse e-mail ne semble pas valide.'; return; }
+    btn.disabled=true; btn.textContent='Envoi…';
+    try{
+      var r=await fetch('/api/licence-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+      var j={}; try{ j=await r.json(); }catch(e){}
+      if(r.ok && j.ok){ msg.className='msg ok'; msg.textContent='Merci ! Votre retour est bien arrivé.'; f.reset(); }
+      else { msg.className='msg err'; msg.textContent=(j && j.message) || 'Envoi impossible pour le moment. Réessayez un peu plus tard.'; }
+    }catch(e){ msg.className='msg err'; msg.textContent='Pas de réseau. Réessayez un peu plus tard.'; }
+    btn.disabled=false; btn.textContent='Envoyer mon retour';
+  });
+})();
+</script>
+</body>
+</html>

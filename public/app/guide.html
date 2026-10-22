@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide utilisateur — Eyzi</title><link rel="icon" type="image/png" href="img/favicon-32.png">
+<meta name="description" content="Installer, activer et utiliser Eyzi : commande oculaire, jeux, réglages, mises à jour, licences.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F6F0FF;--card:#fff;--ink:#3B2A5A;--muted:#6B5B8A;--line:#E3D8F5;--accent:#7E3FF2;--gold:#F29E00;--code:#F1EBFF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1B1430;--card:#261C42;--ink:#F1EAFF;--muted:#B9ACD6;--line:#3A2E5C;--accent:#B99CFF;--gold:#FFC54D;--code:#332757}}
+:root[data-theme="dark"]{--bg:#1B1430;--card:#261C42;--ink:#F1EAFF;--muted:#B9ACD6;--line:#3A2E5C;--accent:#B99CFF;--gold:#FFC54D;--code:#332757}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Fredoka,"Segoe UI",system-ui,sans-serif;font-size:17px;line-height:1.55}
+.top{background:linear-gradient(90deg,#B388FF,#8AD6FF);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.top a{color:#2A1B4A;text-decoration:none;font-weight:700;background:rgba(255,255,255,.6);padding:8px 16px;border-radius:999px}
+.top .brand{font-family:"Baloo 2",Fredoka,sans-serif;font-size:22px;background:none;padding:0}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 64px;display:grid;grid-template-columns:240px 1fr;gap:28px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}}
+nav.toc{position:sticky;top:16px;align-self:start;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+nav.toc a{color:var(--muted);text-decoration:none;padding:4px 8px;border-radius:8px}nav.toc a:hover{background:var(--code);color:var(--ink)}
+@media (max-width:860px){nav.toc{position:static}}
+main{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:28px 32px;min-width:0}
+@media (max-width:600px){main{padding:20px 16px}}
+h1{font-family:"Baloo 2",Fredoka,sans-serif;font-size:34px;margin:0 0 8px;line-height:1.15}
+h2{font-family:"Baloo 2",Fredoka,sans-serif;font-size:26px;margin:40px 0 10px;padding-top:14px;border-top:2px solid var(--line);color:var(--accent)}
+h3{font-size:20px;margin:24px 0 6px}
+p{margin:10px 0}em{color:var(--muted)}
+ul,ol{padding-left:26px;margin:8px 0}li{margin:5px 0}
+code{background:var(--code);padding:2px 6px;border-radius:6px;font-size:.92em;font-family:Consolas,Menlo,monospace;word-break:break-all}
+hr{display:none}
+a{color:var(--accent)}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:18px 0 6px}
+.shots figure{margin:0}.shots img{width:100%;border-radius:14px;border:1px solid var(--line);display:block}
+.shots figcaption{font-size:14px;color:var(--muted);margin-top:6px;text-align:center}
+.note{background:var(--code);border-left:5px solid var(--gold);border-radius:12px;padding:12px 16px;margin:16px 0}
+</style>
+</head>
+<body>
+<div class="top"><a class="brand" href="./">⭐ Eyzi</a><div><a href="./">Télécharger</a> <a href="licence.html">Demander une licence</a> <a href="retours.html">Vos retours</a></div></div>
+<div class="wrap">
+<nav class="toc"><a href="#1-installer-l-application">1. Installer l&#x27;application</a>
+<a href="#2-le-premier-dmarrage">2. Le premier démarrage</a>
+<a href="#3-la-commande-oculaire">3. La commande oculaire</a>
+<a href="#4-ce-que-voit-l-enfant">4. Ce que voit l&#x27;enfant</a>
+<a href="#5-les-rglages-des-parents-bouton">5. Les réglages des parents (bouton ⚙)</a>
+<a href="#6-les-mises-jour">6. Les mises à jour</a>
+<a href="#7-les-donnes-et-la-scurit">7. Les données et la sécurité</a>
+<a href="#8-problmes-frquents">8. Problèmes fréquents</a>
+<a href="#9-pour-l-diteur-donner-l-application-une-autre-famille">9. Pour l&#x27;éditeur : donner l&#x27;application à une autre famille</a></nav>
+<main>
+<h1>Eyzi — Guide utilisateur</h1>
+<p><em>Une application Windows pour jouer, parler et apprendre avec les yeux, pour les enfants de 4 à 7 ans. Elle se pilote à la commande oculaire (Tobii), au doigt ou à la souris.</em></p>
+<p><em>Eyzi est en <strong>version bêta</strong> : elle marche, elle est utilisée tous les jours, et elle s'améliore avec les retours. La bêta est gratuite et limitée : 10 licences pour commencer, d'autres au fil des retours, jusqu'au 30 juin 2027 ; ceux de la bêta garderont leur licence gratuite si l'application devient payante un jour. Vos remarques : <strong>eyzi.fr/retours.html</strong>.</em></p>
+<p>Ce guide s'adresse aux parents et aux accompagnants. La première partie explique l'installation et le premier démarrage, la deuxième ce que l'enfant voit, la troisième les réglages, la dernière ce qu'il faut savoir pour donner l'application à une autre famille.</p>
+<hr>
+<h2 id="1-installer-l-application">1. Installer l'application</h2>
+<h3 id="ce-qu-il-faut">Ce qu'il faut</h3>
+<ul>
+<li>Une tablette ou un PC sous <strong>Windows 10 ou 11</strong>.</li>
+<li>Pour la commande oculaire : un capteur <strong>Tobii</strong> avec son logiciel installé. Testés : TD I-13 et TD I-16, PCEye 5 (moteur direct, sans TD Control), Tobii Eye Tracker 4C et 5 (Tobii Experience), Tobii Pro (Nano, Fusion…). Toute autre commande oculaire qui déplace la souris (Irisbond, Lumin-i, TD Control, Computer Control) marche en mode « Curseur ». Sans capteur, l'application marche au doigt et à la souris.</li>
+<li>Pas encore : Mac, iPad, Android, Chromebook.</li>
+<li>Une connexion internet pour l'installation et les mises à jour (ensuite l'application marche hors ligne).</li>
+</ul>
+<h3 id="les-tapes">Les étapes</h3>
+<ol>
+<li>Téléchargez <strong>Eyzi-Setup.exe</strong> sur <strong>eyzi.fr</strong> (ou la page des versions : github.com/nicolas1kowalski-blip/eyzi-releases/releases).</li>
+<li>Ouvrez le fichier. Windows peut afficher un écran bleu « Windows a protégé votre ordinateur » : cliquez sur <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>. C'est normal pour une application qui n'est pas encore signée par un certificat payant.</li>
+<li>L'installeur est en français et ne demande <strong>aucun droit administrateur</strong> : il installe l'application dans le profil de l'utilisateur. Cochez « Lancer au démarrage de Windows » si la tablette est dédiée à l'enfant.</li>
+<li>À la fin, l'application se lance toute seule. Un raccourci « Eyzi » est sur le bureau et dans le menu Démarrer.</li>
+</ol>
+<p>Pour désinstaller : Paramètres Windows → Applications → Eyzi → Désinstaller. Le contenu de la famille (photos, voix, livres) n'est pas supprimé.</p>
+<h2 id="2-le-premier-dmarrage">2. Le premier démarrage</h2>
+<h3 id="l-essai-de-10-jours">L'essai de 10 jours</h3>
+<p>Au tout premier lancement, vous pouvez choisir <strong>« Essayer 10 jours sans licence »</strong> : toutes les fonctions sont ouvertes pendant dix jours sur cette tablette. Les réglages affichent les jours restants. À la fin, l'application redemande un numéro de licence, que vous demandez sur <strong>eyzi.fr/licence.html</strong> (gratuite pendant la bêta ; réponse sous 48 heures en général). Pendant l'essai, le contenu reste sur la tablette : le nuage entre tablettes et les tableaux d'usage demandent une licence.</p>
+<h3 id="la-licence">La licence</h3>
+<p>L'application demande un <strong>numéro de licence</strong> de la forme <code>EYZ-XXXX-XXXX-XXXX-XXXX</code>. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :</p>
+<ul>
+<li>il autorise l'application sur cette tablette ;</li>
+<li>il regroupe vos tablettes en une <strong>famille</strong> : toutes les tablettes activées avec le même numéro partagent leurs photos, voix et livres ;</li>
+<li>il dit à l'application si elle reçoit les versions <strong>test</strong> ou seulement les versions <strong>prod</strong>.</li>
+</ul>
+<p>Sur le même écran, choisissez un <strong>mot de passe famille</strong> (6 caractères au moins). Tapez le même sur toutes vos tablettes. Il sert à chiffrer vos contenus avant qu'ils ne quittent la tablette : personne d'autre, pas même l'éditeur, ne peut les lire. Notez-le : s'il est perdu, les contenus déjà envoyés ne pourront pas être relus par une nouvelle tablette (ils restent sur les tablettes où ils sont).</p>
+<p>La licence est vérifiée en ligne à l'activation, puis au plus une fois par jour. Sans réseau, elle reste valable <strong>30 jours</strong>.</p>
+<p>Elle est limitée à un <strong>nombre de tablettes</strong> (deux, en général). Quand elles sont toutes prises, une nouvelle tablette est refusée : sur l'ancienne, réglages → <strong>🚫 Libérer cette tablette</strong> rend la place. Les réglages affichent toujours « tablettes : 1/2 ».</p>
+<h3 id="le-prnom-de-l-enfant">Le prénom de l'enfant</h3>
+<p>Juste après, l'application demande le <strong>prénom de l'enfant</strong>. Il est utilisé sur l'accueil (« Bonjour Laura ! ») et dans l'activité « Mon prénom ». On peut le changer plus tard dans les réglages.</p>
+<h3 id="vos-anciens-contenus">Vos anciens contenus</h3>
+<p>Si vous utilisiez une version précédente (contenu dans OneDrive, dans Documents ou à côté de l'application), tout est rapatrié automatiquement au premier lancement dans le dossier de l'application. Rien à faire.</p>
+<h2 id="3-la-commande-oculaire">3. La commande oculaire</h2>
+<h3 id="comment-a-marche">Comment ça marche</h3>
+<p>L'enfant regarde un bouton ; un petit cercle se remplit autour de son regard ; quand il est plein, le bouton est « cliqué ». C'est la <strong>durée de fixation</strong> (réglable, de très courte à longue). L'application peut aussi <strong>l'ajuster toute seule</strong> : plus l'enfant réussit, plus elle raccourcit.</p>
+<p>Pendant que l'application parle, un bouton regardé est quand même pris en compte : il s'enfonce, et son action part dès la fin de la phrase. L'enfant ne croit jamais « avoir cliqué pour rien ».</p>
+<p>Ce qui est en train d'être lu reste <strong>surligné en doré</strong> jusqu'à la fin de la phrase.</p>
+<h3 id="les-pilotes">Les pilotes</h3>
+<p>Dans les réglages (bouton <strong>⚙</strong> en haut à droite), « Source du regard » propose :</p>
+<ul>
+<li><strong>Auto</strong> : l'application choisit le meilleur pilote disponible (conseillé).</li>
+<li><strong>Moteur Tobii direct</strong> : le même moteur que Grid 3 ; c'est celui qui marche le mieux sur les tablettes TD I-13 et PCEye 5.</li>
+<li><strong>Regard direct (Tobii Experience)</strong> : pour les capteurs Tobii grand public.</li>
+<li><strong>Curseur</strong> : marche avec n'importe quelle commande oculaire qui déplace la souris (TD Control, etc.).</li>
+</ul>
+<p>Le pilote change à chaud, sans redémarrer.</p>
+<h3 id="calibrer-et-vrifier">Calibrer et vérifier</h3>
+<ul>
+<li><strong>👁 Vérifier la position des yeux</strong> ouvre une fenêtre qui montre les deux yeux : l'enfant doit être bien dans le cadre, ni trop près ni trop loin.</li>
+<li><strong>🎯 Calibrer la tablette</strong> lance le calibrage du logiciel Tobii installé (sans passer par TD Control).</li>
+<li><strong>🎯 Régler la précision (étoile)</strong> : un mini-jeu où l'enfant suit une étoile ; l'application corrige un décalage éventuel.</li>
+<li><strong>Lissage</strong> rend le regard plus stable (plus lent) ou plus réactif ; <strong>Taille du cercle</strong> change la taille de la cible.</li>
+</ul>
+<h2 id="4-ce-que-voit-l-enfant">4. Ce que voit l'enfant</h2>
+<h3 id="l-accueil">L'accueil</h3>
+<p>« Bonjour Laura ! », la date du jour, l'ami du jour (un animal), les étoiles gagnées, une surprise, et un décor qui suit la journée : le soleil le matin, la lune et les étoiles le soir. Regarder le soleil ou la lune les fait parler. La carte <strong>« Dire bonjour »</strong> fait dire bonjour à voix haute (avec votre voix si vous l'avez enregistrée).</p>
+<h3 id="les-onglets">Les onglets</h3>
+<p>Tout en haut, toujours visibles :</p>
+<ul>
+<li><strong>📖 Histoires</strong> : les livres fournis et les vôtres (photos de la famille, texte lu à voix haute).</li>
+<li><strong>🎮 Jeux</strong> : ballons, paires (seul ou à deux), cherche et trouve, le jeu magique…</li>
+<li><strong>🎓 Éducatif</strong> : par thèmes — <em>Les lettres</em> (mon prénom, mot et image, lettres mobiles, rimes, syllabes), <em>Les nombres</em> (compter, un de plus, partager, la bande numérique), <em>La musique</em>, <em>L'anglais</em>, <em>Découvrir</em> (les émotions, « Range la maison », les contraires).</li>
+<li><strong>🎨 Coloriage</strong> : on regarde une zone, elle se colorie.</li>
+<li><strong>🎵 Musique</strong> : instruments à jouer avec les yeux (le son part dès que le regard se pose), xylophone, « Au clair de la lune » (la lame qui brille est la prochaine note ; rester dessus la rejoue), batterie.</li>
+<li><strong>📅 Parcours</strong> : une suite d'activités pour la séance du jour.</li>
+</ul>
+<h3 id="parler-oui-non">Parler, Oui, Non</h3>
+<p>Les boutons <strong>💬 Parler</strong> (en bas à droite) et <strong>✅ Oui / ✗ Non</strong> (en bas à gauche) sont toujours à l'écran. « Parler » ouvre le tableau de communication : je veux, j'ai mal, j'aime, encore, fini, ma journée, et au niveau 2 « Je fais une phrase ». On peut les cacher dans les réglages.</p>
+<h3 id="je-choisis">Je choisis</h3>
+<p>Le bouton <strong>🙋 Je choisis</strong> (réglages) affiche 2 à 4 images que vous choisissez (le jus, le gâteau, un livre…). L'enfant regarde celle qu'il veut, l'application la dit. Idéal pour les vrais choix du quotidien.</p>
+<h3 id="les-toiles-le-carnet-la-boutique">Les étoiles, le carnet, la boutique</h3>
+<p>Chaque réussite donne une étoile. <strong>Mon carnet</strong> montre l'arbre à pommes (une pomme tous les 25 étoiles), les étoiles par domaine, les badges (10, 50, 100 étoiles, 3 jours de suite, Je parle !…). Dans la <strong>Boutique</strong>, l'enfant dépense ses étoiles contre des surprises : le grand feu d'artifice, la fête des ballons, une chanson, une vidéo de sa famille.</p>
+<h3 id="le-niveau">Le niveau</h3>
+<p>Trois niveaux : 🌱 Petite section (2 choix, nombres jusqu'à 5), 🌿 Moyenne section (3 choix, jusqu'à 7), 🌳 Grande section · CP (4 choix, jusqu'à 10). En <strong>Automatique</strong>, l'application monte d'un niveau après 20 réponses avec 85 % de réussite et redescend sous 40 %. On peut fixer le niveau à la main.</p>
+<h3 id="la-pause">La pause</h3>
+<p>Après 10 minutes de jeu (réglable : jamais, 5, 10, 15, 20), l'application demande « on continue encore un peu, ou on fait une petite pause ? ». La pause joue un peu de musique, et on reprend quand on veut.</p>
+<h2 id="5-les-rglages-des-parents-bouton">5. Les réglages des parents (bouton ⚙)</h2>
+<ul>
+<li><strong>🔧 Mode administration</strong> met le regard en pause pour que vous puissiez utiliser la souris, et permet d'ajouter, modifier ou supprimer les livres, coloriages et photos.</li>
+<li><strong>👧 Prénom de l'enfant</strong>.</li>
+<li><strong>Voix</strong> : voix Windows (hors ligne) avec réglage de hauteur, ou voix naturelle Azure (en ligne, clé à saisir ; repli automatique hors ligne). <strong>🎙 Enregistrer vos voix</strong> : vos « Bravo ! » et « Bonjour ! » remplacent la voix de synthèse aux moments forts.</li>
+<li><strong>📊 Bilan</strong> : la semaine, les niveaux, les étoiles, les mots dits.</li>
+<li><strong>📁 Le contenu de la famille</strong> : photos, voix, livres, coloriages et images ajoutées vivent dans <code>%LocalAppData%\MesPremiersJeux\Contenu</code>. <strong>📦 Exporter</strong> fabrique un seul fichier (sauvegarde ou copie vers une autre tablette avec <strong>📥 Importer</strong>).</li>
+<li><strong>☁️ Le nuage</strong> : si l'éditeur a configuré le serveur, le contenu voyage tout seul entre vos tablettes (récupéré au démarrage, envoyé à la fermeture), chiffré avec votre mot de passe famille. Deux boutons pour forcer : <strong>Envoyer maintenant</strong> / <strong>Récupérer maintenant</strong>.</li>
+<li><strong>🔑 Licence et mises à jour</strong> : la licence active (famille, canal, tablettes utilisées), la version installée, <strong>🔄 Vérifier les mises à jour</strong>, <strong>↩ Version précédente</strong>, <strong>🔑 Changer la licence</strong>, <strong>🚫 Libérer cette tablette</strong> (changement de poste : la place redevient libre, l'application se ferme et redemandera une licence ; le contenu reste sur la tablette).</li>
+</ul>
+<h2 id="6-les-mises-jour">6. Les mises à jour</h2>
+<p>L'application se met à jour <strong>comme une application du Store</strong> : au démarrage, elle regarde s'il existe une version plus récente de son canal, la télécharge, vérifie son empreinte, l'installe en silence et se relance. Le contenu de la famille et les réglages ne sont jamais touchés.</p>
+<ul>
+<li>Canal <strong>test</strong> : reçoit toutes les versions, dès qu'elles sont compilées. Pour les tablettes qui servent à essayer.</li>
+<li>Canal <strong>prod</strong> : reçoit seulement les versions promues, une fois testées. Pour les tablettes de tous les jours.</li>
+</ul>
+<p>Le canal est porté par la licence. <strong>↩ Version précédente</strong> réinstalle la version d'avant (les trois derniers installeurs sont gardés sur la tablette).</p>
+<h2 id="7-les-donnes-et-la-scurit">7. Les données et la sécurité</h2>
+<ul>
+<li>Tout est sur la tablette : réglages, contenu, journal, progrès. Rien ne part sans licence activée.</li>
+<li>Vers le nuage ne partent que des fichiers <strong>chiffrés</strong> (AES-256) avec votre mot de passe famille. Le serveur, et l'éditeur, voient un fichier illisible.</li>
+<li>Chaque famille a son espace, cloisonné par le serveur : une tablette d'une famille ne peut pas lire une autre famille.</li>
+<li>Le numéro de licence n'est pas un secret absolu (quelqu'un qui l'a peut activer une tablette de votre famille, dans la limite du nombre autorisé) ; le mot de passe famille, lui, protège vos contenus. Ne les écrivez pas au même endroit.</li>
+<li>L'application envoie à l'éditeur, une fois par jour, des <strong>compteurs d'usage</strong> : par jour et par activité, le nombre d'ouvertures, de réussites et de minutes, avec le nom de la tablette. Rien d'autre : ni le prénom, ni les photos, ni les voix, ni ce qui a été dit. Ils servent à savoir ce qui est utilisé et ce qui ne l'est pas, pour améliorer l'application.</li>
+<li>Le journal (<code>%LocalAppData%\MesPremiersJeux\journal.txt</code>) note ce qui se passe (jeux, erreurs). En cas de plantage, un fichier <code>plantage-&lt;tablette&gt;.txt</code> est écrit dans le dossier du contenu : envoyez-le à l'éditeur.</li>
+</ul>
+<h2 id="8-problmes-frquents">8. Problèmes fréquents</h2>
+<p><strong>L'écran bleu « Windows a protégé votre ordinateur »</strong> : Informations complémentaires → Exécuter quand même.</p>
+<p><strong>Le regard ne fait rien</strong> : vérifiez que le logiciel Tobii voit les yeux (👁 Vérifier la position des yeux), puis essayez « Moteur Tobii direct » dans Source du regard, puis calibrez (🎯).</p>
+<p><strong>Le cercle se remplit trop vite / trop lentement</strong> : Durée de fixation, ou cochez « Ajuster tout seul ».</p>
+<p><strong>La voix parle en retard ou coupe</strong> : avec la voix Azure, vérifiez le réseau ; sinon passez en voix Windows. La phrase en cours se termine toujours avant la suivante.</p>
+<p><strong>« Le serveur de licences n'est pas configuré »</strong> : cette version n'embarque pas encore l'adresse du serveur ; saisissez-la dans ☁️ Le nuage (URL et clé fournies par l'éditeur), ou utilisez une licence maître.</p>
+<p><strong>L'application s'est fermée toute seule</strong> : relancez-la, puis regardez <code>journal.txt</code> (lignes <code>[plantage]</code>) et envoyez le fichier <code>plantage-…txt</code>.</p>
+<p><strong>Je change de tablette</strong> : installez, activez avec le même numéro et le même mot de passe famille ; le contenu descend tout seul (ou 📦 Exporter / 📥 Importer sans réseau).</p>
+<hr>
+<h2 id="9-pour-l-diteur-donner-l-application-une-autre-famille">9. Pour l'éditeur : donner l'application à une autre famille</h2>
+<ol>
+<li><strong>Créer une licence</strong> dans le serveur (Supabase → SQL) : <code>select public.create_licence('Famille Martin', 'prod', 2);</code> — le nom, le canal (<code>test</code> ou <code>prod</code>), le nombre de tablettes, et une date de fin facultative en 4ᵉ paramètre. La fonction renvoie le numéro <code>EYZ-…</code> à transmettre.</li>
+<li><strong>Donner</strong> à la famille : l'adresse eyzi.fr, le numéro de licence, ce guide (eyzi.fr/guide.html). Elle choisit elle-même son mot de passe famille.</li>
+<li><strong>Publier une version</strong> : chaque poussée de code compile une version <em>test</em> (pré-version) sur GitHub. Pour la passer en <em>prod</em> : GitHub → Releases → Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ». Les tablettes prod la reçoivent au prochain démarrage.</li>
+<li><strong>Révoquer</strong> une licence : dans la table <code>licences</code>, passer <code>enabled</code> à <code>false</code> ; la tablette perd l'accès au plus tard 30 jours après (ou à sa prochaine vérification en ligne).</li>
+<li><strong>Désactiver une tablette</strong> (perdue, remplacée, prêtée) : <code>select public.disable_tablet('EYZ-…', 'NOM-DE-LA-TABLETTE');</code> (même fonction avec <code>true</code> en 3ᵉ paramètre pour la réactiver). La vue <code>tablettes</code> liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que <code>max_tablets</code> est refusée tant qu'une place n'est pas libérée.</li>
+<li><strong>Voir ce qui est utilisé</strong>, par famille : la vue <code>usage_par_famille</code> (du plus utilisé au moins utilisé : minutes, ouvertures, réussites, jours), <code>usage_30_jours</code> (les 30 derniers jours) et <code>usage_resume</code> (une ligne par famille : minutes, jours, tablettes, dernière fois). Dans Supabase : Table Editor → choisir la vue, ou SQL : <code>select * from public.usage_30_jours where famille = 'Famille Martin';</code></li>
+</ol>
+<p>Les fichiers utiles : <code>desktop/docs/supabase.sql</code> (le serveur), <code>desktop/installer/MesPremiersJeux.iss</code> (l'installeur), <code>.github/workflows/build.yml</code> (la compilation automatique).</p>
+<hr>
+<p class="note">Les images de ce guide et de la vidéo sont des maquettes des écrans de l'application, faites pour illustrer ; les vrais écrans peuvent différer légèrement selon la version et la tablette.</p>
+<div class="shots">
+<figure><img src="img/accueil-jour.jpg" alt="L'accueil le jour" loading="lazy"><figcaption>L'accueil, le jour</figcaption></figure>
+<figure><img src="img/accueil-nuit.jpg" alt="L'accueil le soir" loading="lazy"><figcaption>L'accueil, le soir</figcaption></figure>
+<figure><img src="img/choisis.jpg" alt="Je choisis" loading="lazy"><figcaption>« Je choisis »</figcaption></figure>
+<figure><img src="img/emotions.jpg" alt="Les émotions" loading="lazy"><figcaption>Les émotions</figcaption></figure>
+<figure><img src="img/xylo.jpg" alt="Le xylophone" loading="lazy"><figcaption>Le xylophone, « Au clair de la lune »</figcaption></figure>
+<figure><img src="img/carnet.jpg" alt="Mon carnet" loading="lazy"><figcaption>Mon carnet</figcaption></figure>
+</div>
+</main>
+</div>
+</body>
+</html>
+

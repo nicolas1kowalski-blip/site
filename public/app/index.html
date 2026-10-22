@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eyzi — jeux inclusifs et CAA au regard</title>
+<link rel="canonical" href="https://eyzi.fr/">
+<meta name="description" content="Eyzi : jeux inclusifs et communication alternative (CAA) pilotés par le regard, pour les enfants de 4 à 7 ans. Application Windows, commande oculaire Tobii. Version bêta gratuite.">
+<link rel="icon" type="image/png" href="img/favicon-32.png"><link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F6F0FF;--card:#fff;--ink:#2A1B4A;--muted:#6B5B8A;--line:#E3D8F5;--accent:#5B2FD1;--accent2:#7E3FF2;--gold:#FFD24D;--code:#F1EBFF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1B1430;--card:#261C42;--ink:#F1EAFF;--muted:#B9ACD6;--line:#3A2E5C;--accent:#9C7BFF;--accent2:#B99CFF;--code:#332757}}
+:root[data-theme="dark"]{--bg:#1B1430;--card:#261C42;--ink:#F1EAFF;--muted:#B9ACD6;--line:#3A2E5C;--accent:#9C7BFF;--accent2:#B99CFF;--code:#332757}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Fredoka,"Segoe UI",system-ui,sans-serif;font-size:17px;line-height:1.55}
+.top{position:sticky;top:0;z-index:5;background:linear-gradient(90deg,#B388FF,#8AD6FF);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.top a{color:#2A1B4A;text-decoration:none;font-weight:700;background:rgba(255,255,255,.6);padding:8px 14px;border-radius:999px;font-size:15px}
+.top .brand{background:none;padding:0}.top .brand img{height:38px;display:block}
+.top nav{display:flex;gap:8px;flex-wrap:wrap}
+.hero{background:linear-gradient(135deg,#B388FF,#8AD6FF 60%,#FFD1E8);padding:44px 16px 52px;text-align:center;color:#2A1B4A}
+.hero img.logo{height:clamp(70px,11vw,130px)}
+.hero .desc{font-size:clamp(17px,2.3vw,22px);font-weight:600;max-width:760px;margin:10px auto 0;opacity:.9}
+.hero .sig{font-family:"Baloo 2",Fredoka,sans-serif;font-size:clamp(30px,4.6vw,48px);font-weight:800;margin:14px 0 0;color:#fff;text-shadow:0 3px 14px rgba(60,20,140,.25);line-height:1.1}
+.hero p{max-width:760px;margin:12px auto 0}
+.cta{display:inline-flex;align-items:center;gap:10px;margin:22px 6px 0;padding:16px 28px;border-radius:999px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;font-size:19px;box-shadow:0 8px 30px rgba(60,20,140,.3)}
+.cta.alt{background:rgba(255,255,255,.8);color:#2A1B4A;box-shadow:none}
+.hero small{display:block;margin-top:14px;font-size:14px;opacity:.85}
+.trial{display:inline-block;margin-top:18px;background:#2A1B4A;color:var(--gold);border-radius:999px;padding:10px 20px;font-weight:700}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 60px}
+section{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px 28px;margin:18px 0;scroll-margin-top:70px}
+@media (max-width:600px){section{padding:18px 16px}}
+h2{font-family:"Baloo 2",Fredoka,sans-serif;font-size:26px;margin:0 0 10px;color:var(--accent2)}
+video{width:100%;border-radius:16px;background:#2A1B4A;display:block}
+ol,ul{padding-left:24px}li{margin:6px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.f{background:var(--code);border-radius:16px;padding:14px 16px}.f b{display:block;font-size:18px;margin-bottom:4px}.f span{color:var(--muted);font-size:15px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;counter-reset:s}
+.step{background:var(--code);border-radius:16px;padding:16px 16px 16px 62px;position:relative;min-height:96px}
+.step:before{counter-increment:s;content:counter(s);position:absolute;left:16px;top:14px;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:18px}
+.step b{display:block;margin-bottom:4px}.step span{color:var(--muted);font-size:15px}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.shots img{width:100%;border-radius:14px;border:1px solid var(--line);display:block}
+code{background:var(--code);padding:2px 6px;border-radius:6px;font-family:Consolas,Menlo,monospace;font-size:.92em}
+a{color:var(--accent)}
+.note{border-left:5px solid var(--gold);background:var(--code);border-radius:12px;padding:12px 16px;margin:14px 0}
+.price{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.p{border:2px solid var(--line);border-radius:18px;padding:18px}.p b{font-size:20px;display:block}.p .n{font-family:"Baloo 2",Fredoka,sans-serif;font-size:34px;color:var(--accent2);margin:6px 0}.p span{color:var(--muted);font-size:15px}
+.p.hi{border-color:var(--accent)}
+footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30px}
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="brand" href="./"><img src="img/eyzi-logo-light.png" alt="Eyzi"></a>
+  <nav><a href="#telecharger">Télécharger</a><a href="#decouvrir">Découvrir</a><a href="#compatibilite">Compatibilité</a><a href="#licence">Licence</a><a href="retours.html">Vos retours</a><a href="guide.html">Guide</a></nav>
+</div>
+
+<div class="hero">
+  <img class="logo" src="img/eyzi-logo-light.png" alt="Eyzi">
+  <p class="desc">Communication alternative et jeux inclusifs, pilotés par le regard.</p>
+  <p class="sig">Facile, avec les yeux.</p>
+  <p>Pour les enfants de 4 à 7 ans qui ne peuvent pas utiliser leurs mains : avec la commande oculaire, ils jouent, choisissent, parlent et apprennent.</p>
+  <div><a class="cta" id="telecharger" href="https://github.com/nicolas1kowalski-blip/site/releases/latest/download/Eyzi-Setup.exe">⬇ Télécharger pour Windows</a><a class="cta alt" href="licence.html">🔑 Demander une licence</a></div>
+  <div class="trial">🧪 Bêta gratuite · 10 premières licences, puis d'autres au fil des retours · 10 jours d'essai sans licence</div>
+  <small>Windows 10 / 11 · installation sans droits administrateur · mises à jour automatiques · <a href="https://github.com/nicolas1kowalski-blip/site/releases" style="color:inherit">toutes les versions</a></small>
+</div>
+
+<div class="wrap">
+  <section id="comment">
+    <h2>🚀 Comment ça marche</h2>
+    <div class="steps">
+      <div class="step"><b>Téléchargez et installez</b><span>Un fichier, un clic. Si Windows affiche « Windows a protégé votre ordinateur », cliquez <em>Informations complémentaires</em> puis <em>Exécuter quand même</em>.</span></div>
+      <div class="step"><b>Essayez 10 jours</b><span>Au premier lancement, choisissez « Essayer 10 jours ». Donnez le prénom de l'enfant, et c'est parti.</span></div>
+      <div class="step"><b>Demandez votre licence, gratuite</b><span>Un formulaire, une réponse sous 48 heures. Le numéro s'entre dans l'application, pour toutes les tablettes de la famille. Et dites-nous ce que vous en pensez : c'est comme ça que l'application avance.</span></div>
+    </div>
+  </section>
+
+  <section id="decouvrir">
+    <h2>🎬 Découvrir en une minute</h2>
+    <video controls preload="metadata" poster="img/poster.jpg" src="demo.mp4"></video>
+    <p style="color:var(--muted);font-size:14px;margin:8px 0 0">Les écrans de cette vidéo sont des maquettes illustrant l'application.</p>
+  </section>
+
+  <section>
+    <h2>✨ Ce qu'il y a dedans</h2>
+    <div class="grid">
+      <div class="f"><b>👁 Pensé pour les yeux</b><span>Gros boutons, cercle de fixation réglable ou automatique, tout est lu à voix haute et surligné pendant la lecture.</span></div>
+      <div class="f"><b>💬 Parler, Oui, Non</b><span>Toujours à l'écran : je veux, j'ai mal, encore, fini, ma journée, et « Je choisis » pour les vrais choix du quotidien.</span></div>
+      <div class="f"><b>🎮 Des jeux inclusifs</b><span>Ballons, paires, cherche et trouve, émotions, range la maison, instruments, xylophone, « Au clair de la lune ».</span></div>
+      <div class="f"><b>🎓 Lettres, nombres, anglais</b><span>Mon prénom, mot et image, rimes, compter, partager, la bande numérique, premiers mots d'anglais.</span></div>
+      <div class="f"><b>📖 Vos histoires et vos photos</b><span>Des livres avec les photos de la famille, lus avec votre voix enregistrée.</span></div>
+      <div class="f"><b>🌱 Trois niveaux</b><span>Petite, moyenne, grande section : l'application monte ou descend toute seule selon les réussites.</span></div>
+      <div class="f"><b>📒 Le carnet et les étoiles</b><span>L'arbre à pommes, les badges, la boutique de surprises, le bilan pour les parents et les thérapeutes.</span></div>
+      <div class="f"><b>🔒 Chaque famille chez elle</b><span>Une licence par famille ; les contenus voyagent entre vos tablettes chiffrés avec votre mot de passe, lisibles par vous seuls.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>🖼 Quelques écrans</h2>
+    <div class="shots">
+      <img src="img/accueil-jour.jpg" alt="L'accueil le jour" loading="lazy">
+      <img src="img/choisis.jpg" alt="Je choisis" loading="lazy">
+      <img src="img/emotions.jpg" alt="Les émotions" loading="lazy">
+      <img src="img/xylo.jpg" alt="Le xylophone" loading="lazy">
+      <img src="img/carnet.jpg" alt="Mon carnet" loading="lazy">
+      <img src="img/accueil-nuit.jpg" alt="L'accueil le soir" loading="lazy">
+    </div>
+  </section>
+
+  <section id="compatibilite">
+    <h2>🖥 Compatibilité, aujourd'hui</h2>
+    <div class="grid">
+      <div class="f"><b>✅ Windows 10 et 11</b><span>PC ou tablette Windows 64 bits. Écran de 12 pouces ou plus conseillé. Installation sans droits administrateur.</span></div>
+      <div class="f"><b>✅ Tobii Dynavox TD I-13 et TD I-16</b><span>Testés tous les jours. Regard direct par le moteur Tobii de la tablette, sans TD Control.</span></div>
+      <div class="f"><b>✅ Tobii Dynavox PCEye 5</b><span>Testé. Même moteur direct que Grid 3.</span></div>
+      <div class="f"><b>✅ Tobii Eye Tracker 4C et 5</b><span>Les capteurs grand public, avec Tobii Experience. La porte d'entrée à petit prix.</span></div>
+      <div class="f"><b>✅ Tobii Pro (Nano, Fusion…)</b><span>Par le Tobii Pro SDK, avec la position des yeux.</span></div>
+      <div class="f"><b>🟡 Toute commande oculaire qui déplace la souris</b><span>Irisbond, Lumin-i, TD Control, Computer Control… en mode « Curseur ». Ça marche ; le cercle de fixation est alors moins fin. Dites-nous votre matériel.</span></div>
+      <div class="f"><b>✅ Au doigt et à la souris</b><span>Sans capteur, pour les frères et sœurs, ou pour préparer une activité.</span></div>
+      <div class="f"><b>✅ Voix</b><span>Voix Windows hors ligne ; voix naturelle Azure en option (clé à saisir). Français ; anglais pour le module d'anglais.</span></div>
+      <div class="f"><b>❌ Pas encore</b><span>Mac, iPad, Android, Chromebook. L'iPad est la question suivante, à cause du suivi des yeux intégré d'iPadOS 18.</span></div>
+    </div>
+    <p class="note">Votre capteur n'est pas dans la liste ? Essayez le mode « Curseur », et <a href="retours.html">dites-nous</a> ce que vous avez : c'est comme ça que la liste s'allonge.</p>
+  </section>
+
+  <section id="licence">
+    <h2>🔑 La licence, gratuite pendant la bêta</h2>
+    <p>Eyzi est en <strong>version bêta</strong> : l'application marche, elle est utilisée tous les jours par une famille, et elle s'améliore à chaque retour. Pendant la bêta, <strong>la licence est gratuite</strong>. Elle sert à regrouper les tablettes d'une même famille, à recevoir les mises à jour, et à savoir qui utilise quoi pour améliorer ce qui compte. Après 10 jours d'essai, demandez la vôtre : réponse sous 48 heures.</p>
+    <p><strong>La bêta est limitée</strong> : 10 licences pour commencer, puis d'autres s'ouvrent au fil des retours, jusqu'au 30 juin 2027. C'est pour que chaque retour soit lu et que chaque tablette soit suivie. Quand les places sont prises, les demandes suivantes sont gardées dans l'ordre d'arrivée, et prévenues dès qu'une place s'ouvre.</p>
+    <div class="price">
+      <div class="p hi"><b>Famille</b><div class="n">gratuit</div><span>Un numéro pour la maison, 2 tablettes. Les photos, voix et livres voyagent entre les tablettes, chiffrés.</span></div>
+      <div class="p"><b>Établissement</b><div class="n">gratuit</div><span>IME, IEM, école, hôpital : plusieurs postes, les bilans et l'usage pour l'équipe.</span></div>
+      <div class="p"><b>Professionnel</b><div class="n">gratuit</div><span>Orthophoniste, ergothérapeute : pour les séances, avec le bilan de chaque enfant.</span></div>
+    </div>
+    <p class="note">Si l'application devient payante un jour, les familles et les établissements de la bêta <strong>garderont leur licence gratuite</strong>. C'est leur façon d'avoir aidé.</p>
+    <p style="text-align:center;margin-top:18px"><a class="cta" href="licence.html">🔑 Demander une licence</a></p>
+  </section>
+
+  <section id="retours">
+    <h2>💬 Vos retours font l'application</h2>
+    <p>Eyzi est née pour une petite fille, Laura, et grandit avec ceux qui l'utilisent. Un jeu trop difficile, une voix trop rapide, une idée d'activité, un bug : dites-le, simplement. Chaque retour est lu, et beaucoup finissent dans la version suivante.</p>
+    <p style="text-align:center;margin-top:14px"><a class="cta alt" style="background:var(--code);color:var(--ink)" href="retours.html">💬 Donner mon avis</a></p>
+  </section>
+
+  <section>
+    <h2>🧪 Pour les curieux : versions test et prod</h2>
+    <p>Chaque nouvelle version sort d'abord en <strong>test</strong>, puis passe en <strong>prod</strong> une fois essayée. Le bouton de téléchargement donne la dernière version prod ; <a href="https://github.com/nicolas1kowalski-blip/site/releases">la page des versions</a> liste aussi les versions test, avec leur empreinte de contrôle.</p>
+  </section>
+</div>
+<footer>Eyzi · version bêta · communication alternative et jeux inclusifs au regard · <a href="guide.html">guide utilisateur</a> · <a href="licence.html">demander une licence</a> · <a href="retours.html">vos retours</a> · fait avec amour pour Laura</footer>
+</body>
+</html>

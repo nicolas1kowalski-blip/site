@@ -11,6 +11,7 @@ import GamePlay from './components/screens/GamePlay.jsx';
 import MusicMenu from './components/screens/MusicMenu.jsx';
 import Xylophone from './components/screens/Xylophone.jsx';
 import Songs from './components/screens/Songs.jsx';
+import ColoringScreen from './components/screens/ColoringScreen.jsx';
 import AddBookModal from './components/modals/AddBookModal.jsx';
 import { STORIES } from './data/stories.js';
 import { apiGetBook } from './lib/booksApi.js';
@@ -130,6 +131,8 @@ function AppInner() {
 
         <GamesMenu active={tab === 'games' && !inGame} onStartGame={startGame} />
         <GamePlay active={tab === 'games' && inGame} game={game} />
+
+        <ColoringScreen active={tab === 'coloring'} />
 
         <MusicMenu active={tab === 'music' && !musicSub} onSelect={setMusicSub} />
         <Xylophone active={tab === 'music' && musicSub === 'xylo'} />
