@@ -8,7 +8,7 @@
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   (déjà utilisées par api/books.js)
 import { createClient } from '@supabase/supabase-js';
 
-const MAX = { name: 120, email: 160, org: 160, message: 2000, child: 40 };
+const MAX = { name: 120, email: 160, org: 160, message: 2000, child: 40, gear: 80 };
 
 function clean(v, max) {
   return typeof v === 'string' ? v.trim().slice(0, max) : '';
@@ -30,6 +30,8 @@ export default async function handler(req, res) {
   const kind = ['famille', 'etablissement', 'professionnel'].includes(body.kind) ? body.kind : 'famille';
   const org = clean(body.org, MAX.org);
   const child = clean(body.child, MAX.child);
+  const gear = clean(body.gear, MAX.gear);
+  const recontact = body.recontact === '1' || body.recontact === true;
   const tablets = Math.min(50, Math.max(1, parseInt(body.tablets, 10) || 1));
   const message = clean(body.message, MAX.message);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -50,7 +52,7 @@ export default async function handler(req, res) {
   }
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const { error } = await supabase.from('licence_requests').insert({
-    topic, name: name || '(anonyme)', email: email || '', kind, org, child, tablets, message,
+    topic, name: name || '(anonyme)', email: email || '', kind, org, child, gear, tablets, message, recontact,
     user_agent: clean(req.headers['user-agent'], 300),
   });
   if (error) {

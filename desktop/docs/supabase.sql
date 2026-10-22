@@ -314,6 +314,8 @@ create table if not exists public.licence_requests (
   kind        text not null default 'famille' check (kind in ('famille', 'etablissement', 'professionnel')),
   org         text,
   child       text,
+  gear        text,
+  recontact   boolean not null default false,
   tablets     int  not null default 1,
   message     text,
   user_agent  text,

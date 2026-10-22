@@ -36,7 +36,7 @@ a{color:var(--accent)}
 <div class="top"><a class="brand" href="./"><img src="img/eyzi-logo-light.png" alt="Eyzi"></a><div><a href="./">Télécharger</a> <a href="retours.html">Vos retours</a> <a href="guide.html">Le guide</a></div></div>
 <div class="wrap">
   <h1>🔑 Demander une licence</h1>
-  <p class="lead">Eyzi est en <strong>version bêta</strong> et la licence est <strong>gratuite</strong>. Elle est donnée par famille ou par établissement, pour un nombre de tablettes. Remplissez ce formulaire : vous recevez votre numéro par e-mail, en général sous 48 heures. En attendant, l'application marche <strong>10 jours sans licence</strong>.</p>
+  <p class="lead">Eyzi est en <strong>version bêta</strong> et la licence est <strong>gratuite</strong>, pour 50 familles et établissements jusqu'au 30 juin 2027. Elle est donnée par famille ou par établissement, pour un nombre de tablettes. Remplissez ce formulaire : vous recevez votre numéro par e-mail, en général sous 48 heures. En attendant, l'application marche <strong>10 jours sans licence</strong>.</p>
   <form id="f" novalidate>
     <input type="hidden" name="topic" value="licence">
     <div class="hp"><label>Site web<input name="site" tabindex="-1" autocomplete="off"></label></div>
@@ -50,7 +50,9 @@ a{color:var(--accent)}
     </div>
     <label for="org">Établissement ou cabinet (si vous n'êtes pas une famille)</label><input id="org" name="org" maxlength="160" autocomplete="organization">
     <label for="child">Âge de l'enfant, ou des enfants</label><input id="child" name="child" maxlength="40" placeholder="par exemple : 5 ans">
+    <label for="gear">Votre commande oculaire</label><input id="gear" name="gear" maxlength="80" placeholder="par exemple : TD I-13, PCEye 5, Tobii Eye Tracker 5, Irisbond, aucune">
     <label for="message">Un mot sur votre situation (facultatif)</label><textarea id="message" name="message" maxlength="2000" placeholder="Quelle commande oculaire utilisez-vous ? Qu'attendez-vous de l'application ?"></textarea>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-weight:500;margin-top:16px"><input type="checkbox" name="recontact" value="1" checked style="width:auto;margin-top:5px">J'accepte d'être recontacté(e) pour donner mon avis sur l'application pendant la bêta.</label>
     <button id="send" type="submit">Envoyer la demande</button>
     <div id="msg" class="msg"></div>
     <p class="note">Ces informations servent uniquement à vous répondre et à créer votre licence. Elles ne sont ni partagées ni utilisées pour autre chose.</p>

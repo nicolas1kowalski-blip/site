@@ -2,7 +2,7 @@
 
 *Une application Windows pour jouer, parler et apprendre avec les yeux, pour les enfants de 4 à 7 ans. Elle se pilote à la commande oculaire (Tobii), au doigt ou à la souris.*
 
-*Eyzi est en **version bêta** : elle marche, elle est utilisée tous les jours, et elle s'améliore avec les retours. Pendant la bêta, la licence est **gratuite**. Vos remarques : **eyzi.fr/retours.html**.*
+*Eyzi est en **version bêta** : elle marche, elle est utilisée tous les jours, et elle s'améliore avec les retours. La bêta est gratuite et limitée à 50 familles et établissements, jusqu'au 30 juin 2027 ; ceux de la bêta garderont leur licence gratuite si l'application devient payante un jour. Vos remarques : **eyzi.fr/retours.html**.*
 
 Ce guide s'adresse aux parents et aux accompagnants. La première partie explique l'installation et le premier démarrage, la deuxième ce que l'enfant voit, la troisième les réglages, la dernière ce qu'il faut savoir pour donner l'application à une autre famille.
 
@@ -12,7 +12,8 @@ Ce guide s'adresse aux parents et aux accompagnants. La première partie expliqu
 
 ### Ce qu'il faut
 - Une tablette ou un PC sous **Windows 10 ou 11**.
-- Pour la commande oculaire : un capteur **Tobii** (TD I-13, PCEye 5, Tobii 4C / 5) avec son logiciel Tobii installé. Sans capteur, l'application marche au doigt et à la souris.
+- Pour la commande oculaire : un capteur **Tobii** avec son logiciel installé. Testés : TD I-13 et TD I-16, PCEye 5 (moteur direct, sans TD Control), Tobii Eye Tracker 4C et 5 (Tobii Experience), Tobii Pro (Nano, Fusion…). Toute autre commande oculaire qui déplace la souris (Irisbond, Lumin-i, TD Control, Computer Control) marche en mode « Curseur ». Sans capteur, l'application marche au doigt et à la souris.
+- Pas encore : Mac, iPad, Android, Chromebook.
 - Une connexion internet pour l'installation et les mises à jour (ensuite l'application marche hors ligne).
 
 ### Les étapes

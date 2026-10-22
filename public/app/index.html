@@ -53,7 +53,7 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30p
 <body>
 <div class="top">
   <a class="brand" href="./"><img src="img/eyzi-logo-light.png" alt="Eyzi"></a>
-  <nav><a href="#telecharger">Télécharger</a><a href="#decouvrir">Découvrir</a><a href="#licence">Licence</a><a href="retours.html">Vos retours</a><a href="guide.html">Guide</a></nav>
+  <nav><a href="#telecharger">Télécharger</a><a href="#decouvrir">Découvrir</a><a href="#compatibilite">Compatibilité</a><a href="#licence">Licence</a><a href="retours.html">Vos retours</a><a href="guide.html">Guide</a></nav>
 </div>
 
 <div class="hero">
@@ -62,7 +62,7 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30p
   <p class="sig">Facile, avec les yeux.</p>
   <p>Pour les enfants de 4 à 7 ans qui ne peuvent pas utiliser leurs mains : avec la commande oculaire, ils jouent, choisissent, parlent et apprennent.</p>
   <div><a class="cta" id="telecharger" href="https://github.com/nicolas1kowalski-blip/site/releases/latest/download/Eyzi-Setup.exe">⬇ Télécharger pour Windows</a><a class="cta alt" href="licence.html">🔑 Demander une licence</a></div>
-  <div class="trial">🧪 Version bêta · gratuite pendant la bêta · 10 jours d'essai sans licence</div>
+  <div class="trial">🧪 Bêta gratuite, limitée à 50 familles et établissements · 10 jours d'essai sans licence</div>
   <small>Windows 10 / 11 · installation sans droits administrateur · mises à jour automatiques · <a href="https://github.com/nicolas1kowalski-blip/site/releases" style="color:inherit">toutes les versions</a></small>
 </div>
 
@@ -108,15 +108,32 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30p
     </div>
   </section>
 
+  <section id="compatibilite">
+    <h2>🖥 Compatibilité, aujourd'hui</h2>
+    <div class="grid">
+      <div class="f"><b>✅ Windows 10 et 11</b><span>PC ou tablette Windows 64 bits. Écran de 12 pouces ou plus conseillé. Installation sans droits administrateur.</span></div>
+      <div class="f"><b>✅ Tobii Dynavox TD I-13 et TD I-16</b><span>Testés tous les jours. Regard direct par le moteur Tobii de la tablette, sans TD Control.</span></div>
+      <div class="f"><b>✅ Tobii Dynavox PCEye 5</b><span>Testé. Même moteur direct que Grid 3.</span></div>
+      <div class="f"><b>✅ Tobii Eye Tracker 4C et 5</b><span>Les capteurs grand public, avec Tobii Experience. La porte d'entrée à petit prix.</span></div>
+      <div class="f"><b>✅ Tobii Pro (Nano, Fusion…)</b><span>Par le Tobii Pro SDK, avec la position des yeux.</span></div>
+      <div class="f"><b>🟡 Toute commande oculaire qui déplace la souris</b><span>Irisbond, Lumin-i, TD Control, Computer Control… en mode « Curseur ». Ça marche ; le cercle de fixation est alors moins fin. Dites-nous votre matériel.</span></div>
+      <div class="f"><b>✅ Au doigt et à la souris</b><span>Sans capteur, pour les frères et sœurs, ou pour préparer une activité.</span></div>
+      <div class="f"><b>✅ Voix</b><span>Voix Windows hors ligne ; voix naturelle Azure en option (clé à saisir). Français ; anglais pour le module d'anglais.</span></div>
+      <div class="f"><b>❌ Pas encore</b><span>Mac, iPad, Android, Chromebook. L'iPad est la question suivante, à cause du suivi des yeux intégré d'iPadOS 18.</span></div>
+    </div>
+    <p class="note">Votre capteur n'est pas dans la liste ? Essayez le mode « Curseur », et <a href="retours.html">dites-nous</a> ce que vous avez : c'est comme ça que la liste s'allonge.</p>
+  </section>
+
   <section id="licence">
     <h2>🔑 La licence, gratuite pendant la bêta</h2>
     <p>Eyzi est en <strong>version bêta</strong> : l'application marche, elle est utilisée tous les jours par une famille, et elle s'améliore à chaque retour. Pendant la bêta, <strong>la licence est gratuite</strong>. Elle sert à regrouper les tablettes d'une même famille, à recevoir les mises à jour, et à savoir qui utilise quoi pour améliorer ce qui compte. Après 10 jours d'essai, demandez la vôtre : réponse sous 48 heures.</p>
+    <p><strong>La bêta est limitée</strong> : 50 familles et établissements, jusqu'au 30 juin 2027, pour que chaque retour soit lu et que chaque tablette soit suivie. Quand les places sont prises, les demandes suivantes sont mises en attente, dans l'ordre d'arrivée.</p>
     <div class="price">
       <div class="p hi"><b>Famille</b><div class="n">gratuit</div><span>Un numéro pour la maison, 2 tablettes. Les photos, voix et livres voyagent entre les tablettes, chiffrés.</span></div>
       <div class="p"><b>Établissement</b><div class="n">gratuit</div><span>IME, IEM, école, hôpital : plusieurs postes, les bilans et l'usage pour l'équipe.</span></div>
       <div class="p"><b>Professionnel</b><div class="n">gratuit</div><span>Orthophoniste, ergothérapeute : pour les séances, avec le bilan de chaque enfant.</span></div>
     </div>
-    <p class="note">Pendant la bêta, tout est gratuit. Si un jour l'application devient payante, les familles de la bêta seront prévenues à l'avance, et ce qu'elles ont installé continuera de marcher.</p>
+    <p class="note">Si l'application devient payante un jour, les familles et les établissements de la bêta <strong>garderont leur licence gratuite</strong>. C'est leur façon d'avoir aidé.</p>
     <p style="text-align:center;margin-top:18px"><a class="cta" href="licence.html">🔑 Demander une licence</a></p>
   </section>
 
