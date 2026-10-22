@@ -178,11 +178,44 @@ namespace MesPremiersJeux.Lib
         private static string DocsRoot =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MesPremiersJeux");
 
+        /// <summary>Le dossier de la famille sur cette tablette : à part de
+        /// l'application (une mise à jour ou une désinstallation n'y touche pas).</summary>
+        public static string LocalRoot =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MesPremiersJeux", "Contenu");
+
         private static string ResolveRoot()
         {
-            // 0) Dossier choisi par le parent (ex. un dossier OneDrive partagé) :
-            //    le contenu se SYNCHRONISE alors tout seul entre les tablettes.
-            //    Le contenu local existant y est recopié une fois (migration).
+            // 1) LE DOSSIER LOCAL de l'application (toujours, depuis la version
+            //    installable). La première fois, on y RAPATRIE le contenu qui
+            //    vivait ailleurs (dossier OneDrive choisi, dossier portable à
+            //    côté de l'exe, Documents) — une seule fois, puis plus jamais.
+            try
+            {
+                var local = LocalRoot;
+                Directory.CreateDirectory(local);
+                var probe0 = Path.Combine(local, ".test-ecriture");
+                File.WriteAllText(probe0, "ok");
+                File.Delete(probe0);
+                var marker0 = Path.Combine(local, ".migration-locale");
+                if (!File.Exists(marker0))
+                {
+                    string chosen = null;
+                    try { chosen = Settings.Load().ContentDir; } catch { }
+                    var sources = new[] { chosen, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Contenu"), DocsRoot };
+                    foreach (var src in sources)
+                    {
+                        if (string.IsNullOrWhiteSpace(src) || !Directory.Exists(src)) continue;
+                        if (string.Equals(Path.GetFullPath(src).TrimEnd('\\'), Path.GetFullPath(local).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) continue;
+                        try { CopyDirectory(src, local); Log.Write("contenu", "Contenu rapatrié depuis " + src); }
+                        catch (Exception ex) { Log.Write("contenu", "Rapatriement depuis " + src + " : " + ex.Message); }
+                    }
+                    File.WriteAllText(marker0, DateTime.Now.ToString("s"));
+                }
+                return local;
+            }
+            catch { /* AppData indisponible ?! on continue avec les anciens emplacements */ }
+
+            // 0) Ancien mode : dossier choisi par le parent (ex. OneDrive).
             try
             {
                 var chosen = Settings.Load().ContentDir;

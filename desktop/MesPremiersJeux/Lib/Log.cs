@@ -21,11 +21,12 @@ namespace MesPremiersJeux.Lib
 
         private static void Init()
         {
-            // Essaie à côté de l'exe (portable), sinon AppData.
-            var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-            var candidate = Path.Combine(exeDir, "journal.txt");
+            // Dans le dossier de l'application (AppData\Local), jamais à côté de l'exe.
             try
             {
+                var dir0 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MesPremiersJeux");
+                Directory.CreateDirectory(dir0);
+                var candidate = Path.Combine(dir0, "journal.txt");
                 File.AppendAllText(candidate, "");
                 _path = candidate;
             }
