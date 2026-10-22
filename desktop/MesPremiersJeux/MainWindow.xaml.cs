@@ -213,6 +213,10 @@ namespace MesPremiersJeux
             if (SharedSettings.Apply(_settings)) _settings.Save();
             _accueil?.RefreshName(); // le prénom (réglages partagés compris)
 
+            // 👋 PREMIER DÉMARRAGE sur cette tablette : on demande le prénom de
+            // l'enfant (une seule fois ; les réglages partagés peuvent déjà l'avoir).
+            if (!_settings.NameAsked) Dispatcher.BeginInvoke(new Action(AskChildName), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
             // L'application démarre TOUJOURS en plein écran « kiosque » : en
             // fenêtré elle est inopérable au regard. Le bouton ⛶ reste
             // disponible pour en sortir volontairement (maintenance).
@@ -930,6 +934,43 @@ namespace MesPremiersJeux
                     (Level.IsAuto ? ". Toutes les 20 réponses : ≥ 85 % de réussite → niveau suivant, < 40 % → niveau précédent." : ".");
             }
             catch { }
+        }
+
+        private void AskChildName()
+        {
+            if (_settings == null) return;
+            GazeGate.Push(); // pas de clics au regard pendant qu'on tape
+            try
+            {
+                var win = new Window
+                {
+                    Title = "Bienvenue !", Owner = this, Topmost = true,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize,
+                    SizeToContent = SizeToContent.WidthAndHeight, WindowStyle = WindowStyle.ToolWindow,
+                };
+                var panel = new StackPanel { Margin = new Thickness(26), Width = 460 };
+                panel.Children.Add(new TextBlock { Text = "👋 Bienvenue dans Mes Premiers Jeux !", FontSize = 22, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 10) });
+                panel.Children.Add(new TextBlock { Text = "Comment s'appelle l'enfant ? Son prénom sera dit par la voix (« Bonjour Laura ! », « Mon prénom »…). Tu pourras le changer dans les réglages.", FontSize = 15, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14) });
+                var box = new TextBox { Text = _settings.ChildName ?? "", FontSize = 26, Padding = new Thickness(10, 8, 10, 8) };
+                panel.Children.Add(box);
+                var ok = new Button { Content = "C'est parti !", FontSize = 18, Padding = new Thickness(20, 10, 20, 10), Margin = new Thickness(0, 16, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, IsDefault = true };
+                ok.Click += (s, e) => win.DialogResult = true;
+                panel.Children.Add(ok);
+                win.Content = panel;
+                win.Loaded += (s, e) => { box.Focus(); box.SelectAll(); };
+                if (win.ShowDialog() == true)
+                {
+                    var n = (box.Text ?? "").Trim();
+                    if (n.Length > 0) { _settings.ChildName = n; ChildNameBox.Text = n; }
+                }
+                _settings.NameAsked = true;
+                _settings.Save();
+                _accueil?.RefreshName();
+                Lib.Log.Write("app", "Premier démarrage : prénom = " + _settings.ChildName);
+                Speech.Say("Bonjour " + _settings.ChildName + " ! Bienvenue !");
+            }
+            catch (Exception ex) { Lib.Log.Write("app", "Demande du prénom : " + ex.Message); }
+            finally { GazeGate.Pop(); }
         }
 
         private void ChildName_Changed(object sender, RoutedEventArgs e)

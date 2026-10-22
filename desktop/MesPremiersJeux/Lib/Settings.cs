@@ -35,6 +35,7 @@ namespace MesPremiersJeux.Lib
         public bool YesNoButtons = true; // les boutons « Oui / Non » toujours visibles
         public string Level = "auto";    // niveau : auto | 1 | 2 | 3
         public int SessionMinutes = 10;  // au bout de N minutes de jeu, on propose une pause (0 = jamais)
+        public bool NameAsked = false;   // le prénom a été demandé au premier démarrage sur cette tablette
         public int AutoLevel = 1;        // niveau atteint en automatique
         public bool AutoDwell = true;    // temps de fixation ajusté tout seul selon le jeu de l'enfant
 
@@ -80,6 +81,7 @@ namespace MesPremiersJeux.Lib
                         case "YesNoButtons": s.YesNoButtons = val != "0"; break;
                         case "Level": s.Level = val; break;
                         case "SessionMinutes": int.TryParse(val, out s.SessionMinutes); break;
+                        case "NameAsked": s.NameAsked = val != "0"; break;
                         case "AutoLevel": int.TryParse(val, out s.AutoLevel); break;
                     }
                 }
@@ -122,6 +124,7 @@ namespace MesPremiersJeux.Lib
                     "YesNoButtons=" + (YesNoButtons ? "1" : "0"),
                     "Level=" + (Level ?? "auto"),
                     "SessionMinutes=" + SessionMinutes,
+                    "NameAsked=" + (NameAsked ? "1" : "0"),
                     "AutoLevel=" + AutoLevel,
                 };
                 File.WriteAllLines(FilePath, lines);
