@@ -23,7 +23,7 @@ namespace MesPremiersJeux.Lib
     /// </summary>
     public static class Updater
     {
-        private const string Repo = "nicolas1kowalski-blip/eyzi-releases";
+        private const string Repo = "nicolas1kowalski-blip/eyzi";
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
         static Updater()
