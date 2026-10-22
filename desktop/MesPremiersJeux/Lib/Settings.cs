@@ -40,6 +40,7 @@ namespace MesPremiersJeux.Lib
         public string LicenceKey = "", LicenceFamily = "", LicenceChannel = "prod", LicenceUntil = "", LicenceChecked = "";
         public int LicenceMax = 2, LicenceUsed = 0;
         public string UsageSent = "";     // dernier jour d'envoi des compteurs d'usage
+        public string TrialStart = "";    // premier jour de l'essai sans licence (10 jours)
         public bool LicenceOk = false;
         public string LastUpdateSeen = ""; // dernière version proposée (pour ne pas insister)
         // ☁🔒 Nuage de la famille (voir Lib/FamilyCloud.cs)
@@ -98,6 +99,7 @@ namespace MesPremiersJeux.Lib
                         case "LicenceMax": int.TryParse(val, out s.LicenceMax); break;
                         case "LicenceUsed": int.TryParse(val, out s.LicenceUsed); break;
                         case "UsageSent": s.UsageSent = val; break;
+                        case "TrialStart": s.TrialStart = val; break;
                         case "LicenceOk": s.LicenceOk = val != "0"; break;
                         case "LastUpdateSeen": s.LastUpdateSeen = val; break;
                         case "CloudEmail": s.CloudEmail = val; break;
@@ -156,6 +158,7 @@ namespace MesPremiersJeux.Lib
                     "LicenceMax=" + LicenceMax,
                     "LicenceUsed=" + LicenceUsed,
                     "UsageSent=" + (UsageSent ?? ""),
+                    "TrialStart=" + (TrialStart ?? ""),
                     "LicenceOk=" + (LicenceOk ? "1" : "0"),
                     "LastUpdateSeen=" + (LastUpdateSeen ?? ""),
                     "CloudEmail=" + (CloudEmail ?? ""),

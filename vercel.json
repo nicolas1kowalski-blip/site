@@ -20,8 +20,8 @@
   ],
   "rewrites": [
     {
-      "source": "/:path*",
-      "destination": "/app/:path*",
+      "source": "/:path((?!api/).*)",
+      "destination": "/app/:path",
       "has": [
         {
           "type": "host",

@@ -298,3 +298,26 @@ create or replace view public.usage_resume as
    group by l.family, l.key, l.max_tablets
    order by minutes_total desc;
 revoke all on public.usage_resume from public, anon;
+
+-- ============================================================================
+--  DEMANDES DE LICENCE (formulaire eyzi.fr/licence.html → api/licence-request.js).
+--  Écrites par le serveur du site (clé service_role) ; jamais lisibles par
+--  l'application ni par le navigateur. À traiter dans Table Editor :
+--  créer la licence (create_licence), envoyer le numéro, passer status à 'done'.
+-- ============================================================================
+create table if not exists public.licence_requests (
+  id          bigint generated always as identity primary key,
+  created_at  timestamptz not null default now(),
+  name        text not null,
+  email       text not null,
+  kind        text not null default 'famille' check (kind in ('famille', 'etablissement', 'professionnel')),
+  org         text,
+  child       text,
+  tablets     int  not null default 1,
+  message     text,
+  user_agent  text,
+  status      text not null default 'new' check (status in ('new', 'done', 'refused')),
+  licence_key text references public.licences(key),
+  note        text
+);
+alter table public.licence_requests enable row level security;

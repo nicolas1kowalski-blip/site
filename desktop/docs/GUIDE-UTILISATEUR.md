@@ -23,8 +23,11 @@ Pour désinstaller : Paramètres Windows → Applications → Eyzi → Désinsta
 
 ## 2. Le premier démarrage
 
+### L'essai de 10 jours
+Au tout premier lancement, vous pouvez choisir **« Essayer 10 jours sans licence »** : toutes les fonctions sont ouvertes pendant dix jours sur cette tablette. Les réglages affichent les jours restants. À la fin, l'application redemande un numéro de licence, que vous demandez sur **eyzi.fr/licence.html** (réponse sous 48 heures en général). Pendant l'essai, le contenu reste sur la tablette : le nuage entre tablettes et les tableaux d'usage demandent une licence.
+
 ### La licence
-Au tout premier lancement, l'application demande un **numéro de licence** de la forme `EYZ-XXXX-XXXX-XXXX-XXXX`. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :
+L'application demande un **numéro de licence** de la forme `EYZ-XXXX-XXXX-XXXX-XXXX`. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :
 
 - il autorise l'application sur cette tablette ;
 - il regroupe vos tablettes en une **famille** : toutes les tablettes activées avec le même numéro partagent leurs photos, voix et livres ;

@@ -20,6 +20,45 @@ namespace MesPremiersJeux.Lib
     public static class Licence
     {
         private const int OfflineDays = 30;
+        public const int TrialDays = 10;
+
+        // L'essai : 10 jours sans licence. La date de début est gardée dans les
+        // réglages ET dans un petit fichier qui survit à une désinstallation ;
+        // la plus ancienne des deux compte.
+        private static string TrialMarker => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MesPremiersJeux", "essai.txt");
+
+        public static DateTime? TrialStart(Settings s)
+        {
+            DateTime? best = null;
+            if (s != null && DateTime.TryParseExact(s.TrialStart ?? "", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var a)) best = a;
+            try
+            {
+                if (System.IO.File.Exists(TrialMarker) && DateTime.TryParseExact(System.IO.File.ReadAllText(TrialMarker).Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var b))
+                    best = best == null || b < best ? b : best;
+            }
+            catch { }
+            return best;
+        }
+
+        /// <summary>Jours d'essai restants (0 = terminé ; -1 = jamais commencé).</summary>
+        public static int TrialDaysLeft(Settings s)
+        {
+            var start = TrialStart(s);
+            if (start == null) return -1;
+            return Math.Max(0, TrialDays - (int)(DateTime.Today - start.Value.Date).TotalDays);
+        }
+
+        public static bool TrialActive(Settings s) => TrialDaysLeft(s) > 0;
+
+        /// <summary>Démarre l'essai (une seule fois par tablette).</summary>
+        public static void StartTrial(Settings s)
+        {
+            if (TrialStart(s) != null) return;
+            var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            s.TrialStart = today; s.Save();
+            try { System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(TrialMarker)); System.IO.File.WriteAllText(TrialMarker, today); } catch { }
+            Log.Write("licence", "Essai de " + TrialDays + " jours commencé");
+        }
 
         // Empreintes SHA-256 des licences reconnues sans serveur (canal test).
         private static readonly string[] MasterHashes =
@@ -49,7 +88,8 @@ namespace MesPremiersJeux.Lib
         /// <summary>La licence enregistrée est-elle utilisable maintenant ?</summary>
         public static bool IsValid(Settings s)
         {
-            if (s == null || !s.LicenceOk || string.IsNullOrWhiteSpace(s.LicenceKey)) return false;
+            if (s == null) return false;
+            if (!s.LicenceOk || string.IsNullOrWhiteSpace(s.LicenceKey)) return TrialActive(s);
             if (IsMaster(s.LicenceKey)) return true;
             if (DateTime.TryParseExact(s.LicenceUntil ?? "", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var until) && DateTime.Today > until)
                 return false;
@@ -63,7 +103,13 @@ namespace MesPremiersJeux.Lib
 
         public static string Describe(Settings s)
         {
-            if (s == null || string.IsNullOrWhiteSpace(s.LicenceKey)) return "aucune licence";
+            if (s == null || string.IsNullOrWhiteSpace(s.LicenceKey) || !s.LicenceOk)
+            {
+                int left = TrialDaysLeft(s);
+                if (left > 0) return "essai gratuit · " + left + (left > 1 ? " jours restants" : " jour restant") + " · demandez une licence sur eyzi.fr";
+                if (left == 0) return "essai terminé · demandez une licence sur eyzi.fr";
+                return "aucune licence";
+            }
             var sb = new StringBuilder();
             sb.Append(s.LicenceKey).Append(" · ").Append(string.IsNullOrEmpty(s.LicenceFamily) ? "famille" : s.LicenceFamily);
             sb.Append(" · canal ").Append(IsTest(s) ? "TEST" : "prod");

@@ -38,8 +38,7 @@ namespace MesPremiersJeux.Views
             });
             panel.Children.Add(new TextBlock
             {
-                Text = "Entrez le numéro de licence qui vous a été donné. Il est de la forme EYZ-XXXX-XXXX-XXXX-XXXX. " +
-                       "Toutes les tablettes activées avec le même numéro forment une même famille.",
+                Text = TrialIntro(settings),
                 FontSize = 15, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 16),
                 Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0x4A, 0x7A)),
             });
@@ -63,6 +62,17 @@ namespace MesPremiersJeux.Views
             var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var quit = new Button { Content = "Quitter", FontSize = 16, Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(0, 0, 10, 0) };
             quit.Click += (s, e) => { DialogResult = false; Close(); };
+            int left = Licence.TrialDaysLeft(settings);
+            if (left != 0 && !(settings.LicenceOk && !string.IsNullOrWhiteSpace(settings.LicenceKey)))
+            {
+                var trial = new Button
+                {
+                    Content = left < 0 ? "🎁 Essayer " + Licence.TrialDays + " jours sans licence" : "▶ Continuer l'essai (" + left + (left > 1 ? " jours)" : " jour)"),
+                    FontSize = 16, Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(0, 0, 10, 0),
+                };
+                trial.Click += (s, e) => { Licence.StartTrial(_settings); DialogResult = true; Close(); };
+                row.Children.Add(trial);
+            }
             _ok = new Button { Content = "Activer", FontSize = 16, FontWeight = FontWeights.Bold, Padding = new Thickness(22, 8, 22, 8), IsDefault = true, IsEnabled = _box.Text.Trim().Length >= 8 };
             _ok.Click += async (s, e) => await Activate();
             row.Children.Add(quit);
@@ -76,6 +86,16 @@ namespace MesPremiersJeux.Views
             });
             Content = panel;
             Loaded += (s, e) => { _box.Focus(); _box.SelectAll(); };
+        }
+
+        private static string TrialIntro(Settings s)
+        {
+            int left = Licence.TrialDaysLeft(s);
+            string lic = "Entrez le numéro de licence qui vous a été donné (forme EYZ-XXXX-XXXX-XXXX-XXXX). Toutes les tablettes activées avec le même numéro forment une même famille. Pour en demander un : eyzi.fr/licence.html";
+            if (s.LicenceOk && !string.IsNullOrWhiteSpace(s.LicenceKey)) return lic;
+            if (left < 0) return "Vous pouvez essayer Eyzi " + Licence.TrialDays + " jours sans licence, toutes fonctions ouvertes. " + lic;
+            if (left > 0) return "Essai gratuit : il reste " + left + (left > 1 ? " jours." : " jour.") + " " + lic;
+            return "L'essai gratuit de " + Licence.TrialDays + " jours est terminé. " + lic;
         }
 
         private async System.Threading.Tasks.Task Activate()
