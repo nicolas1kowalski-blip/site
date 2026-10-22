@@ -117,18 +117,18 @@ namespace MesPremiersJeux.Views
             });
 
             var now = DateTime.Now;
-            string name = (Settings.Load().ChildName ?? "").Trim();
-            if (name.Length == 0) name = "Laura";
+            ReadName();
 
             // « Bonjour Laura ! »
-            column.Children.Add(Bubble(new TextBlock
+            _hello = new TextBlock
             {
-                Text = Hello(now) + " " + name + " !",
+                Text = Hello(now) + " " + _name + " !",
                 FontSize = 74,
                 FontWeight = FontWeights.ExtraBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
                 HorizontalAlignment = HorizontalAlignment.Center,
-            }, 36));
+            };
+            column.Children.Add(Bubble(_hello, 36));
 
             // La date et la saison.
             column.Children.Add(Bubble(new TextBlock
@@ -143,7 +143,7 @@ namespace MesPremiersJeux.Views
 
             // Les quatre cartes : dire bonjour · l'ami du jour · mes étoiles · surprise.
             var cards = new UniformGrid { Columns = 4, Margin = new Thickness(0, 16, 0, 10), HorizontalAlignment = HorizontalAlignment.Center };
-            cards.Children.Add(HelloCard(name));
+            cards.Children.Add(HelloCard());
             column.Children.Add(cards);
 
             var friend = Friend(now);
@@ -211,6 +211,7 @@ namespace MesPremiersJeux.Views
             IsVisibleChanged += (s, e) =>
             {
                 if (!(bool)e.NewValue) return;
+                RefreshName(); // le prénom des réglages, même changé en cours de route
                 if ((DateTime.Now - _lastHello).TotalMinutes < 60) return;
                 _lastHello = DateTime.Now;
                 var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
@@ -218,7 +219,7 @@ namespace MesPremiersJeux.Views
                 {
                     t.Stop();
                     var d = DateTime.Now;
-                    Speech.Say(Hello(d) + " " + name + " ! Aujourd'hui, c'est " + DateText(d) + ". " +
+                    Speech.Say(Hello(d) + " " + _name + " ! Aujourd'hui, c'est " + DateText(d) + ". " +
                                SeasonText(d) + " " + SpecialSay(d) + " L'ami du jour, c'est " + Friend(d).Name + " !");
                 };
                 t.Start();
@@ -344,7 +345,24 @@ namespace MesPremiersJeux.Views
         // 👋 DIRE BONJOUR : la carte parle POUR l'enfant. Avec les photos de la
         // famille (Contenu\Famille), chaque regard salue quelqu'un d'autre
         // (« Bonjour Papa ! », photo à l'appui), puis tout le monde.
-        private Button HelloCard(string childName)
+        // Le prénom vient des réglages ; relu à chaque affichage de la page.
+        private string _name = "Laura";
+        private TextBlock _hello;
+
+        private void ReadName()
+        {
+            string n = (Settings.Load().ChildName ?? "").Trim();
+            _name = n.Length == 0 ? "Laura" : n;
+        }
+
+        /// <summary>Relit le prénom des réglages et met la page à jour.</summary>
+        public void RefreshName()
+        {
+            ReadName();
+            if (_hello != null) _hello.Text = Hello(DateTime.Now) + " " + _name + " !";
+        }
+
+        private Button HelloCard()
         {
             var host = new Grid { Width = 150, Height = 150 };
             var wave = new TextBlock { Text = "👋", FontSize = 110, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -377,11 +395,11 @@ namespace MesPremiersJeux.Views
                         }
                         catch { pic = wave; }
                     }
-                    else text = hello + " tout le monde ! C'est " + childName + " !";
+                    else text = hello + " tout le monde ! C'est " + _name + " !";
                 }
                 else
                 {
-                    string[] v = { hello + " !", "Coucou !", hello + " tout le monde !", hello + ", c'est " + childName + " !" };
+                    string[] v = { hello + " !", "Coucou !", hello + " tout le monde !", hello + ", c'est " + _name + " !" };
                     turn = (turn + 1) % v.Length;
                     text = v[turn];
                 }

@@ -55,6 +55,7 @@ namespace MesPremiersJeux
 
             // 🏠 L'accueil : bonjour, la date, l'ami du jour… et les grands boutons.
             var accueil = new AccueilView();
+            _accueil = accueil;
             accueil.Navigate += id =>
             {
                 if (id == "parcours") Parcours_Click(this, null);
@@ -170,6 +171,7 @@ namespace MesPremiersJeux
         }
 
         private RewardShopView _shop;
+        private AccueilView _accueil;
         private ProgressBookView _book;
         private ChoiceView _choice;
 
@@ -209,6 +211,7 @@ namespace MesPremiersJeux
             // Réglages partagés entre tablettes (clé de la voix, prénom…) :
             // appliqués depuis le dossier synchronisé, puis gardés en local.
             if (SharedSettings.Apply(_settings)) _settings.Save();
+            _accueil?.RefreshName(); // le prénom (réglages partagés compris)
 
             // L'application démarre TOUJOURS en plein écran « kiosque » : en
             // fenêtré elle est inopérable au regard. Le bouton ⛶ reste
@@ -938,6 +941,7 @@ namespace MesPremiersJeux
             _settings.ChildName = n;
             _settings.Save();
             Lib.Log.Write("app", "Prénom de l'enfant : " + n);
+            _accueil?.RefreshName();
         }
 
         // « Réglage éclair » : une étoile, 3 secondes, recale tout le regard.
