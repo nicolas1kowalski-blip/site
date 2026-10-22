@@ -2,7 +2,7 @@
 
 *Une application Windows pour jouer, parler et apprendre avec les yeux, pour les enfants de 4 à 7 ans. Elle se pilote à la commande oculaire (Tobii), au doigt ou à la souris.*
 
-*Eyzi est en **version bêta** : elle marche, elle est utilisée tous les jours, et elle s'améliore avec les retours. La bêta est gratuite et limitée à 50 familles et établissements, jusqu'au 30 juin 2027 ; ceux de la bêta garderont leur licence gratuite si l'application devient payante un jour. Vos remarques : **eyzi.fr/retours.html**.*
+*Eyzi est en **version bêta** : elle marche, elle est utilisée tous les jours, et elle s'améliore avec les retours. La bêta est gratuite et limitée : 10 licences pour commencer, d'autres au fil des retours, jusqu'au 30 juin 2027 ; ceux de la bêta garderont leur licence gratuite si l'application devient payante un jour. Vos remarques : **eyzi.fr/retours.html**.*
 
 Ce guide s'adresse aux parents et aux accompagnants. La première partie explique l'installation et le premier démarrage, la deuxième ce que l'enfant voit, la troisième les réglages, la dernière ce qu'il faut savoir pour donner l'application à une autre famille.
 
