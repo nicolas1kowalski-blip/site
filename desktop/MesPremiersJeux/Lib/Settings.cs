@@ -41,6 +41,8 @@ namespace MesPremiersJeux.Lib
         public int LicenceMax = 2;
         public bool LicenceOk = false;
         public string LastUpdateSeen = ""; // dernière version proposée (pour ne pas insister)
+        // ☁🔒 Nuage de la famille (voir Lib/FamilyCloud.cs)
+        public string CloudEmail = "", CloudSecret = "", FamilyPassphrase = "", CloudLastSync = "", CloudLastFingerprint = "";
         public int AutoLevel = 1;        // niveau atteint en automatique
         public bool AutoDwell = true;    // temps de fixation ajusté tout seul selon le jeu de l'enfant
 
@@ -95,6 +97,11 @@ namespace MesPremiersJeux.Lib
                         case "LicenceMax": int.TryParse(val, out s.LicenceMax); break;
                         case "LicenceOk": s.LicenceOk = val != "0"; break;
                         case "LastUpdateSeen": s.LastUpdateSeen = val; break;
+                        case "CloudEmail": s.CloudEmail = val; break;
+                        case "CloudSecret": s.CloudSecret = val; break;
+                        case "FamilyPassphrase": s.FamilyPassphrase = val; break;
+                        case "CloudLastSync": s.CloudLastSync = val; break;
+                        case "CloudLastFingerprint": s.CloudLastFingerprint = val; break;
                         case "AutoLevel": int.TryParse(val, out s.AutoLevel); break;
                     }
                 }
@@ -146,6 +153,11 @@ namespace MesPremiersJeux.Lib
                     "LicenceMax=" + LicenceMax,
                     "LicenceOk=" + (LicenceOk ? "1" : "0"),
                     "LastUpdateSeen=" + (LastUpdateSeen ?? ""),
+                    "CloudEmail=" + (CloudEmail ?? ""),
+                    "CloudSecret=" + (CloudSecret ?? ""),
+                    "FamilyPassphrase=" + (FamilyPassphrase ?? ""),
+                    "CloudLastSync=" + (CloudLastSync ?? ""),
+                    "CloudLastFingerprint=" + (CloudLastFingerprint ?? ""),
                     "AutoLevel=" + AutoLevel,
                 };
                 File.WriteAllLines(FilePath, lines);

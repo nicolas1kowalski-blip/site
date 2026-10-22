@@ -17,13 +17,14 @@ namespace MesPremiersJeux.Views
         private readonly TextBox _box;
         private readonly TextBlock _msg;
         private readonly Button _ok;
+        private readonly PasswordBox _pass;
 
         public LicenceWindow(Settings settings)
         {
             _settings = settings;
             Title = "Mes Premiers Jeux — Licence";
             Width = 640;
-            Height = 420;
+            Height = 560;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             Topmost = true;
@@ -49,6 +50,13 @@ namespace MesPremiersJeux.Views
             };
             _box.TextChanged += (s, e) => _ok.IsEnabled = _box.Text.Trim().Length >= 8;
             panel.Children.Add(_box);
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Mot de passe famille (le même sur toutes vos tablettes : il chiffre vos photos et vos voix dans le nuage ; personne d'autre ne peut les lire, pas même l'éditeur) :",
+                FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 14, 0, 4), Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0x4A, 0x7A)),
+            });
+            _pass = new PasswordBox { FontSize = 20, Padding = new Thickness(10, 6, 10, 6), Password = settings.FamilyPassphrase ?? "" };
+            panel.Children.Add(_pass);
             _msg = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B)), MinHeight = 44 };
             panel.Children.Add(_msg);
 
@@ -80,6 +88,9 @@ namespace MesPremiersJeux.Views
             catch (Exception ex) { err = ex.Message; }
             if (err == null)
             {
+                var pass = _pass.Password ?? "";
+                if (pass.Length > 0 && pass.Length < 6) { _msg.Text = "⚠ Le mot de passe famille doit faire au moins 6 caractères."; _ok.IsEnabled = true; return; }
+                if (pass != (_settings.FamilyPassphrase ?? "")) { _settings.FamilyPassphrase = pass; _settings.CloudLastSync = ""; _settings.CloudLastFingerprint = ""; _settings.Save(); }
                 _msg.Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x9E, 0x4F));
                 _msg.Text = "✅ Licence activée : " + Licence.Describe(_settings);
                 await System.Threading.Tasks.Task.Delay(900);

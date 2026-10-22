@@ -111,6 +111,8 @@ namespace MesPremiersJeux.Lib
             }
             int max = 2;
             int.TryParse(Cloud.JsonGet(json, "max_tablets") ?? "2", out max);
+            s.CloudEmail = Cloud.JsonGet(json, "cloud_email") ?? s.CloudEmail;
+            s.CloudSecret = Cloud.JsonGet(json, "cloud_secret") ?? s.CloudSecret;
             Apply(s, key, Cloud.JsonGet(json, "family") ?? "", (Cloud.JsonGet(json, "channel") ?? "prod").ToLowerInvariant(), max,
                   (Cloud.JsonGet(json, "expires_at") ?? "").Split('T')[0], true);
             return null;

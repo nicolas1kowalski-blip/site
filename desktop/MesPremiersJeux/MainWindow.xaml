@@ -194,11 +194,12 @@
                     <TextBlock Text="Clé :" FontSize="13" Foreground="#FF9A8AB8" Margin="0,6,0,2" />
                     <TextBox x:Name="SupabaseKeyBox" FontSize="13" Padding="6,4" LostFocus="Supabase_Changed" />
                     <UniformGrid Columns="2" Margin="0,8,0,0">
-                        <Button x:Name="CloudUpBtn" Content="☁️⬆ Sauvegarder" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="CloudUp_Click" />
-                        <Button x:Name="CloudDownBtn" Content="☁️⬇ Récupérer" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="CloudDown_Click" />
+                        <Button x:Name="CloudUpBtn" Content="☁️⬆ Envoyer maintenant" FontSize="14" Padding="8,8" Margin="0,0,4,0" Click="CloudUp_Click" />
+                        <Button x:Name="CloudDownBtn" Content="☁️⬇ Récupérer maintenant" FontSize="14" Padding="8,8" Margin="4,0,0,0" Click="CloudDown_Click" />
                     </UniformGrid>
                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#FF9A8AB8" Margin="0,4,0,0"
-                               Text="Même contenu sur tous les PC : « Sauvegarder » envoie tout dans le nuage, « Récupérer » le charge sur l'autre appareil." />
+                               Text="Le contenu de la famille est synchronisé entre vos tablettes par l'application, chiffré avec votre mot de passe famille (jamais lisible par personne d'autre). Automatique : récupéré au démarrage s'il y a du nouveau, envoyé à la fermeture si vous avez ajouté des choses." />
+                    <TextBlock x:Name="CloudStatusText" FontSize="12" Foreground="#FF6B5B8A" FontWeight="Bold" Margin="0,4,0,0" />
                     <TextBlock Text="Durée de fixation" FontSize="14" Foreground="#FF6B5B8A" Margin="0,14,0,2" />
                     <Slider x:Name="DwellSlider" Minimum="400" Maximum="2500" TickFrequency="100"
                             IsSnapToTickEnabled="True" ValueChanged="DwellSlider_Changed" />

@@ -45,6 +45,7 @@ namespace MesPremiersJeux
             {
                 try { System.IO.File.Delete(CrashFlag); } catch { } // fermeture normale : pas un plantage
                 StopGazeSources();
+                CloudSyncAtExit();
             };
         }
 
@@ -229,6 +230,8 @@ namespace MesPremiersJeux
             _ = Licence.RecheckAsync(_settings).ContinueWith(t => Dispatcher.Invoke(RefreshLicenceText));
             Updater.Cleanup();
             CheckUpdatesAtStartup();
+            RefreshCloudStatus();
+            CloudSyncAtStartup();
 
             // 👋 PREMIER DÉMARRAGE sur cette tablette : on demande le prénom de
             // l'enfant (une seule fois ; les réglages partagés peuvent déjà l'avoir).
@@ -318,6 +321,8 @@ namespace MesPremiersJeux
             // Sauvegarde en ligne (Supabase).
             CloudSync.Url = _settings.SupabaseUrl;
             CloudSync.Key = _settings.SupabaseKey;
+            Cloud.Url = string.IsNullOrWhiteSpace(_settings.SupabaseUrl) ? Cloud.DefaultUrl : _settings.SupabaseUrl;
+            Cloud.AnonKey = string.IsNullOrWhiteSpace(_settings.SupabaseKey) ? Cloud.DefaultAnonKey : _settings.SupabaseKey;
             SupabaseUrlBox.Text = _settings.SupabaseUrl;
             SupabaseKeyBox.Text = _settings.SupabaseKey;
 
@@ -1385,42 +1390,80 @@ namespace MesPremiersJeux
             _settings.Save();
             CloudSync.Url = _settings.SupabaseUrl;
             CloudSync.Key = _settings.SupabaseKey;
+            Cloud.Url = string.IsNullOrWhiteSpace(_settings.SupabaseUrl) ? Cloud.DefaultUrl : _settings.SupabaseUrl;
+            Cloud.AnonKey = string.IsNullOrWhiteSpace(_settings.SupabaseKey) ? Cloud.DefaultAnonKey : _settings.SupabaseKey;
         }
 
         private async void CloudUp_Click(object sender, RoutedEventArgs e)
         {
-            if (!CloudSync.Enabled)
+            SettingsPopup.IsOpen = false;
+            if (!FamilyCloud.Available(_settings))
             {
-                MessageBox.Show(this, "Renseigne d'abord l'URL et la clé Supabase.", "Sauvegarde en ligne");
+                MessageBox.Show(this, "Le nuage de la famille n'est pas prêt : il faut une licence activée en ligne et un mot de passe famille (bouton « Changer la licence »).", "Nuage");
                 return;
             }
             CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = false;
-            CloudUpBtn.Content = "⏳ Envoi…";
-            var err = await CloudSync.UploadAsync();
-            CloudUpBtn.Content = "☁️⬆ Sauvegarder";
+            var err = await FamilyCloud.UploadAsync(_settings, force: true, status: t => ShowParentNotice("☁️ " + t));
             CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = true;
-            MessageBox.Show(this, err == null
-                ? "Contenu sauvegardé dans le nuage ! Sur l'autre PC : « Récupérer »."
-                : "Échec de la sauvegarde : " + err, "Sauvegarde en ligne");
+            RefreshCloudStatus();
+            MessageBox.Show(this, err == null ? "Contenu envoyé dans le nuage de la famille !" : "Envoi impossible : " + err, "Nuage");
         }
 
         private async void CloudDown_Click(object sender, RoutedEventArgs e)
         {
-            if (!CloudSync.Enabled)
+            SettingsPopup.IsOpen = false;
+            if (!FamilyCloud.Available(_settings))
             {
-                MessageBox.Show(this, "Renseigne d'abord l'URL et la clé Supabase.", "Sauvegarde en ligne");
+                MessageBox.Show(this, "Le nuage de la famille n'est pas prêt : il faut une licence activée en ligne et un mot de passe famille (bouton « Changer la licence »).", "Nuage");
                 return;
             }
             CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = false;
-            CloudDownBtn.Content = "⏳ Réception…";
-            var err = await CloudSync.DownloadAsync();
-            CloudDownBtn.Content = "☁️⬇ Récupérer";
+            var err = await FamilyCloud.DownloadAsync(_settings, force: true, status: t => ShowParentNotice("☁️ " + t));
             CloudUpBtn.IsEnabled = CloudDownBtn.IsEnabled = true;
-            MessageBox.Show(this, err == null
-                ? "Contenu récupéré ! Livres, coloriages et photos sont à jour."
-                : "Échec de la récupération : " + err, "Sauvegarde en ligne");
+            RefreshCloudStatus();
+            RefreshContentDirInfo();
+            MessageBox.Show(this, err == null ? "Contenu récupéré ! (" + FamilyCloud.Status + ")" : "Récupération impossible : " + err, "Nuage");
         }
 
+        private void RefreshCloudStatus()
+        {
+            try
+            {
+                CloudStatusText.Text = !Cloud.Configured ? "Serveur non configuré."
+                    : !FamilyCloud.Available(_settings) ? "Nuage famille : pas prêt (licence en ligne + mot de passe famille)."
+                    : "Nuage famille : prêt" + (string.IsNullOrEmpty(FamilyCloud.Status) ? "" : " · " + FamilyCloud.Status) +
+                      (string.IsNullOrEmpty(_settings.CloudLastSync) ? "" : " · dernière synchro " + _settings.CloudLastSync.Split('T')[0]);
+            }
+            catch { }
+        }
+
+        // Au démarrage : on récupère ce que l'autre tablette a ajouté ; à la fermeture : on envoie ce qu'on a ajouté.
+        private async void CloudSyncAtStartup()
+        {
+            if (!FamilyCloud.Available(_settings)) return;
+            try
+            {
+                await System.Threading.Tasks.Task.Delay(2500);
+                var err = await FamilyCloud.DownloadAsync(_settings, force: false);
+                if (err != null) Lib.Log.Write("nuage", "Synchro au démarrage : " + err);
+                else if (FamilyCloud.Status.StartsWith("récupéré")) { ShowParentNotice("☁️ Contenu de la famille récupéré."); RefreshContentDirInfo(); }
+                RefreshCloudStatus();
+            }
+            catch (Exception ex) { Lib.Log.Write("nuage", "Synchro au démarrage : " + ex.Message); }
+        }
+
+        private void CloudSyncAtExit()
+        {
+            if (!FamilyCloud.Available(_settings)) return;
+            if (FamilyCloud.LocalFingerprint() == _settings.CloudLastFingerprint) return;
+            try
+            {
+                // On envoie avant de partir (quelques secondes au plus : le reste attendra la prochaine fermeture).
+                var task = FamilyCloud.UploadAsync(_settings, force: false);
+                task.Wait(TimeSpan.FromSeconds(25));
+            }
+            catch (Exception ex) { Lib.Log.Write("nuage", "Envoi à la fermeture : " + ex.Message); }
+        }
         private void Azure_Changed(object sender, RoutedEventArgs e)
         {
             if (_settings == null || AzureKeyBox == null) return;
