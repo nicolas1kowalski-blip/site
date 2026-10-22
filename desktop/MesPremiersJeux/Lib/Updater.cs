@@ -69,9 +69,9 @@ namespace MesPremiersJeux.Lib
                 if (draft || (pre && !testChannel)) continue;
                 var tag = Cloud.JsonGet(r, "tag_name") ?? "";
                 if (!Version.TryParse(tag.TrimStart('v', 'V'), out var v)) continue;
-                var setup = Regex.Match(r, "\"browser_download_url\"\\s*:\\s*\"([^\"]*MesPremiersJeux-Setup-[^\"]*\\.exe)\"");
+                var setup = Regex.Match(r, "\"browser_download_url\"\\s*:\\s*\"([^\"]*Eyzi-Setup-[^\"]*\\.exe)\"");
                 if (!setup.Success) continue;
-                var sha = Regex.Match(r, "\"browser_download_url\"\\s*:\\s*\"([^\"]*MesPremiersJeux-Setup-[^\"]*\\.exe\\.sha256)\"");
+                var sha = Regex.Match(r, "\"browser_download_url\"\\s*:\\s*\"([^\"]*Eyzi-Setup-[^\"]*\\.exe\\.sha256)\"");
                 return new Info
                 {
                     Version = v, Tag = tag, Prerelease = pre,
@@ -126,7 +126,7 @@ namespace MesPremiersJeux.Lib
         {
             try
             {
-                return Directory.GetFiles(UpdatesDir, "MesPremiersJeux-Setup-*.exe")
+                return Directory.GetFiles(UpdatesDir, "*-Setup-*.exe")
                     .Select(f => (Path: f, Ver: ParseVersion(f)))
                     .Where(t => t.Ver != null && t.Ver < Current)
                     .OrderByDescending(t => t.Ver)
@@ -174,7 +174,7 @@ namespace MesPremiersJeux.Lib
         {
             try
             {
-                foreach (var f in Directory.GetFiles(UpdatesDir, "MesPremiersJeux-Setup-*.exe")
+                foreach (var f in Directory.GetFiles(UpdatesDir, "*-Setup-*.exe")
                              .Select(f => (Path: f, Ver: ParseVersion(f))).OrderByDescending(t => t.Ver).Skip(3))
                     File.Delete(f.Path);
             }

@@ -163,7 +163,7 @@ namespace MesPremiersJeux.Views
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Impossible d'ouvrir cette activité :\n" + ex.Message, "Mes Premiers Jeux");
+                MessageBox.Show("Impossible d'ouvrir cette activité :\n" + ex.Message, "Eyzi");
             }
         }
 

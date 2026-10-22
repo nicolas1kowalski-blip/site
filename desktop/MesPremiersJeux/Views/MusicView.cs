@@ -451,7 +451,7 @@ namespace MesPremiersJeux.Views
   window.__stop   = function(){ if (player) player.pause(); };
   window.onSpotifyWebPlaybackSDKReady = function(){
     player = new Spotify.Player({
-      name: 'Mes Premiers Jeux',
+      name: 'Eyzi',
       volume: 0.85,
       getOAuthToken: function(cb){ tokenCb = cb; post('token_request'); }
     });

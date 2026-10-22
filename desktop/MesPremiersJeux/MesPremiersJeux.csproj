@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Application de bureau native (WPF) « Mes Premiers Jeux ».
+    Application de bureau native (WPF) « Eyzi » (ex-Mes Premiers Jeux ; l'espace de noms du code reste MesPremiersJeux).
     Cible .NET Framework 4.7.2 car le SDK grand public Tobii (Tobii.Interaction,
     a.k.a. Tobii Core / EyeX) est distribué pour .NET Framework et embarque des
     DLL natives. À compiler en x64 (voir README) pour que ces DLL se chargent.
@@ -11,7 +11,7 @@
     <TargetFramework>net472</TargetFramework>
     <UseWPF>true</UseWPF>
     <RootNamespace>MesPremiersJeux</RootNamespace>
-    <AssemblyName>MesPremiersJeux</AssemblyName>
+    <AssemblyName>Eyzi</AssemblyName>
     <LangVersion>9.0</LangVersion>
     <Platforms>x64;x86</Platforms>
     <PlatformTarget>x64</PlatformTarget>
@@ -20,9 +20,9 @@
          0.0.0.1 = compilée à la main. L'appli l'affiche et s'en sert pour se mettre à jour. -->
     <Version Condition="'$(Version)' == ''">0.0.0.1</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Company>Mes Premiers Jeux</Company>
-    <Product>Mes Premiers Jeux</Product>
-    <Copyright>© Mes Premiers Jeux</Copyright>
+    <Company>Eyzi</Company>
+    <Product>Eyzi</Product>
+    <Copyright>© Eyzi</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

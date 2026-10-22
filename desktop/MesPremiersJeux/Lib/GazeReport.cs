@@ -22,7 +22,7 @@ namespace MesPremiersJeux.Lib
                                    string proStats, long proGuide, string proDevice, string proDiagnostic)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("RAPPORT DU REGARD — Mes Premiers Jeux");
+            sb.AppendLine("RAPPORT DU REGARD — Eyzi");
             sb.AppendLine("=====================================");
             sb.AppendLine("Tablette : " + Environment.MachineName + "   ·   " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
             sb.AppendLine("Windows : " + Environment.OSVersion.VersionString + (Environment.Is64BitOperatingSystem ? " (64 bits)" : ""));

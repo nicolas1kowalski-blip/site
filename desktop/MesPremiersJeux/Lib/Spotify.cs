@@ -307,7 +307,7 @@ namespace MesPremiersJeux.Lib
                     "<!doctype html><html lang='fr'><head><meta charset='utf-8'>" +
                     "<title>Spotify connecté</title></head>" +
                     "<body style='font-family:sans-serif;text-align:center;padding-top:60px;background:#1DB954;color:white'>" +
-                    "<h1>✅ Spotify connecté !</h1><p>Tu peux revenir à l'application « Mes Premiers Jeux ».</p>" +
+                    "<h1>✅ Spotify connecté !</h1><p>Tu peux revenir à l'application « Eyzi ».</p>" +
                     "</body></html>";
                 var buf = Encoding.UTF8.GetBytes(html);
                 ctx.Response.ContentType = "text/html; charset=utf-8";

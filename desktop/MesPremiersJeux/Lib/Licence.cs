@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace MesPremiersJeux.Lib
 {
     /// <summary>
-    /// 🔑 LA LICENCE : un numéro donné par l'éditeur (MPJ-XXXX-XXXX-XXXX-XXXX).
+    /// 🔑 LA LICENCE : un numéro donné par l'éditeur (EYZ-XXXX-XXXX-XXXX-XXXX ; les anciens MPJ- restent acceptés).
     /// Vérifié en ligne à l'activation (serveur de l'application), gardé sur la
     /// tablette, re-vérifié au plus tous les jours quand il y a du réseau, et
     /// valable 30 jours hors ligne. La licence porte le CANAL de mises à jour
@@ -24,7 +24,7 @@ namespace MesPremiersJeux.Lib
         // Empreintes SHA-256 des licences reconnues sans serveur (canal test).
         private static readonly string[] MasterHashes =
         {
-            "d2136350f134cacf953cf6487023e883bad24fd01757858d09c0fdb45967fd5f",
+            "72a39bf8bf6e7b5ac34a747b243cc91dca0e2769468ffccf65edc04c5e6917fc", // EYZ-XW4A-EPNW-HCWC-VSDN
         };
 
         public static string Normalize(string key)
@@ -33,9 +33,9 @@ namespace MesPremiersJeux.Lib
             var sb = new StringBuilder();
             foreach (var c in key.ToUpperInvariant()) if (char.IsLetterOrDigit(c)) sb.Append(c);
             var s = sb.ToString();
-            if (s.StartsWith("MPJ")) s = s.Substring(3);
+            if (s.StartsWith("EYZ") || s.StartsWith("MPJ")) s = s.Substring(3);
             if (s.Length != 16) return key.Trim().ToUpperInvariant();
-            return "MPJ-" + s.Substring(0, 4) + "-" + s.Substring(4, 4) + "-" + s.Substring(8, 4) + "-" + s.Substring(12, 4);
+            return "EYZ-" + s.Substring(0, 4) + "-" + s.Substring(4, 4) + "-" + s.Substring(8, 4) + "-" + s.Substring(12, 4);
         }
 
         public static string Hash(string key)

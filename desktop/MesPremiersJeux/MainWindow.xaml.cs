@@ -1072,7 +1072,7 @@ namespace MesPremiersJeux
                     SizeToContent = SizeToContent.WidthAndHeight, WindowStyle = WindowStyle.ToolWindow,
                 };
                 var panel = new StackPanel { Margin = new Thickness(26), Width = 460 };
-                panel.Children.Add(new TextBlock { Text = "👋 Bienvenue dans Mes Premiers Jeux !", FontSize = 22, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 10) });
+                panel.Children.Add(new TextBlock { Text = "👋 Bienvenue dans Eyzi !", FontSize = 22, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 10) });
                 panel.Children.Add(new TextBlock { Text = "Comment s'appelle l'enfant ? Son prénom sera dit par la voix (« Bonjour Laura ! », « Mon prénom »…). Tu pourras le changer dans les réglages.", FontSize = 15, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14) });
                 var box = new TextBox { Text = _settings.ChildName ?? "", FontSize = 26, Padding = new Thickness(10, 8, 10, 8) };
                 panel.Children.Add(box);

@@ -5,7 +5,7 @@ export default function Header({ showBack, onBack, onOpenSettings }) {
   return (
     <header>
       <h1 className="title">
-        <span className="star">★</span> Mes Premiers Jeux
+        <span className="star">★</span> Eyzi
       </h1>
       <div className="header-controls">
         {showBack && (

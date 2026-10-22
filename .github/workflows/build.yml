@@ -1,4 +1,4 @@
-# Compilation et publication automatiques de « Mes Premiers Jeux ».
+# Compilation et publication automatiques de « Eyzi ».
 # À chaque poussée de code : compilation Windows, installeur, puis une
 # version TEST (pré-version GitHub). Les tablettes en canal « test » la
 # reçoivent ; le canal « prod » ne voit que les versions promues (non
@@ -47,16 +47,19 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc "/DVersion=${{ steps.ver.outputs.version }}" "/DSource=..\MesPremiersJeux\bin\x64\Release\net472" desktop\installer\MesPremiersJeux.iss
+          & $iscc "/DVersion=${{ steps.ver.outputs.version }}" "/DSource=..\MesPremiersJeux\bin\x64\Release\net472" desktop\installer\Eyzi.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Archive portable + empreintes
         shell: pwsh
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          Compress-Archive -Path desktop/MesPremiersJeux/bin/x64/Release/net472/* -DestinationPath "desktop/installer/Output/MesPremiersJeux-$v.zip"
-          # Copie à nom fixe : https://github.com/nicolas1kowalski-blip/site/releases/latest/download/MesPremiersJeux-Setup.exe
-          Copy-Item "desktop/installer/Output/MesPremiersJeux-Setup-$v.exe" "desktop/installer/Output/MesPremiersJeux-Setup.exe"
+          Compress-Archive -Path desktop/MesPremiersJeux/bin/x64/Release/net472/* -DestinationPath "desktop/installer/Output/Eyzi-$v.zip"
+          # Copie à nom fixe : https://github.com/nicolas1kowalski-blip/site/releases/latest/download/Eyzi-Setup.exe
+          Copy-Item "desktop/installer/Output/Eyzi-Setup-$v.exe" "desktop/installer/Output/Eyzi-Setup.exe"
+          # TRANSITION : les tablettes encore sous « Mes Premiers Jeux » (versions 2026.10.22.x) cherchent
+          # MesPremiersJeux-Setup-*.exe pour se mettre à jour. On publie une copie sous ce nom ; à retirer dans quelques versions.
+          Copy-Item "desktop/installer/Output/Eyzi-Setup-$v.exe" "desktop/installer/Output/MesPremiersJeux-Setup-$v.exe"
           Get-ChildItem desktop/installer/Output/*.exe, desktop/installer/Output/*.zip | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$h  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
@@ -67,13 +70,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
-          name: Mes Premiers Jeux ${{ steps.ver.outputs.version }}
+          name: Eyzi ${{ steps.ver.outputs.version }}
           prerelease: true
           body: |
             Version **test** ${{ steps.ver.outputs.version }} — compilée automatiquement depuis `${{ github.ref_name }}` (${{ github.sha }}).
 
-            - `MesPremiersJeux-Setup-*.exe` : l'installeur (par utilisateur, sans droits administrateur).
-            - `MesPremiersJeux-*.zip` : la version portable.
+            - `Eyzi-Setup-*.exe` : l'installeur (par utilisateur, sans droits administrateur). `MesPremiersJeux-Setup-*.exe` : la même chose, pour les tablettes encore sous l'ancien nom.
+            - `Eyzi-*.zip` : la version portable.
             - `*.sha256` : empreintes de contrôle, vérifiées par l'appli avant toute mise à jour.
 
             Pour la promouvoir en **prod** : Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ».

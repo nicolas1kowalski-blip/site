@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guide utilisateur — Mes Premiers Jeux</title>
-<meta name="description" content="Installer, activer et utiliser l'application Mes Premiers Jeux : commande oculaire, jeux, réglages, mises à jour, licences.">
+<title>Guide utilisateur — Eyzi</title><link rel="icon" type="image/png" href="img/favicon-32.png">
+<meta name="description" content="Installer, activer et utiliser Eyzi : commande oculaire, jeux, réglages, mises à jour, licences.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
 <style>
@@ -38,7 +38,7 @@ a{color:var(--accent)}
 </style>
 </head>
 <body>
-<div class="top"><a class="brand" href="./">⭐ Mes Premiers Jeux</a><div><a href="./">Télécharger</a> <a href="./#video">La vidéo</a></div></div>
+<div class="top"><a class="brand" href="./">⭐ Eyzi</a><div><a href="./">Télécharger</a> <a href="./#video">La vidéo</a></div></div>
 <div class="wrap">
 <nav class="toc"><a href="#1-installer-l-application">1. Installer l&#x27;application</a>
 <a href="#2-le-premier-dmarrage">2. Le premier démarrage</a>
@@ -50,7 +50,7 @@ a{color:var(--accent)}
 <a href="#8-problmes-frquents">8. Problèmes fréquents</a>
 <a href="#9-pour-l-diteur-donner-l-application-une-autre-famille">9. Pour l&#x27;éditeur : donner l&#x27;application à une autre famille</a></nav>
 <main>
-<h1>Mes Premiers Jeux — Guide utilisateur</h1>
+<h1>Eyzi — Guide utilisateur</h1>
 <p><em>Une application Windows pour jouer, parler et apprendre avec les yeux, pour les enfants de 4 à 7 ans. Elle se pilote à la commande oculaire (Tobii), au doigt ou à la souris.</em></p>
 <p>Ce guide s'adresse aux parents et aux accompagnants. La première partie explique l'installation et le premier démarrage, la deuxième ce que l'enfant voit, la troisième les réglages, la dernière ce qu'il faut savoir pour donner l'application à une autre famille.</p>
 <hr>
@@ -63,15 +63,15 @@ a{color:var(--accent)}
 </ul>
 <h3 id="les-tapes">Les étapes</h3>
 <ol>
-<li>Téléchargez <strong>MesPremiersJeux-Setup.exe</strong> depuis la page « Application » du site (ou la page des versions sur GitHub).</li>
+<li>Téléchargez <strong>Eyzi-Setup.exe</strong> depuis la page « Application » du site (ou la page des versions sur GitHub).</li>
 <li>Ouvrez le fichier. Windows peut afficher un écran bleu « Windows a protégé votre ordinateur » : cliquez sur <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>. C'est normal pour une application qui n'est pas encore signée par un certificat payant.</li>
 <li>L'installeur est en français et ne demande <strong>aucun droit administrateur</strong> : il installe l'application dans le profil de l'utilisateur. Cochez « Lancer au démarrage de Windows » si la tablette est dédiée à l'enfant.</li>
-<li>À la fin, l'application se lance toute seule. Un raccourci « Mes Premiers Jeux » est sur le bureau et dans le menu Démarrer.</li>
+<li>À la fin, l'application se lance toute seule. Un raccourci « Eyzi » est sur le bureau et dans le menu Démarrer.</li>
 </ol>
-<p>Pour désinstaller : Paramètres Windows → Applications → Mes Premiers Jeux → Désinstaller. Le contenu de la famille (photos, voix, livres) n'est pas supprimé.</p>
+<p>Pour désinstaller : Paramètres Windows → Applications → Eyzi → Désinstaller. Le contenu de la famille (photos, voix, livres) n'est pas supprimé.</p>
 <h2 id="2-le-premier-dmarrage">2. Le premier démarrage</h2>
 <h3 id="la-licence">La licence</h3>
-<p>Au tout premier lancement, l'application demande un <strong>numéro de licence</strong> de la forme <code>MPJ-XXXX-XXXX-XXXX-XXXX</code>. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :</p>
+<p>Au tout premier lancement, l'application demande un <strong>numéro de licence</strong> de la forme <code>EYZ-XXXX-XXXX-XXXX-XXXX</code>. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :</p>
 <ul>
 <li>il autorise l'application sur cette tablette ;</li>
 <li>il regroupe vos tablettes en une <strong>famille</strong> : toutes les tablettes activées avec le même numéro partagent leurs photos, voix et livres ;</li>
@@ -165,11 +165,11 @@ a{color:var(--accent)}
 <hr>
 <h2 id="9-pour-l-diteur-donner-l-application-une-autre-famille">9. Pour l'éditeur : donner l'application à une autre famille</h2>
 <ol>
-<li><strong>Créer une licence</strong> dans le serveur (Supabase → SQL) : <code>select public.create_licence('Famille Martin', 'prod', 2);</code> — le nom, le canal (<code>test</code> ou <code>prod</code>), le nombre de tablettes, et une date de fin facultative en 4ᵉ paramètre. La fonction renvoie le numéro <code>MPJ-…</code> à transmettre.</li>
+<li><strong>Créer une licence</strong> dans le serveur (Supabase → SQL) : <code>select public.create_licence('Famille Martin', 'prod', 2);</code> — le nom, le canal (<code>test</code> ou <code>prod</code>), le nombre de tablettes, et une date de fin facultative en 4ᵉ paramètre. La fonction renvoie le numéro <code>EYZ-…</code> à transmettre.</li>
 <li><strong>Donner</strong> à la famille : le lien de téléchargement, le numéro de licence, ce guide. Elle choisit elle-même son mot de passe famille.</li>
 <li><strong>Publier une version</strong> : chaque poussée de code compile une version <em>test</em> (pré-version) sur GitHub. Pour la passer en <em>prod</em> : GitHub → Releases → Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ». Les tablettes prod la reçoivent au prochain démarrage.</li>
 <li><strong>Révoquer</strong> une licence : dans la table <code>licences</code>, passer <code>enabled</code> à <code>false</code> ; la tablette perd l'accès au plus tard 30 jours après (ou à sa prochaine vérification en ligne).</li>
-<li><strong>Désactiver une tablette</strong> (perdue, remplacée, prêtée) : <code>select public.disable_tablet('MPJ-…', 'NOM-DE-LA-TABLETTE');</code> (même fonction avec <code>true</code> en 3ᵉ paramètre pour la réactiver). La vue <code>tablettes</code> liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que <code>max_tablets</code> est refusée tant qu'une place n'est pas libérée.</li>
+<li><strong>Désactiver une tablette</strong> (perdue, remplacée, prêtée) : <code>select public.disable_tablet('EYZ-…', 'NOM-DE-LA-TABLETTE');</code> (même fonction avec <code>true</code> en 3ᵉ paramètre pour la réactiver). La vue <code>tablettes</code> liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que <code>max_tablets</code> est refusée tant qu'une place n'est pas libérée.</li>
 <li><strong>Voir ce qui est utilisé</strong>, par famille : la vue <code>usage_par_famille</code> (du plus utilisé au moins utilisé : minutes, ouvertures, réussites, jours), <code>usage_30_jours</code> (les 30 derniers jours) et <code>usage_resume</code> (une ligne par famille : minutes, jours, tablettes, dernière fois). Dans Supabase : Table Editor → choisir la vue, ou SQL : <code>select * from public.usage_30_jours where famille = 'Famille Martin';</code></li>
 </ol>
 <p>Les fichiers utiles : <code>desktop/docs/supabase.sql</code> (le serveur), <code>desktop/installer/MesPremiersJeux.iss</code> (l'installeur), <code>.github/workflows/build.yml</code> (la compilation automatique).</p>

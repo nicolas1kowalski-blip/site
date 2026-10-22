@@ -22,7 +22,7 @@ namespace MesPremiersJeux.Views
         public LicenceWindow(Settings settings)
         {
             _settings = settings;
-            Title = "Mes Premiers Jeux — Licence";
+            Title = "Eyzi — Licence";
             Width = 640;
             Height = 560;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -33,12 +33,12 @@ namespace MesPremiersJeux.Views
             var panel = new StackPanel { Margin = new Thickness(36, 28, 36, 20) };
             panel.Children.Add(new TextBlock
             {
-                Text = "🔑 Bienvenue dans Mes Premiers Jeux", FontSize = 26, FontWeight = FontWeights.ExtraBold,
+                Text = "🔑 Bienvenue dans Eyzi", FontSize = 26, FontWeight = FontWeights.ExtraBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x3B, 0x2A, 0x5A)),
             });
             panel.Children.Add(new TextBlock
             {
-                Text = "Entrez le numéro de licence qui vous a été donné. Il est de la forme MPJ-XXXX-XXXX-XXXX-XXXX. " +
+                Text = "Entrez le numéro de licence qui vous a été donné. Il est de la forme EYZ-XXXX-XXXX-XXXX-XXXX. " +
                        "Toutes les tablettes activées avec le même numéro forment une même famille.",
                 FontSize = 15, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 16),
                 Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0x4A, 0x7A)),

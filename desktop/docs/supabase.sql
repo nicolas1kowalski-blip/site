@@ -1,5 +1,5 @@
 -- ============================================================================
---  Mes Premiers Jeux — serveur de licences (Supabase)
+--  Eyzi — serveur de licences (Supabase)
 --  À coller UNE FOIS dans Supabase → SQL Editor → Run.
 --  Ensuite, les licences se gèrent dans Table Editor → licences :
 --    une ligne = une licence. Colonnes : key (le numéro à donner), family
@@ -35,15 +35,20 @@ create table if not exists public.activations (
 alter table public.licences    enable row level security;
 alter table public.activations enable row level security;
 
--- Génère un numéro de licence : MPJ-XXXX-XXXX-XXXX-XXXX (lettres/chiffres sans ambiguïté).
+-- Génère un numéro de licence : EYZ-XXXX-XXXX-XXXX-XXXX (lettres/chiffres sans ambiguïté).
 create or replace function public.new_licence_key() returns text language plpgsql as $$
 declare alphabet text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; s text := ''; i int;
 begin
   for i in 1..16 loop
     s := s || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
   end loop;
-  return 'MPJ-' || substr(s,1,4) || '-' || substr(s,5,4) || '-' || substr(s,9,4) || '-' || substr(s,13,4);
+  return 'EYZ-' || substr(s,1,4) || '-' || substr(s,5,4) || '-' || substr(s,9,4) || '-' || substr(s,13,4);
 end $$;
+
+-- Normalise un numéro tapé par la famille : majuscules, et l'ancien préfixe MPJ- devient EYZ-.
+create or replace function public.norm_key(p_key text) returns text language sql immutable as $$
+  select regexp_replace(upper(trim(p_key)), '^MPJ-', 'EYZ-');
+$$;
 
 -- Crée une licence et renvoie son numéro :  select public.create_licence('Famille Dupont', 'prod', 2);
 create or replace function public.create_licence(p_family text, p_channel text default 'prod', p_max int default 2, p_expires date default null)
@@ -106,7 +111,7 @@ create or replace function public.activate_licence(p_key text, p_machine text, p
 returns json language plpgsql security definer as $$
 declare lic public.licences%rowtype; n int;
 begin
-  select * into lic from public.licences where key = upper(trim(p_key));
+  select * into lic from public.licences where key = public.norm_key(p_key);
   if not found then
     return json_build_object('ok', false, 'message', 'Numéro de licence inconnu.');
   end if;
@@ -147,7 +152,7 @@ create or replace function public.activate_licence(p_key text, p_machine text, p
 returns json language plpgsql security definer as $$
 declare lic public.licences%rowtype; act public.activations%rowtype; n int;
 begin
-  select * into lic from public.licences where key = upper(trim(p_key));
+  select * into lic from public.licences where key = public.norm_key(p_key);
   if not found then
     return json_build_object('ok', false, 'message', 'Numéro de licence inconnu.');
   end if;
@@ -183,7 +188,7 @@ create or replace function public.release_activation(p_key text, p_machine text)
 returns json language plpgsql security definer as $$
 declare n int;
 begin
-  delete from public.activations where licence_key = upper(trim(p_key)) and machine = p_machine;
+  delete from public.activations where licence_key = public.norm_key(p_key) and machine = p_machine;
   get diagnostics n = row_count;
   if n = 0 then return json_build_object('ok', false, 'message', 'Cette tablette n''était pas enregistrée.'); end if;
   return json_build_object('ok', true, 'message', 'Tablette libérée.');
@@ -191,15 +196,15 @@ end $$;
 grant execute on function public.release_activation(text, text) to anon, authenticated;
 
 -- L'ÉDITEUR désactive (ou réactive) une tablette à distance :
---   select public.disable_tablet('MPJ-XXXX-XXXX-XXXX-XXXX', 'NOM-DE-LA-TABLETTE');
---   select public.disable_tablet('MPJ-XXXX-XXXX-XXXX-XXXX', 'NOM-DE-LA-TABLETTE', true);  -- réactiver
+--   select public.disable_tablet('EYZ-XXXX-XXXX-XXXX-XXXX', 'NOM-DE-LA-TABLETTE');
+--   select public.disable_tablet('EYZ-XXXX-XXXX-XXXX-XXXX', 'NOM-DE-LA-TABLETTE', true);  -- réactiver
 -- La tablette perd l'accès à sa prochaine vérification (au plus 30 jours hors ligne).
 create or replace function public.disable_tablet(p_key text, p_machine text, p_enabled boolean default false)
 returns text language plpgsql security definer as $$
 declare n int;
 begin
   update public.activations set enabled = p_enabled, disabled_at = case when p_enabled then null else now() end
-   where licence_key = upper(trim(p_key)) and machine = p_machine;
+   where licence_key = public.norm_key(p_key) and machine = p_machine;
   get diagnostics n = row_count;
   return case when n = 0 then 'tablette inconnue' when p_enabled then 'réactivée' else 'désactivée' end;
 end $$;
@@ -239,7 +244,7 @@ create or replace function public.report_usage(p_key text, p_machine text, p_row
 returns json language plpgsql security definer as $$
 declare lic public.licences%rowtype; act public.activations%rowtype; r json; n int := 0;
 begin
-  select * into lic from public.licences where key = upper(trim(p_key));
+  select * into lic from public.licences where key = public.norm_key(p_key);
   if not found or not lic.enabled then return json_build_object('ok', false, 'message', 'licence inconnue ou désactivée'); end if;
   select * into act from public.activations where licence_key = lic.key and machine = p_machine;
   if not found or not act.enabled then return json_build_object('ok', false, 'message', 'tablette non activée'); end if;

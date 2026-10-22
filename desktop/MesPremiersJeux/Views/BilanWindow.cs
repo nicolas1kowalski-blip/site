@@ -237,7 +237,7 @@ namespace MesPremiersJeux.Views
                 double k = Math.Min(1, Math.Min(sx, sy));
                 root.LayoutTransform = new ScaleTransform(k, k);
                 root.UpdateLayout();
-                pd.PrintVisual(root, "Bilan Mes Premiers Jeux");
+                pd.PrintVisual(root, "Bilan Eyzi");
             }
             catch (Exception ex) { MessageBox.Show("Impression impossible : " + ex.Message, "Bilan"); }
             finally

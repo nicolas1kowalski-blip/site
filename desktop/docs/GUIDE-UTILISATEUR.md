@@ -1,4 +1,4 @@
-# Mes Premiers Jeux — Guide utilisateur
+# Eyzi — Guide utilisateur
 
 *Une application Windows pour jouer, parler et apprendre avec les yeux, pour les enfants de 4 à 7 ans. Elle se pilote à la commande oculaire (Tobii), au doigt ou à la souris.*
 
@@ -14,17 +14,17 @@ Ce guide s'adresse aux parents et aux accompagnants. La première partie expliqu
 - Une connexion internet pour l'installation et les mises à jour (ensuite l'application marche hors ligne).
 
 ### Les étapes
-1. Téléchargez **MesPremiersJeux-Setup.exe** depuis la page « Application » du site (ou la page des versions sur GitHub).
+1. Téléchargez **Eyzi-Setup.exe** depuis la page « Application » du site (ou la page des versions sur GitHub).
 2. Ouvrez le fichier. Windows peut afficher un écran bleu « Windows a protégé votre ordinateur » : cliquez sur **Informations complémentaires**, puis **Exécuter quand même**. C'est normal pour une application qui n'est pas encore signée par un certificat payant.
 3. L'installeur est en français et ne demande **aucun droit administrateur** : il installe l'application dans le profil de l'utilisateur. Cochez « Lancer au démarrage de Windows » si la tablette est dédiée à l'enfant.
-4. À la fin, l'application se lance toute seule. Un raccourci « Mes Premiers Jeux » est sur le bureau et dans le menu Démarrer.
+4. À la fin, l'application se lance toute seule. Un raccourci « Eyzi » est sur le bureau et dans le menu Démarrer.
 
-Pour désinstaller : Paramètres Windows → Applications → Mes Premiers Jeux → Désinstaller. Le contenu de la famille (photos, voix, livres) n'est pas supprimé.
+Pour désinstaller : Paramètres Windows → Applications → Eyzi → Désinstaller. Le contenu de la famille (photos, voix, livres) n'est pas supprimé.
 
 ## 2. Le premier démarrage
 
 ### La licence
-Au tout premier lancement, l'application demande un **numéro de licence** de la forme `MPJ-XXXX-XXXX-XXXX-XXXX`. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :
+Au tout premier lancement, l'application demande un **numéro de licence** de la forme `EYZ-XXXX-XXXX-XXXX-XXXX`. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :
 
 - il autorise l'application sur cette tablette ;
 - il regroupe vos tablettes en une **famille** : toutes les tablettes activées avec le même numéro partagent leurs photos, voix et livres ;
@@ -146,11 +146,11 @@ Le canal est porté par la licence. **↩ Version précédente** réinstalle la 
 ## 9. Pour l'éditeur : donner l'application à une autre famille
 
 1. **Créer une licence** dans le serveur (Supabase → SQL) :
-   `select public.create_licence('Famille Martin', 'prod', 2);` — le nom, le canal (`test` ou `prod`), le nombre de tablettes, et une date de fin facultative en 4ᵉ paramètre. La fonction renvoie le numéro `MPJ-…` à transmettre.
+   `select public.create_licence('Famille Martin', 'prod', 2);` — le nom, le canal (`test` ou `prod`), le nombre de tablettes, et une date de fin facultative en 4ᵉ paramètre. La fonction renvoie le numéro `EYZ-…` à transmettre.
 2. **Donner** à la famille : le lien de téléchargement, le numéro de licence, ce guide. Elle choisit elle-même son mot de passe famille.
 3. **Publier une version** : chaque poussée de code compile une version *test* (pré-version) sur GitHub. Pour la passer en *prod* : GitHub → Releases → Edit → décocher « Set as a pre-release » → cocher « Set as the latest release ». Les tablettes prod la reçoivent au prochain démarrage.
 4. **Révoquer** une licence : dans la table `licences`, passer `enabled` à `false` ; la tablette perd l'accès au plus tard 30 jours après (ou à sa prochaine vérification en ligne).
-5. **Désactiver une tablette** (perdue, remplacée, prêtée) : `select public.disable_tablet('MPJ-…', 'NOM-DE-LA-TABLETTE');` (même fonction avec `true` en 3ᵉ paramètre pour la réactiver). La vue `tablettes` liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que `max_tablets` est refusée tant qu'une place n'est pas libérée.
+5. **Désactiver une tablette** (perdue, remplacée, prêtée) : `select public.disable_tablet('EYZ-…', 'NOM-DE-LA-TABLETTE');` (même fonction avec `true` en 3ᵉ paramètre pour la réactiver). La vue `tablettes` liste toutes les tablettes par famille, avec leur version et leur dernière connexion. La limite est stricte : une tablette de plus que `max_tablets` est refusée tant qu'une place n'est pas libérée.
 6. **Voir ce qui est utilisé**, par famille : la vue `usage_par_famille` (du plus utilisé au moins utilisé : minutes, ouvertures, réussites, jours), `usage_30_jours` (les 30 derniers jours) et `usage_resume` (une ligne par famille : minutes, jours, tablettes, dernière fois). Dans Supabase : Table Editor → choisir la vue, ou SQL : `select * from public.usage_30_jours where famille = 'Famille Martin';`
 
 Les fichiers utiles : `desktop/docs/supabase.sql` (le serveur), `desktop/installer/MesPremiersJeux.iss` (l'installeur), `.github/workflows/build.yml` (la compilation automatique).

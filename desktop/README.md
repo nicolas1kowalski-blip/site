@@ -1,4 +1,4 @@
-# Mes Premiers Jeux — version bureau (C# / WPF + Tobii)
+# Eyzi (ex-« Mes Premiers Jeux ») — version bureau (C# / WPF + Tobii)
 
 Version **native Windows** de l'application, pilotée à la **commande oculaire**
 via le **SDK grand public Tobii** (`Tobii.Interaction`, dit *Tobii Core / EyeX*),
@@ -167,13 +167,13 @@ Le calibrage se fait **au niveau de l'appareil / du runtime**, pas dans l'appli 
    Générer la solution** (Ctrl+Maj+B).
 2. Le résultat se trouve dans :
    `desktop/MesPremiersJeux/bin/x64/Release/net472/`
-3. Ce dossier est **autonome** : il contient `MesPremiersJeux.exe` **et** les DLL
+3. Ce dossier est **autonome** : il contient `Eyzi.exe` **et** les DLL
    Tobii. **Copie le dossier entier** sur la TD I-13 (clé USB, OneDrive…).
-4. Sur la I-13, double-clique **`MesPremiersJeux.exe`**. Aucune installation
+4. Sur la I-13, double-clique **`Eyzi.exe`**. Aucune installation
    requise : .NET Framework 4.8 est déjà présent sur Windows 10/11.
 
 > Astuce : pour un lancement facile par l'enfant, crée un **raccourci** de
-> `MesPremiersJeux.exe` sur le Bureau, et utilise le bouton **⛶ Plein écran**.
+> `Eyzi.exe` sur le Bureau, et utilise le bouton **⛶ Plein écran**.
 
 ## Prochaines étapes prévues
 
