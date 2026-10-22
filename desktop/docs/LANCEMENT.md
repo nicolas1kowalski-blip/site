@@ -4,8 +4,8 @@
 
 ## A. Mettre le code en ligne (10 min)
 
-1. **Fusionner la branche** `claude/git-integration-setup-c0yhos` dans `main` : GitHub → Pull requests → New pull request → base `main`, compare la branche → Create → Merge. (Je peux ouvrir la pull request à ta place.)
-2. Vercel déploie `main` tout seul. Vérifier dans Vercel → Deployments que le dernier est « Ready ».
+1. **Fusionner la pull request n° 24** (GitHub → Pull requests → « Eyzi : application native… » → Merge pull request). La branche par défaut du dépôt, celle que Vercel déploie, s'appelle `claude/create-sync-file-fziau` ; il n'y a pas de branche `main`.
+2. Vercel déploie la branche par défaut tout seul. Vérifier dans Vercel → Deployments que le dernier est « Ready ».
 
 ## B. Le domaine eyzi.fr (10 min, puis attendre jusqu'à 1 h)
 
