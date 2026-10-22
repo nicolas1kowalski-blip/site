@@ -27,7 +27,9 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          $v = (Get-Date -Format "yyyy.M.d") + "." + $env:GITHUB_RUN_NUMBER
+          # Le dernier chiffre = numéro de compilation + 80, pour rester au-dessus des versions
+          # publiées le même jour par l'ancien dépôt (les tablettes ne descendent jamais de version).
+          $v = (Get-Date -Format "yyyy.M.d") + "." + ([int]$env:GITHUB_RUN_NUMBER + 80)
           "version=$v" >> $env:GITHUB_OUTPUT
           Write-Host "Version $v"
 

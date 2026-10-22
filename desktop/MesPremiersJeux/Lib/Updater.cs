@@ -55,12 +55,15 @@ namespace MesPremiersJeux.Lib
             public bool IsNewer => Version > Current;
         }
 
-        /// <summary>La version la plus récente du canal (ou null si aucune / hors ligne).</summary>
+        /// <summary>La version la plus récente du canal (ou null si aucune / hors ligne).
+        /// On regarde TOUTES les versions publiées et on garde le numéro le plus haut :
+        /// l'ordre renvoyé par GitHub n'est pas fiable (versions du même jour).</summary>
         public static async Task<Info> CheckAsync(bool testChannel)
         {
-            var json = await Http.GetStringAsync("https://api.github.com/repos/" + Repo + "/releases?per_page=20");
+            var json = await Http.GetStringAsync("https://api.github.com/repos/" + Repo + "/releases?per_page=50");
             // Découpage grossier des releases : chaque objet commence par "url":"…/releases/<id>".
             var releases = Regex.Split(json, "(?=\\{\\s*\"url\"\\s*:\\s*\"https://api\\.github\\.com/repos/[^\"]+/releases/\\d+\")");
+            Info best = null;
             foreach (var r in releases)
             {
                 if (string.IsNullOrWhiteSpace(r) || !r.Contains("\"tag_name\"")) continue;
@@ -72,7 +75,8 @@ namespace MesPremiersJeux.Lib
                 var setup = Regex.Match(r, "\"browser_download_url\"\\s*:\\s*\"([^\"]*Eyzi-Setup-[^\"]*\\.exe)\"");
                 if (!setup.Success) continue;
                 var sha = Regex.Match(r, "\"browser_download_url\"\\s*:\\s*\"([^\"]*Eyzi-Setup-[^\"]*\\.exe\\.sha256)\"");
-                return new Info
+                if (best != null && v <= best.Version) continue;
+                best = new Info
                 {
                     Version = v, Tag = tag, Prerelease = pre,
                     Title = Cloud.JsonGet(r, "name") ?? tag,
@@ -81,7 +85,7 @@ namespace MesPremiersJeux.Lib
                     ShaUrl = sha.Success ? sha.Groups[1].Value : null,
                 };
             }
-            return null;
+            return best;
         }
 
         /// <summary>Télécharge l'installeur, vérifie l'empreinte, l'installe en silence et relance l'application.
