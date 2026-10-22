@@ -2,6 +2,8 @@
 
 *Une application Windows pour jouer, parler et apprendre avec les yeux, pour les enfants de 4 à 7 ans. Elle se pilote à la commande oculaire (Tobii), au doigt ou à la souris.*
 
+*Eyzi est en **version bêta** : elle marche, elle est utilisée tous les jours, et elle s'améliore avec les retours. Pendant la bêta, la licence est **gratuite**. Vos remarques : **eyzi.fr/retours.html**.*
+
 Ce guide s'adresse aux parents et aux accompagnants. La première partie explique l'installation et le premier démarrage, la deuxième ce que l'enfant voit, la troisième les réglages, la dernière ce qu'il faut savoir pour donner l'application à une autre famille.
 
 ---
@@ -24,7 +26,7 @@ Pour désinstaller : Paramètres Windows → Applications → Eyzi → Désinsta
 ## 2. Le premier démarrage
 
 ### L'essai de 10 jours
-Au tout premier lancement, vous pouvez choisir **« Essayer 10 jours sans licence »** : toutes les fonctions sont ouvertes pendant dix jours sur cette tablette. Les réglages affichent les jours restants. À la fin, l'application redemande un numéro de licence, que vous demandez sur **eyzi.fr/licence.html** (réponse sous 48 heures en général). Pendant l'essai, le contenu reste sur la tablette : le nuage entre tablettes et les tableaux d'usage demandent une licence.
+Au tout premier lancement, vous pouvez choisir **« Essayer 10 jours sans licence »** : toutes les fonctions sont ouvertes pendant dix jours sur cette tablette. Les réglages affichent les jours restants. À la fin, l'application redemande un numéro de licence, que vous demandez sur **eyzi.fr/licence.html** (gratuite pendant la bêta ; réponse sous 48 heures en général). Pendant l'essai, le contenu reste sur la tablette : le nuage entre tablettes et les tableaux d'usage demandent une licence.
 
 ### La licence
 L'application demande un **numéro de licence** de la forme `EYZ-XXXX-XXXX-XXXX-XXXX`. C'est le numéro que l'éditeur vous a donné. Il sert à trois choses :

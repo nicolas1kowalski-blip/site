@@ -300,7 +300,7 @@ create or replace view public.usage_resume as
 revoke all on public.usage_resume from public, anon;
 
 -- ============================================================================
---  DEMANDES DE LICENCE (formulaire eyzi.fr/licence.html → api/licence-request.js).
+--  DEMANDES DE LICENCE ET RETOURS (eyzi.fr/licence.html et retours.html → api/licence-request.js).
 --  Écrites par le serveur du site (clé service_role) ; jamais lisibles par
 --  l'application ni par le navigateur. À traiter dans Table Editor :
 --  créer la licence (create_licence), envoyer le numéro, passer status à 'done'.
@@ -308,8 +308,9 @@ revoke all on public.usage_resume from public, anon;
 create table if not exists public.licence_requests (
   id          bigint generated always as identity primary key,
   created_at  timestamptz not null default now(),
+  topic       text not null default 'licence' check (topic in ('licence', 'retour')),
   name        text not null,
-  email       text not null,
+  email       text not null default '',
   kind        text not null default 'famille' check (kind in ('famille', 'etablissement', 'professionnel')),
   org         text,
   child       text,

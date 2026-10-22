@@ -106,8 +106,8 @@ namespace MesPremiersJeux.Lib
             if (s == null || string.IsNullOrWhiteSpace(s.LicenceKey) || !s.LicenceOk)
             {
                 int left = TrialDaysLeft(s);
-                if (left > 0) return "essai gratuit · " + left + (left > 1 ? " jours restants" : " jour restant") + " · demandez une licence sur eyzi.fr";
-                if (left == 0) return "essai terminé · demandez une licence sur eyzi.fr";
+                if (left > 0) return "essai · " + left + (left > 1 ? " jours restants" : " jour restant") + " · licence gratuite sur eyzi.fr";
+                if (left == 0) return "essai terminé · licence gratuite sur eyzi.fr";
                 return "aucune licence";
             }
             var sb = new StringBuilder();

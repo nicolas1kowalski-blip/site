@@ -850,7 +850,7 @@ namespace MesPremiersJeux
             try
             {
                 LicenceText.Text = "Licence : " + Licence.Describe(_settings);
-                VersionText.Text = "Version " + Updater.Current + (Updater.IsDevBuild ? " (compilée à la main : pas de mise à jour automatique)" : " · canal " + (Licence.IsTest(_settings) ? "TEST" : "prod"));
+                VersionText.Text = "Eyzi bêta · version " + Updater.Current + (Updater.IsDevBuild ? " (compilée à la main : pas de mise à jour automatique)" : " · canal " + (Licence.IsTest(_settings) ? "TEST" : "prod"));
             }
             catch { }
         }

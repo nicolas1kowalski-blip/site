@@ -1,4 +1,4 @@
-// Demande de licence Eyzi (formulaire de eyzi.fr/licence.html).
+// Demande de licence (eyzi.fr/licence.html) ou retour d'utilisateur (eyzi.fr/retours.html).
 // Enregistre la demande dans la table Supabase "licence_requests" avec la clé
 // service_role (côté serveur uniquement). L'éditeur lit les demandes dans
 // Supabase → Table Editor → licence_requests, puis crée la licence avec
@@ -24,6 +24,7 @@ export default async function handler(req, res) {
   // Piège à robots : le champ "site" est caché ; un humain le laisse vide.
   if (clean(body.site, 50)) { res.status(200).json({ ok: true }); return; }
 
+  const topic = body.topic === 'retour' ? 'retour' : 'licence';
   const name = clean(body.name, MAX.name);
   const email = clean(body.email, MAX.email);
   const kind = ['famille', 'etablissement', 'professionnel'].includes(body.kind) ? body.kind : 'famille';
@@ -31,8 +32,13 @@ export default async function handler(req, res) {
   const child = clean(body.child, MAX.child);
   const tablets = Math.min(50, Math.max(1, parseInt(body.tablets, 10) || 1));
   const message = clean(body.message, MAX.message);
-  if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (topic === 'licence' && (name.length < 2 || !emailOk)) {
     res.status(400).json({ ok: false, message: 'Il manque un nom ou une adresse e-mail valide.' });
+    return;
+  }
+  if (topic === 'retour' && (message.length < 5 || (email && !emailOk))) {
+    res.status(400).json({ ok: false, message: 'Écrivez votre retour (et une adresse e-mail valide, si vous en donnez une).' });
     return;
   }
 
@@ -44,7 +50,7 @@ export default async function handler(req, res) {
   }
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const { error } = await supabase.from('licence_requests').insert({
-    name, email, kind, org, child, tablets, message,
+    topic, name: name || '(anonyme)', email: email || '', kind, org, child, tablets, message,
     user_agent: clean(req.headers['user-agent'], 300),
   });
   if (error) {
