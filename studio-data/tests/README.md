@@ -5,7 +5,8 @@ CDN : les bibliothèques externes sont neutralisées pendant les tests et Tailwi
 
 ## Prérequis
 
-- Node 22+ ; Playwright et Chromium (chemins par défaut de l'environnement de développement, surchargeables :
+- Node **22.23.4+** (ou 24.22.1+, ou 26.12.1+ — seuils de l'avis Node2Shell d'octobre 2026,
+  voir `SECURITY.md`) ; Playwright et Chromium (chemins par défaut de l'environnement de développement, surchargeables :
   `PLAYWRIGHT_INDEX`, `CHROMIUM`).
 - Facultatif, pour exécuter réellement le SQL généré (suite `v12111_extract_fix`) : `npm i --no-save @duckdb/node-api`
   dans ce dossier, ou `DUCKDB_NODE_API=<chemin>`. Sans lui, ces vérifications sont ignorées avec un message.

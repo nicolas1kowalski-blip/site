@@ -58,6 +58,41 @@ après « réinitialisation », qui ne vidait qu'IndexedDB.
   multi-utilisateurs ; les exports (CSV/bundles) sortent des données brutes (enjeu DLP à
   encadrer par l'usage). La réponse « multi-utilisateurs » serait une version serveur/bureau.
 
+## Node.js et Brotli : ce que l'application contient, et ce qu'elle ne contient pas
+
+Question posée par les équipes sécurité dès qu'un avis vise une version de **Node.js** ou la
+bibliothèque **Brotli** (par exemple « Node2Shell », CVSS 9.2, 23 octobre 2026). Réponse
+vérifiable, point par point.
+
+**L'application livrée ne contient ni Node.js, ni la bibliothèque Brotli.**
+
+- `StudioData.html` et `StudioDataV13-hors-ligne.html` sont des fichiers **HTML exécutés par le
+  navigateur**. Aucun moteur Node.js n'y est embarqué, aucun processus serveur n'est démarré,
+  aucun port n'est ouvert.
+- La compression des ressources embarquées dans la version hors ligne utilise **gzip** —
+  `zlib.gzipSync` à la construction, `DecompressionStream('gzip')` dans le navigateur. **Pas
+  Brotli.**
+- Le moteur **DuckDB-WASM** embarqué ne contient **aucun symbole de la bibliothèque Brotli**
+  (`BrotliDecoderDecompress`, `BROTLI_*`, `libbrotli`). Le mot « brotli » n'y figure qu'une fois,
+  comme **nom** de codec Parquet reconnu, à côté de « snappy », « gzip » et « zstd ».
+- Les chaînes `node_modules` que l'on peut trouver en cherchant dans le fichier hors ligne sont
+  les **scripts npm du paquet duckdb-wasm**, recopiés comme texte inerte dans son bundle : rien
+  n'est exécuté.
+
+Comment le revérifier soi-même, sur le fichier livré :
+
+```bash
+grep -c -i brotli StudioDataV13-hors-ligne.html          # 0
+strings -a hors-ligne/ressources/duckdb-moteur.wasm | grep -i -E "BrotliDecoder|BROTLI_|libbrotli"   # aucune
+```
+
+**Node.js ne sert qu'à CONSTRUIRE l'application** (`build.mjs`, les formateurs,
+`tools/hors-ligne.mjs`) et à lancer les tests. Il tourne sur le poste de développement — jamais
+chez l'utilisateur, jamais en production. Le poste qui construit doit donc utiliser une version
+non vulnérable : au minimum **22.23.4**, **24.22.1** ou **26.12.1** selon la branche (seuils de
+l'avis d'octobre 2026). Une version antérieure ne change rien au fichier produit, mais expose le
+poste de construction.
+
 ## Recommandations de déploiement en entreprise
 
 1. Postes avec chiffrement disque (BitLocker/FileVault) — standard.

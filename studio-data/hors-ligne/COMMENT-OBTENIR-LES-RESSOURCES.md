@@ -18,7 +18,10 @@ donc les reconstituer **une fois**, sur une machine connectée à internet.
 
 ## Ce qu'il faut avoir
 
-**Node.js, version 22 ou plus.** C'est tout. Rien d'autre à installer.
+**Node.js, version 22.23.4 ou plus** (ou 24.22.1+, ou 26.12.1+). C'est tout. Rien d'autre à
+installer. Ces seuils ne sont pas arbitraires : les versions antérieures sont visées par l'avis
+de sécurité Node2Shell d'octobre 2026. Node ne sert qu'ici, pour préparer les ressources —
+l'application elle-même n'en contient pas (voir `SECURITY.md`).
 
 - Windows : <https://nodejs.org> → le bouton « LTS » → installer → **fermer la fenêtre de
   commandes et en ouvrir une nouvelle**. Une fenêtre ouverte avant l'installation ne
