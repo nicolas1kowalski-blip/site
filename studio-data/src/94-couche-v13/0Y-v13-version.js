@@ -1,7 +1,21 @@
         // ======================= V13 : VERSION ET JOURNAL DE LA COUCHE « GOUVERNANCE SIMPLE » =======================
         // Assemblé uniquement dans StudioDataV13.html (manifest-v13.json), après la couche V12 dont il hérite.
-        const V13_VERSION = '13.59.0';
+        const V13_VERSION = '13.60.0';
         const V13_CHANGELOG = [
+            {
+                v: '13.60.0',
+                d: '2026-10-27',
+                t: 'Comparer : une clé n’est pas une ligne — 962 410 « clés » pour deux fichiers de 80 000 lignes',
+                items: [
+                    'Deux fichiers de 80 000 lignes comparés sur une clé annonçaient <b>962 410 clés évaluées</b>. Le chiffre était impossible, et pourtant la tuile disait bien « union des deux fichiers ». En réalité la comparaison <b>appariait des LIGNES</b>, pas des clés : un code contrat présent 5 fois dans le fichier des tâches et 3 fois dans celui des relations produisait <b>5 × 3 = 15 lignes</b> pour cette seule clé. Les quatre tuiles comptaient ces appariements, et le rapport CSV les contenait tous.',
+                    'En mode <b>« écarts de clé »</b> — celui où aucune valeur n’est à contrôler — chaque fichier est désormais <b>regroupé par clé avant la jointure</b>. Une clé ne peut plus produire qu’<b>une seule ligne</b>, quel que soit le nombre de fois qu’elle figure dans les fichiers. « Clés évaluées » est enfin l’union des clés distinctes, et le rapport en compte autant de lignes — au lieu de huit fois plus.',
+                    'Ce que le regroupement aurait fait perdre, le rapport le rend : deux colonnes <b>OCCURRENCES_FICHIER_A</b> et <b>OCCURRENCES_FICHIER_B</b> disent combien de fois la clé figure de chaque côté. C’est souvent l’information que l’on cherchait sans savoir la demander.',
+                    'Le résumé <b>écrit désormais en clair ce que contient chaque fichier</b> : « CID_taches.csv : 80 000 ligne(s) · 65 849 clé(s) distincte(s) · dont 9 212 présente(s) plusieurs fois (jusqu’à 12 fois) ». Les lignes écartées faute de clé y sont comptées aussi. Plus aucun chiffre du résumé ne reste inexpliqué.',
+                    'Nouveau bouton <b>« 🔎 Vérifier la clé »</b> à côté de la clé d’identification : il donne ces mêmes chiffres <b>avant</b> de lancer une comparaison qui peut durer, et dit si la clé désigne bien une seule ligne de chaque côté. La mesure s’efface dès qu’on change la clé ou les réglages, pour qu’on ne lise jamais un chiffre périmé.',
+                    'En mode <b>comparaison de valeurs</b>, l’appariement ligne à ligne reste nécessaire — il faut bien lire les valeurs des deux côtés. Mais la multiplication n’est plus silencieuse : le résumé prévient que la clé n’est pas unique, dit <b>jusqu’à combien de lignes une seule clé peut produire</b>, et conseille d’ajouter une colonne à la clé. La tuile « Total évalué », qui comptait les lignes du fichier A pendant que les trois autres comptaient des appariements, devient <b>« Lignes du rapport »</b> : la somme des quatre tuiles retombe juste.',
+                    'Le nombre de lignes de chaque fichier reste affiché, dans la phrase qui le décrit. Rien n’est perdu, tout est nommé.'
+                ]
+            },
             {
                 v: '13.59.0',
                 d: '2026-10-18',

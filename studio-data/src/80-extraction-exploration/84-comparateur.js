@@ -34,7 +34,15 @@
         function compKeyParts() {
             return (compState.keys || []).filter(k => k.colA && k.colB);
         }
+        // Une mesure affichée ne vaut que pour la clé et les réglages qui l'ont produite : dès que l'un
+        // d'eux change, on efface plutôt que de laisser lire un chiffre périmé.
+        function comparisonOublierLaVerification() {
+            const zone = el('compKeyCheck');
+            if (zone) zone.innerHTML = '';
+        }
+
         function renderCompKeys() {
+            comparisonOublierLaVerification();
             const area = el('compKeysArea');
             if (!area) return;
             const tA = state.tables[el('compTableA').value],
@@ -131,6 +139,167 @@
             return forKey ? `NULLIF(${expr}, '')` : `COALESCE(${expr}, '')`;
         }
 
+        // Clé composite : les parties normalisées sont concaténées avec un séparateur qui ne peut pas
+        // figurer dans une donnée (chr(31), séparateur d'unité). Si UNE partie est vide, la clé entière
+        // est nulle et la ligne est écartée — comme pour une clé simple.
+        function comparisonCleCompositeSql(keyParts, side, ignoreSpace, ignoreCase) {
+            const parties = keyParts.map(couple =>
+                comparisonNormExpr('', side === 'A' ? couple.colA : couple.colB, ignoreSpace, ignoreCase, true)
+            );
+            if (parties.length === 1) return parties[0];
+            const auMoinsUneVide = parties.map(partie => `${partie} IS NULL`).join(' OR ');
+            return `CASE WHEN ${auMoinsUneVide} THEN NULL ELSE ${parties.join(' || chr(31) || ')} END`;
+        }
+
+        // ================= UNE CLÉ N'EST PAS UNE LIGNE =================
+        // Deux fichiers de 80 000 lignes peuvent produire un rapport de 962 410 lignes, et ce n'est pas
+        // un bug du comptage : c'est la jointure. Une clé présente 5 fois d'un côté et 3 fois de l'autre
+        // produit 5 × 3 = 15 appariements. Tant qu'on ne mesure pas la répétition des clés, ce chiffre
+        // reste inexplicable. On la mesure donc, toujours, et on l'écrit en clair.
+
+        // Pour un fichier et une expression de clé : combien de lignes au total, combien portent une clé,
+        // combien de clés DISTINCTES, combien de ces clés reviennent plusieurs fois, et jusqu'à combien
+        // de fois. Un seul passage sur la donnée.
+        function comparisonMesureDesClesSql(nomDeLaTableDuckDb, expressionDeLaCle) {
+            return `
+                WITH cles AS (SELECT ${expressionDeLaCle} AS cle FROM ${nomDeLaTableDuckDb}),
+                     regroupees AS (SELECT cle, COUNT(*) AS occurrences FROM cles WHERE cle IS NOT NULL GROUP BY 1)
+                SELECT
+                    (SELECT COUNT(*) FROM cles)::BIGINT AS lignes_du_fichier,
+                    (SELECT COALESCE(SUM(occurrences), 0) FROM regroupees)::BIGINT AS lignes_avec_une_cle,
+                    (SELECT COUNT(*) FROM regroupees)::BIGINT AS cles_distinctes,
+                    (SELECT COALESCE(SUM(CASE WHEN occurrences > 1 THEN 1 ELSE 0 END), 0) FROM regroupees)::BIGINT AS cles_repetees,
+                    (SELECT COALESCE(MAX(occurrences), 0) FROM regroupees)::BIGINT AS occurrences_maximum
+            `;
+        }
+
+        // Les mêmes chiffres, lus dans le résultat du moteur et nommés en clair.
+        async function comparisonMesurerLesCles(connexion, nomDeLaTableDuckDb, expressionDeLaCle) {
+            const resultat = await connexion.query(comparisonMesureDesClesSql(nomDeLaTableDuckDb, expressionDeLaCle));
+            const ligne = arrowResultToObjects(resultat)[0] || {};
+            return {
+                lignesDuFichier: Number(ligne.lignes_du_fichier || 0),
+                lignesAvecUneCle: Number(ligne.lignes_avec_une_cle || 0),
+                clesDistinctes: Number(ligne.cles_distinctes || 0),
+                clesRepetees: Number(ligne.cles_repetees || 0),
+                occurrencesMaximum: Number(ligne.occurrences_maximum || 0)
+            };
+        }
+
+        // Une clé est unique quand aucune de ses valeurs ne revient deux fois. C'est la condition pour
+        // comparer des VALEURS ligne à ligne : sans elle, on ne sait pas quelle ligne comparer à quelle
+        // autre.
+        function comparisonCleEstUnique(mesure) {
+            return !!mesure && mesure.clesRepetees === 0;
+        }
+
+        // « CID_taches.csv : 80 000 lignes · 65 849 clés distinctes · dont 9 212 présentes plusieurs fois
+        //   (jusqu'à 12 fois) »
+        function comparisonPhraseDUnFichier(nomDuFichier, mesure) {
+            const enClair = valeur => Number(valeur || 0).toLocaleString('fr-FR');
+            const morceaux = [`<strong>${escapeHTML(nomDuFichier)}</strong> : ${enClair(mesure.lignesDuFichier)} ligne(s)`];
+            const sansCle = mesure.lignesDuFichier - mesure.lignesAvecUneCle;
+            if (sansCle > 0) morceaux.push(`${enClair(sansCle)} écartée(s), clé vide`);
+            morceaux.push(`${enClair(mesure.clesDistinctes)} clé(s) distincte(s)`);
+            if (mesure.clesRepetees > 0)
+                morceaux.push(
+                    `dont ${enClair(mesure.clesRepetees)} présente(s) plusieurs fois (jusqu'à ${enClair(mesure.occurrencesMaximum)} fois)`
+                );
+            return morceaux.join(' · ');
+        }
+
+        // Le verdict : la clé désigne-t-elle UNE ligne de chaque côté ? Sinon, on dit combien de lignes
+        // une seule clé peut produire en se faisant apparier, pour que le total du rapport ne soit jamais
+        // une surprise.
+        function comparisonVerdictDesClesHtml(mesureA, mesureB) {
+            if (comparisonCleEstUnique(mesureA) && comparisonCleEstUnique(mesureB))
+                return '<div class="text-xs text-emerald-700 font-bold">✔ Clé unique des deux côtés : une clé désigne bien une seule ligne de chaque fichier.</div>';
+            const cotes = [];
+            if (!comparisonCleEstUnique(mesureA)) cotes.push(`jusqu'à ${mesureA.occurrencesMaximum} fois dans A`);
+            if (!comparisonCleEstUnique(mesureB)) cotes.push(`jusqu'à ${mesureB.occurrencesMaximum} fois dans B`);
+            const appariements = Math.max(1, mesureA.occurrencesMaximum) * Math.max(1, mesureB.occurrencesMaximum);
+            return `<div class="text-xs text-amber-700 font-bold">⚠ La clé n'est pas unique : une même clé revient ${cotes.join(' et ')}.</div>
+                    <div class="text-[11px] text-amber-700">Comparer des <strong>valeurs</strong> apparie chaque ligne de A avec chaque ligne de B portant la même clé : une seule clé peut produire jusqu'à ${Number(appariements).toLocaleString('fr-FR')} ligne(s) de rapport. Ajoutez une colonne à la clé jusqu'à ce qu'elle soit unique. Pour les <strong>écarts de clé</strong>, en revanche, rien à craindre : chaque clé n'est comptée qu'une fois.</div>`;
+        }
+
+        // Le bilan complet, partagé par le bouton de vérification et par le résumé de fin.
+        function comparisonBilanDesClesHtml(nomDuFichierA, nomDuFichierB, mesureA, mesureB) {
+            return `<div class="text-left space-y-1">
+                        <div class="text-xs text-slate-600">${comparisonPhraseDUnFichier(nomDuFichierA, mesureA)}</div>
+                        <div class="text-xs text-slate-600">${comparisonPhraseDUnFichier(nomDuFichierB, mesureB)}</div>
+                        ${comparisonVerdictDesClesHtml(mesureA, mesureB)}
+                    </div>`;
+        }
+
+        // Nom affichable d'un fichier de la comparaison (une source, ou un jeu temporaire).
+        function comparisonNomDuFichier(tableId) {
+            const table = state.tables[tableId];
+            return (table && table.name) || tableId || '?';
+        }
+
+        // Mesure les deux côtés d'un coup, avec les réglages de l'écran.
+        async function comparisonMesurerLesDeuxCotes(connexion, tIdA, tIdB, keyParts, ignoreSpace, ignoreCase) {
+            const mesureA = await comparisonMesurerLesCles(
+                connexion,
+                sqlIdent(duckTableName(tIdA)),
+                comparisonCleCompositeSql(keyParts, 'A', ignoreSpace, ignoreCase)
+            );
+            const mesureB = await comparisonMesurerLesCles(
+                connexion,
+                sqlIdent(duckTableName(tIdB)),
+                comparisonCleCompositeSql(keyParts, 'B', ignoreSpace, ignoreCase)
+            );
+            return { mesureA, mesureB };
+        }
+
+        // Bouton « Vérifier la clé » : on mesure AVANT de lancer une comparaison qui peut durer, pour
+        // savoir tout de suite si la clé choisie désigne bien une ligne de chaque côté.
+        async function comparisonVerifierLesCles() {
+            const zone = el('compKeyCheck');
+            if (!zone) return;
+            const tIdA = el('compTableA').value,
+                tIdB = el('compTableB').value;
+            const keyParts = compKeyParts();
+            if (!tIdA || !tIdB || !keyParts.length) {
+                zone.innerHTML =
+                    '<p class="text-xs text-slate-400 italic">Choisissez les deux fichiers et au moins une colonne de clé de chaque côté.</p>';
+                return;
+            }
+            zone.innerHTML = '<p class="text-xs text-slate-400 italic">Mesure des clés en cours…</p>';
+            try {
+                const { conn } = await getDB();
+                const { mesureA, mesureB } = await comparisonMesurerLesDeuxCotes(
+                    conn,
+                    tIdA,
+                    tIdB,
+                    keyParts,
+                    el('compIgnoreSpace').checked,
+                    el('compIgnoreCase').checked
+                );
+                zone.innerHTML = comparisonBilanDesClesHtml(
+                    comparisonNomDuFichier(tIdA),
+                    comparisonNomDuFichier(tIdB),
+                    mesureA,
+                    mesureB
+                );
+            } catch (e) {
+                zone.innerHTML = `<p class="text-xs text-red-600">Mesure impossible : ${escapeHTML(e.message)}</p>`;
+            }
+        }
+
+        // Un côté de la comparaison des ÉCARTS DE CLÉ : une ligne PAR CLÉ, jamais par ligne de fichier.
+        // On garde au passage le nombre d'occurrences, et une valeur telle qu'écrite dans le fichier pour
+        // chaque partie de la clé (quand on ignore la casse, c'est l'une des graphies rencontrées).
+        function comparisonCoteRegroupeSql(nomDeLaTableDuckDb, expressionDeLaCle, colonnesDeLaCle) {
+            const representants = colonnesDeLaCle.map(
+                (colonne, rang) => `MIN(CAST(${sqlIdent(colonne)} AS VARCHAR)) AS __cle${rang}`
+            );
+            return (
+                `SELECT ${expressionDeLaCle} AS __nk, COUNT(*) AS __occurrences, ${representants.join(', ')}` +
+                ` FROM ${nomDeLaTableDuckDb} WHERE ${expressionDeLaCle} IS NOT NULL GROUP BY 1`
+            );
+        }
+
         async function runComparison() {
             hideError();
             const tIdA = el('compTableA').value,
@@ -158,30 +327,35 @@
 
             try {
                 const { conn } = await getDB();
-                compStatusTextElement.innerText = 'Exécution de la jointure SQL...';
 
-                // Clé composite : les parties normalisées sont concaténées avec un séparateur qui ne peut
-                // pas figurer dans une donnée (chr(31), séparateur d'unité). Si UNE partie est vide, la
-                // clé entière est nulle et la ligne est écartée — comme pour une clé simple.
-                const compositeKeySql = side => {
-                    const parts = keyParts.map(k =>
-                        comparisonNormExpr('', side === 'A' ? k.colA : k.colB, ignoreSpace, ignoreCase, true)
-                    );
-                    if (parts.length === 1) return parts[0];
-                    return `CASE WHEN ${parts.map(pp => `${pp} IS NULL`).join(' OR ')} THEN NULL ELSE ${parts.join(' || chr(31) || ')} END`;
-                };
-                const keyExprA = compositeKeySql('A'),
-                    keyExprB = compositeKeySql('B');
+                const keyExprA = comparisonCleCompositeSql(keyParts, 'A', ignoreSpace, ignoreCase),
+                    keyExprB = comparisonCleCompositeSql(keyParts, 'B', ignoreSpace, ignoreCase);
+
+                // On mesure la répétition des clés AVANT la jointure : c'est elle qui explique la taille
+                // du rapport, et elle doit être dite même quand tout va bien.
+                compStatusTextElement.innerText = 'Mesure des clés...';
+                const { mesureA, mesureB } = await comparisonMesurerLesDeuxCotes(
+                    conn,
+                    tIdA,
+                    tIdB,
+                    keyParts,
+                    ignoreSpace,
+                    ignoreCase
+                );
+                compProgressBarElement.style.width = '25%';
+                compStatusTextElement.innerText = 'Exécution de la jointure SQL...';
 
                 // Une colonne de sortie par partie de clé : plus lisible qu'une clé concaténée.
                 const outSchema = [];
                 const selectExprs = [];
-                keyParts.forEach(k => {
-                    const h = dedupeHeader(outSchema, keyParts.length > 1 ? `CLE_${k.colA}` : 'CLE_IDENTIFICATION');
+                keyParts.forEach((couple, rang) => {
+                    const h = dedupeHeader(outSchema, keyParts.length > 1 ? `CLE_${couple.colA}` : 'CLE_IDENTIFICATION');
                     outSchema.push(h);
-                    selectExprs.push(
-                        `COALESCE(CAST(a.${sqlIdent(k.colA)} AS VARCHAR), CAST(b.${sqlIdent(k.colB)} AS VARCHAR)) AS ${sqlIdent(h)}`
-                    );
+                    // En mode « écarts de clé » les deux côtés sont regroupés : la valeur d'origine est
+                    // ramenée par la colonne __cleN du regroupement, et non par la colonne du fichier.
+                    const valeurA = keyOnly ? `a.__cle${rang}` : `CAST(a.${sqlIdent(couple.colA)} AS VARCHAR)`;
+                    const valeurB = keyOnly ? `b.__cle${rang}` : `CAST(b.${sqlIdent(couple.colB)} AS VARCHAR)`;
+                    selectExprs.push(`COALESCE(${valeurA}, ${valeurB}) AS ${sqlIdent(h)}`);
                 });
                 outSchema.push('STATUT_LIGNE');
 
@@ -203,6 +377,14 @@
                         }
                     END AS ${sqlIdent('STATUT_LIGNE')}
                 `);
+                // En mode « écarts de clé », le rapport dit aussi COMBIEN de fois la clé figure de chaque
+                // côté : c'est l'information que la ligne regroupée remplace, et elle est précieuse.
+                if (keyOnly) {
+                    outSchema.push('OCCURRENCES_FICHIER_A');
+                    outSchema.push('OCCURRENCES_FICHIER_B');
+                    selectExprs.push(`COALESCE(a.__occurrences, 0)::BIGINT AS ${sqlIdent('OCCURRENCES_FICHIER_A')}`);
+                    selectExprs.push(`COALESCE(b.__occurrences, 0)::BIGINT AS ${sqlIdent('OCCURRENCES_FICHIER_B')}`);
+                }
                 validMappings.forEach((m, i) => {
                     const hA = dedupeHeader(outSchema, `VAL_${m.colA}_(Fich_A)`);
                     outSchema.push(hA);
@@ -222,24 +404,35 @@
                     `);
                 });
 
+                // Mode « écarts de clé » : chaque côté est REGROUPÉ par clé avant la jointure, donc une
+                // clé ne peut plus produire qu'UNE ligne — quel que soit le nombre de fois qu'elle figure
+                // dans les fichiers. Mode « comparaison de valeurs » : on garde les lignes, puisqu'il faut
+                // bien lire les valeurs ; le résumé prévient alors de la multiplication.
+                const colonnesDeLaCleA = keyParts.map(couple => couple.colA);
+                const colonnesDeLaCleB = keyParts.map(couple => couple.colB);
+                const coteA = keyOnly
+                    ? comparisonCoteRegroupeSql(sqlIdent(duckTableName(tIdA)), keyExprA, colonnesDeLaCleA)
+                    : `SELECT *, ${keyExprA} AS __nk FROM ${sqlIdent(duckTableName(tIdA))} WHERE ${keyExprA} IS NOT NULL`;
+                const coteB = keyOnly
+                    ? comparisonCoteRegroupeSql(sqlIdent(duckTableName(tIdB)), keyExprB, colonnesDeLaCleB)
+                    : `SELECT *, ${keyExprB} AS __nk FROM ${sqlIdent(duckTableName(tIdB))} WHERE ${keyExprB} IS NOT NULL`;
+
                 const resultTId = 'cmp_' + generateId();
                 await conn.query(`
                     CREATE TABLE ${sqlIdent(duckTableName(resultTId))} AS
                     SELECT row_number() OVER () AS __rn, * FROM (
                         SELECT ${selectExprs.join(', ')}
-                        FROM (SELECT *, ${keyExprA} AS __nk FROM ${sqlIdent(duckTableName(tIdA))} WHERE ${keyExprA} IS NOT NULL) a
-                        FULL OUTER JOIN (SELECT *, ${keyExprB} AS __nk FROM ${sqlIdent(duckTableName(tIdB))} WHERE ${keyExprB} IS NOT NULL) b
+                        FROM (${coteA}) a
+                        FULL OUTER JOIN (${coteB}) b
                             ON a.__nk = b.__nk
                     ) AS sub
                 `);
                 compProgressBarElement.style.width = '50%';
                 compStatusTextElement.innerText = 'Calcul des statistiques...';
 
-                const totalRes = await conn.query(
-                    keyOnly
-                        ? `SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(resultTId))}`
-                        : `SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(tIdA))}`
-                );
+                // Le total compté est celui du RAPPORT : il est donc toujours égal à la somme des trois
+                // autres tuiles. En mode « écarts de clé », une ligne de rapport = une clé.
+                const totalRes = await conn.query(`SELECT COUNT(*)::BIGINT AS n FROM ${sqlIdent(duckTableName(resultTId))}`);
                 const statsRes = await conn.query(`
                     SELECT
                         SUM(CASE WHEN ${sqlIdent('STATUT_LIGNE')} IN ('100% Identique', 'Clé présente des deux côtés') THEN 1 ELSE 0 END)::BIGINT AS identical,
@@ -284,15 +477,25 @@
                 const keyLbl = keyParts.map(k => k.colA).join(' + ');
                 const tile = (bg, lbl, val, sub) =>
                     `<div class="${bg} border p-4 rounded-xl"><div class="text-xs font-bold uppercase mb-1">${lbl}</div><div class="text-2xl font-black">${Number(val).toLocaleString('fr-FR')}</div>${sub ? `<div class="text-[10px] text-slate-500 mt-1">${sub}</div>` : ''}</div>`;
+                // Le bilan des clés est affiché dans les DEUX modes : c'est lui qui explique l'écart entre
+                // le nombre de lignes des fichiers et le nombre de lignes du rapport.
+                const bilanDesCles = comparisonBilanDesClesHtml(
+                    comparisonNomDuFichier(tIdA),
+                    comparisonNomDuFichier(tIdB),
+                    mesureA,
+                    mesureB
+                );
                 el('compSummary').innerHTML = keyOnly
-                    ? `<div class="text-xs text-slate-500 mb-3">Comparaison des <strong>écarts de clé</strong> sur <strong>${escapeHTML(keyLbl)}</strong> — aucune valeur n'était à contrôler.</div>
+                    ? `<div class="text-xs text-slate-500 mb-2 text-left">Comparaison des <strong>écarts de clé</strong> sur <strong>${escapeHTML(keyLbl)}</strong> — aucune valeur n'était à contrôler. Les chiffres ci-dessous comptent des <strong>clés</strong>, pas des lignes : une clé répétée n'est comptée qu'une fois, et le rapport donne son nombre d'occurrences de chaque côté.</div>
+                       <div class="mb-3">${bilanDesCles}</div>
                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
                        ${tile('bg-indigo-50', 'Clés évaluées', total, 'union des deux fichiers')}
                        ${tile('bg-emerald-50', 'Présentes des deux côtés', identical, '')}
                        ${tile('bg-red-50', 'En plus dans A', missingB, 'absentes du fichier B')}
                        ${tile('bg-amber-50', 'En plus dans B', missingA, 'absentes du fichier A')}</div>`
-                    : `<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-left">
-                       ${tile('bg-indigo-50', 'Total évalué', total, '')}
+                    : `<div class="mb-3">${bilanDesCles}</div>
+                       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+                       ${tile('bg-indigo-50', 'Lignes du rapport', total, 'appariements évalués')}
                        ${tile('bg-emerald-50', '100% Identiques', identical, '')}
                        ${tile('bg-amber-50', 'Avec Différences', diff, '')}
                        ${tile('bg-red-50', 'Lignes Absentes', missingA + missingB, `${missingB} en plus dans A · ${missingA} en plus dans B`)}</div>`;
